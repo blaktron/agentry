@@ -6,6 +6,8 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -14,8 +16,11 @@ import (
 
 	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
+	samlsp "github.com/PLACEHOLDER_ORG/agentry/internal/auth/saml"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/dnsx"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/notify"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/queue"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/render"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/scan"
@@ -23,6 +28,7 @@ import (
 	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
 	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/version"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/webhook"
 )
 
 // Server implements the generated ServerInterface plus non-spec endpoints
@@ -41,6 +47,17 @@ type Server struct {
 	blobs    registry.BlobStore
 	pipeline *scan.Pipeline
 	renderer *render.Renderer
+	// Enterprise (M6/WG-J): webhook fan-out, DNS resolver for domain
+	// verification, and the shared SAML assertion replay cache.
+	webhooks   *webhook.Dispatcher
+	resolver   dnsx.Resolver
+	samlReplay samlsp.ReplayCache
+	// jobs is the enqueue-side queue client (webhook deliveries, audit
+	// exports). The worker role drains it; nil without a database.
+	jobs queue.Client
+	// oidcHTTPClient, when set, is the HTTP client OIDC discovery/JWKS/token
+	// calls use (tests point it at an httptest IdP). nil = default client.
+	oidcHTTPClient *http.Client
 }
 
 // New creates the API server. st may be nil in database-less dev mode; any
@@ -68,8 +85,19 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		limits:   newRateLimits(),
 		classes:  classesFromConfig(cfg.Limits),
 	}
+	// Enterprise defaults, set regardless of database presence (§12.4, §9.3).
+	srv.resolver = dnsx.NewSystemResolver()
+	srv.samlReplay = samlsp.NewMemoryReplayCache()
 	if st != nil {
 		srv.reg = registry.NewService(st, aud)
+		// Webhook fan-out (§9.3): enqueue deliveries onto the Postgres queue;
+		// the worker role runs the delivery handler. Wired before the blobs
+		// early-return so the event sink is always active.
+		srv.jobs = queue.NewPGClient(st, log)
+		srv.webhooks = webhook.NewDispatcher(webhook.Deps{
+			Store: st, Sealer: sealer, Queue: srv.jobs, Log: log,
+		})
+		srv.reg.SetEventSink(srv.emitAgentEvent)
 		if cfg.Storage.Kind == "local" {
 			blobs, berr := registry.NewLocalFS(cfg.Storage.LocalDir)
 			if berr != nil {
@@ -114,6 +142,46 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 // Reg exposes the registry service so role wiring can share one instance
 // (git role injects its archiver; auto-publish uses the same pipeline).
 func (s *Server) Reg() *registry.Service { return s.reg }
+
+// SetResolver overrides the DNS resolver (domain verification; tests inject a
+// fake resolver, §12.4).
+func (s *Server) SetResolver(r dnsx.Resolver) { s.resolver = r }
+
+// SetWebhookDispatcher overrides the webhook dispatcher (tests inject a
+// loopback-allowing delivery client). The registry event sink already points
+// at s.emitAgentEvent, which reads s.webhooks at call time.
+func (s *Server) SetWebhookDispatcher(d *webhook.Dispatcher) { s.webhooks = d }
+
+// SetOIDCHTTPClient overrides the HTTP client used for OIDC discovery/JWKS/
+// token calls (tests point it at an in-process IdP).
+func (s *Server) SetOIDCHTTPClient(c *http.Client) { s.oidcHTTPClient = c }
+
+// RegisterQueueHandlers wires this server's async job handlers onto a queue
+// worker (the worker role, and tests): webhook delivery (§9.3) and audit
+// export (§12.6).
+func (s *Server) RegisterQueueHandlers(q queue.Client) {
+	if s.webhooks != nil {
+		s.webhooks.RegisterHandlers(q)
+	}
+	q.Register(jobAuditExport, s.runAuditExport)
+}
+
+// emitAgentEvent is the registry event sink (§9.3): it resolves the agent's
+// owning org and fans the transition out to that org's webhooks. Personal
+// namespaces (no org) and fan-out errors are swallowed — webhooks never affect
+// the state change that triggered them.
+func (s *Server) emitAgentEvent(ctx context.Context, agentID uuid.UUID, event string, payload map[string]any) {
+	if s.webhooks == nil || s.st == nil {
+		return
+	}
+	orgID, err := s.q().GetAgentOwnerOrg(ctx, agentID)
+	if err != nil {
+		return // personal namespace or agent gone
+	}
+	if err := s.webhooks.Emit(ctx, orgID, event, payload); err != nil {
+		s.log.Error("webhook emit", "event", event, "err", err)
+	}
+}
 
 // q returns the base query layer, or nil without a database.
 func (s *Server) q() *storegen.Queries {
@@ -230,6 +298,12 @@ func NewHandlerWithGit(s *Server, mountGit func(*http.ServeMux)) http.Handler {
 	mux.HandleFunc("GET /.well-known/agentry/registry.json", s.wellKnownRegistry)
 	mux.HandleFunc("GET /.well-known/agentry/signing-keys.json", s.wellKnownSigningKeys)
 
+	// SCIM 2.0 data plane (§12.5). Mounted outside the generated /api/v1
+	// handler: it uses its own base path, application/scim+json media type, and
+	// authenticates by SCIM bearer token (not the RBAC chokepoint), so it is
+	// deliberately not part of the OpenAPI surface (see handlers_scim.go).
+	s.mountSCIM(mux)
+
 	// Generated OpenAPI routes under /api/v1 (spec-first, D-09).
 	apiHandler := HandlerWithOptions(s, StdHTTPServerOptions{
 		BaseURL:    "/api/v1",
@@ -271,4 +345,17 @@ func readJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 		return false
 	}
 	return true
+}
+
+// readJSONOptional decodes an optional request body; an empty body is not an
+// error (used by endpoints whose requestBody is not required).
+func readJSONOptional(r *http.Request, dst any) error {
+	dec := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
+	if err := dec.Decode(dst); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		return err
+	}
+	return nil
 }

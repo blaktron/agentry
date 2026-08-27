@@ -37,6 +37,13 @@ type testEnv struct {
 }
 
 func newTestEnv(t *testing.T) *testEnv {
+	return newTestEnvWith(t)
+}
+
+// newTestEnvWith builds a test env, applying opts to the *api.Server before it
+// is wrapped in the HTTP handler (M6 tests inject fake resolvers, OIDC clients,
+// and webhook dispatchers).
+func newTestEnvWith(t *testing.T, opts ...func(*api.Server)) *testEnv {
 	t.Helper()
 	url := os.Getenv("AGENTRY_TEST_DATABASE_URL")
 	if url == "" {
@@ -61,7 +68,11 @@ func newTestEnv(t *testing.T) *testEnv {
 	cfg.Limits.AnonymousPerMin = 100000
 	cfg.Limits.AuthedPerHour = 10000000
 	cfg.Limits.AuthedBurstPerMin = 100000
-	srv := httptest.NewServer(api.NewHandler(api.New(cfg, envSt, nil)))
+	srvObj := api.New(cfg, envSt, nil)
+	for _, o := range opts {
+		o(srvObj)
+	}
+	srv := httptest.NewServer(api.NewHandler(srvObj))
 	t.Cleanup(srv.Close)
 
 	return &testEnv{

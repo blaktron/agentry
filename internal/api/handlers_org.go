@@ -11,6 +11,7 @@ import (
 	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
 	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/webhook"
 )
 
 // orgOrNotFound resolves an org handle or writes 404.
@@ -135,22 +136,44 @@ func (s *Server) UpdateOrg(w http.ResponseWriter, r *http.Request, org OrgHandle
 	if !readJSON(w, r, &req) {
 		return
 	}
-	if req.DisplayName == nil {
+	if req.DisplayName == nil && req.SsoRequired == nil {
 		problemValidation(w, r, "nothing to update")
 		return
 	}
-	name := strings.TrimSpace(*req.DisplayName)
-	if name == "" || len(name) > 120 {
-		problemValidation(w, r, "displayName must be 1-120 characters")
-		return
+	name := ""
+	if req.DisplayName != nil {
+		name = strings.TrimSpace(*req.DisplayName)
+		if name == "" || len(name) > 120 {
+			problemValidation(w, r, "displayName must be 1-120 characters")
+			return
+		}
+	}
+	// Toggling enforced SSO is an SSO setting → owner only (§12.2, §12.4),
+	// stricter than the admin+ gate that guards the rest of org update.
+	if req.SsoRequired != nil {
+		p := principalFrom(r.Context())
+		if auth.Check(p, auth.Resource{OrgID: row.ID}, auth.ActOrgSettingsManage) != nil {
+			problemForbidden(w, r, "changing ssoRequired requires owner")
+			return
+		}
 	}
 	err := s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
-		if _, err := q.UpdateOrgDisplayName(r.Context(), storegen.UpdateOrgDisplayNameParams{ID: row.ID, DisplayName: name}); err != nil {
-			return err
+		if req.DisplayName != nil {
+			if _, err := q.UpdateOrgDisplayName(r.Context(), storegen.UpdateOrgDisplayNameParams{ID: row.ID, DisplayName: name}); err != nil {
+				return err
+			}
+		}
+		if req.SsoRequired != nil {
+			if err := q.SetOrgSSORequired(r.Context(), storegen.SetOrgSSORequiredParams{ID: row.ID, SsoRequired: *req.SsoRequired}); err != nil {
+				return err
+			}
 		}
 		e := auditEvent(r, audit.ActionOrgUpdate)
 		e.OrgID = row.ID
 		e.TargetKind, e.TargetID = "org", row.ID
+		if req.SsoRequired != nil {
+			e.Detail = map[string]any{"sso_required": *req.SsoRequired}
+		}
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
@@ -275,6 +298,11 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 		problemInternal(w, r)
 		return
 	}
+	// Webhook fan-out (§9.3): a brand-new membership is a member.added event.
+	if s.webhooks != nil && current == auth.RoleNone {
+		_ = s.webhooks.Emit(r.Context(), orgRow.ID, webhook.EventMemberAdded,
+			map[string]any{"user": target.Handle, "role": string(requested)})
+	}
 	via := false
 	writeJSON(w, http.StatusOK, Membership{
 		User: PublicUser{Handle: target.Handle, DisplayName: target.DisplayName},
@@ -342,6 +370,10 @@ func (s *Server) RemoveOrgMember(w http.ResponseWriter, r *http.Request, org Org
 		s.log.Error("remove member", "err", err)
 		problemInternal(w, r)
 		return
+	}
+	if s.webhooks != nil {
+		_ = s.webhooks.Emit(r.Context(), orgRow.ID, webhook.EventMemberRemoved,
+			map[string]any{"user": target.Handle})
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

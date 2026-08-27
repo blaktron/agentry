@@ -22,6 +22,30 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AbuseReportState.
+const (
+	AbuseReportStateActioned  AbuseReportState = "actioned"
+	AbuseReportStateDismissed AbuseReportState = "dismissed"
+	AbuseReportStateOpen      AbuseReportState = "open"
+	AbuseReportStateTriaged   AbuseReportState = "triaged"
+)
+
+// Valid indicates whether the value is a known member of the AbuseReportState enum.
+func (e AbuseReportState) Valid() bool {
+	switch e {
+	case AbuseReportStateActioned:
+		return true
+	case AbuseReportStateDismissed:
+		return true
+	case AbuseReportStateOpen:
+		return true
+	case AbuseReportStateTriaged:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentQuarantineState.
 const (
 	AgentQuarantineStateBlocked     AgentQuarantineState = "blocked"
@@ -178,6 +202,30 @@ func (e AuditEventActorKind) Valid() bool {
 	case AuditEventActorKindSystem:
 		return true
 	case AuditEventActorKindUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AuditExportStatus.
+const (
+	AuditExportStatusCompleted AuditExportStatus = "completed"
+	AuditExportStatusFailed    AuditExportStatus = "failed"
+	AuditExportStatusPending   AuditExportStatus = "pending"
+	AuditExportStatusRunning   AuditExportStatus = "running"
+)
+
+// Valid indicates whether the value is a known member of the AuditExportStatus enum.
+func (e AuditExportStatus) Valid() bool {
+	switch e {
+	case AuditExportStatusCompleted:
+		return true
+	case AuditExportStatusFailed:
+		return true
+	case AuditExportStatusPending:
+		return true
+	case AuditExportStatusRunning:
 		return true
 	default:
 		return false
@@ -394,6 +442,24 @@ func (e SearchHitQuarantineState) Valid() bool {
 	}
 }
 
+// Defines values for SsoConnectionKind.
+const (
+	SsoConnectionKindOidc SsoConnectionKind = "oidc"
+	SsoConnectionKindSaml SsoConnectionKind = "saml"
+)
+
+// Valid indicates whether the value is a known member of the SsoConnectionKind enum.
+func (e SsoConnectionKind) Valid() bool {
+	switch e {
+	case SsoConnectionKindOidc:
+		return true
+	case SsoConnectionKindSaml:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for VersionStatus.
 const (
 	VersionStatusApproved    VersionStatus = "approved"
@@ -433,6 +499,24 @@ func (e VersionStatus) Valid() bool {
 	}
 }
 
+// Defines values for SsoKind.
+const (
+	SsoKindOidc SsoKind = "oidc"
+	SsoKindSaml SsoKind = "saml"
+)
+
+// Valid indicates whether the value is a known member of the SsoKind enum.
+func (e SsoKind) Valid() bool {
+	switch e {
+	case SsoKindOidc:
+		return true
+	case SsoKindSaml:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UpdateAgentJSONBodyVisibility.
 const (
 	UpdateAgentJSONBodyVisibilityPrivate UpdateAgentJSONBodyVisibility = "private"
@@ -445,6 +529,39 @@ func (e UpdateAgentJSONBodyVisibility) Valid() bool {
 	case UpdateAgentJSONBodyVisibilityPrivate:
 		return true
 	case UpdateAgentJSONBodyVisibilityPublic:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReportAbuseJSONBodyCategory.
+const (
+	CredentialTheft    ReportAbuseJSONBodyCategory = "credential_theft"
+	HiddenInstructions ReportAbuseJSONBodyCategory = "hidden_instructions"
+	License            ReportAbuseJSONBodyCategory = "license"
+	MaliciousContent   ReportAbuseJSONBodyCategory = "malicious_content"
+	Other              ReportAbuseJSONBodyCategory = "other"
+	Spam               ReportAbuseJSONBodyCategory = "spam"
+	Typosquat          ReportAbuseJSONBodyCategory = "typosquat"
+)
+
+// Valid indicates whether the value is a known member of the ReportAbuseJSONBodyCategory enum.
+func (e ReportAbuseJSONBodyCategory) Valid() bool {
+	switch e {
+	case CredentialTheft:
+		return true
+	case HiddenInstructions:
+		return true
+	case License:
+		return true
+	case MaliciousContent:
+		return true
+	case Other:
+		return true
+	case Spam:
+		return true
+	case Typosquat:
 		return true
 	default:
 		return false
@@ -466,6 +583,42 @@ func (e SetFindingVerdictJSONBodyVerdict) Valid() bool {
 	case SetFindingVerdictJSONBodyVerdictDismissedAcceptedRisk:
 		return true
 	case SetFindingVerdictJSONBodyVerdictDismissedFalsePositive:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeleteSsoConnectionParamsKind.
+const (
+	DeleteSsoConnectionParamsKindOidc DeleteSsoConnectionParamsKind = "oidc"
+	DeleteSsoConnectionParamsKindSaml DeleteSsoConnectionParamsKind = "saml"
+)
+
+// Valid indicates whether the value is a known member of the DeleteSsoConnectionParamsKind enum.
+func (e DeleteSsoConnectionParamsKind) Valid() bool {
+	switch e {
+	case DeleteSsoConnectionParamsKindOidc:
+		return true
+	case DeleteSsoConnectionParamsKindSaml:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PutSsoConnectionParamsKind.
+const (
+	PutSsoConnectionParamsKindOidc PutSsoConnectionParamsKind = "oidc"
+	PutSsoConnectionParamsKindSaml PutSsoConnectionParamsKind = "saml"
+)
+
+// Valid indicates whether the value is a known member of the PutSsoConnectionParamsKind enum.
+func (e PutSsoConnectionParamsKind) Valid() bool {
+	switch e {
+	case PutSsoConnectionParamsKindOidc:
+		return true
+	case PutSsoConnectionParamsKindSaml:
 		return true
 	default:
 		return false
@@ -546,6 +699,39 @@ func (e ListReviewQueueParamsQueue) Valid() bool {
 		return false
 	}
 }
+
+// Defines values for DeleteCurrentUserParamsPublishedContent.
+const (
+	Transfer DeleteCurrentUserParamsPublishedContent = "transfer"
+	Yank     DeleteCurrentUserParamsPublishedContent = "yank"
+)
+
+// Valid indicates whether the value is a known member of the DeleteCurrentUserParamsPublishedContent enum.
+func (e DeleteCurrentUserParamsPublishedContent) Valid() bool {
+	switch e {
+	case Transfer:
+		return true
+	case Yank:
+		return true
+	default:
+		return false
+	}
+}
+
+// AbuseReport defines model for AbuseReport.
+type AbuseReport struct {
+	Agent     string             `json:"agent"`
+	Category  string             `json:"category"`
+	CreatedAt time.Time          `json:"createdAt"`
+	Detail    string             `json:"detail"`
+	Id        openapi_types.UUID `json:"id"`
+	Namespace string             `json:"namespace"`
+	State     AbuseReportState   `json:"state"`
+	Version   *string            `json:"version,omitempty"`
+}
+
+// AbuseReportState defines model for AbuseReport.State.
+type AbuseReportState string
 
 // Advisory defines model for Advisory.
 type Advisory struct {
@@ -647,6 +833,21 @@ type AuditEvent struct {
 // AuditEventActorKind defines model for AuditEvent.ActorKind.
 type AuditEventActorKind string
 
+// AuditExport defines model for AuditExport.
+type AuditExport struct {
+	CreatedAt *time.Time `json:"createdAt,omitempty"`
+
+	// DownloadPath Blob-store reference; presign is a deployment concern.
+	DownloadPath *string            `json:"downloadPath,omitempty"`
+	Error        *string            `json:"error,omitempty"`
+	EventCount   *int               `json:"eventCount,omitempty"`
+	Id           openapi_types.UUID `json:"id"`
+	Status       AuditExportStatus  `json:"status"`
+}
+
+// AuditExportStatus defines model for AuditExport.Status.
+type AuditExportStatus string
+
 // AuditPage defines model for AuditPage.
 type AuditPage struct {
 	Events []AuditEvent `json:"events"`
@@ -681,7 +882,24 @@ type CreateTokenRequest struct {
 	// ExpiresAt Defaults to (and is capped at) the max PAT lifetime (§12.3).
 	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
 	Name      string     `json:"name"`
-	Scopes    []Scope    `json:"scopes"`
+
+	// OrgHandle Bind the token to this org (§12.4). Requires the current session to be SSO-fresh for the org; org-bound tokens are capped at 90 days and are the only tokens accepted against an enforced-SSO org's resources.
+	OrgHandle *string `json:"orgHandle,omitempty"`
+	Scopes    []Scope `json:"scopes"`
+}
+
+// DomainClaim defines model for DomainClaim.
+type DomainClaim struct {
+	Domain string `json:"domain"`
+
+	// RecordName The DNS TXT record name to create.
+	RecordName *string `json:"recordName,omitempty"`
+
+	// RecordValue The DNS TXT record value to publish.
+	RecordValue       *string    `json:"recordValue,omitempty"`
+	VerificationToken string     `json:"verificationToken"`
+	Verified          bool       `json:"verified"`
+	VerifiedAt        *time.Time `json:"verifiedAt,omitempty"`
 }
 
 // LoginRequest defines model for LoginRequest.
@@ -889,6 +1107,22 @@ type ScanReport struct {
 	VersionStatus VersionStatus `json:"versionStatus"`
 }
 
+// ScimToken defines model for ScimToken.
+type ScimToken struct {
+	CreatedAt time.Time          `json:"createdAt"`
+	ExpiresAt *time.Time         `json:"expiresAt,omitempty"`
+	Id        openapi_types.UUID `json:"id"`
+}
+
+// ScimTokenCreated defines model for ScimTokenCreated.
+type ScimTokenCreated struct {
+	ExpiresAt *time.Time         `json:"expiresAt,omitempty"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// Token The SCIM bearer token; shown once.
+	Token string `json:"token"`
+}
+
 // Scope PAT scopes (§12.3).
 type Scope string
 
@@ -913,6 +1147,24 @@ type SearchResults struct {
 	Facets  *map[string]map[string]int `json:"facets,omitempty"`
 	Results []SearchHit                `json:"results"`
 	Total   *int                       `json:"total,omitempty"`
+}
+
+// SsoConnection defines model for SsoConnection.
+type SsoConnection struct {
+	// Config Non-secret connection settings (client secrets are redacted).
+	Config  *map[string]interface{} `json:"config,omitempty"`
+	Enabled bool                    `json:"enabled"`
+	Kind    SsoConnectionKind       `json:"kind"`
+}
+
+// SsoConnectionKind defines model for SsoConnection.Kind.
+type SsoConnectionKind string
+
+// SsoConnectionInput defines model for SsoConnectionInput.
+type SsoConnectionInput struct {
+	// Config SAML (idpMetadataXml or idpEntityId+idpCertificatePem+idpSsoUrl) or OIDC (issuer, clientId, clientSecret) settings.
+	Config  map[string]interface{} `json:"config"`
+	Enabled bool                   `json:"enabled"`
 }
 
 // Team defines model for Team.
@@ -943,6 +1195,46 @@ type User struct {
 // VersionStatus Publication state machine states (§7).
 type VersionStatus string
 
+// WebhookDelivery defines model for WebhookDelivery.
+type WebhookDelivery struct {
+	Attempt     int                `json:"attempt"`
+	CreatedAt   time.Time          `json:"createdAt"`
+	DeliveredAt *time.Time         `json:"deliveredAt,omitempty"`
+	Error       *string            `json:"error,omitempty"`
+	EventType   string             `json:"eventType"`
+	Id          openapi_types.UUID `json:"id"`
+	StatusCode  *int               `json:"statusCode,omitempty"`
+}
+
+// WebhookEndpoint defines model for WebhookEndpoint.
+type WebhookEndpoint struct {
+	Active    bool               `json:"active"`
+	CreatedAt time.Time          `json:"createdAt"`
+	Events    []string           `json:"events"`
+	Id        openapi_types.UUID `json:"id"`
+	Url       string             `json:"url"`
+}
+
+// WebhookEndpointCreated defines model for WebhookEndpointCreated.
+type WebhookEndpointCreated struct {
+	Active    bool               `json:"active"`
+	CreatedAt time.Time          `json:"createdAt"`
+	Events    []string           `json:"events"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// Secret The HMAC signing secret; shown once.
+	Secret string `json:"secret"`
+	Url    string `json:"url"`
+}
+
+// WebhookInput defines model for WebhookInput.
+type WebhookInput struct {
+	Events []string `json:"events"`
+
+	// Url HTTPS endpoint (§9.3 requires https).
+	Url string `json:"url"`
+}
+
 // AgentName defines model for AgentName.
 type AgentName = string
 
@@ -955,11 +1247,17 @@ type Namespace = string
 // OrgHandle defines model for OrgHandle.
 type OrgHandle = string
 
+// SsoKind defines model for SsoKind.
+type SsoKind string
+
 // TeamSlug defines model for TeamSlug.
 type TeamSlug = string
 
 // VersionString defines model for VersionString.
 type VersionString = string
+
+// WebhookID defines model for WebhookID.
+type WebhookID = openapi_types.UUID
 
 // ListAdvisoriesParams defines parameters for ListAdvisories.
 type ListAdvisoriesParams struct {
@@ -981,6 +1279,16 @@ type UpdateAgentJSONBody struct {
 
 // UpdateAgentJSONBodyVisibility defines parameters for UpdateAgent.
 type UpdateAgentJSONBodyVisibility string
+
+// ReportAbuseJSONBody defines parameters for ReportAbuse.
+type ReportAbuseJSONBody struct {
+	Category ReportAbuseJSONBodyCategory `json:"category"`
+	Detail   string                      `json:"detail"`
+	Version  *string                     `json:"version,omitempty"`
+}
+
+// ReportAbuseJSONBodyCategory defines parameters for ReportAbuse.
+type ReportAbuseJSONBodyCategory string
 
 // SetAgentTeamGrantJSONBody defines parameters for SetAgentTeamGrant.
 type SetAgentTeamGrantJSONBody struct {
@@ -1041,6 +1349,9 @@ type SetFindingVerdictJSONBodyVerdict string
 // UpdateOrgJSONBody defines parameters for UpdateOrg.
 type UpdateOrgJSONBody struct {
 	DisplayName *string `json:"displayName,omitempty"`
+
+	// SsoRequired Enforce SSO for org resources (§12.4). Owner only.
+	SsoRequired *bool `json:"ssoRequired,omitempty"`
 }
 
 // ListOrgAuditParams defines parameters for ListOrgAudit.
@@ -1048,6 +1359,22 @@ type ListOrgAuditParams struct {
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 	Action *string `form:"action,omitempty" json:"action,omitempty"`
+}
+
+// CreateAuditExportJSONBody defines parameters for CreateAuditExport.
+type CreateAuditExportJSONBody struct {
+	// Action Optional action filter.
+	Action *string `json:"action,omitempty"`
+}
+
+// CreateDomainClaimJSONBody defines parameters for CreateDomainClaim.
+type CreateDomainClaimJSONBody struct {
+	Domain string `json:"domain"`
+}
+
+// VerifyDomainClaimJSONBody defines parameters for VerifyDomainClaim.
+type VerifyDomainClaimJSONBody struct {
+	Domain string `json:"domain"`
 }
 
 // SetOrgMemberJSONBody defines parameters for SetOrgMember.
@@ -1059,9 +1386,38 @@ type SetOrgMemberJSONBody struct {
 // SetOrgPolicyJSONBody defines parameters for SetOrgPolicy.
 type SetOrgPolicyJSONBody map[string]interface{}
 
+// CreateScimTokenJSONBody defines parameters for CreateScimToken.
+type CreateScimTokenJSONBody struct {
+	ExpiresInDays *int `json:"expiresInDays,omitempty"`
+}
+
+// DeleteSsoConnectionParamsKind defines parameters for DeleteSsoConnection.
+type DeleteSsoConnectionParamsKind string
+
+// PutSsoConnectionParamsKind defines parameters for PutSsoConnection.
+type PutSsoConnectionParamsKind string
+
+// OidcCallbackParams defines parameters for OidcCallback.
+type OidcCallbackParams struct {
+	Code  *string `form:"code,omitempty" json:"code,omitempty"`
+	State *string `form:"state,omitempty" json:"state,omitempty"`
+}
+
 // CreateTeamJSONBody defines parameters for CreateTeam.
 type CreateTeamJSONBody struct {
 	Slug string `json:"slug"`
+}
+
+// UpdateWebhookJSONBody defines parameters for UpdateWebhook.
+type UpdateWebhookJSONBody struct {
+	Active *bool     `json:"active,omitempty"`
+	Events *[]string `json:"events,omitempty"`
+	Url    *string   `json:"url,omitempty"`
+}
+
+// ListAbuseReportsParams defines parameters for ListAbuseReports.
+type ListAbuseReportsParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // PlatformAgentActionJSONBody defines parameters for PlatformAgentAction.
@@ -1115,11 +1471,23 @@ type UpdateCurrentUserJSONBody struct {
 	DisplayName *string `json:"displayName,omitempty"`
 }
 
+// DeleteCurrentUserParams defines parameters for DeleteCurrentUser.
+type DeleteCurrentUserParams struct {
+	// PublishedContent What to do with published public versions (default yank).
+	PublishedContent *DeleteCurrentUserParamsPublishedContent `form:"publishedContent,omitempty" json:"publishedContent,omitempty"`
+}
+
+// DeleteCurrentUserParamsPublishedContent defines parameters for DeleteCurrentUser.
+type DeleteCurrentUserParamsPublishedContent string
+
 // CreateAgentJSONRequestBody defines body for CreateAgent for application/json ContentType.
 type CreateAgentJSONRequestBody = CreateAgentRequest
 
 // UpdateAgentJSONRequestBody defines body for UpdateAgent for application/json ContentType.
 type UpdateAgentJSONRequestBody UpdateAgentJSONBody
+
+// ReportAbuseJSONRequestBody defines body for ReportAbuse for application/json ContentType.
+type ReportAbuseJSONRequestBody ReportAbuseJSONBody
 
 // SetAgentTeamGrantJSONRequestBody defines body for SetAgentTeamGrant for application/json ContentType.
 type SetAgentTeamGrantJSONRequestBody SetAgentTeamGrantJSONBody
@@ -1157,14 +1525,35 @@ type CreateOrgJSONRequestBody = CreateOrgRequest
 // UpdateOrgJSONRequestBody defines body for UpdateOrg for application/json ContentType.
 type UpdateOrgJSONRequestBody UpdateOrgJSONBody
 
+// CreateAuditExportJSONRequestBody defines body for CreateAuditExport for application/json ContentType.
+type CreateAuditExportJSONRequestBody CreateAuditExportJSONBody
+
+// CreateDomainClaimJSONRequestBody defines body for CreateDomainClaim for application/json ContentType.
+type CreateDomainClaimJSONRequestBody CreateDomainClaimJSONBody
+
+// VerifyDomainClaimJSONRequestBody defines body for VerifyDomainClaim for application/json ContentType.
+type VerifyDomainClaimJSONRequestBody VerifyDomainClaimJSONBody
+
 // SetOrgMemberJSONRequestBody defines body for SetOrgMember for application/json ContentType.
 type SetOrgMemberJSONRequestBody SetOrgMemberJSONBody
 
 // SetOrgPolicyJSONRequestBody defines body for SetOrgPolicy for application/json ContentType.
 type SetOrgPolicyJSONRequestBody SetOrgPolicyJSONBody
 
+// CreateScimTokenJSONRequestBody defines body for CreateScimToken for application/json ContentType.
+type CreateScimTokenJSONRequestBody CreateScimTokenJSONBody
+
+// PutSsoConnectionJSONRequestBody defines body for PutSsoConnection for application/json ContentType.
+type PutSsoConnectionJSONRequestBody = SsoConnectionInput
+
 // CreateTeamJSONRequestBody defines body for CreateTeam for application/json ContentType.
 type CreateTeamJSONRequestBody CreateTeamJSONBody
+
+// CreateWebhookJSONRequestBody defines body for CreateWebhook for application/json ContentType.
+type CreateWebhookJSONRequestBody = WebhookInput
+
+// UpdateWebhookJSONRequestBody defines body for UpdateWebhook for application/json ContentType.
+type UpdateWebhookJSONRequestBody UpdateWebhookJSONBody
 
 // PlatformAgentActionJSONRequestBody defines body for PlatformAgentAction for application/json ContentType.
 type PlatformAgentActionJSONRequestBody PlatformAgentActionJSONBody
@@ -1195,6 +1584,9 @@ type ServerInterface interface {
 	// UpdateAgent Update agent settings (maintain).
 	// (PATCH /agents/{ns}/{name})
 	UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName)
+	// ReportAbuse Report malicious or abusive content (authed, rate-limited §8.7).
+	// (POST /agents/{ns}/{name}/abuse-reports)
+	ReportAbuse(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName)
 	// ListAgentGrants List explicit grants (maintain).
 	// (GET /agents/{ns}/{name}/grants)
 	ListAgentGrants(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName)
@@ -1273,6 +1665,21 @@ type ServerInterface interface {
 	// ListOrgAudit Org audit events, newest first (admin+; cursor paged, §12.6).
 	// (GET /orgs/{org}/audit)
 	ListOrgAudit(w http.ResponseWriter, r *http.Request, org OrgHandle, params ListOrgAuditParams)
+	// CreateAuditExport Start an async NDJSON audit export (admin+, §12.6).
+	// (POST /orgs/{org}/audit/exports)
+	CreateAuditExport(w http.ResponseWriter, r *http.Request, org OrgHandle)
+	// GetAuditExport Poll an audit export's status and download reference (admin+, §12.6).
+	// (GET /orgs/{org}/audit/exports/{id})
+	GetAuditExport(w http.ResponseWriter, r *http.Request, org OrgHandle, id openapi_types.UUID)
+	// ListDomainClaims List domain claims (admin+, §12.4).
+	// (GET /orgs/{org}/domain-claims)
+	ListDomainClaims(w http.ResponseWriter, r *http.Request, org OrgHandle)
+	// CreateDomainClaim Start a domain claim; returns the DNS TXT challenge (admin+, §12.4).
+	// (POST /orgs/{org}/domain-claims)
+	CreateDomainClaim(w http.ResponseWriter, r *http.Request, org OrgHandle)
+	// VerifyDomainClaim Check the DNS TXT record and mark verified (admin+, §12.4).
+	// (POST /orgs/{org}/domain-claims/verify)
+	VerifyDomainClaim(w http.ResponseWriter, r *http.Request, org OrgHandle)
 	// ListOrgMembers List members with roles (members can view).
 	// (GET /orgs/{org}/members)
 	ListOrgMembers(w http.ResponseWriter, r *http.Request, org OrgHandle)
@@ -1288,6 +1695,36 @@ type ServerInterface interface {
 	// SetOrgPolicy Set the org policy overlay (owner; tighten-only, §8.6).
 	// (PUT /orgs/{org}/policy)
 	SetOrgPolicy(w http.ResponseWriter, r *http.Request, org OrgHandle)
+	// ListScimTokens List active SCIM provisioning tokens (owner, §12.5).
+	// (GET /orgs/{org}/scim/tokens)
+	ListScimTokens(w http.ResponseWriter, r *http.Request, org OrgHandle)
+	// CreateScimToken Mint a SCIM bearer token (owner, §12.5).
+	// (POST /orgs/{org}/scim/tokens)
+	CreateScimToken(w http.ResponseWriter, r *http.Request, org OrgHandle)
+	// RevokeScimToken Revoke a SCIM token (owner, §12.5).
+	// (DELETE /orgs/{org}/scim/tokens/{tokenId})
+	RevokeScimToken(w http.ResponseWriter, r *http.Request, org OrgHandle, tokenId openapi_types.UUID)
+	// ListSsoConnections List the org's SSO connections (owner, §12.4).
+	// (GET /orgs/{org}/sso/connections)
+	ListSsoConnections(w http.ResponseWriter, r *http.Request, org OrgHandle)
+	// DeleteSsoConnection Delete a connection (owner, §12.4).
+	// (DELETE /orgs/{org}/sso/connections/{kind})
+	DeleteSsoConnection(w http.ResponseWriter, r *http.Request, org OrgHandle, kind DeleteSsoConnectionParamsKind)
+	// PutSsoConnection Create or update a SAML/OIDC connection (owner, §12.4).
+	// (PUT /orgs/{org}/sso/connections/{kind})
+	PutSsoConnection(w http.ResponseWriter, r *http.Request, org OrgHandle, kind PutSsoConnectionParamsKind)
+	// OidcCallback OIDC redirect URI — exchange the code and establish a session (§12.4).
+	// (GET /orgs/{org}/sso/oidc/callback)
+	OidcCallback(w http.ResponseWriter, r *http.Request, org OrgHandle, params OidcCallbackParams)
+	// OidcStart Begin the OIDC auth-code + PKCE flow (redirect to IdP, §12.4).
+	// (GET /orgs/{org}/sso/oidc/start)
+	OidcStart(w http.ResponseWriter, r *http.Request, org OrgHandle)
+	// SamlAcs SAML Assertion Consumer Service — consume a signed assertion (§12.4).
+	// (POST /orgs/{org}/sso/saml/acs)
+	SamlAcs(w http.ResponseWriter, r *http.Request, org OrgHandle)
+	// GetSamlMetadata SP SAML metadata for this org's connection (§12.4).
+	// (GET /orgs/{org}/sso/saml/metadata)
+	GetSamlMetadata(w http.ResponseWriter, r *http.Request, org OrgHandle)
 	// ListTeams List teams (members can view).
 	// (GET /orgs/{org}/teams)
 	ListTeams(w http.ResponseWriter, r *http.Request, org OrgHandle)
@@ -1306,6 +1743,27 @@ type ServerInterface interface {
 	// AddTeamMember Add an org member to a team (admin+).
 	// (PUT /orgs/{org}/teams/{team}/members/{handle})
 	AddTeamMember(w http.ResponseWriter, r *http.Request, org OrgHandle, team TeamSlug, handle Handle)
+	// ListWebhooks List webhook endpoints (admin+, §9.3).
+	// (GET /orgs/{org}/webhooks)
+	ListWebhooks(w http.ResponseWriter, r *http.Request, org OrgHandle)
+	// CreateWebhook Create a webhook endpoint (admin+, §9.3).
+	// (POST /orgs/{org}/webhooks)
+	CreateWebhook(w http.ResponseWriter, r *http.Request, org OrgHandle)
+	// DeleteWebhook Delete a webhook endpoint (admin+, §9.3).
+	// (DELETE /orgs/{org}/webhooks/{id})
+	DeleteWebhook(w http.ResponseWriter, r *http.Request, org OrgHandle, id WebhookID)
+	// GetWebhook Get a webhook endpoint (admin+, §9.3).
+	// (GET /orgs/{org}/webhooks/{id})
+	GetWebhook(w http.ResponseWriter, r *http.Request, org OrgHandle, id WebhookID)
+	// UpdateWebhook Update a webhook endpoint (admin+, §9.3).
+	// (PATCH /orgs/{org}/webhooks/{id})
+	UpdateWebhook(w http.ResponseWriter, r *http.Request, org OrgHandle, id WebhookID)
+	// ListWebhookDeliveries Recent delivery attempts for an endpoint (admin+, §9.3).
+	// (GET /orgs/{org}/webhooks/{id}/deliveries)
+	ListWebhookDeliveries(w http.ResponseWriter, r *http.Request, org OrgHandle, id WebhookID)
+	// ListAbuseReports Open abuse reports (platform staff).
+	// (GET /platform/abuse-reports)
+	ListAbuseReports(w http.ResponseWriter, r *http.Request, params ListAbuseReportsParams)
 	// PlatformAgentAction Quarantine, block, or reinstate an agent (platform staff, §7).
 	// (POST /platform/agents/{ns}/{name}/{action})
 	PlatformAgentAction(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, action PlatformAgentActionParamsAction)
@@ -1333,6 +1791,9 @@ type ServerInterface interface {
 	// UpdateCurrentUser Update profile fields.
 	// (PATCH /user)
 	UpdateCurrentUser(w http.ResponseWriter, r *http.Request)
+	// DeleteCurrentUser Erase the caller's account (GDPR flow, §12.7).
+	// (POST /user/delete)
+	DeleteCurrentUser(w http.ResponseWriter, r *http.Request, params DeleteCurrentUserParams)
 	// ListTokens List the caller's personal access tokens (metadata only).
 	// (GET /user/tokens)
 	ListTokens(w http.ResponseWriter, r *http.Request)
@@ -1497,6 +1958,41 @@ func (siw *ServerInterfaceWrapper) UpdateAgent(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateAgent(w, r, ns, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReportAbuse operation middleware
+func (siw *ServerInterfaceWrapper) ReportAbuse(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns Namespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name AgentName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReportAbuse(w, r, ns, name)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2360,6 +2856,145 @@ func (siw *ServerInterfaceWrapper) ListOrgAudit(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// CreateAuditExport operation middleware
+func (siw *ServerInterfaceWrapper) CreateAuditExport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAuditExport(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAuditExport operation middleware
+func (siw *ServerInterfaceWrapper) GetAuditExport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAuditExport(w, r, org, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListDomainClaims operation middleware
+func (siw *ServerInterfaceWrapper) ListDomainClaims(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDomainClaims(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateDomainClaim operation middleware
+func (siw *ServerInterfaceWrapper) CreateDomainClaim(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateDomainClaim(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// VerifyDomainClaim operation middleware
+func (siw *ServerInterfaceWrapper) VerifyDomainClaim(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.VerifyDomainClaim(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListOrgMembers operation middleware
 func (siw *ServerInterfaceWrapper) ListOrgMembers(w http.ResponseWriter, r *http.Request) {
 
@@ -2499,6 +3134,322 @@ func (siw *ServerInterfaceWrapper) SetOrgPolicy(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetOrgPolicy(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListScimTokens operation middleware
+func (siw *ServerInterfaceWrapper) ListScimTokens(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListScimTokens(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateScimToken operation middleware
+func (siw *ServerInterfaceWrapper) CreateScimToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateScimToken(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeScimToken operation middleware
+func (siw *ServerInterfaceWrapper) RevokeScimToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "tokenId" -------------
+	var tokenId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "tokenId", r.PathValue("tokenId"), &tokenId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tokenId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeScimToken(w, r, org, tokenId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSsoConnections operation middleware
+func (siw *ServerInterfaceWrapper) ListSsoConnections(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSsoConnections(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSsoConnection operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSsoConnection(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "kind" -------------
+	var kind DeleteSsoConnectionParamsKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", r.PathValue("kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSsoConnection(w, r, org, kind)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutSsoConnection operation middleware
+func (siw *ServerInterfaceWrapper) PutSsoConnection(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "kind" -------------
+	var kind PutSsoConnectionParamsKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", r.PathValue("kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutSsoConnection(w, r, org, kind)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// OidcCallback operation middleware
+func (siw *ServerInterfaceWrapper) OidcCallback(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params OidcCallbackParams
+
+	// ------------- Optional query parameter "code" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "code", r.URL.Query(), &params.Code, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "code"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "code", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.OidcCallback(w, r, org, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// OidcStart operation middleware
+func (siw *ServerInterfaceWrapper) OidcStart(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.OidcStart(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SamlAcs operation middleware
+func (siw *ServerInterfaceWrapper) SamlAcs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SamlAcs(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSamlMetadata operation middleware
+func (siw *ServerInterfaceWrapper) GetSamlMetadata(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSamlMetadata(w, r, org)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2709,6 +3660,231 @@ func (siw *ServerInterfaceWrapper) AddTeamMember(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AddTeamMember(w, r, org, team, handle)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListWebhooks operation middleware
+func (siw *ServerInterfaceWrapper) ListWebhooks(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWebhooks(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateWebhook operation middleware
+func (siw *ServerInterfaceWrapper) CreateWebhook(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateWebhook(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteWebhook operation middleware
+func (siw *ServerInterfaceWrapper) DeleteWebhook(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id WebhookID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteWebhook(w, r, org, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetWebhook operation middleware
+func (siw *ServerInterfaceWrapper) GetWebhook(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id WebhookID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWebhook(w, r, org, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateWebhook operation middleware
+func (siw *ServerInterfaceWrapper) UpdateWebhook(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id WebhookID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateWebhook(w, r, org, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListWebhookDeliveries operation middleware
+func (siw *ServerInterfaceWrapper) ListWebhookDeliveries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id WebhookID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWebhookDeliveries(w, r, org, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAbuseReports operation middleware
+func (siw *ServerInterfaceWrapper) ListAbuseReports(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAbuseReportsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAbuseReports(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3033,6 +4209,39 @@ func (siw *ServerInterfaceWrapper) UpdateCurrentUser(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteCurrentUser operation middleware
+func (siw *ServerInterfaceWrapper) DeleteCurrentUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteCurrentUserParams
+
+	// ------------- Optional query parameter "publishedContent" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "publishedContent", r.URL.Query(), &params.PublishedContent, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "publishedContent"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "publishedContent", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteCurrentUser(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListTokens operation middleware
 func (siw *ServerInterfaceWrapper) ListTokens(w http.ResponseWriter, r *http.Request) {
 
@@ -3242,6 +4451,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/2fa/totp/verify", wrapper.TotpVerify)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/user", wrapper.GetCurrentUser)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/user", wrapper.UpdateCurrentUser)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/user/delete", wrapper.DeleteCurrentUser)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users/{handle}", wrapper.GetUserProfile)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/user/tokens", wrapper.ListTokens)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/user/tokens", wrapper.CreateToken)
@@ -3284,7 +4494,30 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/platform/policy", wrapper.GetPlatformPolicy)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/policy", wrapper.GetOrgPolicy)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/policy", wrapper.SetOrgPolicy)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/sso/connections", wrapper.ListSsoConnections)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/sso/connections/{kind}", wrapper.DeleteSsoConnection)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/sso/connections/{kind}", wrapper.PutSsoConnection)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/sso/saml/metadata", wrapper.GetSamlMetadata)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/sso/saml/acs", wrapper.SamlAcs)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/sso/oidc/start", wrapper.OidcStart)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/sso/oidc/callback", wrapper.OidcCallback)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/scim/tokens", wrapper.ListScimTokens)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/scim/tokens", wrapper.CreateScimToken)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/scim/tokens/{tokenId}", wrapper.RevokeScimToken)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/webhooks", wrapper.ListWebhooks)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/webhooks", wrapper.CreateWebhook)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/webhooks/{id}", wrapper.DeleteWebhook)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/webhooks/{id}", wrapper.GetWebhook)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/webhooks/{id}", wrapper.UpdateWebhook)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/webhooks/{id}/deliveries", wrapper.ListWebhookDeliveries)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/domain-claims", wrapper.ListDomainClaims)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/domain-claims", wrapper.CreateDomainClaim)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/domain-claims/verify", wrapper.VerifyDomainClaim)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/audit/exports", wrapper.CreateAuditExport)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/audit/exports/{id}", wrapper.GetAuditExport)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/platform/agents/{ns}/{name}/{action}", wrapper.PlatformAgentAction)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{ns}/{name}/abuse-reports", wrapper.ReportAbuse)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/platform/abuse-reports", wrapper.ListAbuseReports)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/advisories", wrapper.ListAdvisories)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/search", wrapper.SearchAgents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{ns}/{name}/readme", wrapper.GetAgentReadme)
@@ -3297,126 +4530,165 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"J9Lnv51doZ7NhxFLbmwzk+WturqJ9+/u/3MA",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

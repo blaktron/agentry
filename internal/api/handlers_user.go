@@ -157,7 +157,28 @@ func (s *Server) CreateToken(w http.ResponseWriter, r *http.Request) {
 		}
 		scopes = append(scopes, string(sc))
 	}
-	maxExpiry := time.Now().Add(s.cfg.Auth.PATMaxTTL)
+	p := principalFrom(r.Context())
+
+	// Org binding (§12.4): a token bound to an org may be minted only from an
+	// SSO-fresh session for that org, and is capped at the org-bound max TTL
+	// (90 days). It is the only kind of PAT accepted against an enforced-SSO
+	// org's resources.
+	var orgID *uuid.UUID
+	maxTTL := s.cfg.Auth.PATMaxTTL
+	if req.OrgHandle != nil && *req.OrgHandle != "" {
+		orgRow, ok := s.orgOrNotFound(w, r, *req.OrgHandle)
+		if !ok {
+			return
+		}
+		if !p.SSOSatisfied(orgRow.ID, s.cfg.Auth.SSOMaxAge) {
+			problemForbidden(w, r, "org-bound tokens require a fresh SSO session for the org")
+			return
+		}
+		orgID = &orgRow.ID
+		maxTTL = s.cfg.Auth.PATOrgBoundMaxTTL
+	}
+
+	maxExpiry := time.Now().Add(maxTTL)
 	expiresAt := maxExpiry
 	if req.ExpiresAt != nil {
 		if req.ExpiresAt.After(maxExpiry) {
@@ -178,13 +199,12 @@ func (s *Server) CreateToken(w http.ResponseWriter, r *http.Request) {
 		problemInternal(w, r)
 		return
 	}
-	p := principalFrom(r.Context())
 	var created storegen.Pat
 	err = s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
 		pat, err := q.CreatePAT(r.Context(), storegen.CreatePATParams{
 			ID: newUUID(), UserID: p.UserID, Name: name,
 			TokenSha256: auth.HashToken(token), TokenPrefix: auth.DisplayPrefix(token),
-			Scopes: scopes, ExpiresAt: expiresAt,
+			Scopes: scopes, ExpiresAt: expiresAt, OrgID: orgID,
 		})
 		if err != nil {
 			return err

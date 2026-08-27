@@ -241,7 +241,13 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			method: "GET",
 			path:   func(s *matrixSeed, _ string) string { return "/api/v1/resolve?ref=" + s.orgH + "/mx-agent" },
 		},
-		"searchAgents":          {method: "GET", path: sPath("/api/v1/search?q=matrix")},
+		"searchAgents": {method: "GET", path: sPath("/api/v1/search?q=matrix")},
+		// deleteCurrentUser is destructive: the flow test covers sessions;
+		// the matrix only checks that anonymous and PAT callers are refused.
+		"deleteCurrentUser": {
+			method: "POST", path: sPath("/api/v1/user/delete"),
+			skipCallers: map[string]bool{"owner": true, "admin": true, "security_reviewer": true, "member": true, "outsider": true},
+		},
 		"getAgentReadme":        {method: "GET", path: agentPath("/readme")},
 		"getVersionReport":      {method: "GET", path: agentPath("/versions/9.9.9/report")},
 		"getVersionAttestation": {method: "GET", path: agentPath("/versions/9.9.9/attestation")},
@@ -311,6 +317,81 @@ func requestFactories(env *testEnv) map[string]opRequest {
 		"totpVerify": {
 			method: "POST", path: sPath("/api/v1/auth/2fa/totp/verify"),
 			body: func(*matrixSeed, string) any { return map[string]any{"code": "000000"} },
+		},
+
+		// Enterprise (M6/WG-J). SSO/SCIM config = owner; webhooks/domains =
+		// admin+; audit export = admin+ (audit:read). Allowed callers may still
+		// get 404/422 (missing target / invalid config) — the matrix only
+		// asserts the authz outcome (not 401/403), so these are fine.
+		"listSsoConnections": {method: "GET", path: orgPath("/sso/connections")},
+		"putSsoConnection": {
+			method: "PUT", path: orgPath("/sso/connections/oidc"),
+			body: func(*matrixSeed, string) any {
+				return map[string]any{"enabled": false, "config": map[string]any{"issuer": "https://idp.example", "clientId": "x"}}
+			},
+		},
+		"deleteSsoConnection": {method: "DELETE", path: orgPath("/sso/connections/oidc")},
+		"listScimTokens":      {method: "GET", path: orgPath("/scim/tokens")},
+		"createScimToken": {
+			method: "POST", path: orgPath("/scim/tokens"),
+			body: func(*matrixSeed, string) any { return map[string]any{} },
+		},
+		"revokeScimToken": {
+			method: "DELETE",
+			path: func(s *matrixSeed, _ string) string {
+				return "/api/v1/orgs/" + s.orgH + "/scim/tokens/" + uuid.NewString()
+			},
+		},
+		"listWebhooks": {method: "GET", path: orgPath("/webhooks")},
+		"createWebhook": {
+			method: "POST", path: orgPath("/webhooks"),
+			body: func(*matrixSeed, string) any {
+				return map[string]any{"url": "https://example.com/hook", "events": []string{"member.added"}}
+			},
+		},
+		"getWebhook": {
+			method: "GET",
+			path: func(s *matrixSeed, _ string) string {
+				return "/api/v1/orgs/" + s.orgH + "/webhooks/" + uuid.NewString()
+			},
+		},
+		"updateWebhook": {
+			method: "PATCH",
+			path: func(s *matrixSeed, _ string) string {
+				return "/api/v1/orgs/" + s.orgH + "/webhooks/" + uuid.NewString()
+			},
+			body: func(*matrixSeed, string) any { return map[string]any{"active": false} },
+		},
+		"deleteWebhook": {
+			method: "DELETE",
+			path: func(s *matrixSeed, _ string) string {
+				return "/api/v1/orgs/" + s.orgH + "/webhooks/" + uuid.NewString()
+			},
+		},
+		"listWebhookDeliveries": {
+			method: "GET",
+			path: func(s *matrixSeed, _ string) string {
+				return "/api/v1/orgs/" + s.orgH + "/webhooks/" + uuid.NewString() + "/deliveries"
+			},
+		},
+		"listDomainClaims": {method: "GET", path: orgPath("/domain-claims")},
+		"createDomainClaim": {
+			method: "POST", path: orgPath("/domain-claims"),
+			body: func(s *matrixSeed, _ string) any { return map[string]any{"domain": "mx-" + s.env.sfx + ".example.com"} },
+		},
+		"verifyDomainClaim": {
+			method: "POST", path: orgPath("/domain-claims/verify"),
+			body: func(*matrixSeed, string) any { return map[string]any{"domain": "absent.example.com"} },
+		},
+		"createAuditExport": {
+			method: "POST", path: orgPath("/audit/exports"),
+			body: func(*matrixSeed, string) any { return map[string]any{} },
+		},
+		"getAuditExport": {
+			method: "GET",
+			path: func(s *matrixSeed, _ string) string {
+				return "/api/v1/orgs/" + s.orgH + "/audit/exports/" + uuid.NewString()
+			},
 		},
 	}
 }

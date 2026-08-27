@@ -2,8 +2,10 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -124,7 +126,33 @@ func (s *Server) resolveSession(r *http.Request, token string) (*auth.Principal,
 		EmailVerified: u.EmailVerifiedAt != nil,
 		PlatformStaff: u.PlatformStaff,
 		SessionID:     sess.ID,
+		SSOFresh:      parseSSOTags(sess.SsoTags),
 	}, sess.CsrfToken, nil
+}
+
+// parseSSOTags decodes sessions.sso_tags ({"<org_id>":"<RFC3339 refreshed_at>"})
+// into the per-org freshness map used by enforced SSO (§12.4).
+func parseSSOTags(raw []byte) map[uuid.UUID]time.Time {
+	if len(raw) == 0 {
+		return nil
+	}
+	var m map[string]string
+	if err := json.Unmarshal(raw, &m); err != nil || len(m) == 0 {
+		return nil
+	}
+	out := make(map[uuid.UUID]time.Time, len(m))
+	for k, v := range m {
+		id, err := uuid.Parse(k)
+		if err != nil {
+			continue
+		}
+		t, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			continue
+		}
+		out[id] = t
+	}
+	return out
 }
 
 func (s *Server) loadOrgRoles(ctx context.Context, userID uuid.UUID) (map[uuid.UUID]auth.OrgRole, error) {
@@ -140,13 +168,16 @@ func (s *Server) loadOrgRoles(ctx context.Context, userID uuid.UUID) (map[uuid.U
 }
 
 // authorize runs the §12.2 chokepoint for the request and writes the problem
-// response on denial. orgID is uuid.Nil for self/public actions.
+// response on denial. orgID is uuid.Nil for self/public actions. For
+// org-scoped actions it additionally enforces SSO freshness / org-bound PATs
+// when the org has sso_required set (§12.4) — a second gate layered on top of
+// RBAC, applied uniformly to every org route through this one chokepoint.
 func (s *Server) authorize(w http.ResponseWriter, r *http.Request, act auth.Action, orgID uuid.UUID) bool {
 	p := principalFrom(r.Context())
 	err := auth.Check(p, auth.Resource{OrgID: orgID}, act)
 	switch err {
 	case nil:
-		return true
+		// proceed to enforced-SSO gate below
 	case auth.ErrUnauthorized:
 		problemUnauthorized(w, r, "")
 		return false
@@ -154,4 +185,27 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, act auth.Acti
 		problemForbidden(w, r, "")
 		return false
 	}
+	if orgID != uuid.Nil && !p.Anonymous && !s.enforceSSO(r.Context(), p, orgID) {
+		writeProblem(w, r, http.StatusForbidden, "sso-required",
+			"SSO required", "this organization requires a fresh SSO session or an org-bound token")
+		return false
+	}
+	return true
+}
+
+// enforceSSO returns true when the caller may act on orgID's resources under
+// the org's enforced-SSO policy (§12.4). Non-enforcing orgs always pass. The
+// gate is skipped without a database (dev-only) since it cannot be evaluated.
+func (s *Server) enforceSSO(ctx context.Context, p *auth.Principal, orgID uuid.UUID) bool {
+	if s.st == nil {
+		return true
+	}
+	org, err := s.q().GetOrgByID(ctx, orgID)
+	if err != nil {
+		return true // org lookup failure surfaces as a 404 in the handler
+	}
+	if !org.SsoRequired {
+		return true
+	}
+	return p.SSOSatisfied(orgID, s.cfg.Auth.SSOMaxAge)
 }
