@@ -93,6 +93,10 @@ type Limits struct {
 	AuthedBurstPerMin int `yaml:"authedBurstPerMin"` // authed burst
 	AnonymousPerMin   int `yaml:"anonymousPerMin"`   // anonymous per-IP
 	LoginPerMin       int `yaml:"loginPerMin"`       // login/register per-IP
+
+	// Git/repo quotas (§19): 100 MB hard, 25 MB single-object cap.
+	RepoQuotaBytes   int `yaml:"repoQuotaBytes"`
+	RepoMaxBlobBytes int `yaml:"repoMaxBlobBytes"`
 }
 
 // Signing configures attestation signing (D-16): kms | file | none(dev).
@@ -132,6 +136,8 @@ func Default() Config {
 			AuthedBurstPerMin: 100,
 			AnonymousPerMin:   60,
 			LoginPerMin:       10,
+			RepoQuotaBytes:    100 << 20,
+			RepoMaxBlobBytes:  25 << 20,
 		},
 		Signing: Signing{Kind: "none"},
 		Judge:   Judge{Provider: "none"},

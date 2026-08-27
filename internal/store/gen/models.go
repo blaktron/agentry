@@ -11,6 +11,38 @@ import (
 	"github.com/google/uuid"
 )
 
+type Agent struct {
+	ID                       uuid.UUID   `json:"id"`
+	NamespaceID              uuid.UUID   `json:"namespace_id"`
+	Name                     string      `json:"name"`
+	Kind                     string      `json:"kind"`
+	Visibility               string      `json:"visibility"`
+	RepoID                   uuid.UUID   `json:"repo_id"`
+	Summary                  string      `json:"summary"`
+	LatestPublishedVersionID *uuid.UUID  `json:"latest_published_version_id"`
+	QuarantineState          string      `json:"quarantine_state"`
+	AutoPublishTags          bool        `json:"auto_publish_tags"`
+	SearchTsv                interface{} `json:"search_tsv"`
+	CreatedAt                time.Time   `json:"created_at"`
+	UpdatedAt                time.Time   `json:"updated_at"`
+}
+
+type AgentTeamGrant struct {
+	AgentID   uuid.UUID `json:"agent_id"`
+	TeamID    uuid.UUID `json:"team_id"`
+	Role      string    `json:"role"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type AgentUserGrant struct {
+	AgentID   uuid.UUID `json:"agent_id"`
+	UserID    uuid.UUID `json:"user_id"`
+	Role      string    `json:"role"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type AuditEvent struct {
 	ID         uuid.UUID   `json:"id"`
 	OccurredAt time.Time   `json:"occurred_at"`
@@ -95,6 +127,14 @@ type Pat struct {
 	LastUsedAt  *time.Time `json:"last_used_at"`
 	RevokedAt   *time.Time `json:"revoked_at"`
 	CreatedAt   time.Time  `json:"created_at"`
+}
+
+type Repo struct {
+	ID            uuid.UUID  `json:"id"`
+	DefaultBranch string     `json:"default_branch"`
+	SizeBytes     int64      `json:"size_bytes"`
+	LastPushAt    *time.Time `json:"last_push_at"`
+	CreatedAt     time.Time  `json:"created_at"`
 }
 
 type ScimToken struct {

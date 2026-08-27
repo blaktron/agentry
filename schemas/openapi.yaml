@@ -25,6 +25,8 @@ tags:
     description: Organizations, members, teams (§12.2).
   - name: audit
     description: Org audit log (§12.6).
+  - name: agents
+    description: Agents, hosted repos, per-agent grants (§9.2).
 
 paths:
   /meta:
@@ -529,8 +531,212 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /agents:
+    post:
+      operationId: createAgent
+      tags: [agents]
+      summary: Create an agent and its hosted git repository (§9.2).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAgentRequest"
+      responses:
+        "201":
+          description: Agent created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        default:
+          $ref: "#/components/responses/Problem"
+    get:
+      operationId: listAgents
+      tags: [agents]
+      summary: List agents in a namespace (public ones for everyone).
+      security: []
+      parameters:
+        - name: namespace
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Agents.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Agent"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /agents/{ns}/{name}:
+    get:
+      operationId: getAgent
+      tags: [agents]
+      summary: Agent metadata (public agents readable by anyone).
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+      responses:
+        "200":
+          description: Agent.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateAgent
+      tags: [agents]
+      summary: Update agent settings (maintain).
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                summary:
+                  type: string
+                  maxLength: 140
+                visibility:
+                  type: string
+                  enum: [public, private]
+                autoPublishTags:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated agent.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /agents/{ns}/{name}/grants:
+    get:
+      operationId: listAgentGrants
+      tags: [agents]
+      summary: List explicit grants (maintain).
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+      responses:
+        "200":
+          description: Grants.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentGrant"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /agents/{ns}/{name}/grants/user/{handle}:
+    put:
+      operationId: setAgentUserGrant
+      tags: [agents]
+      summary: Grant a user a per-agent role (maintain).
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+        - $ref: "#/components/parameters/Handle"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  $ref: "#/components/schemas/AgentRole"
+      responses:
+        "204":
+          description: Grant set.
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: removeAgentUserGrant
+      tags: [agents]
+      summary: Remove a user grant (maintain).
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+        - $ref: "#/components/parameters/Handle"
+      responses:
+        "204":
+          description: Removed.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /agents/{ns}/{name}/grants/team/{team}:
+    put:
+      operationId: setAgentTeamGrant
+      tags: [agents]
+      summary: Grant an org team a per-agent role (maintain; org agents only).
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+        - $ref: "#/components/parameters/TeamSlug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  $ref: "#/components/schemas/AgentRole"
+      responses:
+        "204":
+          description: Grant set.
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: removeAgentTeamGrant
+      tags: [agents]
+      summary: Remove a team grant (maintain).
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+        - $ref: "#/components/parameters/TeamSlug"
+      responses:
+        "204":
+          description: Removed.
+        default:
+          $ref: "#/components/responses/Problem"
+
+
 components:
   parameters:
+    Namespace:
+      name: ns
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"
+    AgentName:
+      name: name
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[a-z0-9](?:[a-z0-9-]{0,63}[a-z0-9])?$"
     Handle:
       name: handle
       in: path
@@ -820,6 +1026,82 @@ components:
         nextCursor:
           type: string
           description: Opaque; absent on the last page.
+
+    AgentKind:
+      type: string
+      description: Supported agent kinds (§1.4).
+      enum: [skill, prompt-agent, mcp-server]
+
+    AgentRole:
+      type: string
+      description: Per-agent grant levels (§12.2), read < write < maintain < publish.
+      enum: [read, write, maintain, publish]
+
+    CreateAgentRequest:
+      type: object
+      required: [namespace, name, kind]
+      properties:
+        namespace:
+          type: string
+          description: User or org handle owning the agent.
+        name:
+          type: string
+          pattern: "^[a-z0-9](?:[a-z0-9-]{0,63}[a-z0-9])?$"
+        kind:
+          $ref: "#/components/schemas/AgentKind"
+        visibility:
+          type: string
+          enum: [public, private]
+          default: private
+        summary:
+          type: string
+          maxLength: 140
+
+    Agent:
+      type: object
+      required: [id, namespace, name, kind, visibility, summary, defaultBranch, gitHttpUrl, quarantineState, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        namespace:
+          type: string
+        name:
+          type: string
+        kind:
+          $ref: "#/components/schemas/AgentKind"
+        visibility:
+          type: string
+          enum: [public, private]
+        summary:
+          type: string
+        defaultBranch:
+          type: string
+        gitHttpUrl:
+          type: string
+          description: Clone URL for the hosted repository (§6.1).
+        quarantineState:
+          type: string
+          enum: [none, quarantined, blocked]
+        autoPublishTags:
+          type: boolean
+          description: Present for callers with maintain (§6.3 toggle).
+        createdAt:
+          type: string
+          format: date-time
+
+    AgentGrant:
+      type: object
+      required: [kind, grantee, role]
+      properties:
+        kind:
+          type: string
+          enum: [user, team]
+        grantee:
+          type: string
+          description: User handle or team slug.
+        role:
+          $ref: "#/components/schemas/AgentRole"
 
     Problem:
       type: object

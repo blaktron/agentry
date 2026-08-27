@@ -93,30 +93,7 @@ func (s *Server) resolvePAT(r *http.Request, token string) (*auth.Principal, err
 	if s.st == nil {
 		return nil, auth.ErrUnauthorized
 	}
-	ctx := r.Context()
-	q := s.q()
-	pat, err := q.GetPATByHash(ctx, auth.HashToken(token))
-	if err != nil {
-		return nil, auth.ErrUnauthorized
-	}
-	u, err := q.GetUserByID(ctx, pat.UserID)
-	if err != nil || u.State != "active" {
-		return nil, auth.ErrUnauthorized
-	}
-	_ = q.TouchPAT(ctx, pat.ID) // best-effort last_used tracking
-	roles, err := s.loadOrgRoles(ctx, pat.UserID)
-	if err != nil {
-		return nil, err
-	}
-	return &auth.Principal{
-		UserID:        pat.UserID,
-		Handle:        u.Handle,
-		Via:           "pat",
-		Scopes:        pat.Scopes,
-		OrgRoles:      roles,
-		EmailVerified: u.EmailVerifiedAt != nil,
-		PATID:         pat.ID,
-	}, nil
+	return auth.ResolvePAT(r.Context(), s.q(), token)
 }
 
 // resolveSession loads a session principal and returns its CSRF token.

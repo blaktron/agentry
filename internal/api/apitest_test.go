@@ -187,6 +187,17 @@ func (env *testEnv) mintPAT(c caller, name string, scopes ...string) (id, token 
 	return out.Id, out.Token
 }
 
+// verifyEmail marks a user's email verified directly (the token only leaves
+// through the notifier; tests shortcut the mailbox).
+func (env *testEnv) verifyEmail(handle string) {
+	env.t.Helper()
+	_, err := env.st.Pool().Exec(context.Background(),
+		`UPDATE users SET email_verified_at = now() WHERE id = (SELECT id FROM handles WHERE handle = $1)`, handle)
+	if err != nil {
+		env.t.Fatal(err)
+	}
+}
+
 func mustJSON(v any) []byte {
 	b, err := json.Marshal(v)
 	if err != nil {

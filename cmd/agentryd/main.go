@@ -16,7 +16,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/PLACEHOLDER_ORG/agentry/internal/api"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/gitsrv"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/version"
 )
@@ -50,6 +53,8 @@ func rootCmd() *cobra.Command {
 			},
 		})
 	}
+
+	root.AddCommand(hookCmd())
 
 	root.AddCommand(&cobra.Command{
 		Use:   "migrate",
@@ -103,11 +108,8 @@ func run(ctx context.Context, cfgPath, role string) error {
 	}
 
 	switch role {
-	case "api", "all":
+	case "api", "git", "all":
 		return serveHTTP(ctx, cfg, st, log, role)
-	case "git":
-		// M2 (WG-C) mounts the smart-HTTP handler here.
-		return errors.New("git role: not implemented until M2 (WG-C)")
 	case "worker":
 		// M4 (WG-H) mounts queue workers here.
 		return errors.New("worker role: not implemented until M4 (WG-H)")
@@ -117,10 +119,13 @@ func run(ctx context.Context, cfgPath, role string) error {
 }
 
 func serveHTTP(ctx context.Context, cfg config.Config, st *store.Store, log *slog.Logger, role string) error {
-	s := api.New(cfg, st, log)
+	handler, err := buildHandler(cfg, st, log, role)
+	if err != nil {
+		return err
+	}
 	srv := &http.Server{
 		Addr:              cfg.HTTP.Addr,
-		Handler:           api.NewHandler(s),
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -158,4 +163,53 @@ func newLogger(level string) *slog.Logger {
 	log := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: lvl}))
 	slog.SetDefault(log)
 	return log
+}
+
+// buildHandler assembles the HTTP surface for a role: api routes, git
+// smart-HTTP routes, or both (`all`, the self-host default).
+func buildHandler(cfg config.Config, st *store.Store, log *slog.Logger, role string) (http.Handler, error) {
+	switch role {
+	case "api":
+		return api.NewHandler(api.New(cfg, st, log)), nil
+	case "git", "all":
+		if st == nil {
+			return nil, errors.New("the git role requires a database")
+		}
+		repos, err := gitsrv.NewRepoStore(cfg)
+		if err != nil {
+			return nil, err
+		}
+		aud := audit.NewWriter(log)
+		reg := registry.NewService(st, aud)
+		git := gitsrv.NewHandler(cfg, st, repos, reg, aud, log)
+		if role == "git" {
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"status":"ok"}`))
+			})
+			git.Mount(mux)
+			return mux, nil
+		}
+		s := api.New(cfg, st, log)
+		return api.NewHandlerWithGit(s, git.Mount), nil
+	default:
+		return nil, fmt.Errorf("unknown http role %q", role)
+	}
+}
+
+// hookCmd implements the git hook shim (`agentryd hook pre-receive`),
+// invoked by git inside bare repos (§6.3).
+func hookCmd() *cobra.Command {
+	cmd := &cobra.Command{Use: "hook", Hidden: true, Short: "git hook shims (invoked by git)"}
+	cmd.AddCommand(&cobra.Command{
+		Use: "pre-receive",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			if code := gitsrv.RunPreReceiveHook(os.Stdin, os.Stderr); code != 0 {
+				os.Exit(code)
+			}
+			return nil
+		},
+	})
+	return cmd
 }

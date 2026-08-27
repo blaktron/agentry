@@ -65,6 +65,7 @@ func seedMatrix(t *testing.T, env *testEnv) *matrixSeed {
 	sessions := map[string]caller{}
 	for _, role := range roles {
 		h := env.register("mx-" + role[:3])
+		env.verifyEmail(h)
 		sessions[role] = env.login(h)
 	}
 	orgH := "mxorg" + env.sfx
@@ -85,6 +86,11 @@ func seedMatrix(t *testing.T, env *testEnv) *matrixSeed {
 		map[string]any{"slug": "mx-team"}, nil, http.StatusCreated)
 	env.doJSON(sessions["owner"], http.MethodPut,
 		"/api/v1/orgs/"+orgH+"/teams/mx-team/members/"+pawnH, nil, nil, http.StatusNoContent)
+
+	// A public agent in the org for agent-scoped routes.
+	env.doJSON(sessions["owner"], http.MethodPost, "/api/v1/agents", map[string]any{
+		"namespace": orgH, "name": "mx-agent", "kind": "skill", "visibility": "public",
+	}, nil, http.StatusCreated)
 
 	_, patAll := env.mintPAT(sessions["owner"], "matrix-ok",
 		"org:admin", "audit:read", "user:profile", "agent:read")
@@ -219,8 +225,59 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			},
 		},
 		"listOrgAudit": {method: "GET", path: orgPath("/audit")},
-		"logout":       {method: "POST", path: sPath("/api/v1/auth/logout"), skipCallers: map[string]bool{"owner": true, "admin": true, "security_reviewer": true, "member": true, "outsider": true}},
-		"totpSetup":    {method: "POST", path: sPath("/api/v1/auth/2fa/totp/setup")},
+		"createAgent": {
+			method: "POST", path: sPath("/api/v1/agents"),
+			body: func(s *matrixSeed, _ string) any {
+				return map[string]any{"namespace": s.orgH, "name": "ag" + nextUniq(), "kind": "skill"}
+			},
+		},
+		"listAgents": {
+			method: "GET",
+			path:   func(s *matrixSeed, _ string) string { return "/api/v1/agents?namespace=" + s.orgH },
+		},
+		"getAgent":        {method: "GET", path: agentPath("")},
+		"updateAgent":     {method: "PATCH", path: agentPath(""), body: func(*matrixSeed, string) any { return map[string]any{"summary": "matrix"} }},
+		"listAgentGrants": {method: "GET", path: agentPath("/grants")},
+		"setAgentUserGrant": {
+			method: "PUT",
+			path: func(s *matrixSeed, _ string) string {
+				return "/api/v1/agents/" + s.orgH + "/mx-agent/grants/user/" + s.pawnH
+			},
+			body: func(*matrixSeed, string) any { return map[string]any{"role": "read"} },
+		},
+		"removeAgentUserGrant": {
+			method: "DELETE",
+			path: func(s *matrixSeed, _ string) string {
+				return "/api/v1/agents/" + s.orgH + "/mx-agent/grants/user/" + s.pawnH
+			},
+			prep: func(s *matrixSeed, _ string) string {
+				s.env.doJSON(s.sessions["owner"], http.MethodPut,
+					"/api/v1/agents/"+s.orgH+"/mx-agent/grants/user/"+s.pawnH,
+					map[string]any{"role": "read"}, nil, http.StatusNoContent)
+				return ""
+			},
+		},
+		"setAgentTeamGrant": {
+			method: "PUT",
+			path: func(s *matrixSeed, _ string) string {
+				return "/api/v1/agents/" + s.orgH + "/mx-agent/grants/team/mx-team"
+			},
+			body: func(*matrixSeed, string) any { return map[string]any{"role": "read"} },
+		},
+		"removeAgentTeamGrant": {
+			method: "DELETE",
+			path: func(s *matrixSeed, _ string) string {
+				return "/api/v1/agents/" + s.orgH + "/mx-agent/grants/team/mx-team"
+			},
+			prep: func(s *matrixSeed, _ string) string {
+				s.env.doJSON(s.sessions["owner"], http.MethodPut,
+					"/api/v1/agents/"+s.orgH+"/mx-agent/grants/team/mx-team",
+					map[string]any{"role": "read"}, nil, http.StatusNoContent)
+				return ""
+			},
+		},
+		"logout":    {method: "POST", path: sPath("/api/v1/auth/logout"), skipCallers: map[string]bool{"owner": true, "admin": true, "security_reviewer": true, "member": true, "outsider": true}},
+		"totpSetup": {method: "POST", path: sPath("/api/v1/auth/2fa/totp/setup")},
 		"totpVerify": {
 			method: "POST", path: sPath("/api/v1/auth/2fa/totp/verify"),
 			body: func(*matrixSeed, string) any { return map[string]any{"code": "000000"} },
@@ -234,6 +291,10 @@ func sPath(p string) func(*matrixSeed, string) string {
 
 func orgPath(suffix string) func(*matrixSeed, string) string {
 	return func(s *matrixSeed, _ string) string { return "/api/v1/orgs/" + s.orgH + suffix }
+}
+
+func agentPath(suffix string) func(*matrixSeed, string) string {
+	return func(s *matrixSeed, _ string) string { return "/api/v1/agents/" + s.orgH + "/mx-agent" + suffix }
 }
 
 // TestAuthzMatrix executes the full matrix. Expected outcomes derive from
@@ -300,6 +361,15 @@ func TestAuthzMatrix(t *testing.T) {
 					fac.prep(seed, caseID)
 				}
 				path := fac.path(seed, caseID)
+				var bodyOverride any
+				if opID == "createAgent" && mc.caller.session != "" {
+					// Personal namespace: the chokepoint admits any authed
+					// caller; org-namespace policy is registry-level and
+					// tested separately.
+					bodyOverride = map[string]any{
+						"namespace": mc.caller.name, "name": "ag" + caseID, "kind": "skill",
+					}
+				}
 				if opID == "revokeToken" && mc.caller.session != "" {
 					// Mint a disposable token as this caller to revoke.
 					id, _ := env.mintPAT(mc.caller, "rv-"+caseID, "user:profile")
@@ -308,6 +378,9 @@ func TestAuthzMatrix(t *testing.T) {
 				var body any
 				if fac.body != nil {
 					body = fac.body(seed, caseID)
+				}
+				if bodyOverride != nil {
+					body = bodyOverride
 				}
 				res := env.do(mc.caller, fac.method, path, body)
 				defer func() { _ = res.Body.Close() }()
@@ -332,12 +405,19 @@ func expectAllowed(decl api.RouteDecl, p *auth.Principal, orgID uuid.UUID) bool 
 	if p.Anonymous {
 		return decl.Anonymous
 	}
+	if decl.NoAuthz {
+		return true
+	}
+	if decl.AgentScoped {
+		// The fixture agent is PUBLIC and org-owned with no explicit grants
+		// for matrix callers: effective role = namespace-derived (§12.2),
+		// pinned separately in internal/auth tests.
+		role := auth.NamespaceDerivedAgentRole(p, "org", orgID, p.OrgRoles[orgID])
+		return auth.CheckAgent(p, auth.AgentResource{Public: true, EffectiveRole: role}, decl.Action) == nil
+	}
 	res := auth.Resource{}
 	if decl.OrgScoped {
 		res.OrgID = orgID
-	}
-	if decl.NoAuthz {
-		return true
 	}
 	return auth.Check(p, res, decl.Action) == nil
 }

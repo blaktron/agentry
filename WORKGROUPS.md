@@ -76,7 +76,7 @@ Scope:
 
 Acceptance: `scripts/conformance/git.sh` matrix green (clone/fetch/push × public/private × PAT states × shallow/partial × quota/tag rejections).
 
-**Status: ⏳ not started**
+**Status: ✅ core complete** — smart HTTP v2 (info/refs, upload-pack, receive-pack, gzip bodies, protocol v2, shallow+partial clone), UUID-sharded bare repos w/ lazy init (git role owns storage per §13.3), PAT-only Basic auth + per-op §6.4 authz w/ private-repo existence privacy, pre-receive policy hook (`agentryd hook pre-receive`: immutable v* tags, publish-permission gating incl. PAT scope, force-push/default-branch-delete denial, nested-.git + oversize-blob rejection, quota), post-receive bookkeeping (size, audit, PostReceive hook for M3 tag→submit), agents+repos+grants schema and full agents/grants API. Conformance: 21-case matrix green (`scripts/acceptance/m2.sh`); also caught+fixed a real bug where a repo:write-only PAT could create v* tags. Deferred: gc worker job (needs M4 queue), per-IP git concurrency limits (M7 WAF layer), agent delete endpoint (M3, needs never-published check).
 
 ---
 
@@ -92,7 +92,7 @@ Scope:
 
 Acceptance: table-driven tests over valid/invalid manifests incl. every V-rule; fuzz target for the parser (§17.5).
 
-**Status: ⏳ not started**
+**Status: ✅ complete** — pkg/manifest (Parse strict-YAML closed schema, V1–V8 via Validate/ValidateInContext, capability vocabulary, canonical JSON, `**` globber, 60-id SPDX list) + schemas/agent-manifest-1.schema.json (draft 2020-12, additionalProperties:false). 28 test funcs / 163 subtests + FuzzParse (660k execs clean); §5.2 normative example validates clean end-to-end. Built by parallel workgroup agent; independently re-verified (build/test/lint) on the main line.
 
 ---
 
@@ -141,7 +141,7 @@ Scope:
 
 Acceptance: corpus recall 100% on expected findings; benign lookalikes pass; rule bundle digest computed reproducibly.
 
-**Status: ⏳ not started**
+**Status: ✅ complete** — pkg/rules: 11 S3 detectors (zero-width, bidi, tag-block, PUA, confusables/mixed-script, HTML-comment w/ S4 escalation, CSS-hidden, data-URI, entropy-gated base64/hex, trailing-whitespace, NFC-delta), S4 YAML signature engine (per-line matching, same-line notPattern suppression, (?im) patterns), versioned bundle loader w/ reproducible sha256 digest + fixture enforcement (loader rejects rules lacking match+nonMatch fixtures). rules/ v0.1.0: 12 rules across 6 families. testdata/attack-corpus: 17 attack/benign fixture pairs w/ expected.yaml, 100% recall + benign precision in CI. Built by parallel workgroup agent (survived one session-limit interruption, resumed); independently re-verified on the main line.
 
 ---
 

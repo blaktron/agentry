@@ -117,6 +117,7 @@ var scopeFor = map[Action]Scope{
 	ActOrgTeamsManage:    ScopeOrgAdmin,
 	ActOrgUpdate:         ScopeOrgAdmin,
 	ActOrgAuditRead:      ScopeAuditRead,
+	ActAgentCreate:       ScopeAgentPublish,
 	ActUserSelfRead:      ScopeUserProfile,
 	ActUserSelfUpdate:    ScopeUserProfile,
 	ActUserTokensRead:    ScopeUserProfile,
@@ -161,7 +162,10 @@ func Check(p *Principal, res Resource, act Action) error {
 	// (+scope gate above for PATs).
 	switch act {
 	case ActUserSelfRead, ActUserSelfUpdate, ActUserTokensRead,
-		ActUserTokensManage, ActUserSecurityManage, ActOrgCreate:
+		ActUserTokensManage, ActUserSecurityManage, ActOrgCreate,
+		ActAgentCreate:
+		// ActAgentCreate: namespace-level authorization (self vs org
+		// admin+) happens in registry.CreateAgent with the target ns.
 		return nil
 	}
 

@@ -18,6 +18,108 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AgentQuarantineState.
+const (
+	Blocked     AgentQuarantineState = "blocked"
+	None        AgentQuarantineState = "none"
+	Quarantined AgentQuarantineState = "quarantined"
+)
+
+// Valid indicates whether the value is a known member of the AgentQuarantineState enum.
+func (e AgentQuarantineState) Valid() bool {
+	switch e {
+	case Blocked:
+		return true
+	case None:
+		return true
+	case Quarantined:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentVisibility.
+const (
+	AgentVisibilityPrivate AgentVisibility = "private"
+	AgentVisibilityPublic  AgentVisibility = "public"
+)
+
+// Valid indicates whether the value is a known member of the AgentVisibility enum.
+func (e AgentVisibility) Valid() bool {
+	switch e {
+	case AgentVisibilityPrivate:
+		return true
+	case AgentVisibilityPublic:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentGrantKind.
+const (
+	AgentGrantKindTeam AgentGrantKind = "team"
+	AgentGrantKindUser AgentGrantKind = "user"
+)
+
+// Valid indicates whether the value is a known member of the AgentGrantKind enum.
+func (e AgentGrantKind) Valid() bool {
+	switch e {
+	case AgentGrantKindTeam:
+		return true
+	case AgentGrantKindUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentKind.
+const (
+	McpServer   AgentKind = "mcp-server"
+	PromptAgent AgentKind = "prompt-agent"
+	Skill       AgentKind = "skill"
+)
+
+// Valid indicates whether the value is a known member of the AgentKind enum.
+func (e AgentKind) Valid() bool {
+	switch e {
+	case McpServer:
+		return true
+	case PromptAgent:
+		return true
+	case Skill:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentRole.
+const (
+	Maintain AgentRole = "maintain"
+	Publish  AgentRole = "publish"
+	Read     AgentRole = "read"
+	Write    AgentRole = "write"
+)
+
+// Valid indicates whether the value is a known member of the AgentRole enum.
+func (e AgentRole) Valid() bool {
+	switch e {
+	case Maintain:
+		return true
+	case Publish:
+		return true
+	case Read:
+		return true
+	case Write:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AuditEventActorKind.
 const (
 	AuditEventActorKindPat    AuditEventActorKind = "pat"
@@ -36,6 +138,24 @@ func (e AuditEventActorKind) Valid() bool {
 	case AuditEventActorKindSystem:
 		return true
 	case AuditEventActorKindUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CreateAgentRequestVisibility.
+const (
+	CreateAgentRequestVisibilityPrivate CreateAgentRequestVisibility = "private"
+	CreateAgentRequestVisibilityPublic  CreateAgentRequestVisibility = "public"
+)
+
+// Valid indicates whether the value is a known member of the CreateAgentRequestVisibility enum.
+func (e CreateAgentRequestVisibility) Valid() bool {
+	switch e {
+	case CreateAgentRequestVisibilityPrivate:
+		return true
+	case CreateAgentRequestVisibilityPublic:
 		return true
 	default:
 		return false
@@ -102,6 +222,69 @@ func (e Scope) Valid() bool {
 	}
 }
 
+// Defines values for UpdateAgentJSONBodyVisibility.
+const (
+	UpdateAgentJSONBodyVisibilityPrivate UpdateAgentJSONBodyVisibility = "private"
+	UpdateAgentJSONBodyVisibilityPublic  UpdateAgentJSONBodyVisibility = "public"
+)
+
+// Valid indicates whether the value is a known member of the UpdateAgentJSONBodyVisibility enum.
+func (e UpdateAgentJSONBodyVisibility) Valid() bool {
+	switch e {
+	case UpdateAgentJSONBodyVisibilityPrivate:
+		return true
+	case UpdateAgentJSONBodyVisibilityPublic:
+		return true
+	default:
+		return false
+	}
+}
+
+// Agent defines model for Agent.
+type Agent struct {
+	// AutoPublishTags Present for callers with maintain (§6.3 toggle).
+	AutoPublishTags *bool     `json:"autoPublishTags,omitempty"`
+	CreatedAt       time.Time `json:"createdAt"`
+	DefaultBranch   string    `json:"defaultBranch"`
+
+	// GitHttpUrl Clone URL for the hosted repository (§6.1).
+	GitHttpUrl string             `json:"gitHttpUrl"`
+	Id         openapi_types.UUID `json:"id"`
+
+	// Kind Supported agent kinds (§1.4).
+	Kind            AgentKind            `json:"kind"`
+	Name            string               `json:"name"`
+	Namespace       string               `json:"namespace"`
+	QuarantineState AgentQuarantineState `json:"quarantineState"`
+	Summary         string               `json:"summary"`
+	Visibility      AgentVisibility      `json:"visibility"`
+}
+
+// AgentQuarantineState defines model for Agent.QuarantineState.
+type AgentQuarantineState string
+
+// AgentVisibility defines model for Agent.Visibility.
+type AgentVisibility string
+
+// AgentGrant defines model for AgentGrant.
+type AgentGrant struct {
+	// Grantee User handle or team slug.
+	Grantee string         `json:"grantee"`
+	Kind    AgentGrantKind `json:"kind"`
+
+	// Role Per-agent grant levels (§12.2), read < write < maintain < publish.
+	Role AgentRole `json:"role"`
+}
+
+// AgentGrantKind defines model for AgentGrant.Kind.
+type AgentGrantKind string
+
+// AgentKind Supported agent kinds (§1.4).
+type AgentKind string
+
+// AgentRole Per-agent grant levels (§12.2), read < write < maintain < publish.
+type AgentRole string
+
 // AuditEvent defines model for AuditEvent.
 type AuditEvent struct {
 	// Action Registered action id (internal/audit/actions.go).
@@ -125,6 +308,21 @@ type AuditPage struct {
 	// NextCursor Opaque; absent on the last page.
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
+
+// CreateAgentRequest defines model for CreateAgentRequest.
+type CreateAgentRequest struct {
+	// Kind Supported agent kinds (§1.4).
+	Kind AgentKind `json:"kind"`
+	Name string    `json:"name"`
+
+	// Namespace User or org handle owning the agent.
+	Namespace  string                        `json:"namespace"`
+	Summary    *string                       `json:"summary,omitempty"`
+	Visibility *CreateAgentRequestVisibility `json:"visibility,omitempty"`
+}
+
+// CreateAgentRequestVisibility defines model for CreateAgentRequest.Visibility.
+type CreateAgentRequestVisibility string
 
 // CreateOrgRequest defines model for CreateOrgRequest.
 type CreateOrgRequest struct {
@@ -295,14 +493,47 @@ type User struct {
 	TotpEnabled   bool               `json:"totpEnabled"`
 }
 
+// AgentName defines model for AgentName.
+type AgentName = string
+
 // Handle defines model for Handle.
 type Handle = string
+
+// Namespace defines model for Namespace.
+type Namespace = string
 
 // OrgHandle defines model for OrgHandle.
 type OrgHandle = string
 
 // TeamSlug defines model for TeamSlug.
 type TeamSlug = string
+
+// ListAgentsParams defines parameters for ListAgents.
+type ListAgentsParams struct {
+	Namespace string `form:"namespace" json:"namespace"`
+}
+
+// UpdateAgentJSONBody defines parameters for UpdateAgent.
+type UpdateAgentJSONBody struct {
+	AutoPublishTags *bool                          `json:"autoPublishTags,omitempty"`
+	Summary         *string                        `json:"summary,omitempty"`
+	Visibility      *UpdateAgentJSONBodyVisibility `json:"visibility,omitempty"`
+}
+
+// UpdateAgentJSONBodyVisibility defines parameters for UpdateAgent.
+type UpdateAgentJSONBodyVisibility string
+
+// SetAgentTeamGrantJSONBody defines parameters for SetAgentTeamGrant.
+type SetAgentTeamGrantJSONBody struct {
+	// Role Per-agent grant levels (§12.2), read < write < maintain < publish.
+	Role AgentRole `json:"role"`
+}
+
+// SetAgentUserGrantJSONBody defines parameters for SetAgentUserGrant.
+type SetAgentUserGrantJSONBody struct {
+	// Role Per-agent grant levels (§12.2), read < write < maintain < publish.
+	Role AgentRole `json:"role"`
+}
 
 // TotpVerifyJSONBody defines parameters for TotpVerify.
 type TotpVerifyJSONBody struct {
@@ -341,6 +572,18 @@ type CreateTeamJSONBody struct {
 type UpdateCurrentUserJSONBody struct {
 	DisplayName *string `json:"displayName,omitempty"`
 }
+
+// CreateAgentJSONRequestBody defines body for CreateAgent for application/json ContentType.
+type CreateAgentJSONRequestBody = CreateAgentRequest
+
+// UpdateAgentJSONRequestBody defines body for UpdateAgent for application/json ContentType.
+type UpdateAgentJSONRequestBody UpdateAgentJSONBody
+
+// SetAgentTeamGrantJSONRequestBody defines body for SetAgentTeamGrant for application/json ContentType.
+type SetAgentTeamGrantJSONRequestBody SetAgentTeamGrantJSONBody
+
+// SetAgentUserGrantJSONRequestBody defines body for SetAgentUserGrant for application/json ContentType.
+type SetAgentUserGrantJSONRequestBody SetAgentUserGrantJSONBody
 
 // TotpVerifyJSONRequestBody defines body for TotpVerify for application/json ContentType.
 type TotpVerifyJSONRequestBody TotpVerifyJSONBody
@@ -445,6 +688,87 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+
+	// ListAgents List agents in a namespace (public ones for everyone).
+	//
+	// Corresponds with GET /agents (the `ListAgents` operationId).
+	ListAgents(ctx context.Context, params *ListAgentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateAgentWithBody Create an agent and its hosted git repository (§9.2).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /agents (the `CreateAgent` operationId).
+	CreateAgentWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateAgent Create an agent and its hosted git repository (§9.2).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /agents (the `CreateAgent` operationId).
+	CreateAgent(ctx context.Context, body CreateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAgent Agent metadata (public agents readable by anyone).
+	//
+	// Corresponds with GET /agents/{ns}/{name} (the `GetAgent` operationId).
+	GetAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateAgentWithBody Update agent settings (maintain).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /agents/{ns}/{name} (the `UpdateAgent` operationId).
+	UpdateAgentWithBody(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateAgent Update agent settings (maintain).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /agents/{ns}/{name} (the `UpdateAgent` operationId).
+	UpdateAgent(ctx context.Context, ns Namespace, name AgentName, body UpdateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListAgentGrants List explicit grants (maintain).
+	//
+	// Corresponds with GET /agents/{ns}/{name}/grants (the `ListAgentGrants` operationId).
+	ListAgentGrants(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RemoveAgentTeamGrant Remove a team grant (maintain).
+	//
+	// Corresponds with DELETE /agents/{ns}/{name}/grants/team/{team} (the `RemoveAgentTeamGrant` operationId).
+	RemoveAgentTeamGrant(ctx context.Context, ns Namespace, name AgentName, team TeamSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetAgentTeamGrantWithBody Grant an org team a per-agent role (maintain; org agents only).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /agents/{ns}/{name}/grants/team/{team} (the `SetAgentTeamGrant` operationId).
+	SetAgentTeamGrantWithBody(ctx context.Context, ns Namespace, name AgentName, team TeamSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetAgentTeamGrant Grant an org team a per-agent role (maintain; org agents only).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /agents/{ns}/{name}/grants/team/{team} (the `SetAgentTeamGrant` operationId).
+	SetAgentTeamGrant(ctx context.Context, ns Namespace, name AgentName, team TeamSlug, body SetAgentTeamGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RemoveAgentUserGrant Remove a user grant (maintain).
+	//
+	// Corresponds with DELETE /agents/{ns}/{name}/grants/user/{handle} (the `RemoveAgentUserGrant` operationId).
+	RemoveAgentUserGrant(ctx context.Context, ns Namespace, name AgentName, handle Handle, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetAgentUserGrantWithBody Grant a user a per-agent role (maintain).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /agents/{ns}/{name}/grants/user/{handle} (the `SetAgentUserGrant` operationId).
+	SetAgentUserGrantWithBody(ctx context.Context, ns Namespace, name AgentName, handle Handle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetAgentUserGrant Grant a user a per-agent role (maintain).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /agents/{ns}/{name}/grants/user/{handle} (the `SetAgentUserGrant` operationId).
+	SetAgentUserGrant(ctx context.Context, ns Namespace, name AgentName, handle Handle, body SetAgentUserGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// TotpSetup Begin TOTP enrollment; returns the provisioning secret.
 	//
@@ -665,6 +989,217 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /users/{handle} (the `GetUserProfile` operationId).
 	GetUserProfile(ctx context.Context, handle Handle, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+// ListAgents List agents in a namespace (public ones for everyone).
+//
+// Corresponds with GET /agents (the `ListAgents` operationId).
+func (c *Client) ListAgents(ctx context.Context, params *ListAgentsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAgentsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateAgentWithBody Create an agent and its hosted git repository (§9.2).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /agents (the `CreateAgent` operationId).
+func (c *Client) CreateAgentWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateAgentRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateAgent Create an agent and its hosted git repository (§9.2).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /agents (the `CreateAgent` operationId).
+func (c *Client) CreateAgent(ctx context.Context, body CreateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateAgentRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetAgent Agent metadata (public agents readable by anyone).
+//
+// Corresponds with GET /agents/{ns}/{name} (the `GetAgent` operationId).
+func (c *Client) GetAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAgentRequest(c.Server, ns, name)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateAgentWithBody Update agent settings (maintain).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /agents/{ns}/{name} (the `UpdateAgent` operationId).
+func (c *Client) UpdateAgentWithBody(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAgentRequestWithBody(c.Server, ns, name, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateAgent Update agent settings (maintain).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /agents/{ns}/{name} (the `UpdateAgent` operationId).
+func (c *Client) UpdateAgent(ctx context.Context, ns Namespace, name AgentName, body UpdateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAgentRequest(c.Server, ns, name, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListAgentGrants List explicit grants (maintain).
+//
+// Corresponds with GET /agents/{ns}/{name}/grants (the `ListAgentGrants` operationId).
+func (c *Client) ListAgentGrants(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAgentGrantsRequest(c.Server, ns, name)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RemoveAgentTeamGrant Remove a team grant (maintain).
+//
+// Corresponds with DELETE /agents/{ns}/{name}/grants/team/{team} (the `RemoveAgentTeamGrant` operationId).
+func (c *Client) RemoveAgentTeamGrant(ctx context.Context, ns Namespace, name AgentName, team TeamSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRemoveAgentTeamGrantRequest(c.Server, ns, name, team)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetAgentTeamGrantWithBody Grant an org team a per-agent role (maintain; org agents only).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /agents/{ns}/{name}/grants/team/{team} (the `SetAgentTeamGrant` operationId).
+func (c *Client) SetAgentTeamGrantWithBody(ctx context.Context, ns Namespace, name AgentName, team TeamSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetAgentTeamGrantRequestWithBody(c.Server, ns, name, team, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetAgentTeamGrant Grant an org team a per-agent role (maintain; org agents only).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /agents/{ns}/{name}/grants/team/{team} (the `SetAgentTeamGrant` operationId).
+func (c *Client) SetAgentTeamGrant(ctx context.Context, ns Namespace, name AgentName, team TeamSlug, body SetAgentTeamGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetAgentTeamGrantRequest(c.Server, ns, name, team, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RemoveAgentUserGrant Remove a user grant (maintain).
+//
+// Corresponds with DELETE /agents/{ns}/{name}/grants/user/{handle} (the `RemoveAgentUserGrant` operationId).
+func (c *Client) RemoveAgentUserGrant(ctx context.Context, ns Namespace, name AgentName, handle Handle, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRemoveAgentUserGrantRequest(c.Server, ns, name, handle)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetAgentUserGrantWithBody Grant a user a per-agent role (maintain).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /agents/{ns}/{name}/grants/user/{handle} (the `SetAgentUserGrant` operationId).
+func (c *Client) SetAgentUserGrantWithBody(ctx context.Context, ns Namespace, name AgentName, handle Handle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetAgentUserGrantRequestWithBody(c.Server, ns, name, handle, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetAgentUserGrant Grant a user a per-agent role (maintain).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /agents/{ns}/{name}/grants/user/{handle} (the `SetAgentUserGrant` operationId).
+func (c *Client) SetAgentUserGrant(ctx context.Context, ns Namespace, name AgentName, handle Handle, body SetAgentUserGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetAgentUserGrantRequest(c.Server, ns, name, handle, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 // TotpSetup Begin TOTP enrollment; returns the provisioning secret.
@@ -1245,6 +1780,450 @@ func (c *Client) GetUserProfile(ctx context.Context, handle Handle, reqEditors .
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewListAgentsRequest constructs an http.Request for the ListAgents method
+func NewListAgentsRequest(server string, params *ListAgentsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "namespace", params.Namespace, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateAgentRequest calls the generic CreateAgent builder with application/json body
+func NewCreateAgentRequest(server string, body CreateAgentJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateAgentRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateAgentRequestWithBody constructs an http.Request for the CreateAgent method, with any body, and a specified content type
+func NewCreateAgentRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetAgentRequest constructs an http.Request for the GetAgent method
+func NewGetAgentRequest(server string, ns Namespace, name AgentName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateAgentRequest calls the generic UpdateAgent builder with application/json body
+func NewUpdateAgentRequest(server string, ns Namespace, name AgentName, body UpdateAgentJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateAgentRequestWithBody(server, ns, name, "application/json", bodyReader)
+}
+
+// NewUpdateAgentRequestWithBody constructs an http.Request for the UpdateAgent method, with any body, and a specified content type
+func NewUpdateAgentRequestWithBody(server string, ns Namespace, name AgentName, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListAgentGrantsRequest constructs an http.Request for the ListAgentGrants method
+func NewListAgentGrantsRequest(server string, ns Namespace, name AgentName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/grants", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRemoveAgentTeamGrantRequest constructs an http.Request for the RemoveAgentTeamGrant method
+func NewRemoveAgentTeamGrantRequest(server string, ns Namespace, name AgentName, team TeamSlug) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "team", team, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/grants/team/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSetAgentTeamGrantRequest calls the generic SetAgentTeamGrant builder with application/json body
+func NewSetAgentTeamGrantRequest(server string, ns Namespace, name AgentName, team TeamSlug, body SetAgentTeamGrantJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetAgentTeamGrantRequestWithBody(server, ns, name, team, "application/json", bodyReader)
+}
+
+// NewSetAgentTeamGrantRequestWithBody constructs an http.Request for the SetAgentTeamGrant method, with any body, and a specified content type
+func NewSetAgentTeamGrantRequestWithBody(server string, ns Namespace, name AgentName, team TeamSlug, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "team", team, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/grants/team/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewRemoveAgentUserGrantRequest constructs an http.Request for the RemoveAgentUserGrant method
+func NewRemoveAgentUserGrantRequest(server string, ns Namespace, name AgentName, handle Handle) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "handle", handle, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/grants/user/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSetAgentUserGrantRequest calls the generic SetAgentUserGrant builder with application/json body
+func NewSetAgentUserGrantRequest(server string, ns Namespace, name AgentName, handle Handle, body SetAgentUserGrantJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetAgentUserGrantRequestWithBody(server, ns, name, handle, "application/json", bodyReader)
+}
+
+// NewSetAgentUserGrantRequestWithBody constructs an http.Request for the SetAgentUserGrant method, with any body, and a specified content type
+func NewSetAgentUserGrantRequestWithBody(server string, ns Namespace, name AgentName, handle Handle, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "handle", handle, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/grants/user/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
 }
 
 // NewTotpSetupRequest constructs an http.Request for the TotpSetup method
@@ -2328,6 +3307,97 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
+	// ListAgentsWithResponse List agents in a namespace (public ones for everyone).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /agents (the `ListAgents` operationId).
+	ListAgentsWithResponse(ctx context.Context, params *ListAgentsParams, reqEditors ...RequestEditorFn) (*ListAgentsResponse, error)
+
+	// CreateAgentWithBodyWithResponse Create an agent and its hosted git repository (§9.2).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /agents (the `CreateAgent` operationId).
+	CreateAgentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAgentResponse, error)
+
+	// CreateAgentWithResponse Create an agent and its hosted git repository (§9.2).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /agents (the `CreateAgent` operationId).
+	CreateAgentWithResponse(ctx context.Context, body CreateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAgentResponse, error)
+
+	// GetAgentWithResponse Agent metadata (public agents readable by anyone).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /agents/{ns}/{name} (the `GetAgent` operationId).
+	GetAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*GetAgentResponse, error)
+
+	// UpdateAgentWithBodyWithResponse Update agent settings (maintain).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /agents/{ns}/{name} (the `UpdateAgent` operationId).
+	UpdateAgentWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentResponse, error)
+
+	// UpdateAgentWithResponse Update agent settings (maintain).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /agents/{ns}/{name} (the `UpdateAgent` operationId).
+	UpdateAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, body UpdateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentResponse, error)
+
+	// ListAgentGrantsWithResponse List explicit grants (maintain).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /agents/{ns}/{name}/grants (the `ListAgentGrants` operationId).
+	ListAgentGrantsWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*ListAgentGrantsResponse, error)
+
+	// RemoveAgentTeamGrantWithResponse Remove a team grant (maintain).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /agents/{ns}/{name}/grants/team/{team} (the `RemoveAgentTeamGrant` operationId).
+	RemoveAgentTeamGrantWithResponse(ctx context.Context, ns Namespace, name AgentName, team TeamSlug, reqEditors ...RequestEditorFn) (*RemoveAgentTeamGrantResponse, error)
+
+	// SetAgentTeamGrantWithBodyWithResponse Grant an org team a per-agent role (maintain; org agents only).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /agents/{ns}/{name}/grants/team/{team} (the `SetAgentTeamGrant` operationId).
+	SetAgentTeamGrantWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, team TeamSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetAgentTeamGrantResponse, error)
+
+	// SetAgentTeamGrantWithResponse Grant an org team a per-agent role (maintain; org agents only).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /agents/{ns}/{name}/grants/team/{team} (the `SetAgentTeamGrant` operationId).
+	SetAgentTeamGrantWithResponse(ctx context.Context, ns Namespace, name AgentName, team TeamSlug, body SetAgentTeamGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*SetAgentTeamGrantResponse, error)
+
+	// RemoveAgentUserGrantWithResponse Remove a user grant (maintain).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /agents/{ns}/{name}/grants/user/{handle} (the `RemoveAgentUserGrant` operationId).
+	RemoveAgentUserGrantWithResponse(ctx context.Context, ns Namespace, name AgentName, handle Handle, reqEditors ...RequestEditorFn) (*RemoveAgentUserGrantResponse, error)
+
+	// SetAgentUserGrantWithBodyWithResponse Grant a user a per-agent role (maintain).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /agents/{ns}/{name}/grants/user/{handle} (the `SetAgentUserGrant` operationId).
+	SetAgentUserGrantWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, handle Handle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetAgentUserGrantResponse, error)
+
+	// SetAgentUserGrantWithResponse Grant a user a per-agent role (maintain).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /agents/{ns}/{name}/grants/user/{handle} (the `SetAgentUserGrant` operationId).
+	SetAgentUserGrantWithResponse(ctx context.Context, ns Namespace, name AgentName, handle Handle, body SetAgentUserGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*SetAgentUserGrantResponse, error)
+
 	// TotpSetupWithResponse Begin TOTP enrollment; returns the provisioning secret.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -2579,6 +3649,410 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /users/{handle} (the `GetUserProfile` operationId).
 	GetUserProfileWithResponse(ctx context.Context, handle Handle, reqEditors ...RequestEditorFn) (*GetUserProfileResponse, error)
+}
+
+type ListAgentsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]Agent
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListAgentsResponse) GetJSON200() *[]Agent {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListAgentsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListAgentsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAgentsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAgentsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListAgentsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateAgentResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Agent
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateAgentResponse) GetJSON201() *Agent {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r CreateAgentResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateAgentResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateAgentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateAgentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateAgentResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetAgentResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Agent
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetAgentResponse) GetJSON200() *Agent {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetAgentResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetAgentResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAgentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAgentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetAgentResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UpdateAgentResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Agent
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UpdateAgentResponse) GetJSON200() *Agent {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r UpdateAgentResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r UpdateAgentResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateAgentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateAgentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdateAgentResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListAgentGrantsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]AgentGrant
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListAgentGrantsResponse) GetJSON200() *[]AgentGrant {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListAgentGrantsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListAgentGrantsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAgentGrantsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAgentGrantsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListAgentGrantsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RemoveAgentTeamGrantResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r RemoveAgentTeamGrantResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r RemoveAgentTeamGrantResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RemoveAgentTeamGrantResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RemoveAgentTeamGrantResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RemoveAgentTeamGrantResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SetAgentTeamGrantResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r SetAgentTeamGrantResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SetAgentTeamGrantResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SetAgentTeamGrantResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetAgentTeamGrantResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SetAgentTeamGrantResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RemoveAgentUserGrantResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r RemoveAgentUserGrantResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r RemoveAgentUserGrantResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RemoveAgentUserGrantResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RemoveAgentUserGrantResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RemoveAgentUserGrantResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SetAgentUserGrantResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r SetAgentUserGrantResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SetAgentUserGrantResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SetAgentUserGrantResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetAgentUserGrantResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SetAgentUserGrantResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
 }
 
 type TotpSetupResponse struct {
@@ -3773,6 +5247,175 @@ func (r GetUserProfileResponse) ContentType() string {
 	return ""
 }
 
+// ListAgentsWithResponse List agents in a namespace (public ones for everyone).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /agents (the `ListAgents` operationId).
+func (c *ClientWithResponses) ListAgentsWithResponse(ctx context.Context, params *ListAgentsParams, reqEditors ...RequestEditorFn) (*ListAgentsResponse, error) {
+	rsp, err := c.ListAgents(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAgentsResponse(rsp)
+}
+
+// CreateAgentWithBodyWithResponse Create an agent and its hosted git repository (§9.2).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /agents (the `CreateAgent` operationId).
+func (c *ClientWithResponses) CreateAgentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAgentResponse, error) {
+	rsp, err := c.CreateAgentWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateAgentResponse(rsp)
+}
+
+// CreateAgentWithResponse Create an agent and its hosted git repository (§9.2).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /agents (the `CreateAgent` operationId).
+func (c *ClientWithResponses) CreateAgentWithResponse(ctx context.Context, body CreateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAgentResponse, error) {
+	rsp, err := c.CreateAgent(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateAgentResponse(rsp)
+}
+
+// GetAgentWithResponse Agent metadata (public agents readable by anyone).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /agents/{ns}/{name} (the `GetAgent` operationId).
+func (c *ClientWithResponses) GetAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*GetAgentResponse, error) {
+	rsp, err := c.GetAgent(ctx, ns, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAgentResponse(rsp)
+}
+
+// UpdateAgentWithBodyWithResponse Update agent settings (maintain).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /agents/{ns}/{name} (the `UpdateAgent` operationId).
+func (c *ClientWithResponses) UpdateAgentWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentResponse, error) {
+	rsp, err := c.UpdateAgentWithBody(ctx, ns, name, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateAgentResponse(rsp)
+}
+
+// UpdateAgentWithResponse Update agent settings (maintain).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /agents/{ns}/{name} (the `UpdateAgent` operationId).
+func (c *ClientWithResponses) UpdateAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, body UpdateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentResponse, error) {
+	rsp, err := c.UpdateAgent(ctx, ns, name, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateAgentResponse(rsp)
+}
+
+// ListAgentGrantsWithResponse List explicit grants (maintain).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /agents/{ns}/{name}/grants (the `ListAgentGrants` operationId).
+func (c *ClientWithResponses) ListAgentGrantsWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*ListAgentGrantsResponse, error) {
+	rsp, err := c.ListAgentGrants(ctx, ns, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAgentGrantsResponse(rsp)
+}
+
+// RemoveAgentTeamGrantWithResponse Remove a team grant (maintain).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /agents/{ns}/{name}/grants/team/{team} (the `RemoveAgentTeamGrant` operationId).
+func (c *ClientWithResponses) RemoveAgentTeamGrantWithResponse(ctx context.Context, ns Namespace, name AgentName, team TeamSlug, reqEditors ...RequestEditorFn) (*RemoveAgentTeamGrantResponse, error) {
+	rsp, err := c.RemoveAgentTeamGrant(ctx, ns, name, team, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRemoveAgentTeamGrantResponse(rsp)
+}
+
+// SetAgentTeamGrantWithBodyWithResponse Grant an org team a per-agent role (maintain; org agents only).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /agents/{ns}/{name}/grants/team/{team} (the `SetAgentTeamGrant` operationId).
+func (c *ClientWithResponses) SetAgentTeamGrantWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, team TeamSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetAgentTeamGrantResponse, error) {
+	rsp, err := c.SetAgentTeamGrantWithBody(ctx, ns, name, team, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetAgentTeamGrantResponse(rsp)
+}
+
+// SetAgentTeamGrantWithResponse Grant an org team a per-agent role (maintain; org agents only).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /agents/{ns}/{name}/grants/team/{team} (the `SetAgentTeamGrant` operationId).
+func (c *ClientWithResponses) SetAgentTeamGrantWithResponse(ctx context.Context, ns Namespace, name AgentName, team TeamSlug, body SetAgentTeamGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*SetAgentTeamGrantResponse, error) {
+	rsp, err := c.SetAgentTeamGrant(ctx, ns, name, team, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetAgentTeamGrantResponse(rsp)
+}
+
+// RemoveAgentUserGrantWithResponse Remove a user grant (maintain).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /agents/{ns}/{name}/grants/user/{handle} (the `RemoveAgentUserGrant` operationId).
+func (c *ClientWithResponses) RemoveAgentUserGrantWithResponse(ctx context.Context, ns Namespace, name AgentName, handle Handle, reqEditors ...RequestEditorFn) (*RemoveAgentUserGrantResponse, error) {
+	rsp, err := c.RemoveAgentUserGrant(ctx, ns, name, handle, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRemoveAgentUserGrantResponse(rsp)
+}
+
+// SetAgentUserGrantWithBodyWithResponse Grant a user a per-agent role (maintain).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /agents/{ns}/{name}/grants/user/{handle} (the `SetAgentUserGrant` operationId).
+func (c *ClientWithResponses) SetAgentUserGrantWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, handle Handle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetAgentUserGrantResponse, error) {
+	rsp, err := c.SetAgentUserGrantWithBody(ctx, ns, name, handle, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetAgentUserGrantResponse(rsp)
+}
+
+// SetAgentUserGrantWithResponse Grant a user a per-agent role (maintain).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /agents/{ns}/{name}/grants/user/{handle} (the `SetAgentUserGrant` operationId).
+func (c *ClientWithResponses) SetAgentUserGrantWithResponse(ctx context.Context, ns Namespace, name AgentName, handle Handle, body SetAgentUserGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*SetAgentUserGrantResponse, error) {
+	rsp, err := c.SetAgentUserGrant(ctx, ns, name, handle, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetAgentUserGrantResponse(rsp)
+}
+
 // TotpSetupWithResponse Begin TOTP enrollment; returns the provisioning secret.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -4239,6 +5882,287 @@ func (c *ClientWithResponses) GetUserProfileWithResponse(ctx context.Context, ha
 		return nil, err
 	}
 	return ParseGetUserProfileResponse(rsp)
+}
+
+// ParseListAgentsResponse parses an HTTP response from a ListAgentsWithResponse call
+func ParseListAgentsResponse(rsp *http.Response) (*ListAgentsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAgentsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []Agent
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateAgentResponse parses an HTTP response from a CreateAgentWithResponse call
+func ParseCreateAgentResponse(rsp *http.Response) (*CreateAgentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateAgentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Agent
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAgentResponse parses an HTTP response from a GetAgentWithResponse call
+func ParseGetAgentResponse(rsp *http.Response) (*GetAgentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAgentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Agent
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateAgentResponse parses an HTTP response from a UpdateAgentWithResponse call
+func ParseUpdateAgentResponse(rsp *http.Response) (*UpdateAgentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateAgentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Agent
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListAgentGrantsResponse parses an HTTP response from a ListAgentGrantsWithResponse call
+func ParseListAgentGrantsResponse(rsp *http.Response) (*ListAgentGrantsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAgentGrantsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []AgentGrant
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRemoveAgentTeamGrantResponse parses an HTTP response from a RemoveAgentTeamGrantWithResponse call
+func ParseRemoveAgentTeamGrantResponse(rsp *http.Response) (*RemoveAgentTeamGrantResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RemoveAgentTeamGrantResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetAgentTeamGrantResponse parses an HTTP response from a SetAgentTeamGrantWithResponse call
+func ParseSetAgentTeamGrantResponse(rsp *http.Response) (*SetAgentTeamGrantResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetAgentTeamGrantResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRemoveAgentUserGrantResponse parses an HTTP response from a RemoveAgentUserGrantWithResponse call
+func ParseRemoveAgentUserGrantResponse(rsp *http.Response) (*RemoveAgentUserGrantResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RemoveAgentUserGrantResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetAgentUserGrantResponse parses an HTTP response from a SetAgentUserGrantWithResponse call
+func ParseSetAgentUserGrantResponse(rsp *http.Response) (*SetAgentUserGrantResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetAgentUserGrantResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseTotpSetupResponse parses an HTTP response from a TotpSetupWithResponse call

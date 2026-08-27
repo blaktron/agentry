@@ -23,6 +23,9 @@ type RouteDecl struct {
 	// NoAuthz marks routes outside the chokepoint: credential-establishing
 	// endpoints (register/login/verify) that are rate-limited instead.
 	NoAuthz bool
+	// AgentScoped routes resolve {ns}/{name} and check the caller's
+	// effective agent role via auth.CheckAgent.
+	AgentScoped bool
 }
 
 // NormalizeOpID canonicalizes an operationId: the generator capitalizes ids
@@ -51,30 +54,39 @@ func AllRouteAuthzDecls() map[string]RouteDecl {
 
 // routeAuthz maps OpenAPI operationId → declaration. Keep alphabetical.
 var routeAuthz = map[string]RouteDecl{
-	"addTeamMember":     {Action: auth.ActOrgTeamsManage, OrgScoped: true},
-	"createOrg":         {Action: auth.ActOrgCreate},
-	"createTeam":        {Action: auth.ActOrgTeamsManage, OrgScoped: true},
-	"createToken":       {Action: auth.ActUserTokensManage, SessionOnly: true},
-	"deleteTeam":        {Action: auth.ActOrgTeamsManage, OrgScoped: true},
-	"getCurrentUser":    {Action: auth.ActUserSelfRead},
-	"getMeta":           {Action: auth.ActPublicRead, Anonymous: true, NoAuthz: true},
-	"getOrg":            {Action: auth.ActOrgRead, OrgScoped: true, Anonymous: true},
-	"getUserProfile":    {Action: auth.ActPublicRead, Anonymous: true},
-	"listOrgAudit":      {Action: auth.ActOrgAuditRead, OrgScoped: true},
-	"listOrgMembers":    {Action: auth.ActOrgMembersRead, OrgScoped: true},
-	"listTeamMembers":   {Action: auth.ActOrgTeamsRead, OrgScoped: true},
-	"listTeams":         {Action: auth.ActOrgTeamsRead, OrgScoped: true},
-	"listTokens":        {Action: auth.ActUserTokensRead},
-	"login":             {NoAuthz: true, Anonymous: true},
-	"logout":            {Action: auth.ActUserSecurityManage, SessionOnly: true},
-	"register":          {NoAuthz: true, Anonymous: true},
-	"removeOrgMember":   {Action: auth.ActOrgMembersManage, OrgScoped: true}, // elevates to ActOrgMembersElevate for owner/admin targets
-	"removeTeamMember":  {Action: auth.ActOrgTeamsManage, OrgScoped: true},
-	"revokeToken":       {Action: auth.ActUserTokensManage, SessionOnly: true},
-	"setOrgMember":      {Action: auth.ActOrgMembersManage, OrgScoped: true}, // elevates to ActOrgMembersElevate for owner/admin roles
-	"totpSetup":         {Action: auth.ActUserSecurityManage, SessionOnly: true},
-	"totpVerify":        {Action: auth.ActUserSecurityManage, SessionOnly: true},
-	"updateCurrentUser": {Action: auth.ActUserSelfUpdate},
-	"updateOrg":         {Action: auth.ActOrgUpdate, OrgScoped: true},
-	"verifyEmail":       {NoAuthz: true, Anonymous: true},
+	"addTeamMember":        {Action: auth.ActOrgTeamsManage, OrgScoped: true},
+	"createAgent":          {Action: auth.ActAgentCreate, AgentScoped: false},
+	"getAgent":             {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
+	"listAgents":           {Action: auth.ActPublicRead, Anonymous: true},
+	"updateAgent":          {Action: auth.ActAgentMaintain, AgentScoped: true},
+	"listAgentGrants":      {Action: auth.ActAgentMaintain, AgentScoped: true},
+	"setAgentUserGrant":    {Action: auth.ActAgentMaintain, AgentScoped: true},
+	"removeAgentUserGrant": {Action: auth.ActAgentMaintain, AgentScoped: true},
+	"setAgentTeamGrant":    {Action: auth.ActAgentMaintain, AgentScoped: true},
+	"removeAgentTeamGrant": {Action: auth.ActAgentMaintain, AgentScoped: true},
+	"createOrg":            {Action: auth.ActOrgCreate},
+	"createTeam":           {Action: auth.ActOrgTeamsManage, OrgScoped: true},
+	"createToken":          {Action: auth.ActUserTokensManage, SessionOnly: true},
+	"deleteTeam":           {Action: auth.ActOrgTeamsManage, OrgScoped: true},
+	"getCurrentUser":       {Action: auth.ActUserSelfRead},
+	"getMeta":              {Action: auth.ActPublicRead, Anonymous: true, NoAuthz: true},
+	"getOrg":               {Action: auth.ActOrgRead, OrgScoped: true, Anonymous: true},
+	"getUserProfile":       {Action: auth.ActPublicRead, Anonymous: true},
+	"listOrgAudit":         {Action: auth.ActOrgAuditRead, OrgScoped: true},
+	"listOrgMembers":       {Action: auth.ActOrgMembersRead, OrgScoped: true},
+	"listTeamMembers":      {Action: auth.ActOrgTeamsRead, OrgScoped: true},
+	"listTeams":            {Action: auth.ActOrgTeamsRead, OrgScoped: true},
+	"listTokens":           {Action: auth.ActUserTokensRead},
+	"login":                {NoAuthz: true, Anonymous: true},
+	"logout":               {Action: auth.ActUserSecurityManage, SessionOnly: true},
+	"register":             {NoAuthz: true, Anonymous: true},
+	"removeOrgMember":      {Action: auth.ActOrgMembersManage, OrgScoped: true}, // elevates to ActOrgMembersElevate for owner/admin targets
+	"removeTeamMember":     {Action: auth.ActOrgTeamsManage, OrgScoped: true},
+	"revokeToken":          {Action: auth.ActUserTokensManage, SessionOnly: true},
+	"setOrgMember":         {Action: auth.ActOrgMembersManage, OrgScoped: true}, // elevates to ActOrgMembersElevate for owner/admin roles
+	"totpSetup":            {Action: auth.ActUserSecurityManage, SessionOnly: true},
+	"totpVerify":           {Action: auth.ActUserSecurityManage, SessionOnly: true},
+	"updateCurrentUser":    {Action: auth.ActUserSelfUpdate},
+	"updateOrg":            {Action: auth.ActOrgUpdate, OrgScoped: true},
+	"verifyEmail":          {NoAuthz: true, Anonymous: true},
 }

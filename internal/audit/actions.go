@@ -29,6 +29,13 @@ const (
 	ActionTeamDelete       Action = "team.delete"
 	ActionTeamMemberAdd    Action = "team.member_add"
 	ActionTeamMemberRemove Action = "team.member_remove"
+
+	// Agents & repos (M2).
+	ActionAgentCreate      Action = "agent.create"
+	ActionAgentUpdate      Action = "agent.update"
+	ActionAgentGrantSet    Action = "agent.grant_set"
+	ActionAgentGrantRemove Action = "agent.grant_remove"
+	ActionRepoPush         Action = "repo.push"
 )
 
 // registry is populated at init from the constants above.
@@ -42,6 +49,8 @@ func init() {
 		ActionOrgCreate, ActionOrgUpdate, ActionOrgMemberSet,
 		ActionOrgMemberRemove, ActionTeamCreate, ActionTeamDelete,
 		ActionTeamMemberAdd, ActionTeamMemberRemove,
+		ActionAgentCreate, ActionAgentUpdate, ActionAgentGrantSet,
+		ActionAgentGrantRemove, ActionRepoPush,
 	} {
 		registry[a] = struct{}{}
 	}

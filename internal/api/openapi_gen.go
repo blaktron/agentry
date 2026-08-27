@@ -22,6 +22,108 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AgentQuarantineState.
+const (
+	Blocked     AgentQuarantineState = "blocked"
+	None        AgentQuarantineState = "none"
+	Quarantined AgentQuarantineState = "quarantined"
+)
+
+// Valid indicates whether the value is a known member of the AgentQuarantineState enum.
+func (e AgentQuarantineState) Valid() bool {
+	switch e {
+	case Blocked:
+		return true
+	case None:
+		return true
+	case Quarantined:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentVisibility.
+const (
+	AgentVisibilityPrivate AgentVisibility = "private"
+	AgentVisibilityPublic  AgentVisibility = "public"
+)
+
+// Valid indicates whether the value is a known member of the AgentVisibility enum.
+func (e AgentVisibility) Valid() bool {
+	switch e {
+	case AgentVisibilityPrivate:
+		return true
+	case AgentVisibilityPublic:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentGrantKind.
+const (
+	AgentGrantKindTeam AgentGrantKind = "team"
+	AgentGrantKindUser AgentGrantKind = "user"
+)
+
+// Valid indicates whether the value is a known member of the AgentGrantKind enum.
+func (e AgentGrantKind) Valid() bool {
+	switch e {
+	case AgentGrantKindTeam:
+		return true
+	case AgentGrantKindUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentKind.
+const (
+	McpServer   AgentKind = "mcp-server"
+	PromptAgent AgentKind = "prompt-agent"
+	Skill       AgentKind = "skill"
+)
+
+// Valid indicates whether the value is a known member of the AgentKind enum.
+func (e AgentKind) Valid() bool {
+	switch e {
+	case McpServer:
+		return true
+	case PromptAgent:
+		return true
+	case Skill:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentRole.
+const (
+	Maintain AgentRole = "maintain"
+	Publish  AgentRole = "publish"
+	Read     AgentRole = "read"
+	Write    AgentRole = "write"
+)
+
+// Valid indicates whether the value is a known member of the AgentRole enum.
+func (e AgentRole) Valid() bool {
+	switch e {
+	case Maintain:
+		return true
+	case Publish:
+		return true
+	case Read:
+		return true
+	case Write:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AuditEventActorKind.
 const (
 	AuditEventActorKindPat    AuditEventActorKind = "pat"
@@ -40,6 +142,24 @@ func (e AuditEventActorKind) Valid() bool {
 	case AuditEventActorKindSystem:
 		return true
 	case AuditEventActorKindUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CreateAgentRequestVisibility.
+const (
+	CreateAgentRequestVisibilityPrivate CreateAgentRequestVisibility = "private"
+	CreateAgentRequestVisibilityPublic  CreateAgentRequestVisibility = "public"
+)
+
+// Valid indicates whether the value is a known member of the CreateAgentRequestVisibility enum.
+func (e CreateAgentRequestVisibility) Valid() bool {
+	switch e {
+	case CreateAgentRequestVisibilityPrivate:
+		return true
+	case CreateAgentRequestVisibilityPublic:
 		return true
 	default:
 		return false
@@ -106,6 +226,69 @@ func (e Scope) Valid() bool {
 	}
 }
 
+// Defines values for UpdateAgentJSONBodyVisibility.
+const (
+	UpdateAgentJSONBodyVisibilityPrivate UpdateAgentJSONBodyVisibility = "private"
+	UpdateAgentJSONBodyVisibilityPublic  UpdateAgentJSONBodyVisibility = "public"
+)
+
+// Valid indicates whether the value is a known member of the UpdateAgentJSONBodyVisibility enum.
+func (e UpdateAgentJSONBodyVisibility) Valid() bool {
+	switch e {
+	case UpdateAgentJSONBodyVisibilityPrivate:
+		return true
+	case UpdateAgentJSONBodyVisibilityPublic:
+		return true
+	default:
+		return false
+	}
+}
+
+// Agent defines model for Agent.
+type Agent struct {
+	// AutoPublishTags Present for callers with maintain (§6.3 toggle).
+	AutoPublishTags *bool     `json:"autoPublishTags,omitempty"`
+	CreatedAt       time.Time `json:"createdAt"`
+	DefaultBranch   string    `json:"defaultBranch"`
+
+	// GitHttpUrl Clone URL for the hosted repository (§6.1).
+	GitHttpUrl string             `json:"gitHttpUrl"`
+	Id         openapi_types.UUID `json:"id"`
+
+	// Kind Supported agent kinds (§1.4).
+	Kind            AgentKind            `json:"kind"`
+	Name            string               `json:"name"`
+	Namespace       string               `json:"namespace"`
+	QuarantineState AgentQuarantineState `json:"quarantineState"`
+	Summary         string               `json:"summary"`
+	Visibility      AgentVisibility      `json:"visibility"`
+}
+
+// AgentQuarantineState defines model for Agent.QuarantineState.
+type AgentQuarantineState string
+
+// AgentVisibility defines model for Agent.Visibility.
+type AgentVisibility string
+
+// AgentGrant defines model for AgentGrant.
+type AgentGrant struct {
+	// Grantee User handle or team slug.
+	Grantee string         `json:"grantee"`
+	Kind    AgentGrantKind `json:"kind"`
+
+	// Role Per-agent grant levels (§12.2), read < write < maintain < publish.
+	Role AgentRole `json:"role"`
+}
+
+// AgentGrantKind defines model for AgentGrant.Kind.
+type AgentGrantKind string
+
+// AgentKind Supported agent kinds (§1.4).
+type AgentKind string
+
+// AgentRole Per-agent grant levels (§12.2), read < write < maintain < publish.
+type AgentRole string
+
 // AuditEvent defines model for AuditEvent.
 type AuditEvent struct {
 	// Action Registered action id (internal/audit/actions.go).
@@ -129,6 +312,21 @@ type AuditPage struct {
 	// NextCursor Opaque; absent on the last page.
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
+
+// CreateAgentRequest defines model for CreateAgentRequest.
+type CreateAgentRequest struct {
+	// Kind Supported agent kinds (§1.4).
+	Kind AgentKind `json:"kind"`
+	Name string    `json:"name"`
+
+	// Namespace User or org handle owning the agent.
+	Namespace  string                        `json:"namespace"`
+	Summary    *string                       `json:"summary,omitempty"`
+	Visibility *CreateAgentRequestVisibility `json:"visibility,omitempty"`
+}
+
+// CreateAgentRequestVisibility defines model for CreateAgentRequest.Visibility.
+type CreateAgentRequestVisibility string
 
 // CreateOrgRequest defines model for CreateOrgRequest.
 type CreateOrgRequest struct {
@@ -299,14 +497,47 @@ type User struct {
 	TotpEnabled   bool               `json:"totpEnabled"`
 }
 
+// AgentName defines model for AgentName.
+type AgentName = string
+
 // Handle defines model for Handle.
 type Handle = string
+
+// Namespace defines model for Namespace.
+type Namespace = string
 
 // OrgHandle defines model for OrgHandle.
 type OrgHandle = string
 
 // TeamSlug defines model for TeamSlug.
 type TeamSlug = string
+
+// ListAgentsParams defines parameters for ListAgents.
+type ListAgentsParams struct {
+	Namespace string `form:"namespace" json:"namespace"`
+}
+
+// UpdateAgentJSONBody defines parameters for UpdateAgent.
+type UpdateAgentJSONBody struct {
+	AutoPublishTags *bool                          `json:"autoPublishTags,omitempty"`
+	Summary         *string                        `json:"summary,omitempty"`
+	Visibility      *UpdateAgentJSONBodyVisibility `json:"visibility,omitempty"`
+}
+
+// UpdateAgentJSONBodyVisibility defines parameters for UpdateAgent.
+type UpdateAgentJSONBodyVisibility string
+
+// SetAgentTeamGrantJSONBody defines parameters for SetAgentTeamGrant.
+type SetAgentTeamGrantJSONBody struct {
+	// Role Per-agent grant levels (§12.2), read < write < maintain < publish.
+	Role AgentRole `json:"role"`
+}
+
+// SetAgentUserGrantJSONBody defines parameters for SetAgentUserGrant.
+type SetAgentUserGrantJSONBody struct {
+	// Role Per-agent grant levels (§12.2), read < write < maintain < publish.
+	Role AgentRole `json:"role"`
+}
 
 // TotpVerifyJSONBody defines parameters for TotpVerify.
 type TotpVerifyJSONBody struct {
@@ -346,6 +577,18 @@ type UpdateCurrentUserJSONBody struct {
 	DisplayName *string `json:"displayName,omitempty"`
 }
 
+// CreateAgentJSONRequestBody defines body for CreateAgent for application/json ContentType.
+type CreateAgentJSONRequestBody = CreateAgentRequest
+
+// UpdateAgentJSONRequestBody defines body for UpdateAgent for application/json ContentType.
+type UpdateAgentJSONRequestBody UpdateAgentJSONBody
+
+// SetAgentTeamGrantJSONRequestBody defines body for SetAgentTeamGrant for application/json ContentType.
+type SetAgentTeamGrantJSONRequestBody SetAgentTeamGrantJSONBody
+
+// SetAgentUserGrantJSONRequestBody defines body for SetAgentUserGrant for application/json ContentType.
+type SetAgentUserGrantJSONRequestBody SetAgentUserGrantJSONBody
+
 // TotpVerifyJSONRequestBody defines body for TotpVerify for application/json ContentType.
 type TotpVerifyJSONRequestBody TotpVerifyJSONBody
 
@@ -378,6 +621,33 @@ type CreateTokenJSONRequestBody = CreateTokenRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ListAgents List agents in a namespace (public ones for everyone).
+	// (GET /agents)
+	ListAgents(w http.ResponseWriter, r *http.Request, params ListAgentsParams)
+	// CreateAgent Create an agent and its hosted git repository (§9.2).
+	// (POST /agents)
+	CreateAgent(w http.ResponseWriter, r *http.Request)
+	// GetAgent Agent metadata (public agents readable by anyone).
+	// (GET /agents/{ns}/{name})
+	GetAgent(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName)
+	// UpdateAgent Update agent settings (maintain).
+	// (PATCH /agents/{ns}/{name})
+	UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName)
+	// ListAgentGrants List explicit grants (maintain).
+	// (GET /agents/{ns}/{name}/grants)
+	ListAgentGrants(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName)
+	// RemoveAgentTeamGrant Remove a team grant (maintain).
+	// (DELETE /agents/{ns}/{name}/grants/team/{team})
+	RemoveAgentTeamGrant(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, team TeamSlug)
+	// SetAgentTeamGrant Grant an org team a per-agent role (maintain; org agents only).
+	// (PUT /agents/{ns}/{name}/grants/team/{team})
+	SetAgentTeamGrant(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, team TeamSlug)
+	// RemoveAgentUserGrant Remove a user grant (maintain).
+	// (DELETE /agents/{ns}/{name}/grants/user/{handle})
+	RemoveAgentUserGrant(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, handle Handle)
+	// SetAgentUserGrant Grant a user a per-agent role (maintain).
+	// (PUT /agents/{ns}/{name}/grants/user/{handle})
+	SetAgentUserGrant(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, handle Handle)
 	// TotpSetup Begin TOTP enrollment; returns the provisioning secret.
 	// (POST /auth/2fa/totp/setup)
 	TotpSetup(w http.ResponseWriter, r *http.Request)
@@ -466,6 +736,334 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListAgents operation middleware
+func (siw *ServerInterfaceWrapper) ListAgents(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAgentsParams
+
+	// ------------- Required query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "namespace", r.URL.Query(), &params.Namespace, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "namespace"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAgents(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAgent operation middleware
+func (siw *ServerInterfaceWrapper) CreateAgent(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAgent(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAgent operation middleware
+func (siw *ServerInterfaceWrapper) GetAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns Namespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name AgentName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAgent(w, r, ns, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAgent operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns Namespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name AgentName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAgent(w, r, ns, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAgentGrants operation middleware
+func (siw *ServerInterfaceWrapper) ListAgentGrants(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns Namespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name AgentName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAgentGrants(w, r, ns, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveAgentTeamGrant operation middleware
+func (siw *ServerInterfaceWrapper) RemoveAgentTeamGrant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns Namespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name AgentName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "team" -------------
+	var team TeamSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "team", r.PathValue("team"), &team, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "team", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveAgentTeamGrant(w, r, ns, name, team)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetAgentTeamGrant operation middleware
+func (siw *ServerInterfaceWrapper) SetAgentTeamGrant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns Namespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name AgentName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "team" -------------
+	var team TeamSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "team", r.PathValue("team"), &team, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "team", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetAgentTeamGrant(w, r, ns, name, team)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveAgentUserGrant operation middleware
+func (siw *ServerInterfaceWrapper) RemoveAgentUserGrant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns Namespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name AgentName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "handle" -------------
+	var handle Handle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "handle", r.PathValue("handle"), &handle, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "handle", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveAgentUserGrant(w, r, ns, name, handle)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetAgentUserGrant operation middleware
+func (siw *ServerInterfaceWrapper) SetAgentUserGrant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns Namespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name AgentName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "handle" -------------
+	var handle Handle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "handle", r.PathValue("handle"), &handle, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "handle", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetAgentUserGrant(w, r, ns, name, handle)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // TotpSetup operation middleware
 func (siw *ServerInterfaceWrapper) TotpSetup(w http.ResponseWriter, r *http.Request) {
@@ -1259,6 +1857,15 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/teams/{team}/members/{handle}", wrapper.RemoveTeamMember)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/teams/{team}/members/{handle}", wrapper.AddTeamMember)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/audit", wrapper.ListOrgAudit)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents", wrapper.ListAgents)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents", wrapper.CreateAgent)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{ns}/{name}", wrapper.GetAgent)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/agents/{ns}/{name}", wrapper.UpdateAgent)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{ns}/{name}/grants", wrapper.ListAgentGrants)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{ns}/{name}/grants/user/{handle}", wrapper.RemoveAgentUserGrant)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/agents/{ns}/{name}/grants/user/{handle}", wrapper.SetAgentUserGrant)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{ns}/{name}/grants/team/{team}", wrapper.RemoveAgentTeamGrant)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/agents/{ns}/{name}/grants/team/{team}", wrapper.SetAgentTeamGrant)
 
 	return m
 }
@@ -1268,66 +1875,79 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"TEmvMW2p6WLcfhXr/wYA",
+	"7DzrbuO2mq9CaA+wCarYSWZOD+r5cZCmM+2g0002yRQL5GQ7tPRZZkciNSTlxCeb59n32CdbfCR1sUXZ",
+	"SiJnWuwCRSeyKOq736n7IBJZLjhwrYLJfZBTSTPQIM3VSQJc/xvNAC8YDyZBTvU8CANufrP/hIGELwWT",
+	"EAcTLQsIAxXNIaN2O61B4oP/eU0P/nl48N3N3t8n7s+Dm/vD8NtXD+Wd/b//JQgDvcxxa6Ul40nw8BAG",
+	"P1Eep10gzO3N5wHx6m9bgUAqqJxGnaRQu4fhTCYbaSFksnsgroBml2mRdMCggWa7BuIB91e54AqMmJ5L",
+	"MU0hwz8jwTVwjX/SPE9ZRDUTfJzbFd/8rgTHezU4f5EwCybBv4xrPRjbu2pc7mveGIOKJMtxu2ASvJVS",
+	"SDITaSpuGU/IxbtT8t3rv/5tZGjkNqhUyOAtRQ5SMwsyLbQ4L6YpU/MrmpifVl9wLkEB12QmJIlomoJU",
+	"5JbpOcko45oyTvb+57+/Hb0iWiRJCvujmk5TIVKgPHgIg0gC1RCfGAhmQmZUB5MgphoONMugfqakLeI5",
+	"o0Wqv5eUR3N8rLUiYfonrfOPMm2DfZoKDuTjxQcDuJ4DmQulISYScqGYFnJpAT9qQlzvzeIVSIuCxb5l",
+	"nxmPt3HPUP5nXPhQSqcHGd7U69bdLwWVlGvG4VJTbdYAL7Jgch1wwSForkBAp6mIPkMc3HhgVkWWUbn0",
+	"vmfBFJuylOll8xU5CkgUhEEu2QJff+NTyFrVrgNDrRqlsLTQhl4rr6nhWWf5CoPbJGgKVQ2PmP4OkUZU",
+	"DNl/xEfaUp/gzwBtsfmoQBJrygnKDdCMqLRIRpuYX5KpUCCD0FoeH+GlSKGXsFzgwnWSOtKVoLvtOjH/",
+	"2QG3it9lkedCoh5QXERwU4WKcDR6bRShxEV9ZmlqOC6yXB+Y1UEYZFF+oEAuQHoxrKFv2xGQdhdiMCAp",
+	"LCC1rz4eHe+HRAKNyT+Kw8NXEbmVTEN5URkad51bc9WEFp8NwsA8hlC6JxB+u9gPbREz/Xbht4uRhXsd",
+	"jQtImNIgkYJmCWEx2WNcg+Q0HVPccmzvqFEi/MaFRlrI2oP67//sl66cIh9UxDL8Z6k0+IUtBk2ZMYw0",
+	"jhnCQ9PzBorWHbZkp6fdE1FUSPk4g66pTEC/7/cCu7ikQQ9j04CoScCw5KRXUZBb5zSBNv9hUUaiTEOm",
+	"tqptLUoP1YuolHSJ1xzu9GkhlZBtgTrL6ZcC3hA6NW5WcOOsUqo0yWkCo2CbqXWQ+vA7NQbSKiV8KUB5",
+	"BP3JHuz5IfWa0/NYYoH/JZVBvuUY4iB9jCXx6lbDu2X07gPwRM+DydHrw3Cbt3PeJ5hUbi58hgfscn7d",
+	"fDqTSSeXYqbylC7LFKiJ2bEPs3llXAaJtZuIVYlOE6ZurK7EZ+CdeMFdziSoE90WgB8sOxTRguxRHhOm",
+	"SETzHC2v3jdSkNE7cn5yRVI2A7Q6zpu8Mla3n1HifSmqIpFDf4NwicvxuYzx9/aBo3XD4JGYoHqRj6If",
+	"RMK6aZni3TYdf6qiGcgoS71Kk1OlboWMvd5IC52fihh8ztBCT27nYO0WjSJRcE3mVJGrs6tzApxOU4i3",
+	"mzELfQOUDQRQRerBP1JyZqStDejbaC4I4+Q/Dowpk8uD08uLd2hsIyE+MzighZ4D15imQUyyQlPrwX3E",
+	"Mo54C/vRerVQdB68htOH4i+QTUGqOcvbGPYJINGK4LKegJrcL7LgokGklxhZTO5bOZwfl84Y9BfQtI0A",
+	"zdmvIJU3sjo5f09UIWc0QsX+XUgkPtzRLEekg8WRjxczoLqQoLrjnHtPNroWE0M6O8DskLjdyCyliSJ7",
+	"vxdxAiSXYsFikCFRLEEHhKFqzFQztKvxzhg//fC+E8mzNAaliVoNw+WSnH54Txb2KWPFjkjMEM1pgU8S",
+	"LjT4Y8lF16vczjFRkGHeFNX7TwuWxgdK0yyHeH+Vzoejo9HhVm0t3xo2Wdpgh08kzmTiUdonFAZWfeEG",
+	"3/fUrF4pcVEhu6kggsEJjTPGFRE8XfprHwuQbMYg/kFgXtIznPV62W0pb6n7bbGTCUFVVSERMjbZi7jl",
+	"IG1KBRaH8kJBVEiml79JWDC4BUn+i2TGKlXZWjP3MhuhIOAeQRi0Hg/CwD7uzVPOqR5EKlYiiX6P9JQG",
+	"jMU/qsdB01nmEc3S6bod0taRCpkcTEXBY7IHfCZkBDG5vDwLiaH+a78dyCXM2F1713dMKk2Ojkk0p5JG",
+	"GqQKjew6wSIYWqVCfC5yZO/r0THJqVb+lzw1CNoY91S1oqDConpTk6/bpP+cahtyGrbSND2bBZPrLe6P",
+	"4qPr4qf9UcTVHMisSFPUEAl6RC7n4pYTuKORTpdE8KhHuqY7PP8NYlDXj9cCLVfVJa5+TGx2r8jeDwdH",
+	"h4ZXa/lClf23FUVKIZVPUCCND0xZhixoymITAhG73Aqmq2RPU4NnJQKrr57hPt43Z6CUS7Y308huUT/g",
+	"4/Z6js240pR3lE+VprpoBgOMa0hszKOZ7vAW9oeWmmokQMUJXEQ+Xrxf9aJzrXM1GY+dEx7FsChr/2pc",
+	"U7eZphSSbRcevFuCXKHlVYY6rtuWTPZ3oE/NBMui2WDprclkVqyx/WXHmfBqotSA8viv35rQr4L6sHcW",
+	"XQK+Me+xhrQdipxcEWsoVzLfuiqai4krjZq/y/qokcpJWRotr91KIZNJ6cutC5/QyBTVsMZVrioUyEku",
+	"xYyl4PXr2J5rM7pvAOb6ej0CJbPUR7MrofNL0EXelS8KnWPa59pHbRiMkW8T/Xuq4NWxzW7tGrJX+lJ0",
+	"Aca5NvJJvMpzr0Ndw8e9MWxC5sPMr9U7iKQrNfPf+dUFtv4k6/lhuBY6f2vrBz0y0tWwuVSr1fB5FezV",
+	"N2wOLx7qwPYSYwdwUwqG2lOgEuS7Eh+aLH8jOUiFuSiWREApYv2+a8kaPMxDNd7oMqzcqTKhM21tW6Go",
+	"G9vOpfxWrqtdYc5+hqVtEjM+Ex57YZwCuXh7eUUw3S5bo64oQqSx03I5sWmpCsuUUYVl18Xkvyqi3JRi",
+	"0apIbbKKRIUmlASuQeaSKZdV4IbG143IWxtK2GZ11akme10N8v0ROacJ49T2WRSJTA39YEoVxKN/IOop",
+	"i4ArI2WOPOcfTk7f/nT24Ye3F2Tv349JDjxmPNlvuPqgxPfk/H3QyKCDw9Hx6BAXihw4zVkwCV6NDkev",
+	"bNtlblhuXbr5M7HmAZXQgIitjeADU/rELglXpliuHT+/FGCanY3RlbJO3D2ssG44btYmD44PDzdMHbSn",
+	"Dfo1NRJvP6M9hGDxHTW69l1bV0A3ZhpqzQom1zeNCr6hpRNFrN5RUhGL7NmKPBEclJFjWIBcCu6qJGaU",
+	"4drqigowts6F8nCr0SFx9Aelvxfx8lHU3ERETw/m4eFhndcPLX4eDQaBY2MH24izes/gXsUviyuh3HWX",
+	"TdVeq3L0ImF6bfziu9Gxn18PYalo43uuHsb3yPmHTqX7EXTJwzWV86FRLxnX01QP4dbF9RTas/Xv6fwa",
+	"XsusGGSgaUw1rTTL6R3GeybhmWKpYKOGUR3N27z5mMcNFXtB9jxNl7eOR7Ujnae3HB/XXlwPSXpYkReQ",
+	"SsvfuGzJPt+K2A2dCVGgNeNYjS+HOh5jMMZm1qSHs/7RrvuzmI/+7tsg1seHWwoMwT/jteEO4Wdu2ud5",
+	"7BtroNn4Hv//YIPaFDS0uXkBmVhYS4PZp0X9pVi6fXE1sOph/2tfcxWxGcQv260ItfNsdv5qC0PCIC88",
+	"CnPpHO2fgL5DmP/nTex1NEf72G2PPBhyoz0cQiLsZtT0GqxUUJJXE3oIeC0gb8wiFw5gm+spKlwokON7",
+	"m573VWKsc/zRhMw1b76eCiMhB1HhPzx1/1+BtyuwFYdu3d2gqoWej49ndKyFzscKdGEHTrxpclVLDXYY",
+	"Ya4XbH2nHbgUaZrZwNCWXiPBZ0xm9kzCGlam847m6vn0/h4SxsuRphKIN0SCLiRXpopmBkUUE6Yy5lqE",
+	"TeoXeu6lvYVyM/F/tWuGUovIjXNtrkebVYOJ/+o42ADFBsf4NZ5YQaDETANjeUPEsIkN1dScn/hm4mxH",
+	"paGVcb4XTueak3QeRbu0xWUCCrudTM0hHhHsf5cAoR2zYv9prSD9yc3UvSGfqkm3TyQrlCZTIBDNBcRY",
+	"zTPPrg7kfSJzoDFIHMyjabp1OG/oSsi568GRvW+MVJmmtxPZfWIk5U2NuMPXQblFxkShNwoZ3u+jRSVj",
+	"JCzE56FCC9zKoFQqjUNtE07S9XS7sSq7vjvSnvWm8gtXVd2EZ7tI5yZgXVn1DbHjX5GbpsAGFPlSQAHx",
+	"8PJb118Zj9mCxYXtPxmA9sy7vyn7zG6a6Gh/E5Otazqo+oB+Rlvn9NZ13IbxUNUIztOmaZ7oowwOpBzY",
+	"2wGDnM+ipSTQOJag3IlKO9LOUohtt7CDM5kbre2qhJvR2x26DrO/12fgubCqkDw89dwLyjFW7C6ortnd",
+	"dm/BkM1SELuV3eJcncbYaUeocdrjhS0XYuZh35lMKGf/tHZqJ00h0XjDG3eYmEwhEhkoO4/a5JdhUs2v",
+	"8b2QycYOkOXY41LZ+iT7Tls6PUg+vLqsMNSN6lTdHTNip97U9XUztWJGmfc9XNjS3RmC9EN4jcfNkX3t",
+	"lkqHVJQNFTGMdKz3VbCYV3dVDMu/2d+qePZk68ZGyplMzDHI50hC6B+SsIMfwaaJiI4nU5YxvfJgRu9Y",
+	"hm2348NDM7Rnr47C1mxo157uROku5zO2njU1p1Z94SfedCdHny8yeG7AMJ7YU6Yh4XAL6G3NVLmTnjdu",
+	"MMe8tgwsv10LLFEwWkJlzwWobWLlzkR9Teveq+PWOLvVo+PmVg/WcnPEtLGkOe1B9srfIsoJjnL2UHT3",
+	"yCOK9RWHnqn5f/TSe3kIppR6E7IoIvG+GZHA5gjOSdgbHX60oyb/NYj4UhX26kzicPX1IdOZWmk7lXTO",
+	"8qEq9ydxXMsSflRnTnmC4mUr9yvCVXbPzcXY3OqhwRpottmmXpkVf3RzilD2MaQGm8HMqKFeP8u5earw",
+	"yn6B6utHxeU0/eCfAuiYvX/ZdNZKiV8qdpHH2nZ5/8AZl6se0ys/mN+fKzSDj6FYsAahoN3qeRTsFTIi",
+	"igPEjM+j5Q4M4uph/T5msQwKB7WOVaS5h7nkE0JMH0MfEW/W7H0p7v55gtOZFFkPDeuIQ0/i+E9P3JM4",
+	"hniwQM1OSDniatHTeJVf3ugqVZ7aPttH9xGNXYW2XT0q93ozPDIEpbAxvNqktTvXtMHrHnXEdbr836sJ",
+	"drGsLAoOxTK7X1UWtuVgH8dKcR6bltQWv2uXvIgrpL2mmi1Ew3m/Obi+xb8q/wk/kzm4kxStWcmGFmzK",
+	"G9xJwd31nla+yfXC4XrjKw1d/Kp755+0nR6heQ5U2ulTOzvCVDWKMgR3f2Fmmu785MqOubjpMqbchBfE",
+	"K595wO8uHB/v99CX8b359328Ja7BEYyS8b5Tg2sfN7Z7bjwyuOV4bd9IZegxE0NkwrIMYkY1pMuVo+td",
+	"1FwND7vcKhrPc2vRHh28vEQbsBm/t2Xf3i1N8g6mm1b2tw0/Oz9qSeul/+p+7sTz9Q0GbdVB5esbpJr9",
+	"LKyldSHTYBKMac7GiyNDU7fx/eaZAdPTLzv5MVORwFOdo1rwMzN7EPq/ymqFIbSDWmE5xKRCcvzuhOw1",
+	"xl3cZmamor1ZMzpy554rqqmww+w3trW0a+/b7MeqsMybwrLg1Pi0Uv0Z9Y59XFMmFQnZa3RbKrxipj0P",
+	"nrhD3c0vYYeN0eHyqE49O9E8cq7wGzX/OwA=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

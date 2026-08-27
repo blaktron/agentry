@@ -14,6 +14,7 @@ import (
 	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/notify"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
 	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/version"
@@ -30,6 +31,7 @@ type Server struct {
 	sealer   *auth.Sealer
 	limits   *rateLimits
 	classes  limitClasses
+	reg      *registry.Service
 }
 
 // New creates the API server. st may be nil in database-less dev mode; any
@@ -45,16 +47,21 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		// here during construction (never mid-request).
 		panic(err)
 	}
-	return &Server{
+	aud := audit.NewWriter(log)
+	srv := &Server{
 		cfg:      cfg,
 		st:       st,
 		log:      log,
-		auditW:   audit.NewWriter(log),
+		auditW:   aud,
 		notifier: notify.LogNotifier{Log: log},
 		sealer:   sealer,
 		limits:   newRateLimits(),
 		classes:  classesFromConfig(cfg.Limits),
 	}
+	if st != nil {
+		srv.reg = registry.NewService(st, aud)
+	}
+	return srv
 }
 
 // q returns the base query layer, or nil without a database.
@@ -133,7 +140,16 @@ func (s *Server) wellKnownRegistry(w http.ResponseWriter, r *http.Request) {
 
 // NewHandler assembles the full HTTP handler for the api role.
 func NewHandler(s *Server) http.Handler {
+	return NewHandlerWithGit(s, nil)
+}
+
+// NewHandlerWithGit additionally mounts git smart-HTTP routes on the same
+// mux (the `all` role / self-host single binary). mountGit may be nil.
+func NewHandlerWithGit(s *Server, mountGit func(*http.ServeMux)) http.Handler {
 	mux := http.NewServeMux()
+	if mountGit != nil {
+		mountGit(mux)
+	}
 
 	mux.HandleFunc("GET /healthz", s.healthz)
 	mux.HandleFunc("GET /readyz", s.readyz)
