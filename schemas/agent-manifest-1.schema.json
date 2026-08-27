@@ -1,0 +1,298 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentry.example/schemas/agent-manifest-1.schema.json",
+  "title": "Agentry agent.yaml manifest (schema major 1)",
+  "description": "Machine form of PLAN §5.2. Closed schema: unknown keys are invalid everywhere (rule V1). This schema covers the static shape; the context rules V2 (repo identity), V3 (tag equality and channel monotonicity), V4 (include resolution), V6 (lockfile presence), V7 (public-publish LICENSE/README and SPDX allowlist), and V8 (archive quotas) are enforced by the registry and by pkg/manifest. Glob syntax validity of include patterns and the \"*\"-egress policy flag are likewise checked by pkg/manifest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "name", "namespace", "kind", "version", "summary", "publish"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "description": "Manifest schema major; only major \"1\" is accepted.",
+      "pattern": "^1(\\.[0-9]+)*$"
+    },
+    "name": {
+      "type": "string",
+      "description": "Agent name; must match the target repo (V2) and the §4.2 DDL pattern.",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,63}[a-z0-9])?$"
+    },
+    "namespace": {
+      "type": "string",
+      "description": "Namespace handle; must match the target repo (V2) and the §4.2 DDL pattern.",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["skill", "prompt-agent", "mcp-server"]
+    },
+    "version": {
+      "type": "string",
+      "description": "Strict semver without a leading v; must equal the git tag and exceed every existing version on its channel (V3).",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
+    },
+    "summary": {
+      "type": "string",
+      "description": "Plain single-line text, at most 140 characters (V8).",
+      "minLength": 1,
+      "maxLength": 140,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]*$"
+    },
+    "license": {
+      "type": "string",
+      "description": "SPDX license id; required and checked against the embedded allowlist for public publish (V7).",
+      "minLength": 1
+    },
+    "authors": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/author" }
+    },
+    "homepage": {
+      "type": "string",
+      "format": "uri"
+    },
+    "tags": {
+      "type": "array",
+      "maxItems": 10,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[a-z0-9-]+$" }
+    },
+    "entrypoints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "skill": { "$ref": "#/$defs/relPath" },
+        "mcp": { "$ref": "#/$defs/mcpEntrypoint" }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "models": {
+          "type": "array",
+          "description": "Informational free-form model hint patterns.",
+          "items": { "type": "string" }
+        },
+        "interfaces": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["claude-skill", "mcp", "agents-md"] }
+        }
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "description": "THE security contract; closed vocabulary (V5). Empty = pure text.",
+      "additionalProperties": false,
+      "properties": {
+        "network": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "egress": { "$ref": "#/$defs/egress" }
+          }
+        },
+        "filesystem": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "read": { "$ref": "#/$defs/fsAccess" },
+            "write": { "$ref": "#/$defs/fsAccess" }
+          }
+        },
+        "exec": { "$ref": "#/$defs/exec" },
+        "secrets": {
+          "type": "array",
+          "description": "Environment variable NAMES the agent expects; never values.",
+          "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" }
+        },
+        "dataAccess": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["email", "calendar", "files", "tickets", "code", "messages", "payments", "other"]
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "agents": {
+          "type": "array",
+          "description": "Informational in v1 (no auto-install).",
+          "items": { "$ref": "#/$defs/agentDependency" }
+        }
+      }
+    },
+    "publish": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["include"],
+      "properties": {
+        "include": {
+          "type": "array",
+          "description": "Archive ALLOWLIST of glob patterns; segments use path.Match syntax and a whole \"**\" segment matches any number of segments (V4).",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/includePattern" }
+        },
+        "channel": {
+          "type": "string",
+          "enum": ["stable", "beta"],
+          "default": "stable"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "kind": { "const": "skill" } }, "required": ["kind"] },
+      "then": {
+        "required": ["entrypoints"],
+        "properties": {
+          "entrypoints": {
+            "allOf": [
+              { "required": ["skill"] },
+              { "not": { "required": ["mcp"] } }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "prompt-agent" } }, "required": ["kind"] },
+      "then": {
+        "properties": {
+          "entrypoints": { "not": { "required": ["mcp"] } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "mcp-server" } }, "required": ["kind"] },
+      "then": {
+        "required": ["entrypoints"],
+        "properties": {
+          "entrypoints": {
+            "allOf": [
+              { "required": ["mcp"] },
+              { "not": { "required": ["skill"] } }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "relPath": {
+      "type": "string",
+      "description": "Repo-root-relative slash-separated path: not absolute, no \".\" or \"..\" segments, no empty segments, no backslashes.",
+      "pattern": "^(?!(?:.*/)?\\.\\.?(?:/.*)?$)(?!.*\\\\)[^/]+(?:/[^/]+)*$"
+    },
+    "includePattern": {
+      "type": "string",
+      "description": "Like relPath but glob syntax: path.Match per segment plus whole-segment \"**\"; backslash escapes allowed. Bracket-class validity is checked by pkg/manifest.",
+      "pattern": "^(?!(?:.*/)?\\.\\.?(?:/.*)?$)[^/]+(?:/[^/]+)*$"
+    },
+    "hostName": {
+      "type": "string",
+      "description": "Exact DNS host name: dot-separated labels of 1-63 alphanumeric-or-hyphen characters, no leading/trailing hyphen.",
+      "maxLength": 253,
+      "pattern": "^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$"
+    },
+    "egressHost": {
+      "description": "One egress list element: an exact DNS host or \"*\" (policy-gated). \"none\" is only valid as the entire egress value.",
+      "anyOf": [
+        { "const": "*" },
+        { "$ref": "#/$defs/hostName" }
+      ],
+      "not": { "const": "none" }
+    },
+    "egress": {
+      "description": "\"none\", \"*\" (policy-gated), or a list of exact DNS hosts.",
+      "oneOf": [
+        { "const": "none" },
+        { "const": "*" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/egressHost" }
+        }
+      ]
+    },
+    "fsAccess": {
+      "description": "\"none\", \"workspace\", or {paths: [...]} of repo-relative paths.",
+      "oneOf": [
+        { "type": "string", "enum": ["none", "workspace"] },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["paths"],
+          "properties": {
+            "paths": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/relPath" }
+            }
+          }
+        }
+      ]
+    },
+    "exec": {
+      "description": "\"none\" or {commands: [...]} of single-token command names.",
+      "oneOf": [
+        { "const": "none" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["commands"],
+          "properties": {
+            "commands": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "pattern": "^[^\\s\\u0000-\\u001f\\u007f]+$" }
+            }
+          }
+        }
+      ]
+    },
+    "mcpEntrypoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "transport"],
+      "properties": {
+        "command": { "type": "string", "minLength": 1 },
+        "args": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "transport": { "type": "string", "enum": ["stdio", "http"] }
+      }
+    },
+    "author": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "email": { "type": "string", "format": "email" }
+      }
+    },
+    "agentDependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref"],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "description": "\"namespace/name\".",
+          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?/[a-z0-9](?:[a-z0-9-]{0,63}[a-z0-9])?$"
+        },
+        "version": {
+          "type": "string",
+          "description": "Semver constraint (e.g. \"^1.2\"); absent means any. Constraint syntax is validated by pkg/manifest.",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
