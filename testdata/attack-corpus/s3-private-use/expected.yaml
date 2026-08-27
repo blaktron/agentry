@@ -1,0 +1,6 @@
+# Auto-generated fixture expectation (see README.md).
+technique: "S3 private-use-area characters"
+expect: 
+  - S3/private-use-area
+forbid: []
+expectClean: false

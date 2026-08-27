@@ -1,0 +1,6 @@
+# Auto-generated fixture expectation (see README.md).
+technique: "S3 bidirectional control (Trojan Source)"
+expect: 
+  - S3/bidi-control
+forbid: []
+expectClean: false

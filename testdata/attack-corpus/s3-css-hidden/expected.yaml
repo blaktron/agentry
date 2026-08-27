@@ -1,0 +1,6 @@
+# Auto-generated fixture expectation (see README.md).
+technique: "S3 CSS-hidden markup concealing text"
+expect: 
+  - S3/css-hidden
+forbid: []
+expectClean: false

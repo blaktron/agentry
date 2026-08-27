@@ -1,0 +1,6 @@
+# Auto-generated fixture expectation (see README.md).
+technique: "S4 tool-coercion family"
+expect: 
+  - S4/tool-coercion-001
+forbid: []
+expectClean: false

@@ -1,0 +1,6 @@
+# Auto-generated fixture expectation (see README.md).
+technique: "S3 excessive trailing-whitespace column"
+expect: 
+  - S3/trailing-whitespace
+forbid: []
+expectClean: false

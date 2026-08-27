@@ -1,0 +1,6 @@
+# Auto-generated fixture expectation (see README.md).
+technique: "S3 zero-width characters"
+expect: 
+  - S3/zero-width
+forbid: []
+expectClean: false

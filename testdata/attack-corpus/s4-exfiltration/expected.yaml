@@ -1,0 +1,6 @@
+# Auto-generated fixture expectation (see README.md).
+technique: "S4 exfiltration family"
+expect: 
+  - S4/exfiltration-001
+forbid: []
+expectClean: false

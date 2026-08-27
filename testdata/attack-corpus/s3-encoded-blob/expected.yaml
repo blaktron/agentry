@@ -1,0 +1,6 @@
+# Auto-generated fixture expectation (see README.md).
+technique: "S3 high-entropy encoded blob in prose"
+expect: 
+  - S3/encoded-blob
+forbid: []
+expectClean: false

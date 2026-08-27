@@ -1,0 +1,7 @@
+# Auto-generated fixture expectation (see README.md).
+technique: "S4 credential-harvest family (benign lookalike)"
+expect: []
+forbid: 
+  - S4/credential-harvest-001
+  - S4/credential-harvest-002
+expectClean: true

@@ -1,0 +1,6 @@
+# Auto-generated fixture expectation (see README.md).
+technique: "S3 mixed-script confusable token"
+expect: 
+  - S3/mixed-script
+forbid: []
+expectClean: false

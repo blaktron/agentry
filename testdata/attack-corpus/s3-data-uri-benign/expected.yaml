@@ -1,0 +1,6 @@
+# Auto-generated fixture expectation (see README.md).
+technique: "S3 oversized data: URI payload (benign lookalike)"
+expect: []
+forbid: 
+  - S3/data-uri
+expectClean: true

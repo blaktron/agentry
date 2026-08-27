@@ -1,0 +1,7 @@
+# Auto-generated fixture expectation (see README.md).
+technique: "S4 tool-coercion family (benign lookalike)"
+expect: []
+forbid: 
+  - S4/tool-coercion-001
+  - S4/tool-coercion-002
+expectClean: true

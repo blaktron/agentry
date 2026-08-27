@@ -1,0 +1,6 @@
+# Auto-generated fixture expectation (see README.md).
+technique: "S4 instruction-override family"
+expect: 
+  - S4/instruction-override-001
+forbid: []
+expectClean: false

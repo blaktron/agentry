@@ -1,0 +1,6 @@
+# Auto-generated fixture expectation (see README.md).
+technique: "S3 HTML comment hiding text in Markdown"
+expect: 
+  - S3/html-comment
+forbid: []
+expectClean: false

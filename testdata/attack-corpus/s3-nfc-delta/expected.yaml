@@ -1,0 +1,6 @@
+# Auto-generated fixture expectation (see README.md).
+technique: "S3 NFC-normalization delta in non-Latin-1 text"
+expect: 
+  - S3/nfc-delta
+forbid: []
+expectClean: false

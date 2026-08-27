@@ -1,0 +1,6 @@
+# Auto-generated fixture expectation (see README.md).
+technique: "S4 obfuscation family"
+expect: 
+  - S4/obfuscation-001
+forbid: []
+expectClean: false
