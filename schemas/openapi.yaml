@@ -9,7 +9,7 @@ info:
     Public REST API for the Agentry registry: agents, versions, publishing,
     scanning reports, orgs, and enterprise administration. Errors follow
     RFC 9457 (application/problem+json). Pagination is cursor-based.
-  version: 0.1.0
+  version: 0.2.0
   license:
     name: PLACEHOLDER (Q2 pending)
 servers:
@@ -17,6 +17,14 @@ servers:
 tags:
   - name: meta
     description: Server metadata and feature discovery.
+  - name: auth
+    description: Registration, login, sessions, 2FA (§12.1).
+  - name: users
+    description: Current user, public profiles, personal access tokens.
+  - name: orgs
+    description: Organizations, members, teams (§12.2).
+  - name: audit
+    description: Org audit log (§12.6).
 
 paths:
   /meta:
@@ -35,7 +43,516 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Create an individual account (email+password, §12.1).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Account created; verification email queued.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /auth/verify-email:
+    post:
+      operationId: verifyEmail
+      tags: [auth]
+      summary: Confirm an email address with the mailed token.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        "204":
+          description: Email verified.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Password (+TOTP when enabled) login; sets the session cookie.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Session established. The response sets the
+            `agentry_session` cookie; `csrfToken` must be echoed in the
+            `X-Agentry-CSRF` header on all cookie-authenticated mutations.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResult"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Revoke the current session.
+      responses:
+        "204":
+          description: Session revoked.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /auth/2fa/totp/setup:
+    post:
+      operationId: totpSetup
+      tags: [auth]
+      summary: Begin TOTP enrollment; returns the provisioning secret.
+      responses:
+        "200":
+          description: Enrollment secret (confirm with /auth/2fa/totp/verify).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TotpSetupResult"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /auth/2fa/totp/verify:
+    post:
+      operationId: totpVerify
+      tags: [auth]
+      summary: Confirm TOTP enrollment with a current code.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+      responses:
+        "204":
+          description: TOTP enabled.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /user:
+    get:
+      operationId: getCurrentUser
+      tags: [users]
+      summary: The authenticated user.
+      responses:
+        "200":
+          description: Current user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateCurrentUser
+      tags: [users]
+      summary: Update profile fields.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName:
+                  type: string
+                  maxLength: 120
+      responses:
+        "200":
+          description: Updated user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /users/{handle}:
+    get:
+      operationId: getUserProfile
+      tags: [users]
+      summary: Public profile for a user handle.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Handle"
+      responses:
+        "200":
+          description: Public profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicUser"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /user/tokens:
+    get:
+      operationId: listTokens
+      tags: [users]
+      summary: List the caller's personal access tokens (metadata only).
+      responses:
+        "200":
+          description: Tokens.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Pat"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createToken
+      tags: [users]
+      summary: Mint a PAT. The secret is returned exactly once (D-22).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTokenRequest"
+      responses:
+        "201":
+          description: Token created; `token` appears only in this response.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PatCreated"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /user/tokens/{tokenId}:
+    delete:
+      operationId: revokeToken
+      tags: [users]
+      summary: Revoke a PAT immediately (§12.3).
+      parameters:
+        - name: tokenId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Revoked.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs:
+    post:
+      operationId: createOrg
+      tags: [orgs]
+      summary: Create an organization; caller becomes owner.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrgRequest"
+      responses:
+        "201":
+          description: Organization created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Org"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}:
+    get:
+      operationId: getOrg
+      tags: [orgs]
+      summary: Organization profile (public fields; settings for admins).
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      responses:
+        "200":
+          description: Organization.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Org"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateOrg
+      tags: [orgs]
+      summary: Update org settings (admin+).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName:
+                  type: string
+                  maxLength: 120
+      responses:
+        "200":
+          description: Updated organization.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Org"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/members:
+    get:
+      operationId: listOrgMembers
+      tags: [orgs]
+      summary: List members with roles (members can view).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      responses:
+        "200":
+          description: Members.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Membership"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/members/{handle}:
+    put:
+      operationId: setOrgMember
+      tags: [orgs]
+      summary: Add a member or change a role (admin+; owner grants owner/admin).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+        - $ref: "#/components/parameters/Handle"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  $ref: "#/components/schemas/OrgRole"
+      responses:
+        "200":
+          description: Membership set.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Membership"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: removeOrgMember
+      tags: [orgs]
+      summary: Remove a member (admin+; owners removable only by owners).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+        - $ref: "#/components/parameters/Handle"
+      responses:
+        "204":
+          description: Removed.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/teams:
+    get:
+      operationId: listTeams
+      tags: [orgs]
+      summary: List teams (members can view).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      responses:
+        "200":
+          description: Teams.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Team"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createTeam
+      tags: [orgs]
+      summary: Create a team (admin+).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slug]
+              properties:
+                slug:
+                  type: string
+                  pattern: "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"
+      responses:
+        "201":
+          description: Team created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/teams/{team}:
+    delete:
+      operationId: deleteTeam
+      tags: [orgs]
+      summary: Delete a team (admin+).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+        - $ref: "#/components/parameters/TeamSlug"
+      responses:
+        "204":
+          description: Deleted.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/teams/{team}/members:
+    get:
+      operationId: listTeamMembers
+      tags: [orgs]
+      summary: List team members (org members can view).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+        - $ref: "#/components/parameters/TeamSlug"
+      responses:
+        "200":
+          description: Team members.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PublicUser"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/teams/{team}/members/{handle}:
+    put:
+      operationId: addTeamMember
+      tags: [orgs]
+      summary: Add an org member to a team (admin+).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+        - $ref: "#/components/parameters/TeamSlug"
+        - $ref: "#/components/parameters/Handle"
+      responses:
+        "204":
+          description: Added.
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: removeTeamMember
+      tags: [orgs]
+      summary: Remove a member from a team (admin+).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+        - $ref: "#/components/parameters/TeamSlug"
+        - $ref: "#/components/parameters/Handle"
+      responses:
+        "204":
+          description: Removed.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/audit:
+    get:
+      operationId: listOrgAudit
+      tags: [audit]
+      summary: Org audit events, newest first (admin+; cursor paged, §12.6).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+        - name: action
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Audit page.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditPage"
+        default:
+          $ref: "#/components/responses/Problem"
+
 components:
+  parameters:
+    Handle:
+      name: handle
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"
+    OrgHandle:
+      name: org
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"
+    TeamSlug:
+      name: team
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"
+
   schemas:
     Meta:
       type: object
@@ -57,6 +574,252 @@ components:
         minCLIVersion:
           type: string
           description: Oldest supported agentry CLI version (§11 distribution note).
+
+    RegisterRequest:
+      type: object
+      required: [handle, email, password]
+      properties:
+        handle:
+          type: string
+          pattern: "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 10
+          maxLength: 256
+        displayName:
+          type: string
+          maxLength: 120
+
+    LoginRequest:
+      type: object
+      required: [login, password]
+      properties:
+        login:
+          type: string
+          description: Handle or email.
+        password:
+          type: string
+        totpCode:
+          type: string
+          description: Required when the account has TOTP enabled.
+
+    LoginResult:
+      type: object
+      required: [user, csrfToken]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        csrfToken:
+          type: string
+          description: Echo in X-Agentry-CSRF on cookie-authenticated mutations.
+
+    TotpSetupResult:
+      type: object
+      required: [secret, otpauthUrl]
+      properties:
+        secret:
+          type: string
+          description: Base32 TOTP secret (display once for authenticator apps).
+        otpauthUrl:
+          type: string
+
+    User:
+      type: object
+      required: [id, handle, email, displayName, emailVerified, totpEnabled, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        handle:
+          type: string
+        email:
+          type: string
+        displayName:
+          type: string
+        emailVerified:
+          type: boolean
+        totpEnabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    PublicUser:
+      type: object
+      required: [handle, displayName]
+      properties:
+        handle:
+          type: string
+        displayName:
+          type: string
+
+    Pat:
+      type: object
+      required: [id, name, prefix, scopes, expiresAt, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        prefix:
+          type: string
+          description: First 12 characters, for display and lookup (§4.2 pats).
+        scopes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Scope"
+        orgHandle:
+          type: string
+          description: Set when org-bound (enforced SSO, §12.4).
+        expiresAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    PatCreated:
+      allOf:
+        - $ref: "#/components/schemas/Pat"
+        - type: object
+          required: [token]
+          properties:
+            token:
+              type: string
+              description: The full secret. Shown exactly once.
+
+    CreateTokenRequest:
+      type: object
+      required: [name, scopes]
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        scopes:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/Scope"
+        expiresAt:
+          type: string
+          format: date-time
+          description: Defaults to (and is capped at) the max PAT lifetime (§12.3).
+
+    Scope:
+      type: string
+      description: PAT scopes (§12.3).
+      enum:
+        - repo:read
+        - repo:write
+        - agent:publish
+        - agent:read
+        - org:admin
+        - review:act
+        - audit:read
+        - user:profile
+
+    OrgRole:
+      type: string
+      description: Org roles, ordered owner > admin > security_reviewer | member (§12.2).
+      enum: [owner, admin, security_reviewer, member]
+
+    CreateOrgRequest:
+      type: object
+      required: [handle, displayName]
+      properties:
+        handle:
+          type: string
+          pattern: "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"
+        displayName:
+          type: string
+          maxLength: 120
+
+    Org:
+      type: object
+      required: [id, handle, displayName, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        handle:
+          type: string
+        displayName:
+          type: string
+        verifiedDomain:
+          type: string
+        ssoRequired:
+          type: boolean
+          description: Present for org admins only.
+        createdAt:
+          type: string
+          format: date-time
+
+    Membership:
+      type: object
+      required: [user, role]
+      properties:
+        user:
+          $ref: "#/components/schemas/PublicUser"
+        role:
+          $ref: "#/components/schemas/OrgRole"
+        viaScim:
+          type: boolean
+
+    Team:
+      type: object
+      required: [id, slug]
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+
+    AuditEvent:
+      type: object
+      required: [id, occurredAt, actorKind, action]
+      properties:
+        id:
+          type: string
+          format: uuid
+        occurredAt:
+          type: string
+          format: date-time
+        actorKind:
+          type: string
+          enum: [user, pat, scim, system]
+        actorHandle:
+          type: string
+        action:
+          type: string
+          description: Registered action id (internal/audit/actions.go).
+        targetKind:
+          type: string
+        targetId:
+          type: string
+          format: uuid
+        detail:
+          type: object
+          additionalProperties: true
+
+    AuditPage:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEvent"
+        nextCursor:
+          type: string
+          description: Opaque; absent on the last page.
 
     Problem:
       type: object

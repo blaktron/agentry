@@ -14,6 +14,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
+
+	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
 )
 
 //go:embed migrations/*.sql
@@ -45,6 +47,26 @@ func Connect(ctx context.Context, databaseURL string) (*Store, error) {
 
 // Pool exposes the underlying pool for sqlc-generated code and tests.
 func (s *Store) Pool() *pgxpool.Pool { return s.pool }
+
+// Queries returns the sqlc query layer bound to the pool.
+func (s *Store) Queries() *storegen.Queries { return storegen.New(s.pool) }
+
+// WithTx runs fn inside a transaction, passing transaction-bound queries.
+// Commit on nil, rollback on error or panic.
+func (s *Store) WithTx(ctx context.Context, fn func(q *storegen.Queries) error) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("store: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := fn(storegen.New(tx)); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("store: commit: %w", err)
+	}
+	return nil
+}
 
 // Ping verifies database connectivity (readyz).
 func (s *Store) Ping(ctx context.Context) error { return s.pool.Ping(ctx) }

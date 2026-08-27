@@ -3,3 +3,156 @@
 //   sqlc v1.31.1
 
 package storegen
+
+import (
+	"net/netip"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+type AuditEvent struct {
+	ID         uuid.UUID   `json:"id"`
+	OccurredAt time.Time   `json:"occurred_at"`
+	ActorID    *uuid.UUID  `json:"actor_id"`
+	ActorKind  string      `json:"actor_kind"`
+	OrgID      *uuid.UUID  `json:"org_id"`
+	Action     string      `json:"action"`
+	TargetKind *string     `json:"target_kind"`
+	TargetID   *uuid.UUID  `json:"target_id"`
+	Ip         *netip.Addr `json:"ip"`
+	UserAgent  *string     `json:"user_agent"`
+	Detail     []byte      `json:"detail"`
+}
+
+type AuditEventsDefault struct {
+	ID         uuid.UUID   `json:"id"`
+	OccurredAt time.Time   `json:"occurred_at"`
+	ActorID    *uuid.UUID  `json:"actor_id"`
+	ActorKind  string      `json:"actor_kind"`
+	OrgID      *uuid.UUID  `json:"org_id"`
+	Action     string      `json:"action"`
+	TargetKind *string     `json:"target_kind"`
+	TargetID   *uuid.UUID  `json:"target_id"`
+	Ip         *netip.Addr `json:"ip"`
+	UserAgent  *string     `json:"user_agent"`
+	Detail     []byte      `json:"detail"`
+}
+
+type EmailVerification struct {
+	TokenSha256 []byte     `json:"token_sha256"`
+	UserID      uuid.UUID  `json:"user_id"`
+	ExpiresAt   time.Time  `json:"expires_at"`
+	ConsumedAt  *time.Time `json:"consumed_at"`
+	CreatedAt   time.Time  `json:"created_at"`
+}
+
+type Handle struct {
+	ID        uuid.UUID `json:"id"`
+	Handle    string    `json:"handle"`
+	Kind      string    `json:"kind"`
+	Reserved  bool      `json:"reserved"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type Identity struct {
+	ID              uuid.UUID  `json:"id"`
+	UserID          uuid.UUID  `json:"user_id"`
+	ProviderKind    string     `json:"provider_kind"`
+	SsoConnectionID *uuid.UUID `json:"sso_connection_id"`
+	Subject         string     `json:"subject"`
+	CreatedAt       time.Time  `json:"created_at"`
+}
+
+type Membership struct {
+	OrgID     uuid.UUID `json:"org_id"`
+	UserID    uuid.UUID `json:"user_id"`
+	Role      string    `json:"role"`
+	ViaScim   bool      `json:"via_scim"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type Org struct {
+	ID             uuid.UUID `json:"id"`
+	DisplayName    string    `json:"display_name"`
+	SsoRequired    bool      `json:"sso_required"`
+	VerifiedDomain *string   `json:"verified_domain"`
+	State          string    `json:"state"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+type Pat struct {
+	ID          uuid.UUID  `json:"id"`
+	UserID      uuid.UUID  `json:"user_id"`
+	Name        string     `json:"name"`
+	TokenSha256 []byte     `json:"token_sha256"`
+	TokenPrefix string     `json:"token_prefix"`
+	Scopes      []string   `json:"scopes"`
+	OrgID       *uuid.UUID `json:"org_id"`
+	ExpiresAt   time.Time  `json:"expires_at"`
+	LastUsedAt  *time.Time `json:"last_used_at"`
+	RevokedAt   *time.Time `json:"revoked_at"`
+	CreatedAt   time.Time  `json:"created_at"`
+}
+
+type ScimToken struct {
+	ID          uuid.UUID  `json:"id"`
+	OrgID       uuid.UUID  `json:"org_id"`
+	TokenSha256 []byte     `json:"token_sha256"`
+	ExpiresAt   *time.Time `json:"expires_at"`
+	RevokedAt   *time.Time `json:"revoked_at"`
+	CreatedAt   time.Time  `json:"created_at"`
+}
+
+type Session struct {
+	ID          uuid.UUID   `json:"id"`
+	TokenSha256 []byte      `json:"token_sha256"`
+	UserID      uuid.UUID   `json:"user_id"`
+	CsrfToken   string      `json:"csrf_token"`
+	SsoTags     []byte      `json:"sso_tags"`
+	Ip          *netip.Addr `json:"ip"`
+	UserAgent   *string     `json:"user_agent"`
+	CreatedAt   time.Time   `json:"created_at"`
+	LastSeenAt  time.Time   `json:"last_seen_at"`
+	ExpiresAt   time.Time   `json:"expires_at"`
+	RevokedAt   *time.Time  `json:"revoked_at"`
+}
+
+type SsoConnection struct {
+	ID        uuid.UUID `json:"id"`
+	OrgID     uuid.UUID `json:"org_id"`
+	Kind      string    `json:"kind"`
+	Config    []byte    `json:"config"`
+	Enabled   bool      `json:"enabled"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type Team struct {
+	ID          uuid.UUID `json:"id"`
+	OrgID       uuid.UUID `json:"org_id"`
+	Slug        string    `json:"slug"`
+	ScimGroupID *string   `json:"scim_group_id"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type TeamMember struct {
+	TeamID    uuid.UUID `json:"team_id"`
+	UserID    uuid.UUID `json:"user_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type User struct {
+	ID               uuid.UUID  `json:"id"`
+	Email            string     `json:"email"`
+	EmailVerifiedAt  *time.Time `json:"email_verified_at"`
+	DisplayName      string     `json:"display_name"`
+	PasswordHash     *string    `json:"password_hash"`
+	TotpSecretEnc    []byte     `json:"totp_secret_enc"`
+	TotpEnabled      bool       `json:"totp_enabled"`
+	State            string     `json:"state"`
+	DeletedTombstone []byte     `json:"deleted_tombstone"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}

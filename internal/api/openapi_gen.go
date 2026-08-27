@@ -9,14 +9,165 @@ import (
 	"bytes"
 	"compress/flate"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
+
+// Defines values for AuditEventActorKind.
+const (
+	AuditEventActorKindPat    AuditEventActorKind = "pat"
+	AuditEventActorKindScim   AuditEventActorKind = "scim"
+	AuditEventActorKindSystem AuditEventActorKind = "system"
+	AuditEventActorKindUser   AuditEventActorKind = "user"
+)
+
+// Valid indicates whether the value is a known member of the AuditEventActorKind enum.
+func (e AuditEventActorKind) Valid() bool {
+	switch e {
+	case AuditEventActorKindPat:
+		return true
+	case AuditEventActorKindScim:
+		return true
+	case AuditEventActorKindSystem:
+		return true
+	case AuditEventActorKindUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrgRole.
+const (
+	Admin            OrgRole = "admin"
+	Member           OrgRole = "member"
+	Owner            OrgRole = "owner"
+	SecurityReviewer OrgRole = "security_reviewer"
+)
+
+// Valid indicates whether the value is a known member of the OrgRole enum.
+func (e OrgRole) Valid() bool {
+	switch e {
+	case Admin:
+		return true
+	case Member:
+		return true
+	case Owner:
+		return true
+	case SecurityReviewer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for Scope.
+const (
+	AgentPublish Scope = "agent:publish"
+	AgentRead    Scope = "agent:read"
+	AuditRead    Scope = "audit:read"
+	OrgAdmin     Scope = "org:admin"
+	RepoRead     Scope = "repo:read"
+	RepoWrite    Scope = "repo:write"
+	ReviewAct    Scope = "review:act"
+	UserProfile  Scope = "user:profile"
+)
+
+// Valid indicates whether the value is a known member of the Scope enum.
+func (e Scope) Valid() bool {
+	switch e {
+	case AgentPublish:
+		return true
+	case AgentRead:
+		return true
+	case AuditRead:
+		return true
+	case OrgAdmin:
+		return true
+	case RepoRead:
+		return true
+	case RepoWrite:
+		return true
+	case ReviewAct:
+		return true
+	case UserProfile:
+		return true
+	default:
+		return false
+	}
+}
+
+// AuditEvent defines model for AuditEvent.
+type AuditEvent struct {
+	// Action Registered action id (internal/audit/actions.go).
+	Action      string                  `json:"action"`
+	ActorHandle *string                 `json:"actorHandle,omitempty"`
+	ActorKind   AuditEventActorKind     `json:"actorKind"`
+	Detail      *map[string]interface{} `json:"detail,omitempty"`
+	Id          openapi_types.UUID      `json:"id"`
+	OccurredAt  time.Time               `json:"occurredAt"`
+	TargetId    *openapi_types.UUID     `json:"targetId,omitempty"`
+	TargetKind  *string                 `json:"targetKind,omitempty"`
+}
+
+// AuditEventActorKind defines model for AuditEvent.ActorKind.
+type AuditEventActorKind string
+
+// AuditPage defines model for AuditPage.
+type AuditPage struct {
+	Events []AuditEvent `json:"events"`
+
+	// NextCursor Opaque; absent on the last page.
+	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// CreateOrgRequest defines model for CreateOrgRequest.
+type CreateOrgRequest struct {
+	DisplayName string `json:"displayName"`
+	Handle      string `json:"handle"`
+}
+
+// CreateTokenRequest defines model for CreateTokenRequest.
+type CreateTokenRequest struct {
+	// ExpiresAt Defaults to (and is capped at) the max PAT lifetime (§12.3).
+	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
+	Name      string     `json:"name"`
+	Scopes    []Scope    `json:"scopes"`
+}
+
+// LoginRequest defines model for LoginRequest.
+type LoginRequest struct {
+	// Login Handle or email.
+	Login    string `json:"login"`
+	Password string `json:"password"`
+
+	// TotpCode Required when the account has TOTP enabled.
+	TotpCode *string `json:"totpCode,omitempty"`
+}
+
+// LoginResult defines model for LoginResult.
+type LoginResult struct {
+	// CsrfToken Echo in X-Agentry-CSRF on cookie-authenticated mutations.
+	CsrfToken string `json:"csrfToken"`
+	User      User   `json:"user"`
+}
+
+// Membership defines model for Membership.
+type Membership struct {
+	// Role Org roles, ordered owner > admin > security_reviewer | member (§12.2).
+	Role    OrgRole    `json:"role"`
+	User    PublicUser `json:"user"`
+	ViaScim *bool      `json:"viaScim,omitempty"`
+}
 
 // Meta defines model for Meta.
 type Meta struct {
@@ -35,6 +186,56 @@ type Meta struct {
 	//
 	// Example: 0.1.0
 	Version string `json:"version"`
+}
+
+// Org defines model for Org.
+type Org struct {
+	CreatedAt   time.Time          `json:"createdAt"`
+	DisplayName string             `json:"displayName"`
+	Handle      string             `json:"handle"`
+	Id          openapi_types.UUID `json:"id"`
+
+	// SsoRequired Present for org admins only.
+	SsoRequired    *bool   `json:"ssoRequired,omitempty"`
+	VerifiedDomain *string `json:"verifiedDomain,omitempty"`
+}
+
+// OrgRole Org roles, ordered owner > admin > security_reviewer | member (§12.2).
+type OrgRole string
+
+// Pat defines model for Pat.
+type Pat struct {
+	CreatedAt  time.Time          `json:"createdAt"`
+	ExpiresAt  time.Time          `json:"expiresAt"`
+	Id         openapi_types.UUID `json:"id"`
+	LastUsedAt *time.Time         `json:"lastUsedAt,omitempty"`
+	Name       string             `json:"name"`
+
+	// OrgHandle Set when org-bound (enforced SSO, §12.4).
+	OrgHandle *string `json:"orgHandle,omitempty"`
+
+	// Prefix First 12 characters, for display and lookup (§4.2 pats).
+	Prefix string  `json:"prefix"`
+	Scopes []Scope `json:"scopes"`
+}
+
+// PatCreated defines model for PatCreated.
+type PatCreated struct {
+	CreatedAt  time.Time          `json:"createdAt"`
+	ExpiresAt  time.Time          `json:"expiresAt"`
+	Id         openapi_types.UUID `json:"id"`
+	LastUsedAt *time.Time         `json:"lastUsedAt,omitempty"`
+	Name       string             `json:"name"`
+
+	// OrgHandle Set when org-bound (enforced SSO, §12.4).
+	OrgHandle *string `json:"orgHandle,omitempty"`
+
+	// Prefix First 12 characters, for display and lookup (§4.2 pats).
+	Prefix string  `json:"prefix"`
+	Scopes []Scope `json:"scopes"`
+
+	// Token The full secret. Shown exactly once.
+	Token string `json:"token"`
 }
 
 // Problem RFC 9457 problem details (D-10).
@@ -56,11 +257,205 @@ type Problem struct {
 	Type string `json:"type"`
 }
 
+// PublicUser defines model for PublicUser.
+type PublicUser struct {
+	DisplayName string `json:"displayName"`
+	Handle      string `json:"handle"`
+}
+
+// RegisterRequest defines model for RegisterRequest.
+type RegisterRequest struct {
+	DisplayName *string             `json:"displayName,omitempty"`
+	Email       openapi_types.Email `json:"email"`
+	Handle      string              `json:"handle"`
+	Password    string              `json:"password"`
+}
+
+// Scope PAT scopes (§12.3).
+type Scope string
+
+// Team defines model for Team.
+type Team struct {
+	Id   openapi_types.UUID `json:"id"`
+	Slug string             `json:"slug"`
+}
+
+// TotpSetupResult defines model for TotpSetupResult.
+type TotpSetupResult struct {
+	OtpauthUrl string `json:"otpauthUrl"`
+
+	// Secret Base32 TOTP secret (display once for authenticator apps).
+	Secret string `json:"secret"`
+}
+
+// User defines model for User.
+type User struct {
+	CreatedAt     time.Time          `json:"createdAt"`
+	DisplayName   string             `json:"displayName"`
+	Email         string             `json:"email"`
+	EmailVerified bool               `json:"emailVerified"`
+	Handle        string             `json:"handle"`
+	Id            openapi_types.UUID `json:"id"`
+	TotpEnabled   bool               `json:"totpEnabled"`
+}
+
+// Handle defines model for Handle.
+type Handle = string
+
+// OrgHandle defines model for OrgHandle.
+type OrgHandle = string
+
+// TeamSlug defines model for TeamSlug.
+type TeamSlug = string
+
+// TotpVerifyJSONBody defines parameters for TotpVerify.
+type TotpVerifyJSONBody struct {
+	Code string `json:"code"`
+}
+
+// VerifyEmailJSONBody defines parameters for VerifyEmail.
+type VerifyEmailJSONBody struct {
+	Token string `json:"token"`
+}
+
+// UpdateOrgJSONBody defines parameters for UpdateOrg.
+type UpdateOrgJSONBody struct {
+	DisplayName *string `json:"displayName,omitempty"`
+}
+
+// ListOrgAuditParams defines parameters for ListOrgAudit.
+type ListOrgAuditParams struct {
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Action *string `form:"action,omitempty" json:"action,omitempty"`
+}
+
+// SetOrgMemberJSONBody defines parameters for SetOrgMember.
+type SetOrgMemberJSONBody struct {
+	// Role Org roles, ordered owner > admin > security_reviewer | member (§12.2).
+	Role OrgRole `json:"role"`
+}
+
+// CreateTeamJSONBody defines parameters for CreateTeam.
+type CreateTeamJSONBody struct {
+	Slug string `json:"slug"`
+}
+
+// UpdateCurrentUserJSONBody defines parameters for UpdateCurrentUser.
+type UpdateCurrentUserJSONBody struct {
+	DisplayName *string `json:"displayName,omitempty"`
+}
+
+// TotpVerifyJSONRequestBody defines body for TotpVerify for application/json ContentType.
+type TotpVerifyJSONRequestBody TotpVerifyJSONBody
+
+// LoginJSONRequestBody defines body for Login for application/json ContentType.
+type LoginJSONRequestBody = LoginRequest
+
+// RegisterJSONRequestBody defines body for Register for application/json ContentType.
+type RegisterJSONRequestBody = RegisterRequest
+
+// VerifyEmailJSONRequestBody defines body for VerifyEmail for application/json ContentType.
+type VerifyEmailJSONRequestBody VerifyEmailJSONBody
+
+// CreateOrgJSONRequestBody defines body for CreateOrg for application/json ContentType.
+type CreateOrgJSONRequestBody = CreateOrgRequest
+
+// UpdateOrgJSONRequestBody defines body for UpdateOrg for application/json ContentType.
+type UpdateOrgJSONRequestBody UpdateOrgJSONBody
+
+// SetOrgMemberJSONRequestBody defines body for SetOrgMember for application/json ContentType.
+type SetOrgMemberJSONRequestBody SetOrgMemberJSONBody
+
+// CreateTeamJSONRequestBody defines body for CreateTeam for application/json ContentType.
+type CreateTeamJSONRequestBody CreateTeamJSONBody
+
+// UpdateCurrentUserJSONRequestBody defines body for UpdateCurrentUser for application/json ContentType.
+type UpdateCurrentUserJSONRequestBody UpdateCurrentUserJSONBody
+
+// CreateTokenJSONRequestBody defines body for CreateToken for application/json ContentType.
+type CreateTokenJSONRequestBody = CreateTokenRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// TotpSetup Begin TOTP enrollment; returns the provisioning secret.
+	// (POST /auth/2fa/totp/setup)
+	TotpSetup(w http.ResponseWriter, r *http.Request)
+	// TotpVerify Confirm TOTP enrollment with a current code.
+	// (POST /auth/2fa/totp/verify)
+	TotpVerify(w http.ResponseWriter, r *http.Request)
+	// Login Password (+TOTP when enabled) login; sets the session cookie.
+	// (POST /auth/login)
+	Login(w http.ResponseWriter, r *http.Request)
+	// Logout Revoke the current session.
+	// (POST /auth/logout)
+	Logout(w http.ResponseWriter, r *http.Request)
+	// Register Create an individual account (email+password, §12.1).
+	// (POST /auth/register)
+	Register(w http.ResponseWriter, r *http.Request)
+	// VerifyEmail Confirm an email address with the mailed token.
+	// (POST /auth/verify-email)
+	VerifyEmail(w http.ResponseWriter, r *http.Request)
 	// GetMeta Server version and self-host feature flags (§9.2).
 	// (GET /meta)
 	GetMeta(w http.ResponseWriter, r *http.Request)
+	// CreateOrg Create an organization; caller becomes owner.
+	// (POST /orgs)
+	CreateOrg(w http.ResponseWriter, r *http.Request)
+	// GetOrg Organization profile (public fields; settings for admins).
+	// (GET /orgs/{org})
+	GetOrg(w http.ResponseWriter, r *http.Request, org OrgHandle)
+	// UpdateOrg Update org settings (admin+).
+	// (PATCH /orgs/{org})
+	UpdateOrg(w http.ResponseWriter, r *http.Request, org OrgHandle)
+	// ListOrgAudit Org audit events, newest first (admin+; cursor paged, §12.6).
+	// (GET /orgs/{org}/audit)
+	ListOrgAudit(w http.ResponseWriter, r *http.Request, org OrgHandle, params ListOrgAuditParams)
+	// ListOrgMembers List members with roles (members can view).
+	// (GET /orgs/{org}/members)
+	ListOrgMembers(w http.ResponseWriter, r *http.Request, org OrgHandle)
+	// RemoveOrgMember Remove a member (admin+; owners removable only by owners).
+	// (DELETE /orgs/{org}/members/{handle})
+	RemoveOrgMember(w http.ResponseWriter, r *http.Request, org OrgHandle, handle Handle)
+	// SetOrgMember Add a member or change a role (admin+; owner grants owner/admin).
+	// (PUT /orgs/{org}/members/{handle})
+	SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHandle, handle Handle)
+	// ListTeams List teams (members can view).
+	// (GET /orgs/{org}/teams)
+	ListTeams(w http.ResponseWriter, r *http.Request, org OrgHandle)
+	// CreateTeam Create a team (admin+).
+	// (POST /orgs/{org}/teams)
+	CreateTeam(w http.ResponseWriter, r *http.Request, org OrgHandle)
+	// DeleteTeam Delete a team (admin+).
+	// (DELETE /orgs/{org}/teams/{team})
+	DeleteTeam(w http.ResponseWriter, r *http.Request, org OrgHandle, team TeamSlug)
+	// ListTeamMembers List team members (org members can view).
+	// (GET /orgs/{org}/teams/{team}/members)
+	ListTeamMembers(w http.ResponseWriter, r *http.Request, org OrgHandle, team TeamSlug)
+	// RemoveTeamMember Remove a member from a team (admin+).
+	// (DELETE /orgs/{org}/teams/{team}/members/{handle})
+	RemoveTeamMember(w http.ResponseWriter, r *http.Request, org OrgHandle, team TeamSlug, handle Handle)
+	// AddTeamMember Add an org member to a team (admin+).
+	// (PUT /orgs/{org}/teams/{team}/members/{handle})
+	AddTeamMember(w http.ResponseWriter, r *http.Request, org OrgHandle, team TeamSlug, handle Handle)
+	// GetCurrentUser The authenticated user.
+	// (GET /user)
+	GetCurrentUser(w http.ResponseWriter, r *http.Request)
+	// UpdateCurrentUser Update profile fields.
+	// (PATCH /user)
+	UpdateCurrentUser(w http.ResponseWriter, r *http.Request)
+	// ListTokens List the caller's personal access tokens (metadata only).
+	// (GET /user/tokens)
+	ListTokens(w http.ResponseWriter, r *http.Request)
+	// CreateToken Mint a PAT. The secret is returned exactly once (D-22).
+	// (POST /user/tokens)
+	CreateToken(w http.ResponseWriter, r *http.Request)
+	// RevokeToken Revoke a PAT immediately (§12.3).
+	// (DELETE /user/tokens/{tokenId})
+	RevokeToken(w http.ResponseWriter, r *http.Request, tokenId openapi_types.UUID)
+	// GetUserProfile Public profile for a user handle.
+	// (GET /users/{handle})
+	GetUserProfile(w http.ResponseWriter, r *http.Request, handle Handle)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -72,11 +467,643 @@ type ServerInterfaceWrapper struct {
 
 type MiddlewareFunc func(http.Handler) http.Handler
 
+// TotpSetup operation middleware
+func (siw *ServerInterfaceWrapper) TotpSetup(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TotpSetup(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TotpVerify operation middleware
+func (siw *ServerInterfaceWrapper) TotpVerify(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TotpVerify(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Login operation middleware
+func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Login(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Logout operation middleware
+func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Logout(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Register operation middleware
+func (siw *ServerInterfaceWrapper) Register(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Register(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// VerifyEmail operation middleware
+func (siw *ServerInterfaceWrapper) VerifyEmail(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.VerifyEmail(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMeta operation middleware
 func (siw *ServerInterfaceWrapper) GetMeta(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMeta(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateOrg operation middleware
+func (siw *ServerInterfaceWrapper) CreateOrg(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateOrg(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOrg operation middleware
+func (siw *ServerInterfaceWrapper) GetOrg(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOrg(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateOrg operation middleware
+func (siw *ServerInterfaceWrapper) UpdateOrg(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateOrg(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListOrgAudit operation middleware
+func (siw *ServerInterfaceWrapper) ListOrgAudit(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOrgAuditParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "action" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "action", r.URL.Query(), &params.Action, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "action"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "action", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOrgAudit(w, r, org, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListOrgMembers operation middleware
+func (siw *ServerInterfaceWrapper) ListOrgMembers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOrgMembers(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveOrgMember operation middleware
+func (siw *ServerInterfaceWrapper) RemoveOrgMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "handle" -------------
+	var handle Handle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "handle", r.PathValue("handle"), &handle, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "handle", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveOrgMember(w, r, org, handle)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetOrgMember operation middleware
+func (siw *ServerInterfaceWrapper) SetOrgMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "handle" -------------
+	var handle Handle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "handle", r.PathValue("handle"), &handle, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "handle", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetOrgMember(w, r, org, handle)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListTeams operation middleware
+func (siw *ServerInterfaceWrapper) ListTeams(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTeams(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateTeam operation middleware
+func (siw *ServerInterfaceWrapper) CreateTeam(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateTeam(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteTeam operation middleware
+func (siw *ServerInterfaceWrapper) DeleteTeam(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "team" -------------
+	var team TeamSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "team", r.PathValue("team"), &team, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "team", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteTeam(w, r, org, team)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListTeamMembers operation middleware
+func (siw *ServerInterfaceWrapper) ListTeamMembers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "team" -------------
+	var team TeamSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "team", r.PathValue("team"), &team, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "team", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTeamMembers(w, r, org, team)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveTeamMember operation middleware
+func (siw *ServerInterfaceWrapper) RemoveTeamMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "team" -------------
+	var team TeamSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "team", r.PathValue("team"), &team, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "team", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "handle" -------------
+	var handle Handle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "handle", r.PathValue("handle"), &handle, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "handle", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveTeamMember(w, r, org, team, handle)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddTeamMember operation middleware
+func (siw *ServerInterfaceWrapper) AddTeamMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "team" -------------
+	var team TeamSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "team", r.PathValue("team"), &team, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "team", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "handle" -------------
+	var handle Handle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "handle", r.PathValue("handle"), &handle, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "handle", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddTeamMember(w, r, org, team, handle)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCurrentUser operation middleware
+func (siw *ServerInterfaceWrapper) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCurrentUser(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateCurrentUser operation middleware
+func (siw *ServerInterfaceWrapper) UpdateCurrentUser(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateCurrentUser(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListTokens operation middleware
+func (siw *ServerInterfaceWrapper) ListTokens(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTokens(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateToken operation middleware
+func (siw *ServerInterfaceWrapper) CreateToken(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateToken(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeToken operation middleware
+func (siw *ServerInterfaceWrapper) RevokeToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "tokenId" -------------
+	var tokenId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "tokenId", r.PathValue("tokenId"), &tokenId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tokenId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeToken(w, r, tokenId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetUserProfile operation middleware
+func (siw *ServerInterfaceWrapper) GetUserProfile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "handle" -------------
+	var handle Handle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "handle", r.PathValue("handle"), &handle, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "handle", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetUserProfile(w, r, handle)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -207,6 +1234,31 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/meta", wrapper.GetMeta)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/register", wrapper.Register)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/verify-email", wrapper.VerifyEmail)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/login", wrapper.Login)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/logout", wrapper.Logout)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/2fa/totp/setup", wrapper.TotpSetup)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/2fa/totp/verify", wrapper.TotpVerify)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/user", wrapper.GetCurrentUser)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/user", wrapper.UpdateCurrentUser)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users/{handle}", wrapper.GetUserProfile)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/user/tokens", wrapper.ListTokens)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/user/tokens", wrapper.CreateToken)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/user/tokens/{tokenId}", wrapper.RevokeToken)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs", wrapper.CreateOrg)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}", wrapper.GetOrg)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}", wrapper.UpdateOrg)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/members", wrapper.ListOrgMembers)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/members/{handle}", wrapper.RemoveOrgMember)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/members/{handle}", wrapper.SetOrgMember)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/teams", wrapper.ListTeams)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/teams", wrapper.CreateTeam)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/teams/{team}", wrapper.DeleteTeam)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/teams/{team}/members", wrapper.ListTeamMembers)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/teams/{team}/members/{handle}", wrapper.RemoveTeamMember)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/teams/{team}/members/{handle}", wrapper.AddTeamMember)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/audit", wrapper.ListOrgAudit)
 
 	return m
 }
@@ -216,22 +1268,66 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"5Dztctu2lq+C4d6ZlSe0JDu5906VH3d8HWfrabr22k5nZ1JvAxFHFBISYABQtur18/Q9+mQ7BwApSgIl",
+	"OpbS7dxftkzw4Hx/yw9RIvNCChBGR6OHqKCK5mBA2U/fU8EywN+4iEZRQc00iiNBc4hG0dQ9jCMFX0qu",
+	"gEUjo0qII51MIacOmjGg8NX/+UAPfx0efnfb+8fI/3p4+zCMX/79sXpy8I+/RHFk5gUC10ZxkUaPj3F0",
+	"odKNeEiV7h+JG6D5dVamLTgYoPm+kXhE+LqQQoMVzqWS4wxy/DWRwoAw+Cstiown1HApBoU78eKTlgKf",
+	"LdD5i4JJNIr+bbCQ/sA91YMKrr2RgU4ULxBcNIrOlJKKTGSWyTsuUnL19pR89+qvf+9bHnkACP+kZNyc",
+	"zTxOhZIFKMMd3jRx0B5WgF9ByrUBBYy4I4Qz0uMC+UazAUWQA/dE91N50F/nUYzApVqoS/j5D1wwfAqi",
+	"zKPRh6jUoKIYZRQhFRxFqefaQB7dBu5gYCjPLCmMccSHZpcNEp3s/Wty/AkSg69xe+dEqpyaaBSVJWch",
+	"CmSSlEoBOzFLxxk1cGh4DqF3DFUpmPNuF7jDFQ/WVX2hxB8iC6GBUZOBcSXJ2wCxVgEuaQrr8odZ5Wy4",
+	"gVxvU8eGKj3WF1Gl6Bw/C7g3p6XSUq0r1EVBv5TwmtCxBmGIFMRMgWRUG1LQFPpRvIV6j2mIvlMF1MCF",
+	"Sq/gSwk6oOaM6yKj8/+0DuIhyun9OxCpmUajo+NhQCzTWml34rCadNSeuolTO1U38jOIVrrgvuAK9IlZ",
+	"Z/gbmNAyM5oYSXpUMMI1SWhRoEWbA8v9nN6Ty5MbkvEJoDaT3u+/HR33X1pr7qbsoitHdSIL6K5o13gc",
+	"38u5OHcvHK0q3ApjLSr1RSGOvpMpb+dlhk/X+ej8F5GKQE55FnR0BdX6TioW9HJGmuJUMgg5WYc9uZuC",
+	"sweaJLIUhkypJjcXN5cEBB1nwLabh8O+gcoGBugyC9CfaDWx2raO6FkylYQL8t+HJykIo+aHp9dXb9GI",
+	"Eyk/czikpZmCMBjrgJG8NNRFhhCzrIPfIv73eGaVRB8ZFniGSPwR8jEoPeXFOoVKZrDtZvQieKwjopfl",
+	"OOOJQzeOZpxeY8RaqMFYygyoaKPFYhQmw9BAtC74T6B0MGKfXJ4TXaoJTdCwP0mFzId7mhdIdDQ7Csli",
+	"AtSUCnR7/FynZDUPuYZscjiV2hAPjUwymmrS+1SyFEih5IwzUDHRPBVcpDFRwLhupgwLunMuTt+dtxJ5",
+	"kTHQhuiyKKRCVaNOH8npu3Myc29ZL3ZEGEcyxyW+SYQ0EM5RZm1XeciMaMgpqvYC/rjkGTvUhuYFsINl",
+	"Pg/7R/3hVmutbo2bIm2II6QSFyoNGK0NEk/KT1Zi4YbYt/aoY9aktbyqiV3l66UCmwFMpCJSpYSynAtN",
+	"pMjmDQE1tG0Gik84sDcyp85Bd0iTglE2brCrhcNX3kWsqJ1KCZqqjolUzGbF8k6AIj+Xw+FLcDRUHzQk",
+	"peJm/ouCGYc7UOR/SW69ko+vx05lfL5rAaEiIIwojtZej+LIvR7Mfy+p2YlWLGUS3V7pqA2Y473XT8NG",
+	"tCmnbNafq37IuEAqVXo4lqVgpAdiIlUCjFxfX8TEcv9V2A8UCib8fh3qW660IUfHJJlSRRMDSsdWd71i",
+	"EUytMik/lwWK91X/mBTU6PAlX5sEbcx7LNd98uOpqG9qynWb9l9S41JOK1aaZReTaPRhS/ij+Oqq+plw",
+	"FnEzBTIpswwtRIHpk+upvBME7mlisjmRIulQBpiWyH+LFCyK8JVEy5fGxBfhxFWNmvTeHB4NraxW6oW6",
+	"qlw3FKWk0iFFgYwdZjCDjMxoxplNgYg77hTTtwPGmaWzVoHlqycIJ3hzDlr7Im4zjxyIxQshaa/Wblxo",
+	"Q0UStjptqCmbyQAXBlKX8xhuWqKF+8OamRpkQC0JPETeX50vR9GpMYUeDQY+CPcZzKoGih4suNssU0rF",
+	"tysPPq1QrskKGsMir9tWTHYPoF9bCVbNmJ2Vt7aSWfLG7i97roSXC6UGlsd//ZtN/Wqsh52r6ArxjXWP",
+	"c6TrqcjJDXGOcqnyrSKzgkKOFFA0Jfv7neIG77RaOSpQRfS0/uxPSpWOqljuQviIJrZZg72T6lSpQY0K",
+	"JSd8qQBYcAp7nOuC7pqA+eZoh0TJHg3x7Eaa4hpMWbTVi9IUWPa9V2E/6Zz8OtP/STW8PHbVrTtDelUs",
+	"xRBgg2ujnsRPRREMqCv0+BvjJmYhysJWvYdMujaz8JOffGIbLrKen4YbaYoz1z/oUJEup82VWS2nz8to",
+	"L9+wOb14XCS215g7gB9wWG6PgSpQbyt6aDr/hRSgNNai2BIBrYmL+76vbemwLy3oxpDh9E5XBZ2dDbgO",
+	"xWI64EPKL9W5RSgs+A8wd512LiYy4C9sUCBXZ9c3BMtt1FTs2vimCFHWT6v5yJWlOq5KRh0T7y1s/asT",
+	"KrASJuhVlLFVRapjm0qCMKAKxbWvKhCgjXV9cuZSCdfxr9v9pNc2ZTjok0uackFd/16TxPZmD8dUA+v/",
+	"jKRnPAGhrZZ59ly+Ozk9+/7i3ZuzK9L7r2NSgGBcpAeNUB9V9J5cnkeNCjoa9o/7QzwoCxC04NEoetkf",
+	"9l+6dv7UinyAljk4ntABKs9Ao4fBvxfSBTY0SYswNtAXTihambccD4cbZi1Pm7GserrQrEUomWU51q2V",
+	"z0qkmHCVkztupmSFKluyzg/6rlli+7BtSNRUNUY9caTLPKdqju4SUi6qXmCFxGuiwJRKaKt+tsOCIkCV",
+	"8rl1FEeGphoNG1GLbhFqEMvNzP/JnXGuArT5p2TzJzF+xcn6PuhmR25PBXzI4+pQ73FNK14Fyo6lPurz",
+	"JXLqBb8iE6cIlNjxjDAEidgkhrrdHGa+bdU+g++bFH6pD96JrcNd391maNfOKxPQWCZwPQXWJ1g4VggR",
+	"Dcap/ccVT/7RN6Nfk491i/gjyUttyBgIJFMJDJvY9t3lTvZHMgXKQGFHm2bZ1q72VyuRD4HR6MNtU6Uu",
+	"ffJKei+sVtlq0avsAbGa8npBuKfXY7lFx2RpNioZPu9iRZVgFMzk590Y0pUFZUmqjMaTtokm5Yuhdqqq",
+	"cmlP1rNajXUyoKOdXe9HI2uWc+JHRz4Le01c3zTxbQjM3MiXEkpgu9df1zciVBAuGJ9xVrrEzSLUs3e/",
+	"qAo034Y7OtgkZBeaDusEOixoF5zOfKq6mwhV966+rg31lTHK0kCqTvceBORjFq00gTKmQGsXtNwsmGfA",
+	"XJrdIpncz6RSCMjiP8DYmdUeQ4eFH4wZagaKIHqMGrp77vkLqvkPpum6bej1+2/f+QZ/xUHLNsdBTPPb",
+	"1bleY9iT41pbk/jGngspC4jvQqVU8F+dn/Leayd5Wu2UZOOG1yShWQaKjCGROWg3yGnKywppIa/Bg1Tp",
+	"4ya9dxJrLuu1dM0XRwaLPbrH2z2aTAeW795clgTqe1ykV7ji2famtc1mDBepdu0eOwM8CEjBVo7JdJ3v",
+	"7wtWG8vzWL+LqPG0BuzjV4WNvWuFYykjcjfaUeuDg4tgF1LvWZG/ONhqeG7VsNX83nGN9mf30p6jCbHv",
+	"Fn0pQc0XzSLXMYmay6Nrsgy/mfGcm6UXc3rPc+wsHw+HttvtPh3Fa0OVNph+xW8TNvt0Jos1wlD6iQ/9",
+	"Kt/zVQYH7lbwxK39xUTAHWC0teNYrz2vfUfLXlslln9bSSxRMdaUyg3U9Ta18stEf6R37zQobiw9rU+L",
+	"10TlT+9CTsgnv9zgc0m7JkF61d8SKgjOQDoYun9l8OCa0I8uS87AQKjEy+UMagk90/K3HG4X5avQTh9i",
+	"tqP6GEERWm+PVFpvUxZNFD63w1RcniHjuX/QEkfLgJ5fg/kjmLiLkPukZb6V6q1l7e7bRuGm0bYa6ZQX",
+	"GDR3oU4njC10SSpcaBEpqhdyY0W5SKqoMD45HthHHSzYAM03+9Qbe+L/uztFLLs4UkvNztyo5V43zxlv",
+	"rCBv3Pdf/visuBpD73yHvmVo/W3LWaclYa3YRx1rFeQJiTMe14MH/LExlr6xf3+u0myPAPW3troFUofW",
+	"TjjoQD2Pg51SRiRxBznj83i5B4e4vOXexS1WSeFOvWOdafawlvyKFDMk0Cfkmwvxfivp/nmS04mSeQcL",
+	"a8lDTxj70zP3hDFgO0vUbNeyYq6RHZ1X9ZWVtlblqZuzvfffPtlXats2o/LXE0RzF5zCwfDykNZBXvAG",
+	"P3foI67y5V+vJ9gmsqopuCuROXh1W9i1g0MSq9R5YEdSW+KuO/JNQiE1nWKgxWh30W8Kfm7x7zq8Gmcr",
+	"BzcAs+2AgxYr2FQ3+BW7/c2elr7M+o3T9cbXG9rktZidfzRue4QWBVDlvp3kdke4rldRdiHdH7kwhOK3",
+	"cN2ai98u49pveAFb+n4EfmHh+Pigg70MHuzPc7Ylr8EVjErwK1E39K8VHMyN/11hy15q10xl12smlsmE",
+	"5zkwTg1k86Wd7zZuLqeHbWEVneel82hPTl6+xRiwmb+v6757WrnkPWw3LcF3Az8bT4hjbZD/y/D8qvCH",
+	"W0za6g3fD7fINW2n847XpcqiUTSgBR/MjixPPeCHzTsDdqZfTfIZ14mcgZr3F4qf292DOPxvMpwyxG5R",
+	"K66WmHRMjt+ekF5j3cUDszsV68Ca2ZFfGK65puMWt98A63i3Drc5j9VxVTfFVcOp8Z3ExT9xaYHjhzKZ",
+	"TEmvMW2p6WLcfhXr/wYA",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

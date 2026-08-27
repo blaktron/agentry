@@ -51,6 +51,34 @@ func problemInternal(w http.ResponseWriter, r *http.Request) {
 	writeProblem(w, r, http.StatusInternalServerError, "internal", "Internal server error", "")
 }
 
+func problemNotFound(w http.ResponseWriter, r *http.Request) {
+	writeProblem(w, r, http.StatusNotFound, "not-found", "Not found", "")
+}
+
+func problemValidation(w http.ResponseWriter, r *http.Request, detail string, fields ...FieldError) {
+	writeProblem(w, r, http.StatusUnprocessableEntity, "validation", "Validation failed", detail, fields...)
+}
+
 func problemBadRequest(w http.ResponseWriter, r *http.Request, detail string) {
 	writeProblem(w, r, http.StatusBadRequest, "bad-request", "Bad request", detail)
+}
+
+func problemUnauthorized(w http.ResponseWriter, r *http.Request, detail string) {
+	writeProblem(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required", detail)
+}
+
+func problemForbidden(w http.ResponseWriter, r *http.Request, detail string) {
+	writeProblem(w, r, http.StatusForbidden, "forbidden", "Forbidden", detail)
+}
+
+func problemConflict(w http.ResponseWriter, r *http.Request, detail string) {
+	writeProblem(w, r, http.StatusConflict, "conflict", "Conflict", detail)
+}
+
+func problemTooMany(w http.ResponseWriter, r *http.Request, detail string) {
+	writeProblem(w, r, http.StatusTooManyRequests, "rate-limited", "Too many requests", detail)
+}
+
+func problemUnavailable(w http.ResponseWriter, r *http.Request, detail string) {
+	writeProblem(w, r, http.StatusServiceUnavailable, "unavailable", "Service unavailable", detail)
 }

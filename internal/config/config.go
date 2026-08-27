@@ -28,6 +28,7 @@ type Config struct {
 	Git      Git      `yaml:"git"`
 	Log      Log      `yaml:"log"`
 	Auth     Auth     `yaml:"auth"`
+	Limits   Limits   `yaml:"limits"`
 	Signing  Signing  `yaml:"signing"`
 	Judge    Judge    `yaml:"judge"`
 	BaseURL  string   `yaml:"baseURL"` // public origin, e.g. https://agentry.example
@@ -80,6 +81,18 @@ type Auth struct {
 	PATMaxTTL time.Duration `yaml:"patMaxTTL"`
 	// CookieSecure marks session cookies Secure (default true outside dev).
 	CookieSecure bool `yaml:"cookieSecure"`
+	// SealingKey is a base64 32-byte key encrypting small secrets at rest
+	// (TOTP seeds). Empty is allowed only in dev (a fixed insecure key).
+	SealingKey string `yaml:"sealingKey"`
+}
+
+// Limits tunes the §19 API rate quotas (self-host operators may adjust;
+// SaaS values come from the entitlements layer later).
+type Limits struct {
+	AuthedPerHour     int `yaml:"authedPerHour"`     // sustained authed budget
+	AuthedBurstPerMin int `yaml:"authedBurstPerMin"` // authed burst
+	AnonymousPerMin   int `yaml:"anonymousPerMin"`   // anonymous per-IP
+	LoginPerMin       int `yaml:"loginPerMin"`       // login/register per-IP
 }
 
 // Signing configures attestation signing (D-16): kms | file | none(dev).
@@ -113,6 +126,12 @@ func Default() Config {
 			SessionTTL:   24 * time.Hour,
 			PATMaxTTL:    365 * 24 * time.Hour,
 			CookieSecure: false,
+		},
+		Limits: Limits{
+			AuthedPerHour:     5000,
+			AuthedBurstPerMin: 100,
+			AnonymousPerMin:   60,
+			LoginPerMin:       10,
 		},
 		Signing: Signing{Kind: "none"},
 		Judge:   Judge{Provider: "none"},
@@ -202,6 +221,7 @@ func applyEnv(c *Config) error {
 	str("AGENTRY_SIGNING_KIND", &c.Signing.Kind)
 	str("AGENTRY_SIGNING_KMS_KEY_ARN", &c.Signing.KMSKeyARN)
 	str("AGENTRY_SIGNING_KEY_FILE", &c.Signing.KeyFile)
+	str("AGENTRY_AUTH_SEALING_KEY", &c.Auth.SealingKey)
 	str("AGENTRY_JUDGE_PROVIDER", &c.Judge.Provider)
 	str("AGENTRY_JUDGE_MODEL", &c.Judge.Model)
 	str("AGENTRY_JUDGE_REGION", &c.Judge.Region)
@@ -246,6 +266,9 @@ func (c Config) Validate() error {
 	}
 	if c.Env == "prod" && c.Signing.Kind == "none" {
 		return fmt.Errorf("config: signing.kind none is not allowed in prod")
+	}
+	if !c.DevMode && c.Auth.SealingKey == "" {
+		return fmt.Errorf("config: auth.sealingKey is required outside dev mode")
 	}
 	switch c.Judge.Provider {
 	case "none", "bedrock", "anthropic", "classifier":

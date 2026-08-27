@@ -1,6 +1,6 @@
 // Package api is the HTTP layer (§2.1 L2/L3 seam): generated OpenAPI server
 // stubs, middleware, health endpoints, and well-known documents. Route
-// authorization declarations live beside handlers per §12.2.
+// authorization declarations live in authz_routes.go per §12.2.
 package api
 
 import (
@@ -10,26 +10,68 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/notify"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
+	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/version"
 )
 
 // Server implements the generated ServerInterface plus non-spec endpoints
 // (health, well-known). It is assembled once per process by NewHandler.
 type Server struct {
-	cfg config.Config
-	st  *store.Store // nil when running without a database (limited dev mode)
-	log *slog.Logger
+	cfg      config.Config
+	st       *store.Store // nil when running without a database (limited dev mode)
+	log      *slog.Logger
+	auditW   *audit.Writer
+	notifier notify.Notifier
+	sealer   *auth.Sealer
+	limits   *rateLimits
+	classes  limitClasses
 }
 
 // New creates the API server. st may be nil in database-less dev mode; any
-// handler that needs the store must fail closed with 503 in that case.
+// handler that needs the store fails closed with 503 in that case.
 func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Server{cfg: cfg, st: st, log: log}
+	sealer, err := auth.NewSealer(cfg.Auth.SealingKey, cfg.DevMode)
+	if err != nil {
+		// Config validation already enforces key presence outside dev; an
+		// invalid key value is a hard startup error surfaced by panicking
+		// here during construction (never mid-request).
+		panic(err)
+	}
+	return &Server{
+		cfg:      cfg,
+		st:       st,
+		log:      log,
+		auditW:   audit.NewWriter(log),
+		notifier: notify.LogNotifier{Log: log},
+		sealer:   sealer,
+		limits:   newRateLimits(),
+		classes:  classesFromConfig(cfg.Limits),
+	}
+}
+
+// q returns the base query layer, or nil without a database.
+func (s *Server) q() *storegen.Queries {
+	if s.st == nil {
+		return nil
+	}
+	return s.st.Queries()
+}
+
+// requireDB writes 503 and returns false when no database is configured.
+func (s *Server) requireDB(w http.ResponseWriter, r *http.Request) bool {
+	if s.st == nil {
+		problemUnavailable(w, r, "database not configured")
+		return false
+	}
+	return true
 }
 
 // GetMeta implements GET /api/v1/meta (§9.2): server version + feature flags.
@@ -47,8 +89,7 @@ func (s *Server) GetMeta(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Health mounts /healthz (liveness: process up) and /readyz (readiness:
-// dependencies reachable). LBs use /healthz; deploys gate on /readyz.
+// healthz is liveness (process up); readyz is readiness (dependencies).
 func (s *Server) healthz(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write([]byte(`{"status":"ok"}`))
@@ -105,6 +146,7 @@ func NewHandler(s *Server) http.Handler {
 		ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
 			problemBadRequest(w, r, err.Error())
 		},
+		Middlewares: []MiddlewareFunc{s.principalMiddleware},
 	})
 
 	return withMiddleware(apiHandler, s.log)
@@ -116,4 +158,15 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// readJSON decodes a request body strictly (unknown fields rejected).
+func readJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(dst); err != nil {
+		problemBadRequest(w, r, "invalid JSON body: "+err.Error())
+		return false
+	}
+	return true
 }

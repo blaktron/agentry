@@ -28,7 +28,7 @@ func TestLoadDefaults(t *testing.T) {
 func TestLoadFileAndEnvPrecedence(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "agentry.yaml")
-	if err := os.WriteFile(path, []byte("env: staging\ndevMode: false\nhttp:\n  addr: \":9999\"\nlog:\n  level: debug\n"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("env: staging\ndevMode: false\nhttp:\n  addr: \":9999\"\nlog:\n  level: debug\nauth:\n  sealingKey: \"MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("AGENTRY_HTTP_ADDR", ":7777")

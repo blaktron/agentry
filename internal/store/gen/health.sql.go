@@ -7,8 +7,7 @@ package storegen
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
+	"time"
 )
 
 const now = `-- name: Now :one
@@ -17,9 +16,9 @@ SELECT now()::timestamptz AS server_time
 `
 
 // Health/diagnostic queries. Real domain queries land with M1 (WG-B).
-func (q *Queries) Now(ctx context.Context) (pgtype.Timestamptz, error) {
+func (q *Queries) Now(ctx context.Context) (time.Time, error) {
 	row := q.db.QueryRow(ctx, now)
-	var server_time pgtype.Timestamptz
+	var server_time time.Time
 	err := row.Scan(&server_time)
 	return server_time, err
 }

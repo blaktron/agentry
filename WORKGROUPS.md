@@ -58,7 +58,7 @@ Scope:
 
 Acceptance: authz matrix test (§17.4) enumerates every route × role × org-boundary and passes; PAT lifecycle e2e; audit rows asserted for every mutating call.
 
-**Status: ⏳ not started**
+**Status: ✅ complete** — identity schema (00002: handles/users/orgs/memberships/teams/pats/sessions/audit partitioned+immutability trigger), register/login/TOTP (argon2id, sealed secrets), server-side sessions + CSRF, PATs (`agy_`, sha256-at-rest, 8 scopes), authz chokepoint + per-route declarations w/ completeness gate, audit writer + code-registered catalog, configurable §19 rate limits, org/member/team endpoints. Acceptance green (`scripts/acceptance/m1.sh`): 179-case authz matrix, PAT lifecycle e2e, audit coverage incl. append-only trigger, auth/TOTP/CSRF flows. Deferred to later WGs: social OIDC login (M6 SSO work), session-listing UI endpoint, GDPR delete (M8).
 
 ---
 
