@@ -8,3 +8,31 @@ notes: >
   persistence, obfuscation). Every rule ships with match and non-match
   fixtures; benign lookalikes (security docs that merely discuss an attack)
   must not match, per §17.3.
+
+# Bundle-level suppressions, applied to every rule in addition to its own
+# (§17.3 precision requirement). These capture DESCRIPTIVE FRAMING: prose that
+# catalogues an attack technique rather than issuing it. Security
+# documentation, review checklists, and defensive skills all legitimately
+# contain the same verbs and nouns as the attacks they describe — and an agent
+# *about* prompt-injection defense has to remain publishable.
+#
+# Scoped to the matched line, like per-rule notPatterns, so one descriptive
+# phrase cannot whitelist a whole file. The residual risk is stated plainly in
+# DEVIATIONS.md (DEV-010): an attacker who wraps a live directive in
+# cataloguing language evades the S4 line hit, and is then left to S3, S5, S6,
+# and S9 — which is why the pipeline is layered rather than a single gate.
+notPatterns:
+  # Cataloguing / enumerating language.
+  - 'prompts?\s+(to|that|which)\b'
+  - 'content\s+(asking|that|which)\b'
+  - 'text\s+(that|which|asking)\b'
+  - 'requests?\s+that\s+(try|attempt)'
+  - '\b(look|looking|watch|watching|check|checking|scan|scanning)\s+for\b'
+  - '\b(indicators?|signs?|symptoms?|markers?|hallmarks?|techniques?|tactics?|patterns?\s+of)\b'
+  - '\b(harvesting|exfiltration|override|coercion|persistence|obfuscation)\b\s*[.:]'
+  # Reporting / review framing.
+  - '\bfindings?\b'
+  - '\breport (it|them|each|the|what)\b'
+  - '\b(quote|excerpt|cite)\s+(it|them|the|a)\b'
+  - '\bphrasing\b'
+  - '\b(verdict|checklist|rubric|review)\b'

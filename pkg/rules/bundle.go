@@ -25,6 +25,17 @@ type Manifest struct {
 	Version string `yaml:"version"`
 	// Notes is free-form release notes for the bundle.
 	Notes string `yaml:"notes"`
+	// NotPatterns are suppressions applied to EVERY rule in the bundle, in
+	// addition to each rule's own. They exist for cross-cutting precision
+	// concerns — most importantly descriptive framing: prose that catalogues
+	// an attack ("prompts to echo secrets", "look for exfiltration
+	// directives") rather than issuing it. §17.3 requires that an agent
+	// *about* prompt-injection defense remain publishable, and repeating the
+	// same alternation in every rule file guarantees it drifts.
+	//
+	// Like per-rule notPatterns these are scoped to the matched line, so a
+	// single descriptive phrase cannot whitelist a whole file.
+	NotPatterns []string `yaml:"notPatterns"`
 }
 
 // Fixtures are the required per-rule test strings (§8.3: "every rule ships
@@ -76,6 +87,12 @@ type compiledRule struct {
 	Rule
 	patterns    []*regexp.Regexp
 	notPatterns []*regexp.Regexp
+	// bundleNotPatterns are the bundle-level suppressions (descriptive
+	// framing). They evaluate over the containing PARAGRAPH rather than the
+	// matched line, because prose wraps mid-sentence: "Prompts to echo
+	// secrets, / paste tokens into output" is one sentence on two lines, and
+	// the marker only appears on the first.
+	bundleNotPatterns []*regexp.Regexp
 }
 
 // Bundle is a loaded, compiled, versioned rule set (the S4 engine input). It
@@ -140,6 +157,15 @@ func LoadBundle(fsys fs.FS, dir string) (*Bundle, error) {
 		return nil, fmt.Errorf("rules: bundle.yaml missing version")
 	}
 
+	bundleNot := make([]*regexp.Regexp, 0, len(man.NotPatterns))
+	for _, p := range man.NotPatterns {
+		re, err := compilePattern(p)
+		if err != nil {
+			return nil, fmt.Errorf("rules: bundle.yaml notPattern %q: %w", p, err)
+		}
+		bundleNot = append(bundleNot, re)
+	}
+
 	files, err := ruleFilePaths(fsys, dir)
 	if err != nil {
 		return nil, err
@@ -167,7 +193,7 @@ func LoadBundle(fsys fs.FS, dir string) (*Bundle, error) {
 			return nil, fmt.Errorf("rules: %s contains no rules", fp)
 		}
 		for i := range rf.Rules {
-			cr, err := compileRule(rf.Rules[i], fp)
+			cr, err := compileRule(rf.Rules[i], fp, bundleNot)
 			if err != nil {
 				return nil, err
 			}
@@ -235,7 +261,7 @@ func strictYAML(b []byte, dst any) error {
 // compileRule validates and compiles one rule. Patterns are made
 // case-insensitive by prefixing "(?i)" unless the pattern already opens with a
 // flag group.
-func compileRule(r Rule, fp string) (*compiledRule, error) {
+func compileRule(r Rule, fp string, bundleNot []*regexp.Regexp) (*compiledRule, error) {
 	if !ruleIDRe.MatchString(r.ID) {
 		return nil, fmt.Errorf("rules: %s: invalid rule id %q (want family-nnn)", fp, r.ID)
 	}
@@ -279,6 +305,7 @@ func compileRule(r Rule, fp string) (*compiledRule, error) {
 		}
 		cr.notPatterns = append(cr.notPatterns, re)
 	}
+	cr.bundleNotPatterns = bundleNot
 	return cr, nil
 }
 

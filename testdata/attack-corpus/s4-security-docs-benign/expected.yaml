@@ -1,0 +1,25 @@
+# Regression fixture: the shipped first-party `injection-defense` skill.
+# It discusses every S4 family in detail — override framing, exfiltration
+# directives, tool coercion, credential harvesting, persistence, concealment —
+# because that is its job. It MUST scan clean.
+#
+# This is the §17.3 benign-lookalike requirement as a real artifact rather
+# than a synthetic string: if any S4 rule fires here, an agent about
+# prompt-injection defense has become unpublishable and our precision has
+# regressed. Found in practice — see DEVIATIONS.md DEV-010.
+technique: "Security documentation discussing every S4 family (first-party injection-defense skill)"
+expect: []
+forbid:
+  - S4/credential-harvest-001
+  - S4/credential-harvest-002
+  - S4/exfiltration-001
+  - S4/exfiltration-002
+  - S4/instruction-override-001
+  - S4/instruction-override-002
+  - S4/tool-coercion-001
+  - S4/tool-coercion-002
+  - S4/persistence-001
+  - S4/persistence-002
+  - S4/obfuscation-001
+  - S4/obfuscation-002
+expectClean: true

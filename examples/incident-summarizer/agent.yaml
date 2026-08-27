@@ -1,0 +1,31 @@
+schemaVersion: "1"
+name: incident-summarizer
+namespace: agentry
+kind: skill
+version: 1.0.0
+summary: "Turns a PagerDuty incident into a postmortem draft"
+license: Apache-2.0
+authors:
+  - name: Agentry maintainers
+tags: [incident-response, summarization, postmortem]
+
+entrypoints:
+  skill: SKILL.md
+
+runtime:
+  interfaces: [claude-skill]
+
+capabilities:
+  # One host, one token. Anything wider would be a policy decision someone
+  # has to justify, and reviewers would be right to ask why.
+  network:
+    egress: [api.pagerduty.com]
+  filesystem:
+    read: workspace
+    write: none
+  exec: none
+  secrets: [PAGERDUTY_TOKEN]
+  dataAccess: [tickets]
+
+publish:
+  include: [agent.yaml, README.md, SKILL.md, LICENSE]

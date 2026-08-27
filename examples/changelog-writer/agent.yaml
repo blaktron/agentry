@@ -1,0 +1,29 @@
+schemaVersion: "1"
+name: changelog-writer
+namespace: agentry
+kind: skill
+version: 1.0.0
+summary: "Write release notes from the commits since the last tag"
+license: Apache-2.0
+authors:
+  - name: Agentry maintainers
+tags: [release, changelog, documentation]
+
+entrypoints:
+  skill: SKILL.md
+
+runtime:
+  interfaces: [claude-skill]
+
+capabilities:
+  # Reads the workspace, writes nothing itself — it hands you the text and you
+  # decide where it goes. No network: the commits are already local.
+  filesystem:
+    read: workspace
+    write: none
+  network:
+    egress: none
+  exec: none
+
+publish:
+  include: [agent.yaml, README.md, SKILL.md, LICENSE]

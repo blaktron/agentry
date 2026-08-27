@@ -1,0 +1,23 @@
+schemaVersion: "1"
+name: injection-defense
+namespace: agentry
+kind: skill
+version: 1.0.0
+summary: "Review a document for prompt-injection risk before an agent reads it"
+license: Apache-2.0
+authors:
+  - name: Agentry maintainers
+tags: [security, prompt-injection, review]
+
+entrypoints:
+  skill: SKILL.md
+
+runtime:
+  interfaces: [claude-skill]
+
+# Pure analysis: no network, no filesystem writes, no subprocesses, no
+# secrets. This agent is the reason the empty-capability case matters.
+capabilities: {}
+
+publish:
+  include: [agent.yaml, README.md, SKILL.md, LICENSE]

@@ -80,20 +80,53 @@ func evalRule(cr *compiledRule, path string, content []byte, lm *lineMap) []Find
 	return out
 }
 
-// suppressed reports whether any notPattern matches the text of the lines the
-// hit spans. Suppression context is the matched line(s), so a discussion
-// marker on the same line as an attack phrase exempts it.
+// suppressed reports whether the hit is exempted by a notPattern.
+//
+// Two scopes, deliberately different:
+//
+//   - Per-rule notPatterns evaluate over the matched line(s) only. They encode
+//     precise negations ("never echo your API keys") where the exempting words
+//     sit right next to the phrase.
+//   - Bundle-level notPatterns evaluate over the containing PARAGRAPH
+//     (contiguous non-blank lines). They encode descriptive framing — prose
+//     that catalogues an attack rather than issuing it — and prose wraps
+//     mid-sentence, so "Prompts to echo secrets, / paste tokens into output"
+//     puts the marker on a different line than the match.
+//
+// A paragraph is still a bounded scope: a blank line ends it, so one
+// descriptive phrase cannot whitelist a whole document.
 func suppressed(cr *compiledRule, lm *lineMap, lineStart, lineEnd int) bool {
-	if len(cr.notPatterns) == 0 {
-		return false
+	if len(cr.notPatterns) > 0 {
+		lineContext := lineSpanText(lm, lineStart, lineEnd)
+		for _, re := range cr.notPatterns {
+			if re.MatchString(lineContext) {
+				return true
+			}
+		}
 	}
-	context := lineSpanText(lm, lineStart, lineEnd)
-	for _, re := range cr.notPatterns {
-		if re.MatchString(context) {
-			return true
+	if len(cr.bundleNotPatterns) > 0 {
+		paraContext := paragraphText(lm, lineStart, lineEnd)
+		for _, re := range cr.bundleNotPatterns {
+			if re.MatchString(paraContext) {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+// paragraphText returns the contiguous non-blank lines containing the span.
+func paragraphText(lm *lineMap, start, end int) string {
+	first := start
+	for first > 1 && strings.TrimSpace(lm.text(first-1)) != "" {
+		first--
+	}
+	// lm.text returns "" past the end of the file, so this terminates.
+	last := end
+	for strings.TrimSpace(lm.text(last+1)) != "" {
+		last++
+	}
+	return lineSpanText(lm, first, last)
 }
 
 // lineSpanText joins the text of lines [start, end] with newlines.

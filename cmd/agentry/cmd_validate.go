@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/scan/ruleset"
 	"github.com/PLACEHOLDER_ORG/agentry/pkg/manifest"
 	"github.com/PLACEHOLDER_ORG/agentry/pkg/rules"
 )
@@ -91,25 +92,23 @@ func runValidate(cmd *cobra.Command, dir string, strict bool) error {
 		_, _ = fmt.Fprintf(out, "  ERROR read: %v\n", e)
 	}
 
-	bundle, bundleNote := loadRulesBundle()
+	bundle, err := loadRulesBundle()
+	if err != nil {
+		// Fail closed: never report PASSED on content S4 did not examine.
+		return err
+	}
 	findings := rules.Scan(bundle, scanFiles)
 	sortFindings(findings)
 
 	switch {
-	case len(findings) == 0 && bundle != nil:
-		_, _ = fmt.Fprintf(out, "scan: clean — %d file(s), S3 + S4 (bundle %s)\n", len(scanFiles), bundle.Version())
 	case len(findings) == 0:
-		_, _ = fmt.Fprintf(out, "scan: clean — %d file(s), S3 only\n", len(scanFiles))
+		_, _ = fmt.Fprintf(out, "scan: clean — %d file(s), S3 + S4 (bundle %s)\n", len(scanFiles), bundle.Version())
 	default:
 		_, _ = fmt.Fprintf(out, "scan: %d finding(s) over %d file(s)\n", len(findings), len(scanFiles))
 		for _, f := range findings {
 			printFinding(out, f)
 		}
 	}
-	if bundleNote != "" {
-		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "warning: "+bundleNote)
-	}
-
 	failed := errCount > 0 || len(findings) > 0 || (strict && warnCount > 0)
 	if failed {
 		return fmt.Errorf("validate failed: %d error(s), %d warning(s), %d finding(s)", errCount, warnCount, len(findings))
@@ -151,37 +150,37 @@ func loadScanFiles(dir string, m *manifest.Manifest, files []manifest.FileInfo) 
 	return scanFiles, errs
 }
 
-// loadRulesBundle locates the S4 rule bundle: $AGENTRY_RULES_DIR, then
-// ./rules. A nil bundle (with a warning note) means S4 is skipped; S3 needs
-// no bundle. Release builds will embed the bundle (deferred; go:embed cannot
-// reach the repo-root rules/ directory from this package).
-func loadRulesBundle() (*rules.Bundle, string) {
-	var candidates []string
+// loadRulesBundle resolves the S4 signature bundle.
+//
+// The bundle is EMBEDDED in the binary (internal/scan/ruleset), so local/remote
+// scan parity (D-12) does not depend on where the CLI is run from. The
+// AGENTRY_RULES_DIR environment variable and a ./rules directory override it,
+// for rule development against an unreleased bundle.
+//
+// A malformed override is a hard error, not a warning: silently skipping S4
+// would report "validate: PASSED" on content the signature engine never
+// examined, which is the same failure mode §7 forbids on the server (never
+// pass on scanner failure).
+func loadRulesBundle() (*rules.Bundle, error) {
 	if d := os.Getenv(envRulesDir); d != "" {
-		candidates = append(candidates, d)
-	}
-	candidates = append(candidates, "rules")
-
-	var firstErr error
-	for _, dir := range candidates {
-		if st, err := os.Stat(dir); err != nil || !st.IsDir() {
-			continue
-		}
-		b, err := rules.LoadBundle(os.DirFS(dir), ".")
+		b, err := rules.LoadBundle(os.DirFS(d), ".")
 		if err != nil {
-			if firstErr == nil {
-				firstErr = fmt.Errorf("load rule bundle from %s: %w", dir, err)
-			}
-			continue
+			return nil, fmt.Errorf("load rule bundle from %s (%s): %w", d, envRulesDir, err)
 		}
-		return b, ""
+		return b, nil
 	}
-	if firstErr != nil {
-		return nil, firstErr.Error() + " — S4 signature scan skipped"
+	if st, err := os.Stat("rules"); err == nil && st.IsDir() {
+		b, err := rules.LoadBundle(os.DirFS("rules"), ".")
+		if err != nil {
+			return nil, fmt.Errorf("load rule bundle from ./rules: %w", err)
+		}
+		return b, nil
 	}
-	return nil, "S4 rule bundle not found (set " + envRulesDir + " or run from the agentry repo) — " +
-		"S4 signature scan skipped; S3 hidden-content detectors still ran. " +
-		"Release builds will embed the bundle."
+	b, err := ruleset.Load()
+	if err != nil {
+		return nil, fmt.Errorf("load embedded rule bundle: %w", err)
+	}
+	return b, nil
 }
 
 // printManifestIssues prints validation issues, errors before warnings.
