@@ -125,7 +125,7 @@ Scope:
 
 Acceptance: CLI e2e against dev stack covering §18.2 M3 round-trip; exporters produce valid target formats (fixture-verified).
 
-**Status: ⏳ not started**
+**Status: ✅ core complete** — all §11 commands: init (3 kinds, scaffolds validate clean), validate (D-12 parity — V-rules + S3/S4 via pkg/rules, --strict for warnings), login (PAT→OS keychain w/ chmod-600 file fallback, AGENTRY_TOKEN override), publish (tag + upload modes, polls pipeline to verdict, non-zero on rejected), install (resolve→digest verify→capability summary→typed confirm on egress/exec→all three §5.6 exporters), verify, search, info, yank. Multi-registry config. Unit tests for exporters (frontmatter injection, .mcp.json merge idempotency, AGENTS.md section upsert, arg re-rooting), config round-trip+perms, capability rendering. E2E `scripts/acceptance/m3-cli.sh` green: full register→PAT→init→validate→publish→install→verify→yank round-trip against a live server. Deferred: --from import wizards, embedded rule bundle in release builds, SSE progress (polls), DSSE verify + TOFU pinning (wired next now that M4 signing exists), capability diff vs installed version.
 
 ---
 
