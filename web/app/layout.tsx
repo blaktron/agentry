@@ -20,6 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <nav className="flex gap-4 text-sm" style={{ color: "var(--color-muted)" }}>
               <Link href="/search">Browse</Link>
               <Link href="/trust">Trust &amp; security</Link>
+              <Link href="/advisories">Advisories</Link>
               <Link href="/docs">Docs</Link>
             </nav>
             <form action="/search" className="ml-auto">
