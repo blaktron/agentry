@@ -14,8 +14,12 @@ import (
 
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 )
 
 // MaxInputBytes caps rendering input (§19 instruction-file quota is 1 MB;
@@ -32,8 +36,16 @@ type Renderer struct {
 func New() *Renderer {
 	md := goldmark.New(
 		goldmark.WithExtensions(
-			extension.GFM,          // tables, strikethrough, task lists, autolinks
+			extension.GFM, // tables, strikethrough, task lists, autolinks
 			extension.Footnote,
+		),
+		goldmark.WithParserOptions(
+			// Author headings are demoted one level so a README's "# Title"
+			// becomes an <h2> inside a page that already owns the <h1>. Two
+			// <h1> elements break the document outline for screen readers, and
+			// the fix belongs here rather than in one page's stylesheet: this
+			// HTML is served by the API and may be embedded anywhere.
+			parser.WithASTTransformers(util.Prioritized(demoteHeadings{}, 100)),
 		),
 		goldmark.WithRendererOptions(
 			// Raw HTML never passes through (§10.3: "no raw HTML pass-through
@@ -87,6 +99,23 @@ func (r *Renderer) Markdown(src []byte) (string, error) {
 	}
 	safe := r.policy.SanitizeBytes(buf.Bytes())
 	return RevealInvisible(string(safe)), nil
+}
+
+// demoteHeadings shifts every author heading down one level (h1→h2 … h5→h6),
+// leaving h6 alone since there is nowhere deeper to go.
+type demoteHeadings struct{}
+
+// Transform implements parser.ASTTransformer.
+func (demoteHeadings) Transform(doc *ast.Document, _ text.Reader, _ parser.Context) {
+	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		if h, ok := n.(*ast.Heading); ok && h.Level < 6 {
+			h.Level++
+		}
+		return ast.WalkContinue, nil
+	})
 }
 
 // invisibleRanges are the codepoint classes that must never render as

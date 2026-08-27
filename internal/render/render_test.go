@@ -94,7 +94,9 @@ func TestXSSCorpus(t *testing.T) {
 		{
 			name:     "benign markdown survives",
 			input:    "# Title\n\nSome **bold** and `code` and a [link](https://example.com).\n\n- item\n- item\n",
-			mustHave: []string{"<h1", "Title", "<strong>bold</strong>", "<code>code</code>", "<li>item</li>"},
+			// h2, not h1: author headings are demoted so the page keeps a
+			// single <h1> (see TestAuthorHeadingsAreDemoted).
+			mustHave: []string{"<h2", "Title", "<strong>bold</strong>", "<code>code</code>", "<li>item</li>"},
 			mustNot:  []string{"<script"},
 		},
 		{
@@ -139,11 +141,11 @@ func TestInvisibleCharactersRevealed(t *testing.T) {
 		input string
 		want  string
 	}{
-		{"zero-width space", "before​after", "U+200B"},
-		{"bidi override", "text‮reversed", "U+202E"},
+		{"zero-width space", "before\u200bafter", "U+200B"},
+		{"bidi override", "text\u202ereversed", "U+202E"},
 		{"unicode tag block", "hello\U000E0041", "U+E0041"},
 		{"private use", "xy", "U+E000"},
-		{"soft hyphen", "sof­hyphen", "U+00AD"},
+		{"soft hyphen", "sof\u00adhyphen", "U+00AD"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -173,8 +175,8 @@ func TestRevealInvisibleLeavesTagsIntact(t *testing.T) {
 
 func TestPlainTextStripsEverything(t *testing.T) {
 	r := New()
-	got := r.PlainText([]byte("# Title\n\n<script>alert(1)</script>\n\nSome **text**​ here.\n"))
-	for _, bad := range []string{"<", ">", "script", "​"} {
+	got := r.PlainText([]byte("# Title\n\n<script>alert(1)</script>\n\nSome **text**\u200b here.\n"))
+	for _, bad := range []string{"<", ">", "script", "\u200b"} {
 		if strings.Contains(got, bad) {
 			t.Fatalf("plain text contains %q: %q", bad, got)
 		}
@@ -193,5 +195,26 @@ func TestOversizedInputTruncated(t *testing.T) {
 	}
 	if len(out) > MaxInputBytes+1000 {
 		t.Fatalf("output not bounded: %d bytes", len(out))
+	}
+}
+
+// TestAuthorHeadingsAreDemoted pins the document-outline fix: the page owns
+// the <h1>, so an author's "# Title" must render as <h2>. Two <h1> elements
+// on one page break the outline for screen readers, and this HTML is served
+// by the API to any embedder — so the fix lives in the renderer, not in one
+// page's stylesheet. Found by the M5 accessibility check on a real agent page.
+func TestAuthorHeadingsAreDemoted(t *testing.T) {
+	r := New()
+	out, err := r.Markdown([]byte("# Title\n\n## Section\n\n###### Deepest\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "<h1") {
+		t.Errorf("author h1 was not demoted:\n%s", out)
+	}
+	for _, want := range []string{"<h2", "Title", "<h3", "Section", "<h6", "Deepest"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q after demotion:\n%s", want, out)
+		}
 	}
 }

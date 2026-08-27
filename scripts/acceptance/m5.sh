@@ -101,5 +101,19 @@ check "http://localhost:$WEBPORT/$H/demo-skill/versions/1.0.0" "Provenance"     
 check "http://localhost:$WEBPORT/$H"                        "demo-skill"             "namespace page"
 check "http://localhost:$WEBPORT/trust"                     "does not guarantee"     "trust page"
 check "http://localhost:$WEBPORT/docs"                      "publish.include"        "docs page"
+check "http://localhost:$WEBPORT/advisories"                "quarantined"            "advisories page"
+
+# 5. Structural accessibility on the public pages. Not a full Lighthouse run,
+#    but it gates the regressions that actually happen: a lost landmark, a
+#    second h1, an unlabelled search input, a nameless link.
+echo "accessibility (landmarks, heading order, labels, link names):"
+python3 ./scripts/dev/a11y-check.py \
+  "http://localhost:$WEBPORT/" \
+  "http://localhost:$WEBPORT/search" \
+  "http://localhost:$WEBPORT/trust" \
+  "http://localhost:$WEBPORT/docs" \
+  "http://localhost:$WEBPORT/advisories" \
+  "http://localhost:$WEBPORT/$H/demo-skill" \
+  "http://localhost:$WEBPORT/$H/demo-skill/versions/1.0.0"
 
 echo "== M5 acceptance PASSED =="
