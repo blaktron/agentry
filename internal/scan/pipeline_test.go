@@ -134,6 +134,35 @@ func (e *pipeEnv) publish(name, visibility string, files map[string]string) stor
 	return final
 }
 
+// publishExisting submits a further version to an agent created earlier.
+func (e *pipeEnv) publishExisting(name string, files map[string]string) storegen.AgentVersion {
+	e.t.Helper()
+	ctx := context.Background()
+	u, _ := e.st.Queries().GetUserByID(ctx, e.owner)
+	p := &auth.Principal{UserID: e.owner, Handle: u.Handle, Via: "session", EmailVerified: true,
+		OrgRoles: map[uuid.UUID]auth.OrgRole{}}
+	a, err := e.reg.Resolve(ctx, u.Handle, name)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	ws := e.t.TempDir()
+	for path, content := range files {
+		if err := os.WriteFile(ws+"/"+path, []byte(content), 0o644); err != nil {
+			e.t.Fatal(err)
+		}
+	}
+	v, err := e.reg.SubmitVersion(ctx, p, a, registry.SubmitInput{Source: "cli-upload", Workspace: ws},
+		audit.Event{Actor: e.owner, ActorKind: audit.ActorUser})
+	if err != nil {
+		e.t.Fatalf("submit: %v", err)
+	}
+	final, err := e.st.Queries().GetVersionByID(ctx, v.ID)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return final
+}
+
 func skillManifest(ns, name, version string) string {
 	return `schemaVersion: "1"
 name: ` + name + `
