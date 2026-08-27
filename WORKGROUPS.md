@@ -2,6 +2,31 @@
 
 Derived from [PLAN.md](PLAN.md) §18 (milestones) and §18.3 (ordering/parallelization). Each workgroup (WG) is an independently assignable unit of work with explicit dependencies and acceptance criteria. Statuses are maintained here as the build proceeds.
 
+## Status at a glance
+
+| WG | Milestone | Status | Acceptance |
+|---|---|---|---|
+| A — Foundation | M0 | ✅ complete | `scripts/acceptance/m0.sh` |
+| B — Identity & access | M1 | ✅ complete | `scripts/acceptance/m1.sh` (179-case authz matrix) |
+| C — Git hosting | M2 | ✅ core complete | `scripts/acceptance/m2.sh` (21-case conformance) |
+| D — Manifest | M3 | ✅ complete | 163 subtests + fuzz |
+| E — Registry core | M3 | ✅ core complete | `scripts/acceptance/m3.sh` |
+| F — CLI | M3 | ✅ core complete | `scripts/acceptance/m3-cli.sh` |
+| G — Rules engine | M4 seed | ✅ complete | fixture runner + corpus |
+| H — Security pipeline | M4 | ✅ core complete | `scripts/acceptance/m4.sh` (attack-corpus gate) |
+| I — Web UI | M5 | ✅ public surface | `scripts/acceptance/m5.sh` (9 live SSR flows) |
+| J — Enterprise SSO/SCIM | M6 | 🔄 in progress | `scripts/acceptance/m6.sh` |
+| K — AWS infra | M7 | 🔄 in progress | `scripts/acceptance/m7.sh` |
+| L — Launch hardening | M8 | 🟡 partial | docs + GDPR + abuse intake done |
+
+Bugs the build itself surfaced and fixed (each with a regression test):
+
+- **S5 false positive** — "drafts the document in your team's format" scored as destructive-actions, sending a benign agent to review. Pattern now requires a destructive operation on a named target.
+- **S4 precision** (DEV-010) — security documentation that *catalogues* attacks was unpublishable; the shipped `injection-defense` example is now a corpus fixture that must stay clean.
+- **CLI fail-open** (DEV-011) — `agentry validate` printed PASSED after silently skipping S4 when the rule bundle failed to load. Bundle is now embedded; a load failure exits non-zero.
+- **Scope escalation** — a `repo:write`-only PAT could create `v*` tags (i.e. publish); tag creation now goes through the chokepoint with scopes.
+- **Silent rescan failure** — the sweep logged unreadable archives and returned nil, so a totally failed run looked clean. It now counts and reports.
+
 **Critical path:** WG-A → WG-B → (WG-D ∥ WG-G) → WG-E/WG-F → WG-H → WG-I → WG-L
 **Parallel lanes:** WG-C (git) after WG-B · WG-J (enterprise) after WG-B · WG-K (infra) after WG-A
 
@@ -224,7 +249,7 @@ Scope:
 
 Acceptance: M8 criteria incl. fresh-machine self-host quickstart < 15 min; runbooks reviewed (human).
 
-**Status: ⏳ not started**
+**Status: 🟡 in progress** — done: SECURITY.md (coordinated disclosure, scope oriented at gate-bypass/scanner-escape/signing-forgery, honest non-vulnerability limitations), CONTRIBUTING.md (DCO, the two load-bearing rules: route authz declarations + scanner fixtures w/ benign lookalikes), README (front door + status), docs/self-hosting.md (<15-min quickstart, config, policy choices, operator responsibilities), docs/ops/runbooks.md (all 10 §16.4 procedures incl. the ClawHavoc-scale quarantine wave and signing-key rotation), docs/rfcs template, release workflow (reproducible cross-platform builds, keyless cosign signatures, SPDX SBOM, refuses to release if the attack-corpus gate is red), GDPR erasure endpoint + flow test (§12.7: PII purged, credentials revoked, published versions yanked-not-deleted with digests intact, tombstone leak-free), abuse-report intake + staff triage list (§8.7). Remaining: status page setup (operational), pen test 🧍, seed content (needs Q10), T&S console UI, release-please changelog automation.
 
 ---
 
