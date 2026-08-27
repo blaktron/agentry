@@ -27,6 +27,8 @@ tags:
     description: Org audit log (§12.6).
   - name: agents
     description: Agents, hosted repos, per-agent grants (§9.2).
+  - name: versions
+    description: Version submission, resolution, downloads (§7, §9.4).
 
 paths:
   /meta:
@@ -721,8 +723,201 @@ paths:
           $ref: "#/components/responses/Problem"
 
 
+  /agents/{ns}/{name}/versions:
+    post:
+      operationId: submitVersion
+      tags: [versions]
+      summary: Submit a version for publication (§7 state machine entry).
+      description: >
+        Two sources (§6.5): JSON {tag} submits an existing repo tag
+        (git-tag source); multipart/form-data with an `archive` part
+        (tar.zst) submits a client-built package (cli-upload source; the
+        server re-validates, re-packs deterministically, and compares
+        digests — client packing is never trusted).
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tag]
+              properties:
+                tag:
+                  type: string
+                  description: Existing repo tag vX.Y.Z.
+          multipart/form-data:
+            schema:
+              type: object
+              required: [archive]
+              properties:
+                archive:
+                  type: string
+                  format: binary
+                digest:
+                  type: string
+                  description: Client-computed sha256 digest to cross-check.
+      responses:
+        "202":
+          description: Version accepted into the pipeline.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentVersion"
+        default:
+          $ref: "#/components/responses/Problem"
+    get:
+      operationId: listVersions
+      tags: [versions]
+      summary: Version history, newest first.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+      responses:
+        "200":
+          description: Versions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentVersion"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /agents/{ns}/{name}/versions/{version}:
+    get:
+      operationId: getVersionInfo
+      tags: [versions]
+      summary: One version with its state and archive identity.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+        - $ref: "#/components/parameters/VersionString"
+      responses:
+        "200":
+          description: Version.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentVersion"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /agents/{ns}/{name}/versions/{version}/manifest:
+    get:
+      operationId: getVersionManifest
+      tags: [versions]
+      summary: The validated manifest (canonical JSON, §4.2).
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+        - $ref: "#/components/parameters/VersionString"
+      responses:
+        "200":
+          description: Canonical manifest document.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /agents/{ns}/{name}/versions/{version}/yank:
+    post:
+      operationId: yankVersion
+      tags: [versions]
+      summary: Yank a published version (§5.5 semantics; publish permission).
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+        - $ref: "#/components/parameters/VersionString"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  maxLength: 500
+      responses:
+        "204":
+          description: Yanked.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /agents/{ns}/{name}/versions/{version}/download:
+    get:
+      operationId: downloadVersion
+      tags: [versions]
+      summary: Download the release archive (§9.4; counts an install).
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+        - $ref: "#/components/parameters/VersionString"
+      responses:
+        "200":
+          description: The tar.zst archive (self-host streams directly).
+          content:
+            application/zstd:
+              schema:
+                type: string
+                format: binary
+        "302":
+          description: Redirect to the CDN object (SaaS).
+        "410":
+          description: Version blocked by trust & safety (§7).
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /resolve:
+    get:
+      operationId: resolveRef
+      tags: [versions]
+      summary: Resolve ns/name@range to a concrete version (§9.4 step 1).
+      security: []
+      parameters:
+        - name: ref
+          in: query
+          required: true
+          schema:
+            type: string
+          description: "ns/name, ns/name@^1.2, ns/name@1.2.3, or ns/name@beta."
+        - name: channel
+          in: query
+          schema:
+            type: string
+            enum: [stable, beta]
+      responses:
+        "200":
+          description: Resolution result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResolveResult"
+        default:
+          $ref: "#/components/responses/Problem"
+
+
 components:
   parameters:
+    VersionString:
+      name: version
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+].*)?$"
     Namespace:
       name: ns
       in: path
@@ -1102,6 +1297,79 @@ components:
           description: User handle or team slug.
         role:
           $ref: "#/components/schemas/AgentRole"
+
+    VersionStatus:
+      type: string
+      description: Publication state machine states (§7).
+      enum: [submitted, scanning, needs_review, approved, published, rejected, yanked, quarantined, blocked]
+
+    AgentVersion:
+      type: object
+      required: [id, version, status, channel, source, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        version:
+          type: string
+        status:
+          $ref: "#/components/schemas/VersionStatus"
+        statusReason:
+          type: string
+        channel:
+          type: string
+          enum: [stable, beta]
+        source:
+          type: string
+          enum: [git-tag, cli-upload]
+        commitSha:
+          type: string
+        archiveDigest:
+          type: string
+          description: sha256:<hex> — the release identity (D-15).
+        archiveSize:
+          type: integer
+          format: int64
+        capabilities:
+          type: object
+          additionalProperties: true
+          description: The declared capability block (§5.4).
+        createdAt:
+          type: string
+          format: date-time
+        publishedAt:
+          type: string
+          format: date-time
+        yankedAt:
+          type: string
+          format: date-time
+        yankReason:
+          type: string
+
+    ResolveResult:
+      type: object
+      required: [namespace, name, version, digest, archiveUrl, manifest, yanked]
+      properties:
+        namespace:
+          type: string
+        name:
+          type: string
+        version:
+          type: string
+        digest:
+          type: string
+        archiveUrl:
+          type: string
+          description: Where to fetch the archive (CDN on SaaS; API path self-host).
+        attestationUrl:
+          type: string
+          description: DSSE attestation location (M4+; absent until signing ships).
+        manifest:
+          type: object
+          additionalProperties: true
+        yanked:
+          type: boolean
+          description: True only for exact pins of yanked versions (§5.5).
 
     Problem:
       type: object

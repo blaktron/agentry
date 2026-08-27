@@ -19,7 +19,6 @@ import (
 	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/gitsrv"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/version"
 )
@@ -179,8 +178,10 @@ func buildHandler(cfg config.Config, st *store.Store, log *slog.Logger, role str
 		if err != nil {
 			return nil, err
 		}
+		s := api.New(cfg, st, log)
+		reg := s.Reg()
+		reg.SetGitArchiver(repos)
 		aud := audit.NewWriter(log)
-		reg := registry.NewService(st, aud)
 		git := gitsrv.NewHandler(cfg, st, repos, reg, aud, log)
 		if role == "git" {
 			mux := http.NewServeMux()
@@ -191,7 +192,6 @@ func buildHandler(cfg config.Config, st *store.Store, log *slog.Logger, role str
 			git.Mount(mux)
 			return mux, nil
 		}
-		s := api.New(cfg, st, log)
 		return api.NewHandlerWithGit(s, git.Mount), nil
 	default:
 		return nil, fmt.Errorf("unknown http role %q", role)

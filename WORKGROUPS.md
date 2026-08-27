@@ -110,7 +110,7 @@ Scope:
 
 Acceptance: publish→install round-trip e2e for all 3 kinds × both sources; archives byte-reproducible across two builds; yank semantics test; no path to `published` skipping the gate (property test, with M4).
 
-**Status: ⏳ not started**
+**Status: ✅ core complete** — agent_versions schema w/ DB-level immutability + never-delete triggers (§4.3), §7 state machine (SELECT FOR UPDATE single-writer, audited transitions, latest-published maintenance, edge property test incl. no-gate-skip), deterministic tar.zst archive builder (D-15, byte-reproducibility test) + hardened extractor, content-addressed LocalFS blob store (S3 impl → WG-K), submission for both sources (git-tag via MaterializeTag + §6.3 tag auto-publish on push; cli-upload w/ server re-pack + digest cross-check per §6.5), §9.4 resolve (semver ranges, channels, yank-pin semantics) + download (stream w/ immutable caching, install counting, 410 blocked / 409 quarantined), dev-mode auto-approve pipeline stub. Acceptance green (`scripts/acceptance/m3.sh`): 3 kinds × 2 sources round-trip, reproducibility, yank semantics, matrix w/ 7 new version routes.
 
 ---
 

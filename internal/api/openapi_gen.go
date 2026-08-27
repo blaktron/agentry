@@ -24,19 +24,19 @@ import (
 
 // Defines values for AgentQuarantineState.
 const (
-	Blocked     AgentQuarantineState = "blocked"
-	None        AgentQuarantineState = "none"
-	Quarantined AgentQuarantineState = "quarantined"
+	AgentQuarantineStateBlocked     AgentQuarantineState = "blocked"
+	AgentQuarantineStateNone        AgentQuarantineState = "none"
+	AgentQuarantineStateQuarantined AgentQuarantineState = "quarantined"
 )
 
 // Valid indicates whether the value is a known member of the AgentQuarantineState enum.
 func (e AgentQuarantineState) Valid() bool {
 	switch e {
-	case Blocked:
+	case AgentQuarantineStateBlocked:
 		return true
-	case None:
+	case AgentQuarantineStateNone:
 		return true
-	case Quarantined:
+	case AgentQuarantineStateQuarantined:
 		return true
 	default:
 		return false
@@ -118,6 +118,42 @@ func (e AgentRole) Valid() bool {
 	case Read:
 		return true
 	case Write:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentVersionChannel.
+const (
+	AgentVersionChannelBeta   AgentVersionChannel = "beta"
+	AgentVersionChannelStable AgentVersionChannel = "stable"
+)
+
+// Valid indicates whether the value is a known member of the AgentVersionChannel enum.
+func (e AgentVersionChannel) Valid() bool {
+	switch e {
+	case AgentVersionChannelBeta:
+		return true
+	case AgentVersionChannelStable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentVersionSource.
+const (
+	CliUpload AgentVersionSource = "cli-upload"
+	GitTag    AgentVersionSource = "git-tag"
+)
+
+// Valid indicates whether the value is a known member of the AgentVersionSource enum.
+func (e AgentVersionSource) Valid() bool {
+	switch e {
+	case CliUpload:
+		return true
+	case GitTag:
 		return true
 	default:
 		return false
@@ -226,6 +262,45 @@ func (e Scope) Valid() bool {
 	}
 }
 
+// Defines values for VersionStatus.
+const (
+	VersionStatusApproved    VersionStatus = "approved"
+	VersionStatusBlocked     VersionStatus = "blocked"
+	VersionStatusNeedsReview VersionStatus = "needs_review"
+	VersionStatusPublished   VersionStatus = "published"
+	VersionStatusQuarantined VersionStatus = "quarantined"
+	VersionStatusRejected    VersionStatus = "rejected"
+	VersionStatusScanning    VersionStatus = "scanning"
+	VersionStatusSubmitted   VersionStatus = "submitted"
+	VersionStatusYanked      VersionStatus = "yanked"
+)
+
+// Valid indicates whether the value is a known member of the VersionStatus enum.
+func (e VersionStatus) Valid() bool {
+	switch e {
+	case VersionStatusApproved:
+		return true
+	case VersionStatusBlocked:
+		return true
+	case VersionStatusNeedsReview:
+		return true
+	case VersionStatusPublished:
+		return true
+	case VersionStatusQuarantined:
+		return true
+	case VersionStatusRejected:
+		return true
+	case VersionStatusScanning:
+		return true
+	case VersionStatusSubmitted:
+		return true
+	case VersionStatusYanked:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UpdateAgentJSONBodyVisibility.
 const (
 	UpdateAgentJSONBodyVisibilityPrivate UpdateAgentJSONBodyVisibility = "private"
@@ -238,6 +313,24 @@ func (e UpdateAgentJSONBodyVisibility) Valid() bool {
 	case UpdateAgentJSONBodyVisibilityPrivate:
 		return true
 	case UpdateAgentJSONBodyVisibilityPublic:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ResolveRefParamsChannel.
+const (
+	ResolveRefParamsChannelBeta   ResolveRefParamsChannel = "beta"
+	ResolveRefParamsChannelStable ResolveRefParamsChannel = "stable"
+)
+
+// Valid indicates whether the value is a known member of the ResolveRefParamsChannel enum.
+func (e ResolveRefParamsChannel) Valid() bool {
+	switch e {
+	case ResolveRefParamsChannelBeta:
+		return true
+	case ResolveRefParamsChannelStable:
 		return true
 	default:
 		return false
@@ -288,6 +381,35 @@ type AgentKind string
 
 // AgentRole Per-agent grant levels (§12.2), read < write < maintain < publish.
 type AgentRole string
+
+// AgentVersion defines model for AgentVersion.
+type AgentVersion struct {
+	// ArchiveDigest sha256:<hex> — the release identity (D-15).
+	ArchiveDigest *string `json:"archiveDigest,omitempty"`
+	ArchiveSize   *int64  `json:"archiveSize,omitempty"`
+
+	// Capabilities The declared capability block (§5.4).
+	Capabilities *map[string]interface{} `json:"capabilities,omitempty"`
+	Channel      AgentVersionChannel     `json:"channel"`
+	CommitSha    *string                 `json:"commitSha,omitempty"`
+	CreatedAt    time.Time               `json:"createdAt"`
+	Id           openapi_types.UUID      `json:"id"`
+	PublishedAt  *time.Time              `json:"publishedAt,omitempty"`
+	Source       AgentVersionSource      `json:"source"`
+
+	// Status Publication state machine states (§7).
+	Status       VersionStatus `json:"status"`
+	StatusReason *string       `json:"statusReason,omitempty"`
+	Version      string        `json:"version"`
+	YankReason   *string       `json:"yankReason,omitempty"`
+	YankedAt     *time.Time    `json:"yankedAt,omitempty"`
+}
+
+// AgentVersionChannel defines model for AgentVersion.Channel.
+type AgentVersionChannel string
+
+// AgentVersionSource defines model for AgentVersion.Source.
+type AgentVersionSource string
 
 // AuditEvent defines model for AuditEvent.
 type AuditEvent struct {
@@ -469,6 +591,23 @@ type RegisterRequest struct {
 	Password    string              `json:"password"`
 }
 
+// ResolveResult defines model for ResolveResult.
+type ResolveResult struct {
+	// ArchiveUrl Where to fetch the archive (CDN on SaaS; API path self-host).
+	ArchiveUrl string `json:"archiveUrl"`
+
+	// AttestationUrl DSSE attestation location (M4+; absent until signing ships).
+	AttestationUrl *string                `json:"attestationUrl,omitempty"`
+	Digest         string                 `json:"digest"`
+	Manifest       map[string]interface{} `json:"manifest"`
+	Name           string                 `json:"name"`
+	Namespace      string                 `json:"namespace"`
+	Version        string                 `json:"version"`
+
+	// Yanked True only for exact pins of yanked versions (§5.5).
+	Yanked bool `json:"yanked"`
+}
+
 // Scope PAT scopes (§12.3).
 type Scope string
 
@@ -497,6 +636,9 @@ type User struct {
 	TotpEnabled   bool               `json:"totpEnabled"`
 }
 
+// VersionStatus Publication state machine states (§7).
+type VersionStatus string
+
 // AgentName defines model for AgentName.
 type AgentName = string
 
@@ -511,6 +653,9 @@ type OrgHandle = string
 
 // TeamSlug defines model for TeamSlug.
 type TeamSlug = string
+
+// VersionString defines model for VersionString.
+type VersionString = string
 
 // ListAgentsParams defines parameters for ListAgents.
 type ListAgentsParams struct {
@@ -537,6 +682,25 @@ type SetAgentTeamGrantJSONBody struct {
 type SetAgentUserGrantJSONBody struct {
 	// Role Per-agent grant levels (§12.2), read < write < maintain < publish.
 	Role AgentRole `json:"role"`
+}
+
+// SubmitVersionJSONBody defines parameters for SubmitVersion.
+type SubmitVersionJSONBody struct {
+	// Tag Existing repo tag vX.Y.Z.
+	Tag string `json:"tag"`
+}
+
+// SubmitVersionMultipartBody defines parameters for SubmitVersion.
+type SubmitVersionMultipartBody struct {
+	Archive openapi_types.File `json:"archive"`
+
+	// Digest Client-computed sha256 digest to cross-check.
+	Digest *string `json:"digest,omitempty"`
+}
+
+// YankVersionJSONBody defines parameters for YankVersion.
+type YankVersionJSONBody struct {
+	Reason string `json:"reason"`
 }
 
 // TotpVerifyJSONBody defines parameters for TotpVerify.
@@ -572,6 +736,16 @@ type CreateTeamJSONBody struct {
 	Slug string `json:"slug"`
 }
 
+// ResolveRefParams defines parameters for ResolveRef.
+type ResolveRefParams struct {
+	// Ref ns/name, ns/name@^1.2, ns/name@1.2.3, or ns/name@beta.
+	Ref     string                   `form:"ref" json:"ref"`
+	Channel *ResolveRefParamsChannel `form:"channel,omitempty" json:"channel,omitempty"`
+}
+
+// ResolveRefParamsChannel defines parameters for ResolveRef.
+type ResolveRefParamsChannel string
+
 // UpdateCurrentUserJSONBody defines parameters for UpdateCurrentUser.
 type UpdateCurrentUserJSONBody struct {
 	DisplayName *string `json:"displayName,omitempty"`
@@ -588,6 +762,15 @@ type SetAgentTeamGrantJSONRequestBody SetAgentTeamGrantJSONBody
 
 // SetAgentUserGrantJSONRequestBody defines body for SetAgentUserGrant for application/json ContentType.
 type SetAgentUserGrantJSONRequestBody SetAgentUserGrantJSONBody
+
+// SubmitVersionJSONRequestBody defines body for SubmitVersion for application/json ContentType.
+type SubmitVersionJSONRequestBody SubmitVersionJSONBody
+
+// SubmitVersionMultipartRequestBody defines body for SubmitVersion for multipart/form-data ContentType.
+type SubmitVersionMultipartRequestBody SubmitVersionMultipartBody
+
+// YankVersionJSONRequestBody defines body for YankVersion for application/json ContentType.
+type YankVersionJSONRequestBody YankVersionJSONBody
 
 // TotpVerifyJSONRequestBody defines body for TotpVerify for application/json ContentType.
 type TotpVerifyJSONRequestBody TotpVerifyJSONBody
@@ -648,6 +831,24 @@ type ServerInterface interface {
 	// SetAgentUserGrant Grant a user a per-agent role (maintain).
 	// (PUT /agents/{ns}/{name}/grants/user/{handle})
 	SetAgentUserGrant(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, handle Handle)
+	// ListVersions Version history, newest first.
+	// (GET /agents/{ns}/{name}/versions)
+	ListVersions(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName)
+	// SubmitVersion Submit a version for publication (§7 state machine entry).
+	// (POST /agents/{ns}/{name}/versions)
+	SubmitVersion(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName)
+	// GetVersionInfo One version with its state and archive identity.
+	// (GET /agents/{ns}/{name}/versions/{version})
+	GetVersionInfo(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, version VersionString)
+	// DownloadVersion Download the release archive (§9.4; counts an install).
+	// (GET /agents/{ns}/{name}/versions/{version}/download)
+	DownloadVersion(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, version VersionString)
+	// GetVersionManifest The validated manifest (canonical JSON, §4.2).
+	// (GET /agents/{ns}/{name}/versions/{version}/manifest)
+	GetVersionManifest(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, version VersionString)
+	// YankVersion Yank a published version (§5.5 semantics; publish permission).
+	// (POST /agents/{ns}/{name}/versions/{version}/yank)
+	YankVersion(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, version VersionString)
 	// TotpSetup Begin TOTP enrollment; returns the provisioning secret.
 	// (POST /auth/2fa/totp/setup)
 	TotpSetup(w http.ResponseWriter, r *http.Request)
@@ -708,6 +909,9 @@ type ServerInterface interface {
 	// AddTeamMember Add an org member to a team (admin+).
 	// (PUT /orgs/{org}/teams/{team}/members/{handle})
 	AddTeamMember(w http.ResponseWriter, r *http.Request, org OrgHandle, team TeamSlug, handle Handle)
+	// ResolveRef Resolve ns/name@range to a concrete version (§9.4 step 1).
+	// (GET /resolve)
+	ResolveRef(w http.ResponseWriter, r *http.Request, params ResolveRefParams)
 	// GetCurrentUser The authenticated user.
 	// (GET /user)
 	GetCurrentUser(w http.ResponseWriter, r *http.Request)
@@ -1056,6 +1260,252 @@ func (siw *ServerInterfaceWrapper) SetAgentUserGrant(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetAgentUserGrant(w, r, ns, name, handle)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListVersions operation middleware
+func (siw *ServerInterfaceWrapper) ListVersions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns Namespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name AgentName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListVersions(w, r, ns, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SubmitVersion operation middleware
+func (siw *ServerInterfaceWrapper) SubmitVersion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns Namespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name AgentName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SubmitVersion(w, r, ns, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetVersionInfo operation middleware
+func (siw *ServerInterfaceWrapper) GetVersionInfo(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns Namespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name AgentName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version VersionString
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", r.PathValue("version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetVersionInfo(w, r, ns, name, version)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DownloadVersion operation middleware
+func (siw *ServerInterfaceWrapper) DownloadVersion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns Namespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name AgentName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version VersionString
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", r.PathValue("version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DownloadVersion(w, r, ns, name, version)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetVersionManifest operation middleware
+func (siw *ServerInterfaceWrapper) GetVersionManifest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns Namespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name AgentName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version VersionString
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", r.PathValue("version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetVersionManifest(w, r, ns, name, version)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// YankVersion operation middleware
+func (siw *ServerInterfaceWrapper) YankVersion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns Namespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name AgentName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version VersionString
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", r.PathValue("version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.YankVersion(w, r, ns, name, version)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1603,6 +2053,52 @@ func (siw *ServerInterfaceWrapper) AddTeamMember(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// ResolveRef operation middleware
+func (siw *ServerInterfaceWrapper) ResolveRef(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ResolveRefParams
+
+	// ------------- Required query parameter "ref" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "ref", r.URL.Query(), &params.Ref, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "ref"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ref", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "channel" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "channel", r.URL.Query(), &params.Channel, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "channel"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "channel", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResolveRef(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetCurrentUser operation middleware
 func (siw *ServerInterfaceWrapper) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 
@@ -1866,6 +2362,13 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/agents/{ns}/{name}/grants/user/{handle}", wrapper.SetAgentUserGrant)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{ns}/{name}/grants/team/{team}", wrapper.RemoveAgentTeamGrant)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/agents/{ns}/{name}/grants/team/{team}", wrapper.SetAgentTeamGrant)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{ns}/{name}/versions", wrapper.ListVersions)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{ns}/{name}/versions", wrapper.SubmitVersion)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{ns}/{name}/versions/{version}", wrapper.GetVersionInfo)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{ns}/{name}/versions/{version}/manifest", wrapper.GetVersionManifest)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{ns}/{name}/versions/{version}/yank", wrapper.YankVersion)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{ns}/{name}/versions/{version}/download", wrapper.DownloadVersion)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/resolve", wrapper.ResolveRef)
 
 	return m
 }
@@ -1875,79 +2378,100 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"nrhD3c0vYYeN0eHyqE49O9E8cq7wGzX/OwA=",
+	"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",
+	"dzhipvHL0UFz5spuvn13+38DAA==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

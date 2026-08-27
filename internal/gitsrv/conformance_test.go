@@ -44,6 +44,7 @@ type gitEnv struct {
 	t     *testing.T
 	srv   *httptest.Server
 	st    *store.Store
+	reg   *registry.Service
 	sfx   string
 	owner struct {
 		handle string
@@ -79,17 +80,21 @@ func newGitEnv(t *testing.T) *gitEnv {
 	cfg.Limits.AuthedPerHour = 10000000
 	cfg.Limits.AuthedBurstPerMin = 1000000
 
+	cfg.Storage.LocalDir = t.TempDir()
+
 	repos, err := gitsrv.NewRepoStore(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
+	apiSrv := api.New(cfg, st, nil)
+	reg := apiSrv.Reg()
+	reg.SetGitArchiver(repos)
 	aud := audit.NewWriter(nil)
-	reg := registry.NewService(st, aud)
 	git := gitsrv.NewHandler(cfg, st, repos, reg, aud, nil)
-	srv := httptest.NewServer(api.NewHandlerWithGit(api.New(cfg, st, nil), git.Mount))
+	srv := httptest.NewServer(api.NewHandlerWithGit(apiSrv, git.Mount))
 	t.Cleanup(srv.Close)
 
-	env := &gitEnv{t: t, srv: srv, st: st, sfx: fmt.Sprintf("%06x", rand.Int63n(1<<24))} //nolint:gosec
+	env := &gitEnv{t: t, srv: srv, st: st, reg: reg, sfx: fmt.Sprintf("%06x", rand.Int63n(1<<24))} //nolint:gosec
 
 	// Seed the owner directly through the store (API flows are covered by
 	// internal/api tests; here git transport is the subject).
@@ -137,11 +142,14 @@ func (e *gitEnv) seedPAT(userID uuid.UUID, name string, scopes ...string) string
 }
 
 func (e *gitEnv) seedAgent(name, visibility string) registry.Agent {
+	return e.seedAgentKind(name, "skill", visibility)
+}
+
+func (e *gitEnv) seedAgentKind(name, kind, visibility string) registry.Agent {
 	e.t.Helper()
-	reg := registry.NewService(e.st, audit.NewWriter(nil))
 	p := &auth.Principal{UserID: e.owner.id, Handle: e.owner.handle, Via: "session", EmailVerified: true}
-	a, err := reg.CreateAgent(context.Background(), p, registry.CreateAgentInput{
-		Namespace: e.owner.handle, Name: name, Kind: "skill", Visibility: visibility,
+	a, err := e.reg.CreateAgent(context.Background(), p, registry.CreateAgentInput{
+		Namespace: e.owner.handle, Name: name, Kind: kind, Visibility: visibility,
 	}, audit.Event{Actor: e.owner.id, ActorKind: audit.ActorUser})
 	if err != nil {
 		e.t.Fatal(err)

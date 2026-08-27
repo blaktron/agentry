@@ -225,6 +225,22 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			},
 		},
 		"listOrgAudit": {method: "GET", path: orgPath("/audit")},
+		"submitVersion": {
+			method: "POST", path: agentPath("/versions"),
+			body: func(*matrixSeed, string) any { return map[string]any{"tag": "v9.9.9"} },
+		},
+		"listVersions":       {method: "GET", path: agentPath("/versions")},
+		"getVersionInfo":     {method: "GET", path: agentPath("/versions/9.9.9")},
+		"getVersionManifest": {method: "GET", path: agentPath("/versions/9.9.9/manifest")},
+		"yankVersion": {
+			method: "POST", path: agentPath("/versions/9.9.9/yank"),
+			body: func(*matrixSeed, string) any { return map[string]any{"reason": "matrix"} },
+		},
+		"downloadVersion": {method: "GET", path: agentPath("/versions/9.9.9/download")},
+		"resolveRef": {
+			method: "GET",
+			path:   func(s *matrixSeed, _ string) string { return "/api/v1/resolve?ref=" + s.orgH + "/mx-agent" },
+		},
 		"createAgent": {
 			method: "POST", path: sPath("/api/v1/agents"),
 			body: func(s *matrixSeed, _ string) any {

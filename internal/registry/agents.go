@@ -31,13 +31,34 @@ const (
 // Bare repositories are NOT created here: the git layer initializes them
 // lazily on first access (§13.3 — only the git role mounts repo storage).
 type Service struct {
-	st  *store.Store
-	aud *audit.Writer
+	st    *store.Store
+	aud   *audit.Writer
+	blobs BlobStore
+	// pipeline receives submitted versions (M3 dev stub / M4 orchestrator).
+	pipeline Pipeline
+	// gitArchiver produces tag archives for git-tag submissions; nil on
+	// roles without repo storage (SaaS api role — M7 routes via workers).
+	gitArchiver GitArchiver
 }
 
-// NewService assembles the registry service.
+// NewService assembles the registry service. blobs may be nil for callers
+// that never submit versions (the git role's read paths).
 func NewService(st *store.Store, aud *audit.Writer) *Service {
 	return &Service{st: st, aud: aud}
+}
+
+// SetBlobStore wires archive storage (required for submissions).
+func (s *Service) SetBlobStore(b BlobStore) { s.blobs = b }
+
+// SetGitArchiver wires tag-archive production for git-tag submissions.
+func (s *Service) SetGitArchiver(g GitArchiver) { s.gitArchiver = g }
+
+// GitArchiver materializes the tree of a tag into a workspace directory and
+// returns the peeled commit id (§6.5 step 1: git archive, never a
+// working-tree checkout; export-ignore disabled — the manifest allowlist is
+// the only filter).
+type GitArchiver interface {
+	MaterializeTag(ctx context.Context, repoID uuid.UUID, tag, dst string) (commitSHA string, err error)
 }
 
 // ErrNotFound is returned when an agent or namespace does not exist.

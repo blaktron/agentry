@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Agent struct {
@@ -43,6 +44,28 @@ type AgentUserGrant struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+type AgentVersion struct {
+	ID            uuid.UUID  `json:"id"`
+	AgentID       uuid.UUID  `json:"agent_id"`
+	Version       string     `json:"version"`
+	CommitSha     string     `json:"commit_sha"`
+	Manifest      []byte     `json:"manifest"`
+	Capabilities  []byte     `json:"capabilities"`
+	ArchiveDigest *string    `json:"archive_digest"`
+	ArchiveKey    *string    `json:"archive_key"`
+	ArchiveSize   *int64     `json:"archive_size"`
+	Status        string     `json:"status"`
+	StatusReason  *string    `json:"status_reason"`
+	PublishedAt   *time.Time `json:"published_at"`
+	YankedAt      *time.Time `json:"yanked_at"`
+	YankReason    *string    `json:"yank_reason"`
+	Channel       string     `json:"channel"`
+	SubmittedBy   uuid.UUID  `json:"submitted_by"`
+	Source        string     `json:"source"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+}
+
 type AuditEvent struct {
 	ID         uuid.UUID   `json:"id"`
 	OccurredAt time.Time   `json:"occurred_at"`
@@ -69,6 +92,13 @@ type AuditEventsDefault struct {
 	Ip         *netip.Addr `json:"ip"`
 	UserAgent  *string     `json:"user_agent"`
 	Detail     []byte      `json:"detail"`
+}
+
+type DownloadStat struct {
+	AgentID   uuid.UUID   `json:"agent_id"`
+	VersionID uuid.UUID   `json:"version_id"`
+	Day       pgtype.Date `json:"day"`
+	Installs  int32       `json:"installs"`
 }
 
 type EmailVerification struct {

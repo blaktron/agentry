@@ -295,6 +295,23 @@ func (h *Handler) afterReceive(ctx context.Context, agent registry.Agent, princi
 	if h.PostReceive != nil {
 		h.PostReceive(ctx, agent, refs, principal)
 	}
+
+	// §6.3: a new v* tag with auto-publish enabled submits the version.
+	// Runs inline for now — the M4 queue moves this to a worker job. The
+	// push already succeeded; submission failures surface via the version
+	// (or its absence) in the API, and in logs.
+	if agent.AutoPublishTags && agent.QuarantineState == "none" {
+		for _, ru := range refs {
+			tag, ok := strings.CutPrefix(ru.Ref, "refs/tags/")
+			if !ok || !strings.HasPrefix(tag, "v") || ru.New == strings.Repeat("0", 40) {
+				continue
+			}
+			e := audit.Event{Actor: principal.UserID, ActorKind: audit.ActorPAT}
+			if _, err := h.reg.SubmitTag(ctx, principal, agent, tag, e); err != nil {
+				h.log.Warn("auto-publish submit", "tag", tag, "err", err)
+			}
+		}
+	}
 }
 
 // gitEnv builds the subprocess environment: protocol v2 plus the hook

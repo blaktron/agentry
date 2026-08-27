@@ -32,6 +32,7 @@ type Server struct {
 	limits   *rateLimits
 	classes  limitClasses
 	reg      *registry.Service
+	blobs    registry.BlobStore
 }
 
 // New creates the API server. st may be nil in database-less dev mode; any
@@ -60,9 +61,27 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 	}
 	if st != nil {
 		srv.reg = registry.NewService(st, aud)
+		if cfg.Storage.Kind == "local" {
+			blobs, err := registry.NewLocalFS(cfg.Storage.LocalDir)
+			if err != nil {
+				panic(err) // startup-time config failure, never mid-request
+			}
+			srv.blobs = blobs
+			srv.reg.SetBlobStore(blobs)
+		}
+		// M3 pipeline stub (§18.2): auto-approve in dev mode ONLY. Outside
+		// dev, versions wait in `scanning` until the M4 orchestrator lands
+		// (fail closed, §7).
+		if cfg.DevMode {
+			srv.reg.SetPipeline(registry.DevAutoApprovePipeline{Svc: srv.reg})
+		}
 	}
 	return srv
 }
+
+// Reg exposes the registry service so role wiring can share one instance
+// (git role injects its archiver; auto-publish uses the same pipeline).
+func (s *Server) Reg() *registry.Service { return s.reg }
 
 // q returns the base query layer, or nil without a database.
 func (s *Server) q() *storegen.Queries {

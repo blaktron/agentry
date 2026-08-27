@@ -20,19 +20,19 @@ import (
 
 // Defines values for AgentQuarantineState.
 const (
-	Blocked     AgentQuarantineState = "blocked"
-	None        AgentQuarantineState = "none"
-	Quarantined AgentQuarantineState = "quarantined"
+	AgentQuarantineStateBlocked     AgentQuarantineState = "blocked"
+	AgentQuarantineStateNone        AgentQuarantineState = "none"
+	AgentQuarantineStateQuarantined AgentQuarantineState = "quarantined"
 )
 
 // Valid indicates whether the value is a known member of the AgentQuarantineState enum.
 func (e AgentQuarantineState) Valid() bool {
 	switch e {
-	case Blocked:
+	case AgentQuarantineStateBlocked:
 		return true
-	case None:
+	case AgentQuarantineStateNone:
 		return true
-	case Quarantined:
+	case AgentQuarantineStateQuarantined:
 		return true
 	default:
 		return false
@@ -114,6 +114,42 @@ func (e AgentRole) Valid() bool {
 	case Read:
 		return true
 	case Write:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentVersionChannel.
+const (
+	AgentVersionChannelBeta   AgentVersionChannel = "beta"
+	AgentVersionChannelStable AgentVersionChannel = "stable"
+)
+
+// Valid indicates whether the value is a known member of the AgentVersionChannel enum.
+func (e AgentVersionChannel) Valid() bool {
+	switch e {
+	case AgentVersionChannelBeta:
+		return true
+	case AgentVersionChannelStable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentVersionSource.
+const (
+	CliUpload AgentVersionSource = "cli-upload"
+	GitTag    AgentVersionSource = "git-tag"
+)
+
+// Valid indicates whether the value is a known member of the AgentVersionSource enum.
+func (e AgentVersionSource) Valid() bool {
+	switch e {
+	case CliUpload:
+		return true
+	case GitTag:
 		return true
 	default:
 		return false
@@ -222,6 +258,45 @@ func (e Scope) Valid() bool {
 	}
 }
 
+// Defines values for VersionStatus.
+const (
+	VersionStatusApproved    VersionStatus = "approved"
+	VersionStatusBlocked     VersionStatus = "blocked"
+	VersionStatusNeedsReview VersionStatus = "needs_review"
+	VersionStatusPublished   VersionStatus = "published"
+	VersionStatusQuarantined VersionStatus = "quarantined"
+	VersionStatusRejected    VersionStatus = "rejected"
+	VersionStatusScanning    VersionStatus = "scanning"
+	VersionStatusSubmitted   VersionStatus = "submitted"
+	VersionStatusYanked      VersionStatus = "yanked"
+)
+
+// Valid indicates whether the value is a known member of the VersionStatus enum.
+func (e VersionStatus) Valid() bool {
+	switch e {
+	case VersionStatusApproved:
+		return true
+	case VersionStatusBlocked:
+		return true
+	case VersionStatusNeedsReview:
+		return true
+	case VersionStatusPublished:
+		return true
+	case VersionStatusQuarantined:
+		return true
+	case VersionStatusRejected:
+		return true
+	case VersionStatusScanning:
+		return true
+	case VersionStatusSubmitted:
+		return true
+	case VersionStatusYanked:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UpdateAgentJSONBodyVisibility.
 const (
 	UpdateAgentJSONBodyVisibilityPrivate UpdateAgentJSONBodyVisibility = "private"
@@ -234,6 +309,24 @@ func (e UpdateAgentJSONBodyVisibility) Valid() bool {
 	case UpdateAgentJSONBodyVisibilityPrivate:
 		return true
 	case UpdateAgentJSONBodyVisibilityPublic:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ResolveRefParamsChannel.
+const (
+	ResolveRefParamsChannelBeta   ResolveRefParamsChannel = "beta"
+	ResolveRefParamsChannelStable ResolveRefParamsChannel = "stable"
+)
+
+// Valid indicates whether the value is a known member of the ResolveRefParamsChannel enum.
+func (e ResolveRefParamsChannel) Valid() bool {
+	switch e {
+	case ResolveRefParamsChannelBeta:
+		return true
+	case ResolveRefParamsChannelStable:
 		return true
 	default:
 		return false
@@ -284,6 +377,35 @@ type AgentKind string
 
 // AgentRole Per-agent grant levels (§12.2), read < write < maintain < publish.
 type AgentRole string
+
+// AgentVersion defines model for AgentVersion.
+type AgentVersion struct {
+	// ArchiveDigest sha256:<hex> — the release identity (D-15).
+	ArchiveDigest *string `json:"archiveDigest,omitempty"`
+	ArchiveSize   *int64  `json:"archiveSize,omitempty"`
+
+	// Capabilities The declared capability block (§5.4).
+	Capabilities *map[string]interface{} `json:"capabilities,omitempty"`
+	Channel      AgentVersionChannel     `json:"channel"`
+	CommitSha    *string                 `json:"commitSha,omitempty"`
+	CreatedAt    time.Time               `json:"createdAt"`
+	Id           openapi_types.UUID      `json:"id"`
+	PublishedAt  *time.Time              `json:"publishedAt,omitempty"`
+	Source       AgentVersionSource      `json:"source"`
+
+	// Status Publication state machine states (§7).
+	Status       VersionStatus `json:"status"`
+	StatusReason *string       `json:"statusReason,omitempty"`
+	Version      string        `json:"version"`
+	YankReason   *string       `json:"yankReason,omitempty"`
+	YankedAt     *time.Time    `json:"yankedAt,omitempty"`
+}
+
+// AgentVersionChannel defines model for AgentVersion.Channel.
+type AgentVersionChannel string
+
+// AgentVersionSource defines model for AgentVersion.Source.
+type AgentVersionSource string
 
 // AuditEvent defines model for AuditEvent.
 type AuditEvent struct {
@@ -465,6 +587,23 @@ type RegisterRequest struct {
 	Password    string              `json:"password"`
 }
 
+// ResolveResult defines model for ResolveResult.
+type ResolveResult struct {
+	// ArchiveUrl Where to fetch the archive (CDN on SaaS; API path self-host).
+	ArchiveUrl string `json:"archiveUrl"`
+
+	// AttestationUrl DSSE attestation location (M4+; absent until signing ships).
+	AttestationUrl *string                `json:"attestationUrl,omitempty"`
+	Digest         string                 `json:"digest"`
+	Manifest       map[string]interface{} `json:"manifest"`
+	Name           string                 `json:"name"`
+	Namespace      string                 `json:"namespace"`
+	Version        string                 `json:"version"`
+
+	// Yanked True only for exact pins of yanked versions (§5.5).
+	Yanked bool `json:"yanked"`
+}
+
 // Scope PAT scopes (§12.3).
 type Scope string
 
@@ -493,6 +632,9 @@ type User struct {
 	TotpEnabled   bool               `json:"totpEnabled"`
 }
 
+// VersionStatus Publication state machine states (§7).
+type VersionStatus string
+
 // AgentName defines model for AgentName.
 type AgentName = string
 
@@ -507,6 +649,9 @@ type OrgHandle = string
 
 // TeamSlug defines model for TeamSlug.
 type TeamSlug = string
+
+// VersionString defines model for VersionString.
+type VersionString = string
 
 // ListAgentsParams defines parameters for ListAgents.
 type ListAgentsParams struct {
@@ -533,6 +678,25 @@ type SetAgentTeamGrantJSONBody struct {
 type SetAgentUserGrantJSONBody struct {
 	// Role Per-agent grant levels (§12.2), read < write < maintain < publish.
 	Role AgentRole `json:"role"`
+}
+
+// SubmitVersionJSONBody defines parameters for SubmitVersion.
+type SubmitVersionJSONBody struct {
+	// Tag Existing repo tag vX.Y.Z.
+	Tag string `json:"tag"`
+}
+
+// SubmitVersionMultipartBody defines parameters for SubmitVersion.
+type SubmitVersionMultipartBody struct {
+	Archive openapi_types.File `json:"archive"`
+
+	// Digest Client-computed sha256 digest to cross-check.
+	Digest *string `json:"digest,omitempty"`
+}
+
+// YankVersionJSONBody defines parameters for YankVersion.
+type YankVersionJSONBody struct {
+	Reason string `json:"reason"`
 }
 
 // TotpVerifyJSONBody defines parameters for TotpVerify.
@@ -568,6 +732,16 @@ type CreateTeamJSONBody struct {
 	Slug string `json:"slug"`
 }
 
+// ResolveRefParams defines parameters for ResolveRef.
+type ResolveRefParams struct {
+	// Ref ns/name, ns/name@^1.2, ns/name@1.2.3, or ns/name@beta.
+	Ref     string                   `form:"ref" json:"ref"`
+	Channel *ResolveRefParamsChannel `form:"channel,omitempty" json:"channel,omitempty"`
+}
+
+// ResolveRefParamsChannel defines parameters for ResolveRef.
+type ResolveRefParamsChannel string
+
 // UpdateCurrentUserJSONBody defines parameters for UpdateCurrentUser.
 type UpdateCurrentUserJSONBody struct {
 	DisplayName *string `json:"displayName,omitempty"`
@@ -584,6 +758,15 @@ type SetAgentTeamGrantJSONRequestBody SetAgentTeamGrantJSONBody
 
 // SetAgentUserGrantJSONRequestBody defines body for SetAgentUserGrant for application/json ContentType.
 type SetAgentUserGrantJSONRequestBody SetAgentUserGrantJSONBody
+
+// SubmitVersionJSONRequestBody defines body for SubmitVersion for application/json ContentType.
+type SubmitVersionJSONRequestBody SubmitVersionJSONBody
+
+// SubmitVersionMultipartRequestBody defines body for SubmitVersion for multipart/form-data ContentType.
+type SubmitVersionMultipartRequestBody SubmitVersionMultipartBody
+
+// YankVersionJSONRequestBody defines body for YankVersion for application/json ContentType.
+type YankVersionJSONRequestBody YankVersionJSONBody
 
 // TotpVerifyJSONRequestBody defines body for TotpVerify for application/json ContentType.
 type TotpVerifyJSONRequestBody TotpVerifyJSONBody
@@ -770,6 +953,58 @@ type ClientInterface interface {
 	// Corresponds with PUT /agents/{ns}/{name}/grants/user/{handle} (the `SetAgentUserGrant` operationId).
 	SetAgentUserGrant(ctx context.Context, ns Namespace, name AgentName, handle Handle, body SetAgentUserGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListVersions Version history, newest first.
+	//
+	// Corresponds with GET /agents/{ns}/{name}/versions (the `ListVersions` operationId).
+	ListVersions(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SubmitVersionWithBody Submit a version for publication (§7 state machine entry).
+	//
+	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests — client packing is never trusted).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /agents/{ns}/{name}/versions (the `SubmitVersion` operationId).
+	SubmitVersionWithBody(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SubmitVersion Submit a version for publication (§7 state machine entry).
+	//
+	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests — client packing is never trusted).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /agents/{ns}/{name}/versions (the `SubmitVersion` operationId).
+	SubmitVersion(ctx context.Context, ns Namespace, name AgentName, body SubmitVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetVersionInfo One version with its state and archive identity.
+	//
+	// Corresponds with GET /agents/{ns}/{name}/versions/{version} (the `GetVersionInfo` operationId).
+	GetVersionInfo(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DownloadVersion Download the release archive (§9.4; counts an install).
+	//
+	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/download (the `DownloadVersion` operationId).
+	DownloadVersion(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetVersionManifest The validated manifest (canonical JSON, §4.2).
+	//
+	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/manifest (the `GetVersionManifest` operationId).
+	GetVersionManifest(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// YankVersionWithBody Yank a published version (§5.5 semantics; publish permission).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /agents/{ns}/{name}/versions/{version}/yank (the `YankVersion` operationId).
+	YankVersionWithBody(ctx context.Context, ns Namespace, name AgentName, version VersionString, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// YankVersion Yank a published version (§5.5 semantics; publish permission).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /agents/{ns}/{name}/versions/{version}/yank (the `YankVersion` operationId).
+	YankVersion(ctx context.Context, ns Namespace, name AgentName, version VersionString, body YankVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// TotpSetup Begin TOTP enrollment; returns the provisioning secret.
 	//
 	// Corresponds with POST /auth/2fa/totp/setup (the `TotpSetup` operationId).
@@ -941,6 +1176,11 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /orgs/{org}/teams/{team}/members/{handle} (the `AddTeamMember` operationId).
 	AddTeamMember(ctx context.Context, org OrgHandle, team TeamSlug, handle Handle, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ResolveRef Resolve ns/name@range to a concrete version (§9.4 step 1).
+	//
+	// Corresponds with GET /resolve (the `ResolveRef` operationId).
+	ResolveRef(ctx context.Context, params *ResolveRefParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetCurrentUser The authenticated user.
 	//
@@ -1192,6 +1432,138 @@ func (c *Client) SetAgentUserGrantWithBody(ctx context.Context, ns Namespace, na
 // Corresponds with PUT /agents/{ns}/{name}/grants/user/{handle} (the `SetAgentUserGrant` operationId).
 func (c *Client) SetAgentUserGrant(ctx context.Context, ns Namespace, name AgentName, handle Handle, body SetAgentUserGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSetAgentUserGrantRequest(c.Server, ns, name, handle, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListVersions Version history, newest first.
+//
+// Corresponds with GET /agents/{ns}/{name}/versions (the `ListVersions` operationId).
+func (c *Client) ListVersions(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListVersionsRequest(c.Server, ns, name)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SubmitVersionWithBody Submit a version for publication (§7 state machine entry).
+//
+// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests — client packing is never trusted).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /agents/{ns}/{name}/versions (the `SubmitVersion` operationId).
+func (c *Client) SubmitVersionWithBody(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSubmitVersionRequestWithBody(c.Server, ns, name, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SubmitVersion Submit a version for publication (§7 state machine entry).
+//
+// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests — client packing is never trusted).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /agents/{ns}/{name}/versions (the `SubmitVersion` operationId).
+func (c *Client) SubmitVersion(ctx context.Context, ns Namespace, name AgentName, body SubmitVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSubmitVersionRequest(c.Server, ns, name, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetVersionInfo One version with its state and archive identity.
+//
+// Corresponds with GET /agents/{ns}/{name}/versions/{version} (the `GetVersionInfo` operationId).
+func (c *Client) GetVersionInfo(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetVersionInfoRequest(c.Server, ns, name, version)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DownloadVersion Download the release archive (§9.4; counts an install).
+//
+// Corresponds with GET /agents/{ns}/{name}/versions/{version}/download (the `DownloadVersion` operationId).
+func (c *Client) DownloadVersion(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDownloadVersionRequest(c.Server, ns, name, version)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetVersionManifest The validated manifest (canonical JSON, §4.2).
+//
+// Corresponds with GET /agents/{ns}/{name}/versions/{version}/manifest (the `GetVersionManifest` operationId).
+func (c *Client) GetVersionManifest(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetVersionManifestRequest(c.Server, ns, name, version)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// YankVersionWithBody Yank a published version (§5.5 semantics; publish permission).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /agents/{ns}/{name}/versions/{version}/yank (the `YankVersion` operationId).
+func (c *Client) YankVersionWithBody(ctx context.Context, ns Namespace, name AgentName, version VersionString, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewYankVersionRequestWithBody(c.Server, ns, name, version, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// YankVersion Yank a published version (§5.5 semantics; publish permission).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /agents/{ns}/{name}/versions/{version}/yank (the `YankVersion` operationId).
+func (c *Client) YankVersion(ctx context.Context, ns Namespace, name AgentName, version VersionString, body YankVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewYankVersionRequest(c.Server, ns, name, version, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1644,6 +2016,21 @@ func (c *Client) RemoveTeamMember(ctx context.Context, org OrgHandle, team TeamS
 // Corresponds with PUT /orgs/{org}/teams/{team}/members/{handle} (the `AddTeamMember` operationId).
 func (c *Client) AddTeamMember(ctx context.Context, org OrgHandle, team TeamSlug, handle Handle, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAddTeamMemberRequest(c.Server, org, team, handle)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ResolveRef Resolve ns/name@range to a concrete version (§9.4 step 1).
+//
+// Corresponds with GET /resolve (the `ResolveRef` operationId).
+func (c *Client) ResolveRef(ctx context.Context, params *ResolveRefParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewResolveRefRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2217,6 +2604,306 @@ func NewSetAgentUserGrantRequestWithBody(server string, ns Namespace, name Agent
 	}
 
 	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListVersionsRequest constructs an http.Request for the ListVersions method
+func NewListVersionsRequest(server string, ns Namespace, name AgentName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/versions", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSubmitVersionRequest calls the generic SubmitVersion builder with application/json body
+func NewSubmitVersionRequest(server string, ns Namespace, name AgentName, body SubmitVersionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSubmitVersionRequestWithBody(server, ns, name, "application/json", bodyReader)
+}
+
+// NewSubmitVersionRequestWithBody constructs an http.Request for the SubmitVersion method, with any body, and a specified content type
+func NewSubmitVersionRequestWithBody(server string, ns Namespace, name AgentName, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/versions", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetVersionInfoRequest constructs an http.Request for the GetVersionInfo method
+func NewGetVersionInfoRequest(server string, ns Namespace, name AgentName, version VersionString) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "version", version, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/versions/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDownloadVersionRequest constructs an http.Request for the DownloadVersion method
+func NewDownloadVersionRequest(server string, ns Namespace, name AgentName, version VersionString) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "version", version, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/versions/%s/download", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetVersionManifestRequest constructs an http.Request for the GetVersionManifest method
+func NewGetVersionManifestRequest(server string, ns Namespace, name AgentName, version VersionString) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "version", version, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/versions/%s/manifest", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewYankVersionRequest calls the generic YankVersion builder with application/json body
+func NewYankVersionRequest(server string, ns Namespace, name AgentName, version VersionString, body YankVersionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewYankVersionRequestWithBody(server, ns, name, version, "application/json", bodyReader)
+}
+
+// NewYankVersionRequestWithBody constructs an http.Request for the YankVersion method, with any body, and a specified content type
+func NewYankVersionRequestWithBody(server string, ns Namespace, name AgentName, version VersionString, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "version", version, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/versions/%s/yank", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
@@ -3061,6 +3748,68 @@ func NewAddTeamMemberRequest(server string, org OrgHandle, team TeamSlug, handle
 	return req, nil
 }
 
+// NewResolveRefRequest constructs an http.Request for the ResolveRef method
+func NewResolveRefRequest(server string, params *ResolveRefParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/resolve")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "ref", params.Ref, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.Channel != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "channel", *params.Channel, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetCurrentUserRequest constructs an http.Request for the GetCurrentUser method
 func NewGetCurrentUserRequest(server string) (*http.Request, error) {
 	var err error
@@ -3398,6 +4147,66 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /agents/{ns}/{name}/grants/user/{handle} (the `SetAgentUserGrant` operationId).
 	SetAgentUserGrantWithResponse(ctx context.Context, ns Namespace, name AgentName, handle Handle, body SetAgentUserGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*SetAgentUserGrantResponse, error)
 
+	// ListVersionsWithResponse Version history, newest first.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /agents/{ns}/{name}/versions (the `ListVersions` operationId).
+	ListVersionsWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*ListVersionsResponse, error)
+
+	// SubmitVersionWithBodyWithResponse Submit a version for publication (§7 state machine entry).
+	//
+	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests — client packing is never trusted).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /agents/{ns}/{name}/versions (the `SubmitVersion` operationId).
+	SubmitVersionWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SubmitVersionResponse, error)
+
+	// SubmitVersionWithResponse Submit a version for publication (§7 state machine entry).
+	//
+	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests — client packing is never trusted).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /agents/{ns}/{name}/versions (the `SubmitVersion` operationId).
+	SubmitVersionWithResponse(ctx context.Context, ns Namespace, name AgentName, body SubmitVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*SubmitVersionResponse, error)
+
+	// GetVersionInfoWithResponse One version with its state and archive identity.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /agents/{ns}/{name}/versions/{version} (the `GetVersionInfo` operationId).
+	GetVersionInfoWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*GetVersionInfoResponse, error)
+
+	// DownloadVersionWithResponse Download the release archive (§9.4; counts an install).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/download (the `DownloadVersion` operationId).
+	DownloadVersionWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*DownloadVersionResponse, error)
+
+	// GetVersionManifestWithResponse The validated manifest (canonical JSON, §4.2).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/manifest (the `GetVersionManifest` operationId).
+	GetVersionManifestWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*GetVersionManifestResponse, error)
+
+	// YankVersionWithBodyWithResponse Yank a published version (§5.5 semantics; publish permission).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /agents/{ns}/{name}/versions/{version}/yank (the `YankVersion` operationId).
+	YankVersionWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*YankVersionResponse, error)
+
+	// YankVersionWithResponse Yank a published version (§5.5 semantics; publish permission).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /agents/{ns}/{name}/versions/{version}/yank (the `YankVersion` operationId).
+	YankVersionWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, body YankVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*YankVersionResponse, error)
+
 	// TotpSetupWithResponse Begin TOTP enrollment; returns the provisioning secret.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -3593,6 +4402,13 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PUT /orgs/{org}/teams/{team}/members/{handle} (the `AddTeamMember` operationId).
 	AddTeamMemberWithResponse(ctx context.Context, org OrgHandle, team TeamSlug, handle Handle, reqEditors ...RequestEditorFn) (*AddTeamMemberResponse, error)
+
+	// ResolveRefWithResponse Resolve ns/name@range to a concrete version (§9.4 step 1).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /resolve (the `ResolveRef` operationId).
+	ResolveRefWithResponse(ctx context.Context, params *ResolveRefParams, reqEditors ...RequestEditorFn) (*ResolveRefResponse, error)
 
 	// GetCurrentUserWithResponse The authenticated user.
 	//
@@ -4049,6 +4865,280 @@ func (r SetAgentUserGrantResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r SetAgentUserGrantResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListVersionsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]AgentVersion
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListVersionsResponse) GetJSON200() *[]AgentVersion {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListVersionsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListVersionsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListVersionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListVersionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListVersionsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SubmitVersionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *AgentVersion
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r SubmitVersionResponse) GetJSON202() *AgentVersion {
+	return r.JSON202
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r SubmitVersionResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SubmitVersionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SubmitVersionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SubmitVersionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SubmitVersionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetVersionInfoResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AgentVersion
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetVersionInfoResponse) GetJSON200() *AgentVersion {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetVersionInfoResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetVersionInfoResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetVersionInfoResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetVersionInfoResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetVersionInfoResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DownloadVersionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DownloadVersionResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DownloadVersionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DownloadVersionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DownloadVersionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DownloadVersionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetVersionManifestResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *map[string]interface{}
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetVersionManifestResponse) GetJSON200() *map[string]interface{} {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetVersionManifestResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetVersionManifestResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetVersionManifestResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetVersionManifestResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetVersionManifestResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type YankVersionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r YankVersionResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r YankVersionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r YankVersionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r YankVersionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r YankVersionResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -4966,6 +6056,54 @@ func (r AddTeamMemberResponse) ContentType() string {
 	return ""
 }
 
+type ResolveRefResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ResolveResult
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ResolveRefResponse) GetJSON200() *ResolveResult {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ResolveRefResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ResolveRefResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ResolveRefResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ResolveRefResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ResolveRefResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetCurrentUserResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -5416,6 +6554,114 @@ func (c *ClientWithResponses) SetAgentUserGrantWithResponse(ctx context.Context,
 	return ParseSetAgentUserGrantResponse(rsp)
 }
 
+// ListVersionsWithResponse Version history, newest first.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /agents/{ns}/{name}/versions (the `ListVersions` operationId).
+func (c *ClientWithResponses) ListVersionsWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*ListVersionsResponse, error) {
+	rsp, err := c.ListVersions(ctx, ns, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListVersionsResponse(rsp)
+}
+
+// SubmitVersionWithBodyWithResponse Submit a version for publication (§7 state machine entry).
+//
+// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests — client packing is never trusted).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /agents/{ns}/{name}/versions (the `SubmitVersion` operationId).
+func (c *ClientWithResponses) SubmitVersionWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SubmitVersionResponse, error) {
+	rsp, err := c.SubmitVersionWithBody(ctx, ns, name, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSubmitVersionResponse(rsp)
+}
+
+// SubmitVersionWithResponse Submit a version for publication (§7 state machine entry).
+//
+// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests — client packing is never trusted).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /agents/{ns}/{name}/versions (the `SubmitVersion` operationId).
+func (c *ClientWithResponses) SubmitVersionWithResponse(ctx context.Context, ns Namespace, name AgentName, body SubmitVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*SubmitVersionResponse, error) {
+	rsp, err := c.SubmitVersion(ctx, ns, name, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSubmitVersionResponse(rsp)
+}
+
+// GetVersionInfoWithResponse One version with its state and archive identity.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /agents/{ns}/{name}/versions/{version} (the `GetVersionInfo` operationId).
+func (c *ClientWithResponses) GetVersionInfoWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*GetVersionInfoResponse, error) {
+	rsp, err := c.GetVersionInfo(ctx, ns, name, version, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetVersionInfoResponse(rsp)
+}
+
+// DownloadVersionWithResponse Download the release archive (§9.4; counts an install).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /agents/{ns}/{name}/versions/{version}/download (the `DownloadVersion` operationId).
+func (c *ClientWithResponses) DownloadVersionWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*DownloadVersionResponse, error) {
+	rsp, err := c.DownloadVersion(ctx, ns, name, version, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDownloadVersionResponse(rsp)
+}
+
+// GetVersionManifestWithResponse The validated manifest (canonical JSON, §4.2).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /agents/{ns}/{name}/versions/{version}/manifest (the `GetVersionManifest` operationId).
+func (c *ClientWithResponses) GetVersionManifestWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*GetVersionManifestResponse, error) {
+	rsp, err := c.GetVersionManifest(ctx, ns, name, version, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetVersionManifestResponse(rsp)
+}
+
+// YankVersionWithBodyWithResponse Yank a published version (§5.5 semantics; publish permission).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /agents/{ns}/{name}/versions/{version}/yank (the `YankVersion` operationId).
+func (c *ClientWithResponses) YankVersionWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*YankVersionResponse, error) {
+	rsp, err := c.YankVersionWithBody(ctx, ns, name, version, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseYankVersionResponse(rsp)
+}
+
+// YankVersionWithResponse Yank a published version (§5.5 semantics; publish permission).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /agents/{ns}/{name}/versions/{version}/yank (the `YankVersion` operationId).
+func (c *ClientWithResponses) YankVersionWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, body YankVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*YankVersionResponse, error) {
+	rsp, err := c.YankVersion(ctx, ns, name, version, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseYankVersionResponse(rsp)
+}
+
 // TotpSetupWithResponse Begin TOTP enrollment; returns the provisioning secret.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -5778,6 +7024,19 @@ func (c *ClientWithResponses) AddTeamMemberWithResponse(ctx context.Context, org
 		return nil, err
 	}
 	return ParseAddTeamMemberResponse(rsp)
+}
+
+// ResolveRefWithResponse Resolve ns/name@range to a concrete version (§9.4 step 1).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /resolve (the `ResolveRef` operationId).
+func (c *ClientWithResponses) ResolveRefWithResponse(ctx context.Context, params *ResolveRefParams, reqEditors ...RequestEditorFn) (*ResolveRefResponse, error) {
+	rsp, err := c.ResolveRef(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseResolveRefResponse(rsp)
 }
 
 // GetCurrentUserWithResponse The authenticated user.
@@ -6145,6 +7404,199 @@ func ParseSetAgentUserGrantResponse(rsp *http.Response) (*SetAgentUserGrantRespo
 	}
 
 	response := &SetAgentUserGrantResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListVersionsResponse parses an HTTP response from a ListVersionsWithResponse call
+func ParseListVersionsResponse(rsp *http.Response) (*ListVersionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListVersionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []AgentVersion
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSubmitVersionResponse parses an HTTP response from a SubmitVersionWithResponse call
+func ParseSubmitVersionResponse(rsp *http.Response) (*SubmitVersionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SubmitVersionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest AgentVersion
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetVersionInfoResponse parses an HTTP response from a GetVersionInfoWithResponse call
+func ParseGetVersionInfoResponse(rsp *http.Response) (*GetVersionInfoResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetVersionInfoResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentVersion
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDownloadVersionResponse parses an HTTP response from a DownloadVersionWithResponse call
+func ParseDownloadVersionResponse(rsp *http.Response) (*DownloadVersionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DownloadVersionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 302:
+		break // No content-type
+
+	case rsp.StatusCode == 410:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetVersionManifestResponse parses an HTTP response from a GetVersionManifestWithResponse call
+func ParseGetVersionManifestResponse(rsp *http.Response) (*GetVersionManifestResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetVersionManifestResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseYankVersionResponse parses an HTTP response from a YankVersionWithResponse call
+func ParseYankVersionResponse(rsp *http.Response) (*YankVersionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &YankVersionResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
@@ -6784,6 +8236,39 @@ func ParseAddTeamMemberResponse(rsp *http.Response) (*AddTeamMemberResponse, err
 	switch {
 	case rsp.StatusCode == 204:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseResolveRefResponse parses an HTTP response from a ResolveRefWithResponse call
+func ParseResolveRefResponse(rsp *http.Response) (*ResolveRefResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ResolveRefResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ResolveResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

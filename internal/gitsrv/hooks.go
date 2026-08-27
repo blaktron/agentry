@@ -26,7 +26,7 @@ import (
 //   - repo quota: approximate disk usage check (§19)
 func RunPreReceiveHook(stdin io.Reader, stderr io.Writer) int {
 	deny := func(format string, args ...any) int {
-		fmt.Fprintf(stderr, "agentry: "+format+"\n", args...)
+		_, _ = fmt.Fprintf(stderr, "agentry: "+format+"\n", args...)
 		return 1
 	}
 

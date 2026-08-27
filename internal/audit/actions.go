@@ -36,6 +36,11 @@ const (
 	ActionAgentGrantSet    Action = "agent.grant_set"
 	ActionAgentGrantRemove Action = "agent.grant_remove"
 	ActionRepoPush         Action = "repo.push"
+
+	// Versions & publication (M3).
+	ActionVersionSubmit     Action = "version.submit"
+	ActionVersionTransition Action = "version.transition"
+	ActionVersionYank       Action = "version.yank"
 )
 
 // registry is populated at init from the constants above.
@@ -51,6 +56,7 @@ func init() {
 		ActionTeamMemberAdd, ActionTeamMemberRemove,
 		ActionAgentCreate, ActionAgentUpdate, ActionAgentGrantSet,
 		ActionAgentGrantRemove, ActionRepoPush,
+		ActionVersionSubmit, ActionVersionTransition, ActionVersionYank,
 	} {
 		registry[a] = struct{}{}
 	}
