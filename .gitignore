@@ -1,6 +1,8 @@
 # binaries & build artifacts
 /bin/
 /dist/
+/agentry
+/agentryd
 
 # local dev state
 /.devdata/
@@ -21,3 +23,6 @@ web/out/
 
 # test artifacts
 coverage.out
+
+# stray dev data written by tests run from package dirs
+**/.devdata/

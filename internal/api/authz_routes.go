@@ -87,6 +87,8 @@ var routeAuthz = map[string]RouteDecl{
 	"setOrgPolicy":          {Action: auth.ActOrgSettingsManage, OrgScoped: true},
 	"platformAgentAction":   {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"listAdvisories":        {Action: auth.ActPublicRead, Anonymous: true},
+	"searchAgents":          {Action: auth.ActPublicRead, Anonymous: true},
+	"getAgentReadme":        {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
 	"createOrg":             {Action: auth.ActOrgCreate},
 	"createTeam":            {Action: auth.ActOrgTeamsManage, OrgScoped: true},
 	"createToken":           {Action: auth.ActUserTokensManage, SessionOnly: true},

@@ -99,7 +99,19 @@ func (StaticProvider) RequiresHumanReview() bool { return false }
 var (
 	reInjection    = regexp.MustCompile(`(?i)ignore (?:all |your )?(?:previous|prior|above) instructions|disregard (?:the|all) (?:system|previous)`)
 	reExfiltration = regexp.MustCompile(`(?i)(?:send|post|upload|email|exfiltrate|leak)[^.\n]{0,40}(?:the )?(?:conversation|contents|data|secrets|credentials|history)`)
-	reDestructive  = regexp.MustCompile(`(?i)(?:rm -rf|delete (?:all|every)|wipe|format|drop (?:table|database)|destroy)[^.\n]{0,30}`)
+	// Destructive actions must name a destructive OPERATION on a target —
+	// not merely a word that also has innocent senses ("format" in "output
+	// format", "drop" in "drop a note"). Each alternative below is anchored
+	// to an object that makes the destructive reading unambiguous.
+	reDestructive = regexp.MustCompile(`(?i)` +
+		`rm\s+-[a-z]*[rf][a-z]*\s|` + // rm -rf, rm -fr, rm -r
+		`\bdelete\s+(?:all|every|the\s+entire)\b|` +
+		`\b(?:wipe|erase)\s+(?:all|every|the\s+)?(?:disk|drive|volume|database|repo|repositor|file|data|directory|folder)|` +
+		`\bformat\s+(?:the\s+)?(?:disk|drive|volume|partition|filesystem|/dev/)|` +
+		`\bdrop\s+(?:table|database|schema)\b|` +
+		`\b(?:destroy|obliterate)\s+(?:all|every|the\s+)?(?:data|database|backup|volume|resource)|` +
+		`\bgit\s+push\s+--force\b|` +
+		`\btruncate\s+table\b`)
 	reDeception    = regexp.MustCompile(`(?i)(?:do not (?:tell|inform|reveal)|without (?:telling|informing)|hide (?:this )?from) the user`)
 	reManipSymptom = regexp.MustCompile(`(?i)as (?:instructed|requested) (?:in|by) (?:the|this) (?:file|document|content)`)
 )

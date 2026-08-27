@@ -27,6 +27,8 @@ tags:
     description: Org audit log (§12.6).
   - name: agents
     description: Agents, hosted repos, per-agent grants (§9.2).
+  - name: search
+    description: Full-text search and facets for discovery (§10.4).
   - name: versions
     description: Version submission, resolution, downloads (§7, §9.4).
   - name: reviews
@@ -1193,6 +1195,72 @@ paths:
           $ref: "#/components/responses/Problem"
 
 
+  /search:
+    get:
+      operationId: searchAgents
+      tags: [search]
+      summary: Full-text search over public agents with facets (§10.4).
+      security: []
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Free-text query; empty lists by popularity.
+        - name: kind
+          in: query
+          schema:
+            $ref: "#/components/schemas/AgentKind"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: Search results with facet counts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResults"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /agents/{ns}/{name}/readme:
+    get:
+      operationId: getAgentReadme
+      tags: [agents]
+      summary: The agent README rendered to sanitized HTML (§10.3, D-11).
+      description: >
+        Markdown is rendered server-side through a strict allowlist: no raw
+        HTML, no user styles, no SVG, external links rewritten, and invisible
+        or bidi Unicode replaced with visible placeholders.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+        - name: version
+          in: query
+          schema:
+            type: string
+          description: Version to render; defaults to the latest published.
+      responses:
+        "200":
+          description: Sanitized HTML fragment.
+          content:
+            text/html:
+              schema:
+                type: string
+        default:
+          $ref: "#/components/responses/Problem"
+
+
 components:
   parameters:
     VersionString:
@@ -1765,6 +1833,42 @@ components:
         publishedAt:
           type: string
           format: date-time
+
+    SearchResults:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchHit"
+        facets:
+          type: object
+          description: Facet counts keyed by facet name then value.
+          additionalProperties:
+            type: object
+            additionalProperties:
+              type: integer
+        total:
+          type: integer
+
+    SearchHit:
+      type: object
+      required: [namespace, name, kind, summary]
+      properties:
+        namespace:
+          type: string
+        name:
+          type: string
+        kind:
+          $ref: "#/components/schemas/AgentKind"
+        summary:
+          type: string
+        installs30d:
+          type: integer
+        quarantineState:
+          type: string
+          enum: [none, quarantined, blocked]
 
     Problem:
       type: object

@@ -113,6 +113,28 @@ type AuditEventsDefault struct {
 	Detail     []byte      `json:"detail"`
 }
 
+type AuditExport struct {
+	ID           uuid.UUID  `json:"id"`
+	OrgID        uuid.UUID  `json:"org_id"`
+	RequestedBy  *uuid.UUID `json:"requested_by"`
+	Status       string     `json:"status"`
+	ActionFilter *string    `json:"action_filter"`
+	ObjectKey    *string    `json:"object_key"`
+	EventCount   int32      `json:"event_count"`
+	Error        *string    `json:"error"`
+	CreatedAt    time.Time  `json:"created_at"`
+	FinishedAt   *time.Time `json:"finished_at"`
+}
+
+type DomainClaim struct {
+	ID                uuid.UUID  `json:"id"`
+	OrgID             uuid.UUID  `json:"org_id"`
+	Domain            string     `json:"domain"`
+	VerificationToken string     `json:"verification_token"`
+	VerifiedAt        *time.Time `json:"verified_at"`
+	CreatedAt         time.Time  `json:"created_at"`
+}
+
 type DownloadStat struct {
 	AgentID   uuid.UUID   `json:"agent_id"`
 	VersionID uuid.UUID   `json:"version_id"`
@@ -329,4 +351,28 @@ type User struct {
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
 	PlatformStaff    bool       `json:"platform_staff"`
+}
+
+type WebhookDelivery struct {
+	ID          uuid.UUID  `json:"id"`
+	EndpointID  uuid.UUID  `json:"endpoint_id"`
+	EventType   string     `json:"event_type"`
+	Payload     []byte     `json:"payload"`
+	Attempt     int32      `json:"attempt"`
+	StatusCode  *int32     `json:"status_code"`
+	Error       *string    `json:"error"`
+	DeliveredAt *time.Time `json:"delivered_at"`
+	NextRetryAt *time.Time `json:"next_retry_at"`
+	CreatedAt   time.Time  `json:"created_at"`
+}
+
+type WebhookEndpoint struct {
+	ID        uuid.UUID `json:"id"`
+	OrgID     uuid.UUID `json:"org_id"`
+	Url       string    `json:"url"`
+	SecretEnc []byte    `json:"secret_enc"`
+	Events    []string  `json:"events"`
+	Active    bool      `json:"active"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }

@@ -79,3 +79,37 @@ WHERE a.id = $1;
 
 -- name: SetAgentQuarantineState :exec
 UPDATE agents SET quarantine_state = $2, updated_at = now() WHERE id = $1;
+
+-- name: SearchAgents :many
+-- Public FTS search (§10.4, D-20): weighted tsvector + trigram fuzzy fallback
+-- on name, ranked by relevance × install popularity × recency decay.
+SELECT a.id, a.name, a.kind, a.visibility, a.summary, a.quarantine_state,
+       a.created_at, h.handle AS namespace,
+       coalesce(d.installs, 0)::bigint AS installs,
+       ts_rank_cd(a.search_tsv, websearch_to_tsquery('english', sqlc.arg(query)::text)) AS rank
+FROM agents a
+JOIN handles h ON h.id = a.namespace_id
+LEFT JOIN (
+  SELECT agent_id, sum(installs) AS installs
+  FROM download_stats WHERE day >= current_date - 30 GROUP BY agent_id
+) d ON d.agent_id = a.id
+WHERE a.visibility = 'public'
+  AND a.quarantine_state <> 'blocked'
+  AND (
+    sqlc.arg(query)::text = ''
+    OR a.search_tsv @@ websearch_to_tsquery('english', sqlc.arg(query)::text)
+    OR a.name::text % sqlc.arg(query)::text
+  )
+  AND (sqlc.narg('kind')::text IS NULL OR a.kind = sqlc.narg('kind'))
+ORDER BY
+  ts_rank_cd(a.search_tsv, websearch_to_tsquery('english', sqlc.arg(query)::text)) DESC,
+  coalesce(d.installs, 0) DESC,
+  a.created_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: SearchFacetKinds :many
+SELECT a.kind, count(*)::bigint AS n
+FROM agents a
+WHERE a.visibility = 'public' AND a.quarantine_state <> 'blocked'
+  AND (sqlc.arg(query)::text = '' OR a.search_tsv @@ websearch_to_tsquery('english', sqlc.arg(query)::text))
+GROUP BY a.kind ORDER BY a.kind;

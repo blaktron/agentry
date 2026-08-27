@@ -241,6 +241,8 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			method: "GET",
 			path:   func(s *matrixSeed, _ string) string { return "/api/v1/resolve?ref=" + s.orgH + "/mx-agent" },
 		},
+		"searchAgents":          {method: "GET", path: sPath("/api/v1/search?q=matrix")},
+		"getAgentReadme":        {method: "GET", path: agentPath("/readme")},
 		"getVersionReport":      {method: "GET", path: agentPath("/versions/9.9.9/report")},
 		"getVersionAttestation": {method: "GET", path: agentPath("/versions/9.9.9/attestation")},
 		"getPlatformPolicy":     {method: "GET", path: sPath("/api/v1/platform/policy")},

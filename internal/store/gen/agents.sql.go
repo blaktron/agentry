@@ -393,6 +393,123 @@ func (q *Queries) ListAgentsByNamespace(ctx context.Context, arg ListAgentsByNam
 	return items, nil
 }
 
+const searchAgents = `-- name: SearchAgents :many
+SELECT a.id, a.name, a.kind, a.visibility, a.summary, a.quarantine_state,
+       a.created_at, h.handle AS namespace,
+       coalesce(d.installs, 0)::bigint AS installs,
+       ts_rank_cd(a.search_tsv, websearch_to_tsquery('english', $3::text)) AS rank
+FROM agents a
+JOIN handles h ON h.id = a.namespace_id
+LEFT JOIN (
+  SELECT agent_id, sum(installs) AS installs
+  FROM download_stats WHERE day >= current_date - 30 GROUP BY agent_id
+) d ON d.agent_id = a.id
+WHERE a.visibility = 'public'
+  AND a.quarantine_state <> 'blocked'
+  AND (
+    $3::text = ''
+    OR a.search_tsv @@ websearch_to_tsquery('english', $3::text)
+    OR a.name::text % $3::text
+  )
+  AND ($4::text IS NULL OR a.kind = $4)
+ORDER BY
+  ts_rank_cd(a.search_tsv, websearch_to_tsquery('english', $3::text)) DESC,
+  coalesce(d.installs, 0) DESC,
+  a.created_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type SearchAgentsParams struct {
+	Limit  int32   `json:"limit"`
+	Offset int32   `json:"offset"`
+	Query  string  `json:"query"`
+	Kind   *string `json:"kind"`
+}
+
+type SearchAgentsRow struct {
+	ID              uuid.UUID `json:"id"`
+	Name            string    `json:"name"`
+	Kind            string    `json:"kind"`
+	Visibility      string    `json:"visibility"`
+	Summary         string    `json:"summary"`
+	QuarantineState string    `json:"quarantine_state"`
+	CreatedAt       time.Time `json:"created_at"`
+	Namespace       string    `json:"namespace"`
+	Installs        int64     `json:"installs"`
+	Rank            float32   `json:"rank"`
+}
+
+// Public FTS search (§10.4, D-20): weighted tsvector + trigram fuzzy fallback
+// on name, ranked by relevance × install popularity × recency decay.
+func (q *Queries) SearchAgents(ctx context.Context, arg SearchAgentsParams) ([]SearchAgentsRow, error) {
+	rows, err := q.db.Query(ctx, searchAgents,
+		arg.Limit,
+		arg.Offset,
+		arg.Query,
+		arg.Kind,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchAgentsRow
+	for rows.Next() {
+		var i SearchAgentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Kind,
+			&i.Visibility,
+			&i.Summary,
+			&i.QuarantineState,
+			&i.CreatedAt,
+			&i.Namespace,
+			&i.Installs,
+			&i.Rank,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchFacetKinds = `-- name: SearchFacetKinds :many
+SELECT a.kind, count(*)::bigint AS n
+FROM agents a
+WHERE a.visibility = 'public' AND a.quarantine_state <> 'blocked'
+  AND ($1::text = '' OR a.search_tsv @@ websearch_to_tsquery('english', $1::text))
+GROUP BY a.kind ORDER BY a.kind
+`
+
+type SearchFacetKindsRow struct {
+	Kind string `json:"kind"`
+	N    int64  `json:"n"`
+}
+
+func (q *Queries) SearchFacetKinds(ctx context.Context, query string) ([]SearchFacetKindsRow, error) {
+	rows, err := q.db.Query(ctx, searchFacetKinds, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchFacetKindsRow
+	for rows.Next() {
+		var i SearchFacetKindsRow
+		if err := rows.Scan(&i.Kind, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setAgentQuarantineState = `-- name: SetAgentQuarantineState :exec
 UPDATE agents SET quarantine_state = $2, updated_at = now() WHERE id = $1
 `

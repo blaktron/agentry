@@ -17,6 +17,7 @@ import (
 	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/notify"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/render"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/scan"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/scan/ruleset"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
@@ -39,6 +40,7 @@ type Server struct {
 	reg      *registry.Service
 	blobs    registry.BlobStore
 	pipeline *scan.Pipeline
+	renderer *render.Renderer
 }
 
 // New creates the API server. st may be nil in database-less dev mode; any
@@ -62,6 +64,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		auditW:   aud,
 		notifier: notify.LogNotifier{Log: log},
 		sealer:   sealer,
+		renderer: render.New(),
 		limits:   newRateLimits(),
 		classes:  classesFromConfig(cfg.Limits),
 	}
