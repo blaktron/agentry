@@ -186,6 +186,29 @@ func (s *Server) wellKnownRegistry(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// wellKnownSigningKeys serves /.well-known/agentry/signing-keys.json (§8.8):
+// the verification key set clients pin on first use (TOFU) and use to verify
+// DSSE attestations offline. Rotation = overlapping validity windows.
+func (s *Server) wellKnownSigningKeys(w http.ResponseWriter, r *http.Request) {
+	type key struct {
+		KeyID     string `json:"keyId"`
+		Algorithm string `json:"algorithm"`
+		PublicKey string `json:"publicKeyPem"`
+	}
+	out := struct {
+		Keys []key `json:"keys"`
+	}{Keys: []key{}}
+	if s.signer != nil {
+		out.Keys = append(out.Keys, key{
+			KeyID:     s.signer.KeyID(),
+			Algorithm: "ecdsa-p256-sha256",
+			PublicKey: s.signer.PublicKeyPEM(),
+		})
+	}
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	writeJSON(w, http.StatusOK, out)
+}
+
 // NewHandler assembles the full HTTP handler for the api role.
 func NewHandler(s *Server) http.Handler {
 	return NewHandlerWithGit(s, nil)
@@ -202,6 +225,7 @@ func NewHandlerWithGit(s *Server, mountGit func(*http.ServeMux)) http.Handler {
 	mux.HandleFunc("GET /healthz", s.healthz)
 	mux.HandleFunc("GET /readyz", s.readyz)
 	mux.HandleFunc("GET /.well-known/agentry/registry.json", s.wellKnownRegistry)
+	mux.HandleFunc("GET /.well-known/agentry/signing-keys.json", s.wellKnownSigningKeys)
 
 	// Generated OpenAPI routes under /api/v1 (spec-first, D-09).
 	apiHandler := HandlerWithOptions(s, StdHTTPServerOptions{

@@ -25,7 +25,8 @@ func newVerifyCmd() *cobra.Command {
 		Short: "Verify a published version's archive digest (exit code for CI)",
 		Long: "Resolve an exact version, download its archive, recompute the sha256\n" +
 			"digest, and compare it to the registry's (§9.4). Prints PASS/FAIL and\n" +
-			"exits accordingly. DSSE attestation verification lands with M4 signing.",
+			"exits accordingly, and verifies the DSSE attestation (§8.8) against\n" +
+			"the registry's signing keys, pinned on first use.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runVerify(cmd, args[0])
@@ -35,13 +36,13 @@ func newVerifyCmd() *cobra.Command {
 
 // verifyReport is the --json output shape.
 type verifyReport struct {
-	Ref            string `json:"ref"`
-	Version        string `json:"version"`
-	RegistryDigest string `json:"registryDigest"`
-	ComputedDigest string `json:"computedDigest"`
-	DigestMatch    bool   `json:"digestMatch"`
-	Attestation    string `json:"attestation"`
-	Yanked         bool   `json:"yanked"`
+	Ref            string             `json:"ref"`
+	Version        string             `json:"version"`
+	RegistryDigest string             `json:"registryDigest"`
+	ComputedDigest string             `json:"computedDigest"`
+	DigestMatch    bool               `json:"digestMatch"`
+	Attestation    *AttestationResult `json:"attestation,omitempty"`
+	Yanked         bool               `json:"yanked"`
 }
 
 // runVerify executes the verification.
@@ -75,12 +76,20 @@ func runVerify(cmd *cobra.Command, ref string) error {
 		RegistryDigest: res.Digest,
 		ComputedDigest: sha256Digest(archive),
 		Yanked:         res.Yanked,
-		Attestation:    "not yet available (M4 signing)",
 	}
 	report.DigestMatch = report.ComputedDigest == report.RegistryDigest
-	if res.AttestationUrl != nil && *res.AttestationUrl != "" {
-		report.Attestation = "present at " + *res.AttestationUrl + " (signature verification lands with M4)"
+
+	// Provenance (§8.8): verify the DSSE attestation against the pinned key
+	// set and bind it to the bytes we just downloaded.
+	attURL := ""
+	if res.AttestationUrl != nil {
+		attURL = *res.AttestationUrl
 	}
+	if attURL == "" {
+		attURL = fmt.Sprintf("/api/v1/agents/%s/%s/versions/%s/attestation", res.Namespace, res.Name, res.Version)
+	}
+	att := verifyAttestation(cmd.Context(), reg, token, attURL, report.ComputedDigest)
+	report.Attestation = &att
 
 	out := cmd.OutOrStdout()
 	if flags.jsonOut {
@@ -93,7 +102,19 @@ func runVerify(cmd *cobra.Command, ref string) error {
 		_, _ = fmt.Fprintf(out, "%s/%s@%s\n", res.Namespace, res.Name, res.Version)
 		_, _ = fmt.Fprintf(out, "  registry digest: %s\n", report.RegistryDigest)
 		_, _ = fmt.Fprintf(out, "  computed digest: %s\n", report.ComputedDigest)
-		_, _ = fmt.Fprintf(out, "  attestation:     %s\n", report.Attestation)
+		_, _ = fmt.Fprintf(out, "  attestation:     %s (%s)\n", att.State, att.Detail)
+		if att.State == "verified" {
+			_, _ = fmt.Fprintf(out, "  signed by:       key %s\n", att.KeyID)
+			if att.RulesetVer != "" {
+				_, _ = fmt.Fprintf(out, "  scanned with:    ruleset %s, judge %s\n", att.RulesetVer, orNone(att.JudgeModel))
+			}
+			if att.FirstUse {
+				_, _ = fmt.Fprintln(out, "  note:            signing keys pinned on first use (TOFU)")
+			}
+		}
+		if att.KeyRotated {
+			_, _ = fmt.Fprintln(out, "  WARNING:         the registry advertises new signing key ids")
+		}
 		if report.Yanked {
 			_, _ = fmt.Fprintln(out, "  yanked:          yes")
 		}
@@ -105,6 +126,11 @@ func runVerify(cmd *cobra.Command, ref string) error {
 	}
 	if !report.DigestMatch {
 		return fmt.Errorf("digest mismatch for %s", ref)
+	}
+	// A present-but-invalid attestation is a hard failure; an absent one is
+	// reported and tolerated (self-host may run unsigned, §8.8).
+	if att.State == "mismatch" {
+		return fmt.Errorf("attestation verification failed for %s: %s", ref, att.Detail)
 	}
 	return nil
 }
