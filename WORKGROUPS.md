@@ -15,7 +15,7 @@ Derived from [PLAN.md](PLAN.md) §18 (milestones) and §18.3 (ordering/paralleli
 | G — Rules engine | M4 seed | ✅ complete | fixture runner + corpus |
 | H — Security pipeline | M4 | ✅ core complete | `scripts/acceptance/m4.sh` (attack-corpus gate) |
 | I — Web UI | M5 | ✅ public surface | `scripts/acceptance/m5.sh` (9 live SSR flows) |
-| J — Enterprise SSO/SCIM | M6 | 🔄 in progress | `scripts/acceptance/m6.sh` |
+| J — Enterprise SSO/SCIM | M6 | ✅ complete | `scripts/acceptance/m6.sh` (12 criteria) |
 | K — AWS infra | M7 | ✅ complete | `scripts/acceptance/m7.sh` (71 .tf validate for real) |
 | L — Launch hardening | M8 | 🟡 partial | docs + GDPR + abuse intake done |
 

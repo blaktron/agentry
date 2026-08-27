@@ -39,7 +39,19 @@ type Service struct {
 	// gitArchiver produces tag archives for git-tag submissions; nil on
 	// roles without repo storage (SaaS api role — M7 routes via workers).
 	gitArchiver GitArchiver
+	// eventSink receives post-commit state transitions for webhook fan-out
+	// (§9.3, M6). Set by the api layer; nil = no fan-out.
+	eventSink EventSink
 }
+
+// EventSink receives a committed state transition so the caller can fan it out
+// to webhooks (§9.3). It runs after the transition transaction commits, so a
+// webhook failure never affects the state change. agentID lets the sink resolve
+// the owning org; payload carries version/from/to.
+type EventSink func(ctx context.Context, agentID uuid.UUID, event string, payload map[string]any)
+
+// SetEventSink wires the post-commit transition fan-out (M6 webhooks).
+func (s *Service) SetEventSink(sink EventSink) { s.eventSink = sink }
 
 // NewService assembles the registry service. blobs may be nil for callers
 // that never submit versions (the git role's read paths).

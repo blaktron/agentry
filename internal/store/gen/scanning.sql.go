@@ -12,6 +12,18 @@ import (
 	"github.com/google/uuid"
 )
 
+const countRecentAbuseReportsByReporter = `-- name: CountRecentAbuseReportsByReporter :one
+SELECT count(*) FROM abuse_reports
+WHERE reporter_id = $1 AND created_at >= now() - interval '1 hour'
+`
+
+func (q *Queries) CountRecentAbuseReportsByReporter(ctx context.Context, reporterID *uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countRecentAbuseReportsByReporter, reporterID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countRecentVersionsBySubmitter = `-- name: CountRecentVersionsBySubmitter :one
 SELECT count(*) FROM agent_versions
 WHERE submitted_by = $1 AND created_at >= now() - interval '7 days'
@@ -22,6 +34,47 @@ func (q *Queries) CountRecentVersionsBySubmitter(ctx context.Context, submittedB
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const createAbuseReport = `-- name: CreateAbuseReport :one
+INSERT INTO abuse_reports (id, agent_id, version_id, reporter_id, category, detail)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, agent_id, version_id, reporter_id, category, detail, state, triaged_by, triaged_at, resolution, created_at
+`
+
+type CreateAbuseReportParams struct {
+	ID         uuid.UUID  `json:"id"`
+	AgentID    uuid.UUID  `json:"agent_id"`
+	VersionID  *uuid.UUID `json:"version_id"`
+	ReporterID *uuid.UUID `json:"reporter_id"`
+	Category   string     `json:"category"`
+	Detail     string     `json:"detail"`
+}
+
+func (q *Queries) CreateAbuseReport(ctx context.Context, arg CreateAbuseReportParams) (AbuseReport, error) {
+	row := q.db.QueryRow(ctx, createAbuseReport,
+		arg.ID,
+		arg.AgentID,
+		arg.VersionID,
+		arg.ReporterID,
+		arg.Category,
+		arg.Detail,
+	)
+	var i AbuseReport
+	err := row.Scan(
+		&i.ID,
+		&i.AgentID,
+		&i.VersionID,
+		&i.ReporterID,
+		&i.Category,
+		&i.Detail,
+		&i.State,
+		&i.TriagedBy,
+		&i.TriagedAt,
+		&i.Resolution,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const createAdvisory = `-- name: CreateAdvisory :one
@@ -614,6 +667,66 @@ func (q *Queries) ListFindings(ctx context.Context, scanRunID uuid.UUID) ([]Find
 	return items, nil
 }
 
+const listOpenAbuseReports = `-- name: ListOpenAbuseReports :many
+SELECT ar.id, ar.agent_id, ar.version_id, ar.reporter_id, ar.category, ar.detail, ar.state, ar.triaged_by, ar.triaged_at, ar.resolution, ar.created_at, a.name AS agent_name, h.handle AS namespace
+FROM abuse_reports ar
+JOIN agents a ON a.id = ar.agent_id
+JOIN handles h ON h.id = a.namespace_id
+WHERE ar.state = 'open'
+ORDER BY ar.created_at
+LIMIT $1
+`
+
+type ListOpenAbuseReportsRow struct {
+	ID         uuid.UUID  `json:"id"`
+	AgentID    uuid.UUID  `json:"agent_id"`
+	VersionID  *uuid.UUID `json:"version_id"`
+	ReporterID *uuid.UUID `json:"reporter_id"`
+	Category   string     `json:"category"`
+	Detail     string     `json:"detail"`
+	State      string     `json:"state"`
+	TriagedBy  *uuid.UUID `json:"triaged_by"`
+	TriagedAt  *time.Time `json:"triaged_at"`
+	Resolution *string    `json:"resolution"`
+	CreatedAt  time.Time  `json:"created_at"`
+	AgentName  string     `json:"agent_name"`
+	Namespace  string     `json:"namespace"`
+}
+
+func (q *Queries) ListOpenAbuseReports(ctx context.Context, limit int32) ([]ListOpenAbuseReportsRow, error) {
+	rows, err := q.db.Query(ctx, listOpenAbuseReports, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOpenAbuseReportsRow
+	for rows.Next() {
+		var i ListOpenAbuseReportsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AgentID,
+			&i.VersionID,
+			&i.ReporterID,
+			&i.Category,
+			&i.Detail,
+			&i.State,
+			&i.TriagedBy,
+			&i.TriagedAt,
+			&i.Resolution,
+			&i.CreatedAt,
+			&i.AgentName,
+			&i.Namespace,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOpenFindings = `-- name: ListOpenFindings :many
 SELECT id, scan_run_id, scanner, severity, confidence, title, file_path, line_start, line_end, excerpt, detail, verdict, verdict_by, verdict_reason, verdict_at, created_at FROM findings WHERE scan_run_id = $1 AND verdict = 'open' ORDER BY scanner
 `
@@ -794,6 +907,27 @@ func (q *Queries) SetFindingVerdict(ctx context.Context, arg SetFindingVerdictPa
 		arg.Verdict,
 		arg.VerdictBy,
 		arg.VerdictReason,
+	)
+	return err
+}
+
+const triageAbuseReport = `-- name: TriageAbuseReport :exec
+UPDATE abuse_reports SET state = $2, triaged_by = $3, triaged_at = now(), resolution = $4 WHERE id = $1
+`
+
+type TriageAbuseReportParams struct {
+	ID         uuid.UUID  `json:"id"`
+	State      string     `json:"state"`
+	TriagedBy  *uuid.UUID `json:"triaged_by"`
+	Resolution *string    `json:"resolution"`
+}
+
+func (q *Queries) TriageAbuseReport(ctx context.Context, arg TriageAbuseReportParams) error {
+	_, err := q.db.Exec(ctx, triageAbuseReport,
+		arg.ID,
+		arg.State,
+		arg.TriagedBy,
+		arg.Resolution,
 	)
 	return err
 }

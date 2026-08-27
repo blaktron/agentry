@@ -19,6 +19,7 @@ const (
 	ActionUserTOTPEnabled   Action = "user.totp_enabled"
 	ActionPATCreate         Action = "pat.create"
 	ActionPATRevoke         Action = "pat.revoke"
+	ActionUserDelete        Action = "user.delete"
 
 	// Orgs & teams.
 	ActionOrgCreate        Action = "org.create"
@@ -51,6 +52,23 @@ const (
 	ActionAgentReinstate  Action = "agent.reinstate"
 	ActionAdvisoryPublish Action = "advisory.publish"
 	ActionRulesetRelease  Action = "ruleset.release"
+	ActionAbuseReport     Action = "abuse.report"
+
+	// Enterprise (M6): SSO, SCIM, webhooks, domain verification, audit export.
+	ActionSSOConnectionSet    Action = "sso.connection_set"
+	ActionSSOConnectionDelete Action = "sso.connection_delete"
+	ActionSSOLogin            Action = "sso.login"
+	ActionSCIMTokenCreate     Action = "scim.token_create"
+	ActionSCIMTokenRevoke     Action = "scim.token_revoke"
+	ActionSCIMUserProvision   Action = "scim.user_provision"
+	ActionSCIMUserDeactivate  Action = "scim.user_deactivate"
+	ActionSCIMGroupSync       Action = "scim.group_sync"
+	ActionWebhookCreate       Action = "webhook.create"
+	ActionWebhookUpdate       Action = "webhook.update"
+	ActionWebhookDelete       Action = "webhook.delete"
+	ActionDomainClaim         Action = "domain.claim"
+	ActionDomainVerified      Action = "domain.verified"
+	ActionAuditExport         Action = "audit.export"
 )
 
 // registry is populated at init from the constants above.
@@ -60,7 +78,7 @@ func init() {
 	for _, a := range []Action{
 		ActionUserRegister, ActionUserLogin, ActionUserLoginFailed,
 		ActionUserLogout, ActionUserEmailVerified, ActionUserUpdate,
-		ActionUserTOTPEnabled, ActionPATCreate, ActionPATRevoke,
+		ActionUserTOTPEnabled, ActionPATCreate, ActionPATRevoke, ActionUserDelete,
 		ActionOrgCreate, ActionOrgUpdate, ActionOrgMemberSet,
 		ActionOrgMemberRemove, ActionTeamCreate, ActionTeamDelete,
 		ActionTeamMemberAdd, ActionTeamMemberRemove,
@@ -69,7 +87,12 @@ func init() {
 		ActionVersionSubmit, ActionVersionTransition, ActionVersionYank,
 		ActionReviewDecision, ActionFindingVerdict, ActionPolicyUpdate,
 		ActionAgentQuarantine, ActionAgentBlock, ActionAgentReinstate,
-		ActionAdvisoryPublish, ActionRulesetRelease,
+		ActionAdvisoryPublish, ActionRulesetRelease, ActionAbuseReport,
+		ActionSSOConnectionSet, ActionSSOConnectionDelete, ActionSSOLogin,
+		ActionSCIMTokenCreate, ActionSCIMTokenRevoke, ActionSCIMUserProvision,
+		ActionSCIMUserDeactivate, ActionSCIMGroupSync,
+		ActionWebhookCreate, ActionWebhookUpdate, ActionWebhookDelete,
+		ActionDomainClaim, ActionDomainVerified, ActionAuditExport,
 	} {
 		registry[a] = struct{}{}
 	}

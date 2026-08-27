@@ -26,6 +26,22 @@ func (q *Queries) ConsumeEmailVerification(ctx context.Context, tokenSha256 []by
 	return user_id, err
 }
 
+const countPublishedVersionsByUser = `-- name: CountPublishedVersionsByUser :one
+SELECT count(*) FROM agent_versions av
+JOIN agents a ON a.id = av.agent_id
+JOIN handles h ON h.id = a.namespace_id
+WHERE h.id = $1 AND h.kind = 'user' AND a.visibility = 'public' AND av.status = 'published'
+`
+
+// Published public versions under a user's PERSONAL namespace (§12.7: the
+// deletion chooser needs to know whether consumers depend on them).
+func (q *Queries) CountPublishedVersionsByUser(ctx context.Context, id uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countPublishedVersionsByUser, id)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createEmailVerification = `-- name: CreateEmailVerification :exec
 INSERT INTO email_verifications (token_sha256, user_id, expires_at) VALUES ($1, $2, $3)
 `
@@ -245,12 +261,95 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow
 	return i, err
 }
 
+const listPersonalNamespaceAgents = `-- name: ListPersonalNamespaceAgents :many
+SELECT a.id, a.name, a.visibility, a.latest_published_version_id
+FROM agents a JOIN handles h ON h.id = a.namespace_id
+WHERE h.id = $1 AND h.kind = 'user'
+`
+
+type ListPersonalNamespaceAgentsRow struct {
+	ID                       uuid.UUID  `json:"id"`
+	Name                     string     `json:"name"`
+	Visibility               string     `json:"visibility"`
+	LatestPublishedVersionID *uuid.UUID `json:"latest_published_version_id"`
+}
+
+func (q *Queries) ListPersonalNamespaceAgents(ctx context.Context, id uuid.UUID) ([]ListPersonalNamespaceAgentsRow, error) {
+	rows, err := q.db.Query(ctx, listPersonalNamespaceAgents, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPersonalNamespaceAgentsRow
+	for rows.Next() {
+		var i ListPersonalNamespaceAgentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Visibility,
+			&i.LatestPublishedVersionID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markEmailVerified = `-- name: MarkEmailVerified :exec
 UPDATE users SET email_verified_at = now(), updated_at = now() WHERE id = $1
 `
 
 func (q *Queries) MarkEmailVerified(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, markEmailVerified, id)
+	return err
+}
+
+const pseudonymizeUser = `-- name: PseudonymizeUser :exec
+UPDATE users SET
+  email = $2,
+  email_verified_at = NULL,
+  display_name = 'deleted user',
+  password_hash = NULL,
+  totp_secret_enc = NULL,
+  totp_enabled = false,
+  state = 'deleted',
+  deleted_tombstone = $3,
+  updated_at = now()
+WHERE id = $1
+`
+
+type PseudonymizeUserParams struct {
+	ID               uuid.UUID `json:"id"`
+	Email            string    `json:"email"`
+	DeletedTombstone []byte    `json:"deleted_tombstone"`
+}
+
+// GDPR erasure (§12.7): PII is purged, the row survives so audit events and
+// immutable published content keep a stable (now opaque) actor id. The
+// tombstone keeps only a salted hash of the email for abuse-recurrence
+// detection — never the address itself.
+func (q *Queries) PseudonymizeUser(ctx context.Context, arg PseudonymizeUserParams) error {
+	_, err := q.db.Exec(ctx, pseudonymizeUser, arg.ID, arg.Email, arg.DeletedTombstone)
+	return err
+}
+
+const releaseHandle = `-- name: ReleaseHandle :exec
+UPDATE handles SET handle = $2, reserved = true WHERE id = $1
+`
+
+type ReleaseHandleParams struct {
+	ID     uuid.UUID `json:"id"`
+	Handle string    `json:"handle"`
+}
+
+// The handle is retired, not recycled: renaming it to a reserved sentinel
+// keeps the global namespace free of impersonation of a deleted account.
+func (q *Queries) ReleaseHandle(ctx context.Context, arg ReleaseHandleParams) error {
+	_, err := q.db.Exec(ctx, releaseHandle, arg.ID, arg.Handle)
 	return err
 }
 

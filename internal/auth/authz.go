@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -84,6 +85,31 @@ type Principal struct {
 	// SessionID / PATID identify the credential for audit.
 	SessionID uuid.UUID
 	PATID     uuid.UUID
+	// SSOFresh maps org id → the moment SSO was last asserted for this
+	// session (§12.4 enforced SSO; from sessions.sso_tags). Sessions only.
+	SSOFresh map[uuid.UUID]time.Time
+	// PATOrgID is the org a PAT is bound to (pats.org_id): a PAT minted under
+	// an SSO-fresh session (§12.4). uuid.Nil for personal PATs and sessions.
+	PATOrgID uuid.UUID
+}
+
+// SSOSatisfied reports whether the caller meets an org's enforced-SSO
+// requirement (§12.4): a session must carry an sso tag for the org refreshed
+// within maxAge; a PAT must be bound to the org. Anonymous callers and
+// non-enforcing orgs are decided by the RBAC chokepoint, not here.
+func (p *Principal) SSOSatisfied(orgID uuid.UUID, maxAge time.Duration) bool {
+	if p == nil {
+		return false
+	}
+	switch p.Via {
+	case "pat":
+		return p.PATOrgID == orgID
+	case "session":
+		ts, ok := p.SSOFresh[orgID]
+		return ok && time.Since(ts) <= maxAge
+	default:
+		return false
+	}
 }
 
 // Role returns the caller's role in org (RoleNone when absent).

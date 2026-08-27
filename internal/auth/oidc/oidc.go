@@ -1,0 +1,143 @@
+// Package oidc implements the OpenID Connect Relying Party side of enterprise
+// SSO (§12.4): authorization-code flow with PKCE, issuer pinning (the
+// discovery document's issuer must match the configured issuer), and
+// email_verified respected. Built on github.com/coreos/go-oidc/v3 and
+// golang.org/x/oauth2 (Appendix B: both active).
+package oidc
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	coreoidc "github.com/coreos/go-oidc/v3/oidc"
+	"golang.org/x/oauth2"
+)
+
+// Config is the per-org OIDC connection configuration (stored in
+// sso_connections.config; the client secret is sealed at rest by the caller).
+type Config struct {
+	Issuer       string   `json:"issuer"`
+	ClientID     string   `json:"clientId"`
+	ClientSecret string   `json:"clientSecret,omitempty"`
+	RedirectURL  string   `json:"redirectUrl,omitempty"`
+	Scopes       []string `json:"scopes,omitempty"`
+}
+
+// RP is a configured Relying Party for one org connection.
+type RP struct {
+	provider *coreoidc.Provider
+	oauth    *oauth2.Config
+	verifier *coreoidc.IDTokenVerifier
+	cfg      Config
+}
+
+// Claims is the subset of ID-token claims the JIT flow consumes.
+type Claims struct {
+	Subject       string
+	Email         string
+	EmailVerified bool
+	Issuer        string
+}
+
+// New builds the RP. coreoidc.NewProvider performs discovery and pins the
+// issuer: it returns an error when the discovery document's issuer differs
+// from cfg.Issuer (issuer pinning, §12.4). Pass a context carrying a custom
+// *http.Client via coreoidc.ClientContext to reach a private/test IdP.
+func New(ctx context.Context, cfg Config, redirectURL string) (*RP, error) {
+	if cfg.Issuer == "" || cfg.ClientID == "" {
+		return nil, fmt.Errorf("oidc: issuer and clientId are required")
+	}
+	provider, err := coreoidc.NewProvider(ctx, cfg.Issuer)
+	if err != nil {
+		return nil, fmt.Errorf("oidc: provider discovery/issuer pin: %w", err)
+	}
+	scopes := cfg.Scopes
+	if len(scopes) == 0 {
+		scopes = []string{coreoidc.ScopeOpenID, "email", "profile"}
+	}
+	rURL := redirectURL
+	if rURL == "" {
+		rURL = cfg.RedirectURL
+	}
+	oauthCfg := &oauth2.Config{
+		ClientID:     cfg.ClientID,
+		ClientSecret: cfg.ClientSecret,
+		Endpoint:     provider.Endpoint(),
+		RedirectURL:  rURL,
+		Scopes:       scopes,
+	}
+	return &RP{
+		provider: provider,
+		oauth:    oauthCfg,
+		verifier: provider.Verifier(&coreoidc.Config{ClientID: cfg.ClientID}),
+		cfg:      cfg,
+	}, nil
+}
+
+// AuthURL returns the IdP authorization URL for an auth-code + PKCE flow. The
+// caller must persist state, nonce, and verifier (in a short-lived sealed
+// cookie or server-side) and supply them to Exchange.
+func (rp *RP) AuthURL(state, nonce, verifier string) string {
+	return rp.oauth.AuthCodeURL(state,
+		oauth2.AccessTypeOffline,
+		oauth2.S256ChallengeOption(verifier),
+		coreoidc.Nonce(nonce),
+	)
+}
+
+// Exchange completes the flow: it exchanges the code (sending the PKCE
+// verifier), extracts and verifies the ID token (signature, issuer, audience,
+// expiry), checks the nonce, and returns the claims. email_verified is
+// surfaced verbatim for the JIT decision (§12.4, T-12).
+func (rp *RP) Exchange(ctx context.Context, code, verifier, expectedNonce string) (*Claims, error) {
+	tok, err := rp.oauth.Exchange(ctx, code, oauth2.VerifierOption(verifier))
+	if err != nil {
+		return nil, fmt.Errorf("oidc: code exchange: %w", err)
+	}
+	rawID, ok := tok.Extra("id_token").(string)
+	if !ok || rawID == "" {
+		return nil, fmt.Errorf("oidc: token response has no id_token")
+	}
+	idToken, err := rp.verifier.Verify(ctx, rawID)
+	if err != nil {
+		return nil, fmt.Errorf("oidc: id_token verification: %w", err)
+	}
+	if expectedNonce != "" && idToken.Nonce != expectedNonce {
+		return nil, fmt.Errorf("oidc: id_token nonce mismatch")
+	}
+	var raw struct {
+		Sub           string `json:"sub"`
+		Email         string `json:"email"`
+		EmailVerified any    `json:"email_verified"`
+	}
+	if err := idToken.Claims(&raw); err != nil {
+		return nil, fmt.Errorf("oidc: decode claims: %w", err)
+	}
+	c := &Claims{
+		Subject:       idToken.Subject,
+		Email:         strings.ToLower(strings.TrimSpace(raw.Email)),
+		EmailVerified: asBool(raw.EmailVerified),
+		Issuer:        idToken.Issuer,
+	}
+	if c.Subject == "" {
+		c.Subject = raw.Sub
+	}
+	if c.Subject == "" {
+		return nil, fmt.Errorf("oidc: id_token has no subject")
+	}
+	return c, nil
+}
+
+// asBool tolerates providers that encode email_verified as a JSON bool or a
+// string ("true"/"false") — both occur in the wild.
+func asBool(v any) bool {
+	switch x := v.(type) {
+	case bool:
+		return x
+	case string:
+		return strings.EqualFold(x, "true")
+	default:
+		return false
+	}
+}

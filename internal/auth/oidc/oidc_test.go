@@ -1,0 +1,158 @@
+package oidc
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"encoding/base64"
+	"encoding/json"
+	"math/big"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	coreoidc "github.com/coreos/go-oidc/v3/oidc"
+	"github.com/coreos/go-oidc/v3/oidc/oidctest"
+)
+
+// fakeIDP is an in-process OIDC provider: discovery + JWKS + a token endpoint
+// that mints a signed ID token (DEV-009 pattern).
+type fakeIDP struct {
+	srv            *httptest.Server
+	key            *rsa.PrivateKey
+	keyID          string
+	clientID       string
+	sub            string
+	email          string
+	emailVerified  bool
+	nonce          string
+	code           string
+	issuerOverride string // discovery reports this issuer (for issuer-pin test)
+}
+
+func newFakeIDP(t *testing.T) *fakeIDP {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	idp := &fakeIDP{
+		key: key, keyID: "test-key-1", clientID: "client-abc",
+		sub: "idp-subject-1", email: "person@acme.example", emailVerified: true,
+		nonce: "nonce-xyz", code: "auth-code-1",
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
+		iss := idp.srv.URL
+		if idp.issuerOverride != "" {
+			iss = idp.issuerOverride
+		}
+		writeJSON(w, map[string]any{
+			"issuer":                                iss,
+			"authorization_endpoint":                idp.srv.URL + "/authorize",
+			"token_endpoint":                        idp.srv.URL + "/token",
+			"jwks_uri":                              idp.srv.URL + "/jwks",
+			"id_token_signing_alg_values_supported": []string{"RS256"},
+			"response_types_supported":              []string{"code"},
+			"subject_types_supported":               []string{"public"},
+		})
+	})
+	mux.HandleFunc("/jwks", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, jwksFor(key, idp.keyID))
+	})
+	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		if r.FormValue("code") != idp.code {
+			http.Error(w, "bad code", http.StatusBadRequest)
+			return
+		}
+		claims := map[string]any{
+			"iss": idp.srv.URL, "aud": idp.clientID, "sub": idp.sub,
+			"iat": time.Now().Unix(), "exp": time.Now().Add(time.Hour).Unix(),
+			"nonce": idp.nonce, "email": idp.email, "email_verified": idp.emailVerified,
+		}
+		cb, _ := json.Marshal(claims)
+		idToken := oidctest.SignIDToken(idp.key, idp.keyID, "RS256", string(cb))
+		writeJSON(w, map[string]any{
+			"access_token": "at-1", "token_type": "Bearer", "expires_in": 3600, "id_token": idToken,
+		})
+	})
+	idp.srv = httptest.NewServer(mux)
+	t.Cleanup(idp.srv.Close)
+	return idp
+}
+
+func writeJSON(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func jwksFor(key *rsa.PrivateKey, kid string) map[string]any {
+	n := base64.RawURLEncoding.EncodeToString(key.N.Bytes())
+	e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.E)).Bytes())
+	return map[string]any{"keys": []map[string]any{
+		{"kty": "RSA", "kid": kid, "alg": "RS256", "use": "sig", "n": n, "e": e},
+	}}
+}
+
+func (idp *fakeIDP) ctx() context.Context {
+	return coreoidc.ClientContext(context.Background(), idp.srv.Client())
+}
+
+func TestOIDC_ExchangeCreatesClaims(t *testing.T) {
+	idp := newFakeIDP(t)
+	rp, err := New(idp.ctx(), Config{Issuer: idp.srv.URL, ClientID: idp.clientID}, idp.srv.URL+"/callback")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	// AuthURL must carry PKCE + nonce.
+	url := rp.AuthURL("state-1", idp.nonce, "verifier-abcdefabcdefabcdefabcdefabcdef1234")
+	if !strings.Contains(url, "code_challenge=") || !strings.Contains(url, "nonce=") {
+		t.Fatalf("auth url missing pkce/nonce: %s", url)
+	}
+	claims, err := rp.Exchange(idp.ctx(), idp.code, "verifier-abcdefabcdefabcdefabcdefabcdef1234", idp.nonce)
+	if err != nil {
+		t.Fatalf("Exchange: %v", err)
+	}
+	if claims.Subject != idp.sub || claims.Email != idp.email || !claims.EmailVerified {
+		t.Fatalf("unexpected claims: %+v", claims)
+	}
+}
+
+func TestOIDC_IssuerPinning(t *testing.T) {
+	idp := newFakeIDP(t)
+	idp.issuerOverride = "https://evil.example/issuer"
+	// Discovery advertises a different issuer than the one we pin → New fails.
+	if _, err := New(idp.ctx(), Config{Issuer: idp.srv.URL, ClientID: idp.clientID}, idp.srv.URL+"/callback"); err == nil {
+		t.Fatal("issuer mismatch must fail provider construction (issuer pinning)")
+	}
+}
+
+func TestOIDC_NonceMismatchRejected(t *testing.T) {
+	idp := newFakeIDP(t)
+	rp, err := New(idp.ctx(), Config{Issuer: idp.srv.URL, ClientID: idp.clientID}, idp.srv.URL+"/callback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rp.Exchange(idp.ctx(), idp.code, "verifier-abcdefabcdefabcdefabcdefabcdef1234", "wrong-nonce"); err == nil {
+		t.Fatal("nonce mismatch must be rejected")
+	}
+}
+
+func TestOIDC_EmailVerifiedSurfaced(t *testing.T) {
+	idp := newFakeIDP(t)
+	idp.emailVerified = false
+	rp, err := New(idp.ctx(), Config{Issuer: idp.srv.URL, ClientID: idp.clientID}, idp.srv.URL+"/callback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims, err := rp.Exchange(idp.ctx(), idp.code, "verifier-abcdefabcdefabcdefabcdefabcdef1234", idp.nonce)
+	if err != nil {
+		t.Fatalf("Exchange: %v", err)
+	}
+	if claims.EmailVerified {
+		t.Fatal("email_verified=false must be surfaced (respected by the caller)")
+	}
+}

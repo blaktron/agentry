@@ -21,6 +21,1053 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create an individual account (email+password, §12.1). */
+        post: operations["register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/verify-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm an email address with the mailed token. */
+        post: operations["verifyEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Password (+TOTP when enabled) login; sets the session cookie. */
+        post: operations["login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke the current session. */
+        post: operations["logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/2fa/totp/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Begin TOTP enrollment; returns the provisioning secret. */
+        post: operations["totpSetup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/2fa/totp/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm TOTP enrollment with a current code. */
+        post: operations["totpVerify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/user": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The authenticated user. */
+        get: operations["getCurrentUser"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update profile fields. */
+        patch: operations["updateCurrentUser"];
+        trace?: never;
+    };
+    "/user/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Erase the caller's account (GDPR flow, §12.7).
+         * @description Purges personal data and pseudonymizes the account. Published public versions are not deleted — they are yanked so already-installed copies keep verifying — or you can transfer the agents to an org first and then delete.
+         */
+        post: operations["deleteCurrentUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{handle}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Public profile for a user handle. */
+        get: operations["getUserProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/user/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the caller's personal access tokens (metadata only). */
+        get: operations["listTokens"];
+        put?: never;
+        /** Mint a PAT. The secret is returned exactly once (D-22). */
+        post: operations["createToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/user/tokens/{tokenId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a PAT immediately (§12.3). */
+        delete: operations["revokeToken"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create an organization; caller becomes owner. */
+        post: operations["createOrg"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Organization profile (public fields; settings for admins). */
+        get: operations["getOrg"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update org settings (admin+). */
+        patch: operations["updateOrg"];
+        trace?: never;
+    };
+    "/orgs/{org}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List members with roles (members can view). */
+        get: operations["listOrgMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/members/{handle}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Add a member or change a role (admin+; owner grants owner/admin). */
+        put: operations["setOrgMember"];
+        post?: never;
+        /** Remove a member (admin+; owners removable only by owners). */
+        delete: operations["removeOrgMember"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/teams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List teams (members can view). */
+        get: operations["listTeams"];
+        put?: never;
+        /** Create a team (admin+). */
+        post: operations["createTeam"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/teams/{team}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a team (admin+). */
+        delete: operations["deleteTeam"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/teams/{team}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List team members (org members can view). */
+        get: operations["listTeamMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/teams/{team}/members/{handle}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Add an org member to a team (admin+). */
+        put: operations["addTeamMember"];
+        post?: never;
+        /** Remove a member from a team (admin+). */
+        delete: operations["removeTeamMember"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Org audit events, newest first (admin+; cursor paged, §12.6). */
+        get: operations["listOrgAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List agents in a namespace (public ones for everyone). */
+        get: operations["listAgents"];
+        put?: never;
+        /** Create an agent and its hosted git repository (§9.2). */
+        post: operations["createAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{ns}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Agent metadata (public agents readable by anyone). */
+        get: operations["getAgent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update agent settings (maintain). */
+        patch: operations["updateAgent"];
+        trace?: never;
+    };
+    "/agents/{ns}/{name}/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List explicit grants (maintain). */
+        get: operations["listAgentGrants"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{ns}/{name}/grants/user/{handle}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Grant a user a per-agent role (maintain). */
+        put: operations["setAgentUserGrant"];
+        post?: never;
+        /** Remove a user grant (maintain). */
+        delete: operations["removeAgentUserGrant"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{ns}/{name}/grants/team/{team}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Grant an org team a per-agent role (maintain; org agents only). */
+        put: operations["setAgentTeamGrant"];
+        post?: never;
+        /** Remove a team grant (maintain). */
+        delete: operations["removeAgentTeamGrant"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{ns}/{name}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Version history, newest first. */
+        get: operations["listVersions"];
+        put?: never;
+        /**
+         * Submit a version for publication (§7 state machine entry).
+         * @description Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests — client packing is never trusted).
+         */
+        post: operations["submitVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{ns}/{name}/versions/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One version with its state and archive identity. */
+        get: operations["getVersionInfo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{ns}/{name}/versions/{version}/manifest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The validated manifest (canonical JSON, §4.2). */
+        get: operations["getVersionManifest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{ns}/{name}/versions/{version}/yank": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Yank a published version (§5.5 semantics; publish permission). */
+        post: operations["yankVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{ns}/{name}/versions/{version}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download the release archive (§9.4; counts an install). */
+        get: operations["downloadVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resolve ns/name@range to a concrete version (§9.4 step 1). */
+        get: operations["resolveRef"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{ns}/{name}/versions/{version}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The scan report for a version (findings, ruleset, verdict, §8). */
+        get: operations["getVersionReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{ns}/{name}/versions/{version}/attestation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed DSSE attestation (§8.8), verbatim. */
+        get: operations["getVersionAttestation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/review-queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pending review items (platform staff or org security_reviewer). */
+        get: operations["listReviewQueue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/review-items/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One review item with its findings bundle. */
+        get: operations["getReviewItem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/review-items/{id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve or reject a version under review (not its author, §12.2). */
+        post: operations["decideReviewItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/findings/{id}/verdict": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm or dismiss a finding (§8.5 dismissals). */
+        post: operations["setFindingVerdict"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The read-only platform baseline policy (§8.6). */
+        get: operations["getPlatformPolicy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The org policy overlay (admin+). */
+        get: operations["getOrgPolicy"];
+        /** Set the org policy overlay (owner; tighten-only, §8.6). */
+        put: operations["setOrgPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/sso/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the org's SSO connections (owner, §12.4). */
+        get: operations["listSsoConnections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/sso/connections/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Create or update a SAML/OIDC connection (owner, §12.4). */
+        put: operations["putSsoConnection"];
+        post?: never;
+        /** Delete a connection (owner, §12.4). */
+        delete: operations["deleteSsoConnection"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/sso/saml/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** SP SAML metadata for this org's connection (§12.4). */
+        get: operations["getSamlMetadata"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/sso/saml/acs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** SAML Assertion Consumer Service — consume a signed assertion (§12.4). */
+        post: operations["samlAcs"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/sso/oidc/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Begin the OIDC auth-code + PKCE flow (redirect to IdP, §12.4). */
+        get: operations["oidcStart"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/sso/oidc/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** OIDC redirect URI — exchange the code and establish a session (§12.4). */
+        get: operations["oidcCallback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/scim/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List active SCIM provisioning tokens (owner, §12.5). */
+        get: operations["listScimTokens"];
+        put?: never;
+        /** Mint a SCIM bearer token (owner, §12.5). */
+        post: operations["createScimToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/scim/tokens/{tokenId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a SCIM token (owner, §12.5). */
+        delete: operations["revokeScimToken"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List webhook endpoints (admin+, §9.3). */
+        get: operations["listWebhooks"];
+        put?: never;
+        /** Create a webhook endpoint (admin+, §9.3). */
+        post: operations["createWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/webhooks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a webhook endpoint (admin+, §9.3). */
+        get: operations["getWebhook"];
+        put?: never;
+        post?: never;
+        /** Delete a webhook endpoint (admin+, §9.3). */
+        delete: operations["deleteWebhook"];
+        options?: never;
+        head?: never;
+        /** Update a webhook endpoint (admin+, §9.3). */
+        patch: operations["updateWebhook"];
+        trace?: never;
+    };
+    "/orgs/{org}/webhooks/{id}/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recent delivery attempts for an endpoint (admin+, §9.3). */
+        get: operations["listWebhookDeliveries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/domain-claims": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List domain claims (admin+, §12.4). */
+        get: operations["listDomainClaims"];
+        put?: never;
+        /** Start a domain claim; returns the DNS TXT challenge (admin+, §12.4). */
+        post: operations["createDomainClaim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/domain-claims/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check the DNS TXT record and mark verified (admin+, §12.4). */
+        post: operations["verifyDomainClaim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/audit/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start an async NDJSON audit export (admin+, §12.6). */
+        post: operations["createAuditExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/audit/exports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Poll an audit export's status and download reference (admin+, §12.6). */
+        get: operations["getAuditExport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/agents/{ns}/{name}/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Quarantine, block, or reinstate an agent (platform staff, §7). */
+        post: operations["platformAgentAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{ns}/{name}/abuse-reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Report malicious or abusive content (authed, rate-limited §8.7). */
+        post: operations["reportAbuse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/abuse-reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Open abuse reports (platform staff). */
+        get: operations["listAbuseReports"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/advisories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Published advisories affecting an agent (§8.7). */
+        get: operations["listAdvisories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Full-text search over public agents with facets (§10.4). */
+        get: operations["searchAgents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{ns}/{name}/readme": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The agent README rendered to sanitized HTML (§10.3, D-11).
+         * @description Markdown is rendered server-side through a strict allowlist: no raw HTML, no user styles, no SVG, external links rewritten, and invisible or bidi Unicode replaced with visible placeholders.
+         */
+        get: operations["getAgentReadme"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -43,6 +1090,319 @@ export interface components {
             /** @description Oldest supported agentry CLI version (§11 distribution note). */
             minCLIVersion?: string;
         };
+        RegisterRequest: {
+            handle: string;
+            /** Format: email */
+            email: string;
+            password: string;
+            displayName?: string;
+        };
+        LoginRequest: {
+            /** @description Handle or email. */
+            login: string;
+            password: string;
+            /** @description Required when the account has TOTP enabled. */
+            totpCode?: string;
+        };
+        LoginResult: {
+            user: components["schemas"]["User"];
+            /** @description Echo in X-Agentry-CSRF on cookie-authenticated mutations. */
+            csrfToken: string;
+        };
+        TotpSetupResult: {
+            /** @description Base32 TOTP secret (display once for authenticator apps). */
+            secret: string;
+            otpauthUrl: string;
+        };
+        User: {
+            /** Format: uuid */
+            id: string;
+            handle: string;
+            email: string;
+            displayName: string;
+            emailVerified: boolean;
+            totpEnabled: boolean;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        PublicUser: {
+            handle: string;
+            displayName: string;
+        };
+        Pat: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @description First 12 characters, for display and lookup (§4.2 pats). */
+            prefix: string;
+            scopes: components["schemas"]["Scope"][];
+            /** @description Set when org-bound (enforced SSO, §12.4). */
+            orgHandle?: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            lastUsedAt?: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        PatCreated: components["schemas"]["Pat"] & {
+            /** @description The full secret. Shown exactly once. */
+            token: string;
+        };
+        CreateTokenRequest: {
+            name: string;
+            scopes: components["schemas"]["Scope"][];
+            /**
+             * Format: date-time
+             * @description Defaults to (and is capped at) the max PAT lifetime (§12.3).
+             */
+            expiresAt?: string;
+            /** @description Bind the token to this org (§12.4). Requires the current session to be SSO-fresh for the org; org-bound tokens are capped at 90 days and are the only tokens accepted against an enforced-SSO org's resources. */
+            orgHandle?: string;
+        };
+        /**
+         * @description PAT scopes (§12.3).
+         * @enum {string}
+         */
+        Scope: "repo:read" | "repo:write" | "agent:publish" | "agent:read" | "org:admin" | "review:act" | "audit:read" | "user:profile";
+        /**
+         * @description Org roles, ordered owner > admin > security_reviewer | member (§12.2).
+         * @enum {string}
+         */
+        OrgRole: "owner" | "admin" | "security_reviewer" | "member";
+        CreateOrgRequest: {
+            handle: string;
+            displayName: string;
+        };
+        Org: {
+            /** Format: uuid */
+            id: string;
+            handle: string;
+            displayName: string;
+            verifiedDomain?: string;
+            /** @description Present for org admins only. */
+            ssoRequired?: boolean;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        Membership: {
+            user: components["schemas"]["PublicUser"];
+            role: components["schemas"]["OrgRole"];
+            viaScim?: boolean;
+        };
+        Team: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+        };
+        AuditEvent: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            occurredAt: string;
+            /** @enum {string} */
+            actorKind: "user" | "pat" | "scim" | "system";
+            actorHandle?: string;
+            /** @description Registered action id (internal/audit/actions.go). */
+            action: string;
+            targetKind?: string;
+            /** Format: uuid */
+            targetId?: string;
+            detail?: {
+                [key: string]: unknown;
+            };
+        };
+        AuditPage: {
+            events: components["schemas"]["AuditEvent"][];
+            /** @description Opaque; absent on the last page. */
+            nextCursor?: string;
+        };
+        /**
+         * @description Supported agent kinds (§1.4).
+         * @enum {string}
+         */
+        AgentKind: "skill" | "prompt-agent" | "mcp-server";
+        /**
+         * @description Per-agent grant levels (§12.2), read < write < maintain < publish.
+         * @enum {string}
+         */
+        AgentRole: "read" | "write" | "maintain" | "publish";
+        CreateAgentRequest: {
+            /** @description User or org handle owning the agent. */
+            namespace: string;
+            name: string;
+            kind: components["schemas"]["AgentKind"];
+            /**
+             * @default private
+             * @enum {string}
+             */
+            visibility: "public" | "private";
+            summary?: string;
+        };
+        Agent: {
+            /** Format: uuid */
+            id: string;
+            namespace: string;
+            name: string;
+            kind: components["schemas"]["AgentKind"];
+            /** @enum {string} */
+            visibility: "public" | "private";
+            summary: string;
+            defaultBranch: string;
+            /** @description Clone URL for the hosted repository (§6.1). */
+            gitHttpUrl: string;
+            /** @enum {string} */
+            quarantineState: "none" | "quarantined" | "blocked";
+            /** @description Present for callers with maintain (§6.3 toggle). */
+            autoPublishTags?: boolean;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AgentGrant: {
+            /** @enum {string} */
+            kind: "user" | "team";
+            /** @description User handle or team slug. */
+            grantee: string;
+            role: components["schemas"]["AgentRole"];
+        };
+        /**
+         * @description Publication state machine states (§7).
+         * @enum {string}
+         */
+        VersionStatus: "submitted" | "scanning" | "needs_review" | "approved" | "published" | "rejected" | "yanked" | "quarantined" | "blocked";
+        AgentVersion: {
+            /** Format: uuid */
+            id: string;
+            version: string;
+            status: components["schemas"]["VersionStatus"];
+            statusReason?: string;
+            /** @enum {string} */
+            channel: "stable" | "beta";
+            /** @enum {string} */
+            source: "git-tag" | "cli-upload";
+            commitSha?: string;
+            /** @description sha256:<hex> — the release identity (D-15). */
+            archiveDigest?: string;
+            /** Format: int64 */
+            archiveSize?: number;
+            /** @description The declared capability block (§5.4). */
+            capabilities?: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            publishedAt?: string;
+            /** Format: date-time */
+            yankedAt?: string;
+            yankReason?: string;
+        };
+        ResolveResult: {
+            namespace: string;
+            name: string;
+            version: string;
+            digest: string;
+            /** @description Where to fetch the archive (CDN on SaaS; API path self-host). */
+            archiveUrl: string;
+            /** @description DSSE attestation location (M4+; absent until signing ships). */
+            attestationUrl?: string;
+            manifest: {
+                [key: string]: unknown;
+            };
+            /** @description True only for exact pins of yanked versions (§5.5). */
+            yanked: boolean;
+        };
+        ScanFinding: {
+            /** Format: uuid */
+            id?: string;
+            scanner: string;
+            /** @enum {string} */
+            severity: "info" | "low" | "medium" | "high" | "critical";
+            /** @enum {string} */
+            confidence: "low" | "medium" | "high";
+            title: string;
+            filePath?: string;
+            lineStart?: number;
+            lineEnd?: number;
+            excerpt?: string;
+            detail?: {
+                [key: string]: unknown;
+            };
+            /** @enum {string} */
+            verdict: "open" | "confirmed" | "dismissed_false_positive" | "dismissed_accepted_risk";
+        };
+        ScanReport: {
+            /** Format: uuid */
+            scanRunId?: string;
+            versionStatus: components["schemas"]["VersionStatus"];
+            rulesetVersion?: string;
+            reportDigest?: string;
+            judgeModel?: string;
+            scanStatus?: string;
+            findingCounts?: {
+                [key: string]: number;
+            };
+            findings: components["schemas"]["ScanFinding"][];
+        };
+        ReviewItem: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            queue: "platform" | "org";
+            /** @enum {string} */
+            state: "pending" | "approved" | "rejected";
+            version: string;
+            agent: string;
+            namespace: string;
+            /** Format: date-time */
+            createdAt?: string;
+        };
+        ReviewBundle: {
+            item: components["schemas"]["ReviewItem"];
+            findings: components["schemas"]["ScanFinding"][];
+        };
+        AbuseReport: {
+            /** Format: uuid */
+            id: string;
+            namespace: string;
+            agent: string;
+            version?: string;
+            category: string;
+            detail: string;
+            /** @enum {string} */
+            state: "open" | "triaged" | "actioned" | "dismissed";
+            /** Format: date-time */
+            createdAt: string;
+        };
+        Advisory: {
+            /** Format: uuid */
+            id: string;
+            affectedVersions: string;
+            severity: string;
+            summary: string;
+            detail?: string;
+            /** Format: date-time */
+            publishedAt?: string;
+        };
+        SearchResults: {
+            results: components["schemas"]["SearchHit"][];
+            /** @description Facet counts keyed by facet name then value. */
+            facets?: {
+                [key: string]: {
+                    [key: string]: number;
+                };
+            };
+            total?: number;
+        };
+        SearchHit: {
+            namespace: string;
+            name: string;
+            kind: components["schemas"]["AgentKind"];
+            summary: string;
+            installs30d?: number;
+            /** @enum {string} */
+            quarantineState?: "none" | "quarantined" | "blocked";
+        };
         /** @description RFC 9457 problem details (D-10). */
         Problem: {
             /**
@@ -61,6 +1421,91 @@ export interface components {
                 message: string;
             }[];
         };
+        SsoConnection: {
+            /** @enum {string} */
+            kind: "saml" | "oidc";
+            enabled: boolean;
+            /** @description Non-secret connection settings (client secrets are redacted). */
+            config?: {
+                [key: string]: unknown;
+            };
+        };
+        SsoConnectionInput: {
+            enabled: boolean;
+            /** @description SAML (idpMetadataXml or idpEntityId+idpCertificatePem+idpSsoUrl) or OIDC (issuer, clientId, clientSecret) settings. */
+            config: {
+                [key: string]: unknown;
+            };
+        };
+        ScimToken: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            expiresAt?: string;
+        };
+        ScimTokenCreated: {
+            /** Format: uuid */
+            id: string;
+            /** @description The SCIM bearer token; shown once. */
+            token: string;
+            /** Format: date-time */
+            expiresAt?: string;
+        };
+        WebhookEndpoint: {
+            /** Format: uuid */
+            id: string;
+            url: string;
+            events: string[];
+            active: boolean;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        WebhookEndpointCreated: components["schemas"]["WebhookEndpoint"] & {
+            /** @description The HMAC signing secret; shown once. */
+            secret: string;
+        };
+        WebhookInput: {
+            /** @description HTTPS endpoint (§9.3 requires https). */
+            url: string;
+            events: string[];
+        };
+        WebhookDelivery: {
+            /** Format: uuid */
+            id: string;
+            eventType: string;
+            attempt: number;
+            statusCode?: number;
+            error?: string;
+            /** Format: date-time */
+            deliveredAt?: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        DomainClaim: {
+            domain: string;
+            verificationToken: string;
+            /** @description The DNS TXT record name to create. */
+            recordName?: string;
+            /** @description The DNS TXT record value to publish. */
+            recordValue?: string;
+            verified: boolean;
+            /** Format: date-time */
+            verifiedAt?: string;
+        };
+        AuditExport: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "pending" | "running" | "completed" | "failed";
+            eventCount?: number;
+            /** @description Blob-store reference; presign is a deployment concern. */
+            downloadPath?: string;
+            error?: string;
+            /** Format: date-time */
+            createdAt?: string;
+        };
     };
     responses: {
         /** @description Error following RFC 9457. */
@@ -73,7 +1518,16 @@ export interface components {
             };
         };
     };
-    parameters: never;
+    parameters: {
+        VersionString: string;
+        Namespace: string;
+        AgentName: string;
+        Handle: string;
+        OrgHandle: string;
+        TeamSlug: string;
+        SsoKind: "saml" | "oidc";
+        WebhookID: string;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
@@ -96,6 +1550,2002 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Meta"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    register: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Account created; verification email queued. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    verifyEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Email verified. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Session established. The response sets the `agentry_session` cookie; `csrfToken` must be echoed in the `X-Agentry-CSRF` header on all cookie-authenticated mutations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResult"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    totpSetup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Enrollment secret (confirm with /auth/2fa/totp/verify). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TotpSetupResult"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    totpVerify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    code: string;
+                };
+            };
+        };
+        responses: {
+            /** @description TOTP enabled. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getCurrentUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current user. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateCurrentUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    displayName?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated user. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteCurrentUser: {
+        parameters: {
+            query?: {
+                /** @description What to do with published public versions (default yank). */
+                publishedContent?: "yank" | "transfer";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Account erased; session revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getUserProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                handle: components["parameters"]["Handle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Public profile. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicUser"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listTokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tokens. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Pat"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description Token created; `token` appears only in this response. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatCreated"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    revokeToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tokenId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateOrgRequest"];
+            };
+        };
+        responses: {
+            /** @description Organization created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Org"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Organization. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Org"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    displayName?: string;
+                    /** @description Enforce SSO for org resources (§12.4). Owner only. */
+                    ssoRequired?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated organization. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Org"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listOrgMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Members. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Membership"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    setOrgMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+                handle: components["parameters"]["Handle"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    role: components["schemas"]["OrgRole"];
+                };
+            };
+        };
+        responses: {
+            /** @description Membership set. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Membership"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    removeOrgMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+                handle: components["parameters"]["Handle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listTeams: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Teams. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    slug: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Team created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+                team: components["parameters"]["TeamSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listTeamMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+                team: components["parameters"]["TeamSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Team members. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicUser"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    addTeamMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+                team: components["parameters"]["TeamSlug"];
+                handle: components["parameters"]["Handle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Added. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    removeTeamMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+                team: components["parameters"]["TeamSlug"];
+                handle: components["parameters"]["Handle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listOrgAudit: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+                action?: string;
+            };
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Audit page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listAgents: {
+        parameters: {
+            query: {
+                namespace: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agents. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAgentRequest"];
+            };
+        };
+        responses: {
+            /** @description Agent created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agent. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    summary?: string;
+                    /** @enum {string} */
+                    visibility?: "public" | "private";
+                    autoPublishTags?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated agent. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listAgentGrants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Grants. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentGrant"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    setAgentUserGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+                handle: components["parameters"]["Handle"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    role: components["schemas"]["AgentRole"];
+                };
+            };
+        };
+        responses: {
+            /** @description Grant set. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    removeAgentUserGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+                handle: components["parameters"]["Handle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    setAgentTeamGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+                team: components["parameters"]["TeamSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    role: components["schemas"]["AgentRole"];
+                };
+            };
+        };
+        responses: {
+            /** @description Grant set. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    removeAgentTeamGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+                team: components["parameters"]["TeamSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Versions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentVersion"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    submitVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Existing repo tag vX.Y.Z. */
+                    tag: string;
+                };
+                "multipart/form-data": {
+                    /** Format: binary */
+                    archive: string;
+                    /** @description Client-computed sha256 digest to cross-check. */
+                    digest?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Version accepted into the pipeline. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentVersion"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getVersionInfo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+                version: components["parameters"]["VersionString"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Version. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentVersion"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getVersionManifest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+                version: components["parameters"]["VersionString"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Canonical manifest document. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    yankVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+                version: components["parameters"]["VersionString"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Yanked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    downloadVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+                version: components["parameters"]["VersionString"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The tar.zst archive (self-host streams directly). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zstd": string;
+                };
+            };
+            /** @description Redirect to the CDN object (SaaS). */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Version blocked by trust & safety (§7). */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    resolveRef: {
+        parameters: {
+            query: {
+                /** @description ns/name, ns/name@^1.2, ns/name@1.2.3, or ns/name@beta. */
+                ref: string;
+                channel?: "stable" | "beta";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resolution result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolveResult"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getVersionReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+                version: components["parameters"]["VersionString"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Scan report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanReport"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getVersionAttestation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+                version: components["parameters"]["VersionString"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description DSSE envelope. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description No attestation (unsigned/unpublished). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listReviewQueue: {
+        parameters: {
+            query: {
+                queue: "platform" | "org";
+                org?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Review items. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewItem"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getReviewItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Review bundle. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewBundle"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    decideReviewItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    decision: "approve" | "reject";
+                    rationale: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Decision recorded. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    setFindingVerdict: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    verdict: "confirmed" | "dismissed_false_positive" | "dismissed_accepted_risk";
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Verdict recorded. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getPlatformPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Baseline policy document. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getOrgPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Org policy document. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    setOrgPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Effective (merged) policy after the update. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listSsoConnections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Connections (secrets redacted). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SsoConnection"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    putSsoConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+                kind: components["parameters"]["SsoKind"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SsoConnectionInput"];
+            };
+        };
+        responses: {
+            /** @description Connection stored. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SsoConnection"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteSsoConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+                kind: components["parameters"]["SsoKind"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getSamlMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SP metadata XML. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/samlmetadata+xml": string;
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    samlAcs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SSO session established. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResult"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    oidcStart: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to the IdP authorization endpoint. */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    oidcCallback: {
+        parameters: {
+            query?: {
+                code?: string;
+                state?: string;
+            };
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SSO session established. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResult"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listScimTokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SCIM tokens (secret shown only at creation). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScimToken"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createScimToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    expiresInDays?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Token created; the token value is returned once. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScimTokenCreated"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    revokeScimToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+                tokenId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listWebhooks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Webhook endpoints. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookEndpoint"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookInput"];
+            };
+        };
+        responses: {
+            /** @description Endpoint created; the signing secret is returned once. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookEndpointCreated"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+                id: components["parameters"]["WebhookID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Endpoint. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookEndpoint"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+                id: components["parameters"]["WebhookID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+                id: components["parameters"]["WebhookID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    url?: string;
+                    events?: string[];
+                    active?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated endpoint. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookEndpoint"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listWebhookDeliveries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+                id: components["parameters"]["WebhookID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deliveries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookDelivery"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listDomainClaims: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Domain claims. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DomainClaim"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createDomainClaim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    domain: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Claim created with a verification challenge. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DomainClaim"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    verifyDomainClaim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    domain: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Verification result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DomainClaim"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createAuditExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description Optional action filter. */
+                    action?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Export job accepted. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditExport"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getAuditExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Export status. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditExport"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformAgentAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+                action: "quarantine" | "block" | "reinstate";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Action applied. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    reportAbuse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    category: "malicious_content" | "hidden_instructions" | "credential_theft" | "typosquat" | "spam" | "license" | "other";
+                    detail: string;
+                    version?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Report received and queued for triage. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listAbuseReports: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Open reports. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbuseReport"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listAdvisories: {
+        parameters: {
+            query: {
+                /** @description ns/name. */
+                affecting: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Advisories. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Advisory"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    searchAgents: {
+        parameters: {
+            query?: {
+                /** @description Free-text query; empty lists by popularity. */
+                q?: string;
+                kind?: components["schemas"]["AgentKind"];
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Search results with facet counts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResults"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getAgentReadme: {
+        parameters: {
+            query?: {
+                /** @description Version to render; defaults to the latest published. */
+                version?: string;
+            };
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sanitized HTML fragment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
                 };
             };
             default: components["responses"]["Problem"];

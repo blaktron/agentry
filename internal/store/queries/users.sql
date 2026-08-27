@@ -43,3 +43,38 @@ UPDATE email_verifications
 SET consumed_at = now()
 WHERE token_sha256 = $1 AND consumed_at IS NULL AND expires_at > now()
 RETURNING user_id;
+
+-- name: CountPublishedVersionsByUser :one
+-- Published public versions under a user's PERSONAL namespace (§12.7: the
+-- deletion chooser needs to know whether consumers depend on them).
+SELECT count(*) FROM agent_versions av
+JOIN agents a ON a.id = av.agent_id
+JOIN handles h ON h.id = a.namespace_id
+WHERE h.id = $1 AND h.kind = 'user' AND a.visibility = 'public' AND av.status = 'published';
+
+-- name: ListPersonalNamespaceAgents :many
+SELECT a.id, a.name, a.visibility, a.latest_published_version_id
+FROM agents a JOIN handles h ON h.id = a.namespace_id
+WHERE h.id = $1 AND h.kind = 'user';
+
+-- name: PseudonymizeUser :exec
+-- GDPR erasure (§12.7): PII is purged, the row survives so audit events and
+-- immutable published content keep a stable (now opaque) actor id. The
+-- tombstone keeps only a salted hash of the email for abuse-recurrence
+-- detection — never the address itself.
+UPDATE users SET
+  email = $2,
+  email_verified_at = NULL,
+  display_name = 'deleted user',
+  password_hash = NULL,
+  totp_secret_enc = NULL,
+  totp_enabled = false,
+  state = 'deleted',
+  deleted_tombstone = $3,
+  updated_at = now()
+WHERE id = $1;
+
+-- name: ReleaseHandle :exec
+-- The handle is retired, not recycled: renaming it to a reserved sentinel
+-- keeps the global namespace free of impersonation of a deleted account.
+UPDATE handles SET handle = $2, reserved = true WHERE id = $1;

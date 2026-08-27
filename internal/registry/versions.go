@@ -75,12 +75,18 @@ func (s *Service) SetPipeline(p Pipeline) { s.pipeline = p }
 // Transition moves a version to a new status with full §7 enforcement:
 // row lock, edge validation, audit, and latest-published maintenance.
 func (s *Service) Transition(ctx context.Context, versionID uuid.UUID, to Status, reason string, actorEvent audit.Event) error {
-	return s.st.WithTx(ctx, func(q *storegen.Queries) error {
+	var (
+		fromStatus Status
+		agentID    uuid.UUID
+		verStr     string
+	)
+	err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
 		row, err := q.GetVersionForUpdate(ctx, versionID)
 		if err != nil {
 			return fmt.Errorf("registry: lock version: %w", err)
 		}
 		from := Status(row.Status)
+		fromStatus, agentID, verStr = from, row.AgentID, row.Version
 		if !transitionAllowed(from, to) {
 			return fmt.Errorf("%w: %s → %s", ErrBadTransition, from, to)
 		}
@@ -109,6 +115,41 @@ func (s *Service) Transition(ctx context.Context, versionID uuid.UUID, to Status
 		e.Detail = map[string]any{"from": string(from), "to": string(to), "reason": reason, "version": row.Version}
 		return s.aud.Write(ctx, q, e)
 	})
+	if err != nil {
+		return err
+	}
+	// Post-commit webhook fan-out (§9.3). Best-effort: the sink logs its own
+	// errors and never affects the committed transition.
+	if s.eventSink != nil {
+		if event := transitionEvent(fromStatus, to); event != "" {
+			s.eventSink(ctx, agentID, event, map[string]any{
+				"version": verStr, "from": string(fromStatus), "to": string(to),
+			})
+		}
+	}
+	return nil
+}
+
+// transitionEvent maps a state-machine edge to the §9.3 webhook event, or ""
+// when the edge has no external event.
+func transitionEvent(from, to Status) string {
+	switch to {
+	case StatusPublished:
+		if from == StatusQuarantined {
+			return "agent.reinstated"
+		}
+		return "version.published"
+	case StatusRejected:
+		return "version.rejected"
+	case StatusNeedsReview:
+		return "version.needs_review"
+	case StatusYanked:
+		return "version.yanked"
+	case StatusQuarantined:
+		return "agent.quarantined"
+	default:
+		return ""
+	}
 }
 
 // SubmitInput carries one publication submission (§6.5). Workspace is a

@@ -79,6 +79,12 @@ type Auth struct {
 	SessionTTL time.Duration `yaml:"sessionTTL"`
 	// PATMaxTTL is the maximum PAT lifetime (§12.3: 1y, 90d org-bound).
 	PATMaxTTL time.Duration `yaml:"patMaxTTL"`
+	// PATOrgBoundMaxTTL caps org-bound PAT lifetime under enforced SSO
+	// (§12.3: 90 days).
+	PATOrgBoundMaxTTL time.Duration `yaml:"patOrgBoundMaxTTL"`
+	// SSOMaxAge is how fresh a session's SSO assertion must be to act on an
+	// enforced-SSO org's resources (§12.4, default 8h).
+	SSOMaxAge time.Duration `yaml:"ssoMaxAge"`
 	// CookieSecure marks session cookies Secure (default true outside dev).
 	CookieSecure bool `yaml:"cookieSecure"`
 	// SealingKey is a base64 32-byte key encrypting small secrets at rest
@@ -127,9 +133,11 @@ func Default() Config {
 		Git:     Git{DataDir: ".devdata/git"},
 		Log:     Log{Level: "info"},
 		Auth: Auth{
-			SessionTTL:   24 * time.Hour,
-			PATMaxTTL:    365 * 24 * time.Hour,
-			CookieSecure: false,
+			SessionTTL:        24 * time.Hour,
+			PATMaxTTL:         365 * 24 * time.Hour,
+			PATOrgBoundMaxTTL: 90 * 24 * time.Hour,
+			SSOMaxAge:         8 * time.Hour,
+			CookieSecure:      false,
 		},
 		Limits: Limits{
 			AuthedPerHour:     5000,
@@ -245,6 +253,12 @@ func applyEnv(c *Config) error {
 		return err
 	}
 	if err := dur("AGENTRY_AUTH_PAT_MAX_TTL", &c.Auth.PATMaxTTL); err != nil {
+		return err
+	}
+	if err := dur("AGENTRY_AUTH_PAT_ORG_BOUND_MAX_TTL", &c.Auth.PATOrgBoundMaxTTL); err != nil {
+		return err
+	}
+	if err := dur("AGENTRY_AUTH_SSO_MAX_AGE", &c.Auth.SSOMaxAge); err != nil {
 		return err
 	}
 	return nil

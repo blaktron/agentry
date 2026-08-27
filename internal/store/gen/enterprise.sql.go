@@ -374,6 +374,21 @@ func (q *Queries) FindOrgMemberByEmail(ctx context.Context, arg FindOrgMemberByE
 	return i, err
 }
 
+const getAgentOwnerOrg = `-- name: GetAgentOwnerOrg :one
+SELECT a.namespace_id AS org_id
+FROM agents a JOIN handles h ON h.id = a.namespace_id
+WHERE a.id = $1 AND h.kind = 'org'
+`
+
+// GetAgentOwnerOrg returns the owning org id when an agent's namespace is an
+// org (webhook fan-out is org-scoped; personal-namespace agents return no row).
+func (q *Queries) GetAgentOwnerOrg(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getAgentOwnerOrg, id)
+	var org_id uuid.UUID
+	err := row.Scan(&org_id)
+	return org_id, err
+}
+
 const getAuditExport = `-- name: GetAuditExport :one
 SELECT id, org_id, requested_by, status, action_filter, object_key, event_count, error, created_at, finished_at FROM audit_exports WHERE id = $1 AND org_id = $2
 `
@@ -718,12 +733,12 @@ WHERE org_id = $1 AND active = true AND $2::text = ANY(events)
 `
 
 type ListActiveWebhookEndpointsForEventParams struct {
-	OrgID   uuid.UUID `json:"org_id"`
-	Column2 string    `json:"column_2"`
+	OrgID uuid.UUID `json:"org_id"`
+	Event string    `json:"event"`
 }
 
 func (q *Queries) ListActiveWebhookEndpointsForEvent(ctx context.Context, arg ListActiveWebhookEndpointsForEventParams) ([]WebhookEndpoint, error) {
-	rows, err := q.db.Query(ctx, listActiveWebhookEndpointsForEvent, arg.OrgID, arg.Column2)
+	rows, err := q.db.Query(ctx, listActiveWebhookEndpointsForEvent, arg.OrgID, arg.Event)
 	if err != nil {
 		return nil, err
 	}

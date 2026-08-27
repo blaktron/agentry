@@ -29,7 +29,7 @@ func ResolvePAT(ctx context.Context, q *storegen.Queries, token string) (*Princi
 	for _, m := range rows {
 		orgRoles[m.OrgID] = OrgRole(m.Role)
 	}
-	return &Principal{
+	p := &Principal{
 		UserID:        pat.UserID,
 		Handle:        u.Handle,
 		Via:           "pat",
@@ -38,5 +38,9 @@ func ResolvePAT(ctx context.Context, q *storegen.Queries, token string) (*Princi
 		EmailVerified: u.EmailVerifiedAt != nil,
 		PlatformStaff: u.PlatformStaff,
 		PATID:         pat.ID,
-	}, nil
+	}
+	if pat.OrgID != nil {
+		p.PATOrgID = *pat.OrgID // org-bound PAT (§12.4 enforced SSO)
+	}
+	return p, nil
 }

@@ -159,6 +159,10 @@ func runWorker(ctx context.Context, cfg config.Config, st *store.Store, log *slo
 	})
 	q := queue.NewPGClient(st, log)
 	pipeline.RegisterHandlers(q)
+	// Enterprise async handlers (M6/WG-J): webhook delivery (§9.3) and audit
+	// export (§12.6). An api.Server assembles the same dependencies; we borrow
+	// it only to register its queue handlers.
+	api.New(cfg, st, log).RegisterQueueHandlers(q)
 	log.Info("worker started", "queues", "core,sandbox")
 	return q.Work(ctx, "core", "sandbox", "judge")
 }

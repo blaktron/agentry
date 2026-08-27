@@ -18,6 +18,30 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AbuseReportState.
+const (
+	AbuseReportStateActioned  AbuseReportState = "actioned"
+	AbuseReportStateDismissed AbuseReportState = "dismissed"
+	AbuseReportStateOpen      AbuseReportState = "open"
+	AbuseReportStateTriaged   AbuseReportState = "triaged"
+)
+
+// Valid indicates whether the value is a known member of the AbuseReportState enum.
+func (e AbuseReportState) Valid() bool {
+	switch e {
+	case AbuseReportStateActioned:
+		return true
+	case AbuseReportStateDismissed:
+		return true
+	case AbuseReportStateOpen:
+		return true
+	case AbuseReportStateTriaged:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentQuarantineState.
 const (
 	AgentQuarantineStateBlocked     AgentQuarantineState = "blocked"
@@ -174,6 +198,30 @@ func (e AuditEventActorKind) Valid() bool {
 	case AuditEventActorKindSystem:
 		return true
 	case AuditEventActorKindUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AuditExportStatus.
+const (
+	AuditExportStatusCompleted AuditExportStatus = "completed"
+	AuditExportStatusFailed    AuditExportStatus = "failed"
+	AuditExportStatusPending   AuditExportStatus = "pending"
+	AuditExportStatusRunning   AuditExportStatus = "running"
+)
+
+// Valid indicates whether the value is a known member of the AuditExportStatus enum.
+func (e AuditExportStatus) Valid() bool {
+	switch e {
+	case AuditExportStatusCompleted:
+		return true
+	case AuditExportStatusFailed:
+		return true
+	case AuditExportStatusPending:
+		return true
+	case AuditExportStatusRunning:
 		return true
 	default:
 		return false
@@ -369,6 +417,45 @@ func (e Scope) Valid() bool {
 	}
 }
 
+// Defines values for SearchHitQuarantineState.
+const (
+	SearchHitQuarantineStateBlocked     SearchHitQuarantineState = "blocked"
+	SearchHitQuarantineStateNone        SearchHitQuarantineState = "none"
+	SearchHitQuarantineStateQuarantined SearchHitQuarantineState = "quarantined"
+)
+
+// Valid indicates whether the value is a known member of the SearchHitQuarantineState enum.
+func (e SearchHitQuarantineState) Valid() bool {
+	switch e {
+	case SearchHitQuarantineStateBlocked:
+		return true
+	case SearchHitQuarantineStateNone:
+		return true
+	case SearchHitQuarantineStateQuarantined:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SsoConnectionKind.
+const (
+	SsoConnectionKindOidc SsoConnectionKind = "oidc"
+	SsoConnectionKindSaml SsoConnectionKind = "saml"
+)
+
+// Valid indicates whether the value is a known member of the SsoConnectionKind enum.
+func (e SsoConnectionKind) Valid() bool {
+	switch e {
+	case SsoConnectionKindOidc:
+		return true
+	case SsoConnectionKindSaml:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for VersionStatus.
 const (
 	VersionStatusApproved    VersionStatus = "approved"
@@ -408,6 +495,24 @@ func (e VersionStatus) Valid() bool {
 	}
 }
 
+// Defines values for SsoKind.
+const (
+	SsoKindOidc SsoKind = "oidc"
+	SsoKindSaml SsoKind = "saml"
+)
+
+// Valid indicates whether the value is a known member of the SsoKind enum.
+func (e SsoKind) Valid() bool {
+	switch e {
+	case SsoKindOidc:
+		return true
+	case SsoKindSaml:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UpdateAgentJSONBodyVisibility.
 const (
 	UpdateAgentJSONBodyVisibilityPrivate UpdateAgentJSONBodyVisibility = "private"
@@ -420,6 +525,39 @@ func (e UpdateAgentJSONBodyVisibility) Valid() bool {
 	case UpdateAgentJSONBodyVisibilityPrivate:
 		return true
 	case UpdateAgentJSONBodyVisibilityPublic:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReportAbuseJSONBodyCategory.
+const (
+	CredentialTheft    ReportAbuseJSONBodyCategory = "credential_theft"
+	HiddenInstructions ReportAbuseJSONBodyCategory = "hidden_instructions"
+	License            ReportAbuseJSONBodyCategory = "license"
+	MaliciousContent   ReportAbuseJSONBodyCategory = "malicious_content"
+	Other              ReportAbuseJSONBodyCategory = "other"
+	Spam               ReportAbuseJSONBodyCategory = "spam"
+	Typosquat          ReportAbuseJSONBodyCategory = "typosquat"
+)
+
+// Valid indicates whether the value is a known member of the ReportAbuseJSONBodyCategory enum.
+func (e ReportAbuseJSONBodyCategory) Valid() bool {
+	switch e {
+	case CredentialTheft:
+		return true
+	case HiddenInstructions:
+		return true
+	case License:
+		return true
+	case MaliciousContent:
+		return true
+	case Other:
+		return true
+	case Spam:
+		return true
+	case Typosquat:
 		return true
 	default:
 		return false
@@ -441,6 +579,42 @@ func (e SetFindingVerdictJSONBodyVerdict) Valid() bool {
 	case SetFindingVerdictJSONBodyVerdictDismissedAcceptedRisk:
 		return true
 	case SetFindingVerdictJSONBodyVerdictDismissedFalsePositive:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeleteSsoConnectionParamsKind.
+const (
+	DeleteSsoConnectionParamsKindOidc DeleteSsoConnectionParamsKind = "oidc"
+	DeleteSsoConnectionParamsKindSaml DeleteSsoConnectionParamsKind = "saml"
+)
+
+// Valid indicates whether the value is a known member of the DeleteSsoConnectionParamsKind enum.
+func (e DeleteSsoConnectionParamsKind) Valid() bool {
+	switch e {
+	case DeleteSsoConnectionParamsKindOidc:
+		return true
+	case DeleteSsoConnectionParamsKindSaml:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PutSsoConnectionParamsKind.
+const (
+	PutSsoConnectionParamsKindOidc PutSsoConnectionParamsKind = "oidc"
+	PutSsoConnectionParamsKindSaml PutSsoConnectionParamsKind = "saml"
+)
+
+// Valid indicates whether the value is a known member of the PutSsoConnectionParamsKind enum.
+func (e PutSsoConnectionParamsKind) Valid() bool {
+	switch e {
+	case PutSsoConnectionParamsKindOidc:
+		return true
+	case PutSsoConnectionParamsKindSaml:
 		return true
 	default:
 		return false
@@ -521,6 +695,39 @@ func (e ListReviewQueueParamsQueue) Valid() bool {
 		return false
 	}
 }
+
+// Defines values for DeleteCurrentUserParamsPublishedContent.
+const (
+	Transfer DeleteCurrentUserParamsPublishedContent = "transfer"
+	Yank     DeleteCurrentUserParamsPublishedContent = "yank"
+)
+
+// Valid indicates whether the value is a known member of the DeleteCurrentUserParamsPublishedContent enum.
+func (e DeleteCurrentUserParamsPublishedContent) Valid() bool {
+	switch e {
+	case Transfer:
+		return true
+	case Yank:
+		return true
+	default:
+		return false
+	}
+}
+
+// AbuseReport defines model for AbuseReport.
+type AbuseReport struct {
+	Agent     string             `json:"agent"`
+	Category  string             `json:"category"`
+	CreatedAt time.Time          `json:"createdAt"`
+	Detail    string             `json:"detail"`
+	Id        openapi_types.UUID `json:"id"`
+	Namespace string             `json:"namespace"`
+	State     AbuseReportState   `json:"state"`
+	Version   *string            `json:"version,omitempty"`
+}
+
+// AbuseReportState defines model for AbuseReport.State.
+type AbuseReportState string
 
 // Advisory defines model for Advisory.
 type Advisory struct {
@@ -622,6 +829,21 @@ type AuditEvent struct {
 // AuditEventActorKind defines model for AuditEvent.ActorKind.
 type AuditEventActorKind string
 
+// AuditExport defines model for AuditExport.
+type AuditExport struct {
+	CreatedAt *time.Time `json:"createdAt,omitempty"`
+
+	// DownloadPath Blob-store reference; presign is a deployment concern.
+	DownloadPath *string            `json:"downloadPath,omitempty"`
+	Error        *string            `json:"error,omitempty"`
+	EventCount   *int               `json:"eventCount,omitempty"`
+	Id           openapi_types.UUID `json:"id"`
+	Status       AuditExportStatus  `json:"status"`
+}
+
+// AuditExportStatus defines model for AuditExport.Status.
+type AuditExportStatus string
+
 // AuditPage defines model for AuditPage.
 type AuditPage struct {
 	Events []AuditEvent `json:"events"`
@@ -656,7 +878,24 @@ type CreateTokenRequest struct {
 	// ExpiresAt Defaults to (and is capped at) the max PAT lifetime (§12.3).
 	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
 	Name      string     `json:"name"`
-	Scopes    []Scope    `json:"scopes"`
+
+	// OrgHandle Bind the token to this org (§12.4). Requires the current session to be SSO-fresh for the org; org-bound tokens are capped at 90 days and are the only tokens accepted against an enforced-SSO org's resources.
+	OrgHandle *string `json:"orgHandle,omitempty"`
+	Scopes    []Scope `json:"scopes"`
+}
+
+// DomainClaim defines model for DomainClaim.
+type DomainClaim struct {
+	Domain string `json:"domain"`
+
+	// RecordName The DNS TXT record name to create.
+	RecordName *string `json:"recordName,omitempty"`
+
+	// RecordValue The DNS TXT record value to publish.
+	RecordValue       *string    `json:"recordValue,omitempty"`
+	VerificationToken string     `json:"verificationToken"`
+	Verified          bool       `json:"verified"`
+	VerifiedAt        *time.Time `json:"verifiedAt,omitempty"`
 }
 
 // LoginRequest defines model for LoginRequest.
@@ -864,8 +1103,65 @@ type ScanReport struct {
 	VersionStatus VersionStatus `json:"versionStatus"`
 }
 
+// ScimToken defines model for ScimToken.
+type ScimToken struct {
+	CreatedAt time.Time          `json:"createdAt"`
+	ExpiresAt *time.Time         `json:"expiresAt,omitempty"`
+	Id        openapi_types.UUID `json:"id"`
+}
+
+// ScimTokenCreated defines model for ScimTokenCreated.
+type ScimTokenCreated struct {
+	ExpiresAt *time.Time         `json:"expiresAt,omitempty"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// Token The SCIM bearer token; shown once.
+	Token string `json:"token"`
+}
+
 // Scope PAT scopes (§12.3).
 type Scope string
+
+// SearchHit defines model for SearchHit.
+type SearchHit struct {
+	Installs30d *int `json:"installs30d,omitempty"`
+
+	// Kind Supported agent kinds (§1.4).
+	Kind            AgentKind                 `json:"kind"`
+	Name            string                    `json:"name"`
+	Namespace       string                    `json:"namespace"`
+	QuarantineState *SearchHitQuarantineState `json:"quarantineState,omitempty"`
+	Summary         string                    `json:"summary"`
+}
+
+// SearchHitQuarantineState defines model for SearchHit.QuarantineState.
+type SearchHitQuarantineState string
+
+// SearchResults defines model for SearchResults.
+type SearchResults struct {
+	// Facets Facet counts keyed by facet name then value.
+	Facets  *map[string]map[string]int `json:"facets,omitempty"`
+	Results []SearchHit                `json:"results"`
+	Total   *int                       `json:"total,omitempty"`
+}
+
+// SsoConnection defines model for SsoConnection.
+type SsoConnection struct {
+	// Config Non-secret connection settings (client secrets are redacted).
+	Config  *map[string]interface{} `json:"config,omitempty"`
+	Enabled bool                    `json:"enabled"`
+	Kind    SsoConnectionKind       `json:"kind"`
+}
+
+// SsoConnectionKind defines model for SsoConnection.Kind.
+type SsoConnectionKind string
+
+// SsoConnectionInput defines model for SsoConnectionInput.
+type SsoConnectionInput struct {
+	// Config SAML (idpMetadataXml or idpEntityId+idpCertificatePem+idpSsoUrl) or OIDC (issuer, clientId, clientSecret) settings.
+	Config  map[string]interface{} `json:"config"`
+	Enabled bool                   `json:"enabled"`
+}
 
 // Team defines model for Team.
 type Team struct {
@@ -895,6 +1191,46 @@ type User struct {
 // VersionStatus Publication state machine states (§7).
 type VersionStatus string
 
+// WebhookDelivery defines model for WebhookDelivery.
+type WebhookDelivery struct {
+	Attempt     int                `json:"attempt"`
+	CreatedAt   time.Time          `json:"createdAt"`
+	DeliveredAt *time.Time         `json:"deliveredAt,omitempty"`
+	Error       *string            `json:"error,omitempty"`
+	EventType   string             `json:"eventType"`
+	Id          openapi_types.UUID `json:"id"`
+	StatusCode  *int               `json:"statusCode,omitempty"`
+}
+
+// WebhookEndpoint defines model for WebhookEndpoint.
+type WebhookEndpoint struct {
+	Active    bool               `json:"active"`
+	CreatedAt time.Time          `json:"createdAt"`
+	Events    []string           `json:"events"`
+	Id        openapi_types.UUID `json:"id"`
+	Url       string             `json:"url"`
+}
+
+// WebhookEndpointCreated defines model for WebhookEndpointCreated.
+type WebhookEndpointCreated struct {
+	Active    bool               `json:"active"`
+	CreatedAt time.Time          `json:"createdAt"`
+	Events    []string           `json:"events"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// Secret The HMAC signing secret; shown once.
+	Secret string `json:"secret"`
+	Url    string `json:"url"`
+}
+
+// WebhookInput defines model for WebhookInput.
+type WebhookInput struct {
+	Events []string `json:"events"`
+
+	// Url HTTPS endpoint (§9.3 requires https).
+	Url string `json:"url"`
+}
+
 // AgentName defines model for AgentName.
 type AgentName = string
 
@@ -907,11 +1243,17 @@ type Namespace = string
 // OrgHandle defines model for OrgHandle.
 type OrgHandle = string
 
+// SsoKind defines model for SsoKind.
+type SsoKind string
+
 // TeamSlug defines model for TeamSlug.
 type TeamSlug = string
 
 // VersionString defines model for VersionString.
 type VersionString = string
+
+// WebhookID defines model for WebhookID.
+type WebhookID = openapi_types.UUID
 
 // ListAdvisoriesParams defines parameters for ListAdvisories.
 type ListAdvisoriesParams struct {
@@ -934,6 +1276,16 @@ type UpdateAgentJSONBody struct {
 // UpdateAgentJSONBodyVisibility defines parameters for UpdateAgent.
 type UpdateAgentJSONBodyVisibility string
 
+// ReportAbuseJSONBody defines parameters for ReportAbuse.
+type ReportAbuseJSONBody struct {
+	Category ReportAbuseJSONBodyCategory `json:"category"`
+	Detail   string                      `json:"detail"`
+	Version  *string                     `json:"version,omitempty"`
+}
+
+// ReportAbuseJSONBodyCategory defines parameters for ReportAbuse.
+type ReportAbuseJSONBodyCategory string
+
 // SetAgentTeamGrantJSONBody defines parameters for SetAgentTeamGrant.
 type SetAgentTeamGrantJSONBody struct {
 	// Role Per-agent grant levels (§12.2), read < write < maintain < publish.
@@ -944,6 +1296,12 @@ type SetAgentTeamGrantJSONBody struct {
 type SetAgentUserGrantJSONBody struct {
 	// Role Per-agent grant levels (§12.2), read < write < maintain < publish.
 	Role AgentRole `json:"role"`
+}
+
+// GetAgentReadmeParams defines parameters for GetAgentReadme.
+type GetAgentReadmeParams struct {
+	// Version Version to render; defaults to the latest published.
+	Version *string `form:"version,omitempty" json:"version,omitempty"`
 }
 
 // SubmitVersionJSONBody defines parameters for SubmitVersion.
@@ -987,6 +1345,9 @@ type SetFindingVerdictJSONBodyVerdict string
 // UpdateOrgJSONBody defines parameters for UpdateOrg.
 type UpdateOrgJSONBody struct {
 	DisplayName *string `json:"displayName,omitempty"`
+
+	// SsoRequired Enforce SSO for org resources (§12.4). Owner only.
+	SsoRequired *bool `json:"ssoRequired,omitempty"`
 }
 
 // ListOrgAuditParams defines parameters for ListOrgAudit.
@@ -994,6 +1355,22 @@ type ListOrgAuditParams struct {
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 	Action *string `form:"action,omitempty" json:"action,omitempty"`
+}
+
+// CreateAuditExportJSONBody defines parameters for CreateAuditExport.
+type CreateAuditExportJSONBody struct {
+	// Action Optional action filter.
+	Action *string `json:"action,omitempty"`
+}
+
+// CreateDomainClaimJSONBody defines parameters for CreateDomainClaim.
+type CreateDomainClaimJSONBody struct {
+	Domain string `json:"domain"`
+}
+
+// VerifyDomainClaimJSONBody defines parameters for VerifyDomainClaim.
+type VerifyDomainClaimJSONBody struct {
+	Domain string `json:"domain"`
 }
 
 // SetOrgMemberJSONBody defines parameters for SetOrgMember.
@@ -1005,9 +1382,38 @@ type SetOrgMemberJSONBody struct {
 // SetOrgPolicyJSONBody defines parameters for SetOrgPolicy.
 type SetOrgPolicyJSONBody map[string]interface{}
 
+// CreateScimTokenJSONBody defines parameters for CreateScimToken.
+type CreateScimTokenJSONBody struct {
+	ExpiresInDays *int `json:"expiresInDays,omitempty"`
+}
+
+// DeleteSsoConnectionParamsKind defines parameters for DeleteSsoConnection.
+type DeleteSsoConnectionParamsKind string
+
+// PutSsoConnectionParamsKind defines parameters for PutSsoConnection.
+type PutSsoConnectionParamsKind string
+
+// OidcCallbackParams defines parameters for OidcCallback.
+type OidcCallbackParams struct {
+	Code  *string `form:"code,omitempty" json:"code,omitempty"`
+	State *string `form:"state,omitempty" json:"state,omitempty"`
+}
+
 // CreateTeamJSONBody defines parameters for CreateTeam.
 type CreateTeamJSONBody struct {
 	Slug string `json:"slug"`
+}
+
+// UpdateWebhookJSONBody defines parameters for UpdateWebhook.
+type UpdateWebhookJSONBody struct {
+	Active *bool     `json:"active,omitempty"`
+	Events *[]string `json:"events,omitempty"`
+	Url    *string   `json:"url,omitempty"`
+}
+
+// ListAbuseReportsParams defines parameters for ListAbuseReports.
+type ListAbuseReportsParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // PlatformAgentActionJSONBody defines parameters for PlatformAgentAction.
@@ -1047,16 +1453,37 @@ type ListReviewQueueParams struct {
 // ListReviewQueueParamsQueue defines parameters for ListReviewQueue.
 type ListReviewQueueParamsQueue string
 
+// SearchAgentsParams defines parameters for SearchAgents.
+type SearchAgentsParams struct {
+	// Q Free-text query; empty lists by popularity.
+	Q      *string    `form:"q,omitempty" json:"q,omitempty"`
+	Kind   *AgentKind `form:"kind,omitempty" json:"kind,omitempty"`
+	Limit  *int       `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int       `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // UpdateCurrentUserJSONBody defines parameters for UpdateCurrentUser.
 type UpdateCurrentUserJSONBody struct {
 	DisplayName *string `json:"displayName,omitempty"`
 }
+
+// DeleteCurrentUserParams defines parameters for DeleteCurrentUser.
+type DeleteCurrentUserParams struct {
+	// PublishedContent What to do with published public versions (default yank).
+	PublishedContent *DeleteCurrentUserParamsPublishedContent `form:"publishedContent,omitempty" json:"publishedContent,omitempty"`
+}
+
+// DeleteCurrentUserParamsPublishedContent defines parameters for DeleteCurrentUser.
+type DeleteCurrentUserParamsPublishedContent string
 
 // CreateAgentJSONRequestBody defines body for CreateAgent for application/json ContentType.
 type CreateAgentJSONRequestBody = CreateAgentRequest
 
 // UpdateAgentJSONRequestBody defines body for UpdateAgent for application/json ContentType.
 type UpdateAgentJSONRequestBody UpdateAgentJSONBody
+
+// ReportAbuseJSONRequestBody defines body for ReportAbuse for application/json ContentType.
+type ReportAbuseJSONRequestBody ReportAbuseJSONBody
 
 // SetAgentTeamGrantJSONRequestBody defines body for SetAgentTeamGrant for application/json ContentType.
 type SetAgentTeamGrantJSONRequestBody SetAgentTeamGrantJSONBody
@@ -1094,14 +1521,35 @@ type CreateOrgJSONRequestBody = CreateOrgRequest
 // UpdateOrgJSONRequestBody defines body for UpdateOrg for application/json ContentType.
 type UpdateOrgJSONRequestBody UpdateOrgJSONBody
 
+// CreateAuditExportJSONRequestBody defines body for CreateAuditExport for application/json ContentType.
+type CreateAuditExportJSONRequestBody CreateAuditExportJSONBody
+
+// CreateDomainClaimJSONRequestBody defines body for CreateDomainClaim for application/json ContentType.
+type CreateDomainClaimJSONRequestBody CreateDomainClaimJSONBody
+
+// VerifyDomainClaimJSONRequestBody defines body for VerifyDomainClaim for application/json ContentType.
+type VerifyDomainClaimJSONRequestBody VerifyDomainClaimJSONBody
+
 // SetOrgMemberJSONRequestBody defines body for SetOrgMember for application/json ContentType.
 type SetOrgMemberJSONRequestBody SetOrgMemberJSONBody
 
 // SetOrgPolicyJSONRequestBody defines body for SetOrgPolicy for application/json ContentType.
 type SetOrgPolicyJSONRequestBody SetOrgPolicyJSONBody
 
+// CreateScimTokenJSONRequestBody defines body for CreateScimToken for application/json ContentType.
+type CreateScimTokenJSONRequestBody CreateScimTokenJSONBody
+
+// PutSsoConnectionJSONRequestBody defines body for PutSsoConnection for application/json ContentType.
+type PutSsoConnectionJSONRequestBody = SsoConnectionInput
+
 // CreateTeamJSONRequestBody defines body for CreateTeam for application/json ContentType.
 type CreateTeamJSONRequestBody CreateTeamJSONBody
+
+// CreateWebhookJSONRequestBody defines body for CreateWebhook for application/json ContentType.
+type CreateWebhookJSONRequestBody = WebhookInput
+
+// UpdateWebhookJSONRequestBody defines body for UpdateWebhook for application/json ContentType.
+type UpdateWebhookJSONRequestBody UpdateWebhookJSONBody
 
 // PlatformAgentActionJSONRequestBody defines body for PlatformAgentAction for application/json ContentType.
 type PlatformAgentActionJSONRequestBody PlatformAgentActionJSONBody
@@ -1232,6 +1680,20 @@ type ClientInterface interface {
 	// Corresponds with PATCH /agents/{ns}/{name} (the `UpdateAgent` operationId).
 	UpdateAgent(ctx context.Context, ns Namespace, name AgentName, body UpdateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ReportAbuseWithBody Report malicious or abusive content (authed, rate-limited §8.7).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /agents/{ns}/{name}/abuse-reports (the `ReportAbuse` operationId).
+	ReportAbuseWithBody(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReportAbuse Report malicious or abusive content (authed, rate-limited §8.7).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /agents/{ns}/{name}/abuse-reports (the `ReportAbuse` operationId).
+	ReportAbuse(ctx context.Context, ns Namespace, name AgentName, body ReportAbuseJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListAgentGrants List explicit grants (maintain).
 	//
 	// Corresponds with GET /agents/{ns}/{name}/grants (the `ListAgentGrants` operationId).
@@ -1274,6 +1736,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /agents/{ns}/{name}/grants/user/{handle} (the `SetAgentUserGrant` operationId).
 	SetAgentUserGrant(ctx context.Context, ns Namespace, name AgentName, handle Handle, body SetAgentUserGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAgentReadme The agent README rendered to sanitized HTML (§10.3, D-11).
+	//
+	// Markdown is rendered server-side through a strict allowlist: no raw HTML, no user styles, no SVG, external links rewritten, and invisible or bidi Unicode replaced with visible placeholders.
+	//
+	// Corresponds with GET /agents/{ns}/{name}/readme (the `GetAgentReadme` operationId).
+	GetAgentReadme(ctx context.Context, ns Namespace, name AgentName, params *GetAgentReadmeParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListVersions Version history, newest first.
 	//
@@ -1460,6 +1929,58 @@ type ClientInterface interface {
 	// Corresponds with GET /orgs/{org}/audit (the `ListOrgAudit` operationId).
 	ListOrgAudit(ctx context.Context, org OrgHandle, params *ListOrgAuditParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// CreateAuditExportWithBody Start an async NDJSON audit export (admin+, §12.6).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/audit/exports (the `CreateAuditExport` operationId).
+	CreateAuditExportWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateAuditExport Start an async NDJSON audit export (admin+, §12.6).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/audit/exports (the `CreateAuditExport` operationId).
+	CreateAuditExport(ctx context.Context, org OrgHandle, body CreateAuditExportJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAuditExport Poll an audit export's status and download reference (admin+, §12.6).
+	//
+	// Corresponds with GET /orgs/{org}/audit/exports/{id} (the `GetAuditExport` operationId).
+	GetAuditExport(ctx context.Context, org OrgHandle, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListDomainClaims List domain claims (admin+, §12.4).
+	//
+	// Corresponds with GET /orgs/{org}/domain-claims (the `ListDomainClaims` operationId).
+	ListDomainClaims(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateDomainClaimWithBody Start a domain claim; returns the DNS TXT challenge (admin+, §12.4).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/domain-claims (the `CreateDomainClaim` operationId).
+	CreateDomainClaimWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateDomainClaim Start a domain claim; returns the DNS TXT challenge (admin+, §12.4).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/domain-claims (the `CreateDomainClaim` operationId).
+	CreateDomainClaim(ctx context.Context, org OrgHandle, body CreateDomainClaimJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// VerifyDomainClaimWithBody Check the DNS TXT record and mark verified (admin+, §12.4).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/domain-claims/verify (the `VerifyDomainClaim` operationId).
+	VerifyDomainClaimWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// VerifyDomainClaim Check the DNS TXT record and mark verified (admin+, §12.4).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/domain-claims/verify (the `VerifyDomainClaim` operationId).
+	VerifyDomainClaim(ctx context.Context, org OrgHandle, body VerifyDomainClaimJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListOrgMembers List members with roles (members can view).
 	//
 	// Corresponds with GET /orgs/{org}/members (the `ListOrgMembers` operationId).
@@ -1503,6 +2024,74 @@ type ClientInterface interface {
 	// Corresponds with PUT /orgs/{org}/policy (the `SetOrgPolicy` operationId).
 	SetOrgPolicy(ctx context.Context, org OrgHandle, body SetOrgPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListScimTokens List active SCIM provisioning tokens (owner, §12.5).
+	//
+	// Corresponds with GET /orgs/{org}/scim/tokens (the `ListScimTokens` operationId).
+	ListScimTokens(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateScimTokenWithBody Mint a SCIM bearer token (owner, §12.5).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
+	CreateScimTokenWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateScimToken Mint a SCIM bearer token (owner, §12.5).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
+	CreateScimToken(ctx context.Context, org OrgHandle, body CreateScimTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RevokeScimToken Revoke a SCIM token (owner, §12.5).
+	//
+	// Corresponds with DELETE /orgs/{org}/scim/tokens/{tokenId} (the `RevokeScimToken` operationId).
+	RevokeScimToken(ctx context.Context, org OrgHandle, tokenId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListSsoConnections List the org's SSO connections (owner, §12.4).
+	//
+	// Corresponds with GET /orgs/{org}/sso/connections (the `ListSsoConnections` operationId).
+	ListSsoConnections(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteSsoConnection Delete a connection (owner, §12.4).
+	//
+	// Corresponds with DELETE /orgs/{org}/sso/connections/{kind} (the `DeleteSsoConnection` operationId).
+	DeleteSsoConnection(ctx context.Context, org OrgHandle, kind DeleteSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutSsoConnectionWithBody Create or update a SAML/OIDC connection (owner, §12.4).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
+	PutSsoConnectionWithBody(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutSsoConnection Create or update a SAML/OIDC connection (owner, §12.4).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
+	PutSsoConnection(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, body PutSsoConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// OidcCallback OIDC redirect URI — exchange the code and establish a session (§12.4).
+	//
+	// Corresponds with GET /orgs/{org}/sso/oidc/callback (the `OidcCallback` operationId).
+	OidcCallback(ctx context.Context, org OrgHandle, params *OidcCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// OidcStart Begin the OIDC auth-code + PKCE flow (redirect to IdP, §12.4).
+	//
+	// Corresponds with GET /orgs/{org}/sso/oidc/start (the `OidcStart` operationId).
+	OidcStart(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SamlAcs SAML Assertion Consumer Service — consume a signed assertion (§12.4).
+	//
+	// Corresponds with POST /orgs/{org}/sso/saml/acs (the `SamlAcs` operationId).
+	SamlAcs(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetSamlMetadata SP SAML metadata for this org's connection (§12.4).
+	//
+	// Corresponds with GET /orgs/{org}/sso/saml/metadata (the `GetSamlMetadata` operationId).
+	GetSamlMetadata(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListTeams List teams (members can view).
 	//
 	// Corresponds with GET /orgs/{org}/teams (the `ListTeams` operationId).
@@ -1541,6 +2130,59 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /orgs/{org}/teams/{team}/members/{handle} (the `AddTeamMember` operationId).
 	AddTeamMember(ctx context.Context, org OrgHandle, team TeamSlug, handle Handle, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListWebhooks List webhook endpoints (admin+, §9.3).
+	//
+	// Corresponds with GET /orgs/{org}/webhooks (the `ListWebhooks` operationId).
+	ListWebhooks(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateWebhookWithBody Create a webhook endpoint (admin+, §9.3).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/webhooks (the `CreateWebhook` operationId).
+	CreateWebhookWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateWebhook Create a webhook endpoint (admin+, §9.3).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/webhooks (the `CreateWebhook` operationId).
+	CreateWebhook(ctx context.Context, org OrgHandle, body CreateWebhookJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteWebhook Delete a webhook endpoint (admin+, §9.3).
+	//
+	// Corresponds with DELETE /orgs/{org}/webhooks/{id} (the `DeleteWebhook` operationId).
+	DeleteWebhook(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetWebhook Get a webhook endpoint (admin+, §9.3).
+	//
+	// Corresponds with GET /orgs/{org}/webhooks/{id} (the `GetWebhook` operationId).
+	GetWebhook(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateWebhookWithBody Update a webhook endpoint (admin+, §9.3).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /orgs/{org}/webhooks/{id} (the `UpdateWebhook` operationId).
+	UpdateWebhookWithBody(ctx context.Context, org OrgHandle, id WebhookID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateWebhook Update a webhook endpoint (admin+, §9.3).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /orgs/{org}/webhooks/{id} (the `UpdateWebhook` operationId).
+	UpdateWebhook(ctx context.Context, org OrgHandle, id WebhookID, body UpdateWebhookJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListWebhookDeliveries Recent delivery attempts for an endpoint (admin+, §9.3).
+	//
+	// Corresponds with GET /orgs/{org}/webhooks/{id}/deliveries (the `ListWebhookDeliveries` operationId).
+	ListWebhookDeliveries(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListAbuseReports Open abuse reports (platform staff).
+	//
+	// Corresponds with GET /platform/abuse-reports (the `ListAbuseReports` operationId).
+	ListAbuseReports(ctx context.Context, params *ListAbuseReportsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PlatformAgentActionWithBody Quarantine, block, or reinstate an agent (platform staff, §7).
 	//
@@ -1590,6 +2232,11 @@ type ClientInterface interface {
 	// Corresponds with GET /review-queue (the `ListReviewQueue` operationId).
 	ListReviewQueue(ctx context.Context, params *ListReviewQueueParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// SearchAgents Full-text search over public agents with facets (§10.4).
+	//
+	// Corresponds with GET /search (the `SearchAgents` operationId).
+	SearchAgents(ctx context.Context, params *SearchAgentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetCurrentUser The authenticated user.
 	//
 	// Corresponds with GET /user (the `GetCurrentUser` operationId).
@@ -1608,6 +2255,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with PATCH /user (the `UpdateCurrentUser` operationId).
 	UpdateCurrentUser(ctx context.Context, body UpdateCurrentUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteCurrentUser Erase the caller's account (GDPR flow, §12.7).
+	//
+	// Purges personal data and pseudonymizes the account. Published public versions are not deleted — they are yanked so already-installed copies keep verifying — or you can transfer the agents to an org first and then delete.
+	//
+	// Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
+	DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListTokens List the caller's personal access tokens (metadata only).
 	//
@@ -1752,6 +2406,40 @@ func (c *Client) UpdateAgent(ctx context.Context, ns Namespace, name AgentName, 
 	return c.Client.Do(req)
 }
 
+// ReportAbuseWithBody Report malicious or abusive content (authed, rate-limited §8.7).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /agents/{ns}/{name}/abuse-reports (the `ReportAbuse` operationId).
+func (c *Client) ReportAbuseWithBody(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReportAbuseRequestWithBody(c.Server, ns, name, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ReportAbuse Report malicious or abusive content (authed, rate-limited §8.7).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /agents/{ns}/{name}/abuse-reports (the `ReportAbuse` operationId).
+func (c *Client) ReportAbuse(ctx context.Context, ns Namespace, name AgentName, body ReportAbuseJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReportAbuseRequest(c.Server, ns, name, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListAgentGrants List explicit grants (maintain).
 //
 // Corresponds with GET /agents/{ns}/{name}/grants (the `ListAgentGrants` operationId).
@@ -1855,6 +2543,23 @@ func (c *Client) SetAgentUserGrantWithBody(ctx context.Context, ns Namespace, na
 // Corresponds with PUT /agents/{ns}/{name}/grants/user/{handle} (the `SetAgentUserGrant` operationId).
 func (c *Client) SetAgentUserGrant(ctx context.Context, ns Namespace, name AgentName, handle Handle, body SetAgentUserGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSetAgentUserGrantRequest(c.Server, ns, name, handle, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetAgentReadme The agent README rendered to sanitized HTML (§10.3, D-11).
+//
+// Markdown is rendered server-side through a strict allowlist: no raw HTML, no user styles, no SVG, external links rewritten, and invisible or bidi Unicode replaced with visible placeholders.
+//
+// Corresponds with GET /agents/{ns}/{name}/readme (the `GetAgentReadme` operationId).
+func (c *Client) GetAgentReadme(ctx context.Context, ns Namespace, name AgentName, params *GetAgentReadmeParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAgentReadmeRequest(c.Server, ns, name, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2340,6 +3045,138 @@ func (c *Client) ListOrgAudit(ctx context.Context, org OrgHandle, params *ListOr
 	return c.Client.Do(req)
 }
 
+// CreateAuditExportWithBody Start an async NDJSON audit export (admin+, §12.6).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/audit/exports (the `CreateAuditExport` operationId).
+func (c *Client) CreateAuditExportWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateAuditExportRequestWithBody(c.Server, org, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateAuditExport Start an async NDJSON audit export (admin+, §12.6).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/audit/exports (the `CreateAuditExport` operationId).
+func (c *Client) CreateAuditExport(ctx context.Context, org OrgHandle, body CreateAuditExportJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateAuditExportRequest(c.Server, org, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetAuditExport Poll an audit export's status and download reference (admin+, §12.6).
+//
+// Corresponds with GET /orgs/{org}/audit/exports/{id} (the `GetAuditExport` operationId).
+func (c *Client) GetAuditExport(ctx context.Context, org OrgHandle, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAuditExportRequest(c.Server, org, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListDomainClaims List domain claims (admin+, §12.4).
+//
+// Corresponds with GET /orgs/{org}/domain-claims (the `ListDomainClaims` operationId).
+func (c *Client) ListDomainClaims(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListDomainClaimsRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateDomainClaimWithBody Start a domain claim; returns the DNS TXT challenge (admin+, §12.4).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/domain-claims (the `CreateDomainClaim` operationId).
+func (c *Client) CreateDomainClaimWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateDomainClaimRequestWithBody(c.Server, org, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateDomainClaim Start a domain claim; returns the DNS TXT challenge (admin+, §12.4).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/domain-claims (the `CreateDomainClaim` operationId).
+func (c *Client) CreateDomainClaim(ctx context.Context, org OrgHandle, body CreateDomainClaimJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateDomainClaimRequest(c.Server, org, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// VerifyDomainClaimWithBody Check the DNS TXT record and mark verified (admin+, §12.4).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/domain-claims/verify (the `VerifyDomainClaim` operationId).
+func (c *Client) VerifyDomainClaimWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewVerifyDomainClaimRequestWithBody(c.Server, org, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// VerifyDomainClaim Check the DNS TXT record and mark verified (admin+, §12.4).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/domain-claims/verify (the `VerifyDomainClaim` operationId).
+func (c *Client) VerifyDomainClaim(ctx context.Context, org OrgHandle, body VerifyDomainClaimJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewVerifyDomainClaimRequest(c.Server, org, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListOrgMembers List members with roles (members can view).
 //
 // Corresponds with GET /orgs/{org}/members (the `ListOrgMembers` operationId).
@@ -2453,6 +3290,194 @@ func (c *Client) SetOrgPolicy(ctx context.Context, org OrgHandle, body SetOrgPol
 	return c.Client.Do(req)
 }
 
+// ListScimTokens List active SCIM provisioning tokens (owner, §12.5).
+//
+// Corresponds with GET /orgs/{org}/scim/tokens (the `ListScimTokens` operationId).
+func (c *Client) ListScimTokens(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListScimTokensRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateScimTokenWithBody Mint a SCIM bearer token (owner, §12.5).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
+func (c *Client) CreateScimTokenWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateScimTokenRequestWithBody(c.Server, org, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateScimToken Mint a SCIM bearer token (owner, §12.5).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
+func (c *Client) CreateScimToken(ctx context.Context, org OrgHandle, body CreateScimTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateScimTokenRequest(c.Server, org, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RevokeScimToken Revoke a SCIM token (owner, §12.5).
+//
+// Corresponds with DELETE /orgs/{org}/scim/tokens/{tokenId} (the `RevokeScimToken` operationId).
+func (c *Client) RevokeScimToken(ctx context.Context, org OrgHandle, tokenId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRevokeScimTokenRequest(c.Server, org, tokenId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListSsoConnections List the org's SSO connections (owner, §12.4).
+//
+// Corresponds with GET /orgs/{org}/sso/connections (the `ListSsoConnections` operationId).
+func (c *Client) ListSsoConnections(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListSsoConnectionsRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteSsoConnection Delete a connection (owner, §12.4).
+//
+// Corresponds with DELETE /orgs/{org}/sso/connections/{kind} (the `DeleteSsoConnection` operationId).
+func (c *Client) DeleteSsoConnection(ctx context.Context, org OrgHandle, kind DeleteSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteSsoConnectionRequest(c.Server, org, kind)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutSsoConnectionWithBody Create or update a SAML/OIDC connection (owner, §12.4).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
+func (c *Client) PutSsoConnectionWithBody(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutSsoConnectionRequestWithBody(c.Server, org, kind, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutSsoConnection Create or update a SAML/OIDC connection (owner, §12.4).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
+func (c *Client) PutSsoConnection(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, body PutSsoConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutSsoConnectionRequest(c.Server, org, kind, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// OidcCallback OIDC redirect URI — exchange the code and establish a session (§12.4).
+//
+// Corresponds with GET /orgs/{org}/sso/oidc/callback (the `OidcCallback` operationId).
+func (c *Client) OidcCallback(ctx context.Context, org OrgHandle, params *OidcCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewOidcCallbackRequest(c.Server, org, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// OidcStart Begin the OIDC auth-code + PKCE flow (redirect to IdP, §12.4).
+//
+// Corresponds with GET /orgs/{org}/sso/oidc/start (the `OidcStart` operationId).
+func (c *Client) OidcStart(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewOidcStartRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SamlAcs SAML Assertion Consumer Service — consume a signed assertion (§12.4).
+//
+// Corresponds with POST /orgs/{org}/sso/saml/acs (the `SamlAcs` operationId).
+func (c *Client) SamlAcs(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSamlAcsRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetSamlMetadata SP SAML metadata for this org's connection (§12.4).
+//
+// Corresponds with GET /orgs/{org}/sso/saml/metadata (the `GetSamlMetadata` operationId).
+func (c *Client) GetSamlMetadata(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSamlMetadataRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListTeams List teams (members can view).
 //
 // Corresponds with GET /orgs/{org}/teams (the `ListTeams` operationId).
@@ -2552,6 +3577,149 @@ func (c *Client) RemoveTeamMember(ctx context.Context, org OrgHandle, team TeamS
 // Corresponds with PUT /orgs/{org}/teams/{team}/members/{handle} (the `AddTeamMember` operationId).
 func (c *Client) AddTeamMember(ctx context.Context, org OrgHandle, team TeamSlug, handle Handle, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAddTeamMemberRequest(c.Server, org, team, handle)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListWebhooks List webhook endpoints (admin+, §9.3).
+//
+// Corresponds with GET /orgs/{org}/webhooks (the `ListWebhooks` operationId).
+func (c *Client) ListWebhooks(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListWebhooksRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateWebhookWithBody Create a webhook endpoint (admin+, §9.3).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/webhooks (the `CreateWebhook` operationId).
+func (c *Client) CreateWebhookWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateWebhookRequestWithBody(c.Server, org, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateWebhook Create a webhook endpoint (admin+, §9.3).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/webhooks (the `CreateWebhook` operationId).
+func (c *Client) CreateWebhook(ctx context.Context, org OrgHandle, body CreateWebhookJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateWebhookRequest(c.Server, org, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteWebhook Delete a webhook endpoint (admin+, §9.3).
+//
+// Corresponds with DELETE /orgs/{org}/webhooks/{id} (the `DeleteWebhook` operationId).
+func (c *Client) DeleteWebhook(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteWebhookRequest(c.Server, org, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetWebhook Get a webhook endpoint (admin+, §9.3).
+//
+// Corresponds with GET /orgs/{org}/webhooks/{id} (the `GetWebhook` operationId).
+func (c *Client) GetWebhook(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetWebhookRequest(c.Server, org, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateWebhookWithBody Update a webhook endpoint (admin+, §9.3).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /orgs/{org}/webhooks/{id} (the `UpdateWebhook` operationId).
+func (c *Client) UpdateWebhookWithBody(ctx context.Context, org OrgHandle, id WebhookID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateWebhookRequestWithBody(c.Server, org, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateWebhook Update a webhook endpoint (admin+, §9.3).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /orgs/{org}/webhooks/{id} (the `UpdateWebhook` operationId).
+func (c *Client) UpdateWebhook(ctx context.Context, org OrgHandle, id WebhookID, body UpdateWebhookJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateWebhookRequest(c.Server, org, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListWebhookDeliveries Recent delivery attempts for an endpoint (admin+, §9.3).
+//
+// Corresponds with GET /orgs/{org}/webhooks/{id}/deliveries (the `ListWebhookDeliveries` operationId).
+func (c *Client) ListWebhookDeliveries(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListWebhookDeliveriesRequest(c.Server, org, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListAbuseReports Open abuse reports (platform staff).
+//
+// Corresponds with GET /platform/abuse-reports (the `ListAbuseReports` operationId).
+func (c *Client) ListAbuseReports(ctx context.Context, params *ListAbuseReportsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAbuseReportsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2690,6 +3858,21 @@ func (c *Client) ListReviewQueue(ctx context.Context, params *ListReviewQueuePar
 	return c.Client.Do(req)
 }
 
+// SearchAgents Full-text search over public agents with facets (§10.4).
+//
+// Corresponds with GET /search (the `SearchAgents` operationId).
+func (c *Client) SearchAgents(ctx context.Context, params *SearchAgentsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSearchAgentsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetCurrentUser The authenticated user.
 //
 // Corresponds with GET /user (the `GetCurrentUser` operationId).
@@ -2729,6 +3912,23 @@ func (c *Client) UpdateCurrentUserWithBody(ctx context.Context, contentType stri
 // Corresponds with PATCH /user (the `UpdateCurrentUser` operationId).
 func (c *Client) UpdateCurrentUser(ctx context.Context, body UpdateCurrentUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateCurrentUserRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteCurrentUser Erase the caller's account (GDPR flow, §12.7).
+//
+// Purges personal data and pseudonymizes the account. Published public versions are not deleted — they are yanked so already-installed copies keep verifying — or you can transfer the agents to an org first and then delete.
+//
+// Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
+func (c *Client) DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteCurrentUserRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3053,6 +4253,60 @@ func NewUpdateAgentRequestWithBody(server string, ns Namespace, name AgentName, 
 	return req, nil
 }
 
+// NewReportAbuseRequest calls the generic ReportAbuse builder with application/json body
+func NewReportAbuseRequest(server string, ns Namespace, name AgentName, body ReportAbuseJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReportAbuseRequestWithBody(server, ns, name, "application/json", bodyReader)
+}
+
+// NewReportAbuseRequestWithBody constructs an http.Request for the ReportAbuse method, with any body, and a specified content type
+func NewReportAbuseRequestWithBody(server string, ns Namespace, name AgentName, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/abuse-reports", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewListAgentGrantsRequest constructs an http.Request for the ListAgentGrants method
 func NewListAgentGrantsRequest(server string, ns Namespace, name AgentName) (*http.Request, error) {
 	var err error
@@ -3308,6 +4562,74 @@ func NewSetAgentUserGrantRequestWithBody(server string, ns Namespace, name Agent
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetAgentReadmeRequest constructs an http.Request for the GetAgentReadme method
+func NewGetAgentReadmeRequest(server string, ns Namespace, name AgentName, params *GetAgentReadmeParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/readme", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Version != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "version", *params.Version, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -4202,6 +5524,222 @@ func NewListOrgAuditRequest(server string, org OrgHandle, params *ListOrgAuditPa
 	return req, nil
 }
 
+// NewCreateAuditExportRequest calls the generic CreateAuditExport builder with application/json body
+func NewCreateAuditExportRequest(server string, org OrgHandle, body CreateAuditExportJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateAuditExportRequestWithBody(server, org, "application/json", bodyReader)
+}
+
+// NewCreateAuditExportRequestWithBody constructs an http.Request for the CreateAuditExport method, with any body, and a specified content type
+func NewCreateAuditExportRequestWithBody(server string, org OrgHandle, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/audit/exports", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetAuditExportRequest constructs an http.Request for the GetAuditExport method
+func NewGetAuditExportRequest(server string, org OrgHandle, id openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/audit/exports/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListDomainClaimsRequest constructs an http.Request for the ListDomainClaims method
+func NewListDomainClaimsRequest(server string, org OrgHandle) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/domain-claims", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateDomainClaimRequest calls the generic CreateDomainClaim builder with application/json body
+func NewCreateDomainClaimRequest(server string, org OrgHandle, body CreateDomainClaimJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateDomainClaimRequestWithBody(server, org, "application/json", bodyReader)
+}
+
+// NewCreateDomainClaimRequestWithBody constructs an http.Request for the CreateDomainClaim method, with any body, and a specified content type
+func NewCreateDomainClaimRequestWithBody(server string, org OrgHandle, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/domain-claims", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewVerifyDomainClaimRequest calls the generic VerifyDomainClaim builder with application/json body
+func NewVerifyDomainClaimRequest(server string, org OrgHandle, body VerifyDomainClaimJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewVerifyDomainClaimRequestWithBody(server, org, "application/json", bodyReader)
+}
+
+// NewVerifyDomainClaimRequestWithBody constructs an http.Request for the VerifyDomainClaim method, with any body, and a specified content type
+func NewVerifyDomainClaimRequestWithBody(server string, org OrgHandle, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/domain-claims/verify", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewListOrgMembersRequest constructs an http.Request for the ListOrgMembers method
 func NewListOrgMembersRequest(server string, org OrgHandle) (*http.Request, error) {
 	var err error
@@ -4408,6 +5946,432 @@ func NewSetOrgPolicyRequestWithBody(server string, org OrgHandle, contentType st
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListScimTokensRequest constructs an http.Request for the ListScimTokens method
+func NewListScimTokensRequest(server string, org OrgHandle) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/scim/tokens", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateScimTokenRequest calls the generic CreateScimToken builder with application/json body
+func NewCreateScimTokenRequest(server string, org OrgHandle, body CreateScimTokenJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateScimTokenRequestWithBody(server, org, "application/json", bodyReader)
+}
+
+// NewCreateScimTokenRequestWithBody constructs an http.Request for the CreateScimToken method, with any body, and a specified content type
+func NewCreateScimTokenRequestWithBody(server string, org OrgHandle, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/scim/tokens", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewRevokeScimTokenRequest constructs an http.Request for the RevokeScimToken method
+func NewRevokeScimTokenRequest(server string, org OrgHandle, tokenId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "tokenId", tokenId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/scim/tokens/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListSsoConnectionsRequest constructs an http.Request for the ListSsoConnections method
+func NewListSsoConnectionsRequest(server string, org OrgHandle) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/sso/connections", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDeleteSsoConnectionRequest constructs an http.Request for the DeleteSsoConnection method
+func NewDeleteSsoConnectionRequest(server string, org OrgHandle, kind DeleteSsoConnectionParamsKind) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "kind", kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/sso/connections/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutSsoConnectionRequest calls the generic PutSsoConnection builder with application/json body
+func NewPutSsoConnectionRequest(server string, org OrgHandle, kind PutSsoConnectionParamsKind, body PutSsoConnectionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutSsoConnectionRequestWithBody(server, org, kind, "application/json", bodyReader)
+}
+
+// NewPutSsoConnectionRequestWithBody constructs an http.Request for the PutSsoConnection method, with any body, and a specified content type
+func NewPutSsoConnectionRequestWithBody(server string, org OrgHandle, kind PutSsoConnectionParamsKind, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "kind", kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/sso/connections/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewOidcCallbackRequest constructs an http.Request for the OidcCallback method
+func NewOidcCallbackRequest(server string, org OrgHandle, params *OidcCallbackParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/sso/oidc/callback", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Code != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "code", *params.Code, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.State != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "state", *params.State, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewOidcStartRequest constructs an http.Request for the OidcStart method
+func NewOidcStartRequest(server string, org OrgHandle) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/sso/oidc/start", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSamlAcsRequest constructs an http.Request for the SamlAcs method
+func NewSamlAcsRequest(server string, org OrgHandle) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/sso/saml/acs", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetSamlMetadataRequest constructs an http.Request for the GetSamlMetadata method
+func NewGetSamlMetadataRequest(server string, org OrgHandle) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/sso/saml/metadata", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -4664,6 +6628,318 @@ func NewAddTeamMemberRequest(server string, org OrgHandle, team TeamSlug, handle
 	}
 
 	req, err := http.NewRequest(http.MethodPut, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListWebhooksRequest constructs an http.Request for the ListWebhooks method
+func NewListWebhooksRequest(server string, org OrgHandle) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/webhooks", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateWebhookRequest calls the generic CreateWebhook builder with application/json body
+func NewCreateWebhookRequest(server string, org OrgHandle, body CreateWebhookJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateWebhookRequestWithBody(server, org, "application/json", bodyReader)
+}
+
+// NewCreateWebhookRequestWithBody constructs an http.Request for the CreateWebhook method, with any body, and a specified content type
+func NewCreateWebhookRequestWithBody(server string, org OrgHandle, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/webhooks", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteWebhookRequest constructs an http.Request for the DeleteWebhook method
+func NewDeleteWebhookRequest(server string, org OrgHandle, id WebhookID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/webhooks/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetWebhookRequest constructs an http.Request for the GetWebhook method
+func NewGetWebhookRequest(server string, org OrgHandle, id WebhookID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/webhooks/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateWebhookRequest calls the generic UpdateWebhook builder with application/json body
+func NewUpdateWebhookRequest(server string, org OrgHandle, id WebhookID, body UpdateWebhookJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateWebhookRequestWithBody(server, org, id, "application/json", bodyReader)
+}
+
+// NewUpdateWebhookRequestWithBody constructs an http.Request for the UpdateWebhook method, with any body, and a specified content type
+func NewUpdateWebhookRequestWithBody(server string, org OrgHandle, id WebhookID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/webhooks/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListWebhookDeliveriesRequest constructs an http.Request for the ListWebhookDeliveries method
+func NewListWebhookDeliveriesRequest(server string, org OrgHandle, id WebhookID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/webhooks/%s/deliveries", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListAbuseReportsRequest constructs an http.Request for the ListAbuseReports method
+func NewListAbuseReportsRequest(server string, params *ListAbuseReportsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/platform/abuse-reports")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -4976,6 +7252,96 @@ func NewListReviewQueueRequest(server string, params *ListReviewQueueParams) (*h
 	return req, nil
 }
 
+// NewSearchAgentsRequest constructs an http.Request for the SearchAgents method
+func NewSearchAgentsRequest(server string, params *SearchAgentsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/search")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Q != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "q", *params.Q, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Kind != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "kind", *params.Kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetCurrentUserRequest constructs an http.Request for the GetCurrentUser method
 func NewGetCurrentUserRequest(server string) (*http.Request, error) {
 	var err error
@@ -5039,6 +7405,60 @@ func NewUpdateCurrentUserRequestWithBody(server string, contentType string, body
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteCurrentUserRequest constructs an http.Request for the DeleteCurrentUser method
+func NewDeleteCurrentUserRequest(server string, params *DeleteCurrentUserParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/delete")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.PublishedContent != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "publishedContent", *params.PublishedContent, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -5271,6 +7691,20 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PATCH /agents/{ns}/{name} (the `UpdateAgent` operationId).
 	UpdateAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, body UpdateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentResponse, error)
 
+	// ReportAbuseWithBodyWithResponse Report malicious or abusive content (authed, rate-limited §8.7).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /agents/{ns}/{name}/abuse-reports (the `ReportAbuse` operationId).
+	ReportAbuseWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReportAbuseResponse, error)
+
+	// ReportAbuseWithResponse Report malicious or abusive content (authed, rate-limited §8.7).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /agents/{ns}/{name}/abuse-reports (the `ReportAbuse` operationId).
+	ReportAbuseWithResponse(ctx context.Context, ns Namespace, name AgentName, body ReportAbuseJSONRequestBody, reqEditors ...RequestEditorFn) (*ReportAbuseResponse, error)
+
 	// ListAgentGrantsWithResponse List explicit grants (maintain).
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -5319,6 +7753,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PUT /agents/{ns}/{name}/grants/user/{handle} (the `SetAgentUserGrant` operationId).
 	SetAgentUserGrantWithResponse(ctx context.Context, ns Namespace, name AgentName, handle Handle, body SetAgentUserGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*SetAgentUserGrantResponse, error)
+
+	// GetAgentReadmeWithResponse The agent README rendered to sanitized HTML (§10.3, D-11).
+	//
+	// Markdown is rendered server-side through a strict allowlist: no raw HTML, no user styles, no SVG, external links rewritten, and invisible or bidi Unicode replaced with visible placeholders.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /agents/{ns}/{name}/readme (the `GetAgentReadme` operationId).
+	GetAgentReadmeWithResponse(ctx context.Context, ns Namespace, name AgentName, params *GetAgentReadmeParams, reqEditors ...RequestEditorFn) (*GetAgentReadmeResponse, error)
 
 	// ListVersionsWithResponse Version history, newest first.
 	//
@@ -5527,6 +7970,62 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/audit (the `ListOrgAudit` operationId).
 	ListOrgAuditWithResponse(ctx context.Context, org OrgHandle, params *ListOrgAuditParams, reqEditors ...RequestEditorFn) (*ListOrgAuditResponse, error)
 
+	// CreateAuditExportWithBodyWithResponse Start an async NDJSON audit export (admin+, §12.6).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/audit/exports (the `CreateAuditExport` operationId).
+	CreateAuditExportWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAuditExportResponse, error)
+
+	// CreateAuditExportWithResponse Start an async NDJSON audit export (admin+, §12.6).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/audit/exports (the `CreateAuditExport` operationId).
+	CreateAuditExportWithResponse(ctx context.Context, org OrgHandle, body CreateAuditExportJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAuditExportResponse, error)
+
+	// GetAuditExportWithResponse Poll an audit export's status and download reference (admin+, §12.6).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/audit/exports/{id} (the `GetAuditExport` operationId).
+	GetAuditExportWithResponse(ctx context.Context, org OrgHandle, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetAuditExportResponse, error)
+
+	// ListDomainClaimsWithResponse List domain claims (admin+, §12.4).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/domain-claims (the `ListDomainClaims` operationId).
+	ListDomainClaimsWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListDomainClaimsResponse, error)
+
+	// CreateDomainClaimWithBodyWithResponse Start a domain claim; returns the DNS TXT challenge (admin+, §12.4).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/domain-claims (the `CreateDomainClaim` operationId).
+	CreateDomainClaimWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateDomainClaimResponse, error)
+
+	// CreateDomainClaimWithResponse Start a domain claim; returns the DNS TXT challenge (admin+, §12.4).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/domain-claims (the `CreateDomainClaim` operationId).
+	CreateDomainClaimWithResponse(ctx context.Context, org OrgHandle, body CreateDomainClaimJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateDomainClaimResponse, error)
+
+	// VerifyDomainClaimWithBodyWithResponse Check the DNS TXT record and mark verified (admin+, §12.4).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/domain-claims/verify (the `VerifyDomainClaim` operationId).
+	VerifyDomainClaimWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*VerifyDomainClaimResponse, error)
+
+	// VerifyDomainClaimWithResponse Check the DNS TXT record and mark verified (admin+, §12.4).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/domain-claims/verify (the `VerifyDomainClaim` operationId).
+	VerifyDomainClaimWithResponse(ctx context.Context, org OrgHandle, body VerifyDomainClaimJSONRequestBody, reqEditors ...RequestEditorFn) (*VerifyDomainClaimResponse, error)
+
 	// ListOrgMembersWithResponse List members with roles (members can view).
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -5576,6 +8075,90 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /orgs/{org}/policy (the `SetOrgPolicy` operationId).
 	SetOrgPolicyWithResponse(ctx context.Context, org OrgHandle, body SetOrgPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*SetOrgPolicyResponse, error)
 
+	// ListScimTokensWithResponse List active SCIM provisioning tokens (owner, §12.5).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/scim/tokens (the `ListScimTokens` operationId).
+	ListScimTokensWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListScimTokensResponse, error)
+
+	// CreateScimTokenWithBodyWithResponse Mint a SCIM bearer token (owner, §12.5).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
+	CreateScimTokenWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateScimTokenResponse, error)
+
+	// CreateScimTokenWithResponse Mint a SCIM bearer token (owner, §12.5).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
+	CreateScimTokenWithResponse(ctx context.Context, org OrgHandle, body CreateScimTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateScimTokenResponse, error)
+
+	// RevokeScimTokenWithResponse Revoke a SCIM token (owner, §12.5).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/scim/tokens/{tokenId} (the `RevokeScimToken` operationId).
+	RevokeScimTokenWithResponse(ctx context.Context, org OrgHandle, tokenId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokeScimTokenResponse, error)
+
+	// ListSsoConnectionsWithResponse List the org's SSO connections (owner, §12.4).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/sso/connections (the `ListSsoConnections` operationId).
+	ListSsoConnectionsWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListSsoConnectionsResponse, error)
+
+	// DeleteSsoConnectionWithResponse Delete a connection (owner, §12.4).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/sso/connections/{kind} (the `DeleteSsoConnection` operationId).
+	DeleteSsoConnectionWithResponse(ctx context.Context, org OrgHandle, kind DeleteSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*DeleteSsoConnectionResponse, error)
+
+	// PutSsoConnectionWithBodyWithResponse Create or update a SAML/OIDC connection (owner, §12.4).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
+	PutSsoConnectionWithBodyWithResponse(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutSsoConnectionResponse, error)
+
+	// PutSsoConnectionWithResponse Create or update a SAML/OIDC connection (owner, §12.4).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
+	PutSsoConnectionWithResponse(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, body PutSsoConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*PutSsoConnectionResponse, error)
+
+	// OidcCallbackWithResponse OIDC redirect URI — exchange the code and establish a session (§12.4).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/sso/oidc/callback (the `OidcCallback` operationId).
+	OidcCallbackWithResponse(ctx context.Context, org OrgHandle, params *OidcCallbackParams, reqEditors ...RequestEditorFn) (*OidcCallbackResponse, error)
+
+	// OidcStartWithResponse Begin the OIDC auth-code + PKCE flow (redirect to IdP, §12.4).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/sso/oidc/start (the `OidcStart` operationId).
+	OidcStartWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*OidcStartResponse, error)
+
+	// SamlAcsWithResponse SAML Assertion Consumer Service — consume a signed assertion (§12.4).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/sso/saml/acs (the `SamlAcs` operationId).
+	SamlAcsWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*SamlAcsResponse, error)
+
+	// GetSamlMetadataWithResponse SP SAML metadata for this org's connection (§12.4).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/sso/saml/metadata (the `GetSamlMetadata` operationId).
+	GetSamlMetadataWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*GetSamlMetadataResponse, error)
+
 	// ListTeamsWithResponse List teams (members can view).
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -5624,6 +8207,69 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PUT /orgs/{org}/teams/{team}/members/{handle} (the `AddTeamMember` operationId).
 	AddTeamMemberWithResponse(ctx context.Context, org OrgHandle, team TeamSlug, handle Handle, reqEditors ...RequestEditorFn) (*AddTeamMemberResponse, error)
+
+	// ListWebhooksWithResponse List webhook endpoints (admin+, §9.3).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/webhooks (the `ListWebhooks` operationId).
+	ListWebhooksWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListWebhooksResponse, error)
+
+	// CreateWebhookWithBodyWithResponse Create a webhook endpoint (admin+, §9.3).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/webhooks (the `CreateWebhook` operationId).
+	CreateWebhookWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateWebhookResponse, error)
+
+	// CreateWebhookWithResponse Create a webhook endpoint (admin+, §9.3).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/webhooks (the `CreateWebhook` operationId).
+	CreateWebhookWithResponse(ctx context.Context, org OrgHandle, body CreateWebhookJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateWebhookResponse, error)
+
+	// DeleteWebhookWithResponse Delete a webhook endpoint (admin+, §9.3).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/webhooks/{id} (the `DeleteWebhook` operationId).
+	DeleteWebhookWithResponse(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*DeleteWebhookResponse, error)
+
+	// GetWebhookWithResponse Get a webhook endpoint (admin+, §9.3).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/webhooks/{id} (the `GetWebhook` operationId).
+	GetWebhookWithResponse(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*GetWebhookResponse, error)
+
+	// UpdateWebhookWithBodyWithResponse Update a webhook endpoint (admin+, §9.3).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /orgs/{org}/webhooks/{id} (the `UpdateWebhook` operationId).
+	UpdateWebhookWithBodyWithResponse(ctx context.Context, org OrgHandle, id WebhookID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateWebhookResponse, error)
+
+	// UpdateWebhookWithResponse Update a webhook endpoint (admin+, §9.3).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /orgs/{org}/webhooks/{id} (the `UpdateWebhook` operationId).
+	UpdateWebhookWithResponse(ctx context.Context, org OrgHandle, id WebhookID, body UpdateWebhookJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateWebhookResponse, error)
+
+	// ListWebhookDeliveriesWithResponse Recent delivery attempts for an endpoint (admin+, §9.3).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/webhooks/{id}/deliveries (the `ListWebhookDeliveries` operationId).
+	ListWebhookDeliveriesWithResponse(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*ListWebhookDeliveriesResponse, error)
+
+	// ListAbuseReportsWithResponse Open abuse reports (platform staff).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /platform/abuse-reports (the `ListAbuseReports` operationId).
+	ListAbuseReportsWithResponse(ctx context.Context, params *ListAbuseReportsParams, reqEditors ...RequestEditorFn) (*ListAbuseReportsResponse, error)
 
 	// PlatformAgentActionWithBodyWithResponse Quarantine, block, or reinstate an agent (platform staff, §7).
 	//
@@ -5681,6 +8327,13 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /review-queue (the `ListReviewQueue` operationId).
 	ListReviewQueueWithResponse(ctx context.Context, params *ListReviewQueueParams, reqEditors ...RequestEditorFn) (*ListReviewQueueResponse, error)
 
+	// SearchAgentsWithResponse Full-text search over public agents with facets (§10.4).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /search (the `SearchAgents` operationId).
+	SearchAgentsWithResponse(ctx context.Context, params *SearchAgentsParams, reqEditors ...RequestEditorFn) (*SearchAgentsResponse, error)
+
 	// GetCurrentUserWithResponse The authenticated user.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -5701,6 +8354,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PATCH /user (the `UpdateCurrentUser` operationId).
 	UpdateCurrentUserWithResponse(ctx context.Context, body UpdateCurrentUserJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateCurrentUserResponse, error)
+
+	// DeleteCurrentUserWithResponse Erase the caller's account (GDPR flow, §12.7).
+	//
+	// Purges personal data and pseudonymizes the account. Published public versions are not deleted — they are yanked so already-installed copies keep verifying — or you can transfer the agents to an org first and then delete.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
+	DeleteCurrentUserWithResponse(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*DeleteCurrentUserResponse, error)
 
 	// ListTokensWithResponse List the caller's personal access tokens (metadata only).
 	//
@@ -5978,6 +8640,47 @@ func (r UpdateAgentResponse) ContentType() string {
 	return ""
 }
 
+type ReportAbuseResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ReportAbuseResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ReportAbuseResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ReportAbuseResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReportAbuseResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ReportAbuseResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListAgentGrantsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -6184,6 +8887,47 @@ func (r SetAgentUserGrantResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r SetAgentUserGrantResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetAgentReadmeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetAgentReadmeResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetAgentReadmeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAgentReadmeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAgentReadmeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetAgentReadmeResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -7108,6 +9852,246 @@ func (r ListOrgAuditResponse) ContentType() string {
 	return ""
 }
 
+type CreateAuditExportResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *AuditExport
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r CreateAuditExportResponse) GetJSON202() *AuditExport {
+	return r.JSON202
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r CreateAuditExportResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateAuditExportResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateAuditExportResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateAuditExportResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateAuditExportResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetAuditExportResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AuditExport
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetAuditExportResponse) GetJSON200() *AuditExport {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetAuditExportResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetAuditExportResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAuditExportResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAuditExportResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetAuditExportResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListDomainClaimsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]DomainClaim
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListDomainClaimsResponse) GetJSON200() *[]DomainClaim {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListDomainClaimsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListDomainClaimsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListDomainClaimsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListDomainClaimsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListDomainClaimsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateDomainClaimResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *DomainClaim
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateDomainClaimResponse) GetJSON201() *DomainClaim {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r CreateDomainClaimResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateDomainClaimResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateDomainClaimResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateDomainClaimResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateDomainClaimResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type VerifyDomainClaimResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *DomainClaim
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r VerifyDomainClaimResponse) GetJSON200() *DomainClaim {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r VerifyDomainClaimResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r VerifyDomainClaimResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r VerifyDomainClaimResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r VerifyDomainClaimResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r VerifyDomainClaimResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListOrgMembersResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -7335,6 +10319,458 @@ func (r SetOrgPolicyResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r SetOrgPolicyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListScimTokensResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]ScimToken
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListScimTokensResponse) GetJSON200() *[]ScimToken {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListScimTokensResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListScimTokensResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListScimTokensResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListScimTokensResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListScimTokensResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateScimTokenResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *ScimTokenCreated
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateScimTokenResponse) GetJSON201() *ScimTokenCreated {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r CreateScimTokenResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateScimTokenResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateScimTokenResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateScimTokenResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateScimTokenResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RevokeScimTokenResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r RevokeScimTokenResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r RevokeScimTokenResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RevokeScimTokenResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RevokeScimTokenResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RevokeScimTokenResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListSsoConnectionsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]SsoConnection
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListSsoConnectionsResponse) GetJSON200() *[]SsoConnection {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListSsoConnectionsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListSsoConnectionsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListSsoConnectionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListSsoConnectionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListSsoConnectionsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteSsoConnectionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DeleteSsoConnectionResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteSsoConnectionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteSsoConnectionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteSsoConnectionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteSsoConnectionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PutSsoConnectionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *SsoConnection
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PutSsoConnectionResponse) GetJSON200() *SsoConnection {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r PutSsoConnectionResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PutSsoConnectionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutSsoConnectionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutSsoConnectionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutSsoConnectionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type OidcCallbackResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *LoginResult
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r OidcCallbackResponse) GetJSON200() *LoginResult {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r OidcCallbackResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r OidcCallbackResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r OidcCallbackResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r OidcCallbackResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r OidcCallbackResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type OidcStartResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r OidcStartResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r OidcStartResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r OidcStartResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r OidcStartResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r OidcStartResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SamlAcsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *LoginResult
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SamlAcsResponse) GetJSON200() *LoginResult {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r SamlAcsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SamlAcsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SamlAcsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SamlAcsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SamlAcsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetSamlMetadataResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetSamlMetadataResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetSamlMetadataResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetSamlMetadataResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetSamlMetadataResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetSamlMetadataResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -7602,6 +11038,335 @@ func (r AddTeamMemberResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r AddTeamMemberResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListWebhooksResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]WebhookEndpoint
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListWebhooksResponse) GetJSON200() *[]WebhookEndpoint {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListWebhooksResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListWebhooksResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListWebhooksResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListWebhooksResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListWebhooksResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateWebhookResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *WebhookEndpointCreated
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateWebhookResponse) GetJSON201() *WebhookEndpointCreated {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r CreateWebhookResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateWebhookResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateWebhookResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateWebhookResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateWebhookResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteWebhookResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DeleteWebhookResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteWebhookResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteWebhookResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteWebhookResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteWebhookResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetWebhookResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *WebhookEndpoint
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetWebhookResponse) GetJSON200() *WebhookEndpoint {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetWebhookResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetWebhookResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetWebhookResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetWebhookResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetWebhookResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UpdateWebhookResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *WebhookEndpoint
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UpdateWebhookResponse) GetJSON200() *WebhookEndpoint {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r UpdateWebhookResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r UpdateWebhookResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateWebhookResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateWebhookResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdateWebhookResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListWebhookDeliveriesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]WebhookDelivery
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListWebhookDeliveriesResponse) GetJSON200() *[]WebhookDelivery {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListWebhookDeliveriesResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListWebhookDeliveriesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListWebhookDeliveriesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListWebhookDeliveriesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListWebhookDeliveriesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListAbuseReportsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]AbuseReport
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListAbuseReportsResponse) GetJSON200() *[]AbuseReport {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListAbuseReportsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListAbuseReportsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAbuseReportsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAbuseReportsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListAbuseReportsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -7882,6 +11647,54 @@ func (r ListReviewQueueResponse) ContentType() string {
 	return ""
 }
 
+type SearchAgentsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *SearchResults
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SearchAgentsResponse) GetJSON200() *SearchResults {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r SearchAgentsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SearchAgentsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SearchAgentsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SearchAgentsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SearchAgentsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetCurrentUserResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -7972,6 +11785,47 @@ func (r UpdateCurrentUserResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r UpdateCurrentUserResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteCurrentUserResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DeleteCurrentUserResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteCurrentUserResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteCurrentUserResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteCurrentUserResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteCurrentUserResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -8254,6 +12108,32 @@ func (c *ClientWithResponses) UpdateAgentWithResponse(ctx context.Context, ns Na
 	return ParseUpdateAgentResponse(rsp)
 }
 
+// ReportAbuseWithBodyWithResponse Report malicious or abusive content (authed, rate-limited §8.7).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /agents/{ns}/{name}/abuse-reports (the `ReportAbuse` operationId).
+func (c *ClientWithResponses) ReportAbuseWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReportAbuseResponse, error) {
+	rsp, err := c.ReportAbuseWithBody(ctx, ns, name, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReportAbuseResponse(rsp)
+}
+
+// ReportAbuseWithResponse Report malicious or abusive content (authed, rate-limited §8.7).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /agents/{ns}/{name}/abuse-reports (the `ReportAbuse` operationId).
+func (c *ClientWithResponses) ReportAbuseWithResponse(ctx context.Context, ns Namespace, name AgentName, body ReportAbuseJSONRequestBody, reqEditors ...RequestEditorFn) (*ReportAbuseResponse, error) {
+	rsp, err := c.ReportAbuse(ctx, ns, name, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReportAbuseResponse(rsp)
+}
+
 // ListAgentGrantsWithResponse List explicit grants (maintain).
 //
 // Returns a wrapper object for the known response body format(s).
@@ -8343,6 +12223,21 @@ func (c *ClientWithResponses) SetAgentUserGrantWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseSetAgentUserGrantResponse(rsp)
+}
+
+// GetAgentReadmeWithResponse The agent README rendered to sanitized HTML (§10.3, D-11).
+//
+// Markdown is rendered server-side through a strict allowlist: no raw HTML, no user styles, no SVG, external links rewritten, and invisible or bidi Unicode replaced with visible placeholders.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /agents/{ns}/{name}/readme (the `GetAgentReadme` operationId).
+func (c *ClientWithResponses) GetAgentReadmeWithResponse(ctx context.Context, ns Namespace, name AgentName, params *GetAgentReadmeParams, reqEditors ...RequestEditorFn) (*GetAgentReadmeResponse, error) {
+	rsp, err := c.GetAgentReadme(ctx, ns, name, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAgentReadmeResponse(rsp)
 }
 
 // ListVersionsWithResponse Version history, newest first.
@@ -8726,6 +12621,110 @@ func (c *ClientWithResponses) ListOrgAuditWithResponse(ctx context.Context, org 
 	return ParseListOrgAuditResponse(rsp)
 }
 
+// CreateAuditExportWithBodyWithResponse Start an async NDJSON audit export (admin+, §12.6).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/audit/exports (the `CreateAuditExport` operationId).
+func (c *ClientWithResponses) CreateAuditExportWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAuditExportResponse, error) {
+	rsp, err := c.CreateAuditExportWithBody(ctx, org, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateAuditExportResponse(rsp)
+}
+
+// CreateAuditExportWithResponse Start an async NDJSON audit export (admin+, §12.6).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/audit/exports (the `CreateAuditExport` operationId).
+func (c *ClientWithResponses) CreateAuditExportWithResponse(ctx context.Context, org OrgHandle, body CreateAuditExportJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAuditExportResponse, error) {
+	rsp, err := c.CreateAuditExport(ctx, org, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateAuditExportResponse(rsp)
+}
+
+// GetAuditExportWithResponse Poll an audit export's status and download reference (admin+, §12.6).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/audit/exports/{id} (the `GetAuditExport` operationId).
+func (c *ClientWithResponses) GetAuditExportWithResponse(ctx context.Context, org OrgHandle, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetAuditExportResponse, error) {
+	rsp, err := c.GetAuditExport(ctx, org, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAuditExportResponse(rsp)
+}
+
+// ListDomainClaimsWithResponse List domain claims (admin+, §12.4).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/domain-claims (the `ListDomainClaims` operationId).
+func (c *ClientWithResponses) ListDomainClaimsWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListDomainClaimsResponse, error) {
+	rsp, err := c.ListDomainClaims(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListDomainClaimsResponse(rsp)
+}
+
+// CreateDomainClaimWithBodyWithResponse Start a domain claim; returns the DNS TXT challenge (admin+, §12.4).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/domain-claims (the `CreateDomainClaim` operationId).
+func (c *ClientWithResponses) CreateDomainClaimWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateDomainClaimResponse, error) {
+	rsp, err := c.CreateDomainClaimWithBody(ctx, org, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateDomainClaimResponse(rsp)
+}
+
+// CreateDomainClaimWithResponse Start a domain claim; returns the DNS TXT challenge (admin+, §12.4).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/domain-claims (the `CreateDomainClaim` operationId).
+func (c *ClientWithResponses) CreateDomainClaimWithResponse(ctx context.Context, org OrgHandle, body CreateDomainClaimJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateDomainClaimResponse, error) {
+	rsp, err := c.CreateDomainClaim(ctx, org, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateDomainClaimResponse(rsp)
+}
+
+// VerifyDomainClaimWithBodyWithResponse Check the DNS TXT record and mark verified (admin+, §12.4).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/domain-claims/verify (the `VerifyDomainClaim` operationId).
+func (c *ClientWithResponses) VerifyDomainClaimWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*VerifyDomainClaimResponse, error) {
+	rsp, err := c.VerifyDomainClaimWithBody(ctx, org, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseVerifyDomainClaimResponse(rsp)
+}
+
+// VerifyDomainClaimWithResponse Check the DNS TXT record and mark verified (admin+, §12.4).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/domain-claims/verify (the `VerifyDomainClaim` operationId).
+func (c *ClientWithResponses) VerifyDomainClaimWithResponse(ctx context.Context, org OrgHandle, body VerifyDomainClaimJSONRequestBody, reqEditors ...RequestEditorFn) (*VerifyDomainClaimResponse, error) {
+	rsp, err := c.VerifyDomainClaim(ctx, org, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseVerifyDomainClaimResponse(rsp)
+}
+
 // ListOrgMembersWithResponse List members with roles (members can view).
 //
 // Returns a wrapper object for the known response body format(s).
@@ -8817,6 +12816,162 @@ func (c *ClientWithResponses) SetOrgPolicyWithResponse(ctx context.Context, org 
 	return ParseSetOrgPolicyResponse(rsp)
 }
 
+// ListScimTokensWithResponse List active SCIM provisioning tokens (owner, §12.5).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/scim/tokens (the `ListScimTokens` operationId).
+func (c *ClientWithResponses) ListScimTokensWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListScimTokensResponse, error) {
+	rsp, err := c.ListScimTokens(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListScimTokensResponse(rsp)
+}
+
+// CreateScimTokenWithBodyWithResponse Mint a SCIM bearer token (owner, §12.5).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
+func (c *ClientWithResponses) CreateScimTokenWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateScimTokenResponse, error) {
+	rsp, err := c.CreateScimTokenWithBody(ctx, org, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateScimTokenResponse(rsp)
+}
+
+// CreateScimTokenWithResponse Mint a SCIM bearer token (owner, §12.5).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
+func (c *ClientWithResponses) CreateScimTokenWithResponse(ctx context.Context, org OrgHandle, body CreateScimTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateScimTokenResponse, error) {
+	rsp, err := c.CreateScimToken(ctx, org, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateScimTokenResponse(rsp)
+}
+
+// RevokeScimTokenWithResponse Revoke a SCIM token (owner, §12.5).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/scim/tokens/{tokenId} (the `RevokeScimToken` operationId).
+func (c *ClientWithResponses) RevokeScimTokenWithResponse(ctx context.Context, org OrgHandle, tokenId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokeScimTokenResponse, error) {
+	rsp, err := c.RevokeScimToken(ctx, org, tokenId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRevokeScimTokenResponse(rsp)
+}
+
+// ListSsoConnectionsWithResponse List the org's SSO connections (owner, §12.4).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/sso/connections (the `ListSsoConnections` operationId).
+func (c *ClientWithResponses) ListSsoConnectionsWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListSsoConnectionsResponse, error) {
+	rsp, err := c.ListSsoConnections(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListSsoConnectionsResponse(rsp)
+}
+
+// DeleteSsoConnectionWithResponse Delete a connection (owner, §12.4).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/sso/connections/{kind} (the `DeleteSsoConnection` operationId).
+func (c *ClientWithResponses) DeleteSsoConnectionWithResponse(ctx context.Context, org OrgHandle, kind DeleteSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*DeleteSsoConnectionResponse, error) {
+	rsp, err := c.DeleteSsoConnection(ctx, org, kind, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteSsoConnectionResponse(rsp)
+}
+
+// PutSsoConnectionWithBodyWithResponse Create or update a SAML/OIDC connection (owner, §12.4).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
+func (c *ClientWithResponses) PutSsoConnectionWithBodyWithResponse(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutSsoConnectionResponse, error) {
+	rsp, err := c.PutSsoConnectionWithBody(ctx, org, kind, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutSsoConnectionResponse(rsp)
+}
+
+// PutSsoConnectionWithResponse Create or update a SAML/OIDC connection (owner, §12.4).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
+func (c *ClientWithResponses) PutSsoConnectionWithResponse(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, body PutSsoConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*PutSsoConnectionResponse, error) {
+	rsp, err := c.PutSsoConnection(ctx, org, kind, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutSsoConnectionResponse(rsp)
+}
+
+// OidcCallbackWithResponse OIDC redirect URI — exchange the code and establish a session (§12.4).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/sso/oidc/callback (the `OidcCallback` operationId).
+func (c *ClientWithResponses) OidcCallbackWithResponse(ctx context.Context, org OrgHandle, params *OidcCallbackParams, reqEditors ...RequestEditorFn) (*OidcCallbackResponse, error) {
+	rsp, err := c.OidcCallback(ctx, org, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseOidcCallbackResponse(rsp)
+}
+
+// OidcStartWithResponse Begin the OIDC auth-code + PKCE flow (redirect to IdP, §12.4).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/sso/oidc/start (the `OidcStart` operationId).
+func (c *ClientWithResponses) OidcStartWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*OidcStartResponse, error) {
+	rsp, err := c.OidcStart(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseOidcStartResponse(rsp)
+}
+
+// SamlAcsWithResponse SAML Assertion Consumer Service — consume a signed assertion (§12.4).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/sso/saml/acs (the `SamlAcs` operationId).
+func (c *ClientWithResponses) SamlAcsWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*SamlAcsResponse, error) {
+	rsp, err := c.SamlAcs(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSamlAcsResponse(rsp)
+}
+
+// GetSamlMetadataWithResponse SP SAML metadata for this org's connection (§12.4).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/sso/saml/metadata (the `GetSamlMetadata` operationId).
+func (c *ClientWithResponses) GetSamlMetadataWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*GetSamlMetadataResponse, error) {
+	rsp, err := c.GetSamlMetadata(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetSamlMetadataResponse(rsp)
+}
+
 // ListTeamsWithResponse List teams (members can view).
 //
 // Returns a wrapper object for the known response body format(s).
@@ -8906,6 +13061,123 @@ func (c *ClientWithResponses) AddTeamMemberWithResponse(ctx context.Context, org
 		return nil, err
 	}
 	return ParseAddTeamMemberResponse(rsp)
+}
+
+// ListWebhooksWithResponse List webhook endpoints (admin+, §9.3).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/webhooks (the `ListWebhooks` operationId).
+func (c *ClientWithResponses) ListWebhooksWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListWebhooksResponse, error) {
+	rsp, err := c.ListWebhooks(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListWebhooksResponse(rsp)
+}
+
+// CreateWebhookWithBodyWithResponse Create a webhook endpoint (admin+, §9.3).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/webhooks (the `CreateWebhook` operationId).
+func (c *ClientWithResponses) CreateWebhookWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateWebhookResponse, error) {
+	rsp, err := c.CreateWebhookWithBody(ctx, org, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateWebhookResponse(rsp)
+}
+
+// CreateWebhookWithResponse Create a webhook endpoint (admin+, §9.3).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/webhooks (the `CreateWebhook` operationId).
+func (c *ClientWithResponses) CreateWebhookWithResponse(ctx context.Context, org OrgHandle, body CreateWebhookJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateWebhookResponse, error) {
+	rsp, err := c.CreateWebhook(ctx, org, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateWebhookResponse(rsp)
+}
+
+// DeleteWebhookWithResponse Delete a webhook endpoint (admin+, §9.3).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/webhooks/{id} (the `DeleteWebhook` operationId).
+func (c *ClientWithResponses) DeleteWebhookWithResponse(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*DeleteWebhookResponse, error) {
+	rsp, err := c.DeleteWebhook(ctx, org, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteWebhookResponse(rsp)
+}
+
+// GetWebhookWithResponse Get a webhook endpoint (admin+, §9.3).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/webhooks/{id} (the `GetWebhook` operationId).
+func (c *ClientWithResponses) GetWebhookWithResponse(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*GetWebhookResponse, error) {
+	rsp, err := c.GetWebhook(ctx, org, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetWebhookResponse(rsp)
+}
+
+// UpdateWebhookWithBodyWithResponse Update a webhook endpoint (admin+, §9.3).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /orgs/{org}/webhooks/{id} (the `UpdateWebhook` operationId).
+func (c *ClientWithResponses) UpdateWebhookWithBodyWithResponse(ctx context.Context, org OrgHandle, id WebhookID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateWebhookResponse, error) {
+	rsp, err := c.UpdateWebhookWithBody(ctx, org, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateWebhookResponse(rsp)
+}
+
+// UpdateWebhookWithResponse Update a webhook endpoint (admin+, §9.3).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /orgs/{org}/webhooks/{id} (the `UpdateWebhook` operationId).
+func (c *ClientWithResponses) UpdateWebhookWithResponse(ctx context.Context, org OrgHandle, id WebhookID, body UpdateWebhookJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateWebhookResponse, error) {
+	rsp, err := c.UpdateWebhook(ctx, org, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateWebhookResponse(rsp)
+}
+
+// ListWebhookDeliveriesWithResponse Recent delivery attempts for an endpoint (admin+, §9.3).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/webhooks/{id}/deliveries (the `ListWebhookDeliveries` operationId).
+func (c *ClientWithResponses) ListWebhookDeliveriesWithResponse(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*ListWebhookDeliveriesResponse, error) {
+	rsp, err := c.ListWebhookDeliveries(ctx, org, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListWebhookDeliveriesResponse(rsp)
+}
+
+// ListAbuseReportsWithResponse Open abuse reports (platform staff).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /platform/abuse-reports (the `ListAbuseReports` operationId).
+func (c *ClientWithResponses) ListAbuseReportsWithResponse(ctx context.Context, params *ListAbuseReportsParams, reqEditors ...RequestEditorFn) (*ListAbuseReportsResponse, error) {
+	rsp, err := c.ListAbuseReports(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAbuseReportsResponse(rsp)
 }
 
 // PlatformAgentActionWithBodyWithResponse Quarantine, block, or reinstate an agent (platform staff, §7).
@@ -9012,6 +13284,19 @@ func (c *ClientWithResponses) ListReviewQueueWithResponse(ctx context.Context, p
 	return ParseListReviewQueueResponse(rsp)
 }
 
+// SearchAgentsWithResponse Full-text search over public agents with facets (§10.4).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /search (the `SearchAgents` operationId).
+func (c *ClientWithResponses) SearchAgentsWithResponse(ctx context.Context, params *SearchAgentsParams, reqEditors ...RequestEditorFn) (*SearchAgentsResponse, error) {
+	rsp, err := c.SearchAgents(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSearchAgentsResponse(rsp)
+}
+
 // GetCurrentUserWithResponse The authenticated user.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -9049,6 +13334,21 @@ func (c *ClientWithResponses) UpdateCurrentUserWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseUpdateCurrentUserResponse(rsp)
+}
+
+// DeleteCurrentUserWithResponse Erase the caller's account (GDPR flow, §12.7).
+//
+// Purges personal data and pseudonymizes the account. Published public versions are not deleted — they are yanked so already-installed copies keep verifying — or you can transfer the agents to an org first and then delete.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
+func (c *ClientWithResponses) DeleteCurrentUserWithResponse(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*DeleteCurrentUserResponse, error) {
+	rsp, err := c.DeleteCurrentUser(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteCurrentUserResponse(rsp)
 }
 
 // ListTokensWithResponse List the caller's personal access tokens (metadata only).
@@ -9281,6 +13581,35 @@ func ParseUpdateAgentResponse(rsp *http.Response) (*UpdateAgentResponse, error) 
 	return response, nil
 }
 
+// ParseReportAbuseResponse parses an HTTP response from a ReportAbuseWithResponse call
+func ParseReportAbuseResponse(rsp *http.Response) (*ReportAbuseResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReportAbuseResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 202:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListAgentGrantsResponse parses an HTTP response from a ListAgentGrantsWithResponse call
 func ParseListAgentGrantsResponse(rsp *http.Response) (*ListAgentGrantsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -9418,6 +13747,32 @@ func ParseSetAgentUserGrantResponse(rsp *http.Response) (*SetAgentUserGrantRespo
 	case rsp.StatusCode == 204:
 		break // No content-type
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAgentReadmeResponse parses an HTTP response from a GetAgentReadmeWithResponse call
+func ParseGetAgentReadmeResponse(rsp *http.Response) (*GetAgentReadmeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAgentReadmeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -10072,6 +14427,171 @@ func ParseListOrgAuditResponse(rsp *http.Response) (*ListOrgAuditResponse, error
 	return response, nil
 }
 
+// ParseCreateAuditExportResponse parses an HTTP response from a CreateAuditExportWithResponse call
+func ParseCreateAuditExportResponse(rsp *http.Response) (*CreateAuditExportResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateAuditExportResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest AuditExport
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAuditExportResponse parses an HTTP response from a GetAuditExportWithResponse call
+func ParseGetAuditExportResponse(rsp *http.Response) (*GetAuditExportResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAuditExportResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AuditExport
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListDomainClaimsResponse parses an HTTP response from a ListDomainClaimsWithResponse call
+func ParseListDomainClaimsResponse(rsp *http.Response) (*ListDomainClaimsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListDomainClaimsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []DomainClaim
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateDomainClaimResponse parses an HTTP response from a CreateDomainClaimWithResponse call
+func ParseCreateDomainClaimResponse(rsp *http.Response) (*CreateDomainClaimResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateDomainClaimResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest DomainClaim
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseVerifyDomainClaimResponse parses an HTTP response from a VerifyDomainClaimWithResponse call
+func ParseVerifyDomainClaimResponse(rsp *http.Response) (*VerifyDomainClaimResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &VerifyDomainClaimResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DomainClaim
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListOrgMembersResponse parses an HTTP response from a ListOrgMembersWithResponse call
 func ParseListOrgMembersResponse(rsp *http.Response) (*ListOrgMembersResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -10221,6 +14741,317 @@ func ParseSetOrgPolicyResponse(rsp *http.Response) (*SetOrgPolicyResponse, error
 		}
 		response.JSON200 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListScimTokensResponse parses an HTTP response from a ListScimTokensWithResponse call
+func ParseListScimTokensResponse(rsp *http.Response) (*ListScimTokensResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListScimTokensResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []ScimToken
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateScimTokenResponse parses an HTTP response from a CreateScimTokenWithResponse call
+func ParseCreateScimTokenResponse(rsp *http.Response) (*CreateScimTokenResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateScimTokenResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ScimTokenCreated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRevokeScimTokenResponse parses an HTTP response from a RevokeScimTokenWithResponse call
+func ParseRevokeScimTokenResponse(rsp *http.Response) (*RevokeScimTokenResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RevokeScimTokenResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListSsoConnectionsResponse parses an HTTP response from a ListSsoConnectionsWithResponse call
+func ParseListSsoConnectionsResponse(rsp *http.Response) (*ListSsoConnectionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListSsoConnectionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []SsoConnection
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteSsoConnectionResponse parses an HTTP response from a DeleteSsoConnectionWithResponse call
+func ParseDeleteSsoConnectionResponse(rsp *http.Response) (*DeleteSsoConnectionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteSsoConnectionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutSsoConnectionResponse parses an HTTP response from a PutSsoConnectionWithResponse call
+func ParsePutSsoConnectionResponse(rsp *http.Response) (*PutSsoConnectionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutSsoConnectionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SsoConnection
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseOidcCallbackResponse parses an HTTP response from a OidcCallbackWithResponse call
+func ParseOidcCallbackResponse(rsp *http.Response) (*OidcCallbackResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &OidcCallbackResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest LoginResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseOidcStartResponse parses an HTTP response from a OidcStartWithResponse call
+func ParseOidcStartResponse(rsp *http.Response) (*OidcStartResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &OidcStartResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 302:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSamlAcsResponse parses an HTTP response from a SamlAcsWithResponse call
+func ParseSamlAcsResponse(rsp *http.Response) (*SamlAcsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SamlAcsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest LoginResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetSamlMetadataResponse parses an HTTP response from a GetSamlMetadataWithResponse call
+func ParseGetSamlMetadataResponse(rsp *http.Response) (*GetSamlMetadataResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetSamlMetadataResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -10406,6 +15237,233 @@ func ParseAddTeamMemberResponse(rsp *http.Response) (*AddTeamMemberResponse, err
 	switch {
 	case rsp.StatusCode == 204:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListWebhooksResponse parses an HTTP response from a ListWebhooksWithResponse call
+func ParseListWebhooksResponse(rsp *http.Response) (*ListWebhooksResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListWebhooksResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []WebhookEndpoint
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateWebhookResponse parses an HTTP response from a CreateWebhookWithResponse call
+func ParseCreateWebhookResponse(rsp *http.Response) (*CreateWebhookResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateWebhookResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest WebhookEndpointCreated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteWebhookResponse parses an HTTP response from a DeleteWebhookWithResponse call
+func ParseDeleteWebhookResponse(rsp *http.Response) (*DeleteWebhookResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteWebhookResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetWebhookResponse parses an HTTP response from a GetWebhookWithResponse call
+func ParseGetWebhookResponse(rsp *http.Response) (*GetWebhookResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetWebhookResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest WebhookEndpoint
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateWebhookResponse parses an HTTP response from a UpdateWebhookWithResponse call
+func ParseUpdateWebhookResponse(rsp *http.Response) (*UpdateWebhookResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateWebhookResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest WebhookEndpoint
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListWebhookDeliveriesResponse parses an HTTP response from a ListWebhookDeliveriesWithResponse call
+func ParseListWebhookDeliveriesResponse(rsp *http.Response) (*ListWebhookDeliveriesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListWebhookDeliveriesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []WebhookDelivery
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListAbuseReportsResponse parses an HTTP response from a ListAbuseReportsWithResponse call
+func ParseListAbuseReportsResponse(rsp *http.Response) (*ListAbuseReportsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAbuseReportsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []AbuseReport
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
@@ -10609,6 +15667,39 @@ func ParseListReviewQueueResponse(rsp *http.Response) (*ListReviewQueueResponse,
 	return response, nil
 }
 
+// ParseSearchAgentsResponse parses an HTTP response from a SearchAgentsWithResponse call
+func ParseSearchAgentsResponse(rsp *http.Response) (*SearchAgentsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SearchAgentsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SearchResults
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetCurrentUserResponse parses an HTTP response from a GetCurrentUserWithResponse call
 func ParseGetCurrentUserResponse(rsp *http.Response) (*GetCurrentUserResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -10662,6 +15753,35 @@ func ParseUpdateCurrentUserResponse(rsp *http.Response) (*UpdateCurrentUserRespo
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteCurrentUserResponse parses an HTTP response from a DeleteCurrentUserWithResponse call
+func ParseDeleteCurrentUserResponse(rsp *http.Response) (*DeleteCurrentUserResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteCurrentUserResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

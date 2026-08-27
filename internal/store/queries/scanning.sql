@@ -124,3 +124,24 @@ ORDER BY published_at DESC LIMIT 1;
 -- name: CountRecentVersionsBySubmitter :one
 SELECT count(*) FROM agent_versions
 WHERE submitted_by = $1 AND created_at >= now() - interval '7 days';
+
+-- name: CreateAbuseReport :one
+INSERT INTO abuse_reports (id, agent_id, version_id, reporter_id, category, detail)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING *;
+
+-- name: CountRecentAbuseReportsByReporter :one
+SELECT count(*) FROM abuse_reports
+WHERE reporter_id = $1 AND created_at >= now() - interval '1 hour';
+
+-- name: ListOpenAbuseReports :many
+SELECT ar.*, a.name AS agent_name, h.handle AS namespace
+FROM abuse_reports ar
+JOIN agents a ON a.id = ar.agent_id
+JOIN handles h ON h.id = a.namespace_id
+WHERE ar.state = 'open'
+ORDER BY ar.created_at
+LIMIT $1;
+
+-- name: TriageAbuseReport :exec
+UPDATE abuse_reports SET state = $2, triaged_by = $3, triaged_at = now(), resolution = $4 WHERE id = $1;

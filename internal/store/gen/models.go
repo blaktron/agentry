@@ -12,6 +12,20 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AbuseReport struct {
+	ID         uuid.UUID  `json:"id"`
+	AgentID    uuid.UUID  `json:"agent_id"`
+	VersionID  *uuid.UUID `json:"version_id"`
+	ReporterID *uuid.UUID `json:"reporter_id"`
+	Category   string     `json:"category"`
+	Detail     string     `json:"detail"`
+	State      string     `json:"state"`
+	TriagedBy  *uuid.UUID `json:"triaged_by"`
+	TriagedAt  *time.Time `json:"triaged_at"`
+	Resolution *string    `json:"resolution"`
+	CreatedAt  time.Time  `json:"created_at"`
+}
+
 type Advisory struct {
 	ID               uuid.UUID  `json:"id"`
 	AgentID          uuid.UUID  `json:"agent_id"`

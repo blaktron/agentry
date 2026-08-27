@@ -106,6 +106,13 @@ SELECT user_id FROM team_members WHERE team_id = $1;
 -- name: ClearTeamMembers :exec
 DELETE FROM team_members WHERE team_id = $1;
 
+-- GetAgentOwnerOrg returns the owning org id when an agent's namespace is an
+-- org (webhook fan-out is org-scoped; personal-namespace agents return no row).
+-- name: GetAgentOwnerOrg :one
+SELECT a.namespace_id AS org_id
+FROM agents a JOIN handles h ON h.id = a.namespace_id
+WHERE a.id = $1 AND h.kind = 'org';
+
 -- ============================ Webhooks ============================
 
 -- name: CreateWebhookEndpoint :one
@@ -121,7 +128,7 @@ SELECT * FROM webhook_endpoints WHERE org_id = $1 ORDER BY created_at DESC;
 
 -- name: ListActiveWebhookEndpointsForEvent :many
 SELECT * FROM webhook_endpoints
-WHERE org_id = $1 AND active = true AND $2::text = ANY(events);
+WHERE org_id = $1 AND active = true AND sqlc.arg('event')::text = ANY(events);
 
 -- name: UpdateWebhookEndpoint :one
 UPDATE webhook_endpoints

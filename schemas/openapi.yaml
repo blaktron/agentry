@@ -37,6 +37,14 @@ tags:
     description: Platform baseline and org policy overlays (§8.6).
   - name: platform
     description: Trust & safety actions and advisories (§7, §8.7).
+  - name: sso
+    description: Enterprise SSO — SAML 2.0 SP and OIDC RP (§12.4).
+  - name: scim
+    description: SCIM 2.0 provisioning tokens (§12.5).
+  - name: webhooks
+    description: Org webhook endpoints and deliveries (§9.3).
+  - name: domains
+    description: Domain verification for JIT auto-linking (§12.4).
 
 paths:
   /meta:
@@ -208,6 +216,29 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /user/delete:
+    post:
+      operationId: deleteCurrentUser
+      tags: [users]
+      summary: Erase the caller's account (GDPR flow, §12.7).
+      description: >
+        Purges personal data and pseudonymizes the account. Published public
+        versions are not deleted — they are yanked so already-installed
+        copies keep verifying — or you can transfer the agents to an org
+        first and then delete.
+      parameters:
+        - name: publishedContent
+          in: query
+          schema:
+            type: string
+            enum: [yank, transfer]
+          description: What to do with published public versions (default yank).
+      responses:
+        "204":
+          description: Account erased; session revoked.
+        default:
+          $ref: "#/components/responses/Problem"
+
   /users/{handle}:
     get:
       operationId: getUserProfile
@@ -334,6 +365,9 @@ paths:
                 displayName:
                   type: string
                   maxLength: 120
+                ssoRequired:
+                  type: boolean
+                  description: Enforce SSO for org resources (§12.4). Owner only.
       responses:
         "200":
           description: Updated organization.
@@ -1138,6 +1172,443 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /orgs/{org}/sso/connections:
+    get:
+      operationId: listSsoConnections
+      tags: [sso]
+      summary: List the org's SSO connections (owner, §12.4).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      responses:
+        "200":
+          description: Connections (secrets redacted).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SsoConnection"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/sso/connections/{kind}:
+    put:
+      operationId: putSsoConnection
+      tags: [sso]
+      summary: Create or update a SAML/OIDC connection (owner, §12.4).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+        - $ref: "#/components/parameters/SsoKind"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SsoConnectionInput"
+      responses:
+        "200":
+          description: Connection stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SsoConnection"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteSsoConnection
+      tags: [sso]
+      summary: Delete a connection (owner, §12.4).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+        - $ref: "#/components/parameters/SsoKind"
+      responses:
+        "204":
+          description: Deleted.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/sso/saml/metadata:
+    get:
+      operationId: getSamlMetadata
+      tags: [sso]
+      summary: SP SAML metadata for this org's connection (§12.4).
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      responses:
+        "200":
+          description: SP metadata XML.
+          content:
+            application/samlmetadata+xml:
+              schema:
+                type: string
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/sso/saml/acs:
+    post:
+      operationId: samlAcs
+      tags: [sso]
+      summary: SAML Assertion Consumer Service — consume a signed assertion (§12.4).
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      responses:
+        "200":
+          description: SSO session established.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResult"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/sso/oidc/start:
+    get:
+      operationId: oidcStart
+      tags: [sso]
+      summary: Begin the OIDC auth-code + PKCE flow (redirect to IdP, §12.4).
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      responses:
+        "302":
+          description: Redirect to the IdP authorization endpoint.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/sso/oidc/callback:
+    get:
+      operationId: oidcCallback
+      tags: [sso]
+      summary: OIDC redirect URI — exchange the code and establish a session (§12.4).
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+        - name: code
+          in: query
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: SSO session established.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResult"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/scim/tokens:
+    get:
+      operationId: listScimTokens
+      tags: [scim]
+      summary: List active SCIM provisioning tokens (owner, §12.5).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      responses:
+        "200":
+          description: SCIM tokens (secret shown only at creation).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ScimToken"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createScimToken
+      tags: [scim]
+      summary: Mint a SCIM bearer token (owner, §12.5).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expiresInDays:
+                  type: integer
+                  minimum: 1
+                  maximum: 730
+      responses:
+        "201":
+          description: Token created; the token value is returned once.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScimTokenCreated"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/scim/tokens/{tokenId}:
+    delete:
+      operationId: revokeScimToken
+      tags: [scim]
+      summary: Revoke a SCIM token (owner, §12.5).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+        - name: tokenId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Revoked.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/webhooks:
+    get:
+      operationId: listWebhooks
+      tags: [webhooks]
+      summary: List webhook endpoints (admin+, §9.3).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      responses:
+        "200":
+          description: Webhook endpoints.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WebhookEndpoint"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createWebhook
+      tags: [webhooks]
+      summary: Create a webhook endpoint (admin+, §9.3).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookInput"
+      responses:
+        "201":
+          description: Endpoint created; the signing secret is returned once.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookEndpointCreated"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/webhooks/{id}:
+    get:
+      operationId: getWebhook
+      tags: [webhooks]
+      summary: Get a webhook endpoint (admin+, §9.3).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+        - $ref: "#/components/parameters/WebhookID"
+      responses:
+        "200":
+          description: Endpoint.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookEndpoint"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateWebhook
+      tags: [webhooks]
+      summary: Update a webhook endpoint (admin+, §9.3).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+        - $ref: "#/components/parameters/WebhookID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                events:
+                  type: array
+                  items:
+                    type: string
+                active:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated endpoint.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookEndpoint"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteWebhook
+      tags: [webhooks]
+      summary: Delete a webhook endpoint (admin+, §9.3).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+        - $ref: "#/components/parameters/WebhookID"
+      responses:
+        "204":
+          description: Deleted.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/webhooks/{id}/deliveries:
+    get:
+      operationId: listWebhookDeliveries
+      tags: [webhooks]
+      summary: Recent delivery attempts for an endpoint (admin+, §9.3).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+        - $ref: "#/components/parameters/WebhookID"
+      responses:
+        "200":
+          description: Deliveries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WebhookDelivery"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/domain-claims:
+    get:
+      operationId: listDomainClaims
+      tags: [domains]
+      summary: List domain claims (admin+, §12.4).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      responses:
+        "200":
+          description: Domain claims.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DomainClaim"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createDomainClaim
+      tags: [domains]
+      summary: Start a domain claim; returns the DNS TXT challenge (admin+, §12.4).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [domain]
+              properties:
+                domain:
+                  type: string
+      responses:
+        "201":
+          description: Claim created with a verification challenge.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DomainClaim"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/domain-claims/verify:
+    post:
+      operationId: verifyDomainClaim
+      tags: [domains]
+      summary: Check the DNS TXT record and mark verified (admin+, §12.4).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [domain]
+              properties:
+                domain:
+                  type: string
+      responses:
+        "200":
+          description: Verification result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DomainClaim"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/audit/exports:
+    post:
+      operationId: createAuditExport
+      tags: [audit]
+      summary: Start an async NDJSON audit export (admin+, §12.6).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  description: Optional action filter.
+      responses:
+        "202":
+          description: Export job accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditExport"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/audit/exports/{id}:
+    get:
+      operationId: getAuditExport
+      tags: [audit]
+      summary: Poll an audit export's status and download reference (admin+, §12.6).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Export status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditExport"
+        default:
+          $ref: "#/components/responses/Problem"
+
   /platform/agents/{ns}/{name}/{action}:
     post:
       operationId: platformAgentAction
@@ -1166,6 +1637,61 @@ paths:
       responses:
         "204":
           description: Action applied.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /agents/{ns}/{name}/abuse-reports:
+    post:
+      operationId: reportAbuse
+      tags: [platform]
+      summary: Report malicious or abusive content (authed, rate-limited §8.7).
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category, detail]
+              properties:
+                category:
+                  type: string
+                  enum: [malicious_content, hidden_instructions, credential_theft, typosquat, spam, license, other]
+                detail:
+                  type: string
+                  minLength: 10
+                  maxLength: 4000
+                version:
+                  type: string
+      responses:
+        "202":
+          description: Report received and queued for triage.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /platform/abuse-reports:
+    get:
+      operationId: listAbuseReports
+      tags: [platform]
+      summary: Open abuse reports (platform staff).
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+      responses:
+        "200":
+          description: Open reports.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AbuseReport"
         default:
           $ref: "#/components/responses/Problem"
 
@@ -1305,6 +1831,20 @@ components:
       schema:
         type: string
         pattern: "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"
+    SsoKind:
+      name: kind
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [saml, oidc]
+    WebhookID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
 
   schemas:
     Meta:
@@ -1464,6 +2004,12 @@ components:
           type: string
           format: date-time
           description: Defaults to (and is capped at) the max PAT lifetime (§12.3).
+        orgHandle:
+          type: string
+          description: >
+            Bind the token to this org (§12.4). Requires the current session to
+            be SSO-fresh for the org; org-bound tokens are capped at 90 days and
+            are the only tokens accepted against an enforced-SSO org's resources.
 
     Scope:
       type: string
@@ -1815,6 +2361,30 @@ components:
           items:
             $ref: "#/components/schemas/ScanFinding"
 
+    AbuseReport:
+      type: object
+      required: [id, namespace, agent, category, detail, state, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        namespace:
+          type: string
+        agent:
+          type: string
+        version:
+          type: string
+        category:
+          type: string
+        detail:
+          type: string
+        state:
+          type: string
+          enum: [open, triaged, actioned, dismissed]
+        createdAt:
+          type: string
+          format: date-time
+
     Advisory:
       type: object
       required: [id, affectedVersions, severity, summary]
@@ -1899,6 +2469,163 @@ components:
                 type: string
               message:
                 type: string
+
+    SsoConnection:
+      type: object
+      required: [kind, enabled]
+      properties:
+        kind:
+          type: string
+          enum: [saml, oidc]
+        enabled:
+          type: boolean
+        config:
+          type: object
+          additionalProperties: true
+          description: Non-secret connection settings (client secrets are redacted).
+
+    SsoConnectionInput:
+      type: object
+      required: [enabled, config]
+      properties:
+        enabled:
+          type: boolean
+        config:
+          type: object
+          additionalProperties: true
+          description: SAML (idpMetadataXml or idpEntityId+idpCertificatePem+idpSsoUrl) or OIDC (issuer, clientId, clientSecret) settings.
+
+    ScimToken:
+      type: object
+      required: [id, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+
+    ScimTokenCreated:
+      type: object
+      required: [id, token]
+      properties:
+        id:
+          type: string
+          format: uuid
+        token:
+          type: string
+          description: The SCIM bearer token; shown once.
+        expiresAt:
+          type: string
+          format: date-time
+
+    WebhookEndpoint:
+      type: object
+      required: [id, url, events, active, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+        events:
+          type: array
+          items:
+            type: string
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    WebhookEndpointCreated:
+      allOf:
+        - $ref: "#/components/schemas/WebhookEndpoint"
+        - type: object
+          required: [secret]
+          properties:
+            secret:
+              type: string
+              description: The HMAC signing secret; shown once.
+
+    WebhookInput:
+      type: object
+      required: [url, events]
+      properties:
+        url:
+          type: string
+          description: HTTPS endpoint (§9.3 requires https).
+        events:
+          type: array
+          items:
+            type: string
+
+    WebhookDelivery:
+      type: object
+      required: [id, eventType, attempt, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+        attempt:
+          type: integer
+        statusCode:
+          type: integer
+        error:
+          type: string
+        deliveredAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    DomainClaim:
+      type: object
+      required: [domain, verificationToken, verified]
+      properties:
+        domain:
+          type: string
+        verificationToken:
+          type: string
+        recordName:
+          type: string
+          description: The DNS TXT record name to create.
+        recordValue:
+          type: string
+          description: The DNS TXT record value to publish.
+        verified:
+          type: boolean
+        verifiedAt:
+          type: string
+          format: date-time
+
+    AuditExport:
+      type: object
+      required: [id, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, running, completed, failed]
+        eventCount:
+          type: integer
+        downloadPath:
+          type: string
+          description: Blob-store reference; presign is a deployment concern.
+        error:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
 
   responses:
     Problem:
