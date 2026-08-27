@@ -1,0 +1,45 @@
+# ADOT (AWS Distro for OpenTelemetry) collector config (PLAN §16, D-25).
+# Runs as an ECS sidecar (see modules/ecs-service). agentryd/web export OTLP to
+# localhost; the collector ships traces to X-Ray and RED/queue/scan/judge
+# metrics to CloudWatch as EMF. Loaded verbatim into an SSM parameter and
+# passed to the sidecar via AOT_CONFIG_CONTENT.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 30s
+  resourcedetection:
+    detectors: [env, ecs]
+    timeout: 5s
+
+exporters:
+  awsxray:
+    indexed_attributes:
+      - actor.id
+      - request.id
+  awsemf:
+    namespace: Agentry
+    log_group_name: /agentry/metrics
+    dimension_rollup_option: NoDimensionRollup
+    resource_to_telemetry_conversion:
+      enabled: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [resourcedetection, batch]
+      exporters: [awsxray]
+    metrics:
+      receivers: [otlp]
+      processors: [resourcedetection, batch]
+      exporters: [awsemf]
+  telemetry:
+    logs:
+      level: info

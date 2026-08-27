@@ -1,0 +1,18 @@
+apiVersion: v2
+name: agentry
+description: |
+  Agentry self-host HA (PLAN §2.4): the same agentryd binary split into api,
+  git (shared RWX volume), and worker roles, plus the web frontend. Postgres and
+  object storage are operator-supplied (see values.yaml).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - agentry
+  - agent-registry
+  - security
+home: https://agentry.example
+sources:
+  - https://github.com/PLACEHOLDER_ORG/agentry
+maintainers:
+  - name: agentry

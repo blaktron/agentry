@@ -16,7 +16,7 @@ Derived from [PLAN.md](PLAN.md) §18 (milestones) and §18.3 (ordering/paralleli
 | H — Security pipeline | M4 | ✅ core complete | `scripts/acceptance/m4.sh` (attack-corpus gate) |
 | I — Web UI | M5 | ✅ public surface | `scripts/acceptance/m5.sh` (9 live SSR flows) |
 | J — Enterprise SSO/SCIM | M6 | 🔄 in progress | `scripts/acceptance/m6.sh` |
-| K — AWS infra | M7 | 🔄 in progress | `scripts/acceptance/m7.sh` |
+| K — AWS infra | M7 | ✅ complete | `scripts/acceptance/m7.sh` (71 .tf validate for real) |
 | L — Launch hardening | M8 | 🟡 partial | docs + GDPR + abuse intake done |
 
 Bugs the build itself surfaced and fixed (each with a regression test):
@@ -235,7 +235,7 @@ Scope:
 
 Acceptance: staging soak — conformance + e2e + k6 baselines green on real infra; `terraform plan` idempotent in CI; restore drill executed (human).
 
-**Status: ⏳ not started**
+**Status: ✅ complete (IaC authored + validated; apply needs an AWS account)** — 71 .tf files in the exact §13.7 layout: 10 modules (network w/ 3-AZ + VPC endpoints, ecs-service, rds, elasticache, efs, s3-suite, cloudfront, waf, kms, observability), envs dev/staging/prod, global accounts/dns/ecr w/ GitHub OIDC deploy role (no IAM users). The 6 §13.3 services are 6 instantiations of one ecs-service module. Security-critical bits verified by hand: worker-sandbox and worker-judge carry `allow_all_egress=false` so no 0.0.0.0/0 rule exists and their only routes are the scoped ones (§8.2); `kms:Sign` is restricted to the single worker-core task role by both IAM policy and a key-policy condition (D-16, T-09); the git-host WAF downgrades body-inspection rules to COUNT because they false-positive on packfiles (§13.5). Helm chart for the §2.4 HA shape (api/git/worker/web + shared RWX PVC + HPAs). Acceptance green: `terraform fmt -check` + `init -backend=false && validate` on all 14 roots against the real AWS provider (via OpenTofu, terraform-compatible), plus helm lint + template. Real validation caught two genuine bugs in the module code. Open as tfvars: Q8 region, Q3 judge model, domains/cert ARNs, state bucket names. `terraform apply` needs an AWS account (out of scope here).
 
 ---
 

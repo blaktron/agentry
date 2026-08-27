@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentry.fullname" . }}-git
+  labels:
+    {{- include "agentry.labels" . | nindent 4 }}
+    app.kubernetes.io/component: git
+spec:
+  replicas: {{ .Values.git.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "agentry.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: git
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+      labels:
+        {{- include "agentry.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: git
+    spec:
+      serviceAccountName: {{ include "agentry.serviceAccountName" . }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: git
+          image: {{ include "agentry.agentrydImage" . }}
+          imagePullPolicy: {{ .Values.image.agentryd.pullPolicy }}
+          args: ["git"]
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          env:
+            {{- include "agentry.agentrydEnv" . | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.git.port }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.git.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/agentry
+              readOnly: true
+            - name: scratch
+              mountPath: /tmp
+            - name: git-data
+              mountPath: {{ .Values.config.git.dataDir }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "agentry.fullname" . }}-config
+        - name: scratch
+          emptyDir: {}
+        - name: git-data
+        {{- if .Values.git.persistence.existingClaim }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.git.persistence.existingClaim }}
+        {{- else }}
+          persistentVolumeClaim:
+            claimName: {{ include "agentry.fullname" . }}-git
+        {{- end }}
+      {{- with .Values.git.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.git.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.git.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

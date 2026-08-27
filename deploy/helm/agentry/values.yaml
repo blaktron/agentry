@@ -1,0 +1,174 @@
+# Agentry self-host HA values (PLAN §2.4 "Self-host HA").
+#
+# OPERATOR-SUPPLIED DEPENDENCIES (NOT bundled by this chart, by design — D-03/
+# §14.1 feature parity but services stay external):
+#   * PostgreSQL 16 — set secret.databaseUrl (or existingSecret key
+#     AGENTRY_DATABASE_URL). agentryd runs migrations on start when
+#     config.migrateOnStart=true.
+#   * Object storage — S3 or any S3-compatible store (MinIO, Ceph). Set
+#     config.storage.s3Bucket / s3Region and provide credentials via
+#     serviceAccount IRSA (recommended on EKS) or extraEnv (AWS_ACCESS_KEY_ID,
+#     AWS_SECRET_ACCESS_KEY, AWS_ENDPOINT_URL_S3 for non-AWS stores).
+#   * Redis (optional, D-06) — set secret.redisUrl to enable shared sessions /
+#     rate limits; omit for in-memory fallbacks (single-writer semantics).
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  agentryd:
+    repository: ghcr.io/PLACEHOLDER_ORG/agentry/agentryd
+    tag: "" # defaults to .Chart.AppVersion
+    pullPolicy: IfNotPresent
+  web:
+    repository: ghcr.io/PLACEHOLDER_ORG/agentry/web
+    tag: ""
+    pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# Rendered into a ConfigMap as agentry.yaml and mounted at /etc/agentry.
+config:
+  env: prod
+  devMode: false
+  logLevel: info
+  baseURL: https://agentry.example
+  migrateOnStart: true
+  http:
+    addr: ":8080"
+  auth:
+    cookieSecure: true
+    sessionTTL: 24h
+    patMaxTTL: 8760h
+  storage:
+    kind: s3 # s3 | local
+    s3Bucket: ""
+    s3Region: ""
+  git:
+    dataDir: /data/git
+  signing:
+    kind: kms # kms | file (prod must not be none)
+    kmsKeyARN: ""
+  judge:
+    provider: bedrock # bedrock | anthropic | classifier | none
+    model: ""
+    region: ""
+
+# Sensitive values. In production prefer existingSecret (e.g. managed by
+# external-secrets / sealed-secrets) over inlining here.
+secret:
+  create: true
+  existingSecret: "" # if set, must provide keys: AGENTRY_DATABASE_URL, AGENTRY_AUTH_SEALING_KEY, and optionally AGENTRY_REDIS_URL
+  databaseUrl: "" # postgres://user:pass@host:5432/agentry?sslmode=require
+  redisUrl: "" # rediss://:pass@host:6379/0 (optional)
+  sealingKey: "" # base64 32 bytes; required outside dev (§ config Validate)
+
+serviceAccount:
+  create: true
+  name: ""
+  # On EKS, annotate with an IRSA role granting S3 + KMS (Sign for worker) access:
+  # eks.amazonaws.com/role-arn: arn:aws:iam::<acct>:role/agentry
+  annotations: {}
+
+# Extra env applied to all agentryd pods (e.g. AWS creds for non-IRSA clusters).
+extraEnv: []
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+# --- Roles -----------------------------------------------------------------
+
+api:
+  replicaCount: 2
+  port: 8080
+  resources:
+    requests: { cpu: 500m, memory: 512Mi }
+    limits: { cpu: "1", memory: 1Gi }
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 60
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+git:
+  replicaCount: 2
+  port: 8080
+  # Shared RWX volume for the bare repos (§2.4 "git ×N (shared RWX volume)",
+  # D-19). Requires a ReadWriteMany StorageClass (EFS CSI, Filestore, NFS, ...).
+  persistence:
+    enabled: true
+    existingClaim: ""
+    storageClass: ""
+    accessModes: ["ReadWriteMany"]
+    size: 20Gi
+  resources:
+    requests: { cpu: 500m, memory: 512Mi }
+    limits: { cpu: "1", memory: 1Gi }
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+worker:
+  replicaCount: 2
+  # Empty = run all queues in one deployment (self-host default). To mirror the
+  # SaaS split (§13.3) set queues per an additional worker deployment.
+  queues: ""
+  resources:
+    requests: { cpu: 500m, memory: 1Gi }
+    limits: { cpu: "1", memory: 2Gi }
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+  # Workers touch untrusted content (§8.2). Keep the root FS read-only; the git
+  # RWX volume is mounted read-only for gc coordination when mountGitData=true.
+  mountGitData: true
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+web:
+  replicaCount: 2
+  port: 3000
+  resources:
+    requests: { cpu: 250m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# --- Ingress ---------------------------------------------------------------
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations: {}
+  hosts:
+    web: agentry.example
+    git: git.agentry.example
+  # api paths are served on the web host (§9 same-origin), git on its own host.
+  apiPaths:
+    - /api
+    - /.well-known
+    - /scim
+  tls: []
+  # - secretName: agentry-tls
+  #   hosts: [agentry.example, git.agentry.example]

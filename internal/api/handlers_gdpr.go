@@ -81,7 +81,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 	}
 
 	tombstone, err := json.Marshal(map[string]any{
-		"emailHash": s.hashForTombstone(string(user.Email)),
+		"emailHash": s.hashForTombstone(user.Email),
 		"deletedAt": time.Now().UTC().Format(time.RFC3339),
 		"reason":    "user-requested erasure",
 	})

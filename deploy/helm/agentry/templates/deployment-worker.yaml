@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentry.fullname" . }}-worker
+  labels:
+    {{- include "agentry.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  {{- if not .Values.worker.autoscaling.enabled }}
+  replicas: {{ .Values.worker.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "agentry.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+      labels:
+        {{- include "agentry.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: {{ include "agentry.serviceAccountName" . }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: worker
+          image: {{ include "agentry.agentrydImage" . }}
+          imagePullPolicy: {{ .Values.image.agentryd.pullPolicy }}
+          args:
+            - worker
+            {{- if .Values.worker.queues }}
+            - --queues={{ .Values.worker.queues }}
+            {{- end }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          env:
+            {{- include "agentry.agentrydEnv" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/agentry
+              readOnly: true
+            - name: scratch
+              mountPath: /tmp
+            {{- if .Values.worker.mountGitData }}
+            - name: git-data
+              mountPath: {{ .Values.config.git.dataDir }}
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "agentry.fullname" . }}-config
+        - name: scratch
+          emptyDir: {}
+        {{- if .Values.worker.mountGitData }}
+        - name: git-data
+        {{- if .Values.git.persistence.existingClaim }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.git.persistence.existingClaim }}
+        {{- else }}
+          persistentVolumeClaim:
+            claimName: {{ include "agentry.fullname" . }}-git
+        {{- end }}
+        {{- end }}
+      {{- with .Values.worker.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

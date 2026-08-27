@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "agentry.fullname" . }}-api
+  labels:
+    {{- include "agentry.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "agentry.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "agentry.fullname" . }}-web
+  labels:
+    {{- include "agentry.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "agentry.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "agentry.fullname" . }}-git
+  labels:
+    {{- include "agentry.labels" . | nindent 4 }}
+    app.kubernetes.io/component: git
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "agentry.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: git
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

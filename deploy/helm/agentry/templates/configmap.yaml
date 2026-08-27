@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentry.fullname" . }}-config
+  labels:
+    {{- include "agentry.labels" . | nindent 4 }}
+data:
+  # Rendered agentry.yaml (§ internal/config). Secrets come from the Secret and
+  # override these via AGENTRY_* env at runtime.
+  agentry.yaml: |
+    env: {{ .Values.config.env }}
+    devMode: {{ .Values.config.devMode }}
+    baseURL: {{ .Values.config.baseURL | quote }}
+    http:
+      addr: {{ .Values.config.http.addr | quote }}
+    database:
+      migrateOnStart: {{ .Values.config.migrateOnStart }}
+    log:
+      level: {{ .Values.config.logLevel }}
+    auth:
+      cookieSecure: {{ .Values.config.auth.cookieSecure }}
+      sessionTTL: {{ .Values.config.auth.sessionTTL }}
+      patMaxTTL: {{ .Values.config.auth.patMaxTTL }}
+    storage:
+      kind: {{ .Values.config.storage.kind }}
+      s3Bucket: {{ .Values.config.storage.s3Bucket | quote }}
+      s3Region: {{ .Values.config.storage.s3Region | quote }}
+    git:
+      dataDir: {{ .Values.config.git.dataDir | quote }}
+    signing:
+      kind: {{ .Values.config.signing.kind }}
+      kmsKeyARN: {{ .Values.config.signing.kmsKeyARN | quote }}
+    judge:
+      provider: {{ .Values.config.judge.provider }}
+      model: {{ .Values.config.judge.model | quote }}
+      region: {{ .Values.config.judge.region | quote }}

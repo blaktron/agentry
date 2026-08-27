@@ -1,0 +1,11 @@
+# Terraform working files (never commit state or provider binaries).
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

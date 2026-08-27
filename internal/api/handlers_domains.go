@@ -170,7 +170,7 @@ func validDomain(d string) bool {
 		return false
 	}
 	for _, r := range d {
-		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '.' || r == '-') {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '.' && r != '-' {
 			return false
 		}
 	}
