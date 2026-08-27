@@ -52,27 +52,67 @@ func (qp QueuePipeline) VersionSubmitted(ctx context.Context, versionID uuid.UUI
 	_, _ = qp.Q.Enqueue(ctx, JobScanVersion, "sandbox", ScanJobArgs{VersionID: versionID, Trigger: "publish"})
 }
 
-// RescanSweep re-runs the deterministic scanners against published versions
-// when a new ruleset ships (§8.7). New high/critical findings quarantine the
-// version and draft an advisory. Cheap because archives are content-addressed
-// and small; a results cache (digest, scanner, ruleset) is the optimization
-// left for scale.
+// RescanSummary reports what a sweep did. Failures are counted rather than
+// swallowed: an unreadable archive for a *published* version is a storage
+// integrity problem, and a sweep that logs it and returns nil looks
+// indistinguishable from a clean run.
+type RescanSummary struct {
+	Scanned     int
+	Quarantined int
+	Failed      int
+}
+
+// RescanSweep re-runs the scanners against published versions when a new
+// ruleset ships (§8.7). New high/critical findings quarantine the version and
+// draft an advisory. One unreadable version never stops the sweep — the rest
+// of the catalogue still gets checked — but the count comes back to the caller
+// so the worker can log it at error level and alerting can see it.
+//
+// Cheap because archives are content-addressed and small; a results cache
+// keyed (digest, scanner, ruleset) is the optimization left for scale.
 func (p *Pipeline) RescanSweep(ctx context.Context) error {
+	sum, err := p.RescanSweepWithSummary(ctx)
+	if err != nil {
+		return err
+	}
+	if sum.Failed > 0 {
+		// Not a returned error: the sweep did its job for everything it could
+		// read. But this must be visible — see the restore runbook, where a
+		// version row without its archive is the signal that a database
+		// restore went back past a publish.
+		p.log.Error("rescan sweep completed with unreadable versions",
+			"scanned", sum.Scanned, "quarantined", sum.Quarantined, "failed", sum.Failed)
+	} else {
+		p.log.Info("rescan sweep complete", "scanned", sum.Scanned, "quarantined", sum.Quarantined)
+	}
+	return nil
+}
+
+// RescanSweepWithSummary is RescanSweep with the counts returned.
+func (p *Pipeline) RescanSweepWithSummary(ctx context.Context) (RescanSummary, error) {
 	const batch = 100
+	var sum RescanSummary
 	offset := int32(0)
 	for {
 		rows, err := p.st.Queries().ListPublishedVersionsForRescan(ctx, storegen.ListPublishedVersionsForRescanParams{
 			Limit: batch, Offset: offset,
 		})
 		if err != nil {
-			return fmt.Errorf("scan: rescan list: %w", err)
+			return sum, fmt.Errorf("scan: rescan list: %w", err)
 		}
 		if len(rows) == 0 {
-			return nil
+			return sum, nil
 		}
 		for _, row := range rows {
-			if err := p.rescanOne(ctx, row.ID); err != nil {
+			sum.Scanned++
+			quarantined, err := p.rescanOne(ctx, row.ID)
+			if err != nil {
+				sum.Failed++
 				p.log.Warn("rescan version", "version", row.ID, "err", err)
+				continue
+			}
+			if quarantined {
+				sum.Quarantined++
 			}
 		}
 		offset += batch
@@ -80,20 +120,23 @@ func (p *Pipeline) RescanSweep(ctx context.Context) error {
 }
 
 // rescanOne re-scans a single published version; a new high/critical finding
-// quarantines it and drafts an advisory (§8.7).
-func (p *Pipeline) rescanOne(ctx context.Context, versionID uuid.UUID) error {
+// quarantines it and drafts an advisory (§8.7). Reports whether it acted.
+func (p *Pipeline) rescanOne(ctx context.Context, versionID uuid.UUID) (bool, error) {
 	// Reuse the full Scan pipeline in "rescan" mode but do NOT let it
 	// transition a published version to published again; instead inspect the
 	// resulting run for new high/critical findings.
-	before, _ := p.st.Queries().GetVersionByID(ctx, versionID)
+	before, err := p.st.Queries().GetVersionByID(ctx, versionID)
+	if err != nil {
+		return false, err
+	}
 	if before.Status != "published" {
-		return nil
+		return false, nil
 	}
 	// Run scanners without state transition by scanning into a fresh run and
 	// checking severity; the transition to quarantined is explicit here.
 	result, err := p.scanForRescan(ctx, versionID)
 	if err != nil {
-		return err
+		return false, err
 	}
 	worst := SevInfo
 	for _, f := range result.Findings {
@@ -105,10 +148,16 @@ func (p *Pipeline) rescanOne(ctx context.Context, versionID uuid.UUID) error {
 		agent, _ := p.st.Queries().GetAgentByID(ctx, before.AgentID)
 		if err := p.reg.Transition(ctx, versionID, registry.StatusQuarantined,
 			fmt.Sprintf("rescan found new %s finding", worst), audit.Event{ActorKind: audit.ActorSystem}); err != nil {
-			return err
+			return false, err
 		}
-		_ = p.PublishAdvisory(ctx, before.AgentID, before.Version, string(worst),
-			fmt.Sprintf("Rescan of %s@%s surfaced a new %s-severity finding.", agent.Name, before.Version, worst), "")
+		if err := p.PublishAdvisory(ctx, before.AgentID, before.Version, string(worst),
+			fmt.Sprintf("Rescan of %s@%s surfaced a new %s-severity finding.", agent.Name, before.Version, worst), ""); err != nil {
+			// The quarantine already landed, which is the protective action.
+			// A missing advisory is a notification gap, not a safety gap —
+			// log it loudly rather than unwinding the quarantine.
+			p.log.Error("rescan advisory", "version", versionID, "err", err)
+		}
+		return true, nil
 	}
-	return nil
+	return false, nil
 }

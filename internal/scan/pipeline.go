@@ -366,3 +366,8 @@ func strptrOrNil(s string) *string {
 	}
 	return &s
 }
+
+// SetOrchestratorForTest replaces the orchestrator. It exists so tests can
+// simulate "the ruleset learned something after this version was published"
+// (§8.7) without shipping two rule bundles. Not for production use.
+func (p *Pipeline) SetOrchestratorForTest(o *Orchestrator) { p.orch = o }
