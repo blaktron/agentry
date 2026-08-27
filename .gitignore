@@ -1,0 +1,23 @@
+# binaries & build artifacts
+/bin/
+/dist/
+
+# local dev state
+/.devdata/
+*.log
+
+# node
+node_modules/
+web/.next/
+web/out/
+
+# editor/OS noise
+.DS_Store
+.idea/
+.vscode/
+
+# local config (the example ships as agentry.yaml.example)
+/agentry.yaml
+
+# test artifacts
+coverage.out

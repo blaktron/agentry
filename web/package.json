@@ -1,0 +1,20 @@
+{
+  "name": "agentry-web",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Agentry web layer. M0: generated TS API client + smoke test. M5 (WG-I) turns this into the Next.js SSR app.",
+  "type": "module",
+  "scripts": {
+    "gen": "openapi-typescript ../schemas/openapi.yaml -o lib/api/schema.d.ts",
+    "check": "tsc --noEmit",
+    "smoke": "node scripts/smoke.ts"
+  },
+  "dependencies": {
+    "openapi-fetch": "^0.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.0",
+    "openapi-typescript": "^7.4.0",
+    "typescript": "^5.6.0"
+  }
+}

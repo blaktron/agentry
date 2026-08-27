@@ -1,0 +1,9 @@
+# oapi-codegen config: server stubs for internal/api (std net/http, D-09).
+package: api
+generate:
+  models: true
+  std-http-server: true
+  embedded-spec: true
+output: internal/api/openapi_gen.go
+output-options:
+  skip-prune: true

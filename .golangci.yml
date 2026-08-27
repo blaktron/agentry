@@ -1,0 +1,15 @@
+# golangci-lint config (M0 CI gate). Kept intentionally standard; additions
+# need a DEVIATIONS.md note if they relax anything.
+version: "2"
+linters:
+  default: standard
+  enable:
+    - misspell
+    - unconvert
+    - unparam
+  exclusions:
+    generated: lax
+    paths:
+      - internal/store/gen
+run:
+  timeout: 5m

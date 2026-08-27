@@ -1,0 +1,71 @@
+# CI gate (M0): lint, generated-code drift, tests (real Postgres), build,
+# govulncheck, OpenAPI breaking-change check, TS client smoke.
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: agentry
+          POSTGRES_PASSWORD: agentry
+          POSTGRES_DB: agentry_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U agentry" --health-interval 5s
+          --health-timeout 3s --health-retries 10
+    env:
+      AGENTRY_TEST_DATABASE_URL: postgres://agentry:agentry@localhost:5432/agentry_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install sqlc
+        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+      - name: Install web deps
+        run: cd web && npm ci
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+      - name: make check
+        run: make check
+      - name: web check (types + unit)
+        run: make web-check
+      - name: acceptance M0
+        run: ./scripts/acceptance/m0.sh
+
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  oasdiff:
+    # Breaking-change gate on the OpenAPI contract (D-09). Additive-only in v1.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: oasdiff breaking
+        run: |
+          git show origin/${{ github.base_ref }}:schemas/openapi.yaml > /tmp/base-openapi.yaml || cp schemas/openapi.yaml /tmp/base-openapi.yaml
+          go run github.com/oasdiff/oasdiff@latest breaking /tmp/base-openapi.yaml schemas/openapi.yaml --fail-on ERR

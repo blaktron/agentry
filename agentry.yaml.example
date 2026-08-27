@@ -1,0 +1,40 @@
+# Agentry server configuration example (M0). Copy to agentry.yaml and adjust.
+# Every key can be overridden by AGENTRY_* environment variables — see
+# internal/config/config.go for the full mapping.
+
+env: dev            # dev | staging | prod
+devMode: true       # MUST be false in prod (config validation enforces)
+
+http:
+  addr: ":8080"
+  # gitAddr: ":8081"   # optional separate listener for git smart-HTTP (§6.1)
+
+database:
+  url: postgres://agentry:agentry@localhost:5477/agentry_dev?sslmode=disable
+  migrateOnStart: true
+
+# redis:
+#   url: redis://localhost:6379/0   # optional (D-06); absent = in-memory fallbacks
+
+storage:
+  kind: local        # local | s3
+  localDir: .devdata/storage
+  # s3Bucket: agentry-releases
+  # s3Region: us-east-1
+
+git:
+  dataDir: .devdata/git
+
+log:
+  level: info        # debug | info | warn | error
+
+auth:
+  sessionTTL: 24h
+  patMaxTTL: 8760h   # 1 year (§12.3)
+  cookieSecure: false  # true outside local dev
+
+signing:
+  kind: none         # none (dev) | file | kms — prod requires file or kms
+
+judge:
+  provider: none     # none | bedrock | anthropic | classifier (D-13)
