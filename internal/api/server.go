@@ -10,11 +10,15 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/notify"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/scan"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/scan/ruleset"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
 	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/version"
@@ -29,10 +33,12 @@ type Server struct {
 	auditW   *audit.Writer
 	notifier notify.Notifier
 	sealer   *auth.Sealer
+	signer   scan.Signer
 	limits   *rateLimits
 	classes  limitClasses
 	reg      *registry.Service
 	blobs    registry.BlobStore
+	pipeline *scan.Pipeline
 }
 
 // New creates the API server. st may be nil in database-less dev mode; any
@@ -41,12 +47,12 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 	if log == nil {
 		log = slog.Default()
 	}
-	sealer, err := auth.NewSealer(cfg.Auth.SealingKey, cfg.DevMode)
-	if err != nil {
+	sealer, serr := auth.NewSealer(cfg.Auth.SealingKey, cfg.DevMode)
+	if serr != nil {
 		// Config validation already enforces key presence outside dev; an
 		// invalid key value is a hard startup error surfaced by panicking
 		// here during construction (never mid-request).
-		panic(err)
+		panic(serr)
 	}
 	aud := audit.NewWriter(log)
 	srv := &Server{
@@ -62,19 +68,42 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 	if st != nil {
 		srv.reg = registry.NewService(st, aud)
 		if cfg.Storage.Kind == "local" {
-			blobs, err := registry.NewLocalFS(cfg.Storage.LocalDir)
-			if err != nil {
-				panic(err) // startup-time config failure, never mid-request
+			blobs, berr := registry.NewLocalFS(cfg.Storage.LocalDir)
+			if berr != nil {
+				panic(berr) // startup-time config failure, never mid-request
 			}
 			srv.blobs = blobs
 			srv.reg.SetBlobStore(blobs)
 		}
-		// M3 pipeline stub (§18.2): auto-approve in dev mode ONLY. Outside
-		// dev, versions wait in `scanning` until the M4 orchestrator lands
-		// (fail closed, §7).
-		if cfg.DevMode {
-			srv.reg.SetPipeline(registry.DevAutoApprovePipeline{Svc: srv.reg})
+		// M4 security pipeline (§8): the orchestrator + gate replace the M3
+		// dev stub. Ruleset embedded (§8.3); judge + signer per config.
+		if srv.blobs == nil {
+			return srv // no archive store (e.g. s3 kind, WG-K): pipeline wired there
 		}
+		bundle, err := ruleset.Load()
+		if err != nil {
+			panic(err)
+		}
+		rulesetID, _ := uuid.NewV7()
+		if row, rerr := st.Queries().CreateRulesetRelease(context.Background(), storegen.CreateRulesetReleaseParams{
+			ID: rulesetID, Semver: bundle.Version(), BundleDigest: bundle.Digest(),
+			Notes: ptr(bundle.Notes()),
+		}); rerr == nil {
+			rulesetID = row.ID
+		}
+		judge := scan.NewJudgeProvider(judgeProviderName(cfg))
+		signer, serr := scan.NewSigner(cfg.Signing.Kind, cfg.Signing.KeyFile, cfg.DevMode)
+		if serr != nil {
+			panic(serr)
+		}
+		srv.signer = signer
+		orch := scan.NewOrchestrator(bundle, judge, log)
+		srv.pipeline = scan.NewPipeline(scan.PipelineDeps{
+			Store: st, Registry: srv.reg, Blobs: srv.blobs, Orchestrator: orch,
+			Signer: signer, Audit: aud, Log: log, RegistryURL: cfg.BaseURL,
+			RulesetID: rulesetID, RulesetVer: bundle.Version(),
+		})
+		srv.reg.SetPipeline(srv.pipeline)
 	}
 	return srv
 }
@@ -186,6 +215,17 @@ func NewHandlerWithGit(s *Server, mountGit func(*http.ServeMux)) http.Handler {
 
 	return withMiddleware(apiHandler, s.log)
 }
+
+// judgeProviderName picks the judge provider: config value, or "static" in
+// dev so the pipeline is exercisable without a live model (DEV-007).
+func judgeProviderName(cfg config.Config) string {
+	if cfg.Judge.Provider == "none" && cfg.DevMode {
+		return "static"
+	}
+	return cfg.Judge.Provider
+}
+
+func ptr[T any](v T) *T { return &v }
 
 // writeJSON writes a JSON 2xx response with no-store cache semantics (§9.1).
 func writeJSON(w http.ResponseWriter, status int, v any) {

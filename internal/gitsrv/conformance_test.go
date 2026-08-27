@@ -121,6 +121,12 @@ func (e *gitEnv) seedUser(handle string) uuid.UUID {
 	if err := q.MarkEmailVerified(ctx, id); err != nil {
 		e.t.Fatal(err)
 	}
+	// Age the account past the §19 new-publisher velocity ramp so routine
+	// multi-publish test flows aren't flagged by S8 (that ramp is exercised
+	// directly in internal/scan tests).
+	if _, err := e.st.Pool().Exec(ctx, `UPDATE users SET created_at = now() - interval '30 days' WHERE id = $1`, id); err != nil {
+		e.t.Fatal(err)
+	}
 	return id
 }
 

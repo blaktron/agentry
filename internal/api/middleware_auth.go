@@ -122,6 +122,7 @@ func (s *Server) resolveSession(r *http.Request, token string) (*auth.Principal,
 		Via:           "session",
 		OrgRoles:      roles,
 		EmailVerified: u.EmailVerifiedAt != nil,
+		PlatformStaff: u.PlatformStaff,
 		SessionID:     sess.ID,
 	}, sess.CsrfToken, nil
 }

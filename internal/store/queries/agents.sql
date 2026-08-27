@@ -71,3 +71,11 @@ SELECT g.role
 FROM agent_team_grants g
 JOIN team_members tm ON tm.team_id = g.team_id
 WHERE g.agent_id = $1 AND tm.user_id = $2;
+
+-- name: GetAgentByID :one
+SELECT a.*, h.handle AS namespace, h.kind AS namespace_kind
+FROM agents a JOIN handles h ON h.id = a.namespace_id
+WHERE a.id = $1;
+
+-- name: SetAgentQuarantineState :exec
+UPDATE agents SET quarantine_state = $2, updated_at = now() WHERE id = $1;

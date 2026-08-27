@@ -1,0 +1,223 @@
+package api
+
+import (
+	"encoding/json"
+	"io"
+	"net/http"
+
+	"github.com/google/uuid"
+
+	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/scan"
+	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
+)
+
+// GetPlatformPolicy implements GET /platform/policy (public, read-only §8.6).
+func (s *Server) GetPlatformPolicy(w http.ResponseWriter, r *http.Request) {
+	if !s.authorize(w, r, auth.ActPublicRead, uuid.Nil) {
+		return
+	}
+	if !s.requireDB(w, r) {
+		return
+	}
+	if row, err := s.q().GetBaselinePolicy(r.Context()); err == nil {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(row.Document)
+		return
+	}
+	// Fall back to the compiled-in default baseline.
+	doc, _ := json.Marshal(scan.DefaultBaseline())
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(doc)
+}
+
+// GetOrgPolicy implements GET /orgs/{org}/policy (admin+).
+func (s *Server) GetOrgPolicy(w http.ResponseWriter, r *http.Request, org OrgHandle) {
+	if !s.requireDB(w, r) {
+		return
+	}
+	orgRow, ok := s.orgOrNotFound(w, r, org)
+	if !ok {
+		return
+	}
+	if !s.authorize(w, r, auth.ActOrgUpdate, orgRow.ID) {
+		return
+	}
+	row, err := s.q().GetPolicyForOrg(r.Context(), &orgRow.ID)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{})
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(row.Document)
+}
+
+// SetOrgPolicy implements PUT /orgs/{org}/policy (owner; tighten-only §8.6).
+func (s *Server) SetOrgPolicy(w http.ResponseWriter, r *http.Request, org OrgHandle) {
+	if !s.requireDB(w, r) {
+		return
+	}
+	orgRow, ok := s.orgOrNotFound(w, r, org)
+	if !ok {
+		return
+	}
+	if !s.authorize(w, r, auth.ActOrgSettingsManage, orgRow.ID) {
+		return
+	}
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+	if err != nil {
+		problemBadRequest(w, r, "body too large")
+		return
+	}
+	orgPolicy, err := scan.ParsePolicy(body)
+	if err != nil {
+		problemValidation(w, r, err.Error())
+		return
+	}
+
+	// Tighten-only guard (§8.6): the merged policy must equal the org
+	// overlay merged onto baseline — a document that tries to loosen is
+	// silently clamped by Merge, but we reject an attempt to set
+	// maxAutoPublishSeverity looser than baseline so the author gets a clear
+	// error rather than a surprise.
+	baseline := s.baselinePolicy(r)
+	if scan.LoosensBaseline(baseline, orgPolicy) {
+		problemValidation(w, r, "org policy may only tighten the platform baseline (§8.6)")
+		return
+	}
+
+	e := auditEvent(r, audit.ActionPolicyUpdate)
+	e.OrgID = orgRow.ID
+	err = s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
+		if err := q.UpsertOrgPolicy(r.Context(), storegen.UpsertOrgPolicyParams{
+			ID: newUUID(), OrgID: &orgRow.ID, Document: body,
+		}); err != nil {
+			return err
+		}
+		e.TargetKind, e.TargetID = "org", orgRow.ID
+		return s.auditW.Write(r.Context(), q, e)
+	})
+	if err != nil {
+		s.log.Error("set org policy", "err", err)
+		problemInternal(w, r)
+		return
+	}
+	merged := scan.Merge(baseline, orgPolicy)
+	writeJSON(w, http.StatusOK, merged)
+}
+
+func (s *Server) baselinePolicy(r *http.Request) scan.Policy {
+	if row, err := s.q().GetBaselinePolicy(r.Context()); err == nil {
+		if p, err := scan.ParsePolicy(row.Document); err == nil {
+			return p
+		}
+	}
+	return scan.DefaultBaseline()
+}
+
+// PlatformAgentAction implements POST /platform/agents/{ns}/{name}/{action}
+// (§7 T&S actions: quarantine, block, reinstate). Platform staff only.
+func (s *Server) PlatformAgentAction(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, actionParam PlatformAgentActionParamsAction) {
+	if !s.requireDB(w, r) {
+		return
+	}
+	p := principalFrom(r.Context())
+	if p.Anonymous {
+		problemUnauthorized(w, r, "")
+		return
+	}
+	if !p.PlatformStaff {
+		problemForbidden(w, r, "platform trust & safety action requires staff")
+		return
+	}
+	a, err := s.reg.Resolve(r.Context(), ns, name)
+	if err != nil {
+		problemNotFound(w, r)
+		return
+	}
+	var req PlatformAgentActionJSONRequestBody
+	if !readJSON(w, r, &req) {
+		return
+	}
+
+	action := string(actionParam)
+	var auditAction audit.Action
+	var quarantineState string
+	switch action {
+	case "quarantine":
+		auditAction, quarantineState = audit.ActionAgentQuarantine, "quarantined"
+	case "block":
+		auditAction, quarantineState = audit.ActionAgentBlock, "blocked"
+	case "reinstate":
+		auditAction, quarantineState = audit.ActionAgentReinstate, "none"
+	default:
+		problemValidation(w, r, "action must be quarantine, block, or reinstate")
+		return
+	}
+
+	e := auditEvent(r, auditAction)
+	e.TargetKind, e.TargetID = "agent", a.ID
+	e.Detail = map[string]any{"reason": req.Reason}
+	err = s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
+		if err := q.SetAgentQuarantineState(r.Context(), storegen.SetAgentQuarantineStateParams{
+			ID: a.ID, QuarantineState: quarantineState,
+		}); err != nil {
+			return err
+		}
+		return s.auditW.Write(r.Context(), q, e)
+	})
+	if err != nil {
+		s.log.Error("platform action", "err", err)
+		problemInternal(w, r)
+		return
+	}
+	// Quarantine also moves published versions to quarantined (§7); a full
+	// per-version sweep runs in the worker (rescan). Here we act on the
+	// latest published version synchronously for immediate effect.
+	if action == "quarantine" && a.LatestPublishedVersionID != nil {
+		_ = s.pipeline.Quarantine(r.Context(), *a.LatestPublishedVersionID, req.Reason, audit.Event{ActorKind: audit.ActorSystem})
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ListAdvisories implements GET /advisories?affecting=ns/name (§8.7, public).
+func (s *Server) ListAdvisories(w http.ResponseWriter, r *http.Request, params ListAdvisoriesParams) {
+	if !s.authorize(w, r, auth.ActPublicRead, uuid.Nil) {
+		return
+	}
+	if !s.requireDB(w, r) {
+		return
+	}
+	ref, err := registry.ParseRef(params.Affecting)
+	if err != nil {
+		problemValidation(w, r, err.Error())
+		return
+	}
+	a, err := s.reg.Resolve(r.Context(), ref.Namespace, ref.Name)
+	if err != nil {
+		problemNotFound(w, r)
+		return
+	}
+	rows, err := s.q().ListAdvisoriesForAgent(r.Context(), a.ID)
+	if err != nil {
+		problemInternal(w, r)
+		return
+	}
+	out := make([]Advisory, 0, len(rows))
+	for _, adv := range rows {
+		item := Advisory{
+			Id: adv.ID, AffectedVersions: adv.AffectedVersions,
+			Severity: adv.Severity, Summary: adv.Summary,
+		}
+		if adv.Detail != nil {
+			item.Detail = adv.Detail
+		}
+		if adv.PublishedAt != nil {
+			item.PublishedAt = adv.PublishedAt
+		}
+		out = append(out, item)
+	}
+	writeJSON(w, http.StatusOK, out)
+}

@@ -241,6 +241,18 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			method: "GET",
 			path:   func(s *matrixSeed, _ string) string { return "/api/v1/resolve?ref=" + s.orgH + "/mx-agent" },
 		},
+		"getVersionReport":      {method: "GET", path: agentPath("/versions/9.9.9/report")},
+		"getVersionAttestation": {method: "GET", path: agentPath("/versions/9.9.9/attestation")},
+		"getPlatformPolicy":     {method: "GET", path: sPath("/api/v1/platform/policy")},
+		"getOrgPolicy":          {method: "GET", path: orgPath("/policy")},
+		"setOrgPolicy": {
+			method: "PUT", path: orgPath("/policy"),
+			body: func(*matrixSeed, string) any { return map[string]any{"maxAutoPublishSeverity": "info"} },
+		},
+		"listAdvisories": {
+			method: "GET",
+			path:   func(s *matrixSeed, _ string) string { return "/api/v1/advisories?affecting=" + s.orgH + "/mx-agent" },
+		},
 		"createAgent": {
 			method: "POST", path: sPath("/api/v1/agents"),
 			body: func(s *matrixSeed, _ string) any {
@@ -332,6 +344,9 @@ func TestAuthzMatrix(t *testing.T) {
 	for opID, decl := range api.AllRouteAuthzDecls() {
 		if decl.NoAuthz && opID != "getMeta" {
 			continue // register/login/verifyEmail: separate flow tests
+		}
+		if decl.SelfAuthorized {
+			continue // bespoke platform-staff/reviewer/author authz; handler tests cover these
 		}
 		fac, ok := factories[opID]
 		if !ok {

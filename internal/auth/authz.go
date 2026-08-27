@@ -77,6 +77,10 @@ type Principal struct {
 	OrgRoles map[uuid.UUID]OrgRole
 	// EmailVerified gates publishing flows (§19).
 	EmailVerified bool
+	// PlatformStaff marks trust & safety operators (SaaS platform roles;
+	// self-host: the instance admin). Gates the platform review queue and
+	// quarantine/block actions (§12.2 last row).
+	PlatformStaff bool
 	// SessionID / PATID identify the credential for audit.
 	SessionID uuid.UUID
 	PATID     uuid.UUID

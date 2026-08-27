@@ -1,0 +1,197 @@
+// Package queue is the async job abstraction (D-05). The interface is the
+// commitment; the default backend is a Postgres SELECT … FOR UPDATE SKIP
+// LOCKED implementation (the same mechanism River uses). River slots in
+// behind Client without changing enqueue sites or handlers — see
+// DEVIATIONS DEV-005.
+package queue
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
+	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
+)
+
+// Job is a claimed unit of work handed to a Handler.
+type Job struct {
+	ID      uuid.UUID
+	Kind    string
+	Queue   string
+	Args    json.RawMessage
+	Attempt int
+}
+
+// Handler processes one job kind. Returning an error retries (with backoff)
+// up to the job's max attempts, then the job is marked failed. Handlers MUST
+// be idempotent: at-least-once delivery is the contract.
+type Handler func(ctx context.Context, job Job) error
+
+// Client enqueues and (as a worker) runs jobs.
+type Client interface {
+	Enqueue(ctx context.Context, kind, queueName string, args any, opts ...EnqueueOption) (uuid.UUID, error)
+	Register(kind string, h Handler)
+	Work(ctx context.Context, queues ...string) error
+}
+
+// EnqueueOption customizes enqueue.
+type EnqueueOption func(*enqueueConfig)
+
+type enqueueConfig struct {
+	runAt       *time.Time
+	maxAttempts int
+}
+
+// WithDelay schedules the job to run after d.
+func WithDelay(d time.Duration) EnqueueOption {
+	return func(c *enqueueConfig) { t := time.Now().Add(d); c.runAt = &t }
+}
+
+// WithMaxAttempts overrides the retry budget.
+func WithMaxAttempts(n int) EnqueueOption {
+	return func(c *enqueueConfig) { c.maxAttempts = n }
+}
+
+// PGClient is the Postgres-backed Client.
+type PGClient struct {
+	st       *store.Store
+	log      *slog.Logger
+	handlers map[string]Handler
+	// pollInterval bounds latency when no NOTIFY wakeup fires.
+	pollInterval time.Duration
+}
+
+// NewPGClient builds the Postgres queue client.
+func NewPGClient(st *store.Store, log *slog.Logger) *PGClient {
+	if log == nil {
+		log = slog.Default()
+	}
+	return &PGClient{st: st, log: log, handlers: map[string]Handler{}, pollInterval: time.Second}
+}
+
+// Enqueue durably records a job.
+func (c *PGClient) Enqueue(ctx context.Context, kind, queueName string, args any, opts ...EnqueueOption) (uuid.UUID, error) {
+	cfg := enqueueConfig{maxAttempts: 5}
+	for _, o := range opts {
+		o(&cfg)
+	}
+	raw, err := json.Marshal(args)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("queue: marshal args: %w", err)
+	}
+	if queueName == "" {
+		queueName = "core"
+	}
+	id, err := uuid.NewV7()
+	if err != nil {
+		return uuid.Nil, err
+	}
+	params := storegen.EnqueueJobParams{
+		ID: id, Kind: kind, Queue: queueName, Args: raw,
+		MaxAttempts: int32(cfg.maxAttempts),
+	}
+	if cfg.runAt != nil {
+		params.RunAt = cfg.runAt
+	}
+	if _, err := c.st.Queries().EnqueueJob(ctx, params); err != nil {
+		return uuid.Nil, fmt.Errorf("queue: enqueue: %w", err)
+	}
+	return id, nil
+}
+
+// Register wires a handler for a job kind (before Work).
+func (c *PGClient) Register(kind string, h Handler) { c.handlers[kind] = h }
+
+// Work runs the claim/execute loop until ctx is cancelled.
+func (c *PGClient) Work(ctx context.Context, queues ...string) error {
+	if len(queues) == 0 {
+		queues = []string{"core"}
+	}
+	// Recover jobs orphaned by a crashed worker (locked > 30 min).
+	cutoff := time.Now().Add(-30 * time.Minute)
+	if _, err := c.st.Queries().ResetStuckJobs(ctx, &cutoff); err != nil {
+		c.log.Warn("queue: reset stuck jobs", "err", err)
+	}
+	ticker := time.NewTicker(c.pollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			for _, q := range queues {
+				for c.claimOne(ctx, q) { //nolint:revive // drain the queue each tick
+				}
+			}
+		}
+	}
+}
+
+// RunOnce claims and runs at most one job from each queue (tests, drains).
+func (c *PGClient) RunOnce(ctx context.Context, queues ...string) bool {
+	if len(queues) == 0 {
+		queues = []string{"core"}
+	}
+	any := false
+	for _, q := range queues {
+		if c.claimOne(ctx, q) {
+			any = true
+		}
+	}
+	return any
+}
+
+// Drain runs jobs until every queue is empty (tests).
+func (c *PGClient) Drain(ctx context.Context, queues ...string) {
+	for c.RunOnce(ctx, queues...) {
+	}
+}
+
+func (c *PGClient) claimOne(ctx context.Context, queueName string) bool {
+	job, err := c.st.Queries().ClaimJob(ctx, queueName)
+	if err != nil {
+		return false // ErrNoRows when empty
+	}
+	h, ok := c.handlers[job.Kind]
+	if !ok {
+		c.log.Error("queue: no handler", "kind", job.Kind)
+		_ = c.st.Queries().FailJob(ctx, storegen.FailJobParams{ID: job.ID, LastError: strptr("no handler registered")})
+		return true
+	}
+	err = c.runHandler(ctx, h, Job{ID: job.ID, Kind: job.Kind, Queue: job.Queue, Args: job.Args, Attempt: int(job.Attempt)})
+	if err == nil {
+		if err := c.st.Queries().CompleteJob(ctx, job.ID); err != nil {
+			c.log.Error("queue: complete", "err", err)
+		}
+		return true
+	}
+	if int(job.Attempt) >= int(job.MaxAttempts) {
+		c.log.Error("queue: job failed permanently", "kind", job.Kind, "err", err)
+		_ = c.st.Queries().FailJob(ctx, storegen.FailJobParams{ID: job.ID, LastError: strptr(err.Error())})
+		return true
+	}
+	backoff := time.Duration(1<<uint(job.Attempt)) * time.Second
+	if err := c.st.Queries().RetryJob(ctx, storegen.RetryJobParams{
+		ID: job.ID, LastError: strptr(err.Error()), RunAt: time.Now().Add(backoff),
+	}); err != nil {
+		c.log.Error("queue: retry", "err", err)
+	}
+	return true
+}
+
+// runHandler isolates a handler panic so one bad job never kills the worker.
+func (c *PGClient) runHandler(ctx context.Context, h Handler, job Job) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("queue: handler panic: %v", r)
+		}
+	}()
+	return h(ctx, job)
+}
+
+func strptr(s string) *string { return &s }

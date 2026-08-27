@@ -12,6 +12,16 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Advisory struct {
+	ID               uuid.UUID  `json:"id"`
+	AgentID          uuid.UUID  `json:"agent_id"`
+	AffectedVersions string     `json:"affected_versions"`
+	Severity         string     `json:"severity"`
+	Summary          string     `json:"summary"`
+	Detail           *string    `json:"detail"`
+	PublishedAt      *time.Time `json:"published_at"`
+}
+
 type Agent struct {
 	ID                       uuid.UUID   `json:"id"`
 	NamespaceID              uuid.UUID   `json:"namespace_id"`
@@ -66,6 +76,15 @@ type AgentVersion struct {
 	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
+type Attestation struct {
+	ID            uuid.UUID `json:"id"`
+	VersionID     uuid.UUID `json:"version_id"`
+	PredicateType string    `json:"predicate_type"`
+	DsseEnvelope  []byte    `json:"dsse_envelope"`
+	KeyID         string    `json:"key_id"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
 type AuditEvent struct {
 	ID         uuid.UUID   `json:"id"`
 	OccurredAt time.Time   `json:"occurred_at"`
@@ -109,6 +128,25 @@ type EmailVerification struct {
 	CreatedAt   time.Time  `json:"created_at"`
 }
 
+type Finding struct {
+	ID            uuid.UUID  `json:"id"`
+	ScanRunID     uuid.UUID  `json:"scan_run_id"`
+	Scanner       string     `json:"scanner"`
+	Severity      string     `json:"severity"`
+	Confidence    string     `json:"confidence"`
+	Title         string     `json:"title"`
+	FilePath      *string    `json:"file_path"`
+	LineStart     *int32     `json:"line_start"`
+	LineEnd       *int32     `json:"line_end"`
+	Excerpt       *string    `json:"excerpt"`
+	Detail        []byte     `json:"detail"`
+	Verdict       string     `json:"verdict"`
+	VerdictBy     *uuid.UUID `json:"verdict_by"`
+	VerdictReason *string    `json:"verdict_reason"`
+	VerdictAt     *time.Time `json:"verdict_at"`
+	CreatedAt     time.Time  `json:"created_at"`
+}
+
 type Handle struct {
 	ID        uuid.UUID `json:"id"`
 	Handle    string    `json:"handle"`
@@ -124,6 +162,21 @@ type Identity struct {
 	SsoConnectionID *uuid.UUID `json:"sso_connection_id"`
 	Subject         string     `json:"subject"`
 	CreatedAt       time.Time  `json:"created_at"`
+}
+
+type Job struct {
+	ID          uuid.UUID  `json:"id"`
+	Kind        string     `json:"kind"`
+	Queue       string     `json:"queue"`
+	Args        []byte     `json:"args"`
+	State       string     `json:"state"`
+	Attempt     int32      `json:"attempt"`
+	MaxAttempts int32      `json:"max_attempts"`
+	LastError   *string    `json:"last_error"`
+	RunAt       time.Time  `json:"run_at"`
+	LockedAt    *time.Time `json:"locked_at"`
+	CreatedAt   time.Time  `json:"created_at"`
+	FinishedAt  *time.Time `json:"finished_at"`
 }
 
 type Membership struct {
@@ -159,12 +212,62 @@ type Pat struct {
 	CreatedAt   time.Time  `json:"created_at"`
 }
 
+type Policy struct {
+	ID        uuid.UUID  `json:"id"`
+	OrgID     *uuid.UUID `json:"org_id"`
+	Document  []byte     `json:"document"`
+	Version   int32      `json:"version"`
+	UpdatedAt time.Time  `json:"updated_at"`
+}
+
 type Repo struct {
 	ID            uuid.UUID  `json:"id"`
 	DefaultBranch string     `json:"default_branch"`
 	SizeBytes     int64      `json:"size_bytes"`
 	LastPushAt    *time.Time `json:"last_push_at"`
 	CreatedAt     time.Time  `json:"created_at"`
+}
+
+type ReviewItem struct {
+	ID        uuid.UUID  `json:"id"`
+	VersionID uuid.UUID  `json:"version_id"`
+	Queue     string     `json:"queue"`
+	OrgID     *uuid.UUID `json:"org_id"`
+	State     string     `json:"state"`
+	DecidedBy *uuid.UUID `json:"decided_by"`
+	DecidedAt *time.Time `json:"decided_at"`
+	Rationale *string    `json:"rationale"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
+type RulesetRelease struct {
+	ID           uuid.UUID `json:"id"`
+	Semver       string    `json:"semver"`
+	BundleDigest string    `json:"bundle_digest"`
+	Notes        *string   `json:"notes"`
+	PublishedAt  time.Time `json:"published_at"`
+}
+
+type ScanRun struct {
+	ID               uuid.UUID  `json:"id"`
+	VersionID        uuid.UUID  `json:"version_id"`
+	Trigger          string     `json:"trigger"`
+	RulesetReleaseID uuid.UUID  `json:"ruleset_release_id"`
+	PolicySnapshot   []byte     `json:"policy_snapshot"`
+	JudgeModel       *string    `json:"judge_model"`
+	JudgePromptHash  *string    `json:"judge_prompt_hash"`
+	Status           string     `json:"status"`
+	StartedAt        time.Time  `json:"started_at"`
+	FinishedAt       *time.Time `json:"finished_at"`
+	ReportDigest     *string    `json:"report_digest"`
+}
+
+type ScanStageResult struct {
+	ScanRunID  uuid.UUID `json:"scan_run_id"`
+	Scanner    string    `json:"scanner"`
+	Status     string    `json:"status"`
+	Detail     []byte    `json:"detail"`
+	FinishedAt time.Time `json:"finished_at"`
 }
 
 type ScimToken struct {
@@ -225,4 +328,5 @@ type User struct {
 	DeletedTombstone []byte     `json:"deleted_tombstone"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
+	PlatformStaff    bool       `json:"platform_staff"`
 }

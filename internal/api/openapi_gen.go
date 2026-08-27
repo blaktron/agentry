@@ -226,6 +226,117 @@ func (e OrgRole) Valid() bool {
 	}
 }
 
+// Defines values for ReviewItemQueue.
+const (
+	ReviewItemQueueOrg      ReviewItemQueue = "org"
+	ReviewItemQueuePlatform ReviewItemQueue = "platform"
+)
+
+// Valid indicates whether the value is a known member of the ReviewItemQueue enum.
+func (e ReviewItemQueue) Valid() bool {
+	switch e {
+	case ReviewItemQueueOrg:
+		return true
+	case ReviewItemQueuePlatform:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReviewItemState.
+const (
+	ReviewItemStateApproved ReviewItemState = "approved"
+	ReviewItemStatePending  ReviewItemState = "pending"
+	ReviewItemStateRejected ReviewItemState = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the ReviewItemState enum.
+func (e ReviewItemState) Valid() bool {
+	switch e {
+	case ReviewItemStateApproved:
+		return true
+	case ReviewItemStatePending:
+		return true
+	case ReviewItemStateRejected:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScanFindingConfidence.
+const (
+	ScanFindingConfidenceHigh   ScanFindingConfidence = "high"
+	ScanFindingConfidenceLow    ScanFindingConfidence = "low"
+	ScanFindingConfidenceMedium ScanFindingConfidence = "medium"
+)
+
+// Valid indicates whether the value is a known member of the ScanFindingConfidence enum.
+func (e ScanFindingConfidence) Valid() bool {
+	switch e {
+	case ScanFindingConfidenceHigh:
+		return true
+	case ScanFindingConfidenceLow:
+		return true
+	case ScanFindingConfidenceMedium:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScanFindingSeverity.
+const (
+	ScanFindingSeverityCritical ScanFindingSeverity = "critical"
+	ScanFindingSeverityHigh     ScanFindingSeverity = "high"
+	ScanFindingSeverityInfo     ScanFindingSeverity = "info"
+	ScanFindingSeverityLow      ScanFindingSeverity = "low"
+	ScanFindingSeverityMedium   ScanFindingSeverity = "medium"
+)
+
+// Valid indicates whether the value is a known member of the ScanFindingSeverity enum.
+func (e ScanFindingSeverity) Valid() bool {
+	switch e {
+	case ScanFindingSeverityCritical:
+		return true
+	case ScanFindingSeverityHigh:
+		return true
+	case ScanFindingSeverityInfo:
+		return true
+	case ScanFindingSeverityLow:
+		return true
+	case ScanFindingSeverityMedium:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScanFindingVerdict.
+const (
+	ScanFindingVerdictConfirmed              ScanFindingVerdict = "confirmed"
+	ScanFindingVerdictDismissedAcceptedRisk  ScanFindingVerdict = "dismissed_accepted_risk"
+	ScanFindingVerdictDismissedFalsePositive ScanFindingVerdict = "dismissed_false_positive"
+	ScanFindingVerdictOpen                   ScanFindingVerdict = "open"
+)
+
+// Valid indicates whether the value is a known member of the ScanFindingVerdict enum.
+func (e ScanFindingVerdict) Valid() bool {
+	switch e {
+	case ScanFindingVerdictConfirmed:
+		return true
+	case ScanFindingVerdictDismissedAcceptedRisk:
+		return true
+	case ScanFindingVerdictDismissedFalsePositive:
+		return true
+	case ScanFindingVerdictOpen:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Scope.
 const (
 	AgentPublish Scope = "agent:publish"
@@ -319,6 +430,48 @@ func (e UpdateAgentJSONBodyVisibility) Valid() bool {
 	}
 }
 
+// Defines values for SetFindingVerdictJSONBodyVerdict.
+const (
+	SetFindingVerdictJSONBodyVerdictConfirmed              SetFindingVerdictJSONBodyVerdict = "confirmed"
+	SetFindingVerdictJSONBodyVerdictDismissedAcceptedRisk  SetFindingVerdictJSONBodyVerdict = "dismissed_accepted_risk"
+	SetFindingVerdictJSONBodyVerdictDismissedFalsePositive SetFindingVerdictJSONBodyVerdict = "dismissed_false_positive"
+)
+
+// Valid indicates whether the value is a known member of the SetFindingVerdictJSONBodyVerdict enum.
+func (e SetFindingVerdictJSONBodyVerdict) Valid() bool {
+	switch e {
+	case SetFindingVerdictJSONBodyVerdictConfirmed:
+		return true
+	case SetFindingVerdictJSONBodyVerdictDismissedAcceptedRisk:
+		return true
+	case SetFindingVerdictJSONBodyVerdictDismissedFalsePositive:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlatformAgentActionParamsAction.
+const (
+	Block      PlatformAgentActionParamsAction = "block"
+	Quarantine PlatformAgentActionParamsAction = "quarantine"
+	Reinstate  PlatformAgentActionParamsAction = "reinstate"
+)
+
+// Valid indicates whether the value is a known member of the PlatformAgentActionParamsAction enum.
+func (e PlatformAgentActionParamsAction) Valid() bool {
+	switch e {
+	case Block:
+		return true
+	case Quarantine:
+		return true
+	case Reinstate:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ResolveRefParamsChannel.
 const (
 	ResolveRefParamsChannelBeta   ResolveRefParamsChannel = "beta"
@@ -335,6 +488,52 @@ func (e ResolveRefParamsChannel) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// Defines values for DecideReviewItemJSONBodyDecision.
+const (
+	Approve DecideReviewItemJSONBodyDecision = "approve"
+	Reject  DecideReviewItemJSONBodyDecision = "reject"
+)
+
+// Valid indicates whether the value is a known member of the DecideReviewItemJSONBodyDecision enum.
+func (e DecideReviewItemJSONBodyDecision) Valid() bool {
+	switch e {
+	case Approve:
+		return true
+	case Reject:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListReviewQueueParamsQueue.
+const (
+	ListReviewQueueParamsQueueOrg      ListReviewQueueParamsQueue = "org"
+	ListReviewQueueParamsQueuePlatform ListReviewQueueParamsQueue = "platform"
+)
+
+// Valid indicates whether the value is a known member of the ListReviewQueueParamsQueue enum.
+func (e ListReviewQueueParamsQueue) Valid() bool {
+	switch e {
+	case ListReviewQueueParamsQueueOrg:
+		return true
+	case ListReviewQueueParamsQueuePlatform:
+		return true
+	default:
+		return false
+	}
+}
+
+// Advisory defines model for Advisory.
+type Advisory struct {
+	AffectedVersions string             `json:"affectedVersions"`
+	Detail           *string            `json:"detail,omitempty"`
+	Id               openapi_types.UUID `json:"id"`
+	PublishedAt      *time.Time         `json:"publishedAt,omitempty"`
+	Severity         string             `json:"severity"`
+	Summary          string             `json:"summary"`
 }
 
 // Agent defines model for Agent.
@@ -608,6 +807,67 @@ type ResolveResult struct {
 	Yanked bool `json:"yanked"`
 }
 
+// ReviewBundle defines model for ReviewBundle.
+type ReviewBundle struct {
+	Findings []ScanFinding `json:"findings"`
+	Item     ReviewItem    `json:"item"`
+}
+
+// ReviewItem defines model for ReviewItem.
+type ReviewItem struct {
+	Agent     string             `json:"agent"`
+	CreatedAt *time.Time         `json:"createdAt,omitempty"`
+	Id        openapi_types.UUID `json:"id"`
+	Namespace string             `json:"namespace"`
+	Queue     ReviewItemQueue    `json:"queue"`
+	State     ReviewItemState    `json:"state"`
+	Version   string             `json:"version"`
+}
+
+// ReviewItemQueue defines model for ReviewItem.Queue.
+type ReviewItemQueue string
+
+// ReviewItemState defines model for ReviewItem.State.
+type ReviewItemState string
+
+// ScanFinding defines model for ScanFinding.
+type ScanFinding struct {
+	Confidence ScanFindingConfidence   `json:"confidence"`
+	Detail     *map[string]interface{} `json:"detail,omitempty"`
+	Excerpt    *string                 `json:"excerpt,omitempty"`
+	FilePath   *string                 `json:"filePath,omitempty"`
+	Id         *openapi_types.UUID     `json:"id,omitempty"`
+	LineEnd    *int                    `json:"lineEnd,omitempty"`
+	LineStart  *int                    `json:"lineStart,omitempty"`
+	Scanner    string                  `json:"scanner"`
+	Severity   ScanFindingSeverity     `json:"severity"`
+	Title      string                  `json:"title"`
+	Verdict    ScanFindingVerdict      `json:"verdict"`
+}
+
+// ScanFindingConfidence defines model for ScanFinding.Confidence.
+type ScanFindingConfidence string
+
+// ScanFindingSeverity defines model for ScanFinding.Severity.
+type ScanFindingSeverity string
+
+// ScanFindingVerdict defines model for ScanFinding.Verdict.
+type ScanFindingVerdict string
+
+// ScanReport defines model for ScanReport.
+type ScanReport struct {
+	FindingCounts  *map[string]int     `json:"findingCounts,omitempty"`
+	Findings       []ScanFinding       `json:"findings"`
+	JudgeModel     *string             `json:"judgeModel,omitempty"`
+	ReportDigest   *string             `json:"reportDigest,omitempty"`
+	RulesetVersion *string             `json:"rulesetVersion,omitempty"`
+	ScanRunId      *openapi_types.UUID `json:"scanRunId,omitempty"`
+	ScanStatus     *string             `json:"scanStatus,omitempty"`
+
+	// VersionStatus Publication state machine states (§7).
+	VersionStatus VersionStatus `json:"versionStatus"`
+}
+
 // Scope PAT scopes (§12.3).
 type Scope string
 
@@ -656,6 +916,12 @@ type TeamSlug = string
 
 // VersionString defines model for VersionString.
 type VersionString = string
+
+// ListAdvisoriesParams defines parameters for ListAdvisories.
+type ListAdvisoriesParams struct {
+	// Affecting ns/name.
+	Affecting string `form:"affecting" json:"affecting"`
+}
 
 // ListAgentsParams defines parameters for ListAgents.
 type ListAgentsParams struct {
@@ -713,6 +979,15 @@ type VerifyEmailJSONBody struct {
 	Token string `json:"token"`
 }
 
+// SetFindingVerdictJSONBody defines parameters for SetFindingVerdict.
+type SetFindingVerdictJSONBody struct {
+	Reason  string                           `json:"reason"`
+	Verdict SetFindingVerdictJSONBodyVerdict `json:"verdict"`
+}
+
+// SetFindingVerdictJSONBodyVerdict defines parameters for SetFindingVerdict.
+type SetFindingVerdictJSONBodyVerdict string
+
 // UpdateOrgJSONBody defines parameters for UpdateOrg.
 type UpdateOrgJSONBody struct {
 	DisplayName *string `json:"displayName,omitempty"`
@@ -731,10 +1006,21 @@ type SetOrgMemberJSONBody struct {
 	Role OrgRole `json:"role"`
 }
 
+// SetOrgPolicyJSONBody defines parameters for SetOrgPolicy.
+type SetOrgPolicyJSONBody map[string]interface{}
+
 // CreateTeamJSONBody defines parameters for CreateTeam.
 type CreateTeamJSONBody struct {
 	Slug string `json:"slug"`
 }
+
+// PlatformAgentActionJSONBody defines parameters for PlatformAgentAction.
+type PlatformAgentActionJSONBody struct {
+	Reason string `json:"reason"`
+}
+
+// PlatformAgentActionParamsAction defines parameters for PlatformAgentAction.
+type PlatformAgentActionParamsAction string
 
 // ResolveRefParams defines parameters for ResolveRef.
 type ResolveRefParams struct {
@@ -745,6 +1031,25 @@ type ResolveRefParams struct {
 
 // ResolveRefParamsChannel defines parameters for ResolveRef.
 type ResolveRefParamsChannel string
+
+// DecideReviewItemJSONBody defines parameters for DecideReviewItem.
+type DecideReviewItemJSONBody struct {
+	Decision  DecideReviewItemJSONBodyDecision `json:"decision"`
+	Rationale string                           `json:"rationale"`
+}
+
+// DecideReviewItemJSONBodyDecision defines parameters for DecideReviewItem.
+type DecideReviewItemJSONBodyDecision string
+
+// ListReviewQueueParams defines parameters for ListReviewQueue.
+type ListReviewQueueParams struct {
+	Queue ListReviewQueueParamsQueue `form:"queue" json:"queue"`
+	Org   *string                    `form:"org,omitempty" json:"org,omitempty"`
+	Limit *int                       `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListReviewQueueParamsQueue defines parameters for ListReviewQueue.
+type ListReviewQueueParamsQueue string
 
 // UpdateCurrentUserJSONBody defines parameters for UpdateCurrentUser.
 type UpdateCurrentUserJSONBody struct {
@@ -784,6 +1089,9 @@ type RegisterJSONRequestBody = RegisterRequest
 // VerifyEmailJSONRequestBody defines body for VerifyEmail for application/json ContentType.
 type VerifyEmailJSONRequestBody VerifyEmailJSONBody
 
+// SetFindingVerdictJSONRequestBody defines body for SetFindingVerdict for application/json ContentType.
+type SetFindingVerdictJSONRequestBody SetFindingVerdictJSONBody
+
 // CreateOrgJSONRequestBody defines body for CreateOrg for application/json ContentType.
 type CreateOrgJSONRequestBody = CreateOrgRequest
 
@@ -793,8 +1101,17 @@ type UpdateOrgJSONRequestBody UpdateOrgJSONBody
 // SetOrgMemberJSONRequestBody defines body for SetOrgMember for application/json ContentType.
 type SetOrgMemberJSONRequestBody SetOrgMemberJSONBody
 
+// SetOrgPolicyJSONRequestBody defines body for SetOrgPolicy for application/json ContentType.
+type SetOrgPolicyJSONRequestBody SetOrgPolicyJSONBody
+
 // CreateTeamJSONRequestBody defines body for CreateTeam for application/json ContentType.
 type CreateTeamJSONRequestBody CreateTeamJSONBody
+
+// PlatformAgentActionJSONRequestBody defines body for PlatformAgentAction for application/json ContentType.
+type PlatformAgentActionJSONRequestBody PlatformAgentActionJSONBody
+
+// DecideReviewItemJSONRequestBody defines body for DecideReviewItem for application/json ContentType.
+type DecideReviewItemJSONRequestBody DecideReviewItemJSONBody
 
 // UpdateCurrentUserJSONRequestBody defines body for UpdateCurrentUser for application/json ContentType.
 type UpdateCurrentUserJSONRequestBody UpdateCurrentUserJSONBody
@@ -804,6 +1121,9 @@ type CreateTokenJSONRequestBody = CreateTokenRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ListAdvisories Published advisories affecting an agent (§8.7).
+	// (GET /advisories)
+	ListAdvisories(w http.ResponseWriter, r *http.Request, params ListAdvisoriesParams)
 	// ListAgents List agents in a namespace (public ones for everyone).
 	// (GET /agents)
 	ListAgents(w http.ResponseWriter, r *http.Request, params ListAgentsParams)
@@ -840,12 +1160,18 @@ type ServerInterface interface {
 	// GetVersionInfo One version with its state and archive identity.
 	// (GET /agents/{ns}/{name}/versions/{version})
 	GetVersionInfo(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, version VersionString)
+	// GetVersionAttestation The signed DSSE attestation (§8.8), verbatim.
+	// (GET /agents/{ns}/{name}/versions/{version}/attestation)
+	GetVersionAttestation(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, version VersionString)
 	// DownloadVersion Download the release archive (§9.4; counts an install).
 	// (GET /agents/{ns}/{name}/versions/{version}/download)
 	DownloadVersion(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, version VersionString)
 	// GetVersionManifest The validated manifest (canonical JSON, §4.2).
 	// (GET /agents/{ns}/{name}/versions/{version}/manifest)
 	GetVersionManifest(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, version VersionString)
+	// GetVersionReport The scan report for a version (findings, ruleset, verdict, §8).
+	// (GET /agents/{ns}/{name}/versions/{version}/report)
+	GetVersionReport(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, version VersionString)
 	// YankVersion Yank a published version (§5.5 semantics; publish permission).
 	// (POST /agents/{ns}/{name}/versions/{version}/yank)
 	YankVersion(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, version VersionString)
@@ -867,6 +1193,9 @@ type ServerInterface interface {
 	// VerifyEmail Confirm an email address with the mailed token.
 	// (POST /auth/verify-email)
 	VerifyEmail(w http.ResponseWriter, r *http.Request)
+	// SetFindingVerdict Confirm or dismiss a finding (§8.5 dismissals).
+	// (POST /findings/{id}/verdict)
+	SetFindingVerdict(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// GetMeta Server version and self-host feature flags (§9.2).
 	// (GET /meta)
 	GetMeta(w http.ResponseWriter, r *http.Request)
@@ -891,6 +1220,12 @@ type ServerInterface interface {
 	// SetOrgMember Add a member or change a role (admin+; owner grants owner/admin).
 	// (PUT /orgs/{org}/members/{handle})
 	SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHandle, handle Handle)
+	// GetOrgPolicy The org policy overlay (admin+).
+	// (GET /orgs/{org}/policy)
+	GetOrgPolicy(w http.ResponseWriter, r *http.Request, org OrgHandle)
+	// SetOrgPolicy Set the org policy overlay (owner; tighten-only, §8.6).
+	// (PUT /orgs/{org}/policy)
+	SetOrgPolicy(w http.ResponseWriter, r *http.Request, org OrgHandle)
 	// ListTeams List teams (members can view).
 	// (GET /orgs/{org}/teams)
 	ListTeams(w http.ResponseWriter, r *http.Request, org OrgHandle)
@@ -909,9 +1244,24 @@ type ServerInterface interface {
 	// AddTeamMember Add an org member to a team (admin+).
 	// (PUT /orgs/{org}/teams/{team}/members/{handle})
 	AddTeamMember(w http.ResponseWriter, r *http.Request, org OrgHandle, team TeamSlug, handle Handle)
+	// PlatformAgentAction Quarantine, block, or reinstate an agent (platform staff, §7).
+	// (POST /platform/agents/{ns}/{name}/{action})
+	PlatformAgentAction(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, action PlatformAgentActionParamsAction)
+	// GetPlatformPolicy The read-only platform baseline policy (§8.6).
+	// (GET /platform/policy)
+	GetPlatformPolicy(w http.ResponseWriter, r *http.Request)
 	// ResolveRef Resolve ns/name@range to a concrete version (§9.4 step 1).
 	// (GET /resolve)
 	ResolveRef(w http.ResponseWriter, r *http.Request, params ResolveRefParams)
+	// GetReviewItem One review item with its findings bundle.
+	// (GET /review-items/{id})
+	GetReviewItem(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// DecideReviewItem Approve or reject a version under review (not its author, §12.2).
+	// (POST /review-items/{id}/decision)
+	DecideReviewItem(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// ListReviewQueue Pending review items (platform staff or org security_reviewer).
+	// (GET /review-queue)
+	ListReviewQueue(w http.ResponseWriter, r *http.Request, params ListReviewQueueParams)
 	// GetCurrentUser The authenticated user.
 	// (GET /user)
 	GetCurrentUser(w http.ResponseWriter, r *http.Request)
@@ -940,6 +1290,39 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListAdvisories operation middleware
+func (siw *ServerInterfaceWrapper) ListAdvisories(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAdvisoriesParams
+
+	// ------------- Required query parameter "affecting" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "affecting", r.URL.Query(), &params.Affecting, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "affecting"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "affecting", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAdvisories(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListAgents operation middleware
 func (siw *ServerInterfaceWrapper) ListAgents(w http.ResponseWriter, r *http.Request) {
@@ -1383,6 +1766,50 @@ func (siw *ServerInterfaceWrapper) GetVersionInfo(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// GetVersionAttestation operation middleware
+func (siw *ServerInterfaceWrapper) GetVersionAttestation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns Namespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name AgentName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version VersionString
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", r.PathValue("version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetVersionAttestation(w, r, ns, name, version)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DownloadVersion operation middleware
 func (siw *ServerInterfaceWrapper) DownloadVersion(w http.ResponseWriter, r *http.Request) {
 
@@ -1462,6 +1889,50 @@ func (siw *ServerInterfaceWrapper) GetVersionManifest(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetVersionManifest(w, r, ns, name, version)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetVersionReport operation middleware
+func (siw *ServerInterfaceWrapper) GetVersionReport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns Namespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name AgentName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version VersionString
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", r.PathValue("version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetVersionReport(w, r, ns, name, version)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1590,6 +2061,32 @@ func (siw *ServerInterfaceWrapper) VerifyEmail(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.VerifyEmail(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetFindingVerdict operation middleware
+func (siw *ServerInterfaceWrapper) SetFindingVerdict(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetFindingVerdict(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1843,6 +2340,58 @@ func (siw *ServerInterfaceWrapper) SetOrgMember(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// GetOrgPolicy operation middleware
+func (siw *ServerInterfaceWrapper) GetOrgPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOrgPolicy(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetOrgPolicy operation middleware
+func (siw *ServerInterfaceWrapper) SetOrgPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgHandle
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetOrgPolicy(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListTeams operation middleware
 func (siw *ServerInterfaceWrapper) ListTeams(w http.ResponseWriter, r *http.Request) {
 
@@ -2053,6 +2602,64 @@ func (siw *ServerInterfaceWrapper) AddTeamMember(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// PlatformAgentAction operation middleware
+func (siw *ServerInterfaceWrapper) PlatformAgentAction(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns Namespace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name AgentName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "action" -------------
+	var action PlatformAgentActionParamsAction
+
+	err = runtime.BindStyledParameterWithOptions("simple", "action", r.PathValue("action"), &action, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "action", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PlatformAgentAction(w, r, ns, name, action)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPlatformPolicy operation middleware
+func (siw *ServerInterfaceWrapper) GetPlatformPolicy(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPlatformPolicy(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ResolveRef operation middleware
 func (siw *ServerInterfaceWrapper) ResolveRef(w http.ResponseWriter, r *http.Request) {
 
@@ -2090,6 +2697,117 @@ func (siw *ServerInterfaceWrapper) ResolveRef(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ResolveRef(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetReviewItem operation middleware
+func (siw *ServerInterfaceWrapper) GetReviewItem(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetReviewItem(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DecideReviewItem operation middleware
+func (siw *ServerInterfaceWrapper) DecideReviewItem(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DecideReviewItem(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListReviewQueue operation middleware
+func (siw *ServerInterfaceWrapper) ListReviewQueue(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListReviewQueueParams
+
+	// ------------- Required query parameter "queue" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "queue", r.URL.Query(), &params.Queue, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "queue"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "queue", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "org" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "org", r.URL.Query(), &params.Org, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "org"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListReviewQueue(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2369,6 +3087,17 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{ns}/{name}/versions/{version}/yank", wrapper.YankVersion)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{ns}/{name}/versions/{version}/download", wrapper.DownloadVersion)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/resolve", wrapper.ResolveRef)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{ns}/{name}/versions/{version}/report", wrapper.GetVersionReport)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{ns}/{name}/versions/{version}/attestation", wrapper.GetVersionAttestation)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/review-queue", wrapper.ListReviewQueue)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/review-items/{id}", wrapper.GetReviewItem)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/review-items/{id}/decision", wrapper.DecideReviewItem)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/findings/{id}/verdict", wrapper.SetFindingVerdict)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/platform/policy", wrapper.GetPlatformPolicy)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/policy", wrapper.GetOrgPolicy)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/policy", wrapper.SetOrgPolicy)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/platform/agents/{ns}/{name}/{action}", wrapper.PlatformAgentAction)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/advisories", wrapper.ListAdvisories)
 
 	return m
 }
@@ -2378,100 +3107,119 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"dzhipvHL0UFz5spuvn13+38DAA==",
+	"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",
+	"ECgzQO1mFg8IfxeL79xNDO+9/v8BAA==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

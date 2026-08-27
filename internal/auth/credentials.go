@@ -36,6 +36,7 @@ func ResolvePAT(ctx context.Context, q *storegen.Queries, token string) (*Princi
 		Scopes:        pat.Scopes,
 		OrgRoles:      orgRoles,
 		EmailVerified: u.EmailVerifiedAt != nil,
+		PlatformStaff: u.PlatformStaff,
 		PATID:         pat.ID,
 	}, nil
 }

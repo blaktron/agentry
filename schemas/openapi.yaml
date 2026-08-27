@@ -29,6 +29,12 @@ tags:
     description: Agents, hosted repos, per-agent grants (§9.2).
   - name: versions
     description: Version submission, resolution, downloads (§7, §9.4).
+  - name: reviews
+    description: Review queue and finding verdicts (§8.5, §8.6).
+  - name: policies
+    description: Platform baseline and org policy overlays (§8.6).
+  - name: platform
+    description: Trust & safety actions and advisories (§7, §8.7).
 
 paths:
   /meta:
@@ -909,6 +915,284 @@ paths:
           $ref: "#/components/responses/Problem"
 
 
+  /agents/{ns}/{name}/versions/{version}/report:
+    get:
+      operationId: getVersionReport
+      tags: [versions]
+      summary: The scan report for a version (findings, ruleset, verdict, §8).
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+        - $ref: "#/components/parameters/VersionString"
+      responses:
+        "200":
+          description: Scan report.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanReport"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /agents/{ns}/{name}/versions/{version}/attestation:
+    get:
+      operationId: getVersionAttestation
+      tags: [versions]
+      summary: The signed DSSE attestation (§8.8), verbatim.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+        - $ref: "#/components/parameters/VersionString"
+      responses:
+        "200":
+          description: DSSE envelope.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "404":
+          description: No attestation (unsigned/unpublished).
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /review-queue:
+    get:
+      operationId: listReviewQueue
+      tags: [reviews]
+      summary: Pending review items (platform staff or org security_reviewer).
+      parameters:
+        - name: queue
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [platform, org]
+        - name: org
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Review items.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReviewItem"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /review-items/{id}:
+    get:
+      operationId: getReviewItem
+      tags: [reviews]
+      summary: One review item with its findings bundle.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Review bundle.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewBundle"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /review-items/{id}/decision:
+    post:
+      operationId: decideReviewItem
+      tags: [reviews]
+      summary: Approve or reject a version under review (not its author, §12.2).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision, rationale]
+              properties:
+                decision:
+                  type: string
+                  enum: [approve, reject]
+                rationale:
+                  type: string
+                  maxLength: 1000
+      responses:
+        "204":
+          description: Decision recorded.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /findings/{id}/verdict:
+    post:
+      operationId: setFindingVerdict
+      tags: [reviews]
+      summary: Confirm or dismiss a finding (§8.5 dismissals).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [verdict, reason]
+              properties:
+                verdict:
+                  type: string
+                  enum: [confirmed, dismissed_false_positive, dismissed_accepted_risk]
+                reason:
+                  type: string
+                  maxLength: 1000
+      responses:
+        "204":
+          description: Verdict recorded.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /platform/policy:
+    get:
+      operationId: getPlatformPolicy
+      tags: [policies]
+      summary: The read-only platform baseline policy (§8.6).
+      security: []
+      responses:
+        "200":
+          description: Baseline policy document.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/policy:
+    get:
+      operationId: getOrgPolicy
+      tags: [policies]
+      summary: The org policy overlay (admin+).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      responses:
+        "200":
+          description: Org policy document.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      operationId: setOrgPolicy
+      tags: [policies]
+      summary: Set the org policy overlay (owner; tighten-only, §8.6).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Effective (merged) policy after the update.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /platform/agents/{ns}/{name}/{action}:
+    post:
+      operationId: platformAgentAction
+      tags: [platform]
+      summary: Quarantine, block, or reinstate an agent (platform staff, §7).
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+        - name: action
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [quarantine, block, reinstate]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  maxLength: 1000
+      responses:
+        "204":
+          description: Action applied.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /advisories:
+    get:
+      operationId: listAdvisories
+      tags: [platform]
+      summary: Published advisories affecting an agent (§8.7).
+      security: []
+      parameters:
+        - name: affecting
+          in: query
+          required: true
+          schema:
+            type: string
+          description: ns/name.
+      responses:
+        "200":
+          description: Advisories.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Advisory"
+        default:
+          $ref: "#/components/responses/Problem"
+
+
 components:
   parameters:
     VersionString:
@@ -1370,6 +1654,117 @@ components:
         yanked:
           type: boolean
           description: True only for exact pins of yanked versions (§5.5).
+
+    ScanFinding:
+      type: object
+      required: [scanner, severity, confidence, title, verdict]
+      properties:
+        id:
+          type: string
+          format: uuid
+        scanner:
+          type: string
+        severity:
+          type: string
+          enum: [info, low, medium, high, critical]
+        confidence:
+          type: string
+          enum: [low, medium, high]
+        title:
+          type: string
+        filePath:
+          type: string
+        lineStart:
+          type: integer
+        lineEnd:
+          type: integer
+        excerpt:
+          type: string
+        detail:
+          type: object
+          additionalProperties: true
+        verdict:
+          type: string
+          enum: [open, confirmed, dismissed_false_positive, dismissed_accepted_risk]
+
+    ScanReport:
+      type: object
+      required: [versionStatus, findings]
+      properties:
+        scanRunId:
+          type: string
+          format: uuid
+        versionStatus:
+          $ref: "#/components/schemas/VersionStatus"
+        rulesetVersion:
+          type: string
+        reportDigest:
+          type: string
+        judgeModel:
+          type: string
+        scanStatus:
+          type: string
+        findingCounts:
+          type: object
+          additionalProperties:
+            type: integer
+        findings:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScanFinding"
+
+    ReviewItem:
+      type: object
+      required: [id, queue, state, version, agent, namespace]
+      properties:
+        id:
+          type: string
+          format: uuid
+        queue:
+          type: string
+          enum: [platform, org]
+        state:
+          type: string
+          enum: [pending, approved, rejected]
+        version:
+          type: string
+        agent:
+          type: string
+        namespace:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    ReviewBundle:
+      type: object
+      required: [item, findings]
+      properties:
+        item:
+          $ref: "#/components/schemas/ReviewItem"
+        findings:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScanFinding"
+
+    Advisory:
+      type: object
+      required: [id, affectedVersions, severity, summary]
+      properties:
+        id:
+          type: string
+          format: uuid
+        affectedVersions:
+          type: string
+        severity:
+          type: string
+        summary:
+          type: string
+        detail:
+          type: string
+        publishedAt:
+          type: string
+          format: date-time
 
     Problem:
       type: object

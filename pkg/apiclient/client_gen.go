@@ -222,6 +222,117 @@ func (e OrgRole) Valid() bool {
 	}
 }
 
+// Defines values for ReviewItemQueue.
+const (
+	ReviewItemQueueOrg      ReviewItemQueue = "org"
+	ReviewItemQueuePlatform ReviewItemQueue = "platform"
+)
+
+// Valid indicates whether the value is a known member of the ReviewItemQueue enum.
+func (e ReviewItemQueue) Valid() bool {
+	switch e {
+	case ReviewItemQueueOrg:
+		return true
+	case ReviewItemQueuePlatform:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReviewItemState.
+const (
+	ReviewItemStateApproved ReviewItemState = "approved"
+	ReviewItemStatePending  ReviewItemState = "pending"
+	ReviewItemStateRejected ReviewItemState = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the ReviewItemState enum.
+func (e ReviewItemState) Valid() bool {
+	switch e {
+	case ReviewItemStateApproved:
+		return true
+	case ReviewItemStatePending:
+		return true
+	case ReviewItemStateRejected:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScanFindingConfidence.
+const (
+	ScanFindingConfidenceHigh   ScanFindingConfidence = "high"
+	ScanFindingConfidenceLow    ScanFindingConfidence = "low"
+	ScanFindingConfidenceMedium ScanFindingConfidence = "medium"
+)
+
+// Valid indicates whether the value is a known member of the ScanFindingConfidence enum.
+func (e ScanFindingConfidence) Valid() bool {
+	switch e {
+	case ScanFindingConfidenceHigh:
+		return true
+	case ScanFindingConfidenceLow:
+		return true
+	case ScanFindingConfidenceMedium:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScanFindingSeverity.
+const (
+	ScanFindingSeverityCritical ScanFindingSeverity = "critical"
+	ScanFindingSeverityHigh     ScanFindingSeverity = "high"
+	ScanFindingSeverityInfo     ScanFindingSeverity = "info"
+	ScanFindingSeverityLow      ScanFindingSeverity = "low"
+	ScanFindingSeverityMedium   ScanFindingSeverity = "medium"
+)
+
+// Valid indicates whether the value is a known member of the ScanFindingSeverity enum.
+func (e ScanFindingSeverity) Valid() bool {
+	switch e {
+	case ScanFindingSeverityCritical:
+		return true
+	case ScanFindingSeverityHigh:
+		return true
+	case ScanFindingSeverityInfo:
+		return true
+	case ScanFindingSeverityLow:
+		return true
+	case ScanFindingSeverityMedium:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScanFindingVerdict.
+const (
+	ScanFindingVerdictConfirmed              ScanFindingVerdict = "confirmed"
+	ScanFindingVerdictDismissedAcceptedRisk  ScanFindingVerdict = "dismissed_accepted_risk"
+	ScanFindingVerdictDismissedFalsePositive ScanFindingVerdict = "dismissed_false_positive"
+	ScanFindingVerdictOpen                   ScanFindingVerdict = "open"
+)
+
+// Valid indicates whether the value is a known member of the ScanFindingVerdict enum.
+func (e ScanFindingVerdict) Valid() bool {
+	switch e {
+	case ScanFindingVerdictConfirmed:
+		return true
+	case ScanFindingVerdictDismissedAcceptedRisk:
+		return true
+	case ScanFindingVerdictDismissedFalsePositive:
+		return true
+	case ScanFindingVerdictOpen:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Scope.
 const (
 	AgentPublish Scope = "agent:publish"
@@ -315,6 +426,48 @@ func (e UpdateAgentJSONBodyVisibility) Valid() bool {
 	}
 }
 
+// Defines values for SetFindingVerdictJSONBodyVerdict.
+const (
+	SetFindingVerdictJSONBodyVerdictConfirmed              SetFindingVerdictJSONBodyVerdict = "confirmed"
+	SetFindingVerdictJSONBodyVerdictDismissedAcceptedRisk  SetFindingVerdictJSONBodyVerdict = "dismissed_accepted_risk"
+	SetFindingVerdictJSONBodyVerdictDismissedFalsePositive SetFindingVerdictJSONBodyVerdict = "dismissed_false_positive"
+)
+
+// Valid indicates whether the value is a known member of the SetFindingVerdictJSONBodyVerdict enum.
+func (e SetFindingVerdictJSONBodyVerdict) Valid() bool {
+	switch e {
+	case SetFindingVerdictJSONBodyVerdictConfirmed:
+		return true
+	case SetFindingVerdictJSONBodyVerdictDismissedAcceptedRisk:
+		return true
+	case SetFindingVerdictJSONBodyVerdictDismissedFalsePositive:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlatformAgentActionParamsAction.
+const (
+	Block      PlatformAgentActionParamsAction = "block"
+	Quarantine PlatformAgentActionParamsAction = "quarantine"
+	Reinstate  PlatformAgentActionParamsAction = "reinstate"
+)
+
+// Valid indicates whether the value is a known member of the PlatformAgentActionParamsAction enum.
+func (e PlatformAgentActionParamsAction) Valid() bool {
+	switch e {
+	case Block:
+		return true
+	case Quarantine:
+		return true
+	case Reinstate:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ResolveRefParamsChannel.
 const (
 	ResolveRefParamsChannelBeta   ResolveRefParamsChannel = "beta"
@@ -331,6 +484,52 @@ func (e ResolveRefParamsChannel) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// Defines values for DecideReviewItemJSONBodyDecision.
+const (
+	Approve DecideReviewItemJSONBodyDecision = "approve"
+	Reject  DecideReviewItemJSONBodyDecision = "reject"
+)
+
+// Valid indicates whether the value is a known member of the DecideReviewItemJSONBodyDecision enum.
+func (e DecideReviewItemJSONBodyDecision) Valid() bool {
+	switch e {
+	case Approve:
+		return true
+	case Reject:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListReviewQueueParamsQueue.
+const (
+	ListReviewQueueParamsQueueOrg      ListReviewQueueParamsQueue = "org"
+	ListReviewQueueParamsQueuePlatform ListReviewQueueParamsQueue = "platform"
+)
+
+// Valid indicates whether the value is a known member of the ListReviewQueueParamsQueue enum.
+func (e ListReviewQueueParamsQueue) Valid() bool {
+	switch e {
+	case ListReviewQueueParamsQueueOrg:
+		return true
+	case ListReviewQueueParamsQueuePlatform:
+		return true
+	default:
+		return false
+	}
+}
+
+// Advisory defines model for Advisory.
+type Advisory struct {
+	AffectedVersions string             `json:"affectedVersions"`
+	Detail           *string            `json:"detail,omitempty"`
+	Id               openapi_types.UUID `json:"id"`
+	PublishedAt      *time.Time         `json:"publishedAt,omitempty"`
+	Severity         string             `json:"severity"`
+	Summary          string             `json:"summary"`
 }
 
 // Agent defines model for Agent.
@@ -604,6 +803,67 @@ type ResolveResult struct {
 	Yanked bool `json:"yanked"`
 }
 
+// ReviewBundle defines model for ReviewBundle.
+type ReviewBundle struct {
+	Findings []ScanFinding `json:"findings"`
+	Item     ReviewItem    `json:"item"`
+}
+
+// ReviewItem defines model for ReviewItem.
+type ReviewItem struct {
+	Agent     string             `json:"agent"`
+	CreatedAt *time.Time         `json:"createdAt,omitempty"`
+	Id        openapi_types.UUID `json:"id"`
+	Namespace string             `json:"namespace"`
+	Queue     ReviewItemQueue    `json:"queue"`
+	State     ReviewItemState    `json:"state"`
+	Version   string             `json:"version"`
+}
+
+// ReviewItemQueue defines model for ReviewItem.Queue.
+type ReviewItemQueue string
+
+// ReviewItemState defines model for ReviewItem.State.
+type ReviewItemState string
+
+// ScanFinding defines model for ScanFinding.
+type ScanFinding struct {
+	Confidence ScanFindingConfidence   `json:"confidence"`
+	Detail     *map[string]interface{} `json:"detail,omitempty"`
+	Excerpt    *string                 `json:"excerpt,omitempty"`
+	FilePath   *string                 `json:"filePath,omitempty"`
+	Id         *openapi_types.UUID     `json:"id,omitempty"`
+	LineEnd    *int                    `json:"lineEnd,omitempty"`
+	LineStart  *int                    `json:"lineStart,omitempty"`
+	Scanner    string                  `json:"scanner"`
+	Severity   ScanFindingSeverity     `json:"severity"`
+	Title      string                  `json:"title"`
+	Verdict    ScanFindingVerdict      `json:"verdict"`
+}
+
+// ScanFindingConfidence defines model for ScanFinding.Confidence.
+type ScanFindingConfidence string
+
+// ScanFindingSeverity defines model for ScanFinding.Severity.
+type ScanFindingSeverity string
+
+// ScanFindingVerdict defines model for ScanFinding.Verdict.
+type ScanFindingVerdict string
+
+// ScanReport defines model for ScanReport.
+type ScanReport struct {
+	FindingCounts  *map[string]int     `json:"findingCounts,omitempty"`
+	Findings       []ScanFinding       `json:"findings"`
+	JudgeModel     *string             `json:"judgeModel,omitempty"`
+	ReportDigest   *string             `json:"reportDigest,omitempty"`
+	RulesetVersion *string             `json:"rulesetVersion,omitempty"`
+	ScanRunId      *openapi_types.UUID `json:"scanRunId,omitempty"`
+	ScanStatus     *string             `json:"scanStatus,omitempty"`
+
+	// VersionStatus Publication state machine states (§7).
+	VersionStatus VersionStatus `json:"versionStatus"`
+}
+
 // Scope PAT scopes (§12.3).
 type Scope string
 
@@ -652,6 +912,12 @@ type TeamSlug = string
 
 // VersionString defines model for VersionString.
 type VersionString = string
+
+// ListAdvisoriesParams defines parameters for ListAdvisories.
+type ListAdvisoriesParams struct {
+	// Affecting ns/name.
+	Affecting string `form:"affecting" json:"affecting"`
+}
 
 // ListAgentsParams defines parameters for ListAgents.
 type ListAgentsParams struct {
@@ -709,6 +975,15 @@ type VerifyEmailJSONBody struct {
 	Token string `json:"token"`
 }
 
+// SetFindingVerdictJSONBody defines parameters for SetFindingVerdict.
+type SetFindingVerdictJSONBody struct {
+	Reason  string                           `json:"reason"`
+	Verdict SetFindingVerdictJSONBodyVerdict `json:"verdict"`
+}
+
+// SetFindingVerdictJSONBodyVerdict defines parameters for SetFindingVerdict.
+type SetFindingVerdictJSONBodyVerdict string
+
 // UpdateOrgJSONBody defines parameters for UpdateOrg.
 type UpdateOrgJSONBody struct {
 	DisplayName *string `json:"displayName,omitempty"`
@@ -727,10 +1002,21 @@ type SetOrgMemberJSONBody struct {
 	Role OrgRole `json:"role"`
 }
 
+// SetOrgPolicyJSONBody defines parameters for SetOrgPolicy.
+type SetOrgPolicyJSONBody map[string]interface{}
+
 // CreateTeamJSONBody defines parameters for CreateTeam.
 type CreateTeamJSONBody struct {
 	Slug string `json:"slug"`
 }
+
+// PlatformAgentActionJSONBody defines parameters for PlatformAgentAction.
+type PlatformAgentActionJSONBody struct {
+	Reason string `json:"reason"`
+}
+
+// PlatformAgentActionParamsAction defines parameters for PlatformAgentAction.
+type PlatformAgentActionParamsAction string
 
 // ResolveRefParams defines parameters for ResolveRef.
 type ResolveRefParams struct {
@@ -741,6 +1027,25 @@ type ResolveRefParams struct {
 
 // ResolveRefParamsChannel defines parameters for ResolveRef.
 type ResolveRefParamsChannel string
+
+// DecideReviewItemJSONBody defines parameters for DecideReviewItem.
+type DecideReviewItemJSONBody struct {
+	Decision  DecideReviewItemJSONBodyDecision `json:"decision"`
+	Rationale string                           `json:"rationale"`
+}
+
+// DecideReviewItemJSONBodyDecision defines parameters for DecideReviewItem.
+type DecideReviewItemJSONBodyDecision string
+
+// ListReviewQueueParams defines parameters for ListReviewQueue.
+type ListReviewQueueParams struct {
+	Queue ListReviewQueueParamsQueue `form:"queue" json:"queue"`
+	Org   *string                    `form:"org,omitempty" json:"org,omitempty"`
+	Limit *int                       `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListReviewQueueParamsQueue defines parameters for ListReviewQueue.
+type ListReviewQueueParamsQueue string
 
 // UpdateCurrentUserJSONBody defines parameters for UpdateCurrentUser.
 type UpdateCurrentUserJSONBody struct {
@@ -780,6 +1085,9 @@ type RegisterJSONRequestBody = RegisterRequest
 // VerifyEmailJSONRequestBody defines body for VerifyEmail for application/json ContentType.
 type VerifyEmailJSONRequestBody VerifyEmailJSONBody
 
+// SetFindingVerdictJSONRequestBody defines body for SetFindingVerdict for application/json ContentType.
+type SetFindingVerdictJSONRequestBody SetFindingVerdictJSONBody
+
 // CreateOrgJSONRequestBody defines body for CreateOrg for application/json ContentType.
 type CreateOrgJSONRequestBody = CreateOrgRequest
 
@@ -789,8 +1097,17 @@ type UpdateOrgJSONRequestBody UpdateOrgJSONBody
 // SetOrgMemberJSONRequestBody defines body for SetOrgMember for application/json ContentType.
 type SetOrgMemberJSONRequestBody SetOrgMemberJSONBody
 
+// SetOrgPolicyJSONRequestBody defines body for SetOrgPolicy for application/json ContentType.
+type SetOrgPolicyJSONRequestBody SetOrgPolicyJSONBody
+
 // CreateTeamJSONRequestBody defines body for CreateTeam for application/json ContentType.
 type CreateTeamJSONRequestBody CreateTeamJSONBody
+
+// PlatformAgentActionJSONRequestBody defines body for PlatformAgentAction for application/json ContentType.
+type PlatformAgentActionJSONRequestBody PlatformAgentActionJSONBody
+
+// DecideReviewItemJSONRequestBody defines body for DecideReviewItem for application/json ContentType.
+type DecideReviewItemJSONRequestBody DecideReviewItemJSONBody
 
 // UpdateCurrentUserJSONRequestBody defines body for UpdateCurrentUser for application/json ContentType.
 type UpdateCurrentUserJSONRequestBody UpdateCurrentUserJSONBody
@@ -871,6 +1188,11 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+
+	// ListAdvisories Published advisories affecting an agent (§8.7).
+	//
+	// Corresponds with GET /advisories (the `ListAdvisories` operationId).
+	ListAdvisories(ctx context.Context, params *ListAdvisoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListAgents List agents in a namespace (public ones for everyone).
 	//
@@ -981,6 +1303,11 @@ type ClientInterface interface {
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version} (the `GetVersionInfo` operationId).
 	GetVersionInfo(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetVersionAttestation The signed DSSE attestation (§8.8), verbatim.
+	//
+	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/attestation (the `GetVersionAttestation` operationId).
+	GetVersionAttestation(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// DownloadVersion Download the release archive (§9.4; counts an install).
 	//
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/download (the `DownloadVersion` operationId).
@@ -990,6 +1317,11 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/manifest (the `GetVersionManifest` operationId).
 	GetVersionManifest(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetVersionReport The scan report for a version (findings, ruleset, verdict, §8).
+	//
+	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/report (the `GetVersionReport` operationId).
+	GetVersionReport(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// YankVersionWithBody Yank a published version (§5.5 semantics; publish permission).
 	//
@@ -1071,6 +1403,20 @@ type ClientInterface interface {
 	// Corresponds with POST /auth/verify-email (the `VerifyEmail` operationId).
 	VerifyEmail(ctx context.Context, body VerifyEmailJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// SetFindingVerdictWithBody Confirm or dismiss a finding (§8.5 dismissals).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /findings/{id}/verdict (the `SetFindingVerdict` operationId).
+	SetFindingVerdictWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetFindingVerdict Confirm or dismiss a finding (§8.5 dismissals).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /findings/{id}/verdict (the `SetFindingVerdict` operationId).
+	SetFindingVerdict(ctx context.Context, id openapi_types.UUID, body SetFindingVerdictJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetMeta Server version and self-host feature flags (§9.2).
 	//
 	// Corresponds with GET /meta (the `GetMeta` operationId).
@@ -1138,6 +1484,25 @@ type ClientInterface interface {
 	// Corresponds with PUT /orgs/{org}/members/{handle} (the `SetOrgMember` operationId).
 	SetOrgMember(ctx context.Context, org OrgHandle, handle Handle, body SetOrgMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetOrgPolicy The org policy overlay (admin+).
+	//
+	// Corresponds with GET /orgs/{org}/policy (the `GetOrgPolicy` operationId).
+	GetOrgPolicy(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetOrgPolicyWithBody Set the org policy overlay (owner; tighten-only, §8.6).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /orgs/{org}/policy (the `SetOrgPolicy` operationId).
+	SetOrgPolicyWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetOrgPolicy Set the org policy overlay (owner; tighten-only, §8.6).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /orgs/{org}/policy (the `SetOrgPolicy` operationId).
+	SetOrgPolicy(ctx context.Context, org OrgHandle, body SetOrgPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListTeams List teams (members can view).
 	//
 	// Corresponds with GET /orgs/{org}/teams (the `ListTeams` operationId).
@@ -1177,10 +1542,53 @@ type ClientInterface interface {
 	// Corresponds with PUT /orgs/{org}/teams/{team}/members/{handle} (the `AddTeamMember` operationId).
 	AddTeamMember(ctx context.Context, org OrgHandle, team TeamSlug, handle Handle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PlatformAgentActionWithBody Quarantine, block, or reinstate an agent (platform staff, §7).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /platform/agents/{ns}/{name}/{action} (the `PlatformAgentAction` operationId).
+	PlatformAgentActionWithBody(ctx context.Context, ns Namespace, name AgentName, action PlatformAgentActionParamsAction, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PlatformAgentAction Quarantine, block, or reinstate an agent (platform staff, §7).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /platform/agents/{ns}/{name}/{action} (the `PlatformAgentAction` operationId).
+	PlatformAgentAction(ctx context.Context, ns Namespace, name AgentName, action PlatformAgentActionParamsAction, body PlatformAgentActionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetPlatformPolicy The read-only platform baseline policy (§8.6).
+	//
+	// Corresponds with GET /platform/policy (the `GetPlatformPolicy` operationId).
+	GetPlatformPolicy(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ResolveRef Resolve ns/name@range to a concrete version (§9.4 step 1).
 	//
 	// Corresponds with GET /resolve (the `ResolveRef` operationId).
 	ResolveRef(ctx context.Context, params *ResolveRefParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetReviewItem One review item with its findings bundle.
+	//
+	// Corresponds with GET /review-items/{id} (the `GetReviewItem` operationId).
+	GetReviewItem(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DecideReviewItemWithBody Approve or reject a version under review (not its author, §12.2).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /review-items/{id}/decision (the `DecideReviewItem` operationId).
+	DecideReviewItemWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DecideReviewItem Approve or reject a version under review (not its author, §12.2).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /review-items/{id}/decision (the `DecideReviewItem` operationId).
+	DecideReviewItem(ctx context.Context, id openapi_types.UUID, body DecideReviewItemJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListReviewQueue Pending review items (platform staff or org security_reviewer).
+	//
+	// Corresponds with GET /review-queue (the `ListReviewQueue` operationId).
+	ListReviewQueue(ctx context.Context, params *ListReviewQueueParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetCurrentUser The authenticated user.
 	//
@@ -1229,6 +1637,21 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /users/{handle} (the `GetUserProfile` operationId).
 	GetUserProfile(ctx context.Context, handle Handle, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+// ListAdvisories Published advisories affecting an agent (§8.7).
+//
+// Corresponds with GET /advisories (the `ListAdvisories` operationId).
+func (c *Client) ListAdvisories(ctx context.Context, params *ListAdvisoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAdvisoriesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 // ListAgents List agents in a namespace (public ones for everyone).
@@ -1510,6 +1933,21 @@ func (c *Client) GetVersionInfo(ctx context.Context, ns Namespace, name AgentNam
 	return c.Client.Do(req)
 }
 
+// GetVersionAttestation The signed DSSE attestation (§8.8), verbatim.
+//
+// Corresponds with GET /agents/{ns}/{name}/versions/{version}/attestation (the `GetVersionAttestation` operationId).
+func (c *Client) GetVersionAttestation(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetVersionAttestationRequest(c.Server, ns, name, version)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // DownloadVersion Download the release archive (§9.4; counts an install).
 //
 // Corresponds with GET /agents/{ns}/{name}/versions/{version}/download (the `DownloadVersion` operationId).
@@ -1530,6 +1968,21 @@ func (c *Client) DownloadVersion(ctx context.Context, ns Namespace, name AgentNa
 // Corresponds with GET /agents/{ns}/{name}/versions/{version}/manifest (the `GetVersionManifest` operationId).
 func (c *Client) GetVersionManifest(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetVersionManifestRequest(c.Server, ns, name, version)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetVersionReport The scan report for a version (findings, ruleset, verdict, §8).
+//
+// Corresponds with GET /agents/{ns}/{name}/versions/{version}/report (the `GetVersionReport` operationId).
+func (c *Client) GetVersionReport(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetVersionReportRequest(c.Server, ns, name, version)
 	if err != nil {
 		return nil, err
 	}
@@ -1740,6 +2193,40 @@ func (c *Client) VerifyEmail(ctx context.Context, body VerifyEmailJSONRequestBod
 	return c.Client.Do(req)
 }
 
+// SetFindingVerdictWithBody Confirm or dismiss a finding (§8.5 dismissals).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /findings/{id}/verdict (the `SetFindingVerdict` operationId).
+func (c *Client) SetFindingVerdictWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetFindingVerdictRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetFindingVerdict Confirm or dismiss a finding (§8.5 dismissals).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /findings/{id}/verdict (the `SetFindingVerdict` operationId).
+func (c *Client) SetFindingVerdict(ctx context.Context, id openapi_types.UUID, body SetFindingVerdictJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetFindingVerdictRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetMeta Server version and self-host feature flags (§9.2).
 //
 // Corresponds with GET /meta (the `GetMeta` operationId).
@@ -1917,6 +2404,55 @@ func (c *Client) SetOrgMember(ctx context.Context, org OrgHandle, handle Handle,
 	return c.Client.Do(req)
 }
 
+// GetOrgPolicy The org policy overlay (admin+).
+//
+// Corresponds with GET /orgs/{org}/policy (the `GetOrgPolicy` operationId).
+func (c *Client) GetOrgPolicy(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgPolicyRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetOrgPolicyWithBody Set the org policy overlay (owner; tighten-only, §8.6).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /orgs/{org}/policy (the `SetOrgPolicy` operationId).
+func (c *Client) SetOrgPolicyWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetOrgPolicyRequestWithBody(c.Server, org, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetOrgPolicy Set the org policy overlay (owner; tighten-only, §8.6).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /orgs/{org}/policy (the `SetOrgPolicy` operationId).
+func (c *Client) SetOrgPolicy(ctx context.Context, org OrgHandle, body SetOrgPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetOrgPolicyRequest(c.Server, org, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListTeams List teams (members can view).
 //
 // Corresponds with GET /orgs/{org}/teams (the `ListTeams` operationId).
@@ -2026,11 +2562,124 @@ func (c *Client) AddTeamMember(ctx context.Context, org OrgHandle, team TeamSlug
 	return c.Client.Do(req)
 }
 
+// PlatformAgentActionWithBody Quarantine, block, or reinstate an agent (platform staff, §7).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /platform/agents/{ns}/{name}/{action} (the `PlatformAgentAction` operationId).
+func (c *Client) PlatformAgentActionWithBody(ctx context.Context, ns Namespace, name AgentName, action PlatformAgentActionParamsAction, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPlatformAgentActionRequestWithBody(c.Server, ns, name, action, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PlatformAgentAction Quarantine, block, or reinstate an agent (platform staff, §7).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /platform/agents/{ns}/{name}/{action} (the `PlatformAgentAction` operationId).
+func (c *Client) PlatformAgentAction(ctx context.Context, ns Namespace, name AgentName, action PlatformAgentActionParamsAction, body PlatformAgentActionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPlatformAgentActionRequest(c.Server, ns, name, action, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetPlatformPolicy The read-only platform baseline policy (§8.6).
+//
+// Corresponds with GET /platform/policy (the `GetPlatformPolicy` operationId).
+func (c *Client) GetPlatformPolicy(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetPlatformPolicyRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ResolveRef Resolve ns/name@range to a concrete version (§9.4 step 1).
 //
 // Corresponds with GET /resolve (the `ResolveRef` operationId).
 func (c *Client) ResolveRef(ctx context.Context, params *ResolveRefParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewResolveRefRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetReviewItem One review item with its findings bundle.
+//
+// Corresponds with GET /review-items/{id} (the `GetReviewItem` operationId).
+func (c *Client) GetReviewItem(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetReviewItemRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DecideReviewItemWithBody Approve or reject a version under review (not its author, §12.2).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /review-items/{id}/decision (the `DecideReviewItem` operationId).
+func (c *Client) DecideReviewItemWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDecideReviewItemRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DecideReviewItem Approve or reject a version under review (not its author, §12.2).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /review-items/{id}/decision (the `DecideReviewItem` operationId).
+func (c *Client) DecideReviewItem(ctx context.Context, id openapi_types.UUID, body DecideReviewItemJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDecideReviewItemRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListReviewQueue Pending review items (platform staff or org security_reviewer).
+//
+// Corresponds with GET /review-queue (the `ListReviewQueue` operationId).
+func (c *Client) ListReviewQueue(ctx context.Context, params *ListReviewQueueParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListReviewQueueRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2167,6 +2816,56 @@ func (c *Client) GetUserProfile(ctx context.Context, handle Handle, reqEditors .
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewListAdvisoriesRequest constructs an http.Request for the ListAdvisories method
+func NewListAdvisoriesRequest(server string, params *ListAdvisoriesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/advisories")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "affecting", params.Affecting, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
 }
 
 // NewListAgentsRequest constructs an http.Request for the ListAgents method
@@ -2756,6 +3455,54 @@ func NewGetVersionInfoRequest(server string, ns Namespace, name AgentName, versi
 	return req, nil
 }
 
+// NewGetVersionAttestationRequest constructs an http.Request for the GetVersionAttestation method
+func NewGetVersionAttestationRequest(server string, ns Namespace, name AgentName, version VersionString) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "version", version, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/versions/%s/attestation", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewDownloadVersionRequest constructs an http.Request for the DownloadVersion method
 func NewDownloadVersionRequest(server string, ns Namespace, name AgentName, version VersionString) (*http.Request, error) {
 	var err error
@@ -2835,6 +3582,54 @@ func NewGetVersionManifestRequest(server string, ns Namespace, name AgentName, v
 	}
 
 	operationPath := fmt.Sprintf("/agents/%s/%s/versions/%s/manifest", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetVersionReportRequest constructs an http.Request for the GetVersionReport method
+func NewGetVersionReportRequest(server string, ns Namespace, name AgentName, version VersionString) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "version", version, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/versions/%s/report", pathParam0, pathParam1, pathParam2)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3108,6 +3903,53 @@ func NewVerifyEmailRequestWithBody(server string, contentType string, body io.Re
 	}
 
 	operationPath := fmt.Sprintf("/auth/verify-email")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewSetFindingVerdictRequest calls the generic SetFindingVerdict builder with application/json body
+func NewSetFindingVerdictRequest(server string, id openapi_types.UUID, body SetFindingVerdictJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetFindingVerdictRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewSetFindingVerdictRequestWithBody constructs an http.Request for the SetFindingVerdict method, with any body, and a specified content type
+func NewSetFindingVerdictRequestWithBody(server string, id openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/findings/%s/verdict", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3489,6 +4331,87 @@ func NewSetOrgMemberRequestWithBody(server string, org OrgHandle, handle Handle,
 	return req, nil
 }
 
+// NewGetOrgPolicyRequest constructs an http.Request for the GetOrgPolicy method
+func NewGetOrgPolicyRequest(server string, org OrgHandle) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/policy", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSetOrgPolicyRequest calls the generic SetOrgPolicy builder with application/json body
+func NewSetOrgPolicyRequest(server string, org OrgHandle, body SetOrgPolicyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetOrgPolicyRequestWithBody(server, org, "application/json", bodyReader)
+}
+
+// NewSetOrgPolicyRequestWithBody constructs an http.Request for the SetOrgPolicy method, with any body, and a specified content type
+func NewSetOrgPolicyRequestWithBody(server string, org OrgHandle, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/policy", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewListTeamsRequest constructs an http.Request for the ListTeams method
 func NewListTeamsRequest(server string, org OrgHandle) (*http.Request, error) {
 	var err error
@@ -3748,6 +4671,94 @@ func NewAddTeamMemberRequest(server string, org OrgHandle, team TeamSlug, handle
 	return req, nil
 }
 
+// NewPlatformAgentActionRequest calls the generic PlatformAgentAction builder with application/json body
+func NewPlatformAgentActionRequest(server string, ns Namespace, name AgentName, action PlatformAgentActionParamsAction, body PlatformAgentActionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPlatformAgentActionRequestWithBody(server, ns, name, action, "application/json", bodyReader)
+}
+
+// NewPlatformAgentActionRequestWithBody constructs an http.Request for the PlatformAgentAction method, with any body, and a specified content type
+func NewPlatformAgentActionRequestWithBody(server string, ns Namespace, name AgentName, action PlatformAgentActionParamsAction, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "action", action, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/platform/agents/%s/%s/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetPlatformPolicyRequest constructs an http.Request for the GetPlatformPolicy method
+func NewGetPlatformPolicyRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/platform/policy")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewResolveRefRequest constructs an http.Request for the ResolveRef method
 func NewResolveRefRequest(server string, params *ResolveRefParams) (*http.Request, error) {
 	var err error
@@ -3787,6 +4798,161 @@ func NewResolveRefRequest(server string, params *ResolveRefParams) (*http.Reques
 		if params.Channel != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "channel", *params.Channel, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetReviewItemRequest constructs an http.Request for the GetReviewItem method
+func NewGetReviewItemRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/review-items/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDecideReviewItemRequest calls the generic DecideReviewItem builder with application/json body
+func NewDecideReviewItemRequest(server string, id openapi_types.UUID, body DecideReviewItemJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewDecideReviewItemRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewDecideReviewItemRequestWithBody constructs an http.Request for the DecideReviewItem method, with any body, and a specified content type
+func NewDecideReviewItemRequestWithBody(server string, id openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/review-items/%s/decision", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListReviewQueueRequest constructs an http.Request for the ListReviewQueue method
+func NewListReviewQueueRequest(server string, params *ListReviewQueueParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/review-queue")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "queue", params.Queue, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.Org != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "org", *params.Org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -4056,6 +5222,13 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
+	// ListAdvisoriesWithResponse Published advisories affecting an agent (§8.7).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /advisories (the `ListAdvisories` operationId).
+	ListAdvisoriesWithResponse(ctx context.Context, params *ListAdvisoriesParams, reqEditors ...RequestEditorFn) (*ListAdvisoriesResponse, error)
+
 	// ListAgentsWithResponse List agents in a namespace (public ones for everyone).
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -4179,6 +5352,13 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version} (the `GetVersionInfo` operationId).
 	GetVersionInfoWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*GetVersionInfoResponse, error)
 
+	// GetVersionAttestationWithResponse The signed DSSE attestation (§8.8), verbatim.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/attestation (the `GetVersionAttestation` operationId).
+	GetVersionAttestationWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*GetVersionAttestationResponse, error)
+
 	// DownloadVersionWithResponse Download the release archive (§9.4; counts an install).
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -4192,6 +5372,13 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/manifest (the `GetVersionManifest` operationId).
 	GetVersionManifestWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*GetVersionManifestResponse, error)
+
+	// GetVersionReportWithResponse The scan report for a version (findings, ruleset, verdict, §8).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/report (the `GetVersionReport` operationId).
+	GetVersionReportWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*GetVersionReportResponse, error)
 
 	// YankVersionWithBodyWithResponse Yank a published version (§5.5 semantics; publish permission).
 	//
@@ -4277,6 +5464,20 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /auth/verify-email (the `VerifyEmail` operationId).
 	VerifyEmailWithResponse(ctx context.Context, body VerifyEmailJSONRequestBody, reqEditors ...RequestEditorFn) (*VerifyEmailResponse, error)
 
+	// SetFindingVerdictWithBodyWithResponse Confirm or dismiss a finding (§8.5 dismissals).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /findings/{id}/verdict (the `SetFindingVerdict` operationId).
+	SetFindingVerdictWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetFindingVerdictResponse, error)
+
+	// SetFindingVerdictWithResponse Confirm or dismiss a finding (§8.5 dismissals).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /findings/{id}/verdict (the `SetFindingVerdict` operationId).
+	SetFindingVerdictWithResponse(ctx context.Context, id openapi_types.UUID, body SetFindingVerdictJSONRequestBody, reqEditors ...RequestEditorFn) (*SetFindingVerdictResponse, error)
+
 	// GetMetaWithResponse Server version and self-host feature flags (§9.2).
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -4354,6 +5555,27 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /orgs/{org}/members/{handle} (the `SetOrgMember` operationId).
 	SetOrgMemberWithResponse(ctx context.Context, org OrgHandle, handle Handle, body SetOrgMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*SetOrgMemberResponse, error)
 
+	// GetOrgPolicyWithResponse The org policy overlay (admin+).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/policy (the `GetOrgPolicy` operationId).
+	GetOrgPolicyWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*GetOrgPolicyResponse, error)
+
+	// SetOrgPolicyWithBodyWithResponse Set the org policy overlay (owner; tighten-only, §8.6).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /orgs/{org}/policy (the `SetOrgPolicy` operationId).
+	SetOrgPolicyWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetOrgPolicyResponse, error)
+
+	// SetOrgPolicyWithResponse Set the org policy overlay (owner; tighten-only, §8.6).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /orgs/{org}/policy (the `SetOrgPolicy` operationId).
+	SetOrgPolicyWithResponse(ctx context.Context, org OrgHandle, body SetOrgPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*SetOrgPolicyResponse, error)
+
 	// ListTeamsWithResponse List teams (members can view).
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -4403,12 +5625,61 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /orgs/{org}/teams/{team}/members/{handle} (the `AddTeamMember` operationId).
 	AddTeamMemberWithResponse(ctx context.Context, org OrgHandle, team TeamSlug, handle Handle, reqEditors ...RequestEditorFn) (*AddTeamMemberResponse, error)
 
+	// PlatformAgentActionWithBodyWithResponse Quarantine, block, or reinstate an agent (platform staff, §7).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /platform/agents/{ns}/{name}/{action} (the `PlatformAgentAction` operationId).
+	PlatformAgentActionWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, action PlatformAgentActionParamsAction, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PlatformAgentActionResponse, error)
+
+	// PlatformAgentActionWithResponse Quarantine, block, or reinstate an agent (platform staff, §7).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /platform/agents/{ns}/{name}/{action} (the `PlatformAgentAction` operationId).
+	PlatformAgentActionWithResponse(ctx context.Context, ns Namespace, name AgentName, action PlatformAgentActionParamsAction, body PlatformAgentActionJSONRequestBody, reqEditors ...RequestEditorFn) (*PlatformAgentActionResponse, error)
+
+	// GetPlatformPolicyWithResponse The read-only platform baseline policy (§8.6).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /platform/policy (the `GetPlatformPolicy` operationId).
+	GetPlatformPolicyWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetPlatformPolicyResponse, error)
+
 	// ResolveRefWithResponse Resolve ns/name@range to a concrete version (§9.4 step 1).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /resolve (the `ResolveRef` operationId).
 	ResolveRefWithResponse(ctx context.Context, params *ResolveRefParams, reqEditors ...RequestEditorFn) (*ResolveRefResponse, error)
+
+	// GetReviewItemWithResponse One review item with its findings bundle.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /review-items/{id} (the `GetReviewItem` operationId).
+	GetReviewItemWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetReviewItemResponse, error)
+
+	// DecideReviewItemWithBodyWithResponse Approve or reject a version under review (not its author, §12.2).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /review-items/{id}/decision (the `DecideReviewItem` operationId).
+	DecideReviewItemWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DecideReviewItemResponse, error)
+
+	// DecideReviewItemWithResponse Approve or reject a version under review (not its author, §12.2).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /review-items/{id}/decision (the `DecideReviewItem` operationId).
+	DecideReviewItemWithResponse(ctx context.Context, id openapi_types.UUID, body DecideReviewItemJSONRequestBody, reqEditors ...RequestEditorFn) (*DecideReviewItemResponse, error)
+
+	// ListReviewQueueWithResponse Pending review items (platform staff or org security_reviewer).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /review-queue (the `ListReviewQueue` operationId).
+	ListReviewQueueWithResponse(ctx context.Context, params *ListReviewQueueParams, reqEditors ...RequestEditorFn) (*ListReviewQueueResponse, error)
 
 	// GetCurrentUserWithResponse The authenticated user.
 	//
@@ -4465,6 +5736,54 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /users/{handle} (the `GetUserProfile` operationId).
 	GetUserProfileWithResponse(ctx context.Context, handle Handle, reqEditors ...RequestEditorFn) (*GetUserProfileResponse, error)
+}
+
+type ListAdvisoriesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]Advisory
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListAdvisoriesResponse) GetJSON200() *[]Advisory {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListAdvisoriesResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListAdvisoriesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAdvisoriesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAdvisoriesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListAdvisoriesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
 }
 
 type ListAgentsResponse struct {
@@ -5015,6 +6334,54 @@ func (r GetVersionInfoResponse) ContentType() string {
 	return ""
 }
 
+type GetVersionAttestationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *map[string]interface{}
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetVersionAttestationResponse) GetJSON200() *map[string]interface{} {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetVersionAttestationResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetVersionAttestationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetVersionAttestationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetVersionAttestationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetVersionAttestationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type DownloadVersionResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -5098,6 +6465,54 @@ func (r GetVersionManifestResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetVersionManifestResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetVersionReportResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ScanReport
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetVersionReportResponse) GetJSON200() *ScanReport {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetVersionReportResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetVersionReportResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetVersionReportResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetVersionReportResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetVersionReportResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -5406,6 +6821,47 @@ func (r VerifyEmailResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r VerifyEmailResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SetFindingVerdictResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r SetFindingVerdictResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SetFindingVerdictResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SetFindingVerdictResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetFindingVerdictResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SetFindingVerdictResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -5789,6 +7245,102 @@ func (r SetOrgMemberResponse) ContentType() string {
 	return ""
 }
 
+type GetOrgPolicyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *map[string]interface{}
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOrgPolicyResponse) GetJSON200() *map[string]interface{} {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetOrgPolicyResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOrgPolicyResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOrgPolicyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SetOrgPolicyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *map[string]interface{}
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SetOrgPolicyResponse) GetJSON200() *map[string]interface{} {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r SetOrgPolicyResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SetOrgPolicyResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SetOrgPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetOrgPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SetOrgPolicyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListTeamsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -6056,6 +7608,95 @@ func (r AddTeamMemberResponse) ContentType() string {
 	return ""
 }
 
+type PlatformAgentActionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r PlatformAgentActionResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PlatformAgentActionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PlatformAgentActionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PlatformAgentActionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PlatformAgentActionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetPlatformPolicyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *map[string]interface{}
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetPlatformPolicyResponse) GetJSON200() *map[string]interface{} {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetPlatformPolicyResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetPlatformPolicyResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetPlatformPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetPlatformPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetPlatformPolicyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ResolveRefResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -6098,6 +7739,143 @@ func (r ResolveRefResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ResolveRefResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetReviewItemResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ReviewBundle
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetReviewItemResponse) GetJSON200() *ReviewBundle {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetReviewItemResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetReviewItemResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetReviewItemResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetReviewItemResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetReviewItemResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DecideReviewItemResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DecideReviewItemResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DecideReviewItemResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DecideReviewItemResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DecideReviewItemResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DecideReviewItemResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListReviewQueueResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]ReviewItem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListReviewQueueResponse) GetJSON200() *[]ReviewItem {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListReviewQueueResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListReviewQueueResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListReviewQueueResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListReviewQueueResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListReviewQueueResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -6385,6 +8163,19 @@ func (r GetUserProfileResponse) ContentType() string {
 	return ""
 }
 
+// ListAdvisoriesWithResponse Published advisories affecting an agent (§8.7).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /advisories (the `ListAdvisories` operationId).
+func (c *ClientWithResponses) ListAdvisoriesWithResponse(ctx context.Context, params *ListAdvisoriesParams, reqEditors ...RequestEditorFn) (*ListAdvisoriesResponse, error) {
+	rsp, err := c.ListAdvisories(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAdvisoriesResponse(rsp)
+}
+
 // ListAgentsWithResponse List agents in a namespace (public ones for everyone).
 //
 // Returns a wrapper object for the known response body format(s).
@@ -6610,6 +8401,19 @@ func (c *ClientWithResponses) GetVersionInfoWithResponse(ctx context.Context, ns
 	return ParseGetVersionInfoResponse(rsp)
 }
 
+// GetVersionAttestationWithResponse The signed DSSE attestation (§8.8), verbatim.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /agents/{ns}/{name}/versions/{version}/attestation (the `GetVersionAttestation` operationId).
+func (c *ClientWithResponses) GetVersionAttestationWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*GetVersionAttestationResponse, error) {
+	rsp, err := c.GetVersionAttestation(ctx, ns, name, version, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetVersionAttestationResponse(rsp)
+}
+
 // DownloadVersionWithResponse Download the release archive (§9.4; counts an install).
 //
 // Returns a wrapper object for the known response body format(s).
@@ -6634,6 +8438,19 @@ func (c *ClientWithResponses) GetVersionManifestWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParseGetVersionManifestResponse(rsp)
+}
+
+// GetVersionReportWithResponse The scan report for a version (findings, ruleset, verdict, §8).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /agents/{ns}/{name}/versions/{version}/report (the `GetVersionReport` operationId).
+func (c *ClientWithResponses) GetVersionReportWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*GetVersionReportResponse, error) {
+	rsp, err := c.GetVersionReport(ctx, ns, name, version, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetVersionReportResponse(rsp)
 }
 
 // YankVersionWithBodyWithResponse Yank a published version (§5.5 semantics; publish permission).
@@ -6792,6 +8609,32 @@ func (c *ClientWithResponses) VerifyEmailWithResponse(ctx context.Context, body 
 	return ParseVerifyEmailResponse(rsp)
 }
 
+// SetFindingVerdictWithBodyWithResponse Confirm or dismiss a finding (§8.5 dismissals).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /findings/{id}/verdict (the `SetFindingVerdict` operationId).
+func (c *ClientWithResponses) SetFindingVerdictWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetFindingVerdictResponse, error) {
+	rsp, err := c.SetFindingVerdictWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetFindingVerdictResponse(rsp)
+}
+
+// SetFindingVerdictWithResponse Confirm or dismiss a finding (§8.5 dismissals).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /findings/{id}/verdict (the `SetFindingVerdict` operationId).
+func (c *ClientWithResponses) SetFindingVerdictWithResponse(ctx context.Context, id openapi_types.UUID, body SetFindingVerdictJSONRequestBody, reqEditors ...RequestEditorFn) (*SetFindingVerdictResponse, error) {
+	rsp, err := c.SetFindingVerdict(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetFindingVerdictResponse(rsp)
+}
+
 // GetMetaWithResponse Server version and self-host feature flags (§9.2).
 //
 // Returns a wrapper object for the known response body format(s).
@@ -6935,6 +8778,45 @@ func (c *ClientWithResponses) SetOrgMemberWithResponse(ctx context.Context, org 
 	return ParseSetOrgMemberResponse(rsp)
 }
 
+// GetOrgPolicyWithResponse The org policy overlay (admin+).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/policy (the `GetOrgPolicy` operationId).
+func (c *ClientWithResponses) GetOrgPolicyWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*GetOrgPolicyResponse, error) {
+	rsp, err := c.GetOrgPolicy(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgPolicyResponse(rsp)
+}
+
+// SetOrgPolicyWithBodyWithResponse Set the org policy overlay (owner; tighten-only, §8.6).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /orgs/{org}/policy (the `SetOrgPolicy` operationId).
+func (c *ClientWithResponses) SetOrgPolicyWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetOrgPolicyResponse, error) {
+	rsp, err := c.SetOrgPolicyWithBody(ctx, org, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetOrgPolicyResponse(rsp)
+}
+
+// SetOrgPolicyWithResponse Set the org policy overlay (owner; tighten-only, §8.6).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /orgs/{org}/policy (the `SetOrgPolicy` operationId).
+func (c *ClientWithResponses) SetOrgPolicyWithResponse(ctx context.Context, org OrgHandle, body SetOrgPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*SetOrgPolicyResponse, error) {
+	rsp, err := c.SetOrgPolicy(ctx, org, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetOrgPolicyResponse(rsp)
+}
+
 // ListTeamsWithResponse List teams (members can view).
 //
 // Returns a wrapper object for the known response body format(s).
@@ -7026,6 +8908,45 @@ func (c *ClientWithResponses) AddTeamMemberWithResponse(ctx context.Context, org
 	return ParseAddTeamMemberResponse(rsp)
 }
 
+// PlatformAgentActionWithBodyWithResponse Quarantine, block, or reinstate an agent (platform staff, §7).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /platform/agents/{ns}/{name}/{action} (the `PlatformAgentAction` operationId).
+func (c *ClientWithResponses) PlatformAgentActionWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, action PlatformAgentActionParamsAction, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PlatformAgentActionResponse, error) {
+	rsp, err := c.PlatformAgentActionWithBody(ctx, ns, name, action, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePlatformAgentActionResponse(rsp)
+}
+
+// PlatformAgentActionWithResponse Quarantine, block, or reinstate an agent (platform staff, §7).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /platform/agents/{ns}/{name}/{action} (the `PlatformAgentAction` operationId).
+func (c *ClientWithResponses) PlatformAgentActionWithResponse(ctx context.Context, ns Namespace, name AgentName, action PlatformAgentActionParamsAction, body PlatformAgentActionJSONRequestBody, reqEditors ...RequestEditorFn) (*PlatformAgentActionResponse, error) {
+	rsp, err := c.PlatformAgentAction(ctx, ns, name, action, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePlatformAgentActionResponse(rsp)
+}
+
+// GetPlatformPolicyWithResponse The read-only platform baseline policy (§8.6).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /platform/policy (the `GetPlatformPolicy` operationId).
+func (c *ClientWithResponses) GetPlatformPolicyWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetPlatformPolicyResponse, error) {
+	rsp, err := c.GetPlatformPolicy(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetPlatformPolicyResponse(rsp)
+}
+
 // ResolveRefWithResponse Resolve ns/name@range to a concrete version (§9.4 step 1).
 //
 // Returns a wrapper object for the known response body format(s).
@@ -7037,6 +8958,58 @@ func (c *ClientWithResponses) ResolveRefWithResponse(ctx context.Context, params
 		return nil, err
 	}
 	return ParseResolveRefResponse(rsp)
+}
+
+// GetReviewItemWithResponse One review item with its findings bundle.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /review-items/{id} (the `GetReviewItem` operationId).
+func (c *ClientWithResponses) GetReviewItemWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetReviewItemResponse, error) {
+	rsp, err := c.GetReviewItem(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetReviewItemResponse(rsp)
+}
+
+// DecideReviewItemWithBodyWithResponse Approve or reject a version under review (not its author, §12.2).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /review-items/{id}/decision (the `DecideReviewItem` operationId).
+func (c *ClientWithResponses) DecideReviewItemWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DecideReviewItemResponse, error) {
+	rsp, err := c.DecideReviewItemWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDecideReviewItemResponse(rsp)
+}
+
+// DecideReviewItemWithResponse Approve or reject a version under review (not its author, §12.2).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /review-items/{id}/decision (the `DecideReviewItem` operationId).
+func (c *ClientWithResponses) DecideReviewItemWithResponse(ctx context.Context, id openapi_types.UUID, body DecideReviewItemJSONRequestBody, reqEditors ...RequestEditorFn) (*DecideReviewItemResponse, error) {
+	rsp, err := c.DecideReviewItem(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDecideReviewItemResponse(rsp)
+}
+
+// ListReviewQueueWithResponse Pending review items (platform staff or org security_reviewer).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /review-queue (the `ListReviewQueue` operationId).
+func (c *ClientWithResponses) ListReviewQueueWithResponse(ctx context.Context, params *ListReviewQueueParams, reqEditors ...RequestEditorFn) (*ListReviewQueueResponse, error) {
+	rsp, err := c.ListReviewQueue(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListReviewQueueResponse(rsp)
 }
 
 // GetCurrentUserWithResponse The authenticated user.
@@ -7141,6 +9114,39 @@ func (c *ClientWithResponses) GetUserProfileWithResponse(ctx context.Context, ha
 		return nil, err
 	}
 	return ParseGetUserProfileResponse(rsp)
+}
+
+// ParseListAdvisoriesResponse parses an HTTP response from a ListAdvisoriesWithResponse call
+func ParseListAdvisoriesResponse(rsp *http.Response) (*ListAdvisoriesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAdvisoriesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []Advisory
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseListAgentsResponse parses an HTTP response from a ListAgentsWithResponse call
@@ -7523,6 +9529,42 @@ func ParseGetVersionInfoResponse(rsp *http.Response) (*GetVersionInfoResponse, e
 	return response, nil
 }
 
+// ParseGetVersionAttestationResponse parses an HTTP response from a GetVersionAttestationWithResponse call
+func ParseGetVersionAttestationResponse(rsp *http.Response) (*GetVersionAttestationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetVersionAttestationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 404:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseDownloadVersionResponse parses an HTTP response from a DownloadVersionWithResponse call
 func ParseDownloadVersionResponse(rsp *http.Response) (*DownloadVersionResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -7571,6 +9613,39 @@ func ParseGetVersionManifestResponse(rsp *http.Response) (*GetVersionManifestRes
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetVersionReportResponse parses an HTTP response from a GetVersionReportWithResponse call
+func ParseGetVersionReportResponse(rsp *http.Response) (*GetVersionReportResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetVersionReportResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ScanReport
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -7783,6 +9858,35 @@ func ParseVerifyEmailResponse(rsp *http.Response) (*VerifyEmailResponse, error) 
 	}
 
 	response := &VerifyEmailResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetFindingVerdictResponse parses an HTTP response from a SetFindingVerdictWithResponse call
+func ParseSetFindingVerdictResponse(rsp *http.Response) (*SetFindingVerdictResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetFindingVerdictResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
@@ -8063,6 +10167,72 @@ func ParseSetOrgMemberResponse(rsp *http.Response) (*SetOrgMemberResponse, error
 	return response, nil
 }
 
+// ParseGetOrgPolicyResponse parses an HTTP response from a GetOrgPolicyWithResponse call
+func ParseGetOrgPolicyResponse(rsp *http.Response) (*GetOrgPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetOrgPolicyResponse parses an HTTP response from a SetOrgPolicyWithResponse call
+func ParseSetOrgPolicyResponse(rsp *http.Response) (*SetOrgPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetOrgPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListTeamsResponse parses an HTTP response from a ListTeamsWithResponse call
 func ParseListTeamsResponse(rsp *http.Response) (*ListTeamsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -8249,6 +10419,68 @@ func ParseAddTeamMemberResponse(rsp *http.Response) (*AddTeamMemberResponse, err
 	return response, nil
 }
 
+// ParsePlatformAgentActionResponse parses an HTTP response from a PlatformAgentActionWithResponse call
+func ParsePlatformAgentActionResponse(rsp *http.Response) (*PlatformAgentActionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PlatformAgentActionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetPlatformPolicyResponse parses an HTTP response from a GetPlatformPolicyWithResponse call
+func ParseGetPlatformPolicyResponse(rsp *http.Response) (*GetPlatformPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetPlatformPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseResolveRefResponse parses an HTTP response from a ResolveRefWithResponse call
 func ParseResolveRefResponse(rsp *http.Response) (*ResolveRefResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -8265,6 +10497,101 @@ func ParseResolveRefResponse(rsp *http.Response) (*ResolveRefResponse, error) {
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest ResolveResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetReviewItemResponse parses an HTTP response from a GetReviewItemWithResponse call
+func ParseGetReviewItemResponse(rsp *http.Response) (*GetReviewItemResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetReviewItemResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ReviewBundle
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDecideReviewItemResponse parses an HTTP response from a DecideReviewItemWithResponse call
+func ParseDecideReviewItemResponse(rsp *http.Response) (*DecideReviewItemResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DecideReviewItemResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListReviewQueueResponse parses an HTTP response from a ListReviewQueueWithResponse call
+func ParseListReviewQueueResponse(rsp *http.Response) (*ListReviewQueueResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListReviewQueueResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []ReviewItem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

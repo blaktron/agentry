@@ -121,6 +121,53 @@ func (q *Queries) DeleteAgentUserGrant(ctx context.Context, arg DeleteAgentUserG
 	return result.RowsAffected(), nil
 }
 
+const getAgentByID = `-- name: GetAgentByID :one
+SELECT a.id, a.namespace_id, a.name, a.kind, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, h.handle AS namespace, h.kind AS namespace_kind
+FROM agents a JOIN handles h ON h.id = a.namespace_id
+WHERE a.id = $1
+`
+
+type GetAgentByIDRow struct {
+	ID                       uuid.UUID   `json:"id"`
+	NamespaceID              uuid.UUID   `json:"namespace_id"`
+	Name                     string      `json:"name"`
+	Kind                     string      `json:"kind"`
+	Visibility               string      `json:"visibility"`
+	RepoID                   uuid.UUID   `json:"repo_id"`
+	Summary                  string      `json:"summary"`
+	LatestPublishedVersionID *uuid.UUID  `json:"latest_published_version_id"`
+	QuarantineState          string      `json:"quarantine_state"`
+	AutoPublishTags          bool        `json:"auto_publish_tags"`
+	SearchTsv                interface{} `json:"search_tsv"`
+	CreatedAt                time.Time   `json:"created_at"`
+	UpdatedAt                time.Time   `json:"updated_at"`
+	Namespace                string      `json:"namespace"`
+	NamespaceKind            string      `json:"namespace_kind"`
+}
+
+func (q *Queries) GetAgentByID(ctx context.Context, id uuid.UUID) (GetAgentByIDRow, error) {
+	row := q.db.QueryRow(ctx, getAgentByID, id)
+	var i GetAgentByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.NamespaceID,
+		&i.Name,
+		&i.Kind,
+		&i.Visibility,
+		&i.RepoID,
+		&i.Summary,
+		&i.LatestPublishedVersionID,
+		&i.QuarantineState,
+		&i.AutoPublishTags,
+		&i.SearchTsv,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Namespace,
+		&i.NamespaceKind,
+	)
+	return i, err
+}
+
 const getAgentByPath = `-- name: GetAgentByPath :one
 SELECT a.id, a.namespace_id, a.name, a.kind, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, h.handle AS namespace, h.kind AS namespace_kind, r.default_branch, r.size_bytes
 FROM agents a
@@ -344,6 +391,20 @@ func (q *Queries) ListAgentsByNamespace(ctx context.Context, arg ListAgentsByNam
 		return nil, err
 	}
 	return items, nil
+}
+
+const setAgentQuarantineState = `-- name: SetAgentQuarantineState :exec
+UPDATE agents SET quarantine_state = $2, updated_at = now() WHERE id = $1
+`
+
+type SetAgentQuarantineStateParams struct {
+	ID              uuid.UUID `json:"id"`
+	QuarantineState string    `json:"quarantine_state"`
+}
+
+func (q *Queries) SetAgentQuarantineState(ctx context.Context, arg SetAgentQuarantineStateParams) error {
+	_, err := q.db.Exec(ctx, setAgentQuarantineState, arg.ID, arg.QuarantineState)
+	return err
 }
 
 const updateAgentSettings = `-- name: UpdateAgentSettings :exec

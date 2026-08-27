@@ -13,13 +13,19 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
 	"github.com/PLACEHOLDER_ORG/agentry/internal/api"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/gitsrv"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/queue"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/scan"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/scan/ruleset"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
+	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/version"
 )
 
@@ -110,11 +116,51 @@ func run(ctx context.Context, cfgPath, role string) error {
 	case "api", "git", "all":
 		return serveHTTP(ctx, cfg, st, log, role)
 	case "worker":
-		// M4 (WG-H) mounts queue workers here.
-		return errors.New("worker role: not implemented until M4 (WG-H)")
+		return runWorker(ctx, cfg, st, log)
 	default:
 		return fmt.Errorf("unknown role %q", role)
 	}
+}
+
+// runWorker runs the async scan/notification worker (§8.2, §13.3). It wires
+// the pipeline's job handlers onto the Postgres queue and works the sandbox
+// and core queues until the context is cancelled.
+func runWorker(ctx context.Context, cfg config.Config, st *store.Store, log *slog.Logger) error {
+	if st == nil {
+		return errors.New("the worker role requires a database")
+	}
+	bundle, err := ruleset.Load()
+	if err != nil {
+		return err
+	}
+	blobs, err := registry.NewLocalFS(cfg.Storage.LocalDir)
+	if err != nil {
+		return err
+	}
+	aud := audit.NewWriter(log)
+	reg := registry.NewService(st, aud)
+	reg.SetBlobStore(blobs)
+	signer, err := scan.NewSigner(cfg.Signing.Kind, cfg.Signing.KeyFile, cfg.DevMode)
+	if err != nil {
+		return err
+	}
+	judge := scan.NewJudgeProvider(cfg.Judge.Provider)
+	orch := scan.NewOrchestrator(bundle, judge, log)
+
+	rulesetID, _ := uuid.NewV7()
+	if row, rerr := st.Queries().CreateRulesetRelease(ctx, storegen.CreateRulesetReleaseParams{
+		ID: rulesetID, Semver: bundle.Version(), BundleDigest: bundle.Digest(),
+	}); rerr == nil {
+		rulesetID = row.ID
+	}
+	pipeline := scan.NewPipeline(scan.PipelineDeps{
+		Store: st, Registry: reg, Blobs: blobs, Orchestrator: orch, Signer: signer,
+		Audit: aud, Log: log, RegistryURL: cfg.BaseURL, RulesetID: rulesetID, RulesetVer: bundle.Version(),
+	})
+	q := queue.NewPGClient(st, log)
+	pipeline.RegisterHandlers(q)
+	log.Info("worker started", "queues", "core,sandbox")
+	return q.Work(ctx, "core", "sandbox", "judge")
 }
 
 func serveHTTP(ctx context.Context, cfg config.Config, st *store.Store, log *slog.Logger, role string) error {
