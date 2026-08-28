@@ -9,6 +9,9 @@ RETURNING *;
 -- name: GetRulesetBySemver :one
 SELECT * FROM ruleset_releases WHERE semver = $1;
 
+-- name: GetRulesetByID :one
+SELECT * FROM ruleset_releases WHERE id = $1;
+
 -- name: LatestRuleset :one
 SELECT * FROM ruleset_releases ORDER BY published_at DESC LIMIT 1;
 
@@ -56,6 +59,14 @@ RETURNING *;
 
 -- name: GetReviewItem :one
 SELECT * FROM review_items WHERE id = $1;
+
+-- name: GetReviewItemDetail :one
+SELECT ri.*, av.version, a.name AS agent_name, h.handle AS namespace
+FROM review_items ri
+JOIN agent_versions av ON av.id = ri.version_id
+JOIN agents a ON a.id = av.agent_id
+JOIN handles h ON h.id = a.namespace_id
+WHERE ri.id = $1;
 
 -- name: GetPendingReviewItemForVersion :one
 SELECT * FROM review_items WHERE version_id = $1 AND state = 'pending';
@@ -134,14 +145,18 @@ RETURNING *;
 SELECT count(*) FROM abuse_reports
 WHERE reporter_id = $1 AND created_at >= now() - interval '1 hour';
 
--- name: ListOpenAbuseReports :many
-SELECT ar.*, a.name AS agent_name, h.handle AS namespace
+-- name: ListAbuseReports :many
+SELECT ar.*, a.name AS agent_name, h.handle AS namespace, av.version AS version
 FROM abuse_reports ar
 JOIN agents a ON a.id = ar.agent_id
 JOIN handles h ON h.id = a.namespace_id
-WHERE ar.state = 'open'
+LEFT JOIN agent_versions av ON av.id = ar.version_id
+WHERE ar.state = $1
 ORDER BY ar.created_at
-LIMIT $1;
+LIMIT $2;
+
+-- name: GetAbuseReport :one
+SELECT * FROM abuse_reports WHERE id = $1;
 
 -- name: TriageAbuseReport :exec
 UPDATE abuse_reports SET state = $2, triaged_by = $3, triaged_at = now(), resolution = $4 WHERE id = $1;

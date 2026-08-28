@@ -621,6 +621,51 @@ func (e PutSsoConnectionParamsKind) Valid() bool {
 	}
 }
 
+// Defines values for ListAbuseReportsParamsState.
+const (
+	ListAbuseReportsParamsStateActioned  ListAbuseReportsParamsState = "actioned"
+	ListAbuseReportsParamsStateDismissed ListAbuseReportsParamsState = "dismissed"
+	ListAbuseReportsParamsStateOpen      ListAbuseReportsParamsState = "open"
+	ListAbuseReportsParamsStateTriaged   ListAbuseReportsParamsState = "triaged"
+)
+
+// Valid indicates whether the value is a known member of the ListAbuseReportsParamsState enum.
+func (e ListAbuseReportsParamsState) Valid() bool {
+	switch e {
+	case ListAbuseReportsParamsStateActioned:
+		return true
+	case ListAbuseReportsParamsStateDismissed:
+		return true
+	case ListAbuseReportsParamsStateOpen:
+		return true
+	case ListAbuseReportsParamsStateTriaged:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TriageAbuseReportJSONBodyState.
+const (
+	TriageAbuseReportJSONBodyStateActioned  TriageAbuseReportJSONBodyState = "actioned"
+	TriageAbuseReportJSONBodyStateDismissed TriageAbuseReportJSONBodyState = "dismissed"
+	TriageAbuseReportJSONBodyStateTriaged   TriageAbuseReportJSONBodyState = "triaged"
+)
+
+// Valid indicates whether the value is a known member of the TriageAbuseReportJSONBodyState enum.
+func (e TriageAbuseReportJSONBodyState) Valid() bool {
+	switch e {
+	case TriageAbuseReportJSONBodyStateActioned:
+		return true
+	case TriageAbuseReportJSONBodyStateDismissed:
+		return true
+	case TriageAbuseReportJSONBodyStateTriaged:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PlatformAgentActionParamsAction.
 const (
 	Block      PlatformAgentActionParamsAction = "block"
@@ -1046,6 +1091,34 @@ type ResolveResult struct {
 type ReviewBundle struct {
 	Findings []ScanFinding `json:"findings"`
 	Item     ReviewItem    `json:"item"`
+
+	// Manifest The submitted manifest (canonical JSON form).
+	Manifest      *map[string]interface{} `json:"manifest,omitempty"`
+	Previous      *AgentVersion           `json:"previous,omitempty"`
+	Report        *ScanReport             `json:"report,omitempty"`
+	VersionDetail *AgentVersion           `json:"versionDetail,omitempty"`
+}
+
+// ReviewFileContent defines model for ReviewFileContent.
+type ReviewFileContent struct {
+	Binary bool `json:"binary"`
+
+	// Content UTF-8 text content; absent for binary files. Rendered by clients with invisible-character escaping (§10.3).
+	Content   *string `json:"content,omitempty"`
+	Path      string  `json:"path"`
+	Size      int64   `json:"size"`
+	Truncated bool    `json:"truncated"`
+}
+
+// ReviewFileEntry defines model for ReviewFileEntry.
+type ReviewFileEntry struct {
+	Path string `json:"path"`
+	Size int64  `json:"size"`
+}
+
+// ReviewFileList defines model for ReviewFileList.
+type ReviewFileList struct {
+	Files []ReviewFileEntry `json:"files"`
 }
 
 // ReviewItem defines model for ReviewItem.
@@ -1413,8 +1486,22 @@ type UpdateWebhookJSONBody struct {
 
 // ListAbuseReportsParams defines parameters for ListAbuseReports.
 type ListAbuseReportsParams struct {
-	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+	// State Filter by triage state; defaults to open.
+	State *ListAbuseReportsParamsState `form:"state,omitempty" json:"state,omitempty"`
+	Limit *int                         `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// ListAbuseReportsParamsState defines parameters for ListAbuseReports.
+type ListAbuseReportsParamsState string
+
+// TriageAbuseReportJSONBody defines parameters for TriageAbuseReport.
+type TriageAbuseReportJSONBody struct {
+	Resolution string                         `json:"resolution"`
+	State      TriageAbuseReportJSONBodyState `json:"state"`
+}
+
+// TriageAbuseReportJSONBodyState defines parameters for TriageAbuseReport.
+type TriageAbuseReportJSONBodyState string
 
 // PlatformAgentActionJSONBody defines parameters for PlatformAgentAction.
 type PlatformAgentActionJSONBody struct {
@@ -1442,6 +1529,11 @@ type DecideReviewItemJSONBody struct {
 
 // DecideReviewItemJSONBodyDecision defines parameters for DecideReviewItem.
 type DecideReviewItemJSONBodyDecision string
+
+// GetReviewFileParams defines parameters for GetReviewFile.
+type GetReviewFileParams struct {
+	Path string `form:"path" json:"path"`
+}
 
 // ListReviewQueueParams defines parameters for ListReviewQueue.
 type ListReviewQueueParams struct {
@@ -1550,6 +1642,9 @@ type CreateWebhookJSONRequestBody = WebhookInput
 
 // UpdateWebhookJSONRequestBody defines body for UpdateWebhook for application/json ContentType.
 type UpdateWebhookJSONRequestBody UpdateWebhookJSONBody
+
+// TriageAbuseReportJSONRequestBody defines body for TriageAbuseReport for application/json ContentType.
+type TriageAbuseReportJSONRequestBody TriageAbuseReportJSONBody
 
 // PlatformAgentActionJSONRequestBody defines body for PlatformAgentAction for application/json ContentType.
 type PlatformAgentActionJSONRequestBody PlatformAgentActionJSONBody
@@ -2179,10 +2274,24 @@ type ClientInterface interface {
 	// Corresponds with GET /orgs/{org}/webhooks/{id}/deliveries (the `ListWebhookDeliveries` operationId).
 	ListWebhookDeliveries(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListAbuseReports Open abuse reports (platform staff).
+	// ListAbuseReports Abuse reports for triage (platform staff).
 	//
 	// Corresponds with GET /platform/abuse-reports (the `ListAbuseReports` operationId).
 	ListAbuseReports(ctx context.Context, params *ListAbuseReportsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// TriageAbuseReportWithBody Record a triage outcome for an abuse report (platform staff).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /platform/abuse-reports/{id} (the `TriageAbuseReport` operationId).
+	TriageAbuseReportWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// TriageAbuseReport Record a triage outcome for an abuse report (platform staff).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /platform/abuse-reports/{id} (the `TriageAbuseReport` operationId).
+	TriageAbuseReport(ctx context.Context, id openapi_types.UUID, body TriageAbuseReportJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PlatformAgentActionWithBody Quarantine, block, or reinstate an agent (platform staff, §7).
 	//
@@ -2226,6 +2335,16 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /review-items/{id}/decision (the `DecideReviewItem` operationId).
 	DecideReviewItem(ctx context.Context, id openapi_types.UUID, body DecideReviewItemJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetReviewFile One file's content from the archive under review (reviewer/staff).
+	//
+	// Corresponds with GET /review-items/{id}/file (the `GetReviewFile` operationId).
+	GetReviewFile(ctx context.Context, id openapi_types.UUID, params *GetReviewFileParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListReviewFiles File inventory of the archive under review (reviewer/staff).
+	//
+	// Corresponds with GET /review-items/{id}/files (the `ListReviewFiles` operationId).
+	ListReviewFiles(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListReviewQueue Pending review items (platform staff or org security_reviewer).
 	//
@@ -3715,11 +3834,45 @@ func (c *Client) ListWebhookDeliveries(ctx context.Context, org OrgHandle, id We
 	return c.Client.Do(req)
 }
 
-// ListAbuseReports Open abuse reports (platform staff).
+// ListAbuseReports Abuse reports for triage (platform staff).
 //
 // Corresponds with GET /platform/abuse-reports (the `ListAbuseReports` operationId).
 func (c *Client) ListAbuseReports(ctx context.Context, params *ListAbuseReportsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListAbuseReportsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// TriageAbuseReportWithBody Record a triage outcome for an abuse report (platform staff).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /platform/abuse-reports/{id} (the `TriageAbuseReport` operationId).
+func (c *Client) TriageAbuseReportWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTriageAbuseReportRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// TriageAbuseReport Record a triage outcome for an abuse report (platform staff).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /platform/abuse-reports/{id} (the `TriageAbuseReport` operationId).
+func (c *Client) TriageAbuseReport(ctx context.Context, id openapi_types.UUID, body TriageAbuseReportJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTriageAbuseReportRequest(c.Server, id, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3833,6 +3986,36 @@ func (c *Client) DecideReviewItemWithBody(ctx context.Context, id openapi_types.
 // Corresponds with POST /review-items/{id}/decision (the `DecideReviewItem` operationId).
 func (c *Client) DecideReviewItem(ctx context.Context, id openapi_types.UUID, body DecideReviewItemJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDecideReviewItemRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetReviewFile One file's content from the archive under review (reviewer/staff).
+//
+// Corresponds with GET /review-items/{id}/file (the `GetReviewFile` operationId).
+func (c *Client) GetReviewFile(ctx context.Context, id openapi_types.UUID, params *GetReviewFileParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetReviewFileRequest(c.Server, id, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListReviewFiles File inventory of the archive under review (reviewer/staff).
+//
+// Corresponds with GET /review-items/{id}/files (the `ListReviewFiles` operationId).
+func (c *Client) ListReviewFiles(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListReviewFilesRequest(c.Server, id)
 	if err != nil {
 		return nil, err
 	}
@@ -6921,6 +7104,18 @@ func NewListAbuseReportsRequest(server string, params *ListAbuseReportsParams) (
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
+		if params.State != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "state", *params.State, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.Limit != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
@@ -6943,6 +7138,53 @@ func NewListAbuseReportsRequest(server string, params *ListAbuseReportsParams) (
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewTriageAbuseReportRequest calls the generic TriageAbuseReport builder with application/json body
+func NewTriageAbuseReportRequest(server string, id openapi_types.UUID, body TriageAbuseReportJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewTriageAbuseReportRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewTriageAbuseReportRequestWithBody constructs an http.Request for the TriageAbuseReport method, with any body, and a specified content type
+func NewTriageAbuseReportRequestWithBody(server string, id openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/platform/abuse-reports/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -7174,6 +7416,97 @@ func NewDecideReviewItemRequestWithBody(server string, id openapi_types.UUID, co
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetReviewFileRequest constructs an http.Request for the GetReviewFile method
+func NewGetReviewFileRequest(server string, id openapi_types.UUID, params *GetReviewFileParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/review-items/%s/file", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "path", params.Path, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListReviewFilesRequest constructs an http.Request for the ListReviewFiles method
+func NewListReviewFilesRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/review-items/%s/files", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -8264,12 +8597,26 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/webhooks/{id}/deliveries (the `ListWebhookDeliveries` operationId).
 	ListWebhookDeliveriesWithResponse(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*ListWebhookDeliveriesResponse, error)
 
-	// ListAbuseReportsWithResponse Open abuse reports (platform staff).
+	// ListAbuseReportsWithResponse Abuse reports for triage (platform staff).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /platform/abuse-reports (the `ListAbuseReports` operationId).
 	ListAbuseReportsWithResponse(ctx context.Context, params *ListAbuseReportsParams, reqEditors ...RequestEditorFn) (*ListAbuseReportsResponse, error)
+
+	// TriageAbuseReportWithBodyWithResponse Record a triage outcome for an abuse report (platform staff).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /platform/abuse-reports/{id} (the `TriageAbuseReport` operationId).
+	TriageAbuseReportWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TriageAbuseReportResponse, error)
+
+	// TriageAbuseReportWithResponse Record a triage outcome for an abuse report (platform staff).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /platform/abuse-reports/{id} (the `TriageAbuseReport` operationId).
+	TriageAbuseReportWithResponse(ctx context.Context, id openapi_types.UUID, body TriageAbuseReportJSONRequestBody, reqEditors ...RequestEditorFn) (*TriageAbuseReportResponse, error)
 
 	// PlatformAgentActionWithBodyWithResponse Quarantine, block, or reinstate an agent (platform staff, §7).
 	//
@@ -8319,6 +8666,20 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /review-items/{id}/decision (the `DecideReviewItem` operationId).
 	DecideReviewItemWithResponse(ctx context.Context, id openapi_types.UUID, body DecideReviewItemJSONRequestBody, reqEditors ...RequestEditorFn) (*DecideReviewItemResponse, error)
+
+	// GetReviewFileWithResponse One file's content from the archive under review (reviewer/staff).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /review-items/{id}/file (the `GetReviewFile` operationId).
+	GetReviewFileWithResponse(ctx context.Context, id openapi_types.UUID, params *GetReviewFileParams, reqEditors ...RequestEditorFn) (*GetReviewFileResponse, error)
+
+	// ListReviewFilesWithResponse File inventory of the archive under review (reviewer/staff).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /review-items/{id}/files (the `ListReviewFiles` operationId).
+	ListReviewFilesWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*ListReviewFilesResponse, error)
 
 	// ListReviewQueueWithResponse Pending review items (platform staff or org security_reviewer).
 	//
@@ -11373,6 +11734,47 @@ func (r ListAbuseReportsResponse) ContentType() string {
 	return ""
 }
 
+type TriageAbuseReportResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r TriageAbuseReportResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r TriageAbuseReportResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r TriageAbuseReportResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r TriageAbuseReportResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r TriageAbuseReportResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type PlatformAgentActionResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11593,6 +11995,102 @@ func (r DecideReviewItemResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r DecideReviewItemResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetReviewFileResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ReviewFileContent
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetReviewFileResponse) GetJSON200() *ReviewFileContent {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetReviewFileResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetReviewFileResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetReviewFileResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetReviewFileResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetReviewFileResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListReviewFilesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ReviewFileList
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListReviewFilesResponse) GetJSON200() *ReviewFileList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListReviewFilesResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListReviewFilesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListReviewFilesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListReviewFilesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListReviewFilesResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -13167,7 +13665,7 @@ func (c *ClientWithResponses) ListWebhookDeliveriesWithResponse(ctx context.Cont
 	return ParseListWebhookDeliveriesResponse(rsp)
 }
 
-// ListAbuseReportsWithResponse Open abuse reports (platform staff).
+// ListAbuseReportsWithResponse Abuse reports for triage (platform staff).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -13178,6 +13676,32 @@ func (c *ClientWithResponses) ListAbuseReportsWithResponse(ctx context.Context, 
 		return nil, err
 	}
 	return ParseListAbuseReportsResponse(rsp)
+}
+
+// TriageAbuseReportWithBodyWithResponse Record a triage outcome for an abuse report (platform staff).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /platform/abuse-reports/{id} (the `TriageAbuseReport` operationId).
+func (c *ClientWithResponses) TriageAbuseReportWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TriageAbuseReportResponse, error) {
+	rsp, err := c.TriageAbuseReportWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTriageAbuseReportResponse(rsp)
+}
+
+// TriageAbuseReportWithResponse Record a triage outcome for an abuse report (platform staff).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /platform/abuse-reports/{id} (the `TriageAbuseReport` operationId).
+func (c *ClientWithResponses) TriageAbuseReportWithResponse(ctx context.Context, id openapi_types.UUID, body TriageAbuseReportJSONRequestBody, reqEditors ...RequestEditorFn) (*TriageAbuseReportResponse, error) {
+	rsp, err := c.TriageAbuseReport(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTriageAbuseReportResponse(rsp)
 }
 
 // PlatformAgentActionWithBodyWithResponse Quarantine, block, or reinstate an agent (platform staff, §7).
@@ -13269,6 +13793,32 @@ func (c *ClientWithResponses) DecideReviewItemWithResponse(ctx context.Context, 
 		return nil, err
 	}
 	return ParseDecideReviewItemResponse(rsp)
+}
+
+// GetReviewFileWithResponse One file's content from the archive under review (reviewer/staff).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /review-items/{id}/file (the `GetReviewFile` operationId).
+func (c *ClientWithResponses) GetReviewFileWithResponse(ctx context.Context, id openapi_types.UUID, params *GetReviewFileParams, reqEditors ...RequestEditorFn) (*GetReviewFileResponse, error) {
+	rsp, err := c.GetReviewFile(ctx, id, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetReviewFileResponse(rsp)
+}
+
+// ListReviewFilesWithResponse File inventory of the archive under review (reviewer/staff).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /review-items/{id}/files (the `ListReviewFiles` operationId).
+func (c *ClientWithResponses) ListReviewFilesWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*ListReviewFilesResponse, error) {
+	rsp, err := c.ListReviewFiles(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListReviewFilesResponse(rsp)
 }
 
 // ListReviewQueueWithResponse Pending review items (platform staff or org security_reviewer).
@@ -15477,6 +16027,35 @@ func ParseListAbuseReportsResponse(rsp *http.Response) (*ListAbuseReportsRespons
 	return response, nil
 }
 
+// ParseTriageAbuseReportResponse parses an HTTP response from a TriageAbuseReportWithResponse call
+func ParseTriageAbuseReportResponse(rsp *http.Response) (*TriageAbuseReportResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &TriageAbuseReportResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParsePlatformAgentActionResponse parses an HTTP response from a PlatformAgentActionWithResponse call
 func ParsePlatformAgentActionResponse(rsp *http.Response) (*PlatformAgentActionResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -15621,6 +16200,72 @@ func ParseDecideReviewItemResponse(rsp *http.Response) (*DecideReviewItemRespons
 	switch {
 	case rsp.StatusCode == 204:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetReviewFileResponse parses an HTTP response from a GetReviewFileWithResponse call
+func ParseGetReviewFileResponse(rsp *http.Response) (*GetReviewFileResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetReviewFileResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ReviewFileContent
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListReviewFilesResponse parses an HTTP response from a ListReviewFilesWithResponse call
+func ParseListReviewFilesResponse(rsp *http.Response) (*ListReviewFilesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListReviewFilesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ReviewFileList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

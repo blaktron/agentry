@@ -88,6 +88,8 @@ publish:
 }
 
 // waitStatus polls a version until it reaches want (or fails after ~10s).
+//
+//nolint:unparam // version is part of the address; tests happen to use 1.0.0
 func (env *testEnv) waitStatus(ns, name, version, want string) {
 	env.t.Helper()
 	for i := 0; i < 100; i++ {

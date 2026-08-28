@@ -85,25 +85,37 @@ func (s *Server) ReportAbuse(w http.ResponseWriter, r *http.Request, ns Namespac
 	w.WriteHeader(http.StatusAccepted)
 }
 
+// requireStaff authorizes the caller as signed-in platform staff.
+func (s *Server) requireStaff(w http.ResponseWriter, r *http.Request) bool {
+	p := principalFrom(r.Context())
+	if p.Anonymous {
+		problemUnauthorized(w, r, "")
+		return false
+	}
+	if !p.PlatformStaff {
+		problemForbidden(w, r, "this action is platform-staff only")
+		return false
+	}
+	return true
+}
+
 // ListAbuseReports implements GET /platform/abuse-reports (staff only).
 func (s *Server) ListAbuseReports(w http.ResponseWriter, r *http.Request, params ListAbuseReportsParams) {
 	if !s.requireDB(w, r) {
 		return
 	}
-	p := principalFrom(r.Context())
-	if p.Anonymous {
-		problemUnauthorized(w, r, "")
-		return
-	}
-	if !p.PlatformStaff {
-		problemForbidden(w, r, "abuse triage is staff-only")
+	if !s.requireStaff(w, r) {
 		return
 	}
 	limit := int32(50)
 	if params.Limit != nil {
 		limit = int32(*params.Limit)
 	}
-	rows, err := s.q().ListOpenAbuseReports(r.Context(), limit)
+	state := "open"
+	if params.State != nil {
+		state = string(*params.State)
+	}
+	rows, err := s.q().ListAbuseReports(r.Context(), storegen.ListAbuseReportsParams{State: state, Limit: limit})
 	if err != nil {
 		problemInternal(w, r)
 		return
@@ -115,7 +127,54 @@ func (s *Server) ListAbuseReports(w http.ResponseWriter, r *http.Request, params
 			Category: row.Category, Detail: row.Detail,
 			State: AbuseReportState(row.State), CreatedAt: row.CreatedAt,
 		}
+		if row.Version != nil {
+			item.Version = row.Version
+		}
 		out = append(out, item)
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// TriageAbuseReport implements POST /platform/abuse-reports/{id} (staff only).
+// Recording a triage outcome is bookkeeping — enforcement actions go through
+// the §7 platform agent actions so their audit trail names the agent.
+func (s *Server) TriageAbuseReport(w http.ResponseWriter, r *http.Request, id uuid.UUID) {
+	if !s.requireDB(w, r) {
+		return
+	}
+	if !s.requireStaff(w, r) {
+		return
+	}
+	rep, err := s.q().GetAbuseReport(r.Context(), id)
+	if err != nil {
+		problemNotFound(w, r)
+		return
+	}
+	var req TriageAbuseReportJSONRequestBody
+	if !readJSON(w, r, &req) {
+		return
+	}
+	resolution := strings.TrimSpace(req.Resolution)
+	if resolution == "" {
+		problemValidation(w, r, "resolution required — say what was decided and why")
+		return
+	}
+	p := principalFrom(r.Context())
+	err = s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
+		if err := q.TriageAbuseReport(r.Context(), storegen.TriageAbuseReportParams{
+			ID: rep.ID, State: string(req.State), TriagedBy: &p.UserID, Resolution: &resolution,
+		}); err != nil {
+			return err
+		}
+		e := auditEvent(r, audit.ActionAbuseTriage)
+		e.TargetKind, e.TargetID = "abuse_report", rep.ID
+		e.Detail = map[string]any{"state": string(req.State)}
+		return s.auditW.Write(r.Context(), q, e)
+	})
+	if err != nil {
+		s.log.Error("abuse triage", "err", err)
+		problemInternal(w, r)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
