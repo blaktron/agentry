@@ -1,6 +1,11 @@
 # Release: build, sign, and publish artifacts with provenance (§18.2 M8 OSS
 # hygiene). We hold ourselves to the standard we ask of publishers — signed
 # artifacts, an SBOM, and a scanned dependency tree.
+#
+# Triggered by the vX.Y.Z tag that release-please.yaml creates when its
+# release PR merges (or a manually pushed tag). release-please owns CHANGELOG
+# .md and the release notes; the publish step below appends the verification
+# instructions and attaches the signed assets rather than replacing them.
 name: release
 on:
   push:
@@ -115,8 +120,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*
-          generate_release_notes: true
+          # release-please already created this release with the changelog as
+          # its body; append the verification block instead of overwriting it.
+          append_body: true
           body: |
+            ---
             Verify the checksums before trusting these binaries:
 
             ```
