@@ -298,6 +298,29 @@ func (q *Queries) FinishScanRun(ctx context.Context, arg FinishScanRunParams) er
 	return err
 }
 
+const getAbuseReport = `-- name: GetAbuseReport :one
+SELECT id, agent_id, version_id, reporter_id, category, detail, state, triaged_by, triaged_at, resolution, created_at FROM abuse_reports WHERE id = $1
+`
+
+func (q *Queries) GetAbuseReport(ctx context.Context, id uuid.UUID) (AbuseReport, error) {
+	row := q.db.QueryRow(ctx, getAbuseReport, id)
+	var i AbuseReport
+	err := row.Scan(
+		&i.ID,
+		&i.AgentID,
+		&i.VersionID,
+		&i.ReporterID,
+		&i.Category,
+		&i.Detail,
+		&i.State,
+		&i.TriagedBy,
+		&i.TriagedAt,
+		&i.Resolution,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getAttestation = `-- name: GetAttestation :one
 SELECT id, version_id, predicate_type, dsse_envelope, key_id, created_at FROM attestations WHERE version_id = $1
 `
@@ -458,6 +481,67 @@ func (q *Queries) GetReviewItem(ctx context.Context, id uuid.UUID) (ReviewItem, 
 	return i, err
 }
 
+const getReviewItemDetail = `-- name: GetReviewItemDetail :one
+SELECT ri.id, ri.version_id, ri.queue, ri.org_id, ri.state, ri.decided_by, ri.decided_at, ri.rationale, ri.created_at, av.version, a.name AS agent_name, h.handle AS namespace
+FROM review_items ri
+JOIN agent_versions av ON av.id = ri.version_id
+JOIN agents a ON a.id = av.agent_id
+JOIN handles h ON h.id = a.namespace_id
+WHERE ri.id = $1
+`
+
+type GetReviewItemDetailRow struct {
+	ID        uuid.UUID  `json:"id"`
+	VersionID uuid.UUID  `json:"version_id"`
+	Queue     string     `json:"queue"`
+	OrgID     *uuid.UUID `json:"org_id"`
+	State     string     `json:"state"`
+	DecidedBy *uuid.UUID `json:"decided_by"`
+	DecidedAt *time.Time `json:"decided_at"`
+	Rationale *string    `json:"rationale"`
+	CreatedAt time.Time  `json:"created_at"`
+	Version   string     `json:"version"`
+	AgentName string     `json:"agent_name"`
+	Namespace string     `json:"namespace"`
+}
+
+func (q *Queries) GetReviewItemDetail(ctx context.Context, id uuid.UUID) (GetReviewItemDetailRow, error) {
+	row := q.db.QueryRow(ctx, getReviewItemDetail, id)
+	var i GetReviewItemDetailRow
+	err := row.Scan(
+		&i.ID,
+		&i.VersionID,
+		&i.Queue,
+		&i.OrgID,
+		&i.State,
+		&i.DecidedBy,
+		&i.DecidedAt,
+		&i.Rationale,
+		&i.CreatedAt,
+		&i.Version,
+		&i.AgentName,
+		&i.Namespace,
+	)
+	return i, err
+}
+
+const getRulesetByID = `-- name: GetRulesetByID :one
+SELECT id, semver, bundle_digest, notes, published_at FROM ruleset_releases WHERE id = $1
+`
+
+func (q *Queries) GetRulesetByID(ctx context.Context, id uuid.UUID) (RulesetRelease, error) {
+	row := q.db.QueryRow(ctx, getRulesetByID, id)
+	var i RulesetRelease
+	err := row.Scan(
+		&i.ID,
+		&i.Semver,
+		&i.BundleDigest,
+		&i.Notes,
+		&i.PublishedAt,
+	)
+	return i, err
+}
+
 const getRulesetBySemver = `-- name: GetRulesetBySemver :one
 SELECT id, semver, bundle_digest, notes, published_at FROM ruleset_releases WHERE semver = $1
 `
@@ -594,6 +678,74 @@ func (q *Queries) LatestScanRunForVersion(ctx context.Context, versionID uuid.UU
 	return i, err
 }
 
+const listAbuseReports = `-- name: ListAbuseReports :many
+SELECT ar.id, ar.agent_id, ar.version_id, ar.reporter_id, ar.category, ar.detail, ar.state, ar.triaged_by, ar.triaged_at, ar.resolution, ar.created_at, a.name AS agent_name, h.handle AS namespace, av.version AS version
+FROM abuse_reports ar
+JOIN agents a ON a.id = ar.agent_id
+JOIN handles h ON h.id = a.namespace_id
+LEFT JOIN agent_versions av ON av.id = ar.version_id
+WHERE ar.state = $1
+ORDER BY ar.created_at
+LIMIT $2
+`
+
+type ListAbuseReportsParams struct {
+	State string `json:"state"`
+	Limit int32  `json:"limit"`
+}
+
+type ListAbuseReportsRow struct {
+	ID         uuid.UUID  `json:"id"`
+	AgentID    uuid.UUID  `json:"agent_id"`
+	VersionID  *uuid.UUID `json:"version_id"`
+	ReporterID *uuid.UUID `json:"reporter_id"`
+	Category   string     `json:"category"`
+	Detail     string     `json:"detail"`
+	State      string     `json:"state"`
+	TriagedBy  *uuid.UUID `json:"triaged_by"`
+	TriagedAt  *time.Time `json:"triaged_at"`
+	Resolution *string    `json:"resolution"`
+	CreatedAt  time.Time  `json:"created_at"`
+	AgentName  string     `json:"agent_name"`
+	Namespace  string     `json:"namespace"`
+	Version    *string    `json:"version"`
+}
+
+func (q *Queries) ListAbuseReports(ctx context.Context, arg ListAbuseReportsParams) ([]ListAbuseReportsRow, error) {
+	rows, err := q.db.Query(ctx, listAbuseReports, arg.State, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAbuseReportsRow
+	for rows.Next() {
+		var i ListAbuseReportsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AgentID,
+			&i.VersionID,
+			&i.ReporterID,
+			&i.Category,
+			&i.Detail,
+			&i.State,
+			&i.TriagedBy,
+			&i.TriagedAt,
+			&i.Resolution,
+			&i.CreatedAt,
+			&i.AgentName,
+			&i.Namespace,
+			&i.Version,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAdvisoriesForAgent = `-- name: ListAdvisoriesForAgent :many
 SELECT id, agent_id, affected_versions, severity, summary, detail, published_at FROM advisories WHERE agent_id = $1 ORDER BY published_at DESC
 `
@@ -656,66 +808,6 @@ func (q *Queries) ListFindings(ctx context.Context, scanRunID uuid.UUID) ([]Find
 			&i.VerdictReason,
 			&i.VerdictAt,
 			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listOpenAbuseReports = `-- name: ListOpenAbuseReports :many
-SELECT ar.id, ar.agent_id, ar.version_id, ar.reporter_id, ar.category, ar.detail, ar.state, ar.triaged_by, ar.triaged_at, ar.resolution, ar.created_at, a.name AS agent_name, h.handle AS namespace
-FROM abuse_reports ar
-JOIN agents a ON a.id = ar.agent_id
-JOIN handles h ON h.id = a.namespace_id
-WHERE ar.state = 'open'
-ORDER BY ar.created_at
-LIMIT $1
-`
-
-type ListOpenAbuseReportsRow struct {
-	ID         uuid.UUID  `json:"id"`
-	AgentID    uuid.UUID  `json:"agent_id"`
-	VersionID  *uuid.UUID `json:"version_id"`
-	ReporterID *uuid.UUID `json:"reporter_id"`
-	Category   string     `json:"category"`
-	Detail     string     `json:"detail"`
-	State      string     `json:"state"`
-	TriagedBy  *uuid.UUID `json:"triaged_by"`
-	TriagedAt  *time.Time `json:"triaged_at"`
-	Resolution *string    `json:"resolution"`
-	CreatedAt  time.Time  `json:"created_at"`
-	AgentName  string     `json:"agent_name"`
-	Namespace  string     `json:"namespace"`
-}
-
-func (q *Queries) ListOpenAbuseReports(ctx context.Context, limit int32) ([]ListOpenAbuseReportsRow, error) {
-	rows, err := q.db.Query(ctx, listOpenAbuseReports, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListOpenAbuseReportsRow
-	for rows.Next() {
-		var i ListOpenAbuseReportsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.AgentID,
-			&i.VersionID,
-			&i.ReporterID,
-			&i.Category,
-			&i.Detail,
-			&i.State,
-			&i.TriagedBy,
-			&i.TriagedAt,
-			&i.Resolution,
-			&i.CreatedAt,
-			&i.AgentName,
-			&i.Namespace,
 		); err != nil {
 			return nil, err
 		}

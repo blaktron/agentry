@@ -633,6 +633,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/review-items/{id}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** File inventory of the archive under review (reviewer/staff). */
+        get: operations["listReviewFiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/review-items/{id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One file's content from the archive under review (reviewer/staff). */
+        get: operations["getReviewFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/review-items/{id}/decision": {
         parameters: {
             query?: never;
@@ -1004,10 +1038,27 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Open abuse reports (platform staff). */
+        /** Abuse reports for triage (platform staff). */
         get: operations["listAbuseReports"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/abuse-reports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a triage outcome for an abuse report (platform staff). */
+        post: operations["triageAbuseReport"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1360,6 +1411,30 @@ export interface components {
         ReviewBundle: {
             item: components["schemas"]["ReviewItem"];
             findings: components["schemas"]["ScanFinding"][];
+            versionDetail?: components["schemas"]["AgentVersion"];
+            previous?: components["schemas"]["AgentVersion"];
+            /** @description The submitted manifest (canonical JSON form). */
+            manifest?: {
+                [key: string]: unknown;
+            };
+            report?: components["schemas"]["ScanReport"];
+        };
+        ReviewFileEntry: {
+            path: string;
+            /** Format: int64 */
+            size: number;
+        };
+        ReviewFileList: {
+            files: components["schemas"]["ReviewFileEntry"][];
+        };
+        ReviewFileContent: {
+            path: string;
+            /** Format: int64 */
+            size: number;
+            binary: boolean;
+            truncated: boolean;
+            /** @description UTF-8 text content; absent for binary files. Rendered by clients with invisible-character escaping (§10.3). */
+            content?: string;
         };
         AbuseReport: {
             /** Format: uuid */
@@ -2726,6 +2801,54 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    listReviewFiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Files in the release archive. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewFileList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getReviewFile: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description File content (text files only; binary is flagged, not returned). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewFileContent"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     decideReviewItem: {
         parameters: {
             query?: never;
@@ -3453,6 +3576,8 @@ export interface operations {
     listAbuseReports: {
         parameters: {
             query?: {
+                /** @description Filter by triage state; defaults to open. */
+                state?: "open" | "triaged" | "actioned" | "dismissed";
                 limit?: number;
             };
             header?: never;
@@ -3461,7 +3586,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Open reports. */
+            /** @description Reports. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3469,6 +3594,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AbuseReport"][];
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    triageAbuseReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    state: "triaged" | "actioned" | "dismissed";
+                    resolution: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Triage recorded. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };

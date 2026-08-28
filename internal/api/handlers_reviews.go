@@ -87,8 +87,8 @@ func (s *Server) GetVersionReport(w http.ResponseWriter, r *http.Request, ns Nam
 	if run.JudgeModel != nil {
 		rep.JudgeModel = run.JudgeModel
 	}
-	if rs, err := q.GetRulesetBySemver(r.Context(), ""); err == nil {
-		_ = rs // ruleset semver comes from the run's release below
+	if rs, err := q.GetRulesetByID(r.Context(), run.RulesetReleaseID); err == nil {
+		rep.RulesetVersion = &rs.Semver
 	}
 	writeJSON(w, http.StatusOK, rep)
 }
@@ -196,27 +196,75 @@ func (s *Server) reviewItemAccess(w http.ResponseWriter, r *http.Request, id uui
 	return ri, true
 }
 
-// GetReviewItem implements GET /review-items/{id}.
+// GetReviewItem implements GET /review-items/{id}. The bundle carries
+// everything the §10.1 reviewer detail renders in one call: the findings,
+// the submitted manifest and capabilities, and the previous published
+// version as the capability-diff baseline.
 func (s *Server) GetReviewItem(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
 	if !s.requireDB(w, r) {
 		return
 	}
-	ri, ok := s.reviewItemAccess(w, r, id)
-	if !ok {
+	if _, ok := s.reviewItemAccess(w, r, id); !ok {
 		return
 	}
-	run, err := s.q().LatestScanRunForVersion(r.Context(), ri.VersionID)
-	findings := []ScanFinding{}
-	if err == nil {
-		rows, _ := s.q().ListFindings(r.Context(), run.ID)
-		for _, f := range rows {
-			findings = append(findings, findingToAPI(f))
+	q := s.q()
+	ri, err := q.GetReviewItemDetail(r.Context(), id)
+	if err != nil {
+		problemInternal(w, r)
+		return
+	}
+	bundle := ReviewBundle{
+		Item: ReviewItem{
+			Id: ri.ID, Queue: ReviewItemQueue(ri.Queue), State: ReviewItemState(ri.State),
+			Namespace: ri.Namespace, Agent: ri.AgentName, Version: ri.Version,
+			CreatedAt: &ri.CreatedAt,
+		},
+		Findings: []ScanFinding{},
+	}
+
+	v, err := q.GetVersionByID(r.Context(), ri.VersionID)
+	if err != nil {
+		problemInternal(w, r)
+		return
+	}
+	vd := versionToAPI(v)
+	bundle.VersionDetail = &vd
+	if len(v.Manifest) > 0 {
+		var m map[string]interface{}
+		if json.Unmarshal(v.Manifest, &m) == nil {
+			bundle.Manifest = &m
 		}
 	}
-	writeJSON(w, http.StatusOK, ReviewBundle{
-		Item:     ReviewItem{Id: ri.ID, Queue: ReviewItemQueue(ri.Queue), State: ReviewItemState(ri.State), CreatedAt: &ri.CreatedAt},
-		Findings: findings,
-	})
+	if prev, err := q.GetPreviousPublishedVersion(r.Context(), storegen.GetPreviousPublishedVersionParams{
+		AgentID: v.AgentID, ID: v.ID,
+	}); err == nil {
+		pd := versionToAPI(prev)
+		bundle.Previous = &pd
+	}
+
+	if run, err := q.LatestScanRunForVersion(r.Context(), ri.VersionID); err == nil {
+		rows, _ := q.ListFindings(r.Context(), run.ID)
+		counts := map[string]int{}
+		for _, f := range rows {
+			bundle.Findings = append(bundle.Findings, findingToAPI(f))
+			counts[f.Severity]++
+		}
+		rep := ScanReport{
+			ScanRunId: &run.ID, VersionStatus: VersionStatus(v.Status),
+			ScanStatus: &run.Status, FindingCounts: &counts, Findings: bundle.Findings,
+		}
+		if run.ReportDigest != nil {
+			rep.ReportDigest = run.ReportDigest
+		}
+		if run.JudgeModel != nil {
+			rep.JudgeModel = run.JudgeModel
+		}
+		if rs, err := q.GetRulesetByID(r.Context(), run.RulesetReleaseID); err == nil {
+			rep.RulesetVersion = &rs.Semver
+		}
+		bundle.Report = &rep
+	}
+	writeJSON(w, http.StatusOK, bundle)
 }
 
 // DecideReviewItem implements POST /review-items/{id}/decision. Authors can

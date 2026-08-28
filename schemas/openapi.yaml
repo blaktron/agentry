@@ -1050,6 +1050,56 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /review-items/{id}/files:
+    get:
+      operationId: listReviewFiles
+      tags: [reviews]
+      summary: File inventory of the archive under review (reviewer/staff).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Files in the release archive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewFileList"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /review-items/{id}/file:
+    get:
+      operationId: getReviewFile
+      tags: [reviews]
+      summary: One file's content from the archive under review (reviewer/staff).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 512
+      responses:
+        "200":
+          description: File content (text files only; binary is flagged, not returned).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewFileContent"
+        default:
+          $ref: "#/components/responses/Problem"
+
   /review-items/{id}/decision:
     post:
       operationId: decideReviewItem
@@ -1675,8 +1725,14 @@ paths:
     get:
       operationId: listAbuseReports
       tags: [platform]
-      summary: Open abuse reports (platform staff).
+      summary: Abuse reports for triage (platform staff).
       parameters:
+        - name: state
+          in: query
+          schema:
+            type: string
+            enum: [open, triaged, actioned, dismissed]
+          description: Filter by triage state; defaults to open.
         - name: limit
           in: query
           schema:
@@ -1685,13 +1741,45 @@ paths:
             maximum: 200
       responses:
         "200":
-          description: Open reports.
+          description: Reports.
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/AbuseReport"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /platform/abuse-reports/{id}:
+    post:
+      operationId: triageAbuseReport
+      tags: [platform]
+      summary: Record a triage outcome for an abuse report (platform staff).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [state, resolution]
+              properties:
+                state:
+                  type: string
+                  enum: [triaged, actioned, dismissed]
+                resolution:
+                  type: string
+                  maxLength: 1000
+      responses:
+        "204":
+          description: Triage recorded.
         default:
           $ref: "#/components/responses/Problem"
 
@@ -2360,6 +2448,55 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ScanFinding"
+        versionDetail:
+          $ref: "#/components/schemas/AgentVersion"
+        previous:
+          # The most recent previously published version, when one exists —
+          # the baseline for the capability diff (§10.1).
+          $ref: "#/components/schemas/AgentVersion"
+        manifest:
+          description: The submitted manifest (canonical JSON form).
+          type: object
+          additionalProperties: true
+        report:
+          $ref: "#/components/schemas/ScanReport"
+
+    ReviewFileEntry:
+      type: object
+      required: [path, size]
+      properties:
+        path:
+          type: string
+        size:
+          type: integer
+          format: int64
+
+    ReviewFileList:
+      type: object
+      required: [files]
+      properties:
+        files:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewFileEntry"
+
+    ReviewFileContent:
+      type: object
+      required: [path, size, binary, truncated]
+      properties:
+        path:
+          type: string
+        size:
+          type: integer
+          format: int64
+        binary:
+          type: boolean
+        truncated:
+          type: boolean
+        content:
+          description: UTF-8 text content; absent for binary files. Rendered
+            by clients with invisible-character escaping (§10.3).
+          type: string
 
     AbuseReport:
       type: object

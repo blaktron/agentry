@@ -80,6 +80,8 @@ var routeAuthz = map[string]RouteDecl{
 	"getVersionAttestation": {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
 	"listReviewQueue":       {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"getReviewItem":         {Action: auth.ActPublicRead, SelfAuthorized: true},
+	"listReviewFiles":       {Action: auth.ActPublicRead, SelfAuthorized: true},
+	"getReviewFile":         {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"decideReviewItem":      {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"setFindingVerdict":     {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"getPlatformPolicy":     {Action: auth.ActPublicRead, Anonymous: true},
@@ -92,6 +94,7 @@ var routeAuthz = map[string]RouteDecl{
 	"deleteCurrentUser":     {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	"reportAbuse":           {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"listAbuseReports":      {Action: auth.ActPublicRead, SelfAuthorized: true},
+	"triageAbuseReport":     {Action: auth.ActPublicRead, SelfAuthorized: true},
 	// Enterprise (M6/WG-J). SSO/SCIM config = owner (ActOrgSettingsManage,
 	// session-only for PATs); webhooks/domains = admin+ (ActOrgUpdate);
 	// audit export = admin+ (ActOrgAuditRead). The SSO login-flow endpoints

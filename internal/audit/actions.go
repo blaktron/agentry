@@ -53,6 +53,7 @@ const (
 	ActionAdvisoryPublish Action = "advisory.publish"
 	ActionRulesetRelease  Action = "ruleset.release"
 	ActionAbuseReport     Action = "abuse.report"
+	ActionAbuseTriage     Action = "abuse.triage"
 
 	// Enterprise (M6): SSO, SCIM, webhooks, domain verification, audit export.
 	ActionSSOConnectionSet    Action = "sso.connection_set"
@@ -88,6 +89,7 @@ func init() {
 		ActionReviewDecision, ActionFindingVerdict, ActionPolicyUpdate,
 		ActionAgentQuarantine, ActionAgentBlock, ActionAgentReinstate,
 		ActionAdvisoryPublish, ActionRulesetRelease, ActionAbuseReport,
+		ActionAbuseTriage,
 		ActionSSOConnectionSet, ActionSSOConnectionDelete, ActionSSOLogin,
 		ActionSCIMTokenCreate, ActionSCIMTokenRevoke, ActionSCIMUserProvision,
 		ActionSCIMUserDeactivate, ActionSCIMGroupSync,
