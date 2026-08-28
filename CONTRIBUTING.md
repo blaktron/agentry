@@ -73,7 +73,10 @@ Match the file you are editing. Beyond that:
 - no package-level mutable state;
 - document every exported symbol in `pkg/`;
 - comments explain constraints and *why*, not what the next line does;
-- conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`).
+- conventional commits (`feat:`, `fix:`, `perf:`, `security:`, `deps:`, `docs:`,
+  `refactor:`, `test:`, `ci:`, `chore:`) — release-please turns these into the
+  CHANGELOG, so the prefix is what appears (or is hidden) in release notes. A
+  `feat!:` or a `BREAKING CHANGE:` footer bumps the major version.
 
 ## Tests
 
@@ -102,3 +105,24 @@ Apache-2.0. Do not add dependencies under AGPL, and do not import rule content
 whose license restricts competing use — both would contaminate the
 distribution (PLAN §14.4, threat T-13). New dependencies need a line in the PR
 description explaining why an existing one will not do.
+
+## Releasing
+
+Releases are automated with [release-please](https://github.com/googleapis/release-please)
+(`.github/workflows/release-please.yaml`, `release-please-config.json`):
+
+1. Merges to `main` update a standing **release PR** that bumps the version
+   (per the conventional-commit types since the last release) and rewrites
+   `CHANGELOG.md`. Nothing is released while that PR sits open.
+2. Merging the release PR creates the `vX.Y.Z` tag and a GitHub release whose
+   body is the changelog.
+3. The tag triggers `release.yaml`, which runs the full check + attack-corpus
+   gate, then builds reproducible cross-platform binaries, an SPDX SBOM, and
+   keyless cosign signatures, and attaches them to the release. It **refuses
+   to release if the attack corpus gate is red** — the same bar publishers face.
+
+One operational prerequisite: the tag must be pushed with a token that can
+trigger workflows, or `release.yaml` will not fire. Store a fine-grained PAT
+or GitHub App token as the `RELEASE_PLEASE_TOKEN` secret (see the note atop
+`release-please.yaml`). Without it, the PR and changelog still work; push the
+tag manually to cut assets.
