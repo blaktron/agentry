@@ -1173,6 +1173,12 @@ export interface components {
             displayName: string;
             emailVerified: boolean;
             totpEnabled: boolean;
+            platformStaff?: boolean;
+            /** @description The caller's org memberships (present on GET /user only). */
+            orgs?: {
+                handle: string;
+                role: string;
+            }[];
             /** Format: date-time */
             createdAt: string;
         };

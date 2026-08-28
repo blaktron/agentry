@@ -37,6 +37,13 @@ SELECT count(*) FROM memberships WHERE org_id = $1 AND role = 'owner';
 -- name: ListUserMemberships :many
 SELECT m.org_id, m.role FROM memberships m WHERE m.user_id = $1;
 
+-- name: ListUserMembershipsWithHandles :many
+SELECT m.org_id, m.role, h.handle
+FROM memberships m
+JOIN handles h ON h.id = m.org_id
+WHERE m.user_id = $1
+ORDER BY h.handle;
+
 -- name: CreateTeam :one
 INSERT INTO teams (id, org_id, slug) VALUES ($1, $2, $3) RETURNING *;
 
