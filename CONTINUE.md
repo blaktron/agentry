@@ -1,8 +1,22 @@
 # Agentry — Continuation Brief
 
 **For:** the next builder agent (fresh context) picking up this build.
-**Written:** 2026-08-27, at the end of the first build session.
-**Repo:** `/Users/chrisdupres/Documents/ClaudeWorkspace/agentry` (git, 20 commits, clean tree, no remote).
+**Written:** 2026-08-27; **updated 2026-08-28** at the end of the second build session (web authed surface + T&S console + release-please).
+**Repo:** `/Users/chrisdupres/Documents/ClaudeWorkspace/agentry` (git, 25 commits, clean tree, no remote).
+
+## What changed in session 2 (2026-08-28) — read this first
+
+The two biggest remaining pieces from §4.1/§4.2 below are now **done**, plus all the deferred M5 authed UI. Commits `ee29afd`, `a365c43`, `a2da09b`, `b818fef`.
+
+- **Reviewer detail UI + T&S console (§10.1 Reviewer + Platform-staff rows)** — built. Findings w/ excerpt highlighting + verdict forms, archive **file viewer** with line-level finding overlays and invisible-Unicode revelation, **capability diff** vs previous published version, decision panel; staff console with abuse triage + quarantine/block/reinstate.
+- **All deferred M5 authed UI** — web sign-in, dashboard, org admin (members/teams/policy/SSO/SCIM/domains/webhooks/audit), user settings (profile/2FA/PATs), publish flow + **live progress**, new-agent wizard.
+- **Supporting API** (commit `ee29afd`): enriched review bundle, review-archive file endpoints (`/review-items/{id}/files` + `/file`), abuse triage endpoint + state filter, `GET /user` now returns `platformStaff` + `orgs[]`, report now carries `rulesetVersion`.
+- **release-please** wired (commit `b818fef`, DEV-013).
+- New deviations: **DEV-012** (web auth: SSR forms → route handlers, no client-side token, strict-CSP-clean), **DEV-013** (release-please authored not executed).
+- New acceptance script: **`scripts/acceptance/m8-console.sh`** — live sign-in through the web tier + every authed surface + a11y. Green.
+- Design note: the entire authed web surface is **server components + plain HTML forms → Next route handlers → API**, session held in httpOnly cookies, zero client-side auth JS (one tiny `Refresher` client component for live progress). See DEV-012 before changing it.
+
+**Remaining now:** external pen test 🧍, seed content (Q10), status page (operational), `security@`/`abuse@` (operational), and the §4.3 deferred-engineering list (unchanged; none are blockers). The §4.2 list below is fully done.
 
 ---
 
@@ -41,16 +55,17 @@ export AGENTRY_TEST_DATABASE_URL="$(./scripts/dev/pg.sh test-url)"
 
 ## 3. Current state: verified green
 
-Last full verification (all from a clean tree):
+Last full verification (session 2, all from a clean tree):
 
 ```
 go build ./...            OK
-go test ./...             15/15 packages ok
+go test ./...             all packages ok
 golangci-lint run ./...   0 issues
-9/9 acceptance scripts    m0 m1 m2 m3 m3-cli m4 m5 m6 m7 — all PASSED
+acceptance scripts        m0 m1 m2 m3 m3-cli m4 m5 m6 m7 + m8-console — all PASSED
+web: tsc --noEmit + next build OK (37 routes)
 ```
 
-Scale: **53k lines of Go** across 164 files, **165 test/fuzz functions**, 8 migrations, **79 OpenAPI operations**, 71 Terraform files, 8 web pages, 35 attack-corpus fixtures.
+Scale: ~54k lines of Go, **168 test/fuzz functions**, 8 migrations, **82 OpenAPI operations**, 71 Terraform files, **18 web pages + 19 route handlers**, 35 attack-corpus fixtures. 25 commits.
 
 ### Milestones M0–M7 are done; M8 is partial
 
@@ -61,10 +76,10 @@ Scale: **53k lines of Go** across 164 files, **165 test/fuzz functions**, 8 migr
 | M2 | Git hosting: smart HTTP v2, PAT auth, pre-receive policy hooks | `m2.sh` (21-case conformance vs real git CLI) |
 | M3 | Registry: versions, §7 state machine, deterministic tar.zst, resolve/download + CLI | `m3.sh`, `m3-cli.sh` |
 | M4 | **Security pipeline** S1–S10, gate, policy, review queue, DSSE signing | `m4.sh` (attack corpus 100% recall) |
-| M5 | Web UI: SSR public pages, sanitized rendering, FTS search | `m5.sh` (incl. axe-core a11y) |
+| M5 | Web UI: SSR public pages + **authed/reviewer/org-admin/staff surface** (session 2), sanitized rendering, FTS search | `m5.sh` + `m8-console.sh` |
 | M6 | Enterprise: SAML/OIDC, enforced SSO, SCIM, webhooks, audit export | `m6.sh` (12 criteria) |
 | M7 | AWS: 71 .tf modules+envs, Helm chart, dashboards/alarms | `m7.sh` (real `validate` on 14 roots) |
-| M8 | **PARTIAL** — see §4 below | — |
+| M8 | **PARTIAL** — T&S console + release-please done (session 2); remaining is pen test 🧍 + seed content (Q10) + operational. See §4 | `m8-console.sh` |
 
 ---
 
@@ -72,23 +87,24 @@ Scale: **53k lines of Go** across 164 files, **165 test/fuzz functions**, 8 migr
 
 ### 4.1 M8 / WG-L (the only incomplete workgroup)
 
-Already done: SECURITY.md, CONTRIBUTING.md (DCO), README, `docs/self-hosting.md` (<15-min quickstart), `docs/ops/runbooks.md` (all 10 §16.4 procedures), release workflow (reproducible builds + cosign + SBOM, refuses to release if the corpus gate is red), GDPR erasure flow (§12.7), abuse-report intake, 4 seed example agents in `examples/`.
+Already done: SECURITY.md, CONTRIBUTING.md (DCO + Releasing), README, `docs/self-hosting.md` (<15-min quickstart), `docs/ops/runbooks.md` (all 10 §16.4 procedures), release workflow (reproducible builds + cosign + SBOM, refuses to release if the corpus gate is red), **release-please automation** (session 2), GDPR erasure flow (§12.7), abuse-report intake + **T&S console UI** (session 2), 4 seed example agents in `examples/`.
 
 **Remaining, in suggested order:**
 
-1. **T&S console UI** — the API exists (`/platform/agents/{ns}/{name}/{action}`, `/review-queue?queue=platform`, abuse-report triage list); the *reviewer/staff web UI* is not built. This is the largest remaining piece and pairs with 4.2.
-2. **`release-please` changelog automation** — workflow scaffolding exists; wire the changelog/version PR bot.
-3. **Status page** — operational setup (external SaaS), plus `security@`/`abuse@` addresses live before launch (§16.5).
+1. ~~**T&S console UI**~~ — **DONE** (session 2, commit `a365c43`). `/staff`.
+2. ~~**`release-please` changelog automation**~~ — **DONE** (session 2, commit `b818fef`, DEV-013).
+3. **Status page** — operational setup (external SaaS), plus `security@`/`abuse@` addresses live before launch (§16.5). Not a code task.
 4. **Seed content** — 4 examples exist; PLAN §18.2 wants 10–20. **Blocked on Q10** (which agents, who writes them).
 5. **External pen test** 🧍 — human-scheduled; §17.5 scope: authz, git endpoints, SSRF, sandbox escape.
 
-### 4.2 Deferred UI from WG-I (M5) — API-complete, UI pending
+### 4.2 Deferred UI from WG-I (M5) — ✅ ALL DONE (session 2)
 
-All of these have working, tested APIs; only the pages are missing:
-- authed **dashboard** (my agents, review items assigned to me, activity)
-- **publish flow** with live pipeline progress (SSE or poll — CLI already polls)
-- **org admin** (members/teams, SSO config, SCIM tokens, policy editor, audit browser, domain verification)
-- **reviewer detail UI**: file tree + content viewer with finding overlays, invisible-char visualization, capability diff vs previous version, decision panel. (§10.1 "Reviewer" row — the highest-value remaining UI.)
+Every page below now exists (commits `a365c43` + `a2da09b`), each backed by the tested APIs:
+- ~~authed **dashboard**~~ → `/dashboard`
+- ~~**publish flow** with live pipeline progress~~ → `/{ns}/{name}/publish` + `.../versions/{v}/progress` (poll via a small `Refresher` client component)
+- ~~**org admin**~~ → `/orgs/{org}/admin` (members/teams, SSO, SCIM, policy editor, audit browser + export, domain verification, webhooks)
+- ~~**reviewer detail UI**~~ → `/review/{id}` (file tree + viewer with finding overlays + invisible-char visualization, capability diff vs previous version, decision panel) — the §10.1 "Reviewer" row.
+- Also added beyond the original list: `/login`, `/settings` (profile/2FA/PATs), `/new` (new-agent wizard).
 
 ### 4.3 Deferred engineering (each has a working seam; none are blockers)
 

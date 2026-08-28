@@ -17,7 +17,7 @@ Derived from [PLAN.md](PLAN.md) §18 (milestones) and §18.3 (ordering/paralleli
 | I — Web UI | M5 | ✅ public surface | `scripts/acceptance/m5.sh` (9 live SSR flows) |
 | J — Enterprise SSO/SCIM | M6 | ✅ complete | `scripts/acceptance/m6.sh` (12 criteria) |
 | K — AWS infra | M7 | ✅ complete | `scripts/acceptance/m7.sh` (71 .tf validate for real) |
-| L — Launch hardening | M8 | 🟡 partial | docs + GDPR + abuse intake done |
+| L — Launch hardening | M8 | 🟡 partial | docs + GDPR + abuse intake + T&S console + release-please done; pen test 🧍 + seed content (Q10) remain |
 
 Bugs the build itself surfaced and fixed (each with a regression test):
 
@@ -26,6 +26,8 @@ Bugs the build itself surfaced and fixed (each with a regression test):
 - **CLI fail-open** (DEV-011) — `agentry validate` printed PASSED after silently skipping S4 when the rule bundle failed to load. Bundle is now embedded; a load failure exits non-zero.
 - **Scope escalation** — a `repo:write`-only PAT could create `v*` tags (i.e. publish); tag creation now goes through the chokepoint with scopes.
 - **Silent rescan failure** — the sweep logged unreadable archives and returned nil, so a totally failed run looked clean. It now counts and reports.
+- **Fragile shared-DB test selection** (M8 console work) — `TestReviewApprovalFlow` grabbed `queue[len-1]` of the platform review queue, but that queue is shared across the whole test run (one migrated DB, no per-test truncation). New same-named review items from the console tests made it grab another author's item, so the author-self-approve assertion started passing a 204 instead of 403. Now selects its own item by namespace (the pattern the new `setupReviewItem` helper already used). A latent ordering dependency, surfaced the moment a second test wrote to the same queue.
+- **Web login cookie clobber** (M8 console work) — the login route handler appended the session via a raw `Set-Cookie` header *and* set the CSRF cookie via Next's `cookies` API; the two mechanisms don't compose and only the CSRF cookie survived, so every web sign-in silently produced a session-less browser. Caught by the acceptance script asserting both cookies land. Fixed by setting both through the one `cookies` API with the API's mirrored attributes.
 
 **Critical path:** WG-A → WG-B → (WG-D ∥ WG-G) → WG-E/WG-F → WG-H → WG-I → WG-L
 **Parallel lanes:** WG-C (git) after WG-B · WG-J (enterprise) after WG-B · WG-K (infra) after WG-A
@@ -251,7 +253,11 @@ Scope:
 
 Acceptance: M8 criteria incl. fresh-machine self-host quickstart < 15 min; runbooks reviewed (human).
 
-**Status: 🟡 in progress** — done: SECURITY.md (coordinated disclosure, scope oriented at gate-bypass/scanner-escape/signing-forgery, honest non-vulnerability limitations), CONTRIBUTING.md (DCO, the two load-bearing rules: route authz declarations + scanner fixtures w/ benign lookalikes), README (front door + status), docs/self-hosting.md (<15-min quickstart, config, policy choices, operator responsibilities), docs/ops/runbooks.md (all 10 §16.4 procedures incl. the ClawHavoc-scale quarantine wave and signing-key rotation), docs/rfcs template, release workflow (reproducible cross-platform builds, keyless cosign signatures, SPDX SBOM, refuses to release if the attack-corpus gate is red), GDPR erasure endpoint + flow test (§12.7: PII purged, credentials revoked, published versions yanked-not-deleted with digests intact, tombstone leak-free), abuse-report intake + staff triage list (§8.7). T&S console (commits ee29afd + a365c43): staff `/staff` console — platform-queue summary, abuse-report triage (state tabs, resolution required, audited `abuse.triage`), quarantine/block/reinstate enforcement forms; plus the abuse triage API and state-filtered listing. Remaining: status page setup (operational), pen test 🧍, seed content (needs Q10), release-please changelog automation, ruleset release console (release tooling exists as scripts; a web console for it is v1.1 scope).
+**Status: 🟡 in progress** — done: SECURITY.md (coordinated disclosure, scope oriented at gate-bypass/scanner-escape/signing-forgery, honest non-vulnerability limitations), CONTRIBUTING.md (DCO, the two load-bearing rules: route authz declarations + scanner fixtures w/ benign lookalikes), README (front door + status), docs/self-hosting.md (<15-min quickstart, config, policy choices, operator responsibilities), docs/ops/runbooks.md (all 10 §16.4 procedures incl. the ClawHavoc-scale quarantine wave and signing-key rotation), docs/rfcs template, release workflow (reproducible cross-platform builds, keyless cosign signatures, SPDX SBOM, refuses to release if the attack-corpus gate is red), GDPR erasure endpoint + flow test (§12.7: PII purged, credentials revoked, published versions yanked-not-deleted with digests intact, tombstone leak-free), abuse-report intake + staff triage list (§8.7). T&S console (commits ee29afd + a365c43): staff `/staff` console — platform-queue summary, abuse-report triage (state tabs, resolution required, audited `abuse.triage`), quarantine/block/reinstate enforcement forms; plus the abuse triage API and state-filtered listing.
+
+release-please (commit b818fef, DEV-013): `.github/workflows/release-please.yaml` + config + manifest + seeded CHANGELOG; conventional-commit-driven release PR → CHANGELOG → `vX.Y.Z` tag → the existing `release.yaml` builds/signs/publishes. Authored + syntax-validated, not executed here (needs the GitHub API). CONTRIBUTING gained a Releasing section documenting the `RELEASE_PLEASE_TOKEN` handoff gotcha.
+
+Remaining M8: status page setup (operational/external SaaS), external pen test 🧍, seed content (10–20 first-party agents, blocked on Q10), `security@`/`abuse@` addresses live before launch. Ruleset release **console** UI is v1.1 (release tooling exists as scripts). All §10.1 UI rows are now built.
 
 ---
 
