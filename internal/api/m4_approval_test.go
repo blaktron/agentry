@@ -45,14 +45,23 @@ func TestReviewApprovalFlow(t *testing.T) {
 	env.verifyEmail(staff)
 	env.makePlatformStaff(t, staff)
 	staffSess := env.login(staff)
+	// Select THIS test's item by namespace: the platform queue is shared
+	// across every test in the run (one migrated DB, no per-test cleanup), so
+	// blindly taking the last row grabs another test's item.
 	var queue []struct {
-		Id string `json:"id"`
+		Id        string `json:"id"`
+		Namespace string `json:"namespace"`
 	}
-	env.doJSON(staffSess, http.MethodGet, "/api/v1/review-queue?queue=platform", nil, &queue, http.StatusOK)
-	if len(queue) == 0 {
-		t.Fatal("no platform review item created")
+	env.doJSON(staffSess, http.MethodGet, "/api/v1/review-queue?queue=platform&limit=100", nil, &queue, http.StatusOK)
+	itemID := ""
+	for _, it := range queue {
+		if it.Namespace == author {
+			itemID = it.Id
+		}
 	}
-	itemID := queue[len(queue)-1].Id
+	if itemID == "" {
+		t.Fatal("no platform review item created for this author")
+	}
 
 	// Author cannot decide their own version (§12.2) — even as staff would,
 	// the author is not staff here, but assert the self-approve guard too by

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Badge, Card, KindBadge } from "@/components/ui";
 import type { Agent, ReviewItem } from "@/lib/api";
-import { authedGet, currentUser, reviewerOrgs } from "@/lib/session";
+import { adminOrgs, authedGet, currentUser, reviewerOrgs } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -44,10 +44,18 @@ export default async function DashboardPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-baseline justify-between">
         <h1 className="text-xl font-semibold">Dashboard</h1>
-        <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-          signed in as <strong>{user.handle}</strong>
-          {user.emailVerified ? "" : " · email not verified"}
-        </p>
+        <div className="flex items-baseline gap-3 text-sm">
+          <Link href="/new" className="underline">
+            New agent
+          </Link>
+          <Link href="/settings" className="underline">
+            Settings
+          </Link>
+          <span style={{ color: "var(--color-muted)" }}>
+            signed in as <strong>{user.handle}</strong>
+            {user.emailVerified ? "" : " · email not verified"}
+          </span>
+        </div>
       </div>
 
       {(user.platformStaff || revOrgs.length > 0) && (
@@ -85,6 +93,14 @@ export default async function DashboardPage() {
             <span className="text-sm font-normal" style={{ color: "var(--color-muted)" }}>
               {agents.length} agent{agents.length === 1 ? "" : "s"}
             </span>
+            {adminOrgs(user).some((o) => o.handle === ns) && (
+              <>
+                {" · "}
+                <Link href={`/orgs/${ns}/admin`} className="text-sm font-normal underline">
+                  admin
+                </Link>
+              </>
+            )}
           </h2>
           {agents.length === 0 ? (
             <p className="text-sm" style={{ color: "var(--color-muted)" }}>
@@ -101,6 +117,9 @@ export default async function DashboardPage() {
                   <KindBadge kind={a.kind} />
                   {a.visibility === "private" && <Badge>private</Badge>}
                   {a.quarantineState !== "none" && <Badge tone="danger">{a.quarantineState}</Badge>}
+                  <Link href={`/${a.namespace}/${a.name}/publish`} className="text-xs underline">
+                    publish
+                  </Link>
                   <span className="truncate" style={{ color: "var(--color-muted)" }}>
                     {a.summary}
                   </span>

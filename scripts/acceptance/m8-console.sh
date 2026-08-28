@@ -174,7 +174,67 @@ XO=$(curl -s -b "$JAR" -o /dev/null -w '%{http_code}' -X POST "$WEB/staff/agent-
 [ "$XO" = "403" ] || { echo "cross-origin form post not refused (got $XO)"; exit 1; }
 echo "access control (redirect, refusals, cross-origin 403): OK"
 
-# 8. Structural accessibility on the new authed pages.
+# 8. Org admin console: the author creates an org, and drives members,
+#    teams, policy, webhooks, domains, and an audit export through the web
+#    forms. (SSO/SCIM sections are owner-visible on the page; their round
+#    trips are covered by m6.sh at the API layer.)
+ORG="conorg$SFX"
+curl -fsS -b "$CJA" -H "X-Agentry-CSRF: $CSRFA" -X POST "$API/orgs" \
+  -H 'Content-Type: application/json' -d "{\"handle\":\"$ORG\",\"displayName\":\"Console Org\"}" >/dev/null
+# Sign the author in through the web tier for the admin console.
+JARA=$(mktemp)
+curl -fsS -c "$JARA" -o /dev/null -X POST "$WEB/login/submit" \
+  --data-urlencode "login=$AUTHOR" --data-urlencode "password=hunter2hunter2"
+
+checkao() { if curl -fsS -b "$JARA" "$WEB$1" | grep -q "$2"; then echo "  $3: OK"; else echo "  $3: FAILED (missing '$2' at $1)"; exit 1; fi; }
+checkao "/orgs/$ORG/admin" "Members"              "org admin (members section)"
+checkao "/orgs/$ORG/admin" "$AUTHOR"              "org admin (owner listed)"
+checkao "/orgs/$ORG/admin" "Publication policy"   "org admin (policy section)"
+
+# add a member
+register "conmemb$SFX"
+LOC=$(curl -fsS -b "$JARA" -o /dev/null -w '%{redirect_url}' -X POST "$WEB/orgs/$ORG/admin/members" \
+  --data-urlencode "action=set" --data-urlencode "handle=conmemb$SFX" --data-urlencode "role=member")
+echo "$LOC" | grep -q "ok=" && echo "  org admin: add member: OK" || { echo "add member failed: $LOC"; exit 1; }
+curl -fsS -b "$JARA" "$API/orgs/$ORG/members" | grep -q "conmemb$SFX" || { echo "member not persisted"; exit 1; }
+
+# tighten policy
+LOC=$(curl -fsS -b "$JARA" -o /dev/null -w '%{redirect_url}' -X POST "$WEB/orgs/$ORG/admin/policy" \
+  --data-urlencode 'policy={"maxAutoPublishSeverity":"info","requireHumanReview":"always"}')
+echo "$LOC" | grep -q "ok=" && echo "  org admin: tighten policy: OK" || { echo "policy save failed: $LOC"; exit 1; }
+# loosening is rejected
+LOC=$(curl -fsS -b "$JARA" -o /dev/null -w '%{redirect_url}' -X POST "$WEB/orgs/$ORG/admin/policy" \
+  --data-urlencode 'policy={"maxAutoPublishSeverity":"high"}')
+echo "$LOC" | grep -q "error=" && echo "  org admin: loosening policy rejected: OK" || { echo "loosening not rejected: $LOC"; exit 1; }
+
+# create team + webhook (webhook secret is shown once, as a page not a redirect)
+LOC=$(curl -fsS -b "$JARA" -o /dev/null -w '%{redirect_url}' -X POST "$WEB/orgs/$ORG/admin/teams" \
+  --data-urlencode "action=create" --data-urlencode "slug=reviewers")
+echo "$LOC" | grep -q "ok=" && echo "  org admin: create team: OK" || { echo "team create failed: $LOC"; exit 1; }
+curl -fsS -b "$JARA" -X POST "$WEB/orgs/$ORG/admin/webhooks" \
+  --data-urlencode "action=create" --data-urlencode "url=https://hooks.example.com/x" \
+  --data-urlencode "events=version.published" | grep -q "shown once" \
+  && echo "  org admin: webhook secret shown once: OK" || { echo "webhook create page missing"; exit 1; }
+
+# audit export
+LOC=$(curl -fsS -b "$JARA" -o /dev/null -w '%{redirect_url}' -X POST "$WEB/orgs/$ORG/admin/audit")
+echo "$LOC" | grep -q "export=" && echo "  org admin: audit export started: OK" || { echo "audit export failed: $LOC"; exit 1; }
+
+# 9. Settings: create a PAT (shown once) and revoke it.
+curl -fsS -b "$JARA" -X POST "$WEB/settings/tokens" \
+  --data-urlencode "action=create" --data-urlencode "name=web-pat" --data-urlencode "scopes=agent:read" \
+  | grep -q "agy_" && echo "  settings: PAT shown once on creation: OK" || { echo "PAT create page missing token"; exit 1; }
+checkao "/settings" "Personal access tokens" "settings page renders"
+
+# 10. Publish flow: submit a git tag through the web form and watch progress.
+#     Reuse the author's repo (gated agent already has a v1.0.0 tag pushed by
+#     the CLI publish above), so submitting v1.0.0 again is a duplicate — we
+#     instead assert the publish page renders and the progress page tracks the
+#     existing version's terminal state.
+checkao "/$AUTHOR/gated/publish" "Submit a repo tag" "publish page renders"
+checkao "/$AUTHOR/gated/versions/1.0.0/progress" "Verdict" "progress page shows verdict"
+
+# 11. Structural accessibility on all new authed pages.
 echo "accessibility (authed pages, signed-in):"
 python3 ./scripts/dev/a11y-check.py --cookie-jar "$JAR" \
   "$WEB/login" \
@@ -183,5 +243,11 @@ python3 ./scripts/dev/a11y-check.py --cookie-jar "$JAR" \
   "$WEB/review/$ITEM" \
   "$WEB/review/$ITEM?file=SKILL.md" \
   "$WEB/staff"
+python3 ./scripts/dev/a11y-check.py --cookie-jar "$JARA" \
+  "$WEB/orgs/$ORG/admin" \
+  "$WEB/settings" \
+  "$WEB/new" \
+  "$WEB/$AUTHOR/gated/publish" \
+  "$WEB/$AUTHOR/gated/versions/1.0.0/progress"
 
 echo "== M8 console acceptance PASSED =="
