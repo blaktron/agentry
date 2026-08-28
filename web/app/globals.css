@@ -62,7 +62,7 @@ body {
 
 /* Invisible-character placeholders the API emits in finding excerpts /
    README (§10.3 GlassWorm lesson): make them impossible to miss. */
-.readme .agy-invisible, .excerpt .agy-invisible {
+.readme .agy-invisible, .excerpt .agy-invisible, .codeview .agy-invisible {
   background: var(--color-sev-high);
   color: #fff;
   border-radius: 3px;

@@ -1258,7 +1258,14 @@ type User struct {
 	EmailVerified bool               `json:"emailVerified"`
 	Handle        string             `json:"handle"`
 	Id            openapi_types.UUID `json:"id"`
-	TotpEnabled   bool               `json:"totpEnabled"`
+
+	// Orgs The caller's org memberships (present on GET /user only).
+	Orgs *[]struct {
+		Handle string `json:"handle"`
+		Role   string `json:"role"`
+	} `json:"orgs,omitempty"`
+	PlatformStaff *bool `json:"platformStaff,omitempty"`
+	TotpEnabled   bool  `json:"totpEnabled"`
 }
 
 // VersionStatus Publication state machine states (§7).

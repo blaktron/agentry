@@ -1,12 +1,55 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
+import { currentUser, reviewerOrgs } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: { default: "Agentry", template: "%s · Agentry" },
   description:
     "A registry and git host for single-purpose AI agents, with mandatory pre-publication security scanning and signed provenance.",
 };
+
+// AccountNav renders the signed-in identity area of the header. Reading the
+// session cookie makes routes render dynamically — the fetch cache still
+// serves the public-page API data, so this costs a render, not the backend.
+async function AccountNav() {
+  const user = await currentUser();
+  if (!user) {
+    return (
+      <Link href="/login" className="text-sm font-medium hover:underline">
+        Sign in
+      </Link>
+    );
+  }
+  const showReview = user.platformStaff || reviewerOrgs(user).length > 0;
+  return (
+    <div className="flex items-center gap-3 text-sm">
+      <Link href="/dashboard" className="hover:underline">
+        Dashboard
+      </Link>
+      {showReview && (
+        <Link href="/review" className="hover:underline">
+          Review
+        </Link>
+      )}
+      {user.platformStaff && (
+        <Link href="/staff" className="hover:underline">
+          Staff
+        </Link>
+      )}
+      <form method="post" action="/logout">
+        <button
+          type="submit"
+          className="rounded-md border px-2 py-1 text-xs"
+          style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}
+          title={`Signed in as ${user.handle}`}
+        >
+          Sign out ({user.handle})
+        </button>
+      </form>
+    </div>
+  );
+}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -33,6 +76,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
               />
             </form>
+            <AccountNav />
           </div>
         </header>
         <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>

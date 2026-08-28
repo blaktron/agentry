@@ -27,11 +27,26 @@ func (s *Server) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 		problemNotFound(w, r)
 		return
 	}
-	writeJSON(w, http.StatusOK, User{
+	u := User{
 		Id: row.ID, Handle: row.Handle, Email: row.Email,
 		DisplayName: row.DisplayName, EmailVerified: row.EmailVerifiedAt != nil,
 		TotpEnabled: row.TotpEnabled, CreatedAt: row.CreatedAt,
-	})
+		PlatformStaff: &row.PlatformStaff,
+	}
+	if ms, err := s.q().ListUserMembershipsWithHandles(r.Context(), p.UserID); err == nil {
+		orgs := make([]struct {
+			Handle string `json:"handle"`
+			Role   string `json:"role"`
+		}, 0, len(ms))
+		for _, m := range ms {
+			orgs = append(orgs, struct {
+				Handle string `json:"handle"`
+				Role   string `json:"role"`
+			}{Handle: m.Handle, Role: m.Role})
+		}
+		u.Orgs = &orgs
+	}
+	writeJSON(w, http.StatusOK, u)
 }
 
 // UpdateCurrentUser implements PATCH /user.

@@ -124,3 +124,48 @@ export interface SearchResult {
   facets?: Record<string, Record<string, number>>;
   nextCursor?: string;
 }
+
+// --- Review + console types (§10.1 reviewer / staff surfaces) ---
+
+export interface ReviewItem {
+  id: string;
+  queue: "platform" | "org";
+  state: "pending" | "approved" | "rejected";
+  version: string;
+  agent: string;
+  namespace: string;
+  createdAt?: string;
+}
+
+export interface ReviewBundle {
+  item: ReviewItem;
+  findings: ScanFinding[];
+  versionDetail?: AgentVersion;
+  previous?: AgentVersion;
+  manifest?: Record<string, unknown>;
+  report?: ScanReport;
+}
+
+export interface ReviewFileEntry {
+  path: string;
+  size: number;
+}
+
+export interface ReviewFileContent {
+  path: string;
+  size: number;
+  binary: boolean;
+  truncated: boolean;
+  content?: string;
+}
+
+export interface AbuseReport {
+  id: string;
+  namespace: string;
+  agent: string;
+  version?: string;
+  category: string;
+  detail: string;
+  state: "open" | "triaged" | "actioned" | "dismissed";
+  createdAt: string;
+}

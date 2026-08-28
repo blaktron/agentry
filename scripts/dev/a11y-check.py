@@ -6,7 +6,10 @@ regressions that actually happen in review: a lost landmark, a second <h1>,
 an unlabelled search input, a link with no accessible name. Runs with no
 browser so it can gate CI.
 
-Usage: a11y-check.py URL [URL ...]
+Usage: a11y-check.py [--cookie-jar JAR] URL [URL ...]
+
+--cookie-jar reads a curl/Netscape-format jar so authed pages (dashboard,
+review, staff console) are audited signed-in.
 """
 import re
 import sys
@@ -71,8 +74,25 @@ class Audit(HTMLParser):
                 stack[-1][1] += data
 
 
-def audit(url):
-    with urllib.request.urlopen(url, timeout=20) as r:  # noqa: S310 - local test URL
+def read_jar(path):
+    """Return a Cookie header value from a curl/Netscape cookie jar."""
+    pairs = []
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            fields = line.split("\t")
+            if len(fields) >= 7:
+                pairs.append(f"{fields[5]}={fields[6]}")
+    return "; ".join(pairs)
+
+
+def audit(url, cookie=None):
+    req = urllib.request.Request(url)  # noqa: S310 - local test URL
+    if cookie:
+        req.add_header("Cookie", cookie)
+    with urllib.request.urlopen(req, timeout=20) as r:  # noqa: S310 - local test URL
         html = r.read().decode("utf-8", "replace")
     p = Audit()
     p.feed(html)
@@ -109,8 +129,13 @@ def audit(url):
 
 def main() -> int:
     failed = False
-    for url in sys.argv[1:]:
-        problems = audit(url)
+    args = sys.argv[1:]
+    cookie = None
+    if args and args[0] == "--cookie-jar":
+        cookie = read_jar(args[1])
+        args = args[2:]
+    for url in args:
+        problems = audit(url, cookie)
         if problems:
             failed = True
             print(f"  {url}: FAILED")

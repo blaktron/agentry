@@ -361,6 +361,40 @@ func (q *Queries) ListUserMemberships(ctx context.Context, userID uuid.UUID) ([]
 	return items, nil
 }
 
+const listUserMembershipsWithHandles = `-- name: ListUserMembershipsWithHandles :many
+SELECT m.org_id, m.role, h.handle
+FROM memberships m
+JOIN handles h ON h.id = m.org_id
+WHERE m.user_id = $1
+ORDER BY h.handle
+`
+
+type ListUserMembershipsWithHandlesRow struct {
+	OrgID  uuid.UUID `json:"org_id"`
+	Role   string    `json:"role"`
+	Handle string    `json:"handle"`
+}
+
+func (q *Queries) ListUserMembershipsWithHandles(ctx context.Context, userID uuid.UUID) ([]ListUserMembershipsWithHandlesRow, error) {
+	rows, err := q.db.Query(ctx, listUserMembershipsWithHandles, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUserMembershipsWithHandlesRow
+	for rows.Next() {
+		var i ListUserMembershipsWithHandlesRow
+		if err := rows.Scan(&i.OrgID, &i.Role, &i.Handle); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUserTeamIDs = `-- name: ListUserTeamIDs :many
 SELECT team_id FROM team_members WHERE user_id = $1
 `

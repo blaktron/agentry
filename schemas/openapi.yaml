@@ -2024,6 +2024,19 @@ components:
           type: boolean
         totpEnabled:
           type: boolean
+        platformStaff:
+          type: boolean
+        orgs:
+          description: The caller's org memberships (present on GET /user only).
+          type: array
+          items:
+            type: object
+            required: [handle, role]
+            properties:
+              handle:
+                type: string
+              role:
+                type: string
         createdAt:
           type: string
           format: date-time
