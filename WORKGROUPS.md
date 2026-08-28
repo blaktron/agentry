@@ -186,7 +186,7 @@ Scope:
 
 Acceptance: attack-corpus gate green (100% recall, no benign regressions); state-machine property tests (no path to `published` skipping gate incl. scanner error); attestation verified offline by CLI; policy tighten-only property test.
 
-**Status: ⏳ not started**
+**Status: ✅ core complete** — commit f1d6185. Orchestrator DAG (S1 → S2/S3-S4/S5/S6/S7/S8 in parallel → S9 → S10) with per-stage timeouts, panic isolation, a 30-min scan cap, and fail-closed behaviour (any stage error becomes S0/pipeline-error forcing review, §7). All ten stages implemented; gate §8.5 + tighten-only policy engine §8.6; review queue + finding verdicts with platform-staff/org-reviewer gating and author-cannot-self-approve; DSSE/in-toto ECDSA P-256 signing (D-16) + well-known keys + offline verify; hardened+fuzzed extractor; rescan/quarantine/advisories §8.7; Postgres SKIP-LOCKED queue behind queue.Client + worker role. Acceptance: `scripts/acceptance/m4.sh` (7 criteria incl. the attack-corpus gate at 100% recall / no benign regressions). Deferred: DEV-005 (River), DEV-006 (gitleaks/opengrep/osv native fallbacks), DEV-007 (bedrock/anthropic judge stubs).
 
 ---
 
@@ -202,7 +202,7 @@ Scope:
 
 Acceptance: Playwright five §2.3 flows; XSS corpus rendered safe; Lighthouse a11y ≥ 90 public pages.
 
-**Status: ⏳ not started**
+**Status: ✅ core complete** — commit 7268999 (+ 64974ef advisories page, cb89938 a11y automation). Next.js 16 App Router SSR: home, search w/ facets, agent page (capability badges + security report card + install snippet), version page (report + provenance), namespace, trust, advisories, docs. Server-side sanitized rendering only (goldmark+bluemonday in internal/render; the browser never parses user markdown), CSP without inline script, invisible-Unicode rendered as visible placeholders (§10.3 GlassWorm lesson). Postgres FTS search (§10.4). Acceptance: `scripts/acceptance/m5.sh` incl. an automated axe-core a11y pass that caught and fixed a duplicate-h1. Deferred: authed dashboards, publish-flow live progress UI, org admin UI, reviewer finding-overlay UI (API-complete, UI pending).
 
 ---
 
@@ -219,7 +219,7 @@ Scope:
 
 Acceptance: M6 criteria — SSO test suite green incl. replay/audience negatives; SCIM deactivate <60s test; webhook SSRF guard tests; manual Okta+Entra checklist doc.
 
-**Status: ⏳ not started**
+**Status: ✅ complete** — commit fa54dc9. SAML 2.0 SP (crewjam/saml, DEV-008) + replay cache; OIDC RP (coreos/go-oidc, PKCE, issuer pinning); per-org connection CRUD, metadata/ACS/start/callback; JIT provisioning gated on domain-verified email (T-12); enforced SSO folded into the single authorize() chokepoint (session sso_tags freshness OR org-bound PAT, 90-day cap, mintable only from an SSO-fresh session); SCIM 2.0 Users+Groups→teams with deactivate revoking org-bound PATs and sessions in-request; domain TXT verification behind a resolver interface; webhooks with HMAC + a real SSRF guard (per-attempt re-resolution, all resolved IPs must be public unicast, dials the verified IP to defeat DNS rebinding, no redirects); async audit export to NDJSON. Acceptance: `scripts/acceptance/m6.sh` (12 criteria incl. every SAML negative). Deferred: Single Logout (documented §12.4 limitation), manual Okta/Entra checklist 🧍, five further webhook emit sites.
 
 ---
 
