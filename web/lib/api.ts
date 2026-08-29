@@ -2,6 +2,7 @@
 // public pages are SSR). The base URL is server-only — the browser never
 // calls the API directly, so private data and auth stay on the server.
 import "server-only";
+import type { components } from "./api/schema.d.ts";
 
 const API_BASE = (process.env.AGENTRY_API_BASE ?? "http://localhost:8080").replace(/\/$/, "");
 
@@ -28,6 +29,42 @@ export async function apiGetWellKnown<T>(path: string, opts?: { revalidate?: num
   });
   if (!res.ok) return null;
   return (await res.json()) as T;
+}
+
+// SOCIAL_PROVIDERS is the §12.1 individual-login provider list. Each entry's
+// start endpoint lives on the API under /api/v1, i.e. same-origin with this
+// app in every deployment that fronts both (deploy/helm ingress `apiPaths`).
+export const SOCIAL_PROVIDERS: { id: string; label: string }[] = [
+  { id: "google", label: "Google" },
+  { id: "github", label: "GitHub" },
+];
+
+// enabledSocialProviders asks the API which social providers this deployment
+// actually offers.
+//
+// There is no discovery document for this: /meta's feature flags cover
+// judge/signing/redis/s3 only. The honest probe is the endpoint itself — an
+// unconfigured provider answers 404 by design (DEV-019), a configured one
+// redirects. Anything else (5xx, or a 429 from the shared login limiter) is
+// read as "do not offer", so a broken provider shows no button rather than a
+// dead one. Cached for an hour because /auth/oidc/{p}/start shares the
+// per-IP login rate-limit bucket with the sign-in form, and this whole tier
+// is a single IP to the API.
+export async function enabledSocialProviders(): Promise<string[]> {
+  const results = await Promise.all(
+    SOCIAL_PROVIDERS.map(async (p) => {
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/auth/oidc/${p.id}/start`, {
+          redirect: "manual",
+          next: { revalidate: 3600 },
+        });
+        return res.status >= 300 && res.status < 400 ? p.id : null;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return results.filter((id): id is string => id !== null);
 }
 
 // apiGetText fetches a text/HTML endpoint (the sanitized README, §10.3).
@@ -89,6 +126,10 @@ export interface ScanFinding {
   lineEnd?: number;
   excerpt?: string;
   verdict: "open" | "confirmed" | "dismissed_false_positive" | "dismissed_accepted_risk";
+  // Why a reviewer dismissed or confirmed this finding. §8.5: a dismissed
+  // finding stays on the public report WITH its rationale — a finding that
+  // vanishes without explanation is what the report exists to prevent.
+  verdictReason?: string;
 }
 
 export interface ScanReport {
@@ -98,6 +139,8 @@ export interface ScanReport {
   reportDigest?: string;
   judgeModel?: string;
   scanStatus?: string;
+  // When this scan run completed — the date the report describes (§10.2).
+  finishedAt?: string;
   findingCounts?: Record<string, number>;
   findings: ScanFinding[];
 }
@@ -117,13 +160,23 @@ export interface Advisory {
   publishedAt?: string;
 }
 
-// SearchResult mirrors the /search endpoint (added with the render/search
-// backend work; the page degrades gracefully if the endpoint is absent).
-export interface SearchResult {
-  results: Agent[];
-  facets?: Record<string, Record<string, number>>;
-  nextCursor?: string;
-}
+// --- Types taken straight from the generated OpenAPI schema. `import type`
+// is erased at compile time, so this costs nothing at runtime and cannot
+// drift from schemas/openapi.yaml the way the hand-written interfaces above
+// can. New surfaces should be added here, not duplicated by hand. ---
+
+export type SearchHit = components["schemas"]["SearchHit"];
+export type SearchResults = components["schemas"]["SearchResults"];
+export type TagPage = components["schemas"]["TagPage"];
+export type AgentStats = components["schemas"]["AgentStats"];
+export type ActivityEvent = components["schemas"]["ActivityEvent"];
+export type ActivityPage = components["schemas"]["ActivityPage"];
+export type AgentGrant = components["schemas"]["AgentGrant"];
+export type AgentRole = components["schemas"]["AgentRole"];
+export type AuditEvent = components["schemas"]["AuditEvent"];
+export type AuditPage = components["schemas"]["AuditPage"];
+export type Org = components["schemas"]["Org"];
+export type WebhookDelivery = components["schemas"]["WebhookDelivery"];
 
 // --- Review + console types (§10.1 reviewer / staff surfaces) ---
 

@@ -1,11 +1,10 @@
 // POST /login/submit — exchange credentials for a session at the API and
-// mirror its cookie to the browser. The API's Set-Cookie is forwarded
-// verbatim (same attributes it chose: httpOnly, SameSite=Lax, Secure per
-// deployment); the CSRF token rides a second httpOnly cookie that only this
-// web tier ever reads.
+// mirror its cookie to the browser (see establishSession in lib/forms.ts).
+// The CSRF token rides a second httpOnly cookie that only this web tier
+// ever reads.
 import { NextRequest, NextResponse } from "next/server";
-import { API_BASE, CSRF_COOKIE, SESSION_COOKIE } from "@/lib/session";
-import { redirectBack, safeNext, sameOrigin } from "@/lib/forms";
+import { API_BASE } from "@/lib/session";
+import { establishSession, redirectBack, safeNext, sameOrigin } from "@/lib/forms";
 
 export async function POST(req: NextRequest) {
   if (!sameOrigin(req)) {
@@ -49,27 +48,9 @@ export async function POST(req: NextRequest) {
   }
 
   const { csrfToken } = (await res.json()) as { csrfToken: string };
-  const setCookies = res.headers.getSetCookie();
-  const sessionCookie = setCookies.find((c) => c.startsWith(`${SESSION_COOKIE}=`));
-  const sessionValue = sessionCookie?.split(";")[0]?.split("=").slice(1).join("=");
-  if (!sessionCookie || !sessionValue || !csrfToken) {
+  const out = NextResponse.redirect(new URL(next, req.nextUrl.origin), 303);
+  if (!establishSession(res, csrfToken, out)) {
     return redirectBack(req, "/login", { error: "sign-in succeeded but no session was issued" });
   }
-
-  // Re-set both cookies through one mechanism (mixing raw Set-Cookie appends
-  // with the cookies API loses one of them), mirroring the attributes the
-  // API chose: lifetime, HttpOnly, SameSite=Lax, and Secure per deployment.
-  const maxAge = /Max-Age=(\d+)/i.exec(sessionCookie)?.[1];
-  const secure = /;\s*Secure/i.test(sessionCookie);
-  const attrs = {
-    httpOnly: true,
-    sameSite: "lax" as const,
-    path: "/",
-    secure,
-    ...(maxAge ? { maxAge: Number(maxAge) } : {}),
-  };
-  const out = NextResponse.redirect(new URL(next, req.nextUrl.origin), 303);
-  out.cookies.set(SESSION_COOKIE, sessionValue, attrs);
-  out.cookies.set(CSRF_COOKIE, csrfToken, attrs);
   return out;
 }

@@ -14,7 +14,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   if (!STATES.has(state)) {
     return redirectBack(req, "/staff", { error: "unknown triage state" });
   }
-  const res = await apiSend("POST", `/platform/abuse-reports/${id}`, { state, resolution });
+  const res = await apiSend("POST", `/platform/abuse-reports/${encodeURIComponent(id)}`, {
+    state,
+    resolution,
+  });
   if (!res.ok) {
     return redirectBack(req, "/staff", { error: await problemDetail(res) });
   }
