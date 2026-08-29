@@ -8,7 +8,7 @@ GO      ?= go
 BIN_DIR := bin
 LDFLAGS := -X github.com/PLACEHOLDER_ORG/agentry/internal/version.Version=$(shell git describe --tags --always --dirty 2>/dev/null || echo 0.0.0-dev)
 
-.PHONY: all build test lint vuln generate generate-check check dev db-up db-down clean web-install web-check e2e
+.PHONY: all build test lint vuln generate generate-check check dev db-up db-down clean web-install web-check e2e sync-rules sync-rules-check fuzz deps-audit
 
 all: build
 
@@ -46,8 +46,32 @@ generate-check: generate
 	@if ! git diff --quiet -- internal/api/openapi_gen.go pkg/apiclient/client_gen.go internal/store/gen web/lib/api; then \
 	  echo "generated code is stale — run 'make generate' and commit"; git --no-pager diff --stat; exit 1; fi
 
+## sync-rules: copy the canonical /rules bundle into the embeddable copy
+# go:embed cannot reach outside a package directory, so the bundle exists
+# twice. CONTINUE.md and DEV-011 both name this target; it did not exist
+# until now, which meant the drift check nothing ran was also unrunnable.
+sync-rules:
+	./scripts/dev/sync-rules.sh
+
+## sync-rules-check: fail if the embedded ruleset copy has drifted
+sync-rules-check:
+	./scripts/dev/sync-rules.sh --check
+
+## fuzz: run each §17.5 fuzz target briefly (the committed corpora always run
+## as ordinary tests; this exercises the mutator)
+fuzz:
+	$(GO) test ./internal/scan   -run FuzzExtract  -fuzz FuzzExtract  -fuzztime $(FUZZTIME)
+	$(GO) test ./pkg/manifest    -run FuzzParse    -fuzz FuzzParse    -fuzztime $(FUZZTIME)
+	$(GO) test ./internal/render -run FuzzSanitize -fuzz FuzzSanitize -fuzztime $(FUZZTIME)
+FUZZTIME ?= 30s
+
+## deps-audit: our own dependency hygiene (§17.5, T-13)
+deps-audit:
+	$(GO) run github.com/google/osv-scanner/v2/cmd/osv-scanner@latest scan source -r .
+	$(GO) run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
 ## check: the full local/CI gate
-check: generate-check lint test build
+check: generate-check sync-rules-check lint test build
 
 ## dev: boot the dev stack (compose when docker exists, else local pg) and run agentryd all
 dev:

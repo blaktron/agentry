@@ -1,0 +1,2 @@
+go test fuzz v1
+string("<scr\x00ipt>alert(1)</scr\x00ipt>")

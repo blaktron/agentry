@@ -1,0 +1,2 @@
+go test fuzz v1
+string("<form action=https://evil.example><input name=x>")

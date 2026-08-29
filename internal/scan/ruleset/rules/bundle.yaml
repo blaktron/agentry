@@ -1,13 +1,15 @@
 # Agentry S4 injection-signature rule bundle (PLAN §8.3, shipped as
 # ruleset_releases). This manifest gives the bundle its semantic version,
 # which is recorded on every scan_run and pinned in the CLI release (D-12).
-version: "0.1.0"
+version: "0.2.0"
 notes: >
-  Initial v1 signature set: six families from the §8.3 S4 row
+  v1 signature set: the six families from the §8.3 S4 row
   (instruction-override, exfiltration, tool-coercion, credential-harvest,
-  persistence, obfuscation). Every rule ships with match and non-match
-  fixtures; benign lookalikes (security docs that merely discuss an attack)
-  must not match, per §17.3.
+  persistence, obfuscation) plus `destructive`, added in 0.2.0 for the
+  Amazon Q wiper shape (Appendix A) — a natural-language order to destroy
+  data, which none of the original six matches. Every rule ships with match
+  and non-match fixtures; benign lookalikes (security docs that merely
+  discuss an attack) must not match, per §17.3.
 
 # Bundle-level suppressions, applied to every rule in addition to its own
 # (§17.3 precision requirement). These capture DESCRIPTIVE FRAMING: prose that
