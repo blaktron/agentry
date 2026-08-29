@@ -2401,6 +2401,13 @@ components:
         verdict:
           type: string
           enum: [open, confirmed, dismissed_false_positive, dismissed_accepted_risk]
+        verdictReason:
+          type: string
+          description: >-
+            Why a reviewer dismissed or confirmed this finding. Dismissed
+            findings stay on the public report WITH their rationale (PLAN
+            §8.5) — a finding that vanishes without explanation is exactly
+            what the report exists to prevent.
 
     ScanReport:
       type: object
@@ -2419,6 +2426,10 @@ components:
           type: string
         scanStatus:
           type: string
+        finishedAt:
+          type: string
+          format: date-time
+          description: When this scan run completed — the date the report describes.
         findingCounts:
           type: object
           additionalProperties:

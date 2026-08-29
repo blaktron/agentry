@@ -12,12 +12,18 @@ import (
 	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/scan"
 	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
 )
 
 // Upload limits for cli-upload archives (§19: 10 MB post-filter; accept a
-// little padding for the container itself).
-const maxUploadBytes = 12 << 20
+// little padding for the container itself). maxUploadBytes caps the whole
+// request body; multipartMemoryBytes is only how much of it net/http may hold
+// in memory before spooling.
+const (
+	maxUploadBytes       = 12 << 20
+	multipartMemoryBytes = 1 << 20
+)
 
 func versionToAPI(v registry.Version) AgentVersion {
 	out := AgentVersion{
@@ -68,6 +74,15 @@ func (s *Server) writeSubmitError(w http.ResponseWriter, r *http.Request, err er
 			fields = append(fields, FieldError{Field: "manifest", Message: iss.Error()})
 		}
 		problemValidation(w, r, "submission rejected", fields...)
+	case errors.Is(err, registry.ErrTwoFactorRequired):
+		problemForbidden(w, r, "enable two-factor authentication before publishing to a public namespace (§12.1, §19)")
+	case errors.Is(err, registry.ErrScanNotScheduled):
+		// The version row exists and is in `scanning`; the watchdog will route
+		// it to review. Say so rather than implying nothing happened.
+		s.log.Error("submit version: scan not scheduled", "err", err)
+		writeProblem(w, r, http.StatusServiceUnavailable, "scan-not-scheduled",
+			"Scan could not be started",
+			"the version was recorded but its security scan could not be scheduled; it will be routed to human review")
 	case errors.Is(err, registry.ErrDenied):
 		problemValidation(w, r, err.Error())
 	case errors.Is(err, auth.ErrUnauthorized):
@@ -136,11 +151,28 @@ func (s *Server) SubmitVersion(w http.ResponseWriter, r *http.Request, ns Namesp
 // submitUpload handles the cli-upload source: unpack, then hand the
 // workspace to the registry which re-validates and re-packs (§6.5).
 func (s *Server) submitUpload(w http.ResponseWriter, r *http.Request, p *auth.Principal, a registry.Agent) (registry.Version, error) {
-	if err := r.ParseMultipartForm(maxUploadBytes); err != nil {
+	// Cap the BODY, not just the in-memory part. ParseMultipartForm's argument
+	// is only the memory budget: everything past it spools to disk, so an
+	// unbounded body let an authenticated client fill the server's temp
+	// filesystem before a single byte was validated.
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
+	if err := r.ParseMultipartForm(multipartMemoryBytes); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeProblem(w, r, http.StatusRequestEntityTooLarge, "upload-too-large",
+				"Upload too large",
+				fmt.Sprintf("release archives are capped at %d bytes (§19)", maxUploadBytes))
+			return registry.Version{}, nil
+		}
 		problemValidation(w, r, "invalid multipart upload: "+err.Error())
 		return registry.Version{}, nil
 	}
-	file, _, err := r.FormFile("archive")
+	defer func() {
+		if r.MultipartForm != nil {
+			_ = r.MultipartForm.RemoveAll()
+		}
+	}()
+	file, hdr, err := r.FormFile("archive")
 	if err != nil {
 		problemValidation(w, r, "archive part required")
 		return registry.Version{}, nil
@@ -153,10 +185,18 @@ func (s *Server) submitUpload(w http.ResponseWriter, r *http.Request, p *auth.Pr
 	}
 	defer func() { _ = os.RemoveAll(ws) }()
 
-	if err := registry.ExtractArchive(io.LimitReader(file, maxUploadBytes), ws, 5<<20, 10<<20); err != nil {
+	// One hardened extractor for untrusted archives (§8.2). registry's older
+	// unpacker checked traversal and sizes but not file COUNT, not the
+	// compression ratio, and did not bound decoder memory — so an upload was
+	// unpacked under weaker rules than the scanner would later apply to the
+	// very same bytes.
+	if err := scan.Extract(file, ws, hdr.Size, scan.DefaultLimits()); err != nil {
 		problemValidation(w, r, "archive rejected: "+err.Error())
 		return registry.Version{}, nil
 	}
+	// The server rebuilds the archive from this workspace and its own digest
+	// is authoritative; a claimed digest that disagrees fails validation
+	// inside SubmitVersion (§6.5 — never trust client packing).
 	return s.reg.SubmitVersion(r.Context(), p, a, registry.SubmitInput{
 		Source:        "cli-upload",
 		Workspace:     ws,
@@ -269,6 +309,13 @@ func (s *Server) DownloadVersion(w http.ResponseWriter, r *http.Request, ns Name
 	if !ok {
 		return
 	}
+	// Agent-level block short-circuits every version (§7 blocked: downloads
+	// return 410). Blocking walks the versions too; this catches the case
+	// where a scan finishes and publishes a version after the block landed.
+	if a.QuarantineState == "blocked" {
+		writeProblem(w, r, http.StatusGone, "blocked", "Agent blocked", "disabled by trust & safety (§7)")
+		return
+	}
 	switch registry.Status(v.Status) {
 	case registry.StatusPublished:
 	case registry.StatusYanked:
@@ -331,6 +378,10 @@ func (s *Server) ResolveRef(w http.ResponseWriter, r *http.Request, params Resol
 	}
 	res, err := s.reg.ResolveVersion(r.Context(), a, ref.Range, channel)
 	if err != nil {
+		if errors.Is(err, registry.ErrBlocked) {
+			writeProblem(w, r, http.StatusGone, "blocked", "Agent blocked", "disabled by trust & safety (§7)")
+			return
+		}
 		if errors.Is(err, registry.ErrNoMatch) {
 			problemNotFound(w, r)
 			return

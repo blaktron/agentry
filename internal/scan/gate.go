@@ -27,6 +27,11 @@ type GateInput struct {
 	WildcardEgress bool
 	// Public marks a public agent (platform review queue for high, §8.6).
 	Public bool
+	// NamespaceIsOrg marks an agent in an ORG namespace. Only those have an
+	// org queue and an org security_reviewer to staff it; a personal-namespace
+	// agent routed to "org" produces a review item with no org, which no
+	// listing shows and no principal can decide (§8.6).
+	NamespaceIsOrg bool
 }
 
 // GateDecision is the gate output.
@@ -107,11 +112,15 @@ func Evaluate(in GateInput) GateDecision {
 	}
 }
 
+// review routes a needs_review decision to a queue (§8.6): the org queue for
+// org-namespace agents, the platform queue for everything else — public
+// agents with high findings, all T&S matters, and every personal-namespace
+// agent, which has no org reviewer to hand it to.
 func review(in GateInput, worst Severity, reason string) GateDecision {
-	queue := "org"
-	// Public agents with high findings go to the platform queue (§8.6).
-	if in.Public && severityRank(worst) >= severityRank(SevHigh) {
-		queue = "platform"
+	queue := "platform"
+	publicHigh := in.Public && severityRank(worst) >= severityRank(SevHigh)
+	if in.NamespaceIsOrg && !publicHigh {
+		queue = "org"
 	}
 	return GateDecision{Outcome: OutcomeNeedsReview, WorstSeverity: worst, Reason: reason, Queue: queue}
 }

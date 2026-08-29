@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -173,12 +174,41 @@ func (s *Server) PlatformAgentAction(w http.ResponseWriter, r *http.Request, ns 
 		problemInternal(w, r)
 		return
 	}
-	// Quarantine also moves published versions to quarantined (§7); a full
-	// per-version sweep runs in the worker (rescan). Here we act on the
-	// latest published version synchronously for immediate effect.
-	if action == "quarantine" && a.LatestPublishedVersionID != nil {
-		_ = s.pipeline.Quarantine(r.Context(), *a.LatestPublishedVersionID, req.Reason, audit.Event{ActorKind: audit.ActorSystem})
+
+	// The agent flag alone changes nothing a consumer can observe: downloads
+	// and resolution read the VERSION state machine (§7). Every T&S action
+	// therefore has to walk the agent's versions too — without this, a
+	// "blocked" agent kept serving 200s and the download handler's 410 branch
+	// was unreachable code.
+	sysEvent := audit.Event{ActorKind: audit.ActorSystem}
+	reason := strings.TrimSpace(req.Reason)
+	if reason == "" {
+		reason = "trust & safety " + action
 	}
+	var moved int
+	switch action {
+	case "quarantine":
+		if a.LatestPublishedVersionID != nil {
+			if qerr := s.pipeline.Quarantine(r.Context(), *a.LatestPublishedVersionID, reason, sysEvent); qerr != nil {
+				s.log.Error("platform quarantine", "agent", a.ID, "err", qerr)
+			} else {
+				moved = 1
+			}
+		}
+	case "block":
+		moved, err = s.pipeline.Block(r.Context(), a.ID, reason, sysEvent)
+	case "reinstate":
+		moved, err = s.pipeline.Reinstate(r.Context(), a.ID, reason, sysEvent)
+	}
+	if err != nil {
+		// The agent flag committed; the version walk did not finish. Report
+		// it rather than returning 204 for a half-applied T&S action.
+		s.log.Error("platform action version walk", "action", action, "agent", a.ID, "err", err)
+		problemInternal(w, r)
+		return
+	}
+	s.log.Info("platform trust & safety action", "action", action,
+		"agent", ns+"/"+name, "versions", moved)
 	w.WriteHeader(http.StatusNoContent)
 }
 

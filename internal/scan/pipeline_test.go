@@ -31,7 +31,9 @@ type pipeEnv struct {
 	owner uuid.UUID
 }
 
-func newPipeEnv(t *testing.T) *pipeEnv {
+// newPipeEnv builds the environment; opts adjust the pipeline dependencies
+// before it is assembled (tests that need to observe notifications).
+func newPipeEnv(t *testing.T, opts ...func(*scan.PipelineDeps)) *pipeEnv {
 	t.Helper()
 	url := os.Getenv("AGENTRY_TEST_DATABASE_URL")
 	if url == "" {
@@ -71,12 +73,19 @@ func newPipeEnv(t *testing.T) *pipeEnv {
 	}); err == nil {
 		rid = row.ID
 	}
-	pipe := scan.NewPipeline(scan.PipelineDeps{
+	deps := scan.PipelineDeps{
 		Store: st, Registry: reg, Blobs: blobs, Orchestrator: orch, Signer: signer,
 		Audit: aud, Log: nil, RegistryURL: "https://test.example", RulesetID: rid, RulesetVer: bundle.Version(),
-	})
-	// Synchronous pipeline: submit runs the scan inline.
+	}
+	for _, o := range opts {
+		o(&deps)
+	}
+	pipe := scan.NewPipeline(deps)
+	// Synchronous pipeline: submit runs the scan inline. The policy gate is
+	// the same wiring api.New does, so the §8.6 submission-time knobs are
+	// exercised here rather than only through HTTP.
 	reg.SetPipeline(pipe)
+	reg.SetPolicyGate(pipe)
 
 	e := &pipeEnv{t: t, st: st, reg: reg, pipe: pipe}
 	e.owner = e.seedUser("pipe" + suffix())

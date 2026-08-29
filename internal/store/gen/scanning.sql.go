@@ -190,7 +190,7 @@ const createRulesetRelease = `-- name: CreateRulesetRelease :one
 INSERT INTO ruleset_releases (id, semver, bundle_digest, notes)
 VALUES ($1, $2, $3, $4)
 ON CONFLICT (semver) DO UPDATE SET bundle_digest = EXCLUDED.bundle_digest
-RETURNING id, semver, bundle_digest, notes, published_at
+RETURNING id, semver, bundle_digest, notes, published_at, (xmax = 0) AS inserted
 `
 
 type CreateRulesetReleaseParams struct {
@@ -200,21 +200,34 @@ type CreateRulesetReleaseParams struct {
 	Notes        *string   `json:"notes"`
 }
 
+type CreateRulesetReleaseRow struct {
+	ID           uuid.UUID `json:"id"`
+	Semver       string    `json:"semver"`
+	BundleDigest string    `json:"bundle_digest"`
+	Notes        *string   `json:"notes"`
+	PublishedAt  time.Time `json:"published_at"`
+	Inserted     bool      `json:"inserted"`
+}
+
 // Security pipeline persistence (M4/WG-H).
-func (q *Queries) CreateRulesetRelease(ctx context.Context, arg CreateRulesetReleaseParams) (RulesetRelease, error) {
+// `inserted` distinguishes a brand-new semver from a re-registration of one
+// we already know: a NEW ruleset semver is what triggers the §8.7 rescan
+// sweep, and every process restart re-registers the bundle it embeds.
+func (q *Queries) CreateRulesetRelease(ctx context.Context, arg CreateRulesetReleaseParams) (CreateRulesetReleaseRow, error) {
 	row := q.db.QueryRow(ctx, createRulesetRelease,
 		arg.ID,
 		arg.Semver,
 		arg.BundleDigest,
 		arg.Notes,
 	)
-	var i RulesetRelease
+	var i CreateRulesetReleaseRow
 	err := row.Scan(
 		&i.ID,
 		&i.Semver,
 		&i.BundleDigest,
 		&i.Notes,
 		&i.PublishedAt,
+		&i.Inserted,
 	)
 	return i, err
 }
@@ -283,18 +296,49 @@ func (q *Queries) DecideReviewItem(ctx context.Context, arg DecideReviewItemPara
 	return err
 }
 
+const deleteFindingsForScanner = `-- name: DeleteFindingsForScanner :exec
+DELETE FROM findings
+WHERE scan_run_id = $1 AND (scanner = $2 OR scanner LIKE $2 || '/%')
+`
+
+type DeleteFindingsForScannerParams struct {
+	ScanRunID uuid.UUID `json:"scan_run_id"`
+	Scanner   string    `json:"scanner"`
+}
+
+// Re-persisting a stage's findings: delete then insert, so a stage that runs
+// again (a retried job, an errored stage re-attempted) replaces its findings
+// rather than adding a second copy to the report a reviewer reads. Matches
+// both the bare stage id and its rule-qualified children ("S4/inj-001").
+func (q *Queries) DeleteFindingsForScanner(ctx context.Context, arg DeleteFindingsForScannerParams) error {
+	_, err := q.db.Exec(ctx, deleteFindingsForScanner, arg.ScanRunID, arg.Scanner)
+	return err
+}
+
 const finishScanRun = `-- name: FinishScanRun :exec
-UPDATE scan_runs SET status = $2, finished_at = now(), report_digest = $3 WHERE id = $1
+UPDATE scan_runs
+SET status = $2, finished_at = now(), report_digest = $3,
+    judge_prompt_hash = coalesce($4, judge_prompt_hash)
+WHERE id = $1
 `
 
 type FinishScanRunParams struct {
-	ID           uuid.UUID `json:"id"`
-	Status       string    `json:"status"`
-	ReportDigest *string   `json:"report_digest"`
+	ID              uuid.UUID `json:"id"`
+	Status          string    `json:"status"`
+	ReportDigest    *string   `json:"report_digest"`
+	JudgePromptHash *string   `json:"judge_prompt_hash"`
 }
 
+// judge_prompt_hash is written here rather than at CreateScanRun: the run row
+// must exist before stages run (stage results reference it), and S5 only
+// reports which rubric version it used once it has run (§8.4.4).
 func (q *Queries) FinishScanRun(ctx context.Context, arg FinishScanRunParams) error {
-	_, err := q.db.Exec(ctx, finishScanRun, arg.ID, arg.Status, arg.ReportDigest)
+	_, err := q.db.Exec(ctx, finishScanRun,
+		arg.ID,
+		arg.Status,
+		arg.ReportDigest,
+		arg.JudgePromptHash,
+	)
 	return err
 }
 
@@ -555,6 +599,30 @@ func (q *Queries) GetRulesetBySemver(ctx context.Context, semver string) (Rulese
 		&i.BundleDigest,
 		&i.Notes,
 		&i.PublishedAt,
+	)
+	return i, err
+}
+
+const getScanResultCache = `-- name: GetScanResultCache :one
+SELECT archive_digest, scanner, ruleset_release_id, findings, created_at FROM scan_result_cache
+WHERE archive_digest = $1 AND scanner = $2 AND ruleset_release_id = $3
+`
+
+type GetScanResultCacheParams struct {
+	ArchiveDigest    string    `json:"archive_digest"`
+	Scanner          string    `json:"scanner"`
+	RulesetReleaseID uuid.UUID `json:"ruleset_release_id"`
+}
+
+func (q *Queries) GetScanResultCache(ctx context.Context, arg GetScanResultCacheParams) (ScanResultCache, error) {
+	row := q.db.QueryRow(ctx, getScanResultCache, arg.ArchiveDigest, arg.Scanner, arg.RulesetReleaseID)
+	var i ScanResultCache
+	err := row.Scan(
+		&i.ArchiveDigest,
+		&i.Scanner,
+		&i.RulesetReleaseID,
+		&i.Findings,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -864,13 +932,14 @@ const listPublishedVersionsForRescan = `-- name: ListPublishedVersionsForRescan 
 SELECT av.id, av.agent_id, av.archive_digest, av.archive_key, av.archive_size, av.manifest, av.capabilities, a.kind, a.visibility
 FROM agent_versions av JOIN agents a ON a.id = av.agent_id
 WHERE av.status = 'published'
-ORDER BY av.published_at DESC
-LIMIT $1 OFFSET $2
+  AND ($2::uuid IS NULL OR av.id < $2)
+ORDER BY av.id DESC
+LIMIT $1
 `
 
 type ListPublishedVersionsForRescanParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	Limit int32      `json:"limit"`
+	After *uuid.UUID `json:"after"`
 }
 
 type ListPublishedVersionsForRescanRow struct {
@@ -885,8 +954,11 @@ type ListPublishedVersionsForRescanRow struct {
 	Visibility    string    `json:"visibility"`
 }
 
+// Keyset, not LIMIT/OFFSET: the sweep quarantines rows out of `published` as
+// it goes, so an offset-paged sweep skips one unscanned version per row it
+// acted on. The cursor is the primary key, which no sweep action changes.
 func (q *Queries) ListPublishedVersionsForRescan(ctx context.Context, arg ListPublishedVersionsForRescanParams) ([]ListPublishedVersionsForRescanRow, error) {
-	rows, err := q.db.Query(ctx, listPublishedVersionsForRescan, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, listPublishedVersionsForRescan, arg.Limit, arg.After)
 	if err != nil {
 		return nil, err
 	}
@@ -982,6 +1054,121 @@ func (q *Queries) ListReviewQueue(ctx context.Context, arg ListReviewQueueParams
 	return items, nil
 }
 
+const listStageResults = `-- name: ListStageResults :many
+SELECT scan_run_id, scanner, status, detail, finished_at FROM scan_stage_results WHERE scan_run_id = $1
+`
+
+func (q *Queries) ListStageResults(ctx context.Context, scanRunID uuid.UUID) ([]ScanStageResult, error) {
+	rows, err := q.db.Query(ctx, listStageResults, scanRunID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ScanStageResult
+	for rows.Next() {
+		var i ScanStageResult
+		if err := rows.Scan(
+			&i.ScanRunID,
+			&i.Scanner,
+			&i.Status,
+			&i.Detail,
+			&i.FinishedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStuckScanningVersions = `-- name: ListStuckScanningVersions :many
+SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at FROM agent_versions
+WHERE status = 'scanning' AND updated_at < $1
+ORDER BY updated_at
+LIMIT $2
+`
+
+type ListStuckScanningVersionsParams struct {
+	UpdatedAt time.Time `json:"updated_at"`
+	Limit     int32     `json:"limit"`
+}
+
+// Versions stuck mid-scan past the §7 30-minute cap. The watchdog routes
+// these to review: a scan job that died terminally must never leave a version
+// parked in `scanning` forever.
+func (q *Queries) ListStuckScanningVersions(ctx context.Context, arg ListStuckScanningVersionsParams) ([]AgentVersion, error) {
+	rows, err := q.db.Query(ctx, listStuckScanningVersions, arg.UpdatedAt, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AgentVersion
+	for rows.Next() {
+		var i AgentVersion
+		if err := rows.Scan(
+			&i.ID,
+			&i.AgentID,
+			&i.Version,
+			&i.CommitSha,
+			&i.Manifest,
+			&i.Capabilities,
+			&i.ArchiveDigest,
+			&i.ArchiveKey,
+			&i.ArchiveSize,
+			&i.Status,
+			&i.StatusReason,
+			&i.PublishedAt,
+			&i.YankedAt,
+			&i.YankReason,
+			&i.Channel,
+			&i.SubmittedBy,
+			&i.Source,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const runningScanRunForVersion = `-- name: RunningScanRunForVersion :one
+SELECT id, version_id, trigger, ruleset_release_id, policy_snapshot, judge_model, judge_prompt_hash, status, started_at, finished_at, report_digest FROM scan_runs
+WHERE version_id = $1 AND trigger = $2 AND status = 'running'
+ORDER BY started_at DESC LIMIT 1
+`
+
+type RunningScanRunForVersionParams struct {
+	VersionID uuid.UUID `json:"version_id"`
+	Trigger   string    `json:"trigger"`
+}
+
+func (q *Queries) RunningScanRunForVersion(ctx context.Context, arg RunningScanRunForVersionParams) (ScanRun, error) {
+	row := q.db.QueryRow(ctx, runningScanRunForVersion, arg.VersionID, arg.Trigger)
+	var i ScanRun
+	err := row.Scan(
+		&i.ID,
+		&i.VersionID,
+		&i.Trigger,
+		&i.RulesetReleaseID,
+		&i.PolicySnapshot,
+		&i.JudgeModel,
+		&i.JudgePromptHash,
+		&i.Status,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.ReportDigest,
+	)
+	return i, err
+}
+
 const setFindingVerdict = `-- name: SetFindingVerdict :exec
 UPDATE findings SET verdict = $2, verdict_by = $3, verdict_reason = $4, verdict_at = now() WHERE id = $1
 `
@@ -1055,6 +1242,30 @@ type UpsertOrgPolicyParams struct {
 
 func (q *Queries) UpsertOrgPolicy(ctx context.Context, arg UpsertOrgPolicyParams) error {
 	_, err := q.db.Exec(ctx, upsertOrgPolicy, arg.ID, arg.OrgID, arg.Document)
+	return err
+}
+
+const upsertScanResultCache = `-- name: UpsertScanResultCache :exec
+INSERT INTO scan_result_cache (archive_digest, scanner, ruleset_release_id, findings)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (archive_digest, scanner, ruleset_release_id)
+DO UPDATE SET findings = EXCLUDED.findings, created_at = now()
+`
+
+type UpsertScanResultCacheParams struct {
+	ArchiveDigest    string    `json:"archive_digest"`
+	Scanner          string    `json:"scanner"`
+	RulesetReleaseID uuid.UUID `json:"ruleset_release_id"`
+	Findings         []byte    `json:"findings"`
+}
+
+func (q *Queries) UpsertScanResultCache(ctx context.Context, arg UpsertScanResultCacheParams) error {
+	_, err := q.db.Exec(ctx, upsertScanResultCache,
+		arg.ArchiveDigest,
+		arg.Scanner,
+		arg.RulesetReleaseID,
+		arg.Findings,
+	)
 	return err
 }
 
