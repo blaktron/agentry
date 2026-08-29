@@ -21,13 +21,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ ns: string
     return redirectBack(req, back, { error: `type "${name}" exactly to confirm deletion` });
   }
 
+  // A 409 here is not a transient failure but the rule itself (§4.3 forbids
+  // deleting version rows), and the API's problem detail already states it
+  // and names the alternative. Passing it through unembellished is the
+  // honest rendering; the page has already said the same thing next to the
+  // form, which is where the explanation belongs.
   const res = await apiSend("DELETE", `/agents/${n}/${a}`);
-  if (res.status === 409) {
-    const detail = await problemDetail(res);
-    return redirectBack(req, back, {
-      error: `${detail} — published or in-flight versions, advisories and abuse reports are records that outlive the agent, so it can be yanked or blocked but not deleted.`,
-    });
-  }
   if (!res.ok) return redirectBack(req, back, { error: await problemDetail(res) });
   return redirectBack(req, "/dashboard", { ok: `${ns}/${name} deleted, along with its repository.` });
 }
