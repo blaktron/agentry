@@ -1,0 +1,15 @@
+# Auto-generated fixture expectation (see README.md).
+# The payload is DEFANGED: `scripts/setup.js` is deliberately absent, so the
+# hook references a file that does not exist. What the fixture reproduces is
+# the SHAPE — a lifecycle hook whose command line reads environment and
+# reports it — not a working stealer.
+technique: "Lifecycle install script with a credential-collection command line"
+incident: "Shai-Hulud npm worm (2025-09/11) — postinstall credential stealer"
+kind: mcp-server
+version: "2.1.0"
+manifest: |
+  {"kind":"mcp-server","license":"MIT","capabilities":{}}
+expect:
+  - S7/install-script
+forbid: []
+expectClean: false

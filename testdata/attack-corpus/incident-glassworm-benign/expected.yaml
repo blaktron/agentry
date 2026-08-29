@@ -1,0 +1,12 @@
+# Auto-generated fixture expectation (see README.md).
+technique: "Benign lookalike: a linter that DESCRIBES invisible-character classes without using any"
+incident: "GlassWorm (2025-10) — benign twin"
+kind: prompt-agent
+version: "1.0.0"
+expect: []
+forbid:
+  - S3/unicode-tag-block
+  - S3/zero-width
+  - S3/bidi
+  - S3/private-use
+expectClean: true

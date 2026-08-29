@@ -241,3 +241,120 @@ func TestQueueReclaimRespectsCutoff(t *testing.T) {
 		t.Fatalf("state = %s, want running (in-flight job must not be reclaimed)", j.State)
 	}
 }
+
+// TestQueueDelayedJobIsNotClaimableEarly pins WithDelay: a job scheduled for
+// the future must not be claimable before its time. Everything that defers
+// work — retry backoff, the rescan sweep, the audit retention job — rests on
+// this, and a claim that ignored run_at would turn every delay into "now".
+func TestQueueDelayedJobIsNotClaimableEarly(t *testing.T) {
+	c, st := newQueueTestClient(t)
+	ctx := context.Background()
+	qName := "test-delay-" + uuid.NewString()
+
+	ran := 0
+	c.Register("later", func(context.Context, Job) error { ran++; return nil })
+	id, err := c.Enqueue(ctx, "later", qName, nil, WithDelay(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if j := jobRow(t, st, id); !j.RunAt.After(time.Now().Add(30 * time.Minute)) {
+		t.Fatalf("run_at = %v, want roughly an hour out", j.RunAt)
+	}
+	if c.RunOnce(ctx, qName) {
+		t.Fatal("a job scheduled an hour out was claimed now")
+	}
+	if ran != 0 {
+		t.Fatalf("handler ran %d times before the job was due", ran)
+	}
+
+	// Once due, the same job runs — the delay defers work, it does not lose it.
+	if _, err := st.Pool().Exec(ctx, `UPDATE jobs SET run_at = now() - interval '1 second' WHERE id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	if !c.RunOnce(ctx, qName) {
+		t.Fatal("a due job was not claimed")
+	}
+	if ran != 1 {
+		t.Fatalf("handler ran %d times, want 1", ran)
+	}
+	if j := jobRow(t, st, id); j.State != "completed" {
+		t.Fatalf("state = %s, want completed", j.State)
+	}
+}
+
+// TestQueueDrainEmptiesTheQueue pins Drain: it keeps going until nothing is
+// claimable, rather than running one job per queue like RunOnce.
+func TestQueueDrainEmptiesTheQueue(t *testing.T) {
+	c, st := newQueueTestClient(t)
+	ctx := context.Background()
+	qName := "test-drain-" + uuid.NewString()
+
+	ran := 0
+	c.Register("bulk", func(context.Context, Job) error { ran++; return nil })
+	var ids []uuid.UUID
+	for i := 0; i < 5; i++ {
+		id, err := c.Enqueue(ctx, "bulk", qName, map[string]int{"i": i})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+	}
+	c.Drain(ctx, qName)
+	if ran != 5 {
+		t.Fatalf("handler ran %d times, want 5", ran)
+	}
+	for _, id := range ids {
+		if j := jobRow(t, st, id); j.State != "completed" {
+			t.Fatalf("job %s state = %s, want completed", id, j.State)
+		}
+	}
+}
+
+// TestQueueWorkLoopProcessesAndStops pins Work: it processes what arrives and
+// returns the context's error when cancelled, rather than hanging or leaking
+// the loop. A worker that cannot be shut down cleanly is a deploy that hangs.
+func TestQueueWorkLoopProcessesAndStops(t *testing.T) {
+	c, st := newQueueTestClient(t)
+	qName := "test-work-" + uuid.NewString()
+	c.pollInterval = 20 * time.Millisecond
+
+	done := make(chan struct{})
+	c.Register("looped", func(context.Context, Job) error { close(done); return nil })
+	id, err := c.Enqueue(context.Background(), "looped", qName, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() { errCh <- c.Work(ctx, qName) }()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		cancel()
+		t.Fatal("the work loop never ran the enqueued job")
+	}
+	// Wait for the completion WRITE, not just the handler return: cancelling
+	// between the two would cancel the update's own context, and the job would
+	// (correctly, at-least-once) be redelivered later. That is the queue
+	// behaving properly, and racing it here would only make the test flaky.
+	deadline := time.Now().Add(5 * time.Second)
+	for jobRow(t, st, id).State != "completed" {
+		if time.Now().After(deadline) {
+			cancel()
+			t.Fatalf("job never reached completed (state = %s)", jobRow(t, st, id).State)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	cancel()
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Work returned %v, want context.Canceled", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Work did not return after its context was cancelled")
+	}
+}

@@ -1,0 +1,13 @@
+{
+  "name": "install-hook-audit-mcp",
+  "version": "1.4.2",
+  "license": "MIT",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node --test",
+    "build": "tsc -p ."
+  },
+  "dependencies": {
+    "minimatch": "9.0.5"
+  }
+}

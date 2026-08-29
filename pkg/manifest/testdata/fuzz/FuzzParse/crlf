@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("schemaVersion: \"1\"\r\nname: a\r\nkind: skill\r\n")

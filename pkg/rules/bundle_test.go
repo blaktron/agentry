@@ -22,16 +22,19 @@ func loadShippedBundle(t *testing.T) *Bundle {
 
 func TestBundleLoads(t *testing.T) {
 	b := loadShippedBundle(t)
-	if b.Version() != "0.1.0" {
-		t.Errorf("version = %q, want 0.1.0", b.Version())
+	if b.Version() != "0.2.0" {
+		t.Errorf("version = %q, want 0.2.0", b.Version())
 	}
 	if len(b.Rules()) == 0 {
 		t.Fatal("bundle has no rules")
 	}
 }
 
-// TestEveryFamilyHasRules asserts the six §8.3 S4 families are all present with
-// at least two rules each.
+// TestEveryFamilyHasRules asserts the §8.3 S4 families are all present with at
+// least two rules each. "destructive" is the seventh: §8.3 names it only via
+// S5's C6 category, but the Amazon Q wiper (Appendix A) was plain English that
+// no other family matches, and an incident with a documented reproduction in
+// the corpus needs a deterministic detector behind it.
 func TestEveryFamilyHasRules(t *testing.T) {
 	b := loadShippedBundle(t)
 	want := []string{
@@ -41,6 +44,7 @@ func TestEveryFamilyHasRules(t *testing.T) {
 		"credential-harvest",
 		"persistence",
 		"obfuscation",
+		"destructive",
 	}
 	counts := map[string]int{}
 	for _, r := range b.Rules() {

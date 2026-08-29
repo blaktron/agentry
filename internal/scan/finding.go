@@ -111,11 +111,20 @@ type Input struct {
 	ManifestJSON []byte
 	// Kind is the agent kind (skill|prompt-agent|mcp-server).
 	Kind string
+	// Version is this version's semver string; S9 classifies the bump size
+	// against PrevVersion (a patch bump that changes behaviour is the
+	// rug-pull shape).
+	Version string
+	// Summary is the agent's one-line summary, one of the two ranked fields
+	// S8's keyword-stuffing heuristic reads.
+	Summary string
 	// PrevArchiveDir is the previous published version's extracted archive
 	// for S9 release-diff; empty on first publish.
 	PrevArchiveDir string
 	// PrevManifestJSON is the previous version's manifest for S9.
 	PrevManifestJSON []byte
+	// PrevVersion is the previous published version's semver string.
+	PrevVersion string
 	// AccountAgeDays and RecentPublishCount feed S8 publisher signals.
 	AccountAgeDays     int
 	RecentPublishCount int

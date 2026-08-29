@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("name: \x00\x00\nkind: skill\n")

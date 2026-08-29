@@ -246,17 +246,30 @@ func (p *Pipeline) runOrchestrator(
 	// S9's baseline. Absence is normal (first-ever publish, §8.3 S9); a
 	// database error is NOT, and treating the two alike silently skipped the
 	// rug-pull diff — the single most documented real-world attack shape.
+	//
+	// The previous version's ARCHIVE is materialized too, not just its
+	// manifest: postmark-mcp changed no manifest field at all, so a
+	// manifest-only diff would have cleared it (§8.3 S9, DEV-026).
 	var prevManifest []byte
+	var prevVersion, prevDir string
 	prev, err := q.GetPreviousPublishedVersion(ctx, storegen.GetPreviousPublishedVersionParams{
 		AgentID: v.AgentID, ID: v.ID,
 	})
 	switch {
 	case err == nil:
-		prevManifest = prev.Manifest
+		prevManifest, prevVersion = prev.Manifest, prev.Version
+		prevDir = p.materializePrevArchive(ctx, workDir, prev)
 	case errors.Is(err, pgx.ErrNoRows):
 		// First publish: S9 is skipped by design and S8 weighs more.
 	default:
 		return RunResult{}, fmt.Errorf("scan: previous published version: %w", err)
+	}
+
+	// S8's anti-typosquat compare needs names to compare against; without the
+	// live top-N it silently matched nothing on every scan (§8.3 S8, T-10).
+	popular, err := q.ListPopularAgentNames(ctx, popularAgentSampleSize)
+	if err != nil {
+		return RunResult{}, fmt.Errorf("scan: popular agent names: %w", err)
 	}
 
 	// S8's publisher-behaviour signals. Same reasoning: a lookup failure must
@@ -298,13 +311,16 @@ func (p *Pipeline) runOrchestrator(
 	result := p.orch.Run(ctx, RunParams{
 		Input: Input{
 			Dir: extractDir, ManifestJSON: v.Manifest, Kind: agent.Kind,
-			PrevManifestJSON: prevManifest, AccountAgeDays: accountAge,
+			Version: v.Version, Summary: agent.Summary,
+			PrevManifestJSON: prevManifest, PrevVersion: prevVersion,
+			PrevArchiveDir: prevDir, AccountAgeDays: accountAge,
 			RecentPublishCount: int(recent),
 		},
 		Policy: pol, Public: agent.Visibility == "public", AgentName: agent.Name,
-		NamespaceIsOrg: agent.NamespaceKind == "org",
-		Resume:         resume,
-		OnStage:        onStage,
+		PopularAgentNames: popular,
+		NamespaceIsOrg:    agent.NamespaceKind == "org",
+		Resume:            resume,
+		OnStage:           onStage,
 	})
 	sinkMu.Lock()
 	defer sinkMu.Unlock()
