@@ -332,6 +332,14 @@ func (p *Pipeline) persistStage(ctx context.Context, runID uuid.UUID, res StageR
 		return err
 	}
 	return p.st.WithTx(ctx, func(q *storegen.Queries) error {
+		// Replace, don't accumulate: a stage that runs again (a redelivered
+		// job, or an errored stage re-attempted) must not leave the reviewer
+		// reading two copies of the same finding.
+		if err := q.DeleteFindingsForScanner(ctx, storegen.DeleteFindingsForScannerParams{
+			ScanRunID: runID, Scanner: res.Scanner,
+		}); err != nil {
+			return err
+		}
 		for _, f := range res.Findings {
 			if err := insertFinding(ctx, q, runID, f); err != nil {
 				return err
@@ -342,6 +350,11 @@ func (p *Pipeline) persistStage(ctx context.Context, runID uuid.UUID, res StageR
 		})
 	})
 }
+
+// assemblyScanner tags the findings S10 adds while assembling the report
+// rather than any single stage — today the S0/pipeline-error that a stage
+// failure produces (§7 fail-closed).
+const assemblyScanner = "S0"
 
 func insertFinding(ctx context.Context, q *storegen.Queries, runID uuid.UUID, f Finding) error {
 	detail, err := json.Marshal(f.Detail)
@@ -409,7 +422,8 @@ func stageOf(scanner string) string {
 	return scanner
 }
 
-// finishRun closes the scan run: status, report digest, judge prompt hash.
+// finishRun closes the scan run: the assembly-time findings, then status,
+// report digest and judge prompt hash.
 func (p *Pipeline) finishRun(ctx context.Context, runID uuid.UUID, result RunResult) error {
 	status := "passed"
 	if len(result.Findings) > 0 {
@@ -422,9 +436,28 @@ func (p *Pipeline) finishRun(ctx context.Context, runID uuid.UUID, result RunRes
 	if result.JudgePromptHash != "" {
 		promptHash = &result.JudgePromptHash
 	}
-	return p.st.Queries().FinishScanRun(ctx, storegen.FinishScanRunParams{
-		ID: runID, Status: status, ReportDigest: strptr(result.ReportDigest),
-		JudgePromptHash: promptHash,
+	return p.st.WithTx(ctx, func(q *storegen.Queries) error {
+		// The S0/pipeline-error finding is added by S10 while assembling the
+		// report, not by any stage, so no per-stage write covers it. It is
+		// the finding that explains why a version with a failed stage went to
+		// review at all — losing it would leave that decision unexplained.
+		if err := q.DeleteFindingsForScanner(ctx, storegen.DeleteFindingsForScannerParams{
+			ScanRunID: runID, Scanner: assemblyScanner,
+		}); err != nil {
+			return err
+		}
+		for _, f := range result.Findings {
+			if stageOf(f.Scanner) != assemblyScanner {
+				continue
+			}
+			if err := insertFinding(ctx, q, runID, f); err != nil {
+				return err
+			}
+		}
+		return q.FinishScanRun(ctx, storegen.FinishScanRunParams{
+			ID: runID, Status: status, ReportDigest: strptr(result.ReportDigest),
+			JudgePromptHash: promptHash,
+		})
 	})
 }
 

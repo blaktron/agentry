@@ -1058,3 +1058,54 @@ func TestQuarantineNotifiesAuthorAndEmitsAdvisoryEvent(t *testing.T) {
 		t.Fatal("no advisory.published event emitted; the advisory reaches nobody")
 	}
 }
+
+// erroringJudge fails every adjudication, standing in for an unconfigured or
+// unreachable judge provider (§8.4.6: fail toward review, never toward skip).
+type erroringJudge struct{}
+
+func (erroringJudge) Name() string              { return "erroring" }
+func (erroringJudge) RequiresHumanReview() bool { return false }
+func (erroringJudge) Judge(context.Context, scan.JudgeContent) (scan.JudgeVerdict, error) {
+	return scan.JudgeVerdict{}, errors.New("judge endpoint unreachable")
+}
+
+// TestStageErrorPersistsPipelineErrorFinding pins that the finding explaining
+// a fail-closed decision reaches the database. S10 adds the S0/pipeline-error
+// while assembling the report rather than from any stage, so it is the one
+// finding a purely per-stage write would drop — leaving a version in
+// needs_review with nothing on its report saying why.
+func TestStageErrorPersistsPipelineErrorFinding(t *testing.T) {
+	e := newPipeEnv(t)
+	ctx := context.Background()
+	u, _ := e.st.Queries().GetUserByID(ctx, e.owner)
+
+	e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, erroringJudge{}, nil))
+	v := e.publish("stagefail", "public", benignFiles(u.Handle, "stagefail", "1.0.0"))
+	if v.Status != string(registry.StatusNeedsReview) {
+		t.Fatalf("status = %s, want needs_review (a failed stage must not auto-publish)", v.Status)
+	}
+
+	run, err := e.st.Queries().LatestScanRunForVersion(ctx, v.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Status != "error" {
+		t.Fatalf("run status = %s, want error", run.Status)
+	}
+	findings, err := e.st.Queries().ListFindings(ctx, run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pipelineErrors int
+	for _, f := range findings {
+		if f.Scanner == "S0/pipeline-error" {
+			pipelineErrors++
+			if f.Detail == nil || !containsAll(string(f.Detail), "judge endpoint unreachable") {
+				t.Fatalf("S0 finding does not say what failed: %s", f.Detail)
+			}
+		}
+	}
+	if pipelineErrors != 1 {
+		t.Fatalf("S0/pipeline-error findings = %d, want exactly 1 explaining the review", pipelineErrors)
+	}
+}

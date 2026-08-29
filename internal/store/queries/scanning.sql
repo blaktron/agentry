@@ -48,6 +48,14 @@ INSERT INTO findings (id, scan_run_id, scanner, severity, confidence, title, fil
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING *;
 
+-- Re-persisting a stage's findings: delete then insert, so a stage that runs
+-- again (a retried job, an errored stage re-attempted) replaces its findings
+-- rather than adding a second copy to the report a reviewer reads. Matches
+-- both the bare stage id and its rule-qualified children ("S4/inj-001").
+-- name: DeleteFindingsForScanner :exec
+DELETE FROM findings
+WHERE scan_run_id = $1 AND (scanner = $2 OR scanner LIKE $2 || '/%');
+
 -- name: ListFindings :many
 SELECT * FROM findings WHERE scan_run_id = $1 ORDER BY scanner, file_path, line_start;
 

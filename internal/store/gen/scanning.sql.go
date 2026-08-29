@@ -296,6 +296,25 @@ func (q *Queries) DecideReviewItem(ctx context.Context, arg DecideReviewItemPara
 	return err
 }
 
+const deleteFindingsForScanner = `-- name: DeleteFindingsForScanner :exec
+DELETE FROM findings
+WHERE scan_run_id = $1 AND (scanner = $2 OR scanner LIKE $2 || '/%')
+`
+
+type DeleteFindingsForScannerParams struct {
+	ScanRunID uuid.UUID `json:"scan_run_id"`
+	Scanner   string    `json:"scanner"`
+}
+
+// Re-persisting a stage's findings: delete then insert, so a stage that runs
+// again (a retried job, an errored stage re-attempted) replaces its findings
+// rather than adding a second copy to the report a reviewer reads. Matches
+// both the bare stage id and its rule-qualified children ("S4/inj-001").
+func (q *Queries) DeleteFindingsForScanner(ctx context.Context, arg DeleteFindingsForScannerParams) error {
+	_, err := q.db.Exec(ctx, deleteFindingsForScanner, arg.ScanRunID, arg.Scanner)
+	return err
+}
+
 const finishScanRun = `-- name: FinishScanRun :exec
 UPDATE scan_runs
 SET status = $2, finished_at = now(), report_digest = $3,
