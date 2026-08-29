@@ -95,6 +95,11 @@ export interface Agent {
   defaultBranch: string;
   gitHttpUrl: string;
   quarantineState: "none" | "quarantined" | "blocked";
+  // Serialized only for callers with maintain (§6.3 toggle) — so its mere
+  // presence is the API's own answer to "may this caller administer the
+  // agent?", which is why the pages test for it rather than re-deriving the
+  // role from the session.
+  autoPublishTags?: boolean;
   createdAt: string;
 }
 

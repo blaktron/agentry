@@ -1,40 +1,56 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { apiGet, type AgentKind } from "@/lib/api";
+import { apiGet, type AgentKind, type SearchResults } from "@/lib/api";
 import { AgentRow, Card } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Browse agents" };
 
-interface SearchHit {
-  namespace: string;
-  name: string;
-  kind: AgentKind;
-  summary: string;
-  installs30d?: number;
-  quarantineState?: string;
-}
-
-interface SearchResults {
-  results: SearchHit[];
-  facets?: Record<string, Record<string, number>>;
-}
-
 const KINDS: AgentKind[] = ["skill", "prompt-agent", "mcp-server"];
+
+// §5.4 capability groups, which is what `capability=` filters on. A
+// capability declared as `none`/null/empty does not match (DEV-021) — the
+// filter answers "asks for this", not "mentions this".
+const CAPABILITIES = ["network", "filesystem", "exec", "secrets", "dataAccess"];
+
+const SORTS = [
+  { id: "relevance", label: "best match" },
+  { id: "installs", label: "most installed" },
+  { id: "newest", label: "newest" },
+];
+
+function inputStyle() {
+  return { borderColor: "var(--color-border)", background: "var(--color-surface)" } as const;
+}
 
 // Search / browse (§10.1, §10.4). A plain GET form — no client JS — so the
 // page works with a strict CSP and is crawlable (D-08).
 export default async function SearchPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; kind?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    kind?: string;
+    capability?: string;
+    license?: string;
+    verified?: string;
+    sort?: string;
+  }>;
 }) {
   const sp = await searchParams;
   const q = (sp.q ?? "").trim();
   const kind = KINDS.includes(sp.kind as AgentKind) ? (sp.kind as AgentKind) : undefined;
+  const capability = CAPABILITIES.includes(sp.capability ?? "") ? sp.capability : undefined;
+  const license = (sp.license ?? "").trim().slice(0, 64);
+  const verified = sp.verified === "1";
+  const sort = SORTS.some((s) => s.id === sp.sort) ? sp.sort! : "relevance";
 
   const params = new URLSearchParams();
   if (q) params.set("q", q);
   if (kind) params.set("kind", kind);
+  if (capability) params.set("capability", capability);
+  if (license) params.set("license", license);
+  if (verified) params.set("verified", "true");
+  if (sort !== "relevance") params.set("sort", sort);
   params.set("limit", "50");
 
   let data: SearchResults | null = null;
@@ -47,6 +63,11 @@ export default async function SearchPage({
 
   const results = data?.results ?? [];
   const kindFacets = data?.facets?.kind ?? {};
+  // License facet counts come back from the same query; they are the honest
+  // way to offer the filter, since the set of licences in a registry is
+  // whatever has actually been published to it.
+  const licenseFacets = Object.entries(data?.facets?.license ?? {}).sort((a, b) => b[1] - a[1]);
+  const filtered = Boolean(q || kind || capability || license || verified);
 
   return (
     <div className="space-y-6">
@@ -58,40 +79,85 @@ export default async function SearchPage({
         </p>
       </div>
 
-      <form action="/search" className="flex flex-wrap items-center gap-3">
-        <input
-          type="search"
-          name="q"
-          defaultValue={q}
-          placeholder="Search names, summaries, and READMEs…"
-          aria-label="Search query"
-          className="min-w-64 flex-1 rounded-md border px-3 py-2 text-sm"
-          style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
-        />
-        <label className="text-sm" style={{ color: "var(--color-muted)" }}>
-          <span className="mr-2">Kind</span>
-          <select
-            name="kind"
-            defaultValue={kind ?? ""}
-            className="rounded-md border px-2 py-2 text-sm"
-            style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+      <form action="/search" className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="search"
+            name="q"
+            defaultValue={q}
+            placeholder="Search names, summaries, and READMEs…"
+            aria-label="Search query"
+            className="min-w-64 flex-1 rounded-md border px-3 py-2 text-sm"
+            style={inputStyle()}
+          />
+          <button
+            type="submit"
+            className="rounded-md px-4 py-2 text-sm font-medium"
+            style={{ background: "var(--color-accent)", color: "var(--color-accent-fg)" }}
           >
-            <option value="">any</option>
-            {KINDS.map((k) => (
-              <option key={k} value={k}>
-                {k}
-                {kindFacets[k] !== undefined ? ` (${kindFacets[k]})` : ""}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          type="submit"
-          className="rounded-md px-4 py-2 text-sm font-medium"
-          style={{ background: "var(--color-accent)", color: "var(--color-accent-fg)" }}
-        >
-          Search
-        </button>
+            Search
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-4 text-sm" style={{ color: "var(--color-muted)" }}>
+          <label>
+            <span className="mr-2">Kind</span>
+            <select name="kind" defaultValue={kind ?? ""} className="rounded-md border px-2 py-1.5 text-sm" style={inputStyle()}>
+              <option value="">any</option>
+              {KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {k}
+                  {kindFacets[k] !== undefined ? ` (${kindFacets[k]})` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="mr-2">Capability</span>
+            <select
+              name="capability"
+              defaultValue={capability ?? ""}
+              className="rounded-md border px-2 py-1.5 text-sm"
+              style={inputStyle()}
+            >
+              <option value="">any</option>
+              {CAPABILITIES.map((c) => (
+                <option key={c} value={c}>
+                  asks for {c}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="mr-2">License</span>
+            <select name="license" defaultValue={license} className="rounded-md border px-2 py-1.5 text-sm" style={inputStyle()}>
+              <option value="">any</option>
+              {licenseFacets.map(([id, count]) => (
+                <option key={id} value={id}>
+                  {id} ({count})
+                </option>
+              ))}
+              {license && !licenseFacets.some(([id]) => id === license) && (
+                <option value={license}>{license}</option>
+              )}
+            </select>
+          </label>
+          <label>
+            <span className="mr-2">Sort</span>
+            <select name="sort" defaultValue={sort} className="rounded-md border px-2 py-1.5 text-sm" style={inputStyle()}>
+              {SORTS.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" name="verified" value="1" defaultChecked={verified} />
+            <span title="Only agents in an organization namespace whose domain has been verified by DNS.">
+              verified organizations only
+            </span>
+          </label>
+        </div>
       </form>
 
       {error && (
@@ -106,15 +172,26 @@ export default async function SearchPage({
       {!error && results.length === 0 && (
         <Card>
           <p className="text-sm">
-            {q ? `No public agents match “${q}”.` : "No public agents have been published yet."}
+            {filtered
+              ? `No public agents match${q ? ` “${q}”` : ""} with these filters.`
+              : "No public agents have been published yet."}
           </p>
+          {filtered && (
+            <p className="mt-1 text-sm">
+              <Link href="/search" className="underline">
+                Clear the filters
+              </Link>
+            </p>
+          )}
         </Card>
       )}
 
       {results.length > 0 && (
         <>
           <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-            {results.length} result{results.length === 1 ? "" : "s"}
+            {data?.total !== undefined && data.total > results.length
+              ? `${results.length} of ${data.total} results`
+              : `${results.length} result${results.length === 1 ? "" : "s"}`}
             {q ? ` for “${q}”` : ""}
           </p>
           <ul>
