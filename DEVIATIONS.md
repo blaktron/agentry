@@ -93,3 +93,27 @@ Locked in both directions: `testdata/attack-corpus/s4-security-docs-benign/` is 
 **Why:** Same class as DEV-001 for `deploy/compose` and the release/signing steps in `release.yaml`: the tooling is GitHub-hosted and cannot run against a local checkout. The config is small and declarative, so inspection + schema/lint validation is the appropriate bar here.
 
 **Impact:** The release-automation flow (release PR → CHANGELOG → tag → build/sign/publish) is complete on paper and will run in the GitHub environment. One operational prerequisite is documented in both the workflow header and CONTRIBUTING.md → Releasing: a tag pushed with the default `GITHUB_TOKEN` does not trigger `release.yaml`, so a `RELEASE_PLEASE_TOKEN` secret (fine-grained PAT or GitHub App token) is needed for the automatic handoff; absent it, the release PR + changelog still work and the tag is pushed manually to cut assets.
+
+## DEV-014 — `published → blocked` added as a direct §7 edge (2026-08-29)
+
+**What:** §7's state diagram reaches `blocked` only through `quarantined` (`published → quarantined → blocked`). The state machine now also allows `published → blocked` directly, and the T&S `block` action uses it to move every live version of an agent in one step. `reinstate` still walks back the drawn path (`blocked → quarantined → published`).
+
+**Why:** Fixing B-02 required staff `block` to actually disable published versions — until now it only set `agents.quarantine_state`, so a "blocked" agent kept serving 200s on download and the handler's 410 branch was unreachable code. Doing that through the drawn path means every block writes two transitions per version, and leaves a window in which the agent is `quarantined` (interstitial warning, "pending review") when T&S has in fact already confirmed it malicious. §7's own row for `blocked` — "downloads return 410; page shows T&S notice; only platform admins can set/unset" — describes a terminal disable that the diagram simply did not draw an arrow for from the most common starting state.
+
+**Impact:** One extra edge in `allowedTransitions`; the audit trail records `published → blocked` in a single row with the T&S reason, which reads more truthfully than a synthetic quarantine. Every other §7 edge is unchanged, and `quarantined → blocked` remains available for the abuse-report path that genuinely quarantines first. The property that matters — that nothing reaches `published` without passing the gate, and that `blocked` is settable and unsettable only by platform staff — is untouched.
+
+## DEV-015 — Rejecting a quarantined version yanks it rather than blocking (2026-08-29)
+
+**What:** §7 gives a quarantined version two exits besides re-publication: `quarantined → yanked` ("author or platform action") and `quarantined → blocked` ("T&S confirms malicious"). The review queue's **reject** decision on a quarantined version maps to `yanked`. Reaching `blocked` stays a deliberate T&S console action (`POST /platform/agents/{ns}/{name}/block`).
+
+**Why:** B-03 gave quarantine an exit by filing a platform review item, which made "what does reject mean here?" a live question for the first time. `rejected` is not reachable from `quarantined` at all (and would be wrong — the version was public), so the choice is yank or block. §7 additionally says `blocked` "SHOULD be gated by dual control (two distinct platform admins) in SaaS ops tooling"; routing a single reviewer's reject straight to `blocked` would quietly bypass that. Yanking removes the version from resolution immediately — the protective outcome — while leaving the stronger, dual-controlled action to the surface built for it.
+
+**Impact:** A reviewer clearing the queue can always act; confirmed-malicious cases take one more explicit step through the T&S console, which is where the dual-control gate belongs. Approving still returns the version to `published` and, per §7, does not re-sign.
+
+## DEV-016 — The 2FA-before-public-publish gate is enabled outside dev mode (2026-08-29)
+
+**What:** §12.1/§19 require TOTP before publishing to a public namespace. The check lives in the shared registry submission path (so it covers both the CLI upload and the git-tag auto-publish a push triggers) and is switched on by the api/worker wiring with `reg.SetPublicPublish2FA(!cfg.DevMode)`. In dev mode it is off.
+
+**Why:** §12.1 states the requirement as a "policy default", not an invariant, and a dev instance has no enrollment flow behind it: `agentryd all` against a fresh database would otherwise be unable to publish anything public at all, which is the first thing a self-hoster tries. The carve-out is the same shape as the two that already exist for dev mode (`DevAutoApprovePipeline`, the `static` judge fallback), and config validation already rejects `env: prod` together with `devMode: true`, so no production deployment can reach the disabled path.
+
+**Impact:** Any non-dev configuration enforces the gate: a submitter without `totp_enabled` gets 403 with an actionable message, and the check happens before the archive is built. Private agents are unaffected — the gate is about what goes public. The knob is a single setter on `registry.Service`, so making it unconditional (or moving it into the policy document as a per-org override) is a one-line change when the enrollment flow ships in the self-host quickstart.
