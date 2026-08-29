@@ -2,7 +2,17 @@
 
 /* Agentry web design tokens (§10). Theme-aware: a light base with a
    prefers-color-scheme dark override. Kept deliberately restrained — a
-   trust product should read as calm and legible, not flashy. */
+   trust product should read as calm and legible, not flashy.
+
+   @theme is a BUILD-TIME token table, not a cascade participant: Tailwind
+   flattens every @theme block it finds into one `:root` rule regardless of
+   the at-rules around it. Nesting a second @theme inside a media query
+   therefore does not create a dark override — it silently overwrites the
+   light values, which is exactly what used to happen here (the compiled CSS
+   had one :root, dark, and light-mode users got a dark page). The light
+   palette is the token table; the dark palette is a plain custom-property
+   override below, which does participate in the cascade (and, being
+   unlayered, always beats Tailwind's `@layer theme` output). */
 
 @theme {
   --color-bg: #ffffff;
@@ -19,14 +29,23 @@
   --color-sev-low: #65a30d;
   --color-sev-info: #64748b;
   --color-ok: #16a34a;
+
+  /* Solid destructive/affirmative buttons. --color-ok is a fill, not a text
+     colour: white on it is 3.0:1, so the solid variant is a step darker
+     (4.5:1). Neither flips with the theme, so their foreground does not
+     either — unlike --color-accent-fg. */
+  --color-ok-strong: #15803d;
+  --color-solid-fg: #ffffff;
 }
 
 :root {
+  /* Both palettes exist and both follow the OS preference, so the UA may
+     style form controls either way — it will agree with the tokens. */
   color-scheme: light dark;
 }
 
 @media (prefers-color-scheme: dark) {
-  @theme {
+  :root {
     --color-bg: #0b1120;
     --color-fg: #e2e8f0;
     --color-muted: #94a3b8;
@@ -57,6 +76,7 @@ body {
 .readme pre code { background: none; padding: 0; }
 .readme a { color: var(--color-accent); text-decoration: underline; }
 .readme blockquote { border-left: 3px solid var(--color-border); padding-left: 1em; color: var(--color-muted); margin: 0.75em 0; }
+.readme img { max-width: 100%; height: auto; }
 .readme table { border-collapse: collapse; margin: 0.75em 0; display: block; overflow-x: auto; }
 .readme th, .readme td { border: 1px solid var(--color-border); padding: 0.4em 0.7em; }
 

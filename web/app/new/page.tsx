@@ -83,7 +83,7 @@ export default async function NewAgentPage({
             />
           </label>
           <div>
-            <button type="submit" className="rounded-md px-3 py-1.5 font-medium" style={{ background: "var(--color-accent)", color: "white" }}>
+            <button type="submit" className="rounded-md px-3 py-1.5 font-medium" style={{ background: "var(--color-accent)", color: "var(--color-accent-fg)" }}>
               Create agent
             </button>
           </div>

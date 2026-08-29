@@ -48,13 +48,37 @@ export function Badge({
   );
 }
 
+// SEVERITY_COLOR maps each level to its own token. Written out longhand
+// rather than composed (`var(--color-sev-${severity})`) on purpose: Tailwind
+// v4 keeps a theme variable only if its name appears literally in the
+// scanned source, so an interpolated name would be tree-shaken out of the
+// compiled CSS and every badge would fall back to unstyled.
+const SEVERITY_COLOR: Record<Severity, string> = {
+  critical: "var(--color-sev-critical)",
+  high: "var(--color-sev-high)",
+  medium: "var(--color-sev-medium)",
+  low: "var(--color-sev-low)",
+  info: "var(--color-sev-info)",
+};
+
+// SeverityBadge renders one severity in its own colour. critical is not an
+// alias for high: §8 gates on the distinction, so the UI must not collapse
+// it — a report card showing "high" where the scanner said "critical" is a
+// quieter page and a less honest one.
 export function SeverityBadge({ severity, count }: { severity: Severity; count?: number }) {
-  const tone = severity === "critical" || severity === "high" ? "danger" : severity === "medium" ? "warn" : "neutral";
+  const color = SEVERITY_COLOR[severity] ?? "var(--color-muted)";
   return (
-    <Badge tone={tone}>
+    <span
+      className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium"
+      style={{
+        background: `color-mix(in srgb, ${color} 16%, transparent)`,
+        color,
+        borderColor: "var(--color-border)",
+      }}
+    >
       {severity}
       {count !== undefined ? ` ${count}` : ""}
-    </Badge>
+    </span>
   );
 }
 
@@ -72,6 +96,33 @@ export function StatusBadge({ status }: { status: VersionStatus }) {
 
 export function KindBadge({ kind }: { kind: AgentKind }) {
   return <Badge tone="accent">{kind}</Badge>;
+}
+
+// RefusalCard is the shared rendering for an API 401/403 on an authed page.
+// Authorization lives at the API chokepoint (§12.2); these pages render the
+// refusal, they never decide it — so the copy says who may see the page and
+// stops there.
+export function RefusalCard({ children }: { children: React.ReactNode }) {
+  return (
+    <Card>
+      <h1 className="mb-1 text-lg font-semibold">Not available to your account</h1>
+      <p className="text-sm">{children}</p>
+    </Card>
+  );
+}
+
+// StatTile is one number in a stats panel (stars, installs).
+export function StatTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div>
+      <dt className="text-xs uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
+        {label}
+      </dt>
+      <dd className="text-lg font-semibold" title={hint}>
+        {value}
+      </dd>
+    </div>
+  );
 }
 
 // CapabilityBadges renders the declared capability contract (§10.2 above the

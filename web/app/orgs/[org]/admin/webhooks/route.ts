@@ -9,13 +9,16 @@ import { showOnce } from "@/lib/show-once";
 export async function POST(req: NextRequest, ctx: { params: Promise<{ org: string }> }) {
   if (!sameOrigin(req)) return new NextResponse("cross-origin form post rejected", { status: 403 });
   const { org } = await ctx.params;
-  const back = `/orgs/${org}/admin`;
+  // Every interpolated API path segment is escaped: `org` is route
+  // input, and a handle-shaped value is a convention, not a guarantee.
+  const o = encodeURIComponent(org);
+  const back = `/orgs/${o}/admin`;
   const form = await req.formData();
   const action = String(form.get("action") ?? "create");
 
   if (action === "delete") {
     const id = String(form.get("id") ?? "");
-    const res = await apiSend("DELETE", `/orgs/${org}/webhooks/${encodeURIComponent(id)}`);
+    const res = await apiSend("DELETE", `/orgs/${o}/webhooks/${encodeURIComponent(id)}`);
     if (!res.ok) return redirectBack(req, back, { error: await problemDetail(res) });
     return redirectBack(req, back, { ok: "webhook deleted." });
   }
@@ -23,7 +26,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ org: strin
   const url = String(form.get("url") ?? "");
   const events = form.getAll("events").map(String);
   if (events.length === 0) return redirectBack(req, back, { error: "pick at least one event" });
-  const res = await apiSend("POST", `/orgs/${org}/webhooks`, { url, events });
+  const res = await apiSend("POST", `/orgs/${o}/webhooks`, { url, events });
   if (!res.ok) return redirectBack(req, back, { error: await problemDetail(res) });
   const created = (await res.json()) as { id: string; secret?: string };
   return showOnce({

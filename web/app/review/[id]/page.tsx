@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Badge, Card, SeverityBadge, StatusBadge } from "@/components/ui";
 import type { ReviewBundle, ReviewFileContent, ReviewFileEntry, ScanFinding } from "@/lib/api";
+import { diffCaps } from "@/lib/caps";
+import { fmtUTC } from "@/lib/format";
 import { RevealText } from "@/lib/reveal";
 import { AccessError, authedGet, currentUser } from "@/lib/session";
 
@@ -12,32 +14,7 @@ export const metadata: Metadata = { title: "Review" };
 // the archive file viewer with invisible-character visualization, the
 // capability diff against the previous published version, and the decision
 // panel. Everything is server-rendered; every mutation is a plain form.
-
-function capLeaves(v: unknown, prefix: string, out: Map<string, string>) {
-  if (v === null || v === undefined) return;
-  if (typeof v !== "object" || Array.isArray(v)) {
-    out.set(prefix, JSON.stringify(v));
-    return;
-  }
-  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
-    capLeaves(val, prefix ? `${prefix}.${k}` : k, out);
-  }
-}
-
-// diffCaps flattens two capability objects to dotted leaves and marks changes.
-function diffCaps(prev: Record<string, unknown> | undefined, curr: Record<string, unknown> | undefined) {
-  const a = new Map<string, string>();
-  const b = new Map<string, string>();
-  capLeaves(prev ?? {}, "", a);
-  capLeaves(curr ?? {}, "", b);
-  const keys = [...new Set([...a.keys(), ...b.keys()])].sort();
-  return keys.map((k) => ({
-    key: k,
-    before: a.get(k),
-    after: b.get(k),
-    change: !a.has(k) ? "added" : !b.has(k) ? "removed" : a.get(k) !== b.get(k) ? "changed" : "same",
-  }));
-}
+// The diff itself lives in lib/caps.ts so it can be unit-tested.
 
 function findingAnchor(f: ScanFinding, itemID: string): string | null {
   if (!f.filePath) return null;
@@ -56,9 +33,10 @@ export default async function ReviewDetailPage({
   if (!(await currentUser())) redirect(`/login?next=/review/${id}`);
   const q = await searchParams;
 
+  const itemPath = `/review-items/${encodeURIComponent(id)}`;
   let bundle: ReviewBundle | null = null;
   try {
-    bundle = await authedGet<ReviewBundle>(`/review-items/${id}`);
+    bundle = await authedGet<ReviewBundle>(itemPath);
   } catch (e) {
     if (e instanceof AccessError) {
       return (
@@ -73,17 +51,21 @@ export default async function ReviewDetailPage({
   const { item, findings } = bundle;
 
   let files: ReviewFileEntry[] = [];
+  let content: ReviewFileContent | null = null;
+  let selected: string | undefined;
   try {
-    files = (await authedGet<{ files: ReviewFileEntry[] }>(`/review-items/${id}/files`))?.files ?? [];
+    files = (await authedGet<{ files: ReviewFileEntry[] }>(`${itemPath}/files`))?.files ?? [];
+    selected = q.file && files.some((f) => f.path === q.file) ? q.file : undefined;
+    if (selected) {
+      // Inside the same try as the listing: the archive can go away between
+      // the two calls (a conflicting decision, a yank), and a reviewer who
+      // can see the findings should not lose the whole page to that race.
+      content = await authedGet<ReviewFileContent>(
+        `${itemPath}/file?path=${encodeURIComponent(selected)}`,
+      );
+    }
   } catch {
     // Archive may be missing (conflict) — the page still shows findings.
-  }
-  const selected = q.file && files.some((f) => f.path === q.file) ? q.file : undefined;
-  let content: ReviewFileContent | null = null;
-  if (selected) {
-    content = await authedGet<ReviewFileContent>(
-      `/review-items/${id}/file?path=${encodeURIComponent(selected)}`,
-    );
   }
 
   const fileFindings = selected ? findings.filter((f) => f.filePath === selected) : [];
@@ -121,7 +103,7 @@ export default async function ReviewDetailPage({
           {bundle.versionDetail?.source && <Badge>{bundle.versionDetail.source}</Badge>}
         </div>
         <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-          {item.createdAt ? `queued ${new Date(item.createdAt).toLocaleString()}` : ""}
+          {item.createdAt ? `queued ${fmtUTC(item.createdAt)}` : ""}
           {bundle.versionDetail?.archiveDigest ? ` · ${bundle.versionDetail.archiveDigest.slice(0, 23)}…` : ""}
         </p>
       </div>
@@ -160,7 +142,7 @@ export default async function ReviewDetailPage({
                 name="decision"
                 value="approve"
                 className="rounded-md px-3 py-1.5 text-sm font-medium"
-                style={{ background: "var(--color-ok)", color: "white" }}
+                style={{ background: "var(--color-ok-strong)", color: "var(--color-solid-fg)" }}
               >
                 Approve &amp; publish
               </button>
@@ -169,7 +151,7 @@ export default async function ReviewDetailPage({
                 name="decision"
                 value="reject"
                 className="rounded-md px-3 py-1.5 text-sm font-medium"
-                style={{ background: "var(--color-sev-high)", color: "white" }}
+                style={{ background: "var(--color-sev-high)", color: "var(--color-solid-fg)" }}
               >
                 Reject
               </button>
@@ -262,6 +244,16 @@ export default async function ReviewDetailPage({
                       <Badge tone={f.verdict === "confirmed" ? "danger" : "ok"}>{f.verdict.replace(/_/g, " ")}</Badge>
                     )}
                   </div>
+                  {f.verdict !== "open" && (
+                    <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
+                      Reviewer&apos;s rationale:{" "}
+                      {f.verdictReason ? (
+                        <RevealText text={f.verdictReason} />
+                      ) : (
+                        <em>none recorded</em>
+                      )}
+                    </p>
+                  )}
                   {f.filePath && (
                     <p className="mt-1 text-sm">
                       {anchor ? (
