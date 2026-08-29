@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Badge, Card, SeverityBadge, StatusBadge } from "@/components/ui";
+import { Badge, Card, RefusalCard, SeverityBadge, StatusBadge } from "@/components/ui";
 import type { ReviewBundle, ReviewFileContent, ReviewFileEntry, ScanFinding } from "@/lib/api";
 import { diffCaps } from "@/lib/caps";
 import { fmtUTC } from "@/lib/format";
@@ -39,11 +39,7 @@ export default async function ReviewDetailPage({
     bundle = await authedGet<ReviewBundle>(itemPath);
   } catch (e) {
     if (e instanceof AccessError) {
-      return (
-        <Card>
-          <p>You do not have access to this review item.</p>
-        </Card>
-      );
+      return <RefusalCard>You do not have access to this review item.</RefusalCard>;
     }
     throw e;
   }
