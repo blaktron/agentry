@@ -59,19 +59,19 @@ func AllRouteAuthzDecls() map[string]RouteDecl {
 
 // routeAuthz maps OpenAPI operationId → declaration. Keep alphabetical.
 var routeAuthz = map[string]RouteDecl{
-	"addTeamMember":         {Action: auth.ActOrgTeamsManage, OrgScoped: true},
-	"createAgent":           {Action: auth.ActAgentCreate, AgentScoped: false},
-	"getAgent":              {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
-	"listAgents":            {Action: auth.ActPublicRead, Anonymous: true},
-	"updateAgent":           {Action: auth.ActAgentMaintain, AgentScoped: true},
-	"deleteAgent":           {Action: auth.ActAgentMaintain, AgentScoped: true},
-	"listAgentActivity":     {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
-	"getAgentStats":         {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
+	"addTeamMember":     {Action: auth.ActOrgTeamsManage, OrgScoped: true},
+	"createAgent":       {Action: auth.ActAgentCreate, AgentScoped: false},
+	"getAgent":          {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
+	"listAgents":        {Action: auth.ActPublicRead, Anonymous: true},
+	"updateAgent":       {Action: auth.ActAgentMaintain, AgentScoped: true},
+	"deleteAgent":       {Action: auth.ActAgentMaintain, AgentScoped: true},
+	"listAgentActivity": {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
+	"getAgentStats":     {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
 	// Stars are per-agent reads that mutate the CALLER's list, so they carry
 	// the agent read action (you cannot star what you cannot see) and refuse
 	// anonymous callers in the handler — there is no anonymous star list.
-	"starAgent":   {Action: auth.ActAgentRead, AgentScoped: true},
-	"unstarAgent": {Action: auth.ActAgentRead, AgentScoped: true},
+	"starAgent":             {Action: auth.ActAgentRead, AgentScoped: true},
+	"unstarAgent":           {Action: auth.ActAgentRead, AgentScoped: true},
 	"listAgentGrants":       {Action: auth.ActAgentMaintain, AgentScoped: true},
 	"setAgentUserGrant":     {Action: auth.ActAgentMaintain, AgentScoped: true},
 	"removeAgentUserGrant":  {Action: auth.ActAgentMaintain, AgentScoped: true},
@@ -108,11 +108,11 @@ var routeAuthz = map[string]RouteDecl{
 	"socialOidcStart":    {NoAuthz: true, Anonymous: true},
 	"socialOidcCallback": {NoAuthz: true, Anonymous: true},
 	"totpChallenge":      {NoAuthz: true, Anonymous: true},
-	"getAgentReadme":        {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
-	"deleteCurrentUser":     {Action: auth.ActUserSecurityManage, SessionOnly: true},
-	"reportAbuse":           {Action: auth.ActPublicRead, SelfAuthorized: true},
-	"listAbuseReports":      {Action: auth.ActPublicRead, SelfAuthorized: true},
-	"triageAbuseReport":     {Action: auth.ActPublicRead, SelfAuthorized: true},
+	"getAgentReadme":     {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
+	"deleteCurrentUser":  {Action: auth.ActUserSecurityManage, SessionOnly: true},
+	"reportAbuse":        {Action: auth.ActPublicRead, SelfAuthorized: true},
+	"listAbuseReports":   {Action: auth.ActPublicRead, SelfAuthorized: true},
+	"triageAbuseReport":  {Action: auth.ActPublicRead, SelfAuthorized: true},
 	// Enterprise (M6/WG-J). SSO/SCIM config = owner (ActOrgSettingsManage,
 	// session-only for PATs); webhooks/domains = admin+ (ActOrgUpdate);
 	// audit export = admin+ (ActOrgAuditRead). The SSO login-flow endpoints

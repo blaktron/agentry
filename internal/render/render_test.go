@@ -92,8 +92,8 @@ func TestXSSCorpus(t *testing.T) {
 			mustNot: []string{"<!--"},
 		},
 		{
-			name:     "benign markdown survives",
-			input:    "# Title\n\nSome **bold** and `code` and a [link](https://example.com).\n\n- item\n- item\n",
+			name:  "benign markdown survives",
+			input: "# Title\n\nSome **bold** and `code` and a [link](https://example.com).\n\n- item\n- item\n",
 			// h2, not h1: author headings are demoted so the page keeps a
 			// single <h1> (see TestAuthorHeadingsAreDemoted).
 			mustHave: []string{"<h2", "Title", "<strong>bold</strong>", "<code>code</code>", "<li>item</li>"},

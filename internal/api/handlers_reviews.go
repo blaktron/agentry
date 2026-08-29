@@ -149,10 +149,7 @@ func (s *Server) ListReviewQueue(w http.ResponseWriter, r *http.Request, params 
 		problemUnauthorized(w, r, "")
 		return
 	}
-	limit := 50
-	if params.Limit != nil {
-		limit = *params.Limit
-	}
+	limit := clampLimit(params.Limit, 50, 100)
 	qp := storegen.ListReviewQueueParams{Queue: string(params.Queue), Limit: int32(limit)}
 
 	switch params.Queue {
