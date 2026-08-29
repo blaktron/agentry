@@ -8,7 +8,9 @@ package gitsrv_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"net/http/httptest"
 	"os"
@@ -45,6 +47,7 @@ type gitEnv struct {
 	srv   *httptest.Server
 	st    *store.Store
 	reg   *registry.Service
+	repos *gitsrv.RepoStore
 	sfx   string
 	owner struct {
 		handle string
@@ -94,7 +97,7 @@ func newGitEnv(t *testing.T) *gitEnv {
 	srv := httptest.NewServer(api.NewHandlerWithGit(apiSrv, git.Mount))
 	t.Cleanup(srv.Close)
 
-	env := &gitEnv{t: t, srv: srv, st: st, reg: reg, sfx: fmt.Sprintf("%06x", rand.Int63n(1<<24))} //nolint:gosec
+	env := &gitEnv{t: t, srv: srv, st: st, reg: reg, repos: repos, sfx: fmt.Sprintf("%06x", rand.Int63n(1<<24))} //nolint:gosec
 
 	// Seed the owner directly through the store (API flows are covered by
 	// internal/api tests; here git transport is the subject).
@@ -165,11 +168,76 @@ func (e *gitEnv) seedAgentKind(name, kind, visibility string) registry.Agent {
 
 // cloneURL embeds a PAT as the Basic password (GitHub convention, §6.1).
 func (e *gitEnv) cloneURL(agent, pat string) string {
+	return e.cloneURLNS(e.owner.handle, agent, pat)
+}
+
+// cloneURLNS is cloneURL for any namespace (org repos, §6.4).
+func (e *gitEnv) cloneURLNS(ns, agent, pat string) string {
 	host := strings.TrimPrefix(e.srv.URL, "http://")
 	if pat == "" {
-		return fmt.Sprintf("http://%s/%s/%s.git", host, e.owner.handle, agent)
+		return fmt.Sprintf("http://%s/%s/%s.git", host, ns, agent)
 	}
-	return fmt.Sprintf("http://token:%s@%s/%s/%s.git", pat, host, e.owner.handle, agent)
+	return fmt.Sprintf("http://token:%s@%s/%s/%s.git", pat, host, ns, agent)
+}
+
+// seedOrg creates an org the owner belongs to, optionally enforcing SSO
+// (§12.4). Enforcement is set directly: the API surface for it belongs to
+// internal/api's org settings, not to the git layer under test.
+func (e *gitEnv) seedOrg(handle string, ssoRequired bool) uuid.UUID {
+	e.t.Helper()
+	ctx := context.Background()
+	q := e.st.Queries()
+	id := newUUID(e.t)
+	if err := q.CreateHandle(ctx, storegen.CreateHandleParams{ID: id, Handle: handle, Kind: "org"}); err != nil {
+		e.t.Fatal(err)
+	}
+	if _, err := q.CreateOrg(ctx, storegen.CreateOrgParams{ID: id, DisplayName: handle}); err != nil {
+		e.t.Fatal(err)
+	}
+	if err := q.UpsertMembership(ctx, storegen.UpsertMembershipParams{OrgID: id, UserID: e.owner.id, Role: "owner"}); err != nil {
+		e.t.Fatal(err)
+	}
+	if ssoRequired {
+		if _, err := e.st.Pool().Exec(ctx, `UPDATE orgs SET sso_required = true WHERE id = $1`, id); err != nil {
+			e.t.Fatal(err)
+		}
+	}
+	return id
+}
+
+// seedOrgAgent creates an agent in an org namespace, owned by the org owner.
+func (e *gitEnv) seedOrgAgent(orgHandle string, orgID uuid.UUID, name, visibility string) registry.Agent {
+	e.t.Helper()
+	p := &auth.Principal{
+		UserID: e.owner.id, Handle: e.owner.handle, Via: "session", EmailVerified: true,
+		OrgRoles: map[uuid.UUID]auth.OrgRole{orgID: auth.RoleOwner},
+	}
+	a, err := e.reg.CreateAgent(context.Background(), p, registry.CreateAgentInput{
+		Namespace: orgHandle, Name: name, Kind: "skill", Visibility: visibility,
+	}, audit.Event{Actor: e.owner.id, ActorKind: audit.ActorUser, OrgID: orgID})
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return a
+}
+
+// seedOrgPAT mints an org-bound PAT (pats.org_id — minted during an SSO-fresh
+// session in production, §12.4).
+func (e *gitEnv) seedOrgPAT(userID, orgID uuid.UUID, name string, scopes ...string) string {
+	e.t.Helper()
+	tok, err := auth.NewToken(auth.PATPrefix)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	_, err = e.st.Queries().CreatePAT(context.Background(), storegen.CreatePATParams{
+		ID: newUUID(e.t), UserID: userID, Name: name, OrgID: &orgID,
+		TokenSha256: auth.HashToken(tok), TokenPrefix: auth.DisplayPrefix(tok),
+		Scopes: scopes, ExpiresAt: time.Now().Add(time.Hour),
+	})
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return tok
 }
 
 // git runs the git CLI in dir, returning combined output and error.
@@ -449,6 +517,211 @@ func TestGitConformance(t *testing.T) {
 		}
 	})
 }
+
+// pushAudits counts repo.push audit rows recorded against one agent.
+func (e *gitEnv) pushAudits(agentID uuid.UUID) int {
+	e.t.Helper()
+	var n int
+	err := e.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM audit_events WHERE action = 'repo.push' AND target_id = $1`, agentID).Scan(&n)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return n
+}
+
+// TestPushRejectionLeavesNoTrace pins the §6.3 bookkeeping contract: a push
+// the pre-receive hook denies still exits receive-pack 0, and none of the
+// post-push side effects — size, last_push_at, repo.push audit — may fire for
+// the refs it refused.
+func TestPushRejectionLeavesNoTrace(t *testing.T) {
+	env := newGitEnv(t)
+	agent := env.seedAgent("rejectbk", "public")
+
+	oversize := func(work string) {
+		big := make([]byte, 2<<20) // 2 MB against the 1 MB test cap
+		for i := range big {
+			big[i] = byte(i % 251)
+		}
+		if err := os.WriteFile(filepath.Join(work, "big.bin"), big, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		mustGit(t, work, "add", "big.bin")
+		mustGit(t, work, "commit", "-m", "oversize")
+	}
+
+	work := seedWorkdir(t, map[string]string{"agent.yaml": "schemaVersion: \"1\"\n"})
+	url := env.cloneURL("rejectbk", env.owner.patRW)
+
+	// A push rejected outright must leave the repo row untouched.
+	oversize(work)
+	if out, err := gitRun(t, work, "push", url, "main"); err == nil || !strings.Contains(out, "single-file limit") {
+		t.Fatalf("oversize push must be rejected: %v\n%s", err, out)
+	}
+	repo, err := env.st.Queries().GetRepo(context.Background(), agent.RepoID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repo.LastPushAt != nil || repo.SizeBytes != 0 {
+		t.Fatalf("rejected push was bookkept: last_push_at=%v size=%d", repo.LastPushAt, repo.SizeBytes)
+	}
+	if n := env.pushAudits(agent.ID); n != 0 {
+		t.Fatalf("rejected push wrote %d repo.push audit rows", n)
+	}
+
+	// An accepted push is bookkept normally.
+	mustGit(t, work, "reset", "--hard", "HEAD~1")
+	mustGit(t, work, "push", url, "main")
+	accepted, err := env.st.Queries().GetRepo(context.Background(), agent.RepoID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if accepted.LastPushAt == nil || accepted.SizeBytes == 0 {
+		t.Fatalf("accepted push not bookkept: %+v", accepted)
+	}
+	if n := env.pushAudits(agent.ID); n != 1 {
+		t.Fatalf("accepted push wrote %d repo.push audit rows, want 1", n)
+	}
+
+	// A later rejection must not disturb what the accepted push recorded.
+	oversize(work)
+	if out, err := gitRun(t, work, "push", url, "main"); err == nil {
+		t.Fatalf("second oversize push must be rejected:\n%s", out)
+	}
+	after, err := env.st.Queries().GetRepo(context.Background(), agent.RepoID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.LastPushAt.Equal(*accepted.LastPushAt) || after.SizeBytes != accepted.SizeBytes {
+		t.Fatalf("rejected push moved bookkeeping: %v/%d → %v/%d",
+			accepted.LastPushAt, accepted.SizeBytes, after.LastPushAt, after.SizeBytes)
+	}
+	if n := env.pushAudits(agent.ID); n != 1 {
+		t.Fatalf("repo.push audit rows = %d after a rejection, want 1", n)
+	}
+}
+
+// TestReleaseArchiveIgnoresExportIgnore pins §6.5's invariant that the
+// manifest allowlist is the only filter: a pushed .gitattributes marking
+// manifest-included files export-ignore must not remove them from the
+// materialized workspace or from the published release.
+func TestReleaseArchiveIgnoresExportIgnore(t *testing.T) {
+	env := newGitEnv(t)
+	const name = "exportignore"
+	agent := env.seedAgent(name, "public")
+
+	files := kindFixture("skill", env.owner.handle, name, "1.2.0")
+	files[".gitattributes"] = "SKILL.md export-ignore\nREADME.md export-ignore\n"
+	work := seedWorkdir(t, files)
+	mustGit(t, work, "push", env.cloneURL(name, env.owner.patRW), "main")
+	mustGit(t, work, "tag", "v1.2.0")
+	mustGit(t, work, "push", env.cloneURL(name, env.owner.patRW), "v1.2.0")
+
+	dst := t.TempDir()
+	if _, err := env.repos.MaterializeTag(context.Background(), agent.RepoID, "v1.2.0", dst); err != nil {
+		t.Fatalf("materialize v1.2.0: %v", err)
+	}
+	for _, f := range []string{"agent.yaml", "README.md", "SKILL.md"} {
+		if _, err := os.Stat(filepath.Join(dst, f)); err != nil {
+			t.Fatalf("export-ignore dropped %s from the release workspace", f)
+		}
+	}
+
+	// End to end: the same tree must reach the published archive.
+	env.waitPublished(name, "1.2.0")
+	env.installRoundTrip(name, "1.2.0", "1.2.0", "agent.yaml", "README.md", "SKILL.md")
+
+	// $GIT_DIR/info/attributes has no git switch that disables it, so an
+	// archive must refuse to run under one rather than filter silently.
+	info := filepath.Join(env.repos.Path(agent.RepoID), "info")
+	if err := os.MkdirAll(info, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	attrs := filepath.Join(info, "attributes")
+	if err := os.WriteFile(attrs, []byte("SKILL.md export-ignore\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.repos.MaterializeTag(context.Background(), agent.RepoID, "v1.2.0", t.TempDir()); err == nil {
+		t.Fatal("archive must fail closed while $GIT_DIR/info/attributes exists")
+	}
+	if err := os.Remove(attrs); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestGitEnforcedSSO pins §6.4's push row under §12.4: in an org with
+// sso_required, git writes and releases need an org-bound PAT; reads and
+// non-enforcing orgs are untouched.
+func TestGitEnforcedSSO(t *testing.T) {
+	env := newGitEnv(t)
+
+	entHandle := "gitent" + env.sfx
+	entID := env.seedOrg(entHandle, true)
+	env.seedOrgAgent(entHandle, entID, "ssoagent", "public")
+	bound := env.seedOrgPAT(env.owner.id, entID, "bound", "repo:read", "repo:write", "agent:publish")
+
+	openHandle := "gitopen" + env.sfx
+	openID := env.seedOrg(openHandle, false)
+	env.seedOrgAgent(openHandle, openID, "openagent", "public")
+
+	work := seedWorkdir(t, kindFixture("skill", entHandle, "ssoagent", "1.0.0"))
+
+	t.Run("personal PAT denied on enforced org", func(t *testing.T) {
+		out, err := gitRun(t, work, "push", env.cloneURLNS(entHandle, "ssoagent", env.owner.patRW), "main")
+		if err == nil || !strings.Contains(out, "403") {
+			t.Fatalf("push with a personal PAT must 403 under enforced SSO: %v\n%s", err, out)
+		}
+	})
+
+	t.Run("reads unaffected", func(t *testing.T) {
+		// §6.4 attaches the org-bound requirement to push, not to fetch.
+		dst := t.TempDir()
+		mustGit(t, dst, "clone", env.cloneURLNS(entHandle, "ssoagent", env.owner.patRO), "c")
+	})
+
+	t.Run("org-bound PAT accepted", func(t *testing.T) {
+		mustGit(t, work, "push", env.cloneURLNS(entHandle, "ssoagent", bound), "main")
+		// The publish permission travels the same gate (v* tag creation).
+		mustGit(t, work, "tag", "v1.0.0")
+		mustGit(t, work, "push", env.cloneURLNS(entHandle, "ssoagent", bound), "v1.0.0")
+	})
+
+	t.Run("non-enforcing org unaffected", func(t *testing.T) {
+		other := seedWorkdir(t, kindFixture("skill", openHandle, "openagent", "1.0.0"))
+		mustGit(t, other, "push", env.cloneURLNS(openHandle, "openagent", env.owner.patRW), "main")
+	})
+}
+
+// TestPreReceiveHookFailsClosed: the hook must never accept a push whose ref
+// list it could not read in full (§6.3 is a deny-by-default policy point).
+func TestPreReceiveHookFailsClosed(t *testing.T) {
+	line := zeroesOID + " " + strings.Repeat("a", 40) + " refs/heads/feature\n"
+
+	t.Run("stdin read error", func(t *testing.T) {
+		var stderr bytes.Buffer
+		in := io.MultiReader(strings.NewReader(line), errReader{})
+		if code := gitsrv.RunPreReceiveHook(in, &stderr); code == 0 {
+			t.Fatalf("hook accepted a push it could not read: %q", stderr.String())
+		}
+		if !strings.Contains(stderr.String(), "could not read") {
+			t.Fatalf("expected a read-failure message, got %q", stderr.String())
+		}
+	})
+
+	t.Run("malformed ref line", func(t *testing.T) {
+		var stderr bytes.Buffer
+		if code := gitsrv.RunPreReceiveHook(strings.NewReader("not a ref update\n"), &stderr); code == 0 {
+			t.Fatalf("hook accepted an unparsable ref update: %q", stderr.String())
+		}
+	})
+}
+
+const zeroesOID = "0000000000000000000000000000000000000000"
+
+// errReader fails on first read, standing in for a truncated hook stdin.
+type errReader struct{}
+
+func (errReader) Read([]byte) (int, error) { return 0, errors.New("stdin: connection reset") }
 
 func newUUID(t *testing.T) uuid.UUID {
 	t.Helper()

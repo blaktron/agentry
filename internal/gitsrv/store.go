@@ -36,6 +36,12 @@ func NewRepoStore(cfg config.Config) (*RepoStore, error) {
 		}
 		gitBin = p
 	}
+	// §6.5 depends on `git archive` ignoring gitattributes; prove it against
+	// this binary now rather than discovering at publish time that releases
+	// have been silently filtered by a pushed export-ignore (see archive.go).
+	if err := verifyArchiveNeutralizesAttributes(gitBin); err != nil {
+		return nil, err
+	}
 	hookBin, err := os.Executable()
 	if err != nil {
 		return nil, fmt.Errorf("gitsrv: resolve executable for hooks: %w", err)
@@ -109,6 +115,45 @@ func (s *RepoStore) Remove(repoID uuid.UUID) error {
 		return fmt.Errorf("gitsrv: refusing to remove outside data dir")
 	}
 	return os.RemoveAll(dir)
+}
+
+// RefsAt reads the current object id of each named ref, omitting refs that do
+// not exist. Push bookkeeping uses it to tell which requested updates were
+// actually applied: receive-pack exits 0 even when the pre-receive hook
+// rejects every command, so the repository — not the request — is the
+// authority on what changed (§6.3).
+func (s *RepoStore) RefsAt(ctx context.Context, repoID uuid.UUID, refs []string) (map[string]string, error) {
+	args := []string{"-C", s.Path(repoID), "for-each-ref", "--format=%(objectname) %(refname)"}
+	for _, ref := range refs {
+		// Only well-formed ref names become patterns: receive-pack commands
+		// come from the client, and a leading "-" or a glob would otherwise
+		// be read as an option or widen the match.
+		if !safeRefName(ref) {
+			continue
+		}
+		args = append(args, ref)
+	}
+	out, err := exec.CommandContext(ctx, s.gitBin, args...).Output() //nolint:gosec // fixed binary; ref names validated above
+	if err != nil {
+		return nil, fmt.Errorf("gitsrv: for-each-ref: %w", err)
+	}
+	have := make(map[string]string)
+	for _, line := range strings.Split(string(out), "\n") {
+		oid, name, ok := strings.Cut(line, " ")
+		if ok {
+			have[name] = oid
+		}
+	}
+	return have, nil
+}
+
+// safeRefName reports whether a client-supplied ref name is a plain,
+// fully-qualified ref: safe to hand to git as a literal pattern.
+func safeRefName(ref string) bool {
+	if !strings.HasPrefix(ref, "refs/") || len(ref) > 512 {
+		return false
+	}
+	return !strings.ContainsAny(ref, " \t\n*?[]\\^:~")
 }
 
 // DiskUsage returns the repo's approximate size in bytes.
