@@ -463,6 +463,106 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /user/sessions:
+    get:
+      operationId: listUserSessions
+      tags: [users]
+      summary: List the caller's active browser sessions (§12.1).
+      description: >
+        Sessions are cookie sessions. A PAT-authenticated caller has no
+        sessions of its own, so the list is empty (200, not an error) —
+        a PAT is not a way to enumerate someone's browser sessions.
+      responses:
+        "200":
+          description: Active, unexpired, unrevoked sessions, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionList"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: revokeOtherUserSessions
+      tags: [users]
+      summary: Revoke every session except the calling one ("sign out everywhere else").
+      description: >
+        The calling session survives, so the caller is not logged out of the
+        browser they are using. Session-only: a PAT cannot revoke sessions
+        (403), for the same reason it cannot list them.
+      responses:
+        "204":
+          description: Other sessions revoked.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /user/sessions/{sessionId}:
+    delete:
+      operationId: revokeUserSession
+      tags: [users]
+      summary: Revoke one of the caller's own sessions (§12.1).
+      description: >
+        Own sessions only. An id that is not one of the caller's live
+        sessions answers 404 whether it does not exist or belongs to
+        somebody else — the two are deliberately indistinguishable.
+        Session-only: a PAT cannot revoke sessions (403).
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Revoked.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /ruleset-releases/latest/bundle:
+    get:
+      operationId: getLatestRulesetBundle
+      tags: [meta]
+      summary: The newest published S3/S4 rule bundle, for `agentry validate --rules-update`.
+      description: >
+        Returns the deployment's rule bundle as an uncompressed tar of the
+        bundle directory (`bundle.yaml` plus the family YAML files), exactly
+        the bytes `pkg/rules.LoadBundle` reads. The advertised identity
+        travels in headers so a client can check what it got without
+        unpacking first:
+
+
+        `X-Agentry-Bundle-Semver` — the ruleset release semver;
+        `X-Agentry-Bundle-Digest` — the `sha256:<hex>` content digest
+        recorded on the `ruleset_releases` row; `ETag` — the same digest.
+
+
+        The digest is the pin: a client MUST recompute it over the received
+        bundle and refuse a mismatch. Bundle-level *signatures* do not exist
+        yet (see DEVIATIONS DEV-024); this endpoint pins by digest only.
+      security: []
+      responses:
+        "200":
+          description: The rule bundle as a tar archive.
+          headers:
+            X-Agentry-Bundle-Semver:
+              schema:
+                type: string
+              description: Ruleset release semver.
+            X-Agentry-Bundle-Digest:
+              schema:
+                type: string
+              description: "sha256:<hex> content digest of the bundle."
+            ETag:
+              schema:
+                type: string
+          content:
+            application/x-tar:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: "#/components/responses/Problem"
+
   /orgs:
     post:
       operationId: createOrg
@@ -2707,6 +2807,38 @@ components:
         nextCursor:
           type: string
           description: Opaque; absent on the last page.
+
+    SessionList:
+      type: object
+      required: [sessions]
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/SessionInfo"
+
+    SessionInfo:
+      type: object
+      required: [id, createdAt, lastSeenAt, current]
+      properties:
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        lastSeenAt:
+          type: string
+          format: date-time
+        current:
+          type: boolean
+          description: True for the session making this request.
+        ip:
+          type: string
+          description: Client address recorded at session creation.
+        userAgent:
+          type: string
+          description: User-Agent recorded at session creation.
 
     RulesetRelease:
       type: object

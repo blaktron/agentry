@@ -1343,6 +1343,27 @@ type SearchResults struct {
 	Total   *int                       `json:"total,omitempty"`
 }
 
+// SessionInfo defines model for SessionInfo.
+type SessionInfo struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Current True for the session making this request.
+	Current bool               `json:"current"`
+	Id      openapi_types.UUID `json:"id"`
+
+	// Ip Client address recorded at session creation.
+	Ip         *string   `json:"ip,omitempty"`
+	LastSeenAt time.Time `json:"lastSeenAt"`
+
+	// UserAgent User-Agent recorded at session creation.
+	UserAgent *string `json:"userAgent,omitempty"`
+}
+
+// SessionList defines model for SessionList.
+type SessionList struct {
+	Sessions []SessionInfo `json:"sessions"`
+}
+
 // SocialLoginResult Outcome of a social-login callback: either a session (like password login) or a pending TOTP challenge to complete at POST /auth/2fa/totp/challenge.
 type SocialLoginResult struct {
 	// Challenge Single-use, five-minute challenge; present iff totpRequired.
@@ -2685,6 +2706,17 @@ type ClientInterface interface {
 	// Corresponds with GET /review-queue (the `ListReviewQueue` operationId).
 	ListReviewQueue(ctx context.Context, params *ListReviewQueueParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetLatestRulesetBundle The newest published S3/S4 rule bundle, for `agentry validate --rules-update`.
+	//
+	// Returns the deployment's rule bundle as an uncompressed tar of the bundle directory (`bundle.yaml` plus the family YAML files), exactly the bytes `pkg/rules.LoadBundle` reads. The advertised identity travels in headers so a client can check what it got without unpacking first:
+	//
+	// `X-Agentry-Bundle-Semver` — the ruleset release semver; `X-Agentry-Bundle-Digest` — the `sha256:<hex>` content digest recorded on the `ruleset_releases` row; `ETag` — the same digest.
+	//
+	// The digest is the pin: a client MUST recompute it over the received bundle and refuse a mismatch. Bundle-level *signatures* do not exist yet (see DEVIATIONS DEV-024); this endpoint pins by digest only.
+	//
+	// Corresponds with GET /ruleset-releases/latest/bundle (the `GetLatestRulesetBundle` operationId).
+	GetLatestRulesetBundle(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// SearchAgents Full-text search over public agents with facets (§10.4).
 	//
 	// Corresponds with GET /search (the `SearchAgents` operationId).
@@ -2722,6 +2754,25 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
 	DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RevokeOtherUserSessions Revoke every session except the calling one ("sign out everywhere else").
+	//
+	// The calling session survives, so the caller is not logged out of the browser they are using. A PAT caller has no calling session to keep and therefore revokes nothing (204).
+	//
+	// Corresponds with DELETE /user/sessions (the `RevokeOtherUserSessions` operationId).
+	RevokeOtherUserSessions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListUserSessions List the caller's active browser sessions (§12.1).
+	//
+	// Sessions are cookie sessions. A PAT-authenticated caller has no sessions of its own, so the list is empty (200, not an error) — a PAT is not a way to enumerate someone's browser sessions.
+	//
+	// Corresponds with GET /user/sessions (the `ListUserSessions` operationId).
+	ListUserSessions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RevokeUserSession Revoke one of the caller's own sessions (§12.1).
+	//
+	// Corresponds with DELETE /user/sessions/{sessionId} (the `RevokeUserSession` operationId).
+	RevokeUserSession(ctx context.Context, sessionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UnstarAgent Remove a star (idempotent, §9.2).
 	//
@@ -4585,6 +4636,27 @@ func (c *Client) ListReviewQueue(ctx context.Context, params *ListReviewQueuePar
 	return c.Client.Do(req)
 }
 
+// GetLatestRulesetBundle The newest published S3/S4 rule bundle, for `agentry validate --rules-update`.
+//
+// Returns the deployment's rule bundle as an uncompressed tar of the bundle directory (`bundle.yaml` plus the family YAML files), exactly the bytes `pkg/rules.LoadBundle` reads. The advertised identity travels in headers so a client can check what it got without unpacking first:
+//
+// `X-Agentry-Bundle-Semver` — the ruleset release semver; `X-Agentry-Bundle-Digest` — the `sha256:<hex>` content digest recorded on the `ruleset_releases` row; `ETag` — the same digest.
+//
+// The digest is the pin: a client MUST recompute it over the received bundle and refuse a mismatch. Bundle-level *signatures* do not exist yet (see DEVIATIONS DEV-024); this endpoint pins by digest only.
+//
+// Corresponds with GET /ruleset-releases/latest/bundle (the `GetLatestRulesetBundle` operationId).
+func (c *Client) GetLatestRulesetBundle(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetLatestRulesetBundleRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // SearchAgents Full-text search over public agents with facets (§10.4).
 //
 // Corresponds with GET /search (the `SearchAgents` operationId).
@@ -4673,6 +4745,55 @@ func (c *Client) UpdateCurrentUser(ctx context.Context, body UpdateCurrentUserJS
 // Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
 func (c *Client) DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteCurrentUserRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RevokeOtherUserSessions Revoke every session except the calling one ("sign out everywhere else").
+//
+// The calling session survives, so the caller is not logged out of the browser they are using. A PAT caller has no calling session to keep and therefore revokes nothing (204).
+//
+// Corresponds with DELETE /user/sessions (the `RevokeOtherUserSessions` operationId).
+func (c *Client) RevokeOtherUserSessions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRevokeOtherUserSessionsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListUserSessions List the caller's active browser sessions (§12.1).
+//
+// Sessions are cookie sessions. A PAT-authenticated caller has no sessions of its own, so the list is empty (200, not an error) — a PAT is not a way to enumerate someone's browser sessions.
+//
+// Corresponds with GET /user/sessions (the `ListUserSessions` operationId).
+func (c *Client) ListUserSessions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListUserSessionsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RevokeUserSession Revoke one of the caller's own sessions (§12.1).
+//
+// Corresponds with DELETE /user/sessions/{sessionId} (the `RevokeUserSession` operationId).
+func (c *Client) RevokeUserSession(ctx context.Context, sessionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRevokeUserSessionRequest(c.Server, sessionId)
 	if err != nil {
 		return nil, err
 	}
@@ -8695,6 +8816,33 @@ func NewListReviewQueueRequest(server string, params *ListReviewQueueParams) (*h
 	return req, nil
 }
 
+// NewGetLatestRulesetBundleRequest constructs an http.Request for the GetLatestRulesetBundle method
+func NewGetLatestRulesetBundleRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/ruleset-releases/latest/bundle")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewSearchAgentsRequest constructs an http.Request for the SearchAgents method
 func NewSearchAgentsRequest(server string, params *SearchAgentsParams) (*http.Request, error) {
 	var err error
@@ -9032,6 +9180,94 @@ func NewDeleteCurrentUserRequest(server string, params *DeleteCurrentUserParams)
 	}
 
 	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRevokeOtherUserSessionsRequest constructs an http.Request for the RevokeOtherUserSessions method
+func NewRevokeOtherUserSessionsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/sessions")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListUserSessionsRequest constructs an http.Request for the ListUserSessions method
+func NewListUserSessionsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/sessions")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRevokeUserSessionRequest constructs an http.Request for the RevokeUserSession method
+func NewRevokeUserSessionRequest(server string, sessionId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "sessionId", sessionId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/sessions/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -10110,6 +10346,19 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /review-queue (the `ListReviewQueue` operationId).
 	ListReviewQueueWithResponse(ctx context.Context, params *ListReviewQueueParams, reqEditors ...RequestEditorFn) (*ListReviewQueueResponse, error)
 
+	// GetLatestRulesetBundleWithResponse The newest published S3/S4 rule bundle, for `agentry validate --rules-update`.
+	//
+	// Returns the deployment's rule bundle as an uncompressed tar of the bundle directory (`bundle.yaml` plus the family YAML files), exactly the bytes `pkg/rules.LoadBundle` reads. The advertised identity travels in headers so a client can check what it got without unpacking first:
+	//
+	// `X-Agentry-Bundle-Semver` — the ruleset release semver; `X-Agentry-Bundle-Digest` — the `sha256:<hex>` content digest recorded on the `ruleset_releases` row; `ETag` — the same digest.
+	//
+	// The digest is the pin: a client MUST recompute it over the received bundle and refuse a mismatch. Bundle-level *signatures* do not exist yet (see DEVIATIONS DEV-024); this endpoint pins by digest only.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /ruleset-releases/latest/bundle (the `GetLatestRulesetBundle` operationId).
+	GetLatestRulesetBundleWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetLatestRulesetBundleResponse, error)
+
 	// SearchAgentsWithResponse Full-text search over public agents with facets (§10.4).
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -10155,6 +10404,31 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
 	DeleteCurrentUserWithResponse(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*DeleteCurrentUserResponse, error)
+
+	// RevokeOtherUserSessionsWithResponse Revoke every session except the calling one ("sign out everywhere else").
+	//
+	// The calling session survives, so the caller is not logged out of the browser they are using. A PAT caller has no calling session to keep and therefore revokes nothing (204).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /user/sessions (the `RevokeOtherUserSessions` operationId).
+	RevokeOtherUserSessionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*RevokeOtherUserSessionsResponse, error)
+
+	// ListUserSessionsWithResponse List the caller's active browser sessions (§12.1).
+	//
+	// Sessions are cookie sessions. A PAT-authenticated caller has no sessions of its own, so the list is empty (200, not an error) — a PAT is not a way to enumerate someone's browser sessions.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /user/sessions (the `ListUserSessions` operationId).
+	ListUserSessionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListUserSessionsResponse, error)
+
+	// RevokeUserSessionWithResponse Revoke one of the caller's own sessions (§12.1).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /user/sessions/{sessionId} (the `RevokeUserSession` operationId).
+	RevokeUserSessionWithResponse(ctx context.Context, sessionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokeUserSessionResponse, error)
 
 	// UnstarAgentWithResponse Remove a star (idempotent, §9.2).
 	//
@@ -14015,6 +14289,56 @@ func (r ListReviewQueueResponse) ContentType() string {
 	return ""
 }
 
+// GetLatestRulesetBundleResponse200Headers the declared response headers of an HTTP 200 response for GetLatestRulesetBundle
+type GetLatestRulesetBundleResponse200Headers struct {
+	ETag                 *string
+	XAgentryBundleDigest *string
+	XAgentryBundleSemver *string
+}
+
+type GetLatestRulesetBundleResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *GetLatestRulesetBundleResponse200Headers
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetLatestRulesetBundleResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetLatestRulesetBundleResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetLatestRulesetBundleResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetLatestRulesetBundleResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetLatestRulesetBundleResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type SearchAgentsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -14242,6 +14566,136 @@ func (r DeleteCurrentUserResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r DeleteCurrentUserResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RevokeOtherUserSessionsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r RevokeOtherUserSessionsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r RevokeOtherUserSessionsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RevokeOtherUserSessionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RevokeOtherUserSessionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RevokeOtherUserSessionsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListUserSessionsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *SessionList
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListUserSessionsResponse) GetJSON200() *SessionList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListUserSessionsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListUserSessionsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListUserSessionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListUserSessionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListUserSessionsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RevokeUserSessionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r RevokeUserSessionResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r RevokeUserSessionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RevokeUserSessionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RevokeUserSessionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RevokeUserSessionResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -15997,6 +16451,25 @@ func (c *ClientWithResponses) ListReviewQueueWithResponse(ctx context.Context, p
 	return ParseListReviewQueueResponse(rsp)
 }
 
+// GetLatestRulesetBundleWithResponse The newest published S3/S4 rule bundle, for `agentry validate --rules-update`.
+//
+// Returns the deployment's rule bundle as an uncompressed tar of the bundle directory (`bundle.yaml` plus the family YAML files), exactly the bytes `pkg/rules.LoadBundle` reads. The advertised identity travels in headers so a client can check what it got without unpacking first:
+//
+// `X-Agentry-Bundle-Semver` — the ruleset release semver; `X-Agentry-Bundle-Digest` — the `sha256:<hex>` content digest recorded on the `ruleset_releases` row; `ETag` — the same digest.
+//
+// The digest is the pin: a client MUST recompute it over the received bundle and refuse a mismatch. Bundle-level *signatures* do not exist yet (see DEVIATIONS DEV-024); this endpoint pins by digest only.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /ruleset-releases/latest/bundle (the `GetLatestRulesetBundle` operationId).
+func (c *ClientWithResponses) GetLatestRulesetBundleWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetLatestRulesetBundleResponse, error) {
+	rsp, err := c.GetLatestRulesetBundle(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetLatestRulesetBundleResponse(rsp)
+}
+
 // SearchAgentsWithResponse Full-text search over public agents with facets (§10.4).
 //
 // Returns a wrapper object for the known response body format(s).
@@ -16077,6 +16550,49 @@ func (c *ClientWithResponses) DeleteCurrentUserWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseDeleteCurrentUserResponse(rsp)
+}
+
+// RevokeOtherUserSessionsWithResponse Revoke every session except the calling one ("sign out everywhere else").
+//
+// The calling session survives, so the caller is not logged out of the browser they are using. A PAT caller has no calling session to keep and therefore revokes nothing (204).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /user/sessions (the `RevokeOtherUserSessions` operationId).
+func (c *ClientWithResponses) RevokeOtherUserSessionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*RevokeOtherUserSessionsResponse, error) {
+	rsp, err := c.RevokeOtherUserSessions(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRevokeOtherUserSessionsResponse(rsp)
+}
+
+// ListUserSessionsWithResponse List the caller's active browser sessions (§12.1).
+//
+// Sessions are cookie sessions. A PAT-authenticated caller has no sessions of its own, so the list is empty (200, not an error) — a PAT is not a way to enumerate someone's browser sessions.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /user/sessions (the `ListUserSessions` operationId).
+func (c *ClientWithResponses) ListUserSessionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListUserSessionsResponse, error) {
+	rsp, err := c.ListUserSessions(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListUserSessionsResponse(rsp)
+}
+
+// RevokeUserSessionWithResponse Revoke one of the caller's own sessions (§12.1).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /user/sessions/{sessionId} (the `RevokeUserSession` operationId).
+func (c *ClientWithResponses) RevokeUserSessionWithResponse(ctx context.Context, sessionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokeUserSessionResponse, error) {
+	rsp, err := c.RevokeUserSession(ctx, sessionId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRevokeUserSessionResponse(rsp)
 }
 
 // UnstarAgentWithResponse Remove a star (idempotent, §9.2).
@@ -18818,6 +19334,59 @@ func ParseListReviewQueueResponse(rsp *http.Response) (*ListReviewQueueResponse,
 	return response, nil
 }
 
+// ParseGetLatestRulesetBundleResponse parses an HTTP response from a GetLatestRulesetBundleWithResponse call
+func ParseGetLatestRulesetBundleResponse(rsp *http.Response) (*GetLatestRulesetBundleResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetLatestRulesetBundleResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers GetLatestRulesetBundleResponse200Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = &value
+		}
+		if values := rsp.Header.Values("X-Agentry-Bundle-Digest"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Agentry-Bundle-Digest", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XAgentryBundleDigest = &value
+		}
+		if values := rsp.Header.Values("X-Agentry-Bundle-Semver"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Agentry-Bundle-Semver", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XAgentryBundleSemver = &value
+		}
+		response.Headers200 = &headers
+	}
+
+	return response, nil
+}
+
 // ParseSearchAgentsResponse parses an HTTP response from a SearchAgentsWithResponse call
 func ParseSearchAgentsResponse(rsp *http.Response) (*SearchAgentsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -18959,6 +19528,97 @@ func ParseDeleteCurrentUserResponse(rsp *http.Response) (*DeleteCurrentUserRespo
 	}
 
 	response := &DeleteCurrentUserResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRevokeOtherUserSessionsResponse parses an HTTP response from a RevokeOtherUserSessionsWithResponse call
+func ParseRevokeOtherUserSessionsResponse(rsp *http.Response) (*RevokeOtherUserSessionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RevokeOtherUserSessionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListUserSessionsResponse parses an HTTP response from a ListUserSessionsWithResponse call
+func ParseListUserSessionsResponse(rsp *http.Response) (*ListUserSessionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListUserSessionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SessionList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRevokeUserSessionResponse parses an HTTP response from a RevokeUserSessionWithResponse call
+func ParseRevokeUserSessionResponse(rsp *http.Response) (*RevokeUserSessionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RevokeUserSessionResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}

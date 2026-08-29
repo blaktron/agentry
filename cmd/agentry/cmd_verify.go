@@ -1,7 +1,6 @@
-// `agentry verify` (§11): download a pinned version and check its sha256
-// digest against the registry (§9.4 step 3). DSSE attestation signature
-// verification arrives with M4 signing; until the API serves an
-// attestation, the command says so.
+// `agentry verify` (§11): download a pinned version, check its sha256 digest
+// against the registry (§9.4 step 3), and verify the DSSE attestation (§8.8)
+// against the signing keys pinned for that registry.
 package main
 
 import (
@@ -20,18 +19,32 @@ var exactVersionRe = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+([-+].*)?$`)
 
 // newVerifyCmd builds the verify command.
 func newVerifyCmd() *cobra.Command {
-	return &cobra.Command{
+	var strict bool
+	cmd := &cobra.Command{
 		Use:   "verify <ns/name@version>",
-		Short: "Verify a published version's archive digest (exit code for CI)",
+		Short: "Verify a published version's archive digest and attestation (exit code for CI)",
 		Long: "Resolve an exact version, download its archive, recompute the sha256\n" +
 			"digest, and compare it to the registry's (§9.4). Prints PASS/FAIL and\n" +
 			"exits accordingly, and verifies the DSSE attestation (§8.8) against\n" +
-			"the registry's signing keys, pinned on first use.",
+			"the registry's signing keys, pinned on first use.\n\n" +
+			"Exit codes. A digest mismatch or a signature that fails to verify\n" +
+			"(\"mismatch\") is always non-zero. An UNVERIFIABLE attestation — the key\n" +
+			"endpoint is unreachable, or the registry has rotated to key ids this\n" +
+			"machine has not pinned — exits 0 by default, because it describes a\n" +
+			"problem with the check rather than evidence against the artifact, and a\n" +
+			"transient DNS failure should not look like a compromised release.\n\n" +
+			"--strict makes unverifiable non-zero as well. Use it in CI, where\n" +
+			"\"we could not check\" and \"we checked and it was fine\" must not be the\n" +
+			"same green build. An unsigned version (no attestation published at all)\n" +
+			"is reported and exits 0 in both modes: self-host may run unsigned (§8.8).",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runVerify(cmd, args[0])
+			return runVerify(cmd, args[0], strict)
 		},
 	}
+	cmd.Flags().BoolVar(&strict, "strict", false,
+		"also fail when the attestation could not be verified (key fetch failure, key rotation)")
+	return cmd
 }
 
 // verifyReport is the --json output shape.
@@ -46,7 +59,7 @@ type verifyReport struct {
 }
 
 // runVerify executes the verification.
-func runVerify(cmd *cobra.Command, ref string) error {
+func runVerify(cmd *cobra.Command, ref string, strict bool) error {
 	parsed, err := registry.ParseRef(ref)
 	if err != nil {
 		return err
@@ -57,7 +70,7 @@ func runVerify(cmd *cobra.Command, ref string) error {
 
 	reg := registryURL()
 	token := credentialFor(reg)
-	client, err := newAPIClient(reg, token)
+	client, err := newAPIClientChecked(cmd, reg, token)
 	if err != nil {
 		return err
 	}
@@ -131,6 +144,12 @@ func runVerify(cmd *cobra.Command, ref string) error {
 	// reported and tolerated (self-host may run unsigned, §8.8).
 	if att.State == "mismatch" {
 		return fmt.Errorf("attestation verification failed for %s: %s", ref, att.Detail)
+	}
+	// "unverifiable" is the check failing, not the artifact. Default behavior
+	// is unchanged (exit 0, state printed); --strict promotes it, so a CI job
+	// that cannot reach the key endpoint reports that instead of passing.
+	if strict && att.State == "unverifiable" {
+		return fmt.Errorf("attestation unverifiable for %s: %s (--strict)", ref, att.Detail)
 	}
 	return nil
 }

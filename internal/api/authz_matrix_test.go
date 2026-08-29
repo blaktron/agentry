@@ -169,6 +169,18 @@ func requestFactories(env *testEnv) map[string]opRequest {
 				return "/api/v1/user/tokens/" + uuid.NewString()
 			},
 		},
+		"listUserSessions": {method: "GET", path: sPath("/api/v1/user/sessions")},
+		// Non-destructive by construction: the query spares the calling
+		// session, and every matrix caller holds exactly one.
+		"revokeOtherUserSessions": {method: "DELETE", path: sPath("/api/v1/user/sessions")},
+		"revokeUserSession": {
+			// A random id belongs to nobody, so an authorized caller gets 404
+			// (not denied) and no fixture session is destroyed.
+			method: "DELETE",
+			path: func(*matrixSeed, string) string {
+				return "/api/v1/user/sessions/" + uuid.NewString()
+			},
+		},
 		"createOrg": {
 			method: "POST", path: sPath("/api/v1/orgs"),
 			body: func(*matrixSeed, string) any {
