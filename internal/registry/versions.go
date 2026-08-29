@@ -230,28 +230,16 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 
 	// Deterministic archive from the allowlist (§6.5 steps 2–3).
 	include := manifest.ResolveInclude(m.Publish.Include, files)
-	pr, pw := io.Pipe()
-	infoCh := make(chan ArchiveInfo, 1)
-	errCh := make(chan error, 1)
-	go func() {
-		info, err := BuildArchive(in.Workspace, include, pw)
-		_ = pw.CloseWithError(err)
-		infoCh <- info
-		errCh <- err
-	}()
 	// Stage through a temp buffer file: the key depends on the digest.
 	tmp, err := os.CreateTemp("", "agentry-archive-*")
 	if err != nil {
 		return Version{}, err
 	}
 	defer func() { _ = os.Remove(tmp.Name()); _ = tmp.Close() }()
-	if _, err := io.Copy(tmp, pr); err != nil {
-		return Version{}, fmt.Errorf("registry: stage archive: %w", err)
+	info, err := stageArchive(in.Workspace, include, tmp)
+	if err != nil {
+		return Version{}, err
 	}
-	if err := <-errCh; err != nil {
-		return Version{}, fmt.Errorf("registry: build archive: %w", err)
-	}
-	info := <-infoCh
 
 	// cli-upload: never trust client packing (§6.5) — the server-built
 	// digest is authoritative; a claimed digest must agree.
@@ -321,6 +309,46 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 	}
 
 	return s.st.Queries().GetVersionByID(ctx, versionID)
+}
+
+// stageArchive builds the deterministic archive into dst and returns its
+// identity. BuildArchive runs on its own goroutine because it writes to a
+// pipe; the two rules that keep that safe are (a) the reader end is ALWAYS
+// closed with an error, so a builder parked in pw.Write is released rather
+// than blocking forever on a dst write failure, and (b) we wait for the
+// builder before returning, so no goroutine outlives this call.
+func stageArchive(root string, include []manifest.FileInfo, dst io.Writer) (ArchiveInfo, error) {
+	pr, pw := io.Pipe()
+	type built struct {
+		info ArchiveInfo
+		err  error
+	}
+	done := make(chan built, 1)
+	go func() {
+		info, err := BuildArchive(root, include, pw)
+		_ = pw.CloseWithError(err)
+		done <- built{info: info, err: err}
+	}()
+
+	_, copyErr := io.Copy(dst, pr)
+	// Unblock the builder unconditionally: on a copy failure it is otherwise
+	// asleep in pw.Write with nobody left to read (B-18).
+	if copyErr != nil {
+		_ = pr.CloseWithError(copyErr)
+	} else {
+		_ = pr.Close()
+	}
+	b := <-done
+
+	// The build error is the more informative one when both fire: a copy
+	// failure is usually just the pipe reporting the build's own abort.
+	if b.err != nil {
+		return ArchiveInfo{}, fmt.Errorf("registry: build archive: %w", b.err)
+	}
+	if copyErr != nil {
+		return ArchiveInfo{}, fmt.Errorf("registry: stage archive: %w", copyErr)
+	}
+	return b.info, nil
 }
 
 // SubmitTag prepares a workspace from a repo tag and submits it (git-tag
