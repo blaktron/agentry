@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 
 	"github.com/google/uuid"
@@ -16,6 +17,7 @@ import (
 	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
 	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
+	"github.com/PLACEHOLDER_ORG/agentry/pkg/manifest"
 )
 
 // AgentNameRe is the §4.2 agent-name grammar.
@@ -42,6 +44,53 @@ type Service struct {
 	// eventSink receives post-commit state transitions for webhook fan-out
 	// (§9.3, M6). Set by the api layer; nil = no fan-out.
 	eventSink EventSink
+	// policyGate enforces the §8.6 knobs that reject at V-validation time.
+	// nil = platform baseline only (no submission-time policy rejections).
+	policyGate PolicyGate
+	// require2FAPublic turns on the §12.1/§19 gate for public publishes.
+	require2FAPublic bool
+	log              *slog.Logger
+}
+
+// PolicyGate evaluates the §8.6 policy knobs that reject a submission before
+// it ever enters the state machine: blockedCapabilities, allowedLicenses and
+// requireEvals. It is a seam because resolving the effective policy needs the
+// scan package, which already depends on this one.
+type PolicyGate interface {
+	// CheckSubmission returns the blocking issues, or nil to allow.
+	CheckSubmission(ctx context.Context, in PolicySubmission) []error
+}
+
+// PolicySubmission is what the policy gate judges.
+type PolicySubmission struct {
+	// NamespaceKind / NamespaceID select the org overlay ("org" only).
+	NamespaceKind string
+	NamespaceID   uuid.UUID
+	// Public marks a public agent (allowedLicenses applies to those).
+	Public bool
+	// License is the manifest's SPDX id.
+	License string
+	// ManifestJSON is the canonical manifest (capability tokens).
+	ManifestJSON []byte
+	// Files is the workspace inventory (requireEvals looks for evals/).
+	Files []manifest.FileInfo
+}
+
+// SetPolicyGate wires submission-time policy enforcement (§8.6).
+func (s *Service) SetPolicyGate(g PolicyGate) { s.policyGate = g }
+
+// SetPublicPublish2FA enables the §12.1/§19 gate: publishing to a public
+// namespace requires TOTP on the submitting account.
+func (s *Service) SetPublicPublish2FA(on bool) { s.require2FAPublic = on }
+
+// SetLogger overrides the service logger (defaults to slog.Default).
+func (s *Service) SetLogger(l *slog.Logger) { s.log = l }
+
+func (s *Service) logger() *slog.Logger {
+	if s.log == nil {
+		return slog.Default()
+	}
+	return s.log
 }
 
 // EventSink receives a committed state transition so the caller can fan it out
@@ -78,6 +127,11 @@ var ErrNotFound = errors.New("registry: not found")
 
 // ErrDenied wraps authorization failures with domain context.
 var ErrDenied = errors.New("registry: denied")
+
+// ErrTwoFactorRequired reports the §12.1/§19 public-publish 2FA gate. It is
+// distinct from ErrDenied so the API can answer 403 with an actionable
+// message rather than folding it into a validation error.
+var ErrTwoFactorRequired = errors.New("registry: two-factor authentication required")
 
 // Agent is the resolved agent row with namespace context.
 type Agent = storegen.GetAgentByPathRow

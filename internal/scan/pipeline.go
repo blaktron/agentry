@@ -3,17 +3,22 @@ package scan
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/notify"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
 	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/webhook"
 )
 
 // Pipeline is the M4 implementation of registry.Pipeline (§8): it fetches the
@@ -28,10 +33,13 @@ type Pipeline struct {
 	orch        *Orchestrator
 	signer      Signer
 	aud         *audit.Writer
+	notifier    notify.Notifier
 	log         *slog.Logger
 	registryURL string
 	rulesetID   uuid.UUID
 	rulesetVer  string
+	// rescanBatch is the sweep page size (tests shrink it to force paging).
+	rescanBatch int32
 }
 
 // PipelineDeps bundles the pipeline's collaborators.
@@ -42,11 +50,18 @@ type PipelineDeps struct {
 	Orchestrator *Orchestrator
 	Signer       Signer
 	Audit        *audit.Writer
-	Log          *slog.Logger
-	RegistryURL  string
-	RulesetID    uuid.UUID
-	RulesetVer   string
+	// Notifier reaches the author when their published agent is quarantined
+	// (§8.7). Defaults to the log notifier.
+	Notifier    notify.Notifier
+	Log         *slog.Logger
+	RegistryURL string
+	RulesetID   uuid.UUID
+	RulesetVer  string
 }
+
+// StuckScanCap is the §7 timeout: a version in `scanning` longer than this
+// had its scan die, and the watchdog routes it to review.
+const StuckScanCap = 30 * time.Minute
 
 // NewPipeline assembles the pipeline.
 func NewPipeline(d PipelineDeps) *Pipeline {
@@ -54,21 +69,29 @@ func NewPipeline(d PipelineDeps) *Pipeline {
 	if log == nil {
 		log = slog.Default()
 	}
+	notifier := d.Notifier
+	if notifier == nil {
+		notifier = notify.LogNotifier{Log: log}
+	}
 	return &Pipeline{
 		st: d.Store, reg: d.Registry, blobs: d.Blobs, orch: d.Orchestrator,
-		signer: d.Signer, aud: d.Audit, log: log, registryURL: d.RegistryURL,
-		rulesetID: d.RulesetID, rulesetVer: d.RulesetVer,
+		signer: d.Signer, aud: d.Audit, notifier: notifier, log: log,
+		registryURL: d.RegistryURL, rulesetID: d.RulesetID, rulesetVer: d.RulesetVer,
+		rescanBatch: 100,
 	}
 }
 
 // VersionSubmitted implements registry.Pipeline: run the scan for a version
 // that just entered `scanning`. Idempotent — safe to call again after a crash.
-func (p *Pipeline) VersionSubmitted(ctx context.Context, versionID uuid.UUID) {
+func (p *Pipeline) VersionSubmitted(ctx context.Context, versionID uuid.UUID) error {
 	if err := p.Scan(ctx, versionID, "publish"); err != nil {
 		p.log.Error("pipeline: scan failed", "version", versionID, "err", err)
-		// Fail closed: leave the version in scanning; a rescan or manual
-		// retry re-runs. The state machine never advances on error.
+		// Fail closed: the version stays in scanning and the watchdog routes
+		// it to review at the §7 cap. Returning the error lets the submitter
+		// learn that now instead of guessing from a stalled status.
+		return err
 	}
+	return nil
 }
 
 // Scan runs the full pipeline for one version, persists the run, and drives
@@ -83,47 +106,132 @@ func (p *Pipeline) Scan(ctx context.Context, versionID uuid.UUID, trigger string
 	if err != nil {
 		return fmt.Errorf("scan: load agent: %w", err)
 	}
-	result, policyVer, err := p.runOrchestrator(ctx, v, agent)
+
+	effPolicy, policyVer, err := p.effectivePolicy(ctx, agent)
+	if err != nil {
+		// A policy we cannot parse is not a policy we may ignore. Falling
+		// back to the platform baseline would silently LOOSEN an org that
+		// asked to be tightened (§8.6), so the version goes to a human.
+		p.log.Error("scan: effective policy unusable; failing to review",
+			"version", versionID, "err", err)
+		return p.FailToReview(ctx, v, agent, trigger, "policy", err)
+	}
+
+	runID, resume, err := p.resumeOrCreateRun(ctx, v, trigger, effPolicy)
 	if err != nil {
 		return err
 	}
-	runID := newUUID()
-	effPolicy, _ := p.effectivePolicy(ctx, agent)
-	policySnapshot, _ := json.Marshal(effPolicy)
-	if _, err := q.CreateScanRun(ctx, storegen.CreateScanRunParams{
-		ID: runID, VersionID: versionID, Trigger: trigger,
-		RulesetReleaseID: p.rulesetID, PolicySnapshot: policySnapshot,
-		JudgeModel: strptr(p.orch.judge.Name()),
-	}); err != nil {
-		return fmt.Errorf("scan: create run: %w", err)
+
+	result, err := p.runOrchestrator(ctx, v, agent, effPolicy, resume, runID, false)
+	if err != nil {
+		return err
 	}
-	if err := p.persist(ctx, runID, result); err != nil {
+	if result.Fatal != nil {
+		return p.FailToReview(ctx, v, agent, trigger, "report", result.Fatal)
+	}
+	if err := p.finishRun(ctx, runID, result); err != nil {
 		return err
 	}
 	return p.applyDecision(ctx, agent, v, runID, result, policyVer)
 }
 
+// resumeOrCreateRun reuses an interrupted run for this version+trigger and
+// reports which of its stages are already done (§8.2: "stage results keyed by
+// (scan_run_id, scanner)"). At-least-once queue delivery means a retried scan
+// job used to create a second run and a second copy of every finding.
+func (p *Pipeline) resumeOrCreateRun(ctx context.Context, v storegen.AgentVersion, trigger string, pol Policy) (uuid.UUID, Resume, error) {
+	q := p.st.Queries()
+	prior, err := q.RunningScanRunForVersion(ctx, storegen.RunningScanRunForVersionParams{
+		VersionID: v.ID, Trigger: trigger,
+	})
+	if err == nil {
+		resume, rerr := p.resumeFromRun(ctx, prior.ID)
+		if rerr != nil {
+			return uuid.Nil, Resume{}, rerr
+		}
+		p.log.Info("scan: resuming interrupted run", "run", prior.ID, "version", v.ID,
+			"completed_stages", len(resume.Skip))
+		return prior.ID, resume, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, Resume{}, fmt.Errorf("scan: look up running run: %w", err)
+	}
+
+	snapshot, err := json.Marshal(pol)
+	if err != nil {
+		return uuid.Nil, Resume{}, fmt.Errorf("scan: policy snapshot: %w", err)
+	}
+	runID := newUUID()
+	if _, err := q.CreateScanRun(ctx, storegen.CreateScanRunParams{
+		ID: runID, VersionID: v.ID, Trigger: trigger,
+		RulesetReleaseID: p.rulesetID, PolicySnapshot: snapshot,
+		JudgeModel: strptr(p.orch.judge.Name()),
+	}); err != nil {
+		return uuid.Nil, Resume{}, fmt.Errorf("scan: create run: %w", err)
+	}
+	return runID, Resume{}, nil
+}
+
+// resumeFromRun collects the stages a previous attempt finished cleanly and
+// the findings they already wrote.
+func (p *Pipeline) resumeFromRun(ctx context.Context, runID uuid.UUID) (Resume, error) {
+	q := p.st.Queries()
+	stages, err := q.ListStageResults(ctx, runID)
+	if err != nil {
+		return Resume{}, fmt.Errorf("scan: list stage results: %w", err)
+	}
+	skip := map[string]bool{}
+	for _, s := range stages {
+		// Only clean stages are skippable; an errored stage must run again.
+		if s.Status == "ok" {
+			skip[s.Scanner] = true
+		}
+	}
+	if len(skip) == 0 {
+		return Resume{}, nil
+	}
+	rows, err := q.ListFindings(ctx, runID)
+	if err != nil {
+		return Resume{}, fmt.Errorf("scan: list findings: %w", err)
+	}
+	var prior []Finding
+	for _, row := range rows {
+		if skip[stageOf(row.Scanner)] {
+			prior = append(prior, findingFromRow(row))
+		}
+	}
+	return Resume{Skip: skip, Findings: prior}, nil
+}
+
 // runOrchestrator materializes the archive and runs the scanner DAG,
-// returning the result and effective policy version. It performs no DB writes
-// or state transitions — Scan and RescanSweep layer those on differently.
-func (p *Pipeline) runOrchestrator(ctx context.Context, v storegen.AgentVersion, agent storegen.GetAgentByIDRow) (RunResult, int, error) {
+// persisting each stage's findings as it completes. It performs no state
+// transitions — Scan and the rescan path layer those on differently.
+func (p *Pipeline) runOrchestrator(
+	ctx context.Context,
+	v storegen.AgentVersion,
+	agent storegen.GetAgentByIDRow,
+	pol Policy,
+	resume Resume,
+	runID uuid.UUID,
+	useCache bool,
+) (RunResult, error) {
 	q := p.st.Queries()
 
 	workDir, err := os.MkdirTemp("", "agentry-scan-*")
 	if err != nil {
-		return RunResult{}, 0, err
+		return RunResult{}, err
 	}
 	defer func() { _ = os.RemoveAll(workDir) }()
 	extractDir := workDir + "/cur"
 	if err := os.MkdirAll(extractDir, 0o750); err != nil {
-		return RunResult{}, 0, err
+		return RunResult{}, err
 	}
 	if v.ArchiveKey == nil {
-		return RunResult{}, 0, fmt.Errorf("scan: version has no archive")
+		return RunResult{}, fmt.Errorf("scan: version has no archive")
 	}
 	blob, err := p.blobs.Get(ctx, *v.ArchiveKey)
 	if err != nil {
-		return RunResult{}, 0, fmt.Errorf("scan: fetch archive: %w", err)
+		return RunResult{}, fmt.Errorf("scan: fetch archive: %w", err)
 	}
 	var compSize int64
 	if v.ArchiveSize != nil {
@@ -131,85 +239,192 @@ func (p *Pipeline) runOrchestrator(ctx context.Context, v storegen.AgentVersion,
 	}
 	if err := Extract(blob, extractDir, compSize, DefaultLimits()); err != nil {
 		_ = blob.Close()
-		return RunResult{}, 0, fmt.Errorf("scan: extract: %w", err)
+		return RunResult{}, fmt.Errorf("scan: extract: %w", err)
 	}
 	_ = blob.Close()
 
+	// S9's baseline. Absence is normal (first-ever publish, §8.3 S9); a
+	// database error is NOT, and treating the two alike silently skipped the
+	// rug-pull diff — the single most documented real-world attack shape.
 	var prevManifest []byte
-	if prev, err := q.GetPreviousPublishedVersion(ctx, storegen.GetPreviousPublishedVersionParams{AgentID: v.AgentID, ID: v.ID}); err == nil {
+	prev, err := q.GetPreviousPublishedVersion(ctx, storegen.GetPreviousPublishedVersionParams{
+		AgentID: v.AgentID, ID: v.ID,
+	})
+	switch {
+	case err == nil:
 		prevManifest = prev.Manifest
+	case errors.Is(err, pgx.ErrNoRows):
+		// First publish: S9 is skipped by design and S8 weighs more.
+	default:
+		return RunResult{}, fmt.Errorf("scan: previous published version: %w", err)
 	}
-	accountAge := -1
-	if u, err := q.GetUserByID(ctx, v.SubmittedBy); err == nil {
-		accountAge = int(time.Since(u.CreatedAt).Hours() / 24)
-	}
-	recent, _ := q.CountRecentVersionsBySubmitter(ctx, v.SubmittedBy)
 
-	effPolicy, policyVer := p.effectivePolicy(ctx, agent)
+	// S8's publisher-behaviour signals. Same reasoning: a lookup failure must
+	// not read as "a brand-new account with no publish history".
+	u, err := q.GetUserByID(ctx, v.SubmittedBy)
+	if err != nil {
+		return RunResult{}, fmt.Errorf("scan: submitter: %w", err)
+	}
+	accountAge := int(time.Since(u.CreatedAt).Hours() / 24)
+	recent, err := q.CountRecentVersionsBySubmitter(ctx, v.SubmittedBy)
+	if err != nil {
+		return RunResult{}, fmt.Errorf("scan: submitter publish velocity: %w", err)
+	}
+
+	digest := ""
+	if v.ArchiveDigest != nil {
+		digest = *v.ArchiveDigest
+	}
+	if useCache && digest != "" {
+		resume = p.mergeCachedStages(ctx, digest, resume)
+	}
+
+	// Persisting per stage (rather than in one bulk write at the end) is what
+	// makes a retried scan job resumable: the run's completed stages and their
+	// findings are already durable when the process dies mid-DAG.
+	var sinkMu sync.Mutex
+	var sinkErrs []error
+	onStage := func(res StageResult) {
+		sinkMu.Lock()
+		defer sinkMu.Unlock()
+		if err := p.persistStage(ctx, runID, res); err != nil {
+			sinkErrs = append(sinkErrs, err)
+		}
+		if digest != "" && res.Err == nil && cacheable(res.Scanner) {
+			p.storeCachedStage(ctx, digest, res)
+		}
+	}
+
 	result := p.orch.Run(ctx, RunParams{
 		Input: Input{
 			Dir: extractDir, ManifestJSON: v.Manifest, Kind: agent.Kind,
 			PrevManifestJSON: prevManifest, AccountAgeDays: accountAge,
 			RecentPublishCount: int(recent),
 		},
-		Policy: effPolicy, Public: agent.Visibility == "public", AgentName: agent.Name,
+		Policy: pol, Public: agent.Visibility == "public", AgentName: agent.Name,
+		NamespaceIsOrg: agent.NamespaceKind == "org",
+		Resume:         resume,
+		OnStage:        onStage,
 	})
-	return result, policyVer, nil
+	sinkMu.Lock()
+	defer sinkMu.Unlock()
+	if len(sinkErrs) > 0 {
+		return RunResult{}, fmt.Errorf("scan: persist stage results: %w", errors.Join(sinkErrs...))
+	}
+	return result, nil
 }
 
-// scanForRescan runs the scanners for a rescan without transitioning the
-// version (§8.7); rescanOne inspects the result.
-func (p *Pipeline) scanForRescan(ctx context.Context, versionID uuid.UUID) (RunResult, error) {
-	q := p.st.Queries()
-	v, err := q.GetVersionByID(ctx, versionID)
-	if err != nil {
-		return RunResult{}, err
+// persistStage writes one stage's findings and its (scan_run_id, scanner)
+// result row in a single transaction, so a stage is never recorded complete
+// without its findings.
+func (p *Pipeline) persistStage(ctx context.Context, runID uuid.UUID, res StageResult) error {
+	if res.Skipped {
+		return nil
 	}
-	agent, err := q.GetAgentByID(ctx, v.AgentID)
-	if err != nil {
-		return RunResult{}, err
+	status := "ok"
+	detail := map[string]any{"findings": len(res.Findings)}
+	if res.Err != nil {
+		status = "error"
+		detail["error"] = res.Err.Error()
 	}
-	result, _, err := p.runOrchestrator(ctx, v, agent)
-	return result, err
-}
-
-func (p *Pipeline) persist(ctx context.Context, runID uuid.UUID, result RunResult) error {
+	detailJSON, err := json.Marshal(detail)
+	if err != nil {
+		return err
+	}
 	return p.st.WithTx(ctx, func(q *storegen.Queries) error {
-		for _, f := range result.Findings {
-			detail, _ := json.Marshal(f.Detail)
-			var linePtr *int32
-			var lineEnd *int32
-			if f.LineStart > 0 {
-				ls := int32(f.LineStart)
-				le := int32(f.LineEnd)
-				linePtr, lineEnd = &ls, &le
-			}
-			var filePtr, excerptPtr *string
-			if f.FilePath != "" {
-				filePtr = &f.FilePath
-			}
-			if f.Excerpt != "" {
-				excerptPtr = &f.Excerpt
-			}
-			if _, err := q.InsertFinding(ctx, storegen.InsertFindingParams{
-				ID: newUUID(), ScanRunID: runID, Scanner: f.Scanner,
-				Severity: string(f.Severity), Confidence: string(f.Confidence),
-				Title: f.Title, FilePath: filePtr, LineStart: linePtr, LineEnd: lineEnd,
-				Excerpt: excerptPtr, Detail: detail,
-			}); err != nil {
+		for _, f := range res.Findings {
+			if err := insertFinding(ctx, q, runID, f); err != nil {
 				return err
 			}
 		}
-		status := "passed"
-		if len(result.Findings) > 0 {
-			status = "findings"
-		}
-		if len(result.Report.StageErrors) > 0 {
-			status = "error"
-		}
-		return q.FinishScanRun(ctx, storegen.FinishScanRunParams{
-			ID: runID, Status: status, ReportDigest: strptr(result.ReportDigest),
+		return q.UpsertStageResult(ctx, storegen.UpsertStageResultParams{
+			ScanRunID: runID, Scanner: res.Scanner, Status: status, Detail: detailJSON,
 		})
+	})
+}
+
+func insertFinding(ctx context.Context, q *storegen.Queries, runID uuid.UUID, f Finding) error {
+	detail, err := json.Marshal(f.Detail)
+	if err != nil {
+		return err
+	}
+	var linePtr, lineEnd *int32
+	if f.LineStart > 0 {
+		ls := int32(f.LineStart)
+		le := int32(f.LineEnd)
+		linePtr, lineEnd = &ls, &le
+	}
+	var filePtr, excerptPtr *string
+	if f.FilePath != "" {
+		filePtr = &f.FilePath
+	}
+	if f.Excerpt != "" {
+		excerptPtr = &f.Excerpt
+	}
+	_, err = q.InsertFinding(ctx, storegen.InsertFindingParams{
+		ID: newUUID(), ScanRunID: runID, Scanner: f.Scanner,
+		Severity: string(f.Severity), Confidence: string(f.Confidence),
+		Title: f.Title, FilePath: filePtr, LineStart: linePtr, LineEnd: lineEnd,
+		Excerpt: excerptPtr, Detail: detail,
+	})
+	return err
+}
+
+// findingFromRow rebuilds a pipeline finding from its persisted row, so a
+// resumed run reports and gates on the same set a fresh one would.
+func findingFromRow(row storegen.Finding) Finding {
+	f := Finding{
+		Scanner: row.Scanner, Severity: Severity(row.Severity),
+		Confidence: Confidence(row.Confidence), Title: row.Title,
+	}
+	if row.FilePath != nil {
+		f.FilePath = *row.FilePath
+	}
+	if row.LineStart != nil {
+		f.LineStart = int(*row.LineStart)
+	}
+	if row.LineEnd != nil {
+		f.LineEnd = int(*row.LineEnd)
+	}
+	if row.Excerpt != nil {
+		f.Excerpt = *row.Excerpt
+	}
+	if len(row.Detail) > 0 {
+		var d map[string]any
+		if json.Unmarshal(row.Detail, &d) == nil {
+			f.Detail = d
+		}
+	}
+	return f
+}
+
+// stageOf maps a finding's scanner id back to the stage that produced it:
+// stages tag findings as "S4/inj-override-001" or "S5/C1_injection".
+func stageOf(scanner string) string {
+	for i := 0; i < len(scanner); i++ {
+		if scanner[i] == '/' {
+			return scanner[:i]
+		}
+	}
+	return scanner
+}
+
+// finishRun closes the scan run: status, report digest, judge prompt hash.
+func (p *Pipeline) finishRun(ctx context.Context, runID uuid.UUID, result RunResult) error {
+	status := "passed"
+	if len(result.Findings) > 0 {
+		status = "findings"
+	}
+	if len(result.Report.StageErrors) > 0 {
+		status = "error"
+	}
+	var promptHash *string
+	if result.JudgePromptHash != "" {
+		promptHash = &result.JudgePromptHash
+	}
+	return p.st.Queries().FinishScanRun(ctx, storegen.FinishScanRunParams{
+		ID: runID, Status: status, ReportDigest: strptr(result.ReportDigest),
+		JudgePromptHash: promptHash,
 	})
 }
 
@@ -222,7 +437,7 @@ func (p *Pipeline) applyDecision(ctx context.Context, agent storegen.GetAgentByI
 		if err := p.reg.Transition(ctx, v.ID, registry.StatusPublished, result.Decision.Reason, sysEvent); err != nil {
 			return err
 		}
-		return p.sign(ctx, agent, v, runID, result, policyVer)
+		return p.sign(ctx, p.st.Queries(), agent, v, runID, result.ReportDigest, result.JudgeModel, policyVer)
 
 	case OutcomeRejected:
 		return p.reg.Transition(ctx, v.ID, registry.StatusRejected, result.Decision.Reason, sysEvent)
@@ -232,24 +447,141 @@ func (p *Pipeline) applyDecision(ctx context.Context, agent storegen.GetAgentByI
 			return err
 		}
 		return p.st.WithTx(ctx, func(q *storegen.Queries) error {
-			var orgID *uuid.UUID
-			if agent.NamespaceKind == "org" && result.Decision.Queue == "org" {
-				orgID = &agent.NamespaceID
-			}
-			_, err := q.CreateReviewItem(ctx, storegen.CreateReviewItemParams{
-				ID: newUUID(), VersionID: v.ID, Queue: result.Decision.Queue, OrgID: orgID,
-			})
-			return err
+			return createReviewItem(ctx, q, v.ID, agent, result.Decision.Queue)
 		})
 	}
 	return nil
 }
 
-// sign builds and stores the DSSE attestation on → published (§8.8).
-func (p *Pipeline) sign(ctx context.Context, agent storegen.GetAgentByIDRow, v storegen.AgentVersion, runID uuid.UUID, result RunResult, policyVer int) error {
+// createReviewItem files a version for human review on the right queue
+// (§8.6). org_id is set only for the org queue, which is the only queue that
+// has an owner to scope to. Re-filing an already-pending item is a no-op.
+func createReviewItem(ctx context.Context, q *storegen.Queries, versionID uuid.UUID, agent storegen.GetAgentByIDRow, queue string) error {
+	if queue != "org" {
+		queue = "platform"
+	}
+	var orgID *uuid.UUID
+	if queue == "org" && agent.NamespaceKind == "org" {
+		id := agent.NamespaceID
+		orgID = &id
+	}
+	if queue == "org" && orgID == nil {
+		// Defensive: an org-queue item with no org is undecidable. The gate
+		// no longer produces one; if anything ever does, it lands where a
+		// human can actually see it.
+		queue = "platform"
+	}
+	_, err := q.CreateReviewItem(ctx, storegen.CreateReviewItemParams{
+		ID: newUUID(), VersionID: versionID, Queue: queue, OrgID: orgID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil // already pending for this version
+	}
+	return err
+}
+
+// FailToReview implements the §7 fail-closed rule: a version whose scan could
+// not complete is recorded as an errored run with an S0/pipeline-error
+// finding and routed to human review — never silently published, and never
+// left parked in `scanning`. Idempotent.
+func (p *Pipeline) FailToReview(ctx context.Context, v storegen.AgentVersion, agent storegen.GetAgentByIDRow, trigger, kind string, cause error) error {
+	if trigger != "publish" && trigger != "rescan" && trigger != "manual" {
+		trigger = "manual"
+	}
+	snapshot, err := json.Marshal(DefaultBaseline())
+	if err != nil {
+		return err
+	}
+	runID := newUUID()
+	q := p.st.Queries()
+	if _, err := q.CreateScanRun(ctx, storegen.CreateScanRunParams{
+		ID: runID, VersionID: v.ID, Trigger: trigger,
+		RulesetReleaseID: p.rulesetID, PolicySnapshot: snapshot,
+		JudgeModel: strptr(p.orch.judge.Name()),
+	}); err != nil {
+		return fmt.Errorf("scan: create failure run: %w", err)
+	}
+	reason := "pipeline could not complete (" + kind + ")"
+	finding := Finding{
+		Scanner: "S0/pipeline-error", Severity: SevMedium, Confidence: ConfHigh,
+		Title:  "Pipeline could not complete — routed to human review",
+		Detail: map[string]any{"stage": kind, "error": cause.Error()},
+	}
+	if err := p.st.WithTx(ctx, func(tx *storegen.Queries) error {
+		if err := insertFinding(ctx, tx, runID, finding); err != nil {
+			return err
+		}
+		return tx.FinishScanRun(ctx, storegen.FinishScanRunParams{ID: runID, Status: "error"})
+	}); err != nil {
+		return err
+	}
+
+	// Only versions still in flight move; a rescan failure must not drag a
+	// published version backwards.
+	if registry.Status(v.Status) == registry.StatusScanning {
+		if err := p.reg.Transition(ctx, v.ID, registry.StatusNeedsReview, reason,
+			audit.Event{ActorKind: audit.ActorSystem}); err != nil {
+			return err
+		}
+	}
+	queue := "platform"
+	if agent.NamespaceKind == "org" {
+		queue = "org"
+	}
+	return p.st.WithTx(ctx, func(tx *storegen.Queries) error {
+		return createReviewItem(ctx, tx, v.ID, agent, queue)
+	})
+}
+
+// ReconcileStuckScans is the §7 watchdog: versions that entered `scanning`
+// and never came out (terminally failed job, worker killed mid-DAG) are
+// routed to review with an S0/pipeline-error finding once they pass the
+// 30-minute cap. Without it a lost scan job parked a version forever, visible
+// to nobody. Returns how many it moved.
+func (p *Pipeline) ReconcileStuckScans(ctx context.Context) (int, error) {
+	cutoff := time.Now().Add(-StuckScanCap)
+	rows, err := p.st.Queries().ListStuckScanningVersions(ctx, storegen.ListStuckScanningVersionsParams{
+		UpdatedAt: cutoff, Limit: 200,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("scan: list stuck scans: %w", err)
+	}
+	moved := 0
+	for _, v := range rows {
+		agent, err := p.st.Queries().GetAgentByID(ctx, v.AgentID)
+		if err != nil {
+			p.log.Error("scan: watchdog agent lookup", "version", v.ID, "err", err)
+			continue
+		}
+		cause := fmt.Errorf("version stayed in scanning past the %s cap (§7)", StuckScanCap)
+		if err := p.FailToReview(ctx, v, agent, "publish", "timeout", cause); err != nil {
+			p.log.Error("scan: watchdog could not fail version to review", "version", v.ID, "err", err)
+			continue
+		}
+		p.log.Warn("scan: stuck version routed to review", "version", v.ID, "agent", agent.Name)
+		moved++
+	}
+	return moved, nil
+}
+
+// sign builds and stores the DSSE attestation on → published (§8.8). Signing
+// happens exactly once per version (§7): quarantine/reinstate and a re-review
+// that republishes never re-issue it.
+func (p *Pipeline) sign(ctx context.Context, q *storegen.Queries, agent storegen.GetAgentByIDRow, v storegen.AgentVersion, runID uuid.UUID, reportDigest, judgeModel string, policyVer int) error {
 	if p.signer == nil {
 		p.log.Warn("pipeline: no signer configured; skipping attestation")
 		return nil
+	}
+	if _, err := q.GetAttestation(ctx, v.ID); err == nil {
+		return nil // already signed (§7: exactly once)
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("scan: attestation lookup: %w", err)
+	}
+	if reportDigest == "" {
+		// The attestation's whole claim is "this report describes these
+		// bytes". Signing an empty digest asserts nothing while looking
+		// exactly like a valid attestation (§8.8).
+		return fmt.Errorf("scan: refusing to sign version %s with an empty report digest", v.ID)
 	}
 	digest := ""
 	if v.ArchiveDigest != nil {
@@ -257,7 +589,7 @@ func (p *Pipeline) sign(ctx context.Context, agent storegen.GetAgentByIDRow, v s
 	}
 	stmt := BuildStatement(
 		p.registryURL, agent.Namespace+"/"+agent.Name, v.Version, digest, v.CommitSha, v.Source,
-		ScanRunRef{ID: runID.String(), RulesetVer: p.rulesetVer, ReportDigest: result.ReportDigest, JudgeModel: result.JudgeModel},
+		ScanRunRef{ID: runID.String(), RulesetVer: p.rulesetVer, ReportDigest: reportDigest, JudgeModel: judgeModel},
 		policyVer,
 	)
 	env, err := p.signer.Sign(stmt)
@@ -268,32 +600,57 @@ func (p *Pipeline) sign(ctx context.Context, agent storegen.GetAgentByIDRow, v s
 	if err != nil {
 		return err
 	}
-	_, err = p.st.Queries().CreateAttestation(ctx, storegen.CreateAttestationParams{
+	_, err = q.CreateAttestation(ctx, storegen.CreateAttestationParams{
 		ID: newUUID(), VersionID: v.ID, PredicateType: PredicateType,
 		DsseEnvelope: envJSON, KeyID: p.signer.KeyID(),
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil // raced with another writer; the row exists
+	}
 	return err
 }
 
-// effectivePolicy resolves baseline ← org overlay (§8.6).
-func (p *Pipeline) effectivePolicy(ctx context.Context, agent storegen.GetAgentByIDRow) (Policy, int) {
-	q := p.st.Queries()
+// effectivePolicy resolves baseline ← org overlay (§8.6). An org document
+// that will not parse is an error, not a reason to fall back to the looser
+// platform baseline: org policies may only TIGHTEN, so a silent fallback
+// hands the org the opposite of what it configured.
+func (p *Pipeline) effectivePolicy(ctx context.Context, agent storegen.GetAgentByIDRow) (Policy, int, error) {
+	return effectivePolicyFor(ctx, p.st.Queries(), agent.NamespaceKind, agent.NamespaceID)
+}
+
+func effectivePolicyFor(ctx context.Context, q *storegen.Queries, namespaceKind string, namespaceID uuid.UUID) (Policy, int, error) {
 	baseline := DefaultBaseline()
 	version := 1
-	if row, err := q.GetBaselinePolicy(ctx); err == nil {
-		if parsed, err := ParsePolicy(row.Document); err == nil {
-			baseline = parsed
-			version = int(row.Version)
+	row, err := q.GetBaselinePolicy(ctx)
+	switch {
+	case err == nil:
+		parsed, perr := ParsePolicy(row.Document)
+		if perr != nil {
+			return Policy{}, 0, fmt.Errorf("scan: platform baseline policy: %w", perr)
 		}
+		baseline, version = parsed, int(row.Version)
+	case errors.Is(err, pgx.ErrNoRows):
+		// No stored baseline: the compiled-in default is the baseline.
+	default:
+		return Policy{}, 0, fmt.Errorf("scan: load baseline policy: %w", err)
 	}
-	if agent.NamespaceKind == "org" {
-		if row, err := q.GetPolicyForOrg(ctx, &agent.NamespaceID); err == nil {
-			if org, err := ParsePolicy(row.Document); err == nil {
-				return Merge(baseline, org), version + int(row.Version)
-			}
+
+	if namespaceKind != "org" {
+		return baseline, version, nil
+	}
+	orgRow, err := q.GetPolicyForOrg(ctx, &namespaceID)
+	switch {
+	case err == nil:
+		org, perr := ParsePolicy(orgRow.Document)
+		if perr != nil {
+			return Policy{}, 0, fmt.Errorf("scan: org policy: %w", perr)
 		}
+		return Merge(baseline, org), version + int(orgRow.Version), nil
+	case errors.Is(err, pgx.ErrNoRows):
+		return baseline, version, nil
+	default:
+		return Policy{}, 0, fmt.Errorf("scan: load org policy: %w", err)
 	}
-	return baseline, version
 }
 
 func newUUID() uuid.UUID {
@@ -306,44 +663,87 @@ func newUUID() uuid.UUID {
 
 func strptr(s string) *string { return &s }
 
-// ApproveOrReject moves a needs_review version to published or rejected after
-// a reviewer decision (§8.6). On approve→published it signs the attestation,
-// mirroring the auto-publish path. The review-item state and audit are
-// written by the caller; this owns the §7 transition + signing.
-func (p *Pipeline) ApproveOrReject(ctx context.Context, versionID uuid.UUID, target registry.Status, rationale string) error {
-	sysEvent := audit.Event{ActorKind: audit.ActorSystem}
-	if err := p.reg.Transition(ctx, versionID, target, "review: "+rationale, sysEvent); err != nil {
-		return err
-	}
-	if target != registry.StatusPublished {
-		return nil
-	}
-	q := p.st.Queries()
-	v, err := q.GetVersionByID(ctx, versionID)
+// ReviewDecision is one reviewer verdict on a review item (§8.6).
+type ReviewDecision struct {
+	ItemID    uuid.UUID
+	VersionID uuid.UUID
+	// Target is the §7 state the decision moves the version to.
+	Target registry.Status
+	// State is the review_items state ("approved" | "rejected").
+	State     string
+	Rationale string
+	DecidedBy uuid.UUID
+	// Audit is the caller's audit event (actor, request context); the action
+	// and target are filled in here.
+	Audit audit.Event
+}
+
+// DecideReview records a reviewer's verdict AND performs the §7 transition in
+// one transaction, signing on approve→published.
+//
+// These used to be two commits. A transient failure between them left the
+// item marked decided while the version stayed in needs_review — and the
+// handler's "already decided" guard then refused every retry, so the version
+// was stuck with no way forward but a manual database edit.
+func (p *Pipeline) DecideReview(ctx context.Context, in ReviewDecision) error {
+	var trans registry.TransitionResult
+	err := p.st.WithTx(ctx, func(q *storegen.Queries) error {
+		v, err := q.GetVersionByID(ctx, in.VersionID)
+		if err != nil {
+			return err
+		}
+		agent, err := q.GetAgentByID(ctx, v.AgentID)
+		if err != nil {
+			return err
+		}
+		if err := q.DecideReviewItem(ctx, storegen.DecideReviewItemParams{
+			ID: in.ItemID, State: in.State, DecidedBy: &in.DecidedBy, Rationale: &in.Rationale,
+		}); err != nil {
+			return err
+		}
+		e := in.Audit
+		e.Action = audit.ActionReviewDecision
+		e.TargetKind, e.TargetID = "review_item", in.ItemID
+		e.Detail = map[string]any{
+			"decision": in.State, "version_id": in.VersionID.String(), "target": string(in.Target),
+		}
+		if err := p.aud.Write(ctx, q, e); err != nil {
+			return err
+		}
+		trans, err = p.reg.TransitionInTx(ctx, q, in.VersionID, in.Target, "review: "+in.Rationale, audit.Event{
+			ActorKind: audit.ActorSystem,
+		})
+		if err != nil {
+			return err
+		}
+		if in.Target != registry.StatusPublished {
+			return nil
+		}
+		// Signing is part of the same unit of work: a published version
+		// without an attestation is not something to reconcile later.
+		run, err := q.LatestScanRunForVersion(ctx, in.VersionID)
+		if err != nil {
+			return fmt.Errorf("scan: latest run for review decision: %w", err)
+		}
+		reportDigest := ""
+		if run.ReportDigest != nil {
+			reportDigest = *run.ReportDigest
+		}
+		judge := ""
+		if run.JudgeModel != nil {
+			judge = *run.JudgeModel
+		}
+		_, policyVer, err := effectivePolicyFor(ctx, q, agent.NamespaceKind, agent.NamespaceID)
+		if err != nil {
+			return err
+		}
+		return p.sign(ctx, q, agent, v, run.ID, reportDigest, judge, policyVer)
+	})
 	if err != nil {
 		return err
 	}
-	agent, err := q.GetAgentByID(ctx, v.AgentID)
-	if err != nil {
-		return err
-	}
-	run, err := q.LatestScanRunForVersion(ctx, versionID)
-	if err != nil {
-		return err
-	}
-	reportDigest := ""
-	if run.ReportDigest != nil {
-		reportDigest = *run.ReportDigest
-	}
-	judge := ""
-	if run.JudgeModel != nil {
-		judge = *run.JudgeModel
-	}
-	_, policyVer := p.effectivePolicy(ctx, agent)
-	return p.sign(ctx, agent, v, run.ID, RunResult{
-		ReportDigest: reportDigest,
-		JudgeModel:   judge,
-	}, policyVer)
+	p.reg.EmitTransition(ctx, trans)
+	return nil
 }
 
 // Quarantine/Block/Reinstate implement the T&S platform actions (§7).
@@ -351,13 +751,21 @@ func (p *Pipeline) Quarantine(ctx context.Context, versionID uuid.UUID, reason s
 	return p.reg.Transition(ctx, versionID, registry.StatusQuarantined, reason, ev)
 }
 
-// PublishAdvisory records a security advisory for an agent (§8.7).
+// PublishAdvisory records a security advisory for an agent (§8.7) and
+// announces it on the org's webhooks.
 func (p *Pipeline) PublishAdvisory(ctx context.Context, agentID uuid.UUID, affected, severity, summary, detail string) error {
-	_, err := p.st.Queries().CreateAdvisory(ctx, storegen.CreateAdvisoryParams{
+	adv, err := p.st.Queries().CreateAdvisory(ctx, storegen.CreateAdvisoryParams{
 		ID: newUUID(), AgentID: agentID, AffectedVersions: affected,
 		Severity: severity, Summary: summary, Detail: strptrOrNil(detail),
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	p.reg.EmitAgentEvent(ctx, agentID, webhook.EventAdvisoryPublished, map[string]any{
+		"advisoryId": adv.ID.String(), "affectedVersions": affected,
+		"severity": severity, "summary": summary,
+	})
+	return nil
 }
 
 func strptrOrNil(s string) *string {
@@ -371,3 +779,7 @@ func strptrOrNil(s string) *string {
 // simulate "the ruleset learned something after this version was published"
 // (§8.7) without shipping two rule bundles. Not for production use.
 func (p *Pipeline) SetOrchestratorForTest(o *Orchestrator) { p.orch = o }
+
+// SetRescanBatchForTest shrinks the sweep page size so paging behaviour is
+// exercisable without publishing hundreds of versions. Not for production use.
+func (p *Pipeline) SetRescanBatchForTest(n int32) { p.rescanBatch = n }

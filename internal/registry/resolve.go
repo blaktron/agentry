@@ -49,8 +49,17 @@ type Resolved struct {
 	Yanked  bool
 }
 
+// ErrBlocked reports that trust & safety has disabled the agent (§7).
+var ErrBlocked = errors.New("registry: agent blocked by trust & safety")
+
 // ResolveVersion picks the version for a ref within an agent (§9.4 step 1).
 func (s *Service) ResolveVersion(ctx context.Context, a Agent, rangeStr, channel string) (Resolved, error) {
+	// A blocked agent resolves to nothing, whatever its version rows say.
+	// Blocking walks the versions too, but this is the check that holds if a
+	// scan finishes and publishes a version after the block landed.
+	if a.QuarantineState == "blocked" {
+		return Resolved{}, ErrBlocked
+	}
 	if channel == "" {
 		channel = "stable"
 	}
