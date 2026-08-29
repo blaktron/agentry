@@ -45,7 +45,7 @@ func (s *Server) mountSCIM(mux *http.ServeMux) {
 	mux.HandleFunc("GET /scim/v2/Users", s.scimAuth(s.scimListUsers))
 	mux.HandleFunc("GET /scim/v2/Users/{id}", s.scimAuth(s.scimGetUser))
 	mux.HandleFunc("PATCH /scim/v2/Users/{id}", s.scimAuth(s.scimPatchUser))
-	mux.HandleFunc("PUT /scim/v2/Users/{id}", s.scimAuth(s.scimPatchUser))
+	mux.HandleFunc("PUT /scim/v2/Users/{id}", s.scimAuth(s.scimPutUser))
 	mux.HandleFunc("DELETE /scim/v2/Users/{id}", s.scimAuth(s.scimDeleteUser))
 
 	mux.HandleFunc("POST /scim/v2/Groups", s.scimAuth(s.scimCreateGroup))
@@ -299,6 +299,78 @@ func (s *Server) scimPatchUser(w http.ResponseWriter, r *http.Request, sc scimCt
 	scimWrite(w, http.StatusOK, userToSCIM(id, u.Email, orDefault(u.DisplayName, u.Email), u.State == "active"))
 }
 
+// scimPutUser implements the spec-conformant full-resource replace (RFC 7644
+// §3.5.1). It used to be routed to the PatchOp decoder, which meant Okta's
+// deactivation — a PUT of the whole user with "active": false — decoded to
+// zero operations and returned 200 with nothing done. An IdP that believes it
+// has offboarded someone, on a registry where their sessions still work, is
+// the worst possible failure mode for §12.5.
+func (s *Server) scimPutUser(w http.ResponseWriter, r *http.Request, sc scimCtx) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		scimError(w, http.StatusNotFound, "user not found")
+		return
+	}
+	u, err := s.q().GetScimUser(r.Context(), storegen.GetScimUserParams{OrgID: sc.orgID, ID: id})
+	if err != nil {
+		scimError(w, http.StatusNotFound, "user not found")
+		return
+	}
+	var in scimUser
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
+		scimError(w, http.StatusBadRequest, "invalid SCIM user")
+		return
+	}
+
+	// active=false is the deactivation path: identical to PATCH active=false
+	// and DELETE — drop the membership, revoke org-bound PATs, kill sessions.
+	if !in.Active {
+		if err := s.scimDeactivate(r.Context(), sc.orgID, id); err != nil {
+			s.log.Error("scim put deactivate", "err", err)
+			scimError(w, http.StatusInternalServerError, "deactivate failed")
+			return
+		}
+		scimWrite(w, http.StatusOK, userToSCIM(id, u.Email, orDefault(u.DisplayName, u.Email), false))
+		return
+	}
+
+	// userName is the account's email here, and email changes are an identity
+	// change, not an attribute update: refuse rather than silently ignore, so
+	// an IdP that renames a user finds out instead of drifting.
+	if email := scimPrimaryEmail(in); email != "" && !strings.EqualFold(email, u.Email) {
+		scimError(w, http.StatusBadRequest, "userName/email is immutable; deactivate and re-provision instead")
+		return
+	}
+
+	displayName := u.DisplayName
+	if in.Name != nil && strings.TrimSpace(in.Name.Formatted) != "" {
+		displayName = in.Name.Formatted
+	}
+	err = s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
+		if displayName != u.DisplayName {
+			if _, err := q.UpdateUserDisplayName(r.Context(), storegen.UpdateUserDisplayNameParams{
+				ID: id, DisplayName: displayName,
+			}); err != nil {
+				return err
+			}
+		}
+		// Re-assert the membership: a PUT with active=true on someone
+		// previously deactivated is how an IdP reinstates them.
+		if err := q.UpsertMembership(r.Context(), storegen.UpsertMembershipParams{
+			OrgID: sc.orgID, UserID: id, Role: orDefault(u.Role, string(auth.RoleMember)), ViaScim: true,
+		}); err != nil {
+			return err
+		}
+		return s.auditW.Write(r.Context(), q, s.scimEvent(sc.orgID, audit.ActionSCIMUserProvision, "user", id))
+	})
+	if err != nil {
+		s.log.Error("scim put user", "err", err)
+		scimError(w, http.StatusInternalServerError, "update failed")
+		return
+	}
+	scimWrite(w, http.StatusOK, userToSCIM(id, u.Email, orDefault(displayName, u.Email), true))
+}
+
 func (s *Server) scimDeleteUser(w http.ResponseWriter, r *http.Request, sc scimCtx) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
@@ -382,8 +454,15 @@ func (s *Server) scimCreateGroup(w http.ResponseWriter, r *http.Request, sc scim
 		scimError(w, http.StatusInternalServerError, "create failed")
 		return
 	}
+	// A membership write that fails must be reported: SCIM clients retry on
+	// 5xx, and silently discarding the error left the IdP believing a group
+	// had been synced when the team was empty.
 	if len(in.Members) > 0 {
-		_ = s.scimReplaceMembers(r.Context(), sc.orgID, teamID, in.Members)
+		if err := s.scimReplaceMembers(r.Context(), sc.orgID, teamID, in.Members); err != nil {
+			s.log.Error("scim group create: member sync", "err", err, "team", teamID)
+			scimError(w, http.StatusInternalServerError, "group created but member sync failed; retry")
+			return
+		}
 	}
 	scimWrite(w, http.StatusCreated, scimGroup{
 		Schemas: []string{scimGroupSchema}, ID: teamID.String(), DisplayName: slug,
@@ -448,28 +527,54 @@ func (s *Server) scimPatchGroup(w http.ResponseWriter, r *http.Request, sc scimC
 		scimError(w, http.StatusBadRequest, "invalid PatchOp")
 		return
 	}
+	// Membership writes are the point of a group PATCH: a failure has to
+	// reach the IdP as a 5xx so it retries. Only "this user is not an org
+	// member" is tolerated — that is a legitimate no-op, not a lost write.
 	for _, op := range patch.Operations {
 		members := parseMembersValue(op.Value)
+		var err error
 		switch strings.ToLower(op.Op) {
 		case "replace":
 			if strings.EqualFold(op.Path, "members") || op.Path == "" {
-				_ = s.scimReplaceMembers(r.Context(), sc.orgID, t.ID, members)
+				err = s.scimReplaceMembers(r.Context(), sc.orgID, t.ID, members)
 			}
 		case "add":
 			for _, m := range members {
-				if uid, err := uuid.Parse(m.Value); err == nil {
-					_ = s.addTeamMemberIfOrgMember(r.Context(), sc.orgID, t.ID, uid)
+				uid, perr := uuid.Parse(m.Value)
+				if perr != nil {
+					continue
+				}
+				if aerr := s.addTeamMemberIfOrgMember(r.Context(), sc.orgID, t.ID, uid); aerr != nil &&
+					!errors.Is(aerr, errNotOrgMember) {
+					err = aerr
+					break
 				}
 			}
 		case "remove":
 			for _, m := range members {
-				if uid, err := uuid.Parse(m.Value); err == nil {
-					_, _ = s.q().RemoveTeamMember(r.Context(), storegen.RemoveTeamMemberParams{TeamID: t.ID, UserID: uid})
+				uid, perr := uuid.Parse(m.Value)
+				if perr != nil {
+					continue
+				}
+				if _, rerr := s.q().RemoveTeamMember(r.Context(), storegen.RemoveTeamMemberParams{
+					TeamID: t.ID, UserID: uid,
+				}); rerr != nil {
+					err = rerr
+					break
 				}
 			}
 		}
+		if err != nil {
+			s.log.Error("scim group patch: member sync", "err", err, "team", t.ID, "op", op.Op)
+			scimError(w, http.StatusInternalServerError, "group membership sync failed; retry")
+			return
+		}
 	}
-	_ = s.auditW.Write(r.Context(), s.q(), s.scimEvent(sc.orgID, audit.ActionSCIMGroupSync, "team", t.ID))
+	if err := s.auditW.Write(r.Context(), s.q(), s.scimEvent(sc.orgID, audit.ActionSCIMGroupSync, "team", t.ID)); err != nil {
+		s.log.Error("scim group patch: audit", "err", err, "team", t.ID)
+		scimError(w, http.StatusInternalServerError, "group synced but not audited; retry")
+		return
+	}
 	s.scimGetGroup(w, r, sc)
 }
 
@@ -514,8 +619,15 @@ func (s *Server) scimReplaceMembers(ctx context.Context, orgID, teamID uuid.UUID
 	})
 }
 
+// errNotOrgMember distinguishes "this user does not belong to the org" — a
+// no-op the IdP need not retry — from a genuine write failure.
+var errNotOrgMember = errors.New("scim: not an org member")
+
 func (s *Server) addTeamMemberIfOrgMember(ctx context.Context, orgID, teamID, userID uuid.UUID) error {
 	if _, err := s.q().GetMembership(ctx, storegen.GetMembershipParams{OrgID: orgID, UserID: userID}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return errNotOrgMember
+		}
 		return err
 	}
 	return s.q().AddTeamMember(ctx, storegen.AddTeamMemberParams{TeamID: teamID, UserID: userID})

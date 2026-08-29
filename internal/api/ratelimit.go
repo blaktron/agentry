@@ -64,12 +64,22 @@ type limitResult struct {
 	Reset time.Duration
 }
 
-// allow checks-and-consumes one token for the class+key pair.
-func (rl *rateLimits) allow(class, key string, lim rate.Limit, burst int) bool {
-	return rl.allowWithHeaders(class, key, lim, burst).OK
+// allowLogin applies the §19 login/register class limit (per client IP),
+// writes the §9.1 RateLimit-* headers, and on refusal writes the 429 problem.
+// Credential-establishing endpoints — register, login, SSO/social start and
+// callback, the SSO landing — sit outside the chokepoint, so this is the one
+// budget standing between them and a password-spraying client.
+func (s *Server) allowLogin(w http.ResponseWriter, r *http.Request) bool {
+	res := s.limits.allowWithHeaders("login", clientIP(r), s.classes.login, s.classes.loginBurst)
+	writeRateLimitHeaders(w, res)
+	if !res.OK {
+		problemTooMany(w, r, "try again later")
+		return false
+	}
+	return true
 }
 
-// allowWithHeaders is allow plus the header numbers. Both the decision and
+// allowWithHeaders checks-and-consumes one token for the class+key pair. Both the decision and
 // the numbers come from the same locked read, so the headers can never
 // describe a different moment than the decision they accompany.
 func (rl *rateLimits) allowWithHeaders(class, key string, lim rate.Limit, burst int) limitResult {

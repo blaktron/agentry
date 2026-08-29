@@ -104,8 +104,7 @@ func (s *Server) socialProvider(r *http.Request, name string) (social.Provider, 
 
 // SocialOidcStart implements GET /auth/oidc/{provider}/start.
 func (s *Server) SocialOidcStart(w http.ResponseWriter, r *http.Request, provider SocialOidcStartParamsProvider) {
-	if !s.limits.allow("login", clientIP(r), s.classes.login, s.classes.loginBurst) {
-		problemTooMany(w, r, "try again later")
+	if !s.allowLogin(w, r) {
 		return
 	}
 	if !s.requireDB(w, r) {
@@ -151,8 +150,7 @@ func (s *Server) SocialOidcStart(w http.ResponseWriter, r *http.Request, provide
 
 // SocialOidcCallback implements GET /auth/oidc/{provider}/callback.
 func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, provider SocialOidcCallbackParamsProvider, params SocialOidcCallbackParams) {
-	if !s.limits.allow("login", clientIP(r), s.classes.login, s.classes.loginBurst) {
-		problemTooMany(w, r, "try again later")
+	if !s.allowLogin(w, r) {
 		return
 	}
 	if !s.requireDB(w, r) {
@@ -357,8 +355,7 @@ func (s *Server) sealTOTPChallenge(userID uuid.UUID, provider string) (string, e
 
 // TotpChallenge implements POST /auth/2fa/totp/challenge.
 func (s *Server) TotpChallenge(w http.ResponseWriter, r *http.Request) {
-	if !s.limits.allow("login", clientIP(r), s.classes.login, s.classes.loginBurst) {
-		problemTooMany(w, r, "try again later")
+	if !s.allowLogin(w, r) {
 		return
 	}
 	if !s.requireDB(w, r) {
