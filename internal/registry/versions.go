@@ -14,6 +14,7 @@ import (
 
 	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/entitlements"
 	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
 	"github.com/PLACEHOLDER_ORG/agentry/pkg/manifest"
 )
@@ -211,8 +212,16 @@ type SubmitInput struct {
 	ClaimedDigest string // cli-upload: client digest to cross-check (may be empty)
 }
 
-// MaxVersionsPerDay is the §19 publish-velocity quota.
-const MaxVersionsPerDay = 20
+// The §19 publish-velocity quota and the archive quotas both come from the
+// entitlements Resolver (§14.2). subjectFor maps an agent onto the subject
+// whose plan governs it: the owning org, or the user whose personal namespace
+// holds it.
+func subjectFor(a Agent) entitlements.Subject {
+	if a.NamespaceKind == "org" {
+		return entitlements.ForOrg(a.NamespaceID)
+	}
+	return entitlements.ForUser(a.NamespaceID)
+}
 
 // ErrValidation carries manifest/validation failures to the API layer.
 type ErrValidation struct{ Issues []error }
@@ -235,12 +244,19 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 		return Version{}, errors.New("registry: no blob store configured")
 	}
 
+	// §19 quotas for this agent's owner, resolved once and used for both the
+	// publish-velocity check and the archive limits below.
+	lim, err := s.Entitlements().Limits(ctx, subjectFor(a))
+	if err != nil {
+		return Version{}, fmt.Errorf("registry: entitlements: %w", err)
+	}
+
 	// Publish-velocity quota (§19).
 	today, err := s.st.Queries().CountVersionsToday(ctx, a.ID)
 	if err != nil {
 		return Version{}, err
 	}
-	if today >= MaxVersionsPerDay {
+	if today >= lim.VersionsPerDay {
 		return Version{}, fmt.Errorf("%w: daily version quota reached", ErrDenied)
 	}
 
@@ -261,6 +277,14 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 	if err != nil {
 		return Version{}, err
 	}
+	// V8's archive quotas come from the resolver too, so an org on a larger
+	// plan gets a larger archive without a second source of truth.
+	quotas := manifest.Quotas{
+		MaxArchiveBytes:   lim.Archive.MaxBytes,
+		MaxFiles:          lim.Archive.MaxFiles,
+		MaxFileBytes:      lim.Archive.MaxFileBytes,
+		MaxImageFileBytes: lim.Archive.MaxImageFileBytes,
+	}
 	issues := manifest.ValidateInContext(m, manifest.Context{
 		Namespace:        a.Namespace,
 		Name:             a.Name,
@@ -268,6 +292,7 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 		ExistingVersions: existing,
 		Public:           a.Visibility == "public",
 		Files:            files,
+		Quotas:           &quotas,
 	})
 	if blocking := manifest.Blocking(issues); len(blocking) > 0 {
 		return Version{}, &ErrValidation{Issues: blocking}

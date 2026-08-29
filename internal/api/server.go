@@ -10,6 +10,8 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,8 +21,11 @@ import (
 	samlsp "github.com/PLACEHOLDER_ORG/agentry/internal/auth/saml"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/dnsx"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/entitlements"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/metrics"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/notify"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/queue"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/ratelimit"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/render"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/scan"
@@ -41,7 +46,7 @@ type Server struct {
 	notifier notify.Notifier
 	sealer   *auth.Sealer
 	signer   scan.Signer
-	limits   *rateLimits
+	limits   *ratelimit.Buckets
 	classes  limitClasses
 	reg      *registry.Service
 	blobs    registry.BlobStore
@@ -55,6 +60,10 @@ type Server struct {
 	// jobs is the enqueue-side queue client (webhook deliveries, audit
 	// exports). The worker role drains it; nil without a database.
 	jobs queue.Client
+	// ents resolves the §19 quotas (§14.2 seam).
+	ents entitlements.Resolver
+	// mx is the §16.2 instrument set; nil is a working no-op.
+	mx *metrics.Metrics
 	// oidcHTTPClient, when set, is the HTTP client OIDC discovery/JWKS/token
 	// calls use (tests point it at an httptest IdP). nil = default client.
 	oidcHTTPClient *http.Client
@@ -77,16 +86,27 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 	// §12.6 continuous NDJSON archive (see internal/audit/stream.go).
 	aud.SetStream(audit.NewStream(cfg.Audit.StreamKind, cfg.Audit.StreamDir,
 		cfg.Audit.StreamS3Bucket, cfg.Audit.StreamFlush, log))
+	notifier, nerr := notify.New(notify.Options{
+		Kind:     cfg.Notify.Kind,
+		BaseURL:  cfg.BaseURL,
+		SMTP:     smtpOptions(cfg),
+		Log:      log,
+		Registry: registryDisplayName(cfg),
+	})
+	if nerr != nil {
+		panic(nerr) // startup-time config failure, never mid-request
+	}
 	srv := &Server{
 		cfg:      cfg,
 		st:       st,
 		log:      log,
 		auditW:   aud,
-		notifier: notify.LogNotifier{Log: log},
+		notifier: notifier,
 		sealer:   sealer,
 		renderer: render.New(),
-		limits:   newRateLimits(),
+		limits:   ratelimit.New(ratelimit.DefaultIdleTTL),
 		classes:  classesFromConfig(cfg.Limits),
+		ents:     entitlements.NewConfigResolver(cfg.Limits),
 	}
 	// Enterprise defaults, set regardless of database presence (§12.4, §9.3).
 	srv.resolver = dnsx.NewSystemResolver()
@@ -99,21 +119,22 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		srv.jobs = queue.NewPGClient(st, log)
 		srv.webhooks = webhook.NewDispatcher(webhook.Deps{
 			Store: st, Sealer: sealer, Queue: srv.jobs, Log: log,
+			DeliveriesPerSecond: float64(cfg.Limits.WebhookDeliveriesPerSecond),
 		})
 		srv.reg.SetEventSink(srv.emitAgentEvent)
-		if cfg.Storage.Kind == "local" {
-			blobs, berr := registry.NewLocalFS(cfg.Storage.LocalDir)
-			if berr != nil {
-				panic(berr) // startup-time config failure, never mid-request
-			}
-			srv.blobs = blobs
-			srv.reg.SetBlobStore(blobs)
+		srv.reg.SetEntitlements(srv.ents)
+		// Archive storage. Both kinds are wired here, so the pipeline below is
+		// assembled identically either way — the s3 kind used to fall through
+		// with a nil store and take the whole scan pipeline down with it,
+		// which meant the shipped SaaS default could not scan anything.
+		blobs, berr := newBlobStore(cfg)
+		if berr != nil {
+			panic(berr) // startup-time config failure, never mid-request
 		}
+		srv.blobs = blobs
+		srv.reg.SetBlobStore(blobs)
 		// M4 security pipeline (§8): the orchestrator + gate replace the M3
 		// dev stub. Ruleset embedded (§8.3); judge + signer per config.
-		if srv.blobs == nil {
-			return srv // no archive store (e.g. s3 kind, WG-K): pipeline wired there
-		}
 		bundle, err := ruleset.Load()
 		if err != nil {
 			panic(err)
@@ -127,7 +148,13 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 			panic(rerr)
 		}
 		judge := scan.NewJudgeProvider(judgeProviderName(cfg))
-		signer, serr := scan.NewSigner(cfg.Signing.Kind, cfg.Signing.KeyFile, cfg.DevMode)
+		signer, serr := scan.NewSigner(context.Background(), scan.SignerOptions{
+			Kind:      cfg.Signing.Kind,
+			KeyFile:   cfg.Signing.KeyFile,
+			KMSKeyARN: cfg.Signing.KMSKeyARN,
+			KMSRegion: cfg.Signing.KMSRegion,
+			DevMode:   cfg.DevMode,
+		})
 		if serr != nil {
 			panic(serr)
 		}
@@ -151,6 +178,106 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		scan.EnqueueRescanSweepOnNewRuleset(context.Background(), srv.jobs, log, rulesetReg)
 	}
 	return srv
+}
+
+// Close releases the resources the server owns outside the request path: the
+// rate-limit bucket store's collector goroutine, and the metric exporters.
+// Without it every server built in a process (tests especially) leaks a
+// goroutine holding every bucket it ever created.
+func (s *Server) Close() error {
+	var errs []error
+	errs = append(errs, s.limits.Close())
+	if s.mx != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		errs = append(errs, s.mx.Shutdown(ctx))
+	}
+	return errors.Join(errs...)
+}
+
+// newBlobStore builds the configured archive store (§13.4: local FS for
+// self-host and dev, S3 on SaaS).
+func newBlobStore(cfg config.Config) (registry.BlobStore, error) {
+	switch cfg.Storage.Kind {
+	case "s3":
+		return registry.NewS3(context.Background(), registry.S3Options{
+			Bucket:       cfg.Storage.S3Bucket,
+			Region:       cfg.Storage.S3Region,
+			Prefix:       cfg.Storage.S3Prefix,
+			Endpoint:     cfg.Storage.S3Endpoint,
+			UsePathStyle: cfg.Storage.S3UsePathStyle,
+		})
+	default:
+		return registry.NewLocalFS(cfg.Storage.LocalDir)
+	}
+}
+
+// smtpOptions maps the config block onto the notifier's options.
+func smtpOptions(cfg config.Config) notify.SMTPOptions {
+	return notify.SMTPOptions{
+		Host:     cfg.SMTP.Host,
+		Port:     cfg.SMTP.Port,
+		Username: cfg.SMTP.Username,
+		Password: cfg.SMTP.Password,
+		From:     cfg.SMTP.From,
+		StartTLS: cfg.SMTP.StartTLS,
+		Timeout:  cfg.SMTP.Timeout,
+	}
+}
+
+// registryDisplayName is what notification bodies call this deployment. The
+// public origin's host is the name users already know it by; "Agentry" is the
+// fallback for a deployment that has not set one.
+func registryDisplayName(cfg config.Config) string {
+	if cfg.BaseURL == "" {
+		return "Agentry"
+	}
+	if u, err := url.Parse(cfg.BaseURL); err == nil && u.Host != "" {
+		return u.Host
+	}
+	return cfg.BaseURL
+}
+
+// entitlements returns the §14.2 resolver, defaulting to the shipped §19
+// limits so a partially wired server still enforces quotas.
+func (s *Server) entitlements() entitlements.Resolver {
+	if s.ents == nil {
+		return entitlements.Default()
+	}
+	return s.ents
+}
+
+// SetEntitlements swaps the quota resolver (the SaaS overlay, and tests).
+func (s *Server) SetEntitlements(r entitlements.Resolver) {
+	s.ents = r
+	if s.reg != nil {
+		s.reg.SetEntitlements(r)
+	}
+}
+
+// SetMetrics wires the §16.2 instrument set. nil leaves every record a no-op.
+func (s *Server) SetMetrics(m *metrics.Metrics) {
+	s.mx = m
+	if s.pipeline != nil {
+		s.pipeline.SetMetrics(m)
+	}
+	if s.webhooks != nil {
+		s.webhooks.SetMetrics(m)
+	}
+}
+
+// Metrics returns the wired instrument set (nil-safe for callers).
+func (s *Server) Metrics() *metrics.Metrics { return s.mx }
+
+// Notifier exposes the configured notifier so other roles share one instance.
+func (s *Server) Notifier() notify.Notifier { return s.notifier }
+
+// SetNotifier overrides the notifier (tests).
+func (s *Server) SetNotifier(n notify.Notifier) {
+	s.notifier = n
+	if s.pipeline != nil {
+		s.pipeline.SetNotifier(n)
+	}
 }
 
 // Pipeline exposes the assembled security pipeline so the worker role runs
@@ -282,23 +409,71 @@ func (s *Server) wellKnownRegistry(w http.ResponseWriter, r *http.Request) {
 // the verification key set clients pin on first use (TOFU) and use to verify
 // DSSE attestations offline. Rotation = overlapping validity windows.
 func (s *Server) wellKnownSigningKeys(w http.ResponseWriter, r *http.Request) {
-	type key struct {
-		KeyID     string `json:"keyId"`
-		Algorithm string `json:"algorithm"`
-		PublicKey string `json:"publicKeyPem"`
-	}
 	out := struct {
-		Keys []key `json:"keys"`
-	}{Keys: []key{}}
-	if s.signer != nil {
-		out.Keys = append(out.Keys, key{
-			KeyID:     s.signer.KeyID(),
-			Algorithm: "ecdsa-p256-sha256",
-			PublicKey: s.signer.PublicKeyPEM(),
-		})
-	}
+		Keys []signingKey `json:"keys"`
+	}{Keys: s.signingKeySet()}
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	writeJSON(w, http.StatusOK, out)
+}
+
+// signingKey is one entry in signing-keys.json. notBefore/notAfter are what
+// make §8.8's "rotation = overlapping validity windows" representable: without
+// them the document can only ever describe one key as current, and an operator
+// rotating a key has no way to say "both of these are legitimate, here is
+// when each applies". Omitted when unset, so an unbounded key is silent rather
+// than claiming a window it does not have.
+type signingKey struct {
+	KeyID     string `json:"keyId"`
+	Algorithm string `json:"algorithm"`
+	PublicKey string `json:"publicKeyPem"`
+	NotBefore string `json:"notBefore,omitempty"`
+	NotAfter  string `json:"notAfter,omitempty"`
+}
+
+const defaultSigningAlgorithm = "ecdsa-p256-sha256"
+
+// signingKeySet assembles the published key set: the active signer first, then
+// any verification-only keys the operator configured for an in-flight
+// rotation. A key whose PEM cannot be read is dropped with a log line rather
+// than failing the endpoint — serving the keys that ARE valid keeps existing
+// clients verifying, where a 500 would break all of them at once.
+func (s *Server) signingKeySet() []signingKey {
+	keys := []signingKey{}
+	if s.signer != nil {
+		keys = append(keys, signingKey{
+			KeyID:     s.signer.KeyID(),
+			Algorithm: defaultSigningAlgorithm,
+			PublicKey: s.signer.PublicKeyPEM(),
+			NotBefore: s.cfg.Signing.NotBefore,
+			NotAfter:  s.cfg.Signing.NotAfter,
+		})
+	}
+	for _, k := range s.cfg.Signing.AdditionalKeys {
+		pemText := k.PublicKeyPEM
+		if pemText == "" && k.PublicKeyFile != "" {
+			b, err := os.ReadFile(k.PublicKeyFile) //nolint:gosec // operator-configured path
+			if err != nil {
+				s.log.Error("signing keys: reading additional key", "keyId", k.KeyID, "err", err)
+				continue
+			}
+			pemText = string(b)
+		}
+		if pemText == "" {
+			continue
+		}
+		alg := k.Algorithm
+		if alg == "" {
+			alg = defaultSigningAlgorithm
+		}
+		keys = append(keys, signingKey{
+			KeyID:     k.KeyID,
+			Algorithm: alg,
+			PublicKey: pemText,
+			NotBefore: k.NotBefore,
+			NotAfter:  k.NotAfter,
+		})
+	}
+	return keys
 }
 
 // NewHandler assembles the full HTTP handler for the api role.
@@ -318,6 +493,15 @@ func NewHandlerWithGit(s *Server, mountGit func(*http.ServeMux)) http.Handler {
 	mux.HandleFunc("GET /readyz", s.readyz)
 	mux.HandleFunc("GET /.well-known/agentry/registry.json", s.wellKnownRegistry)
 	mux.HandleFunc("GET /.well-known/agentry/signing-keys.json", s.wellKnownSigningKeys)
+
+	// Prometheus exposition (D-25). Mounted outside /api/v1 alongside the
+	// health endpoints and, like them, unauthenticated: a scraper is
+	// infrastructure, not a principal, and the RBAC chokepoint has no way to
+	// express it. The numbers are operational (request rates, queue depth,
+	// stage timings) and carry no user content, but they do describe traffic
+	// shape — bind agentryd to a private interface, or keep /metrics off the
+	// public listener at the proxy. docs/ops/deployment.md says so too.
+	mux.Handle("GET /metrics", s.metricsHandler())
 
 	// SCIM 2.0 data plane (§12.5). Mounted outside the generated /api/v1
 	// handler: it uses its own base path, application/scim+json media type, and
@@ -340,7 +524,15 @@ func NewHandlerWithGit(s *Server, mountGit func(*http.ServeMux)) http.Handler {
 		Middlewares: []MiddlewareFunc{s.principalMiddleware},
 	})
 
-	return withMiddleware(apiHandler, s.log)
+	return withMiddleware(apiHandler, s.log, s.Metrics, s.cfg.HTTP.TrustedProxies)
+}
+
+// metricsHandler serves /metrics, reading s.mx at request time so
+// SetMetrics can be called after the handler is built.
+func (s *Server) metricsHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.mx.Handler().ServeHTTP(w, r)
+	})
 }
 
 // judgeProviderName picks the judge provider: config value, or "static" in
