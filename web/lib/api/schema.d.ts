@@ -291,6 +291,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/user/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the caller's active browser sessions (§12.1).
+         * @description Sessions are cookie sessions. A PAT-authenticated caller has no sessions of its own, so the list is empty (200, not an error) — a PAT is not a way to enumerate someone's browser sessions.
+         */
+        get: operations["listUserSessions"];
+        put?: never;
+        post?: never;
+        /**
+         * Revoke every session except the calling one ("sign out everywhere else").
+         * @description The calling session survives, so the caller is not logged out of the browser they are using. Session-only: a PAT cannot revoke sessions (403), for the same reason it cannot list them.
+         */
+        delete: operations["revokeOtherUserSessions"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/user/sessions/{sessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke one of the caller's own sessions (§12.1).
+         * @description Own sessions only. An id that is not one of the caller's live sessions answers 404 whether it does not exist or belongs to somebody else — the two are deliberately indistinguishable. Session-only: a PAT cannot revoke sessions (403).
+         */
+        delete: operations["revokeUserSession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ruleset-releases/latest/bundle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The newest published S3/S4 rule bundle, for `agentry validate --rules-update`.
+         * @description Returns the deployment's rule bundle as an uncompressed tar of the bundle directory (`bundle.yaml` plus the family YAML files), exactly the bytes `pkg/rules.LoadBundle` reads. The advertised identity travels in headers so a client can check what it got without unpacking first:
+         *
+         *     `X-Agentry-Bundle-Semver` — the ruleset release semver; `X-Agentry-Bundle-Digest` — the `sha256:<hex>` content digest recorded on the `ruleset_releases` row; `ETag` — the same digest.
+         *
+         *     The digest is the pin: a client MUST recompute it over the received bundle and refuse a mismatch. Bundle-level *signatures* do not exist yet (see DEVIATIONS DEV-024); this endpoint pins by digest only.
+         */
+        get: operations["getLatestRulesetBundle"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs": {
         parameters: {
             query?: never;
@@ -1520,6 +1588,23 @@ export interface components {
             /** @description Opaque; absent on the last page. */
             nextCursor?: string;
         };
+        SessionList: {
+            sessions: components["schemas"]["SessionInfo"][];
+        };
+        SessionInfo: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            lastSeenAt: string;
+            /** @description True for the session making this request. */
+            current: boolean;
+            /** @description Client address recorded at session creation. */
+            ip?: string;
+            /** @description User-Agent recorded at session creation. */
+            userAgent?: string;
+        };
         RulesetRelease: {
             /** Format: uuid */
             id: string;
@@ -2332,6 +2417,93 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listUserSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active, unexpired, unrevoked sessions, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    revokeOtherUserSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Other sessions revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    revokeUserSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getLatestRulesetBundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rule bundle as a tar archive. */
+            200: {
+                headers: {
+                    /** @description Ruleset release semver. */
+                    "X-Agentry-Bundle-Semver"?: string;
+                    /** @description sha256:<hex> content digest of the bundle. */
+                    "X-Agentry-Bundle-Digest"?: string;
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/x-tar": string;
+                };
             };
             default: components["responses"]["Problem"];
         };

@@ -2757,7 +2757,7 @@ type ClientInterface interface {
 
 	// RevokeOtherUserSessions Revoke every session except the calling one ("sign out everywhere else").
 	//
-	// The calling session survives, so the caller is not logged out of the browser they are using. A PAT caller has no calling session to keep and therefore revokes nothing (204).
+	// The calling session survives, so the caller is not logged out of the browser they are using. Session-only: a PAT cannot revoke sessions (403), for the same reason it cannot list them.
 	//
 	// Corresponds with DELETE /user/sessions (the `RevokeOtherUserSessions` operationId).
 	RevokeOtherUserSessions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2770,6 +2770,8 @@ type ClientInterface interface {
 	ListUserSessions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RevokeUserSession Revoke one of the caller's own sessions (§12.1).
+	//
+	// Own sessions only. An id that is not one of the caller's live sessions answers 404 whether it does not exist or belongs to somebody else — the two are deliberately indistinguishable. Session-only: a PAT cannot revoke sessions (403).
 	//
 	// Corresponds with DELETE /user/sessions/{sessionId} (the `RevokeUserSession` operationId).
 	RevokeUserSession(ctx context.Context, sessionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4757,7 +4759,7 @@ func (c *Client) DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUse
 
 // RevokeOtherUserSessions Revoke every session except the calling one ("sign out everywhere else").
 //
-// The calling session survives, so the caller is not logged out of the browser they are using. A PAT caller has no calling session to keep and therefore revokes nothing (204).
+// The calling session survives, so the caller is not logged out of the browser they are using. Session-only: a PAT cannot revoke sessions (403), for the same reason it cannot list them.
 //
 // Corresponds with DELETE /user/sessions (the `RevokeOtherUserSessions` operationId).
 func (c *Client) RevokeOtherUserSessions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4790,6 +4792,8 @@ func (c *Client) ListUserSessions(ctx context.Context, reqEditors ...RequestEdit
 }
 
 // RevokeUserSession Revoke one of the caller's own sessions (§12.1).
+//
+// Own sessions only. An id that is not one of the caller's live sessions answers 404 whether it does not exist or belongs to somebody else — the two are deliberately indistinguishable. Session-only: a PAT cannot revoke sessions (403).
 //
 // Corresponds with DELETE /user/sessions/{sessionId} (the `RevokeUserSession` operationId).
 func (c *Client) RevokeUserSession(ctx context.Context, sessionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -10407,7 +10411,7 @@ type ClientWithResponsesInterface interface {
 
 	// RevokeOtherUserSessionsWithResponse Revoke every session except the calling one ("sign out everywhere else").
 	//
-	// The calling session survives, so the caller is not logged out of the browser they are using. A PAT caller has no calling session to keep and therefore revokes nothing (204).
+	// The calling session survives, so the caller is not logged out of the browser they are using. Session-only: a PAT cannot revoke sessions (403), for the same reason it cannot list them.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -10424,6 +10428,8 @@ type ClientWithResponsesInterface interface {
 	ListUserSessionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListUserSessionsResponse, error)
 
 	// RevokeUserSessionWithResponse Revoke one of the caller's own sessions (§12.1).
+	//
+	// Own sessions only. An id that is not one of the caller's live sessions answers 404 whether it does not exist or belongs to somebody else — the two are deliberately indistinguishable. Session-only: a PAT cannot revoke sessions (403).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -16554,7 +16560,7 @@ func (c *ClientWithResponses) DeleteCurrentUserWithResponse(ctx context.Context,
 
 // RevokeOtherUserSessionsWithResponse Revoke every session except the calling one ("sign out everywhere else").
 //
-// The calling session survives, so the caller is not logged out of the browser they are using. A PAT caller has no calling session to keep and therefore revokes nothing (204).
+// The calling session survives, so the caller is not logged out of the browser they are using. Session-only: a PAT cannot revoke sessions (403), for the same reason it cannot list them.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16583,6 +16589,8 @@ func (c *ClientWithResponses) ListUserSessionsWithResponse(ctx context.Context, 
 }
 
 // RevokeUserSessionWithResponse Revoke one of the caller's own sessions (§12.1).
+//
+// Own sessions only. An id that is not one of the caller's live sessions answers 404 whether it does not exist or belongs to somebody else — the two are deliberately indistinguishable. Session-only: a PAT cannot revoke sessions (403).
 //
 // Returns a wrapper object for the known response body format(s).
 //

@@ -37,6 +37,10 @@ type Config struct {
 	Notify    Notify    `yaml:"notify"`
 	SMTP      SMTP      `yaml:"smtp"`
 	BaseURL   string    `yaml:"baseURL"` // public origin, e.g. https://agentry.example
+	// MinCLIVersion, when set, is advertised via GET /api/v1/meta so the CLI
+	// can warn (or refuse, on a major gap) before talking to an API it
+	// predates (§11 distribution note). Empty = no minimum advertised.
+	MinCLIVersion string `yaml:"minCLIVersion"`
 }
 
 // HTTP configures listeners. Git traffic may share Addr (self-host) or use
@@ -476,6 +480,7 @@ func applyEnv(c *Config) error {
 	}
 
 	// Telemetry (§16.2, D-25).
+	str("AGENTRY_MIN_CLI_VERSION", &c.MinCLIVersion)
 	str("AGENTRY_OTEL_ENDPOINT", &c.Telemetry.OTLPEndpoint)
 	if err := dur("AGENTRY_OTEL_EXPORT_INTERVAL", &c.Telemetry.ExportInterval); err != nil {
 		return err
