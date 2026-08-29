@@ -139,9 +139,19 @@ jobs:
 
             An SPDX SBOM (`agentry-sbom.spdx.json`) ships with every release.
 
+  # Two images per release: agentryd (every role, git included) and the web
+  # app. The chart and the ECS task definitions both reference them by the
+  # same tag, so they are built from one job and must succeed together — a
+  # release that shipped one and not the other would leave a deployment
+  # pointing at a tag that does not exist.
   image:
     needs: verify
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { name: agentryd, file: deploy/compose/Dockerfile }
+          - { name: web, file: deploy/compose/Dockerfile.web }
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -154,15 +164,17 @@ jobs:
         id: build
         with:
           context: .
-          file: deploy/compose/Dockerfile
+          file: ${{ matrix.file }}
           push: true
+          build-args: |
+            VERSION=${{ github.ref_name }}
           tags: |
-            ghcr.io/${{ github.repository }}/agentryd:${{ github.ref_name }}
-            ghcr.io/${{ github.repository }}/agentryd:latest
+            ghcr.io/${{ github.repository }}/${{ matrix.name }}:${{ github.ref_name }}
+            ghcr.io/${{ github.repository }}/${{ matrix.name }}:latest
           provenance: true
           sbom: true
       - uses: sigstore/cosign-installer@v3
       - name: Sign the image
         run: |
           cosign sign --yes \
-            "ghcr.io/${{ github.repository }}/agentryd@${{ steps.build.outputs.digest }}"
+            "ghcr.io/${{ github.repository }}/${{ matrix.name }}@${{ steps.build.outputs.digest }}"

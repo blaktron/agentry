@@ -54,11 +54,46 @@ services:
     environment:
       AGENTRY_DATABASE_URL: postgres://agentry:agentry@postgres:5432/agentry_dev?sslmode=disable
       AGENTRY_HTTP_ADDR: ":8080"
+      # Real SMTP against mailpit: every message the server sends lands in the
+      # web UI on :8025 instead of the log, so the notification paths (§8.7)
+      # can actually be read end to end in dev. No TLS, no auth — mailpit
+      # accepts plaintext on 1025, which is why startTLS is off here and must
+      # never be off against a real relay.
+      AGENTRY_NOTIFY_KIND: smtp
+      AGENTRY_SMTP_HOST: mailpit
+      AGENTRY_SMTP_PORT: "1025"
+      AGENTRY_SMTP_STARTTLS: "false"
+      AGENTRY_SMTP_FROM: Agentry <no-reply@agentry.localhost>
+      AGENTRY_BASE_URL: http://localhost:8080
+      # Archive store against minio (S3-compatible), exercising the same code
+      # path SaaS uses rather than the local-FS one.
+      AGENTRY_STORAGE_KIND: s3
+      AGENTRY_STORAGE_S3_BUCKET: agentry-dev
+      AGENTRY_STORAGE_S3_REGION: us-east-1
+      AGENTRY_STORAGE_S3_ENDPOINT: http://minio:9000
+      AGENTRY_STORAGE_S3_USE_PATH_STYLE: "true"
+      AWS_ACCESS_KEY_ID: agentry
+      AWS_SECRET_ACCESS_KEY: agentry-dev-secret
     ports:
       - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  # Optional: the Next.js web app (§10).
+  web:
+    profiles: ["server"]
+    build:
+      context: ../..
+      dockerfile: deploy/compose/Dockerfile.web
+    environment:
+      AGENTRY_API_BASE: http://server:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      - server
 
 volumes:
   pgdata:
