@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -81,8 +82,15 @@ func (s S6Capabilities) Run(sc stageContext, in *Input) StageResult {
 	}
 
 	var findings []Finding
-	// Undeclared capabilities are the security event (§8.3).
-	for capToken, hits := range detected {
+	// Undeclared capabilities are the security event (§8.3). Iterated in a
+	// fixed order because the report is hashed and signed (§8.8).
+	detectedTokens := make([]string, 0, len(detected))
+	for capToken := range detected {
+		detectedTokens = append(detectedTokens, capToken)
+	}
+	sort.Strings(detectedTokens)
+	for _, capToken := range detectedTokens {
+		hits := detected[capToken]
 		if declaredHas(declared, capToken) {
 			continue
 		}
@@ -104,6 +112,8 @@ func (s S6Capabilities) Run(sc stageContext, in *Input) StageResult {
 			Taxonomy: []string{"LLM03", "ASI04"},
 		})
 	}
+	findings = append(findings, s6DeclaredUnused(declared, detected)...)
+	findings = append(findings, s6StringAssembly(in)...)
 	return StageResult{Scanner: "S6", Findings: findings}
 }
 
