@@ -115,12 +115,13 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		if err != nil {
 			panic(err)
 		}
-		rulesetID, _ := uuid.NewV7()
-		if row, rerr := st.Queries().CreateRulesetRelease(context.Background(), storegen.CreateRulesetReleaseParams{
-			ID: rulesetID, Semver: bundle.Version(), BundleDigest: bundle.Digest(),
-			Notes: ptr(bundle.Notes()),
-		}); rerr == nil {
-			rulesetID = row.ID
+		// Startup-fatal on purpose: the previous code kept a locally generated
+		// uuid when registration failed, and that uuid names no
+		// ruleset_releases row — so every CreateScanRun afterwards failed its
+		// foreign key, silently, until someone restarted the process.
+		rulesetReg, rerr := scan.RegisterRuleset(context.Background(), st, bundle)
+		if rerr != nil {
+			panic(rerr)
 		}
 		judge := scan.NewJudgeProvider(judgeProviderName(cfg))
 		signer, serr := scan.NewSigner(cfg.Signing.Kind, cfg.Signing.KeyFile, cfg.DevMode)
@@ -131,13 +132,29 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		orch := scan.NewOrchestrator(bundle, judge, log)
 		srv.pipeline = scan.NewPipeline(scan.PipelineDeps{
 			Store: st, Registry: srv.reg, Blobs: srv.blobs, Orchestrator: orch,
-			Signer: signer, Audit: aud, Log: log, RegistryURL: cfg.BaseURL,
-			RulesetID: rulesetID, RulesetVer: bundle.Version(),
+			Signer: signer, Audit: aud, Notifier: srv.notifier, Log: log,
+			RegistryURL: cfg.BaseURL,
+			RulesetID:   rulesetReg.ID, RulesetVer: rulesetReg.Semver,
 		})
 		srv.reg.SetPipeline(srv.pipeline)
+		// §8.6 knobs that reject at submission time, and the §12.1/§19
+		// 2FA-before-public-publish gate. Both sit on the registry so the
+		// git-tag auto-publish path is covered as well as the API.
+		srv.reg.SetPolicyGate(srv.pipeline)
+		srv.reg.SetPublicPublish2FA(!cfg.DevMode)
+		srv.reg.SetLogger(log)
+		// A ruleset semver we have never seen means the catalogue was judged
+		// by older rules (§8.7).
+		scan.EnqueueRescanSweepOnNewRuleset(context.Background(), srv.jobs, log, rulesetReg)
 	}
 	return srv
 }
+
+// Pipeline exposes the assembled security pipeline so the worker role runs
+// exactly the object the api role wires — including its registry event sink,
+// without which rescan-driven agent.quarantined webhooks went nowhere.
+// nil when this server has no archive store (see New).
+func (s *Server) Pipeline() *scan.Pipeline { return s.pipeline }
 
 // Reg exposes the registry service so role wiring can share one instance
 // (git role injects its archiver; auto-publish uses the same pipeline).
@@ -325,8 +342,6 @@ func judgeProviderName(cfg config.Config) string {
 	}
 	return cfg.Judge.Provider
 }
-
-func ptr[T any](v T) *T { return &v }
 
 // writeJSON writes a JSON 2xx response with no-store cache semantics (§9.1).
 func writeJSON(w http.ResponseWriter, status int, v any) {

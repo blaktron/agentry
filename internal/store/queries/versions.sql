@@ -41,9 +41,17 @@ WHERE agents.id = $1;
 -- name: ListVersions :many
 SELECT * FROM agent_versions WHERE agent_id = $1 ORDER BY created_at DESC;
 
+-- Resolution set (§9.4): published resolves by range, yanked resolves only by
+-- exact pin. quarantined and blocked are excluded here by construction — a
+-- version the platform has disabled must never come back from a resolve.
 -- name: ListResolvableVersions :many
 SELECT * FROM agent_versions
 WHERE agent_id = $1 AND status IN ('published','yanked')
+ORDER BY created_at DESC;
+
+-- name: ListVersionsByStatus :many
+SELECT * FROM agent_versions
+WHERE agent_id = $1 AND status = ANY(sqlc.arg('statuses')::text[])
 ORDER BY created_at DESC;
 
 -- name: CountVersionsToday :one

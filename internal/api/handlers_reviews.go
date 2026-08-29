@@ -44,7 +44,48 @@ func findingToAPI(f storegen.Finding) ScanFinding {
 			out.Detail = &d
 		}
 	}
+	// §8.5: dismissals "stay on the public report with rationale". Without
+	// the rationale a dismissed finding reads as an unexplained disappearance,
+	// which is the opposite of the honesty the report is for.
+	if f.VerdictReason != nil && *f.VerdictReason != "" {
+		out.VerdictReason = f.VerdictReason
+	}
 	return out
+}
+
+// scanReportFrom assembles the public report for one scan run.
+func (s *Server) scanReportFrom(r *http.Request, run storegen.ScanRun, versionStatus string) (ScanReport, error) {
+	q := s.q()
+	rows, err := q.ListFindings(r.Context(), run.ID)
+	if err != nil {
+		return ScanReport{}, err
+	}
+	counts := map[string]int{}
+	findings := make([]ScanFinding, 0, len(rows))
+	for _, f := range rows {
+		findings = append(findings, findingToAPI(f))
+		counts[f.Severity]++
+	}
+	rep := ScanReport{
+		ScanRunId:     &run.ID,
+		VersionStatus: VersionStatus(versionStatus),
+		ScanStatus:    &run.Status,
+		FindingCounts: &counts,
+		Findings:      findings,
+	}
+	if run.ReportDigest != nil {
+		rep.ReportDigest = run.ReportDigest
+	}
+	if run.JudgeModel != nil {
+		rep.JudgeModel = run.JudgeModel
+	}
+	if run.FinishedAt != nil {
+		rep.FinishedAt = run.FinishedAt
+	}
+	if rs, err := q.GetRulesetByID(r.Context(), run.RulesetReleaseID); err == nil {
+		rep.RulesetVersion = &rs.Semver
+	}
+	return rep, nil
 }
 
 // GetVersionReport implements GET .../versions/{version}/report (§8, public).
@@ -56,39 +97,25 @@ func (s *Server) GetVersionReport(w http.ResponseWriter, r *http.Request, ns Nam
 	if !ok {
 		return
 	}
-	q := s.q()
-	run, err := q.LatestScanRunForVersion(r.Context(), v.ID)
+	run, err := s.q().LatestScanRunForVersion(r.Context(), v.ID)
 	if err != nil {
-		// No scan yet (e.g. still submitted): empty report, not an error.
+		// No scan yet (still submitted, say) is a legitimately empty report.
+		// A database failure is NOT, and answering 200-with-no-findings to
+		// both told the reader "nothing was found" when the truth was "we
+		// could not look" — the exact claim §1.6.3 forbids.
+		if !errors.Is(err, pgx.ErrNoRows) {
+			s.log.Error("version report: load scan run", "version", v.ID, "err", err)
+			problemInternal(w, r)
+			return
+		}
 		writeJSON(w, http.StatusOK, ScanReport{VersionStatus: VersionStatus(v.Status), Findings: []ScanFinding{}})
 		return
 	}
-	rows, err := q.ListFindings(r.Context(), run.ID)
+	rep, err := s.scanReportFrom(r, run, v.Status)
 	if err != nil {
+		s.log.Error("version report: findings", "run", run.ID, "err", err)
 		problemInternal(w, r)
 		return
-	}
-	counts := map[string]int{}
-	findings := make([]ScanFinding, 0, len(rows))
-	for _, f := range rows {
-		findings = append(findings, findingToAPI(f))
-		counts[f.Severity]++
-	}
-	rep := ScanReport{
-		ScanRunId:     &run.ID,
-		VersionStatus: VersionStatus(v.Status),
-		ScanStatus:    &run.Status,
-		FindingCounts: &counts,
-		Findings:      findings,
-	}
-	if run.ReportDigest != nil {
-		rep.ReportDigest = run.ReportDigest
-	}
-	if run.JudgeModel != nil {
-		rep.JudgeModel = run.JudgeModel
-	}
-	if rs, err := q.GetRulesetByID(r.Context(), run.RulesetReleaseID); err == nil {
-		rep.RulesetVersion = &rs.Semver
 	}
 	writeJSON(w, http.StatusOK, rep)
 }
@@ -242,27 +269,26 @@ func (s *Server) GetReviewItem(w http.ResponseWriter, r *http.Request, id openap
 		bundle.Previous = &pd
 	}
 
-	if run, err := q.LatestScanRunForVersion(r.Context(), ri.VersionID); err == nil {
-		rows, _ := q.ListFindings(r.Context(), run.ID)
-		counts := map[string]int{}
-		for _, f := range rows {
-			bundle.Findings = append(bundle.Findings, findingToAPI(f))
-			counts[f.Severity]++
+	run, err := q.LatestScanRunForVersion(r.Context(), ri.VersionID)
+	switch {
+	case err == nil:
+		// A reviewer deciding on a partial finding list would be deciding on
+		// the wrong evidence, so a findings error fails the request rather
+		// than quietly rendering an empty list.
+		rep, rerr := s.scanReportFrom(r, run, v.Status)
+		if rerr != nil {
+			s.log.Error("review bundle: findings", "run", run.ID, "err", rerr)
+			problemInternal(w, r)
+			return
 		}
-		rep := ScanReport{
-			ScanRunId: &run.ID, VersionStatus: VersionStatus(v.Status),
-			ScanStatus: &run.Status, FindingCounts: &counts, Findings: bundle.Findings,
-		}
-		if run.ReportDigest != nil {
-			rep.ReportDigest = run.ReportDigest
-		}
-		if run.JudgeModel != nil {
-			rep.JudgeModel = run.JudgeModel
-		}
-		if rs, err := q.GetRulesetByID(r.Context(), run.RulesetReleaseID); err == nil {
-			rep.RulesetVersion = &rs.Semver
-		}
+		bundle.Findings = rep.Findings
 		bundle.Report = &rep
+	case errors.Is(err, pgx.ErrNoRows):
+		// No run yet; the bundle carries the manifest and diff baseline only.
+	default:
+		s.log.Error("review bundle: load scan run", "item", id, "err", err)
+		problemInternal(w, r)
+		return
 	}
 	writeJSON(w, http.StatusOK, bundle)
 }
@@ -303,39 +329,38 @@ func (s *Server) DecideReviewItem(w http.ResponseWriter, r *http.Request, id ope
 		return
 	}
 
+	// Approving a quarantined version republishes it (§7 quarantined →
+	// published: "re-review clears"). Rejecting one cannot go to `rejected` —
+	// that edge does not exist and the version is already public — so it
+	// yanks instead; blocking stays a T&S console action (DEV-015).
+	quarantined := registry.Status(v.Status) == registry.StatusQuarantined
 	target := registry.StatusPublished
 	newState := "approved"
 	if req.Decision == "reject" {
-		target = registry.StatusRejected
 		newState = "rejected"
+		target = registry.StatusRejected
+		if quarantined {
+			target = registry.StatusYanked
+		}
 	}
 
 	e := auditEvent(r, audit.ActionReviewDecision)
 	if ri.OrgID != nil {
 		e.OrgID = *ri.OrgID
 	}
-	err = s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
-		if err := q.DecideReviewItem(r.Context(), storegen.DecideReviewItemParams{
-			ID: ri.ID, State: newState, DecidedBy: &p.UserID, Rationale: &rationale,
-		}); err != nil {
-			return err
-		}
-		e.TargetKind, e.TargetID = "review_item", ri.ID
-		e.Detail = map[string]any{"decision": req.Decision, "version_id": ri.VersionID.String()}
-		return s.auditW.Write(r.Context(), q, e)
-	})
-	if err != nil {
-		s.log.Error("review decision", "err", err)
-		problemInternal(w, r)
-		return
-	}
-	// Transition after the decision is recorded; sign on approve→published.
-	if err := s.pipeline.ApproveOrReject(r.Context(), ri.VersionID, target, rationale); err != nil {
+	// One transaction for the verdict AND the transition: recording them
+	// separately let a transient failure leave the item decided with the
+	// version still in needs_review, which the "already decided" guard above
+	// then made unrecoverable.
+	if err := s.pipeline.DecideReview(r.Context(), scan.ReviewDecision{
+		ItemID: ri.ID, VersionID: ri.VersionID, Target: target, State: newState,
+		Rationale: rationale, DecidedBy: p.UserID, Audit: e,
+	}); err != nil {
 		if errors.Is(err, registry.ErrBadTransition) {
 			problemConflict(w, r, err.Error())
 			return
 		}
-		s.log.Error("review transition", "err", err)
+		s.log.Error("review decision", "item", ri.ID, "err", err)
 		problemInternal(w, r)
 		return
 	}

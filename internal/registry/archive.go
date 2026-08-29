@@ -135,8 +135,14 @@ func BuildArchive(root string, include []manifest.FileInfo, w io.Writer) (Archiv
 
 // ExtractArchive unpacks a tar.zst release archive into dst with hardening:
 // path traversal, absolute paths, links, and non-regular entries rejected;
-// per-file and total size caps enforced (a fuller extractor with zip-bomb
-// heuristics lands with the M4 scanner sandbox and replaces call sites).
+// per-file and total size caps enforced.
+//
+// For UNTRUSTED input use scan.Extract instead — it adds the file-count cap,
+// the compression-ratio check and the decoder memory bound, and is the single
+// shared unpacker §8.2 calls for. Every server-side path that touches an
+// uploaded archive now goes through it. What is left here is the client side
+// (`agentry install`, unpacking an archive the registry itself built and
+// signed) and the gitsrv end-to-end test.
 func ExtractArchive(r io.Reader, dst string, maxFile, maxTotal int64) error {
 	zr, err := zstd.NewReader(r)
 	if err != nil {

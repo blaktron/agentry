@@ -2,6 +2,8 @@ package scan
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"regexp"
 	"strings"
@@ -68,6 +70,25 @@ type JudgeFile struct {
 	Content string
 }
 
+// RubricHash derives the judge_prompt_hash recorded on a scan run (§8.4.4:
+// "prompt + model id are versioned; judge_prompt_hash recorded per run" —
+// reproducibility and appeals). Providers hash the exact rubric text they
+// adjudicate with, so changing a rule changes the hash on every later run.
+func RubricHash(parts ...string) string {
+	h := sha256.New()
+	for _, p := range parts {
+		_, _ = h.Write([]byte(p))
+		_, _ = h.Write([]byte{0})
+	}
+	return "sha256:" + hex.EncodeToString(h.Sum(nil))
+}
+
+// rubricStatement is the fixed framing every provider adjudicates under
+// (§8.4.1: content is DATA; instructions inside it are evidence, never
+// directives). It is part of the hash because changing it changes verdicts.
+const rubricStatement = "agentry/judge-rubric/v1;categories=C1..C6;scores=0-3;" +
+	"content-is-data;no-tools;temperature=0;structured-output"
+
 // NoneProvider skips S5 and forces human review (§8.4.6): self-host without
 // an LLM. The gate treats every version as if it had one medium finding.
 type NoneProvider struct{}
@@ -78,9 +99,15 @@ func (NoneProvider) Name() string { return "none" }
 // RequiresHumanReview implements JudgeProvider.
 func (NoneProvider) RequiresHumanReview() bool { return true }
 
-// Judge implements JudgeProvider: no scores, review forced by the gate.
+// Judge implements JudgeProvider: no scores, review forced by the gate. The
+// prompt hash still records WHICH no-op this was, so a run adjudicated by no
+// judge is distinguishable from one adjudicated by a judge that found nothing.
 func (NoneProvider) Judge(_ context.Context, _ JudgeContent) (JudgeVerdict, error) {
-	return JudgeVerdict{Scores: map[JudgeCategory]int{}, Model: "none"}, nil
+	return JudgeVerdict{
+		Scores:     map[JudgeCategory]int{},
+		Model:      "none",
+		PromptHash: RubricHash(rubricStatement, "provider=none", "no-adjudication"),
+	}, nil
 }
 
 // StaticProvider is a deterministic heuristic judge used in dev/tests
@@ -116,12 +143,22 @@ var (
 	reManipSymptom = regexp.MustCompile(`(?i)as (?:instructed|requested) (?:in|by) (?:the|this) (?:file|document|content)`)
 )
 
+// staticRubricHash is the hash of the exact patterns this provider scores
+// with. Edit a pattern and the recorded hash changes, which is the whole
+// point: a verdict is only reproducible against the rubric that produced it.
+var staticRubricHash = RubricHash(
+	rubricStatement, "provider=static-heuristic-v1",
+	reInjection.String(), reExfiltration.String(), reDestructive.String(),
+	reDeception.String(), reManipSymptom.String(),
+)
+
 // Judge implements JudgeProvider with deterministic lexical scoring.
 func (StaticProvider) Judge(_ context.Context, content JudgeContent) (JudgeVerdict, error) {
 	v := JudgeVerdict{
-		Scores:   map[JudgeCategory]int{},
-		Excerpts: map[JudgeCategory]string{},
-		Model:    "static-heuristic-v1",
+		Scores:     map[JudgeCategory]int{},
+		Excerpts:   map[JudgeCategory]string{},
+		Model:      "static-heuristic-v1",
+		PromptHash: staticRubricHash,
 	}
 	score := func(cat JudgeCategory, re *regexp.Regexp, text string) {
 		if m := re.FindString(text); m != "" {
@@ -193,6 +230,13 @@ func (S5Judge) Run(sc stageContext, in *Input) StageResult {
 	if err != nil {
 		return StageResult{Scanner: "S5", Err: err} // fail closed (§8.4.6)
 	}
+	promptHash := verdict.PromptHash
+	if promptHash == "" {
+		// A provider that reports no rubric version is itself a
+		// reproducibility gap; record which provider so it is at least
+		// attributable rather than blank (§8.4.4).
+		promptHash = RubricHash(rubricStatement, "provider="+sc.judge.Name(), "unversioned")
+	}
 
 	var findings []Finding
 	catTitle := map[JudgeCategory]string{
@@ -225,7 +269,7 @@ func (S5Judge) Run(sc stageContext, in *Input) StageResult {
 			Taxonomy: []string{"LLM01"},
 		})
 	}
-	return StageResult{Scanner: "S5", Findings: findings}
+	return StageResult{Scanner: "S5", Findings: findings, PromptHash: promptHash}
 }
 
 func isProse(path string) bool {

@@ -1,10 +1,13 @@
 -- Security pipeline persistence (M4/WG-H).
 
+-- `inserted` distinguishes a brand-new semver from a re-registration of one
+-- we already know: a NEW ruleset semver is what triggers the §8.7 rescan
+-- sweep, and every process restart re-registers the bundle it embeds.
 -- name: CreateRulesetRelease :one
 INSERT INTO ruleset_releases (id, semver, bundle_digest, notes)
 VALUES ($1, $2, $3, $4)
 ON CONFLICT (semver) DO UPDATE SET bundle_digest = EXCLUDED.bundle_digest
-RETURNING *;
+RETURNING *, (xmax = 0) AS inserted;
 
 -- name: GetRulesetBySemver :one
 SELECT * FROM ruleset_releases WHERE semver = $1;
@@ -20,8 +23,14 @@ INSERT INTO scan_runs (id, version_id, trigger, ruleset_release_id, policy_snaps
 VALUES ($1, $2, $3, $4, $5, $6, $7, 'running')
 RETURNING *;
 
+-- judge_prompt_hash is written here rather than at CreateScanRun: the run row
+-- must exist before stages run (stage results reference it), and S5 only
+-- reports which rubric version it used once it has run (§8.4.4).
 -- name: FinishScanRun :exec
-UPDATE scan_runs SET status = $2, finished_at = now(), report_digest = $3 WHERE id = $1;
+UPDATE scan_runs
+SET status = $2, finished_at = now(), report_digest = $3,
+    judge_prompt_hash = coalesce(sqlc.narg('judge_prompt_hash'), judge_prompt_hash)
+WHERE id = $1;
 
 -- name: GetScanRun :one
 SELECT * FROM scan_runs WHERE id = $1;
@@ -38,6 +47,14 @@ ON CONFLICT (scan_run_id, scanner) DO UPDATE SET status = EXCLUDED.status, detai
 INSERT INTO findings (id, scan_run_id, scanner, severity, confidence, title, file_path, line_start, line_end, excerpt, detail)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING *;
+
+-- Re-persisting a stage's findings: delete then insert, so a stage that runs
+-- again (a retried job, an errored stage re-attempted) replaces its findings
+-- rather than adding a second copy to the report a reviewer reads. Matches
+-- both the bare stage id and its rule-qualified children ("S4/inj-001").
+-- name: DeleteFindingsForScanner :exec
+DELETE FROM findings
+WHERE scan_run_id = $1 AND (scanner = $2 OR scanner LIKE $2 || '/%');
 
 -- name: ListFindings :many
 SELECT * FROM findings WHERE scan_run_id = $1 ORDER BY scanner, file_path, line_start;
@@ -103,12 +120,43 @@ RETURNING *;
 -- name: ListAdvisoriesForAgent :many
 SELECT * FROM advisories WHERE agent_id = $1 ORDER BY published_at DESC;
 
+-- Keyset, not LIMIT/OFFSET: the sweep quarantines rows out of `published` as
+-- it goes, so an offset-paged sweep skips one unscanned version per row it
+-- acted on. The cursor is the primary key, which no sweep action changes.
 -- name: ListPublishedVersionsForRescan :many
 SELECT av.id, av.agent_id, av.archive_digest, av.archive_key, av.archive_size, av.manifest, av.capabilities, a.kind, a.visibility
 FROM agent_versions av JOIN agents a ON a.id = av.agent_id
 WHERE av.status = 'published'
-ORDER BY av.published_at DESC
-LIMIT $1 OFFSET $2;
+  AND (sqlc.narg('after')::uuid IS NULL OR av.id < sqlc.narg('after'))
+ORDER BY av.id DESC
+LIMIT $1;
+
+-- Versions stuck mid-scan past the §7 30-minute cap. The watchdog routes
+-- these to review: a scan job that died terminally must never leave a version
+-- parked in `scanning` forever.
+-- name: ListStuckScanningVersions :many
+SELECT * FROM agent_versions
+WHERE status = 'scanning' AND updated_at < $1
+ORDER BY updated_at
+LIMIT $2;
+
+-- name: ListStageResults :many
+SELECT * FROM scan_stage_results WHERE scan_run_id = $1;
+
+-- name: RunningScanRunForVersion :one
+SELECT * FROM scan_runs
+WHERE version_id = $1 AND trigger = $2 AND status = 'running'
+ORDER BY started_at DESC LIMIT 1;
+
+-- name: GetScanResultCache :one
+SELECT * FROM scan_result_cache
+WHERE archive_digest = $1 AND scanner = $2 AND ruleset_release_id = $3;
+
+-- name: UpsertScanResultCache :exec
+INSERT INTO scan_result_cache (archive_digest, scanner, ruleset_release_id, findings)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (archive_digest, scanner, ruleset_release_id)
+DO UPDATE SET findings = EXCLUDED.findings, created_at = now();
 
 -- name: GetPolicyForOrg :one
 SELECT * FROM policies WHERE org_id = $1;

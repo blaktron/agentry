@@ -13,7 +13,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
 	"github.com/PLACEHOLDER_ORG/agentry/internal/api"
@@ -21,11 +20,8 @@ import (
 	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/gitsrv"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/queue"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/scan"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/scan/ruleset"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
-	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/version"
 )
 
@@ -129,42 +125,59 @@ func runWorker(ctx context.Context, cfg config.Config, st *store.Store, log *slo
 	if st == nil {
 		return errors.New("the worker role requires a database")
 	}
-	bundle, err := ruleset.Load()
-	if err != nil {
-		return err
+	// One assembly site for the pipeline, shared with the api role. The worker
+	// used to build its own registry service and its own ruleset registration:
+	// the two copies had already drifted, and the worker's registry had NO
+	// event sink, so every rescan-driven agent.quarantined webhook — the
+	// notification path §8.7 relies on — was dropped on the floor.
+	srv := api.New(cfg, st, log)
+	pipeline := srv.Pipeline()
+	if pipeline == nil {
+		return fmt.Errorf("the worker role requires archive storage (storage.kind=%q has none wired)", cfg.Storage.Kind)
 	}
-	blobs, err := registry.NewLocalFS(cfg.Storage.LocalDir)
-	if err != nil {
-		return err
-	}
-	aud := audit.NewWriter(log)
-	reg := registry.NewService(st, aud)
-	reg.SetBlobStore(blobs)
-	signer, err := scan.NewSigner(cfg.Signing.Kind, cfg.Signing.KeyFile, cfg.DevMode)
-	if err != nil {
-		return err
-	}
-	judge := scan.NewJudgeProvider(cfg.Judge.Provider)
-	orch := scan.NewOrchestrator(bundle, judge, log)
 
-	rulesetID, _ := uuid.NewV7()
-	if row, rerr := st.Queries().CreateRulesetRelease(ctx, storegen.CreateRulesetReleaseParams{
-		ID: rulesetID, Semver: bundle.Version(), BundleDigest: bundle.Digest(),
-	}); rerr == nil {
-		rulesetID = row.ID
-	}
-	pipeline := scan.NewPipeline(scan.PipelineDeps{
-		Store: st, Registry: reg, Blobs: blobs, Orchestrator: orch, Signer: signer,
-		Audit: aud, Log: log, RegistryURL: cfg.BaseURL, RulesetID: rulesetID, RulesetVer: bundle.Version(),
-	})
 	q := queue.NewPGClient(st, log)
 	pipeline.RegisterHandlers(q)
 	// Enterprise async handlers (M6/WG-J): webhook delivery (§9.3) and audit
-	// export (§12.6). An api.Server assembles the same dependencies; we borrow
-	// it only to register its queue handlers.
-	api.New(cfg, st, log).RegisterQueueHandlers(q)
+	// export (§12.6).
+	srv.RegisterQueueHandlers(q)
+
+	// §7 watchdog. Enqueued rather than called inline so that across worker
+	// replicas exactly one runs it per interval (SKIP LOCKED), and so an
+	// operator can trigger a reconcile by hand.
+	go reconcileTicker(ctx, q, log)
+
+	// Queues: "core" (webhooks, audit exports, reconcile) and "sandbox"
+	// (scans — §8.2's untrusted-content task profile). There is no "judge"
+	// queue: S5 runs inside the orchestrator's DAG, and §8.4's separate task
+	// profile for it is a deployment boundary, not a second queue. Working a
+	// queue nothing enqueues to only burns claim attempts.
 	log.Info("worker started", "queues", "core,sandbox")
-	return q.Work(ctx, "core", "sandbox", "judge")
+	return q.Work(ctx, "core", "sandbox")
+}
+
+// reconcileWindow is how often the watchdog job is enqueued. Versions become
+// eligible at the §7 30-minute cap, so checking every few minutes is prompt
+// without being chatty.
+const reconcileWindow = 5 * time.Minute
+
+func reconcileTicker(ctx context.Context, q queue.Client, log *slog.Logger) {
+	enqueue := func() {
+		if _, err := q.Enqueue(ctx, scan.JobScanReconcile, "core", struct{}{}); err != nil {
+			log.Error("worker: enqueue scan reconcile", "err", err)
+		}
+	}
+	enqueue()
+	t := time.NewTicker(reconcileWindow)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			enqueue()
+		}
+	}
 }
 
 func serveHTTP(ctx context.Context, cfg config.Config, st *store.Store, log *slog.Logger, role string) error {

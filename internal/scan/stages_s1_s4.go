@@ -50,7 +50,24 @@ func (S1Inventory) Run(sc stageContext, in *Input) StageResult {
 
 		entry := FileEntry{Path: rel, Size: info.Size()}
 		// Read a bounded head for sniffing; full content for text files.
-		data, _ := os.ReadFile(path) //nolint:gosec // read-only extracted archive
+		data, readErr := os.ReadFile(path) //nolint:gosec // read-only extracted archive
+		if readErr != nil {
+			// A file we cannot read is a file no scanner examines. Silently
+			// treating it as empty means S3/S4/S5/S6 all pass over content
+			// that will still ship — so it becomes a finding and the version
+			// routes to a human instead (§7 fail toward review).
+			findings = append(findings, Finding{
+				Scanner: "S1/unreadable-file", Severity: SevMedium, Confidence: ConfHigh,
+				Title: "File in package could not be read for scanning", FilePath: rel,
+				Detail: map[string]any{
+					"error":  readErr.Error(),
+					"reason": "unscanned content cannot be cleared automatically",
+				},
+				Taxonomy: []string{"ASI05"},
+			})
+			inv = append(inv, entry)
+			return nil
+		}
 		head := data
 		if len(head) > 512 {
 			head = head[:512]

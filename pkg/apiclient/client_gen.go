@@ -1151,6 +1151,9 @@ type ScanFinding struct {
 	Severity   ScanFindingSeverity     `json:"severity"`
 	Title      string                  `json:"title"`
 	Verdict    ScanFindingVerdict      `json:"verdict"`
+
+	// VerdictReason Why a reviewer dismissed or confirmed this finding. Dismissed findings stay on the public report WITH their rationale (PLAN §8.5) — a finding that vanishes without explanation is exactly what the report exists to prevent.
+	VerdictReason *string `json:"verdictReason,omitempty"`
 }
 
 // ScanFindingConfidence defines model for ScanFinding.Confidence.
@@ -1164,8 +1167,11 @@ type ScanFindingVerdict string
 
 // ScanReport defines model for ScanReport.
 type ScanReport struct {
-	FindingCounts  *map[string]int     `json:"findingCounts,omitempty"`
-	Findings       []ScanFinding       `json:"findings"`
+	FindingCounts *map[string]int `json:"findingCounts,omitempty"`
+	Findings      []ScanFinding   `json:"findings"`
+
+	// FinishedAt When this scan run completed — the date the report describes.
+	FinishedAt     *time.Time          `json:"finishedAt,omitempty"`
 	JudgeModel     *string             `json:"judgeModel,omitempty"`
 	ReportDigest   *string             `json:"reportDigest,omitempty"`
 	RulesetVersion *string             `json:"rulesetVersion,omitempty"`
