@@ -8,11 +8,14 @@ package queue
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"runtime/debug"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
 	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
@@ -57,6 +60,16 @@ func WithMaxAttempts(n int) EnqueueOption {
 	return func(c *enqueueConfig) { c.maxAttempts = n }
 }
 
+// Orphan recovery: a worker that dies mid-job leaves the row `running` with
+// no owner. reclaimAfter is how long a claimed job may stay locked before
+// another worker may take it; reclaimEvery is how often we look. Both run on
+// the ticker loop, not only at Work() start — a long-lived worker used to
+// never notice a peer crashing after it booted.
+const (
+	defaultReclaimAfter = 30 * time.Minute
+	defaultReclaimEvery = 5 * time.Minute
+)
+
 // PGClient is the Postgres-backed Client.
 type PGClient struct {
 	st       *store.Store
@@ -64,6 +77,9 @@ type PGClient struct {
 	handlers map[string]Handler
 	// pollInterval bounds latency when no NOTIFY wakeup fires.
 	pollInterval time.Duration
+	// reclaimAfter / reclaimEvery drive orphaned-job recovery.
+	reclaimAfter time.Duration
+	reclaimEvery time.Duration
 }
 
 // NewPGClient builds the Postgres queue client.
@@ -71,7 +87,12 @@ func NewPGClient(st *store.Store, log *slog.Logger) *PGClient {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &PGClient{st: st, log: log, handlers: map[string]Handler{}, pollInterval: time.Second}
+	return &PGClient{
+		st: st, log: log, handlers: map[string]Handler{},
+		pollInterval: time.Second,
+		reclaimAfter: defaultReclaimAfter,
+		reclaimEvery: defaultReclaimEvery,
+	}
 }
 
 // Enqueue durably records a job.
@@ -112,23 +133,41 @@ func (c *PGClient) Work(ctx context.Context, queues ...string) error {
 	if len(queues) == 0 {
 		queues = []string{"core"}
 	}
-	// Recover jobs orphaned by a crashed worker (locked > 30 min).
-	cutoff := time.Now().Add(-30 * time.Minute)
-	if _, err := c.st.Queries().ResetStuckJobs(ctx, &cutoff); err != nil {
-		c.log.Warn("queue: reset stuck jobs", "err", err)
-	}
+	// Recover jobs orphaned by a crashed worker, at boot and then on a timer:
+	// a worker that has been up for days must still notice a peer dying.
+	c.ReclaimOrphanedJobs(ctx)
 	ticker := time.NewTicker(c.pollInterval)
 	defer ticker.Stop()
+	reclaim := time.NewTicker(c.reclaimEvery)
+	defer reclaim.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-reclaim.C:
+			c.ReclaimOrphanedJobs(ctx)
 		case <-ticker.C:
 			for _, q := range queues {
 				for c.claimOne(ctx, q) { //nolint:revive // drain the queue each tick
 				}
 			}
 		}
+	}
+}
+
+// ReclaimOrphanedJobs returns jobs locked by a dead worker to `available`.
+// Exported so the worker role (and tests) can run it out of band; the Work
+// loop calls it at boot and every reclaimEvery.
+func (c *PGClient) ReclaimOrphanedJobs(ctx context.Context) {
+	cutoff := time.Now().Add(-c.reclaimAfter)
+	n, err := c.st.Queries().ResetStuckJobs(ctx, &cutoff)
+	if err != nil {
+		c.log.Warn("queue: reset stuck jobs", "err", err)
+		return
+	}
+	if n > 0 {
+		// Not routine: every row here is a job a worker died holding.
+		c.log.Warn("queue: reclaimed orphaned jobs", "count", n, "locked_before", cutoff)
 	}
 }
 
@@ -155,12 +194,22 @@ func (c *PGClient) Drain(ctx context.Context, queues ...string) {
 func (c *PGClient) claimOne(ctx context.Context, queueName string) bool {
 	job, err := c.st.Queries().ClaimJob(ctx, queueName)
 	if err != nil {
-		return false // ErrNoRows when empty
+		// ErrNoRows is the empty queue — the normal case, every tick. Anything
+		// else is a database problem, and a worker that goes quietly idle on a
+		// broken pool is indistinguishable from one with nothing to do.
+		if !errors.Is(err, pgx.ErrNoRows) && ctx.Err() == nil {
+			c.log.Error("queue: claim job", "queue", queueName, "err", err)
+		}
+		return false
 	}
 	h, ok := c.handlers[job.Kind]
 	if !ok {
-		c.log.Error("queue: no handler", "kind", job.Kind)
-		_ = c.st.Queries().FailJob(ctx, storegen.FailJobParams{ID: job.ID, LastError: strptr("no handler registered")})
+		c.log.Error("queue: no handler", "kind", job.Kind, "job", job.ID)
+		if err := c.st.Queries().FailJob(ctx, storegen.FailJobParams{
+			ID: job.ID, LastError: strptr("no handler registered"),
+		}); err != nil {
+			c.log.Error("queue: fail job", "job", job.ID, "err", err)
+		}
 		return true
 	}
 	err = c.runHandler(ctx, h, Job{ID: job.ID, Kind: job.Kind, Queue: job.Queue, Args: job.Args, Attempt: int(job.Attempt)})
@@ -171,8 +220,13 @@ func (c *PGClient) claimOne(ctx context.Context, queueName string) bool {
 		return true
 	}
 	if int(job.Attempt) >= int(job.MaxAttempts) {
-		c.log.Error("queue: job failed permanently", "kind", job.Kind, "err", err)
-		_ = c.st.Queries().FailJob(ctx, storegen.FailJobParams{ID: job.ID, LastError: strptr(err.Error())})
+		c.log.Error("queue: job failed permanently", "kind", job.Kind, "job", job.ID,
+			"attempt", job.Attempt, "err", err)
+		if ferr := c.st.Queries().FailJob(ctx, storegen.FailJobParams{
+			ID: job.ID, LastError: strptr(err.Error()),
+		}); ferr != nil {
+			c.log.Error("queue: fail job", "job", job.ID, "err", ferr)
+		}
 		return true
 	}
 	backoff := time.Duration(1<<uint(job.Attempt)) * time.Second
@@ -185,9 +239,13 @@ func (c *PGClient) claimOne(ctx context.Context, queueName string) bool {
 }
 
 // runHandler isolates a handler panic so one bad job never kills the worker.
+// The stack is logged here and dropped from the returned error: last_error
+// is surfaced in operator tooling, and a full stack does not belong there.
 func (c *PGClient) runHandler(ctx context.Context, h Handler, job Job) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
+			c.log.Error("queue: handler panic", "kind", job.Kind, "job", job.ID,
+				"panic", r, "stack", string(debug.Stack()))
 			err = fmt.Errorf("queue: handler panic: %v", r)
 		}
 	}()
