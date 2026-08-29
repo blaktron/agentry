@@ -93,6 +93,21 @@ rescan sweep surfacing many new high findings at once. The ClawHavoc pattern
 is hundreds of malicious agents from a handful of accounts, so assume the
 blast radius is an *account cluster*, not one agent.
 
+**A rescan sweep is now the most likely way you find out.** Registering a new
+ruleset release enqueues the §8.7 catalogue sweep automatically — you do not
+schedule it, and shipping detection for a live technique will surface every
+already-published version that trips it, all at once. Expect a wave of
+quarantines within a sweep of publishing a rule that matters, and read that
+as the system working rather than as an incident of its own. (Sweeps used to
+need triggering by hand, which meant new detection sat unapplied; that was
+fixed in the 2026-08-29 remediation.)
+
+Note also that S8's publisher-behaviour signal covers **account age ×
+publish velocity** but does **not** correlate publisher IPs across accounts —
+the "or IP cluster" half of §8.3. The actual ClawHavoc incident (1,184 skills
+from 12 accounts) turned on exactly that axis, so step 1 below is manual work
+the scanner will not do for you.
+
 1. **Scope it before acting.** Find the cluster:
    ```sql
    -- recent publishes by account, newest first
@@ -108,10 +123,16 @@ blast radius is an *account cluster*, not one agent.
 2. **Stop the inflow first.** Suspend the accounts (`update users set
    state='suspended' where id in (…)`) — this kills sessions and PATs on next
    use. New publishes stop; existing content is untouched.
-3. **Quarantine, then block.** Quarantine is reversible and stops resolution;
-   block returns 410 and is for confirmed malware. Work through the API
-   (`POST /platform/agents/{ns}/{name}/quarantine`) so every action is audited
-   with a reason — not in SQL.
+3. **Quarantine, then block.** Quarantine is reversible: it stops resolution
+   and refuses direct downloads with `409`. Block is for confirmed malware and
+   returns **`410 Gone`** on every download of that agent or version — which
+   is now true in fact and not only on paper. Until the 2026-08-29
+   remediation, `block` set the agent's quarantine state and nothing else, so
+   a blocked agent kept serving `200`s and its archive stayed downloadable;
+   the `410` branch was unreachable code. If you ran this runbook before that
+   fix, **re-check anything you blocked** — it may still be being served.
+   Work through the API (`POST /platform/agents/{ns}/{name}/quarantine`, then
+   `.../block`) so every action is audited with a reason — not in SQL.
 4. **Publish one advisory per affected agent** (or one covering the cluster,
    referenced from each). Consumers who already installed are reached by
    advisory + webhook, not by any push we control.
@@ -121,8 +142,11 @@ blast radius is an *account cluster*, not one agent.
 **Dual control:** `blocked` should be set by a second platform admin, not the
 one who quarantined. If you are alone, block anyway and get review after.
 
-**Verify:** no new versions from the cluster, quarantined/blocked states
-reflected on the agent pages, advisories visible, audit trail complete.
+**Verify:** no new versions from the cluster; quarantined/blocked states
+reflected on the agent pages; **an actual `curl` of a blocked version's
+download URL returns `410`** (verify the effect, not the state column —
+that is the exact failure that hid here once); advisories visible; audit
+trail complete.
 
 ---
 
@@ -232,17 +256,26 @@ publisher locked out (check `user.login_failed` audit volume by handle).
 1. The self-service path is `POST /api/v1/user/delete` — prefer it; it is
    audited and transactional.
 2. It purges PII, pseudonymizes the account, retires the handle (reserved, not
-   recycled), revokes every credential, and **yanks** published public
-   versions rather than deleting them: consumers who already installed keep a
-   verifiable artifact, which is the §5.5 contract. Explain this to the
+   recycled), revokes every credential, and disposes of published public
+   versions **without ever deleting them**: consumers who already installed
+   keep a verifiable artifact, which is the §5.5 contract. Explain this to the
    requester — it is a lawful-interest position, not an oversight.
-3. If they insist published bytes be removed, that is a `blocked` decision by
+3. **The requester must choose a disposition.** If the account has any
+   published public versions, the call requires `publishedContent=yank` or
+   `publishedContent=transfer` (the latter also needs
+   `transferOrg=<org handle>`, and the caller must be an owner or admin
+   there); without it the request is refused with `400` naming the count.
+   There is no default — it used to silently default to `yank`, which meant
+   nobody was being asked. Ask before you run it, and record the answer.
+4. If they insist published bytes be removed, that is a `blocked` decision by
    trust & safety with a written rationale, not an erasure step.
-4. Audit events keep the opaque user id. Do not delete audit rows; the table
+5. Audit events keep the opaque user id. Do not delete audit rows; the table
    rejects it at the database level anyway.
 
 **Verify:** the account cannot log in, the handle shows as retired, published
-versions read `yanked`, and a `user.delete` audit event exists.
+versions read `yanked` (or are owned by the destination org, if the requester
+chose `transfer`), and a `user.delete` audit event exists recording the
+disposition.
 
 ---
 

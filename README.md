@@ -32,9 +32,9 @@ gate decides.
   in-toto/DSSE attestation binding the archive digest to its scan report,
   ruleset version, and policy. `agentry verify` checks it offline.
 - **Says what it does not know.** Static analysis cannot prove an agent safe,
-  and the product never claims it does. Pages show findings, ruleset version,
-  and scan date; published versions are rescanned as detection improves, with
-  quarantine and advisories when something new surfaces.
+  and the product never claims it does. Pages show the findings, the ruleset
+  version, and when the scan ran; published versions are rescanned as detection
+  improves, with quarantine and advisories when something new surfaces.
 
 ## Quick look
 
@@ -78,11 +78,13 @@ Then [docs/self-hosting.md](docs/self-hosting.md) for a real deployment, or
 | `testdata/attack-corpus/` | the golden corpus: attack fixtures and their benign twins |
 | `web/` | the Next.js registry UI |
 | `deploy/` | compose, Helm, Terraform |
-| `docs/` | user, operator, and API docs |
+| `docs/` | user, operator, and API docs — start with `trust.md`, `self-hosting.md`, `api-conventions.md` |
 
 ## Documentation
 
-- [Trust and security model](docs/self-hosting.md) — and the `/trust` page on any running instance
+- [Trust and security model](docs/trust.md) — what the pipeline checks, what a
+  signature proves, and what none of it guarantees; the `/trust` page on any
+  running instance shows the same posture plus that instance's live signing keys
 - [Self-hosting](docs/self-hosting.md)
 - [Operational runbooks](docs/ops/runbooks.md)
 - [Contributing](CONTRIBUTING.md) — including the rules that actually matter (route authorization, scanner fixtures)
@@ -91,13 +93,29 @@ Then [docs/self-hosting.md](docs/self-hosting.md) for a real deployment, or
 
 ## Status
 
-Milestones M0–M5 of the v1 plan are implemented with automated acceptance
-scripts (`scripts/acceptance/`): scaffolding, identity and authorization, git
-hosting, the registry and publication state machine, the security pipeline, the
-CLI, and the public web UI. Enterprise SSO/SCIM (M6) and the AWS reference
-deployment (M7) are in progress; launch hardening (M8) is partially done.
-See [WORKGROUPS.md](WORKGROUPS.md) for the current state of each workgroup and
-what is explicitly deferred.
+Milestones **M0–M7** of the v1 plan are implemented, each with an automated
+acceptance script in `scripts/acceptance/`: scaffolding and CI (M0), identity
+and authorization (M1), git hosting (M2), the registry and publication state
+machine (M3), the security pipeline (M4), the web UI (M5), enterprise SSO/SCIM
+and webhooks (M6), and the AWS reference deployment (M7 — Terraform validated,
+never applied to a live account).
+
+**M8 (launch hardening) is partial.** Done: SECURITY.md and coordinated
+disclosure, CONTRIBUTING/DCO, signed reproducible releases with SBOM,
+release-please automation, GDPR erasure, abuse intake and the trust & safety
+console, the operational runbooks. Remaining: an external penetration test, a
+status page, seed content beyond the four example agents (blocked on PLAN §20
+Q10), and `security@` / `abuse@` addresses live before launch.
+
+An independent audit of this repository found the tracking documents
+overstating completeness and roughly nineteen departures from PLAN.md that were
+never recorded; remediation waves have since fixed the substantive gaps in the
+code and backfilled the register.
+
+See [WORKGROUPS.md](WORKGROUPS.md) for the state of each workgroup and what is
+explicitly deferred, and [DEVIATIONS.md](DEVIATIONS.md) for where the
+implementation departs from the plan — including the departures that make a
+claim weaker, not just the ones that make it stronger.
 
 Not yet decided (they need a human, per PLAN §20): the product name, the open
 source license, the SaaS judge provider and region, and how strict the launch
