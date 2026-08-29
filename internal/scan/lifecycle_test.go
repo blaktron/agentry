@@ -20,6 +20,7 @@ import (
 	"github.com/PLACEHOLDER_ORG/agentry/internal/queue"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/scan"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/scan/ruleset"
 	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
 )
 
@@ -1107,5 +1108,123 @@ func TestStageErrorPersistsPipelineErrorFinding(t *testing.T) {
 	}
 	if pipelineErrors != 1 {
 		t.Fatalf("S0/pipeline-error findings = %d, want exactly 1 explaining the review", pipelineErrors)
+	}
+}
+
+// TestQuarantineRejectPathIsYank pins the reasoning behind DEV-015. §7 offers
+// a quarantined version two exits besides re-publication, and `rejected` is
+// not one of them — so a reviewer's "reject" on a quarantined version has to
+// mean yank, with `blocked` left to the dual-controlled T&S console.
+func TestQuarantineRejectPathIsYank(t *testing.T) {
+	e := newPipeEnv(t)
+	ctx := context.Background()
+	u, _ := e.st.Queries().GetUserByID(ctx, e.owner)
+
+	armed := false
+	e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, laterRulesetProvider{armed: &armed}, nil))
+	v := e.publish("rejectq", "public", benignFiles(u.Handle, "rejectq", "1.0.0"))
+	if v.Status != "published" {
+		t.Fatalf("setup: status %s", v.Status)
+	}
+	armed = true
+	if err := e.pipe.RescanSweep(ctx); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	item, err := e.st.Queries().GetPendingReviewItemForVersion(ctx, v.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reviewer := e.seedUser("qrej" + suffix())
+
+	// The edge the handler must NOT take: quarantined → rejected is not drawn.
+	err = e.pipe.DecideReview(ctx, scan.ReviewDecision{
+		ItemID: item.ID, VersionID: v.ID, Target: registry.StatusRejected,
+		State: "rejected", Rationale: "confirmed",
+		DecidedBy: reviewer, Audit: audit.Event{Actor: reviewer, ActorKind: audit.ActorUser},
+	})
+	if !errors.Is(err, registry.ErrBadTransition) {
+		t.Fatalf("quarantined → rejected returned %v; the handler must not route rejects there", err)
+	}
+
+	// The edge it takes instead.
+	if err := e.pipe.DecideReview(ctx, scan.ReviewDecision{
+		ItemID: item.ID, VersionID: v.ID, Target: registry.StatusYanked,
+		State: "rejected", Rationale: "confirmed malicious on review",
+		DecidedBy: reviewer, Audit: audit.Event{Actor: reviewer, ActorKind: audit.ActorUser},
+	}); err != nil {
+		t.Fatalf("quarantined → yanked: %v", err)
+	}
+	after, err := e.st.Queries().GetVersionByID(ctx, v.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Status != string(registry.StatusYanked) {
+		t.Fatalf("status = %s, want yanked", after.Status)
+	}
+	if _, err := e.reg.ResolveVersion(ctx, mustAgent(t, e, u.Handle, "rejectq"), "^1.0", "stable"); err == nil {
+		t.Fatal("a yanked version still resolves by range")
+	}
+}
+
+// TestRulesetRegistrationDistinguishesNewSemver pins the §8.7 sweep trigger's
+// decision point: only a semver the registry has never recorded means the
+// catalogue was judged by older rules. Every process restart re-registers the
+// same embedded bundle, so treating registration itself as "new" would sweep
+// the whole catalogue on every deploy — and never noticing "new" means the
+// sweep is never scheduled at all, which is how the handler ended up dead code.
+func TestRulesetRegistrationDistinguishesNewSemver(t *testing.T) {
+	e := newPipeEnv(t)
+	ctx := context.Background()
+	q := e.st.Queries()
+
+	semver := "9.99.0-test" + suffix()
+	first, err := q.CreateRulesetRelease(ctx, storegen.CreateRulesetReleaseParams{
+		ID: mustV7(t), Semver: semver, BundleDigest: "deadbeef",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !first.Inserted {
+		t.Fatal("a semver recorded for the first time was not reported as new; no sweep would be scheduled")
+	}
+	second, err := q.CreateRulesetRelease(ctx, storegen.CreateRulesetReleaseParams{
+		ID: mustV7(t), Semver: semver, BundleDigest: "deadbeef",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Inserted {
+		t.Fatal("re-registering the same semver reported new; every restart would sweep the catalogue")
+	}
+	if second.ID != first.ID {
+		t.Fatalf("re-registration returned a different row: %s vs %s", second.ID, first.ID)
+	}
+
+	// The embedded bundle is already registered by the test environment, so
+	// registering it again is stable and not new.
+	bundle, err := ruleset.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := scan.RegisterRuleset(ctx, e.st, bundle)
+	if err != nil {
+		t.Fatalf("register embedded bundle: %v", err)
+	}
+	if again.New {
+		t.Fatal("the embedded bundle reported new on re-registration")
+	}
+	if again.Semver != bundle.Version() {
+		t.Fatalf("registered semver = %s, want %s", again.Semver, bundle.Version())
+	}
+
+	// Failure must reach the caller. Keeping a locally generated uuid on the
+	// error path gave the pipeline a ruleset id that names no row, so every
+	// CreateScanRun failed its foreign key — silently, for the life of the
+	// process.
+	if _, err := scan.RegisterRuleset(ctx, nil, bundle); err == nil {
+		t.Fatal("registering against no database returned success")
+	}
+	if _, err := scan.RegisterRuleset(ctx, e.st, nil); err == nil {
+		t.Fatal("registering a nil bundle returned success")
 	}
 }
