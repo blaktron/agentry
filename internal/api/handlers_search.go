@@ -12,8 +12,16 @@ import (
 	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
 )
 
+const (
+	searchDefaultLimit = 25
+	searchMaxLimit     = 100
+)
+
 // SearchAgents implements GET /search (§10.4, D-20): Postgres FTS over public
-// agents with kind facets. Blocked agents never appear.
+// agents with the §9.2 facets — kind, capability, license, verified — and a
+// sort selector. capability/license read the LATEST PUBLISHED version, so a
+// filter always describes what someone would install today. Blocked agents
+// never appear.
 func (s *Server) SearchAgents(w http.ResponseWriter, r *http.Request, params SearchAgentsParams) {
 	if !s.authorize(w, r, auth.ActPublicRead, uuid.Nil) {
 		return
@@ -25,19 +33,34 @@ func (s *Server) SearchAgents(w http.ResponseWriter, r *http.Request, params Sea
 	if params.Q != nil {
 		query = strings.TrimSpace(*params.Q)
 	}
-	limit := 25
-	if params.Limit != nil {
-		limit = *params.Limit
-	}
-	offset := 0
-	if params.Offset != nil {
-		offset = *params.Offset
-	}
+	// §9.1: out-of-range paging parameters are clamped, not rejected. A
+	// negative limit used to reach LIMIT/OFFSET verbatim and 500.
+	limit := clampLimit(params.Limit, searchDefaultLimit, searchMaxLimit)
+	offset := clampOffset(params.Offset, maxListOffset)
 
-	qp := storegen.SearchAgentsParams{Query: query, Limit: int32(limit), Offset: int32(offset)}
+	sort := "relevance"
+	if params.Sort != nil && *params.Sort != "" {
+		sort = string(*params.Sort)
+	}
+	qp := storegen.SearchAgentsParams{
+		Query: query, Limit: int32(limit), Offset: int32(offset), Sort: sort,
+	}
 	if params.Kind != nil {
 		k := string(*params.Kind)
 		qp.Kind = &k
+	}
+	if params.Capability != nil {
+		if c := strings.TrimSpace(*params.Capability); c != "" {
+			qp.Capability = &c
+		}
+	}
+	if params.License != nil {
+		if l := strings.TrimSpace(*params.License); l != "" {
+			qp.License = &l
+		}
+	}
+	if params.Verified != nil {
+		qp.VerifiedOnly = *params.Verified
 	}
 	rows, err := s.q().SearchAgents(r.Context(), qp)
 	if err != nil {
@@ -55,6 +78,9 @@ func (s *Server) SearchAgents(w http.ResponseWriter, r *http.Request, params Sea
 		})
 	}
 
+	// Facet counts describe the unfiltered corpus for this query, so the UI
+	// can show "12 MIT, 3 Apache-2.0" alongside an active license filter
+	// rather than only the count of what is already selected.
 	facets := map[string]map[string]int{}
 	if frows, err := s.q().SearchFacetKinds(r.Context(), query); err == nil {
 		kinds := map[string]int{}
@@ -62,6 +88,13 @@ func (s *Server) SearchAgents(w http.ResponseWriter, r *http.Request, params Sea
 			kinds[f.Kind] = int(f.N)
 		}
 		facets["kind"] = kinds
+	}
+	if lrows, err := s.q().SearchFacetLicenses(r.Context(), query); err == nil && len(lrows) > 0 {
+		licenses := map[string]int{}
+		for _, f := range lrows {
+			licenses[f.License] = int(f.N)
+		}
+		facets["license"] = licenses
 	}
 
 	writeJSON(w, http.StatusOK, SearchResults{Results: hits, Facets: &facets})

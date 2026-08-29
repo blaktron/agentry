@@ -31,6 +31,8 @@ type Config struct {
 	Limits   Limits   `yaml:"limits"`
 	Signing  Signing  `yaml:"signing"`
 	Judge    Judge    `yaml:"judge"`
+	Social   Social   `yaml:"social"`
+	Audit    Audit    `yaml:"audit"`
 	BaseURL  string   `yaml:"baseURL"` // public origin, e.g. https://agentry.example
 }
 
@@ -119,6 +121,45 @@ type Judge struct {
 	Region   string `yaml:"region"`
 }
 
+// Social configures social login for individual accounts (§12.1). A provider
+// with no client id is simply not offered: the start endpoint 404s, so an
+// unconfigured deployment advertises nothing it cannot complete.
+type Social struct {
+	Google SocialProvider `yaml:"google"`
+	GitHub SocialProvider `yaml:"github"`
+}
+
+// SocialProvider is one provider's OAuth client registration.
+type SocialProvider struct {
+	ClientID     string `yaml:"clientId"`
+	ClientSecret string `yaml:"clientSecret"`
+	// Issuer/AuthURL/TokenURL/APIBaseURL override the provider's endpoints.
+	// Empty in production; tests point them at an in-process provider.
+	Issuer     string `yaml:"issuer"`
+	AuthURL    string `yaml:"authURL"`
+	TokenURL   string `yaml:"tokenURL"`
+	APIBaseURL string `yaml:"apiBaseURL"`
+}
+
+// Configured reports whether the provider can be offered.
+func (p SocialProvider) Configured() bool { return p.ClientID != "" && p.ClientSecret != "" }
+
+// Audit configures the §12.6 continuous audit stream and §4.3 retention.
+type Audit struct {
+	// StreamKind selects the NDJSON sink: none | file | s3.
+	StreamKind string `yaml:"streamKind"`
+	// StreamDir is the directory file-kind streams write daily files into.
+	StreamDir string `yaml:"streamDir"`
+	// StreamFlush bounds how long an event may sit in the buffer. §12.6 says
+	// "within ~1 min"; the default leaves headroom under that.
+	StreamFlush time.Duration `yaml:"streamFlush"`
+	// StreamS3Bucket is the destination for s3-kind streams.
+	StreamS3Bucket string `yaml:"streamS3Bucket"`
+	// RetentionDays is how long audit rows stay in the hot table (§4.3:
+	// 400 days on SaaS, configurable self-host). 0 disables pruning.
+	RetentionDays int `yaml:"retentionDays"`
+}
+
 // Default returns the development-safe baseline configuration.
 func Default() Config {
 	return Config{
@@ -149,6 +190,12 @@ func Default() Config {
 		},
 		Signing: Signing{Kind: "none"},
 		Judge:   Judge{Provider: "none"},
+		Audit: Audit{
+			StreamKind:    "none",
+			StreamDir:     ".devdata/audit-stream",
+			StreamFlush:   30 * time.Second,
+			RetentionDays: 400,
+		},
 	}
 }
 
@@ -218,6 +265,18 @@ func applyEnv(c *Config) error {
 		*dst = d
 		return nil
 	}
+	integer := func(key string, dst *int) error {
+		v, ok := os.LookupEnv(key)
+		if !ok {
+			return nil
+		}
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("config: %s: %w", key, err)
+		}
+		*dst = n
+		return nil
+	}
 
 	str("AGENTRY_ENV", &c.Env)
 	str("AGENTRY_HTTP_ADDR", &c.HTTP.Addr)
@@ -239,6 +298,28 @@ func applyEnv(c *Config) error {
 	str("AGENTRY_JUDGE_PROVIDER", &c.Judge.Provider)
 	str("AGENTRY_JUDGE_MODEL", &c.Judge.Model)
 	str("AGENTRY_JUDGE_REGION", &c.Judge.Region)
+
+	// Social login (§12.1). Listed one variable per field on purpose: the
+	// same "boring and greppable" rule the rest of this function follows.
+	str("AGENTRY_SOCIAL_GOOGLE_CLIENT_ID", &c.Social.Google.ClientID)
+	str("AGENTRY_SOCIAL_GOOGLE_CLIENT_SECRET", &c.Social.Google.ClientSecret)
+	str("AGENTRY_SOCIAL_GOOGLE_ISSUER", &c.Social.Google.Issuer)
+	str("AGENTRY_SOCIAL_GITHUB_CLIENT_ID", &c.Social.GitHub.ClientID)
+	str("AGENTRY_SOCIAL_GITHUB_CLIENT_SECRET", &c.Social.GitHub.ClientSecret)
+	str("AGENTRY_SOCIAL_GITHUB_AUTH_URL", &c.Social.GitHub.AuthURL)
+	str("AGENTRY_SOCIAL_GITHUB_TOKEN_URL", &c.Social.GitHub.TokenURL)
+	str("AGENTRY_SOCIAL_GITHUB_API_BASE_URL", &c.Social.GitHub.APIBaseURL)
+
+	// Audit stream + retention (§12.6, §4.3).
+	str("AGENTRY_AUDIT_STREAM_KIND", &c.Audit.StreamKind)
+	str("AGENTRY_AUDIT_STREAM_DIR", &c.Audit.StreamDir)
+	str("AGENTRY_AUDIT_STREAM_S3_BUCKET", &c.Audit.StreamS3Bucket)
+	if err := dur("AGENTRY_AUDIT_STREAM_FLUSH", &c.Audit.StreamFlush); err != nil {
+		return err
+	}
+	if err := integer("AGENTRY_AUDIT_RETENTION_DAYS", &c.Audit.RetentionDays); err != nil {
+		return err
+	}
 
 	if err := boolean("AGENTRY_DEV_MODE", &c.DevMode); err != nil {
 		return err
@@ -294,6 +375,17 @@ func (c Config) Validate() error {
 	case "none", "bedrock", "anthropic", "classifier":
 	default:
 		return fmt.Errorf("config: judge.provider must be none|bedrock|anthropic|classifier, got %q", c.Judge.Provider)
+	}
+	switch c.Audit.StreamKind {
+	case "", "none", "file", "s3":
+	default:
+		return fmt.Errorf("config: audit.streamKind must be none|file|s3, got %q", c.Audit.StreamKind)
+	}
+	if c.Audit.StreamKind == "file" && c.Audit.StreamDir == "" {
+		return fmt.Errorf("config: audit.streamDir is required when audit.streamKind is file")
+	}
+	if c.Audit.RetentionDays < 0 {
+		return fmt.Errorf("config: audit.retentionDays must be >= 0")
 	}
 	return nil
 }
