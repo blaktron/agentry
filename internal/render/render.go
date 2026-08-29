@@ -72,7 +72,12 @@ func New() *Renderer {
 	p.RequireNoReferrerOnLinks(true)
 	p.AddTargetBlankToFullyQualifiedLinks(true)
 	p.AllowElements("a")
-	// Images: proxied/relative sources only — see RewriteImages. No SVG.
+	// Images: no SVG (raster only). §10.3's camo-style image proxy is NOT
+	// built (DEV-049) — there is no rewriting step here, so an author's
+	// absolute image URL survives sanitization and is then refused by the
+	// web app's `img-src 'self' data:` CSP. That closes the tracking-pixel
+	// and third-party-request hole §10.3 is about, at the cost of external
+	// images not rendering at all.
 	p.AllowAttrs("src", "alt", "title").OnElements("img")
 	p.AllowElements("img")
 	// Footnote/heading anchors emitted by goldmark itself.
