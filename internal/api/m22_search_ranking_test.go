@@ -219,6 +219,32 @@ func TestSearchMatchesReadmeTerms(t *testing.T) {
 	}
 }
 
+// Searching a namespace handle finds its agents. The handle is not in
+// search_tsv (§10.4 covers name/summary/readme), so this rides the dedicated
+// handle clause — the pre-FTS CLI listed by namespace, and m3-cli.sh looks a
+// fresh publish up by its random handle.
+func TestSearchMatchesNamespaceHandle(t *testing.T) {
+	env := newTestEnv(t)
+	owner := env.register("handle-o")
+	env.verifyEmail(owner)
+	sess := env.login(owner)
+
+	env.publishSearchable(t, sess, owner, "by-handle",
+		"a summary that never mentions the namespace",
+		"# by-handle\n\nreadme without the namespace either.\n")
+
+	got := env.search(t, owner, owner) // query IS the handle
+	found := false
+	for _, hit := range got {
+		if hit.Name == "by-handle" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("searching the namespace handle %q missed its agent; got %v", owner, names(got))
+	}
+}
+
 // Weight ordering: a term in the name (A) must outrank the same term in a
 // README (C), or the weights are decorative.
 func TestSearchWeightsNameAboveReadme(t *testing.T) {
