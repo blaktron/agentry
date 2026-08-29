@@ -92,8 +92,9 @@ type RescanSummary struct {
 	Scanned     int
 	Quarantined int
 	Failed      int
-	// CachedStages counts stage results answered from the §8.7 results cache
-	// instead of re-run — the measure of what the cache saved.
+	// CachedStages counts stage results that did not have to be re-run — §8.7
+	// results-cache hits, plus any stage an interrupted attempt had already
+	// completed. The measure of what the cache saved.
 	CachedStages int
 }
 
@@ -211,7 +212,7 @@ func (p *Pipeline) rescanOne(ctx context.Context, versionID uuid.UUID) (rescanOu
 	if err := p.finishRun(ctx, runID, result); err != nil {
 		return rescanOutcome{}, err
 	}
-	out := rescanOutcome{cachedStages: len(resume.Skip)}
+	out := rescanOutcome{cachedStages: len(result.Skipped)}
 
 	worst := SevInfo
 	for _, f := range result.Findings {

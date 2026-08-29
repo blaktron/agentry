@@ -81,6 +81,9 @@ func TestReviewApprovalFlow(t *testing.T) {
 	env.waitStatus(author, "risky", "1.0.0", "rejected")
 }
 
+// version is part of the manifest's shape, not a knob these tests vary.
+//
+//nolint:unparam // fixtures happen to use 1.0.0
 func skillYAML(ns, name, version string) string {
 	return `schemaVersion: "1"
 name: ` + name + `

@@ -120,6 +120,10 @@ type RunResult struct {
 	Fatal error
 	// Ran lists the stages that actually executed (skipped ones excluded).
 	Ran []StageResult
+	// Skipped names the stages whose results came from Resume rather than
+	// from running them: §8.7 results-cache hits, or stages a previous
+	// attempt at this run had already completed.
+	Skipped []string
 }
 
 // Run executes the full pipeline synchronously (§8.2). The worker calls this
@@ -139,6 +143,7 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 	allFindings := append([]Finding{}, p.Resume.Findings...)
 	var stageErrs []string
 	var ran []StageResult
+	var skipped []string
 	var ranMu sync.Mutex
 
 	record := func(res StageResult) {
@@ -152,6 +157,9 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 	// exec runs a stage unless its result is already known.
 	exec := func(st Stage) StageResult {
 		if p.Resume.skips(st.ID()) {
+			ranMu.Lock()
+			skipped = append(skipped, st.ID())
+			ranMu.Unlock()
 			return StageResult{Scanner: st.ID(), Skipped: true}
 		}
 		res := o.runStage(sc, st, in)
@@ -241,7 +249,7 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 	out := RunResult{
 		Report: report, ReportDigest: digest,
 		Findings: allFindings, Decision: decision, JudgeModel: o.judge.Name(),
-		JudgePromptHash: judgePromptHash, Ran: ran,
+		JudgePromptHash: judgePromptHash, Ran: ran, Skipped: skipped,
 	}
 	if digestErr != nil {
 		// The digest is the subject of the DSSE attestation (§8.8). An empty
