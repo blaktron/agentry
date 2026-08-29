@@ -122,7 +122,11 @@ SELECT a.id, a.name, a.kind, a.visibility, a.summary, a.quarantine_state,
        (CASE WHEN sqlc.arg(query)::text = '' THEN 1.0
              ELSE greatest(
                ts_rank_cd(a.search_tsv, websearch_to_tsquery('english', sqlc.arg(query)::text))::double precision,
-               similarity(a.name::text, sqlc.arg(query)::text)::double precision)
+               similarity(a.name::text, sqlc.arg(query)::text)::double precision,
+               -- handle matches rank by handle similarity: ts_rank is 0 for
+               -- them (the handle is not in the tsvector) and they must not
+               -- score zero and vanish below the popularity floor.
+               similarity(h.handle::text, sqlc.arg(query)::text)::double precision)
         END
         * (1.0 + ln(1.0 + coalesce(d.installs, 0)::double precision))
         * (1.0 / (1.0 + (extract(epoch FROM (now() - a.created_at)) / 86400.0) / 180.0))
@@ -141,6 +145,13 @@ WHERE a.visibility = 'public'
     sqlc.arg(query)::text = ''
     OR a.search_tsv @@ websearch_to_tsquery('english', sqlc.arg(query)::text)
     OR a.name::text % sqlc.arg(query)::text
+    -- The namespace handle is not in search_tsv (§10.4 weights cover
+    -- name/summary/readme), but "search for acme" finding acme's agents is
+    -- table-stakes for a registry — the pre-FTS CLI stopgap behaved that
+    -- way, and m3-cli.sh publishes into a random namespace and then looks
+    -- itself up by handle.
+    OR h.handle = lower(sqlc.arg(query)::text)::citext
+    OR h.handle::text % sqlc.arg(query)::text
   )
   AND (sqlc.narg('kind')::text IS NULL OR a.kind = sqlc.narg('kind'))
   -- capability= means "this agent actually asks for it", not merely "the key

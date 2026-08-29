@@ -30,6 +30,12 @@ PSQL="${PGBIN:-/opt/homebrew/opt/postgresql@16/bin}/psql"
 make build >/dev/null
 if [ ! -d web/node_modules ]; then (cd web && npm install --silent); fi
 (cd web && npm run build >"$WORK/webbuild.log" 2>&1) || { echo "web build FAILED"; tail -20 "$WORK/webbuild.log"; exit 1; }
+# Acceptance traffic is a tight scripted loop from one IP; the real §19
+# limits are exercised by m1.sh, not here.
+AGENTRY_LIMITS_AUTHED_BURST_PER_MIN="100000" \
+AGENTRY_LIMITS_AUTHED_PER_HOUR="1000000" \
+AGENTRY_LIMITS_ANONYMOUS_PER_MIN="100000" \
+AGENTRY_LIMITS_LOGIN_PER_MIN="1000" \
 AGENTRY_DATABASE_URL="$DB" AGENTRY_HTTP_ADDR=":$PORT" \
   AGENTRY_STORAGE_LOCAL_DIR="$WORK/storage" AGENTRY_GIT_DATA_DIR="$WORK/git" \
   AGENTRY_BASE_URL="http://localhost:$PORT" ./bin/agentryd all >"$WORK/api.log" 2>&1 &
