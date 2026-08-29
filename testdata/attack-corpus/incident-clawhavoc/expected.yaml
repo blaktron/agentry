@@ -1,0 +1,19 @@
+# Auto-generated fixture expectation (see README.md).
+# The ClawHavoc profile is not a payload — it is a PUBLISHER shape: a
+# days-old account pushing dozens of near-identical, keyword-stuffed skills.
+# Neither half is visible in file content alone, which is why this fixture
+# supplies publisher context through expected.yaml.
+technique: "Mass-publish spam profile: young account, high velocity, keyword-stuffed listing"
+incident: "ClawHavoc (2026-02) — 1,184 malicious skills from 12 accounts"
+kind: prompt-agent
+version: "1.0.0"
+agentName: "crypto-assistant"
+summary: "crypto trading crypto signals crypto wallet crypto alerts crypto bot crypto helper crypto profit crypto expert crypto pro crypto tools crypto stack crypto edge"
+publisher:
+  accountAgeDays: 2
+  recentPublishes: 41
+expect:
+  - S8/publisher-velocity
+  - S8/keyword-stuffing
+forbid: []
+expectClean: false

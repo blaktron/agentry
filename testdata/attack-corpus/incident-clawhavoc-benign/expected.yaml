@@ -1,0 +1,15 @@
+# Auto-generated fixture expectation (see README.md).
+technique: "Benign lookalike: an established publisher shipping one ordinary finance skill"
+incident: "ClawHavoc (2026-02) — benign twin"
+kind: prompt-agent
+version: "3.2.0"
+agentName: "portfolio-reporter"
+summary: "Summarizes a broker CSV export into a plain-text monthly holdings report."
+publisher:
+  accountAgeDays: 900
+  recentPublishes: 1
+expect: []
+forbid:
+  - S8/publisher-velocity
+  - S8/keyword-stuffing
+expectClean: true
