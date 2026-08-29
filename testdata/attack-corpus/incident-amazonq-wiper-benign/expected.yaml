@@ -1,0 +1,10 @@
+# Auto-generated fixture expectation (see README.md).
+technique: "Benign lookalike: security documentation about destructive-instruction payloads"
+incident: "Amazon Q extension wiper prompt (2025-07) — benign twin"
+kind: prompt-agent
+version: "1.0.0"
+expect: []
+forbid:
+  - S4/destructive-001
+  - S4/destructive-002
+expectClean: true

@@ -1,0 +1,11 @@
+# Auto-generated fixture expectation (see README.md).
+technique: "Benign lookalike: documentation that DISCUSSES silent-BCC rug pulls"
+incident: "postmark-mcp (2025-09) — benign twin"
+kind: prompt-agent
+version: "1.0.0"
+expect: []
+forbid:
+  - S4/exfiltration-001
+  - S4/exfiltration-002
+  - S9/new-egress-content
+expectClean: true

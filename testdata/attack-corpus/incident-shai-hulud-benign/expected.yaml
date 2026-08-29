@@ -1,0 +1,13 @@
+# Auto-generated fixture expectation (see README.md).
+technique: "Benign lookalike: a package that DOCUMENTS install-hook abuse and declares none"
+incident: "Shai-Hulud npm worm (2025-09/11) — benign twin"
+kind: mcp-server
+version: "1.4.2"
+manifest: |
+  {"kind":"mcp-server","license":"MIT","capabilities":{}}
+expect: []
+forbid:
+  - S7/install-script
+  - S7/lockfile-missing
+  - S7/lockfile-coverage
+expectClean: true

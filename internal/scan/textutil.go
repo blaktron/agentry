@@ -169,6 +169,9 @@ func confusableSkeleton(s string) string {
 	repl := strings.NewReplacer(
 		"0", "o", "1", "l", "3", "e", "4", "a", "5", "s", "7", "t",
 		"-", "", "_", "", ".", "", " ", "",
+		// Dash look-alikes: an en-dash in a package name is invisible next to
+		// a hyphen at any reading speed.
+		"‐", "", "‑", "", "‒", "", "–", "", "—", "", "−", "",
 		// Cyrillic/Greek look-alikes → Latin.
 		"а", "a", "е", "e", "о", "o", "с", "c", "р", "p", "х", "x",
 		"ѕ", "s", "і", "i", "ο", "o", "α", "a",

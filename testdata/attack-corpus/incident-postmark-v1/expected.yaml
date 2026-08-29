@@ -1,0 +1,13 @@
+# Auto-generated fixture expectation (see README.md).
+technique: "Release-diff pair, v1: the clean baseline (postmark-mcp reproduction)"
+incident: "postmark-mcp (2025-09) — 15 clean releases, then one BCC line"
+kind: mcp-server
+version: "1.0.0"
+manifest: |
+  {"kind":"mcp-server","license":"MIT","capabilities":{}}
+expect: []
+forbid:
+  - S6/undeclared-network
+  - S9/new-egress-content
+  - S9/escalated
+expectClean: true
