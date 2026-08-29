@@ -245,8 +245,9 @@ smtp:
   from: "Agentry <noreply@example.com>"
 ```
 
-Env: `AGENTRY_SMTP_HOST`, `AGENTRY_SMTP_PORT`, `AGENTRY_SMTP_USERNAME`,
-`AGENTRY_SMTP_PASSWORD`, `AGENTRY_SMTP_FROM`.
+Env: `AGENTRY_SMTP_HOST`, `AGENTRY_SMTP_PORT`, `AGENTRY_SMTP_USER`,
+`AGENTRY_SMTP_PASS`, `AGENTRY_SMTP_FROM`, `AGENTRY_SMTP_STARTTLS`
+(plus `AGENTRY_NOTIFY_KIND=smtp` to switch the notifier on).
 
 In dev the compose stack's **mailpit** (http://localhost:8025) is the default
 target and catches everything, so nothing leaves the machine. With no SMTP
@@ -276,16 +277,17 @@ otherwise:
 
 ```yaml
 http:
-  trustedProxies: ["10.0.0.0/8"]
+  trustedProxies: 2   # number of reverse-proxy hops in front of agentryd
 ```
 
-Env: `AGENTRY_HTTP_TRUSTED_PROXIES` (comma-separated CIDRs).
+Env: `AGENTRY_TRUSTED_PROXIES` (an integer hop count, not a CIDR list).
 
-`X-Forwarded-For` is honoured **only** for requests whose immediate peer is
-inside one of these ranges; from anywhere else the header is ignored and the
-socket address is used. Leave it empty if the server is directly exposed —
-an over-broad trusted range lets any client forge its own rate-limit bucket,
-which is worse than having no per-IP limiting at all.
+`X-Forwarded-For` is honoured **only** up to that many trusted hops: behind
+CloudFront → ALB set `2`; behind a single load balancer set `1`. Leave it at
+`0` (the default) if the server is directly exposed — the header is then
+ignored entirely. Setting it higher than the real hop count lets any client
+choose its own rate-limit bucket and forge audit IPs, which is worse than
+having no per-IP limiting at all.
 
 ## Choosing your publication policy
 

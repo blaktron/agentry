@@ -14,6 +14,9 @@
 // routes proxy.ts skips.
 
 const nextConfig = {
+  // standalone output keeps Dockerfile.web to the traced server bundle
+  // instead of the full node_modules tree.
+  output: "standalone",
   reactStrictMode: true,
   async headers() {
     return [

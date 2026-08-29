@@ -53,9 +53,9 @@ type testRegistry struct {
 	// archiveHits counts archive downloads, so a test can assert that a
 	// rejected flag cost no bytes.
 	archiveHits int
-	ns     string
-	name   string
-	ver    string
+	ns          string
+	name        string
+	ver         string
 }
 
 // newTestRegistry boots the fixture registry. The api.Server runs without a

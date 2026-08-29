@@ -356,11 +356,15 @@ func (s *Server) GetMeta(w http.ResponseWriter, r *http.Request) {
 		"judge":   s.cfg.Judge.Provider != "none",
 		"s3":      s.cfg.Storage.Kind == "s3",
 	}
-	writeJSON(w, http.StatusOK, Meta{
+	meta := Meta{
 		Version:    version.Version,
 		ApiVersion: "v1",
 		Features:   features,
-	})
+	}
+	if s.cfg.MinCLIVersion != "" {
+		meta.MinCLIVersion = &s.cfg.MinCLIVersion
+	}
+	writeJSON(w, http.StatusOK, meta)
 }
 
 // healthz is liveness (process up); readyz is readiness (dependencies).
