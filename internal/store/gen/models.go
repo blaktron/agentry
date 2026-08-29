@@ -284,6 +284,14 @@ type RulesetRelease struct {
 	PublishedAt  time.Time `json:"published_at"`
 }
 
+type ScanResultCache struct {
+	ArchiveDigest    string    `json:"archive_digest"`
+	Scanner          string    `json:"scanner"`
+	RulesetReleaseID uuid.UUID `json:"ruleset_release_id"`
+	Findings         []byte    `json:"findings"`
+	CreatedAt        time.Time `json:"created_at"`
+}
+
 type ScanRun struct {
 	ID               uuid.UUID  `json:"id"`
 	VersionID        uuid.UUID  `json:"version_id"`

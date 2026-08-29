@@ -211,6 +211,9 @@ WHERE agent_id = $1 AND status IN ('published','yanked')
 ORDER BY created_at DESC
 `
 
+// Resolution set (§9.4): published resolves by range, yanked resolves only by
+// exact pin. quarantined and blocked are excluded here by construction — a
+// version the platform has disabled must never come back from a resolve.
 func (q *Queries) ListResolvableVersions(ctx context.Context, agentID uuid.UUID) ([]AgentVersion, error) {
 	rows, err := q.db.Query(ctx, listResolvableVersions, agentID)
 	if err != nil {
@@ -257,6 +260,57 @@ SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest
 
 func (q *Queries) ListVersions(ctx context.Context, agentID uuid.UUID) ([]AgentVersion, error) {
 	rows, err := q.db.Query(ctx, listVersions, agentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AgentVersion
+	for rows.Next() {
+		var i AgentVersion
+		if err := rows.Scan(
+			&i.ID,
+			&i.AgentID,
+			&i.Version,
+			&i.CommitSha,
+			&i.Manifest,
+			&i.Capabilities,
+			&i.ArchiveDigest,
+			&i.ArchiveKey,
+			&i.ArchiveSize,
+			&i.Status,
+			&i.StatusReason,
+			&i.PublishedAt,
+			&i.YankedAt,
+			&i.YankReason,
+			&i.Channel,
+			&i.SubmittedBy,
+			&i.Source,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVersionsByStatus = `-- name: ListVersionsByStatus :many
+SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at FROM agent_versions
+WHERE agent_id = $1 AND status = ANY($2::text[])
+ORDER BY created_at DESC
+`
+
+type ListVersionsByStatusParams struct {
+	AgentID  uuid.UUID `json:"agent_id"`
+	Statuses []string  `json:"statuses"`
+}
+
+func (q *Queries) ListVersionsByStatus(ctx context.Context, arg ListVersionsByStatusParams) ([]AgentVersion, error) {
+	rows, err := q.db.Query(ctx, listVersionsByStatus, arg.AgentID, arg.Statuses)
 	if err != nil {
 		return nil, err
 	}

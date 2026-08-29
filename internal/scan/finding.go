@@ -92,6 +92,13 @@ type StageResult struct {
 	// Err is set when the stage could not complete; the orchestrator treats
 	// a stage error as fail-closed (§7 timeout rule, §8.2).
 	Err error
+	// Skipped marks a stage whose result was already known — a completed
+	// stage of an interrupted run, or a §8.7 results-cache hit. Skipped
+	// stages are not re-persisted and not re-cached.
+	Skipped bool
+	// PromptHash is set by S5: the hash of the rubric/prompt version the
+	// judge adjudicated with (§8.4.4, recorded on the scan run).
+	PromptHash string
 }
 
 // Input is the unpacked archive plus context a stage may need.
