@@ -1,14 +1,13 @@
 package api
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
 	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
 )
@@ -18,29 +17,35 @@ const (
 	auditMaxLimit     = 200
 )
 
-// auditCursor encodes/decodes the opaque (occurred_at, id) keyset cursor.
-func encodeAuditCursor(t time.Time, id uuid.UUID) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(t.UTC().Format(time.RFC3339Nano) + "|" + id.String()))
+// auditRow is the shape both audit listings share (org and platform).
+type auditRow struct {
+	ID          uuid.UUID
+	OccurredAt  time.Time
+	ActorKind   string
+	Action      string
+	ActorHandle *string
+	TargetKind  *string
+	TargetID    *uuid.UUID
+	Detail      []byte
 }
 
-func decodeAuditCursor(s string) (time.Time, uuid.UUID, bool) {
-	raw, err := base64.RawURLEncoding.DecodeString(s)
-	if err != nil {
-		return time.Time{}, uuid.Nil, false
+func auditRowToAPI(row auditRow) AuditEvent {
+	e := AuditEvent{
+		Id:         row.ID,
+		OccurredAt: row.OccurredAt,
+		ActorKind:  AuditEventActorKind(row.ActorKind),
+		Action:     row.Action,
 	}
-	parts := strings.SplitN(string(raw), "|", 2)
-	if len(parts) != 2 {
-		return time.Time{}, uuid.Nil, false
+	e.ActorHandle = row.ActorHandle
+	e.TargetKind = row.TargetKind
+	e.TargetId = row.TargetID
+	if len(row.Detail) > 0 {
+		var detail map[string]interface{}
+		if err := json.Unmarshal(row.Detail, &detail); err == nil {
+			e.Detail = &detail
+		}
 	}
-	t, err := time.Parse(time.RFC3339Nano, parts[0])
-	if err != nil {
-		return time.Time{}, uuid.Nil, false
-	}
-	id, err := uuid.Parse(parts[1])
-	if err != nil {
-		return time.Time{}, uuid.Nil, false
-	}
-	return t, id, true
+	return e
 }
 
 // ListOrgAudit implements GET /orgs/{org}/audit (admin+, §12.6).
@@ -56,27 +61,16 @@ func (s *Server) ListOrgAudit(w http.ResponseWriter, r *http.Request, org OrgHan
 		return
 	}
 
-	limit := auditDefaultLimit
-	if params.Limit != nil {
-		limit = *params.Limit
-		if limit < 1 || limit > auditMaxLimit {
-			problemValidation(w, r, "limit must be 1-200")
-			return
-		}
+	limit := clampLimit(params.Limit, auditDefaultLimit, auditMaxLimit)
+	before, beforeID, ok := cursorParams(w, r, params.Cursor)
+	if !ok {
+		return
 	}
-
-	qp := storegen.ListOrgAuditEventsParams{OrgID: &orgRow.ID, Limit: int32(limit)}
+	qp := storegen.ListOrgAuditEventsParams{
+		OrgID: &orgRow.ID, Limit: int32(limit), BeforeTime: before, BeforeID: beforeID,
+	}
 	if params.Action != nil && *params.Action != "" {
 		qp.Action = params.Action
-	}
-	if params.Cursor != nil && *params.Cursor != "" {
-		t, id, ok := decodeAuditCursor(*params.Cursor)
-		if !ok {
-			problemValidation(w, r, "invalid cursor")
-			return
-		}
-		qp.BeforeTime = &t
-		qp.BeforeID = &id
 	}
 
 	rows, err := s.q().ListOrgAuditEvents(r.Context(), qp)
@@ -88,35 +82,93 @@ func (s *Server) ListOrgAudit(w http.ResponseWriter, r *http.Request, org OrgHan
 
 	events := make([]AuditEvent, 0, len(rows))
 	for _, row := range rows {
-		e := AuditEvent{
-			Id:         row.ID,
-			OccurredAt: row.OccurredAt,
-			ActorKind:  AuditEventActorKind(row.ActorKind),
-			Action:     row.Action,
-		}
-		if row.ActorHandle != nil {
-			e.ActorHandle = row.ActorHandle
-		}
-		if row.TargetKind != nil {
-			e.TargetKind = row.TargetKind
-		}
-		if row.TargetID != nil {
-			e.TargetId = row.TargetID
-		}
-		if len(row.Detail) > 0 {
-			var detail map[string]interface{}
-			if err := json.Unmarshal(row.Detail, &detail); err == nil {
-				e.Detail = &detail
-			}
-		}
-		events = append(events, e)
+		events = append(events, auditRowToAPI(auditRow{
+			ID: row.ID, OccurredAt: row.OccurredAt, ActorKind: row.ActorKind,
+			Action: row.Action, ActorHandle: row.ActorHandle,
+			TargetKind: row.TargetKind, TargetID: row.TargetID, Detail: row.Detail,
+		}))
 	}
 
 	page := AuditPage{Events: events}
 	if len(rows) == limit {
 		last := rows[len(rows)-1]
-		cur := encodeAuditCursor(last.OccurredAt, last.ID)
+		cur := encodeCursor(last.OccurredAt, last.ID)
 		page.NextCursor = &cur
+		setNextLink(w, r, cur)
+	}
+	writeJSON(w, http.StatusOK, page)
+}
+
+// ListPlatformAudit implements GET /platform/audit (§12.6): platform staff
+// see every org's slice. §12.6 requires that this access is itself audited,
+// so each call writes one audit.platform_read event naming the filters used —
+// reading everyone's log is exactly the action an auditor wants a record of.
+func (s *Server) ListPlatformAudit(w http.ResponseWriter, r *http.Request, params ListPlatformAuditParams) {
+	if !s.requireDB(w, r) {
+		return
+	}
+	if !s.requireStaff(w, r) {
+		return
+	}
+	limit := clampLimit(params.Limit, auditDefaultLimit, auditMaxLimit)
+	before, beforeID, ok := cursorParams(w, r, params.Cursor)
+	if !ok {
+		return
+	}
+	qp := storegen.ListPlatformAuditEventsParams{
+		Limit: int32(limit), BeforeTime: before, BeforeID: beforeID,
+	}
+	if params.Action != nil && *params.Action != "" {
+		qp.Action = params.Action
+	}
+	detail := map[string]any{"limit": limit}
+	if params.Org != nil && *params.Org != "" {
+		orgRow, ok := s.orgOrNotFound(w, r, *params.Org)
+		if !ok {
+			return
+		}
+		qp.OrgID = &orgRow.ID
+		detail["org"] = orgRow.Handle
+	}
+	if params.Action != nil && *params.Action != "" {
+		detail["action"] = *params.Action
+	}
+
+	rows, err := s.q().ListPlatformAuditEvents(r.Context(), qp)
+	if err != nil {
+		s.log.Error("list platform audit", "err", err)
+		problemInternal(w, r)
+		return
+	}
+
+	// Audit the staff read BEFORE responding: a read we cannot record is a
+	// read we do not serve (§12.6 "platform staff see all — access itself
+	// audited").
+	e := auditEvent(r, audit.ActionAuditPlatformRead)
+	e.TargetKind = "audit_events"
+	e.Detail = detail
+	if err := s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
+		return s.auditW.Write(r.Context(), q, e)
+	}); err != nil {
+		s.log.Error("audit platform read", "err", err)
+		problemInternal(w, r)
+		return
+	}
+
+	events := make([]AuditEvent, 0, len(rows))
+	for _, row := range rows {
+		events = append(events, auditRowToAPI(auditRow{
+			ID: row.ID, OccurredAt: row.OccurredAt, ActorKind: row.ActorKind,
+			Action: row.Action, ActorHandle: row.ActorHandle,
+			TargetKind: row.TargetKind, TargetID: row.TargetID, Detail: row.Detail,
+		}))
+	}
+	page := AuditPage{Events: events}
+	if len(rows) == limit {
+		last := rows[len(rows)-1]
+		cur := encodeCursor(last.OccurredAt, last.ID)
+		page.NextCursor = &cur
+		setNextLink(w, r, cur)
 	}
 	writeJSON(w, http.StatusOK, page)
 }

@@ -70,6 +70,16 @@ const (
 	ActionDomainClaim         Action = "domain.claim"
 	ActionDomainVerified      Action = "domain.verified"
 	ActionAuditExport         Action = "audit.export"
+
+	// Stars, agent lifecycle, and platform operations.
+	ActionAgentStar         Action = "agent.star"
+	ActionAgentUnstar       Action = "agent.unstar"
+	ActionAgentDelete       Action = "agent.delete"
+	ActionAgentTransfer     Action = "agent.transfer"
+	ActionWebhookPing       Action = "webhook.ping"
+	ActionAuditPlatformRead Action = "audit.platform_read"
+	ActionAuditPrune        Action = "audit.prune"
+	ActionSocialLogin       Action = "user.social_login"
 )
 
 // registry is populated at init from the constants above.
@@ -95,6 +105,9 @@ func init() {
 		ActionSCIMUserDeactivate, ActionSCIMGroupSync,
 		ActionWebhookCreate, ActionWebhookUpdate, ActionWebhookDelete,
 		ActionDomainClaim, ActionDomainVerified, ActionAuditExport,
+		ActionAgentStar, ActionAgentUnstar, ActionAgentDelete,
+		ActionAgentTransfer, ActionWebhookPing, ActionAuditPlatformRead,
+		ActionAuditPrune, ActionSocialLogin,
 	} {
 		registry[a] = struct{}{}
 	}

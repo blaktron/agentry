@@ -92,6 +92,19 @@ func seedMatrix(t *testing.T, env *testEnv) *matrixSeed {
 		"namespace": orgH, "name": "mx-agent", "kind": "skill", "visibility": "public",
 	}, nil, http.StatusCreated)
 
+	// A second public agent that deleteAgent targets. An abuse report pins it
+	// in place: every authorized caller gets 409 instead of actually deleting
+	// it, so the matrix (whose case order is map-random) cannot destroy the
+	// fixture for later cases. The real delete path is covered by
+	// TestDeleteAgent* in the M-10 handler tests.
+	env.doJSON(sessions["owner"], http.MethodPost, "/api/v1/agents", map[string]any{
+		"namespace": orgH, "name": "mx-undeletable", "kind": "skill", "visibility": "public",
+	}, nil, http.StatusCreated)
+	env.doJSON(sessions["member"], http.MethodPost,
+		"/api/v1/agents/"+orgH+"/mx-undeletable/abuse-reports",
+		map[string]any{"category": "spam", "detail": "matrix fixture: keeps this agent undeletable"},
+		nil, http.StatusAccepted)
+
 	_, patAll := env.mintPAT(sessions["owner"], "matrix-ok",
 		"org:admin", "audit:read", "user:profile", "agent:read")
 	_, patNone := env.mintPAT(sessions["owner"], "matrix-wrong", "repo:read")
@@ -271,9 +284,26 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			method: "GET",
 			path:   func(s *matrixSeed, _ string) string { return "/api/v1/agents?namespace=" + s.orgH },
 		},
-		"getAgent":        {method: "GET", path: agentPath("")},
-		"updateAgent":     {method: "PATCH", path: agentPath(""), body: func(*matrixSeed, string) any { return map[string]any{"summary": "matrix"} }},
-		"listAgentGrants": {method: "GET", path: agentPath("/grants")},
+		"getAgent":          {method: "GET", path: agentPath("")},
+		"updateAgent":       {method: "PATCH", path: agentPath(""), body: func(*matrixSeed, string) any { return map[string]any{"summary": "matrix"} }},
+		"listAgentGrants":   {method: "GET", path: agentPath("/grants")},
+		"listAgentActivity": {method: "GET", path: agentPath("/activity")},
+		"getAgentStats":     {method: "GET", path: agentPath("/stats")},
+		"starAgent": {
+			method: "PUT",
+			path:   func(s *matrixSeed, _ string) string { return "/api/v1/user/stars/" + s.orgH + "/mx-agent" },
+		},
+		"unstarAgent": {
+			method: "DELETE",
+			path:   func(s *matrixSeed, _ string) string { return "/api/v1/user/stars/" + s.orgH + "/mx-agent" },
+		},
+		"deleteAgent": {
+			method: "DELETE",
+			path: func(s *matrixSeed, _ string) string {
+				return "/api/v1/agents/" + s.orgH + "/mx-undeletable"
+			},
+		},
+		"listAgentsByTag": {method: "GET", path: sPath("/api/v1/tags/matrix")},
 		"setAgentUserGrant": {
 			method: "PUT",
 			path: func(s *matrixSeed, _ string) string {
@@ -372,6 +402,12 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			method: "GET",
 			path: func(s *matrixSeed, _ string) string {
 				return "/api/v1/orgs/" + s.orgH + "/webhooks/" + uuid.NewString() + "/deliveries"
+			},
+		},
+		"pingWebhook": {
+			method: "POST",
+			path: func(s *matrixSeed, _ string) string {
+				return "/api/v1/orgs/" + s.orgH + "/webhooks/" + uuid.NewString() + "/ping"
 			},
 		},
 		"listDomainClaims": {method: "GET", path: orgPath("/domain-claims")},
