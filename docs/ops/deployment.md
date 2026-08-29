@@ -198,7 +198,7 @@ series.
 | `ScanStageHits` | counter | stage | security dashboard (an S3 spike is an attack-wave signal) |
 | `PublishSubmitted` | counter | — | publish funnel |
 | `PublishVerdictClean` / `…Review` / `…Blocked` | counter | — | publish funnel, verdict mix |
-| `JudgeCostCents` | counter | — | budget anomaly (ticket) |
+| `JudgeCostCents` | counter | — | budget anomaly (ticket) — **not yet emitted, see below** |
 | `GitOps` | counter | op, outcome | git dashboard |
 | `GitOpDurationSeconds` | histogram | op | git dashboard |
 | `GitOpConcurrency` | gauge | op | git dashboard, git autoscaling signal |
@@ -211,6 +211,14 @@ concrete path — a per-path metric would let any caller mint unbounded series.
 
 An instrument with no observations yet is simply absent from a scrape; the
 alarms are configured `treat_missing_data = "notBreaching"` to match.
+
+**`JudgeCostCents` carries no data today.** The instrument exists and the
+pipeline dashboard plots it, but no judge provider reports a cost:
+`bedrock`, `anthropic` and `classifier` all resolve to `UnconfiguredProvider`,
+and `scan.JudgeVerdict` has no cost field to carry one. The recording seam is
+`metrics.RecordJudgeCost`, one call from the S5 stage away — whoever
+implements a real provider should populate it, and until then that dashboard
+panel is empty rather than zero. Do not read an empty panel as "no spend".
 
 **Dimension rollup.** The §16.3 alarms address `QueueAgeSeconds`,
 `ScanStageErrors` and `ScanStageRuns` with no dimensions, while the app emits
@@ -250,8 +258,12 @@ per env.
 | `smtp` | Real delivery via `AGENTRY_SMTP_{HOST,PORT,USER,PASS,FROM}` + `AGENTRY_SMTP_STARTTLS`. |
 
 Sent on: email verification, review verdict decided, quarantine after rescan,
-and advisory published. Bodies are plain text and follow §1.6.3 — they say
-"scanned, N findings, signed", never "safe".
+advisory published, and org membership granted. Bodies are plain text and
+follow §1.6.3 — they say "scanned, N findings, signed", never "safe".
+
+There is no separate invite object in v1: org membership is granted by an
+admin rather than offered and accepted, so the "invite" mail rides the same
+transition that fires the `member.added` webhook.
 
 **Dev.** The compose stack runs mailpit; `deploy/compose/docker-compose.yaml`
 points the server service at `mailpit:1025` with STARTTLS off, and every message
