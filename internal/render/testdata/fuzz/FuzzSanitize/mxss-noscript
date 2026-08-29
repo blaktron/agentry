@@ -1,0 +1,2 @@
+go test fuzz v1
+string("<noscript><p title=\"</noscript><img src=x onerror=alert(1)>\">")

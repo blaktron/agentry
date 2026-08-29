@@ -85,8 +85,16 @@ func TestAttackCorpusGate(t *testing.T) {
 		}
 
 		in := stageFixture(t, dir, exp)
+		// Corpus-shape counters live out here, not inside the subtest: they
+		// describe what the corpus CONTAINS, and `-run .../one-fixture` must
+		// not make the corpus look empty.
 		if exp.Prev != "" {
 			pairCount++
+		}
+		if exp.ExpectClean {
+			benignCount++
+		} else {
+			attackCount++
 		}
 		result := orch.Run(context.Background(), RunParams{
 			Input:             in,
@@ -121,12 +129,10 @@ func TestAttackCorpusGate(t *testing.T) {
 			// Attack fixtures must never auto-publish; benign must never be
 			// rejected (a security doc discussing injection must be publishable).
 			if exp.ExpectClean {
-				benignCount++
 				if result.Decision.Outcome == OutcomeRejected {
 					t.Errorf("%s: benign lookalike was REJECTED (%s)", e.Name(), result.Decision.Reason)
 				}
 			} else {
-				attackCount++
 				// A medium+ attack must gate (needs_review or rejected).
 				// Low/info-by-design techniques (trailing whitespace, NFC
 				// deltas, bare HTML comments) legitimately auto-publish with

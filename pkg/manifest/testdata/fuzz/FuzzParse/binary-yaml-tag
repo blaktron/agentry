@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("name: !!binary |\n  aGVsbG8=\n")
