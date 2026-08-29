@@ -223,7 +223,10 @@ func (s *Server) samlSPForOrg(r *http.Request, orgRow storegen.GetOrgByHandleRow
 	}
 	metadataURL, acsURL, _ := s.ssoURLs(r, orgRow.Handle)
 	sp, err := samlsp.New(c, metadataURL, acsURL, s.samlReplay)
-	return sp, conn.ID, err
+	if err != nil {
+		return nil, uuid.Nil, err
+	}
+	return sp.WithRequestTracker(samlRequests), conn.ID, nil
 }
 
 // oidcRPForOrg builds the OIDC RP for an org's enabled connection. ctx should
