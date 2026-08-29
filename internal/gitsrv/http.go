@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
@@ -31,10 +33,16 @@ type Handler struct {
 	reg   *registry.Service
 	aud   *audit.Writer
 	log   *slog.Logger
-	// sem bounds concurrent git subprocesses (§6.2).
-	sem chan struct{}
-	// opTimeout bounds one git operation.
-	opTimeout time.Duration
+	// sem bounds concurrent git subprocesses instance-wide, perRepo bounds
+	// them per repository (§6.2: a semaphore per repo and global).
+	sem     chan struct{}
+	perRepo *repoSemaphores
+	// opTimeout bounds one git operation; postReceiveTimeout bounds the
+	// bookkeeping that outlives the request (afterReceive).
+	opTimeout          time.Duration
+	postReceiveTimeout time.Duration
+	// diskUsage measures a repo; a field so tests can force its failure path.
+	diskUsage func(uuid.UUID) (int64, error)
 	// PostReceive is invoked after a successful push with the updated refs
 	// (M3 wires tag→submission here).
 	PostReceive func(ctx context.Context, agent registry.Agent, refs []RefUpdate, pusher *auth.Principal)
@@ -47,8 +55,11 @@ func NewHandler(cfg config.Config, st *store.Store, repos *RepoStore, reg *regis
 	}
 	return &Handler{
 		cfg: cfg, st: st, repos: repos, reg: reg, aud: aud, log: log,
-		sem:       make(chan struct{}, 32),
-		opTimeout: 5 * time.Minute,
+		sem:                make(chan struct{}, globalGitConcurrency),
+		perRepo:            newRepoSemaphores(perRepoGitConcurrency),
+		opTimeout:          5 * time.Minute,
+		postReceiveTimeout: 2 * time.Minute,
+		diskUsage:          repos.DiskUsage,
 	}
 }
 
@@ -134,7 +145,47 @@ func (h *Handler) resolve(w http.ResponseWriter, r *http.Request, act auth.Actio
 		}
 		return registry.Agent{}, nil, auth.AgentRoleNone, false
 	}
+
+	// §6.4 + §12.4: in an org that enforces SSO, mutating git operations
+	// additionally require an org-bound PAT.
+	allowed, err := h.ssoAllows(r.Context(), principal, agent, act)
+	if err != nil {
+		h.log.Error("git sso gate", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return registry.Agent{}, nil, auth.AgentRoleNone, false
+	}
+	if !allowed {
+		http.Error(w, "forbidden: this organization requires an org-bound token", http.StatusForbidden)
+		return registry.Agent{}, nil, auth.AgentRoleNone, false
+	}
 	return agent, principal, role, true
+}
+
+// ssoAllows applies an org's enforced-SSO policy to a git operation (§12.4).
+// It is deliberately narrower than the API chokepoint: §6.4's table attaches
+// the org-bound-token requirement to push (and to the publish permission that
+// creates v* tags), so clone/fetch — including anonymous reads of public org
+// repos and granted reads of private ones — is unaffected. Sessions are never
+// accepted on git endpoints, so in practice this resolves to "the PAT must be
+// bound to this org"; going through Principal.SSOSatisfied keeps the
+// semantics identical to internal/api's gate rather than restating them.
+func (h *Handler) ssoAllows(ctx context.Context, p *auth.Principal, agent registry.Agent, act auth.Action) (bool, error) {
+	switch act {
+	case auth.ActAgentRepoWrite, auth.ActAgentPublish:
+	default:
+		return true, nil
+	}
+	if agent.NamespaceKind != "org" || p == nil || p.Anonymous || h.st == nil {
+		return true, nil
+	}
+	org, err := h.st.Queries().GetOrgByID(ctx, agent.NamespaceID)
+	if err != nil {
+		return false, fmt.Errorf("gitsrv: org lookup: %w", err)
+	}
+	if !org.SsoRequired {
+		return true, nil
+	}
+	return p.SSOSatisfied(agent.NamespaceID, h.cfg.Auth.SSOMaxAge), nil
 }
 
 func (h *Handler) unauthorized(w http.ResponseWriter) {
@@ -168,11 +219,17 @@ func (h *Handler) infoRefs(w http.ResponseWriter, r *http.Request) {
 	cmd := exec.CommandContext(ctx, h.repos.GitBin(), args...)
 	cmd.Env = h.gitEnv(r, agent, principal, role)
 
+	// The advertisement is buffered rather than streamed on purpose: it is
+	// small (one pkt-line per ref, bounded by the ref count of a ≤100 MB
+	// repo) and buffering keeps the ability to answer a failed git with a
+	// 500 — once the smart-HTTP prelude is written the status is committed
+	// and a client can only be told "success, no refs". The push path, where
+	// bodies are large, streams (see rpc).
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	if err := h.runLimited(cmd); err != nil {
+	if err := h.runLimited(ctx, agent.RepoID, cmd); err != nil {
 		h.log.Error("info/refs", "err", err, "stderr", stderr.String())
 		http.Error(w, "git error", http.StatusInternalServerError)
 		return
@@ -243,8 +300,12 @@ func (h *Handler) rpc(w http.ResponseWriter, r *http.Request, agent registry.Age
 		http.Error(w, "git error", http.StatusInternalServerError)
 		return
 	}
-	h.sem <- struct{}{}
-	defer func() { <-h.sem }()
+	release, err := h.acquireGit(ctx, agent.RepoID)
+	if err != nil {
+		http.Error(w, "git busy", http.StatusServiceUnavailable)
+		return
+	}
+	defer release()
 	if err := cmd.Start(); err != nil {
 		h.log.Error("git start", "service", service, "err", err)
 		http.Error(w, "git error", http.StatusInternalServerError)
@@ -264,17 +325,41 @@ func (h *Handler) rpc(w http.ResponseWriter, r *http.Request, agent registry.Age
 	}
 }
 
-// afterReceive updates repo bookkeeping and audit after a successful push,
-// and hands ref updates to the M3 publication trigger.
+// afterReceive updates repo bookkeeping and audit for the ref updates a push
+// actually landed, and hands them to the M3 publication trigger.
+//
+// Two properties this function owns (§6.3):
+//
+//   - Only ACCEPTED updates count. receive-pack exits 0 even when the
+//     pre-receive hook rejects the whole push — the refusal is reported per
+//     ref as `ng` in report-status — so the requested command list is not
+//     evidence that anything changed. acceptedRefs re-reads the refs from the
+//     repository; a wholly rejected push writes no audit row, moves no
+//     last_push_at, and auto-publishes no tag.
+//   - The work outlives the request. A client that disconnects the moment it
+//     has the report must not cancel the size update, the audit row or tag
+//     auto-publish, so the caller's context is detached here (values kept,
+//     cancellation dropped) and given a deadline of its own. Detaching inside
+//     afterReceive — not at the call site — keeps the property from being
+//     lost by a future caller.
 func (h *Handler) afterReceive(ctx context.Context, agent registry.Agent, principal *auth.Principal, cmds *bytes.Buffer) {
-	refs := parseReceiveCommands(cmds.Bytes())
-	size, err := h.repos.DiskUsage(agent.RepoID)
-	if err != nil {
-		h.log.Warn("post-receive du", "err", err)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), h.postReceiveTimeout)
+	defer cancel()
+
+	refs := h.acceptedRefs(ctx, agent, parseReceiveCommands(cmds.Bytes()))
+	if len(refs) == 0 {
+		return
 	}
 
 	q := h.st.Queries()
-	if err := q.UpdateRepoOnPush(ctx, storegen.UpdateRepoOnPushParams{ID: agent.RepoID, SizeBytes: size}); err != nil {
+	if size, err := h.diskUsage(agent.RepoID); err != nil {
+		// Never write a fabricated 0 on a measurement failure: keep the last
+		// known size and only record that a push landed.
+		h.log.Warn("post-receive du", "err", err)
+		if err := q.TouchRepoOnPush(ctx, agent.RepoID); err != nil {
+			h.log.Error("post-receive touch", "err", err)
+		}
+	} else if err := q.UpdateRepoOnPush(ctx, storegen.UpdateRepoOnPushParams{ID: agent.RepoID, SizeBytes: size}); err != nil {
 		h.log.Error("post-receive size", "err", err)
 	}
 	refNames := make([]string, 0, len(refs))
@@ -303,7 +388,7 @@ func (h *Handler) afterReceive(ctx context.Context, agent registry.Agent, princi
 	if agent.AutoPublishTags && agent.QuarantineState == "none" {
 		for _, ru := range refs {
 			tag, ok := strings.CutPrefix(ru.Ref, "refs/tags/")
-			if !ok || !strings.HasPrefix(tag, "v") || ru.New == strings.Repeat("0", 40) {
+			if !ok || !strings.HasPrefix(tag, "v") || ru.New == zeroOID {
 				continue
 			}
 			e := audit.Event{Actor: principal.UserID, ActorKind: audit.ActorPAT}
@@ -314,6 +399,39 @@ func (h *Handler) afterReceive(ctx context.Context, agent registry.Agent, princi
 	}
 }
 
+// acceptedRefs narrows the ref updates a client asked for to the ones the
+// repository now reflects: a create/update must be present at the requested
+// object id, a delete must be gone. On any doubt (the ref listing fails) it
+// returns nothing — bookkeeping is skipped rather than invented.
+func (h *Handler) acceptedRefs(ctx context.Context, agent registry.Agent, want []RefUpdate) []RefUpdate {
+	if len(want) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(want))
+	for _, ru := range want {
+		names = append(names, ru.Ref)
+	}
+	have, err := h.repos.RefsAt(ctx, agent.RepoID, names)
+	if err != nil {
+		h.log.Error("post-receive ref verify", "err", err)
+		return nil
+	}
+	accepted := make([]RefUpdate, 0, len(want))
+	for _, ru := range want {
+		cur, exists := have[ru.Ref]
+		if ru.New == zeroOID {
+			if !exists {
+				accepted = append(accepted, ru)
+			}
+			continue
+		}
+		if exists && cur == ru.New {
+			accepted = append(accepted, ru)
+		}
+	}
+	return accepted
+}
+
 // gitEnv builds the subprocess environment: protocol v2 plus the hook
 // context (hooks.go) describing the pusher's permissions and quotas.
 // CAN_PUBLISH goes through the chokepoint so PAT scope limits apply: a
@@ -322,6 +440,15 @@ func (h *Handler) gitEnv(r *http.Request, agent registry.Agent, principal *auth.
 	canPublish := auth.CheckAgent(principal,
 		auth.AgentResource{Public: agent.Visibility == "public", EffectiveRole: role},
 		auth.ActAgentPublish) == nil
+	if canPublish && agent.NamespaceKind == "org" {
+		// Enforced SSO gates release just as it gates push (§6.4, §12.4);
+		// a lookup failure denies the stricter permission, never grants it.
+		allowed, err := h.ssoAllows(r.Context(), principal, agent, auth.ActAgentPublish)
+		if err != nil {
+			h.log.Error("git sso gate (publish)", "err", err)
+		}
+		canPublish = allowed && err == nil
+	}
 	env := append(os.Environ(),
 		"GIT_PROTOCOL="+r.Header.Get("Git-Protocol"),
 		"AGENTRY_HOOK_BIN="+h.repos.hookBin,
@@ -334,9 +461,12 @@ func (h *Handler) gitEnv(r *http.Request, agent registry.Agent, principal *auth.
 	return env
 }
 
-func (h *Handler) runLimited(cmd *exec.Cmd) error {
-	h.sem <- struct{}{}
-	defer func() { <-h.sem }()
+func (h *Handler) runLimited(ctx context.Context, repoID uuid.UUID, cmd *exec.Cmd) error {
+	release, err := h.acquireGit(ctx, repoID)
+	if err != nil {
+		return err
+	}
+	defer release()
 	return cmd.Run()
 }
 
