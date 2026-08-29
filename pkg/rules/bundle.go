@@ -102,6 +102,15 @@ type Bundle struct {
 	manifest Manifest
 	rules    []*compiledRule
 	digest   string
+	// source holds the exact bytes the digest was computed over, keyed by the
+	// file's base name, so a loaded bundle can be re-serialized byte-for-byte
+	// (see Tar). Without it, "the bundle the server is running" and "the
+	// bundle the server hands a client" would be two artifacts that merely
+	// hope to agree.
+	source map[string][]byte
+	// order lists source keys in digest order (bundle.yaml first, then the
+	// family files sorted by path), so serialization is deterministic.
+	order []string
 }
 
 // Version returns the bundle's semantic version from bundle.yaml.
@@ -171,12 +180,14 @@ func LoadBundle(fsys fs.FS, dir string) (*Bundle, error) {
 		return nil, err
 	}
 
-	b := &Bundle{manifest: man}
+	b := &Bundle{manifest: man, source: map[string][]byte{}}
 	seen := map[string]bool{}
 	hasher := sha256.New()
 	// bundle.yaml participates in the digest so a manifest change is a new
 	// bundle identity.
 	digestFile(hasher, path.Join(dir, "bundle.yaml"), manifestBytes)
+	b.source["bundle.yaml"] = manifestBytes
+	b.order = append(b.order, "bundle.yaml")
 
 	for _, fp := range files {
 		raw, err := fs.ReadFile(fsys, fp)
@@ -184,6 +195,12 @@ func LoadBundle(fsys fs.FS, dir string) (*Bundle, error) {
 			return nil, fmt.Errorf("rules: reading %s: %w", fp, err)
 		}
 		digestFile(hasher, fp, raw)
+		base := path.Base(fp)
+		if _, dup := b.source[base]; dup {
+			return nil, fmt.Errorf("rules: two rule files share the base name %q", base)
+		}
+		b.source[base] = raw
+		b.order = append(b.order, base)
 
 		var rf ruleFile
 		if err := strictYAML(raw, &rf); err != nil {
