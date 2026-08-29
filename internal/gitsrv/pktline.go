@@ -16,6 +16,10 @@ type commandCapture struct {
 
 const commandCaptureMax = 64 << 10 // commands are tiny; hard cap regardless
 
+// zeroOID is git's all-zero object id: "no such object" on the old side of a
+// create, on the new side of a delete.
+const zeroOID = "0000000000000000000000000000000000000000"
+
 func newCommandCapture(buf *bytes.Buffer) *commandCapture {
 	return &commandCapture{buf: buf}
 }
