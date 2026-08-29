@@ -154,7 +154,17 @@ var routeAuthz = map[string]RouteDecl{
 	"listTeamMembers":       {Action: auth.ActOrgTeamsRead, OrgScoped: true},
 	"listTeams":             {Action: auth.ActOrgTeamsRead, OrgScoped: true},
 	"listTokens":            {Action: auth.ActUserTokensRead},
-	"login":                 {NoAuthz: true, Anonymous: true},
+	// Sessions: listing rides the self-read action so a `user:profile` PAT is
+	// admitted and answered with an empty list (a PAT has no sessions of its
+	// own); revoking is session-only, like logout — a token must not be able
+	// to sign its holder's browsers out.
+	"listUserSessions":        {Action: auth.ActUserSelfRead},
+	"revokeUserSession":       {Action: auth.ActUserSecurityManage, SessionOnly: true},
+	"revokeOtherUserSessions": {Action: auth.ActUserSecurityManage, SessionOnly: true},
+	// The rule bundle is the same artifact the CLI already embeds; serving it
+	// discloses nothing that shipping the binary did not.
+	"getLatestRulesetBundle": {Action: auth.ActPublicRead, Anonymous: true, NoAuthz: true},
+	"login":                  {NoAuthz: true, Anonymous: true},
 	"logout":                {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	"register":              {NoAuthz: true, Anonymous: true},
 	"removeOrgMember":       {Action: auth.ActOrgMembersManage, OrgScoped: true}, // elevates to ActOrgMembersElevate for owner/admin targets
