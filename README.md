@@ -32,8 +32,8 @@ gate decides.
   in-toto/DSSE attestation binding the archive digest to its scan report,
   ruleset version, and policy. `agentry verify` checks it offline.
 - **Says what it does not know.** Static analysis cannot prove an agent safe,
-  and the product never claims it does. Pages show the findings and the
-  ruleset version they came from; published versions are rescanned as detection
+  and the product never claims it does. Pages show the findings, the ruleset
+  version, and when the scan ran; published versions are rescanned as detection
   improves, with quarantine and advisories when something new surfaces.
 
 ## Quick look
