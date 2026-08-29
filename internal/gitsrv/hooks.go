@@ -36,13 +36,18 @@ func RunPreReceiveHook(stdin io.Reader, stderr io.Writer) int {
 	maxBlob := envInt("AGENTRY_HOOK_MAX_BLOB_BYTES", 25<<20)
 	quota := envInt("AGENTRY_HOOK_QUOTA_BYTES", 100<<20)
 
-	const zeroOID = "0000000000000000000000000000000000000000"
-
 	scanner := bufio.NewScanner(stdin)
 	for scanner.Scan() {
-		parts := strings.Fields(scanner.Text())
-		if len(parts) != 3 {
+		line := scanner.Text()
+		parts := strings.Fields(line)
+		if len(parts) == 0 {
 			continue
+		}
+		if len(parts) != 3 {
+			// git speaks exactly "<old> <new> <ref>" here. Anything else
+			// means we cannot tell what is being pushed, so we refuse it
+			// rather than let an unchecked ref update through.
+			return deny("unreadable ref update from git: %q", line)
 		}
 		oldOID, newOID, ref := parts[0], parts[1], parts[2]
 
@@ -74,6 +79,11 @@ func RunPreReceiveHook(stdin io.Reader, stderr io.Writer) int {
 				return deny("%s", msg)
 			}
 		}
+	}
+	// Fail closed on a truncated or unreadable stdin: the ref lines we never
+	// saw would otherwise be applied without ever being policed.
+	if err := scanner.Err(); err != nil {
+		return deny("could not read the ref updates from git: %v", err)
 	}
 
 	// Approximate quota: current repo dir + incoming quarantine.
