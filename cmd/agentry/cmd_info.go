@@ -1,11 +1,12 @@
-// `agentry info` and `agentry search` (§11 discovery). There is no
-// full-text search endpoint until M5, so search lists a namespace
-// (GET /agents?namespace=) or, given ns/name, shows that agent's info.
+// `agentry info` and `agentry search` (§11 discovery). search calls the real
+// full-text endpoint (GET /search, §10.4) with its facet filters; info shows
+// one agent, its latest published version, and its capability contract.
 package main
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -27,20 +28,51 @@ func newInfoCmd() *cobra.Command {
 	}
 }
 
+// searchOpts carries the §10.4 facet filters.
+type searchOpts struct {
+	kind       string
+	capability string
+	license    string
+	verified   bool
+	sort       string
+	limit      int
+}
+
 // newSearchCmd builds the search command.
 func newSearchCmd() *cobra.Command {
-	return &cobra.Command{
+	var opts searchOpts
+	cmd := &cobra.Command{
 		Use:   "search <query>",
-		Short: "Find agents (namespace listing until full-text search lands in M5)",
-		Long: "Find agents. A query containing \"/\" is treated as ns/name and shows that\n" +
-			"agent's info; anything else lists the namespace's agents via\n" +
-			"GET /agents?namespace=. Real full-text search lands with M5.",
+		Short: "Full-text search over public agents, with facet filters",
+		Long: "Search public agents via GET /search (§10.4). A query containing \"/\" is\n" +
+			"treated as ns/name and shows that agent's info instead.\n\n" +
+			"Facets narrow the result set:\n\n" +
+			"  --kind        skill | prompt-agent | mcp-server\n" +
+			"  --capability  a capability the latest version actually asks for\n" +
+			"                (network, filesystem, exec, secrets, dataAccess) —\n" +
+			"                a capability declared as \"none\" does not match\n" +
+			"  --license     SPDX identifier from the latest published manifest\n" +
+			"  --verified    only agents in an org namespace with a verified domain\n" +
+			"  --sort        relevance (default) | installs | newest\n\n" +
+			"With --json the full response, including facet counts, is printed.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSearch(cmd, args[0])
+			return runSearch(cmd, args[0], opts)
 		},
 	}
+	cmd.Flags().StringVar(&opts.kind, "kind", "", "filter by agent kind: skill | prompt-agent | mcp-server")
+	cmd.Flags().StringVar(&opts.capability, "capability", "", "filter by declared capability (network, filesystem, exec, secrets, dataAccess)")
+	cmd.Flags().StringVar(&opts.license, "license", "", "filter by SPDX license identifier")
+	cmd.Flags().BoolVar(&opts.verified, "verified", false, "only agents in orgs with a verified domain")
+	cmd.Flags().StringVar(&opts.sort, "sort", "", "sort order: relevance | installs | newest")
+	cmd.Flags().IntVar(&opts.limit, "limit", 0, "maximum results (server default when unset)")
+	return cmd
 }
+
+// errNoPublishedVersion distinguishes "this agent has nothing published" from
+// "the registry could not answer". Both used to print the same line, which
+// meant a 503 during a release read as an authoring mistake.
+var errNoPublishedVersion = errors.New("no published version")
 
 // runInfo fetches and renders one agent.
 func runInfo(cmd *cobra.Command, ref string) error {
@@ -51,7 +83,7 @@ func runInfo(cmd *cobra.Command, ref string) error {
 	ns, name := parts[0], parts[1]
 
 	reg := registryURL()
-	client, err := newAPIClient(reg, credentialFor(reg))
+	client, err := newAPIClientChecked(cmd, reg, credentialFor(reg))
 	if err != nil {
 		return err
 	}
@@ -65,24 +97,62 @@ func runInfo(cmd *cobra.Command, ref string) error {
 	}
 	agent := agentResp.JSON200
 
-	// Latest published version on the default (stable) channel; absence is
-	// not an error — the agent may simply have no published versions yet.
-	latest, latestErr := resolveRef(cmd.Context(), client, ns+"/"+name, false)
+	// Latest published version on the default (stable) channel.
+	latest, latestErr := resolveLatest(cmd.Context(), client, ns, name)
+	transportFailure := latestErr != nil && !errors.Is(latestErr, errNoPublishedVersion)
 
 	if flags.jsonOut {
 		doc := map[string]any{"agent": agent}
-		if latestErr == nil {
+		switch {
+		case latestErr == nil:
 			doc["latest"] = latest
+		case transportFailure:
+			doc["latestError"] = latestErr.Error()
+		default:
+			doc["latest"] = nil
 		}
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(doc); err != nil {
 			return fmt.Errorf("encode info: %w", err)
 		}
-		return nil
+	} else {
+		renderAgentInfo(cmd.OutOrStdout(), agent, latest, latestErr)
 	}
-	renderAgentInfo(cmd.OutOrStdout(), agent, latest, latestErr)
+
+	// A transport or server failure is still a failure, even though the agent
+	// record printed: exiting 0 would tell a script the version lookup
+	// succeeded and found nothing.
+	if transportFailure {
+		return latestErr
+	}
 	return nil
+}
+
+// resolveLatest asks for the newest published version, mapping "the registry
+// says there is none" to errNoPublishedVersion and leaving every other
+// failure — transport error, 5xx, malformed response — as itself.
+//
+// The distinction matters because the two call for opposite reactions: an
+// author with no published version should publish one; an author hitting a
+// broken registry should retry, and should certainly not be told their agent
+// is empty.
+func resolveLatest(ctx context.Context, client *apiclient.ClientWithResponses, ns, name string) (*apiclient.ResolveResult, error) {
+	resp, err := client.ResolveRefWithResponse(ctx, &apiclient.ResolveRefParams{Ref: ns + "/" + name})
+	if err != nil {
+		return nil, fmt.Errorf("resolve %s/%s: %w", ns, name, err)
+	}
+	if resp.JSON200 != nil {
+		return resp.JSON200, nil
+	}
+	// 404 (and 410 for a fully-yanked agent) mean "nothing published here",
+	// which is a fact about the agent. Everything else is a fact about the
+	// registry.
+	switch resp.StatusCode() {
+	case 404, 410:
+		return nil, errNoPublishedVersion
+	}
+	return nil, apiProblem("resolve "+ns+"/"+name, resp.StatusCode(), resp.ApplicationproblemJSONDefault, resp.Body)
 }
 
 // renderAgentInfo prints the human-readable info block.
@@ -93,8 +163,12 @@ func renderAgentInfo(out io.Writer, agent *apiclient.Agent, latest *apiclient.Re
 	}
 	_, _ = fmt.Fprintf(out, "  git:     %s\n", agent.GitHttpUrl)
 	_, _ = fmt.Fprintf(out, "  created: %s\n", agent.CreatedAt.Format("2006-01-02"))
-	if latestErr != nil {
+	switch {
+	case errors.Is(latestErr, errNoPublishedVersion):
 		_, _ = fmt.Fprintln(out, "  latest:  no published version")
+		return
+	case latestErr != nil:
+		_, _ = fmt.Fprintf(out, "  latest:  UNKNOWN — the registry could not answer: %v\n", latestErr)
 		return
 	}
 	_, _ = fmt.Fprintf(out, "  latest:  %s (%s)\n", latest.Version, latest.Digest)
@@ -107,56 +181,100 @@ func renderAgentInfo(out io.Writer, agent *apiclient.Agent, latest *apiclient.Re
 	}
 }
 
-// runSearch lists a namespace or delegates ns/name queries to info.
-func runSearch(cmd *cobra.Command, query string) error {
+// runSearch queries GET /search, or delegates ns/name queries to info.
+func runSearch(cmd *cobra.Command, query string, opts searchOpts) error {
 	if strings.Contains(query, "/") {
 		return runInfo(cmd, query)
 	}
-	if !flags.jsonOut {
-		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "note: listing agents in namespace "+query+" (full-text search lands with M5)")
-	}
 
 	reg := registryURL()
-	client, err := newAPIClient(reg, credentialFor(reg))
+	client, err := newAPIClientChecked(cmd, reg, credentialFor(reg))
 	if err != nil {
 		return err
 	}
-	agents, err := listNamespace(cmd.Context(), client, query)
-	if err != nil {
-		return err
+
+	params := &apiclient.SearchAgentsParams{}
+	if query != "" {
+		params.Q = &query
 	}
+	if opts.kind != "" {
+		k := apiclient.AgentKind(opts.kind)
+		params.Kind = &k
+	}
+	if opts.capability != "" {
+		params.Capability = &opts.capability
+	}
+	if opts.license != "" {
+		params.License = &opts.license
+	}
+	if opts.verified {
+		params.Verified = &opts.verified
+	}
+	if opts.sort != "" {
+		s := apiclient.SearchAgentsParamsSort(opts.sort)
+		params.Sort = &s
+	}
+	if opts.limit > 0 {
+		params.Limit = &opts.limit
+	}
+
+	resp, err := client.SearchAgentsWithResponse(cmd.Context(), params)
+	if err != nil {
+		return fmt.Errorf("search %q: %w", query, err)
+	}
+	if resp.JSON200 == nil {
+		return apiProblem("search "+query, resp.StatusCode(), resp.ApplicationproblemJSONDefault, resp.Body)
+	}
+	results := resp.JSON200
 
 	out := cmd.OutOrStdout()
 	if flags.jsonOut {
 		enc := json.NewEncoder(out)
 		enc.SetIndent("", "  ")
-		if err := enc.Encode(agents); err != nil {
+		if err := enc.Encode(results); err != nil {
 			return fmt.Errorf("encode search results: %w", err)
 		}
 		return nil
 	}
-	if len(agents) == 0 {
-		_, _ = fmt.Fprintf(out, "no agents in namespace %q\n", query)
+	if len(results.Results) == 0 {
+		_, _ = fmt.Fprintf(out, "no agents match %q%s\n", query, describeFacets(opts))
 		return nil
 	}
-	for _, a := range agents {
-		summary := a.Summary
+	for _, hit := range results.Results {
+		summary := hit.Summary
 		if summary == "" {
 			summary = "-"
 		}
-		_, _ = fmt.Fprintf(out, "%-40s %-13s %-8s %s\n", a.Namespace+"/"+a.Name, a.Kind, a.Visibility, summary)
+		installs := ""
+		if hit.Installs30d != nil {
+			installs = fmt.Sprintf("%d installs/30d", *hit.Installs30d)
+		}
+		_, _ = fmt.Fprintf(out, "%-40s %-13s %-16s %s\n", hit.Namespace+"/"+hit.Name, hit.Kind, installs, summary)
+	}
+	if results.Total != nil && *results.Total > len(results.Results) {
+		_, _ = fmt.Fprintf(out, "\n%d of %d results shown (--limit to see more)\n", len(results.Results), *results.Total)
 	}
 	return nil
 }
 
-// listNamespace calls GET /agents?namespace=.
-func listNamespace(ctx context.Context, client *apiclient.ClientWithResponses, namespace string) ([]apiclient.Agent, error) {
-	resp, err := client.ListAgentsWithResponse(ctx, &apiclient.ListAgentsParams{Namespace: namespace})
-	if err != nil {
-		return nil, fmt.Errorf("list namespace %s: %w", namespace, err)
+// describeFacets renders the active filters for the empty-result message, so
+// "no agents match" never looks like "this registry is empty".
+func describeFacets(opts searchOpts) string {
+	var parts []string
+	if opts.kind != "" {
+		parts = append(parts, "kind="+opts.kind)
 	}
-	if resp.JSON200 == nil {
-		return nil, apiProblem("list namespace "+namespace, resp.StatusCode(), resp.ApplicationproblemJSONDefault, resp.Body)
+	if opts.capability != "" {
+		parts = append(parts, "capability="+opts.capability)
 	}
-	return *resp.JSON200, nil
+	if opts.license != "" {
+		parts = append(parts, "license="+opts.license)
+	}
+	if opts.verified {
+		parts = append(parts, "verified")
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return " with " + strings.Join(parts, ", ")
 }

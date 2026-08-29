@@ -1,6 +1,7 @@
 // `agentry validate` (§11, D-12): offline parity with the server's submit
-// validation — manifest rules V1–V8 via pkg/manifest plus the S3/S4 scan
-// via pkg/rules, run over the files that publish would actually ship.
+// validation — manifest rules V1–V8 via pkg/manifest, the S1 inventory
+// subset via localscan.go, and the S3/S4 scan via pkg/rules, run over the
+// files that publish would actually ship.
 package main
 
 import (
@@ -21,17 +22,26 @@ import (
 
 // newValidateCmd builds the validate command.
 func newValidateCmd() *cobra.Command {
-	var strict bool
+	var strict, rulesUpdate bool
 	cmd := &cobra.Command{
 		Use:   "validate [dir]",
-		Short: "Validate a workspace offline (manifest rules V1-V8 + S3/S4 content scan)",
+		Short: "Validate a workspace offline (manifest rules V1-V8 + S1/S3/S4 scan)",
 		Long: "Validate a workspace offline with the same code the registry runs at submit\n" +
-			"time (D-12 local/remote parity): manifest rules V1-V8 (public-publish context,\n" +
-			"so V7 runs) plus the S3 hidden-content detectors and the S4 injection-signature\n" +
-			"scan over the files publish.include would ship.\n\n" +
-			"The S4 rule bundle is read from $AGENTRY_RULES_DIR, else ./rules; when absent,\n" +
-			"S4 is skipped with a warning (S3 needs no bundle and always runs). Release\n" +
-			"builds will embed the bundle — deferred until the CLI release pipeline exists.\n\n" +
+			"time (D-12 local/remote parity), over the files publish.include would ship:\n\n" +
+			"  manifest  rules V1-V8, in a public-publish context so V7 runs\n" +
+			"  S1        content-sniffed executables and nested archives (critical),\n" +
+			"            non-UTF-8 text (low) — the checks that used to reject a\n" +
+			"            workspace at submit after it passed locally\n" +
+			"  S3/S4     hidden-content detectors and the injection-signature engine\n\n" +
+			"The S4 rule bundle is EMBEDDED in this binary, so validation never depends\n" +
+			"on where it runs. `--rules-update` fetches the registry's current bundle and\n" +
+			"caches it under ~/.config/agentry/rules/<semver>/; the newest cached bundle\n" +
+			"is then preferred over the embedded one. The fetched bundle is pinned by\n" +
+			"digest — bundle-level signatures do not exist yet (DEVIATIONS DEV-024).\n" +
+			"$AGENTRY_RULES_DIR (or ./rules) overrides both, for rule development.\n\n" +
+			"A bundle that will not load is a hard ERROR, never a skipped scan: reporting\n" +
+			"PASSED over content the signature engine never examined is the failure mode\n" +
+			"§7 forbids on the server, so it is forbidden here too (DEV-011).\n\n" +
 			"Exit code: 0 clean; 1 on manifest errors or scan findings. Manifest warnings\n" +
 			"fail only with --strict.",
 		Args: cobra.MaximumNArgs(1),
@@ -40,16 +50,27 @@ func newValidateCmd() *cobra.Command {
 			if len(args) == 1 {
 				dir = args[0]
 			}
-			return runValidate(cmd, dir, strict)
+			return runValidate(cmd, dir, strict, rulesUpdate)
 		},
 	}
 	cmd.Flags().BoolVar(&strict, "strict", false, "treat manifest warnings as errors")
+	cmd.Flags().BoolVar(&rulesUpdate, "rules-update", false,
+		"fetch the registry's current rule bundle, verify its digest, and cache it before scanning")
 	return cmd
 }
 
 // runValidate executes the offline validation over dir.
-func runValidate(cmd *cobra.Command, dir string, strict bool) error {
+func runValidate(cmd *cobra.Command, dir string, strict, rulesUpdate bool) error {
 	out := cmd.OutOrStdout()
+
+	if rulesUpdate {
+		if _, err := fetchRulesBundle(cmd.Context(), cmd.ErrOrStderr(), registryURL()); err != nil {
+			// Fail closed: a requested rules update that did not happen must
+			// not silently validate against the older bundle, because the
+			// whole reason to ask for it was distrust of the older bundle.
+			return err
+		}
+	}
 
 	m, err := readWorkspaceManifest(dir)
 	if err != nil {
@@ -92,26 +113,39 @@ func runValidate(cmd *cobra.Command, dir string, strict bool) error {
 		_, _ = fmt.Fprintf(out, "  ERROR read: %v\n", e)
 	}
 
-	bundle, err := loadRulesBundle()
+	// S1 subset (D-12): the inventory checks that used to reject a workspace
+	// at submit after it had passed locally.
+	s1 := scanS1Local(scanFiles)
+	s1Failing := localFailingFindings(s1)
+	if len(s1) == 0 {
+		_, _ = fmt.Fprintf(out, "inventory: clean — %d file(s), S1 (binaries, nested archives, encoding)\n", len(scanFiles))
+	} else {
+		_, _ = fmt.Fprintf(out, "inventory: %d finding(s) over %d file(s)\n", len(s1), len(scanFiles))
+		printLocalFindings(out, s1)
+	}
+
+	bundle, source, err := loadRulesBundle()
 	if err != nil {
 		// Fail closed: never report PASSED on content S4 did not examine.
 		return err
 	}
-	findings := rules.Scan(bundle, scanFiles)
+	findings := rules.Scan(bundle, rulesFiles(scanFiles))
 	sortFindings(findings)
 
 	switch {
 	case len(findings) == 0:
-		_, _ = fmt.Fprintf(out, "scan: clean — %d file(s), S3 + S4 (bundle %s)\n", len(scanFiles), bundle.Version())
+		_, _ = fmt.Fprintf(out, "scan: clean — %d file(s), S3 + S4 (bundle %s, %s)\n", len(scanFiles), bundle.Version(), source)
 	default:
-		_, _ = fmt.Fprintf(out, "scan: %d finding(s) over %d file(s)\n", len(findings), len(scanFiles))
+		_, _ = fmt.Fprintf(out, "scan: %d finding(s) over %d file(s) (bundle %s, %s)\n",
+			len(findings), len(scanFiles), bundle.Version(), source)
 		for _, f := range findings {
 			printFinding(out, f)
 		}
 	}
-	failed := errCount > 0 || len(findings) > 0 || (strict && warnCount > 0)
+	failed := errCount > 0 || len(findings) > 0 || s1Failing > 0 || (strict && warnCount > 0)
 	if failed {
-		return fmt.Errorf("validate failed: %d error(s), %d warning(s), %d finding(s)", errCount, warnCount, len(findings))
+		return fmt.Errorf("validate failed: %d error(s), %d warning(s), %d inventory finding(s), %d scan finding(s)",
+			errCount, warnCount, s1Failing, len(findings))
 	}
 	_, _ = fmt.Fprintln(out, "validate: PASSED")
 	return nil
@@ -131,10 +165,11 @@ func readWorkspaceManifest(dir string) (*manifest.Manifest, error) {
 }
 
 // loadScanFiles reads the resolved include set (what the archive would
-// contain) for scanning; symlinks are skipped (V4 already rejects them).
-func loadScanFiles(dir string, m *manifest.Manifest, files []manifest.FileInfo) ([]rules.File, []error) {
+// contain) once, for both the S1 inventory and the S3/S4 engine; symlinks are
+// skipped (V4 already rejects them).
+func loadScanFiles(dir string, m *manifest.Manifest, files []manifest.FileInfo) ([]localFile, []error) {
 	include := manifest.ResolveInclude(m.Publish.Include, files)
-	scanFiles := make([]rules.File, 0, len(include))
+	scanFiles := make([]localFile, 0, len(include))
 	var errs []error
 	for _, fi := range include {
 		if fi.Symlink {
@@ -145,42 +180,61 @@ func loadScanFiles(dir string, m *manifest.Manifest, files []manifest.FileInfo) 
 			errs = append(errs, err)
 			continue
 		}
-		scanFiles = append(scanFiles, rules.File{Path: fi.Path, Content: content})
+		scanFiles = append(scanFiles, localFile{Path: fi.Path, Content: content})
 	}
 	return scanFiles, errs
 }
 
-// loadRulesBundle resolves the S4 signature bundle.
+// rulesFiles adapts the shared read set to the pkg/rules input shape.
+func rulesFiles(files []localFile) []rules.File {
+	out := make([]rules.File, len(files))
+	for i, f := range files {
+		out[i] = rules.File{Path: f.Path, Content: f.Content}
+	}
+	return out
+}
+
+// loadRulesBundle resolves the S4 signature bundle, in precedence order:
 //
-// The bundle is EMBEDDED in the binary (internal/scan/ruleset), so local/remote
-// scan parity (D-12) does not depend on where the CLI is run from. The
-// AGENTRY_RULES_DIR environment variable and a ./rules directory override it,
-// for rule development against an unreleased bundle.
+//  1. $AGENTRY_RULES_DIR — rule development against an unreleased bundle
+//  2. ./rules            — the same, from a rules checkout
+//  3. the newest bundle cached by `--rules-update`
+//  4. the bundle EMBEDDED in this binary
 //
-// A malformed override is a hard error, not a warning: silently skipping S4
-// would report "validate: PASSED" on content the signature engine never
-// examined, which is the same failure mode §7 forbids on the server (never
-// pass on scanner failure).
-func loadRulesBundle() (*rules.Bundle, error) {
+// The embedded bundle is the floor, not the ceiling: it means local/remote
+// parity (D-12) never depends on where the CLI is run from, while a cached
+// update means it does not depend on how recently the CLI was released
+// either. It returns the bundle and a short description of where it came
+// from, because "which rules did this pass under" is the first question
+// anyone asks about a clean validate.
+//
+// A malformed override or cache entry from (1) or (2) is a hard error, not a
+// warning: silently skipping S4 would report "validate: PASSED" on content
+// the signature engine never examined, which is the failure mode §7 forbids
+// on the server (never pass on scanner failure) and DEV-011 forbids here.
+func loadRulesBundle() (*rules.Bundle, string, error) {
 	if d := os.Getenv(envRulesDir); d != "" {
 		b, err := rules.LoadBundle(os.DirFS(d), ".")
 		if err != nil {
-			return nil, fmt.Errorf("load rule bundle from %s (%s): %w", d, envRulesDir, err)
+			return nil, "", fmt.Errorf("load rule bundle from %s (%s): %w", d, envRulesDir, err)
 		}
-		return b, nil
+		return b, envRulesDir, nil
 	}
 	if st, err := os.Stat("rules"); err == nil && st.IsDir() {
 		b, err := rules.LoadBundle(os.DirFS("rules"), ".")
 		if err != nil {
-			return nil, fmt.Errorf("load rule bundle from ./rules: %w", err)
+			return nil, "", fmt.Errorf("load rule bundle from ./rules: %w", err)
 		}
-		return b, nil
+		return b, "./rules", nil
+	}
+	if b, _ := newestCachedBundle(); b != nil {
+		return b, "cached via --rules-update", nil
 	}
 	b, err := ruleset.Load()
 	if err != nil {
-		return nil, fmt.Errorf("load embedded rule bundle: %w", err)
+		return nil, "", fmt.Errorf("load embedded rule bundle: %w", err)
 	}
-	return b, nil
+	return b, "embedded", nil
 }
 
 // printManifestIssues prints validation issues, errors before warnings.
