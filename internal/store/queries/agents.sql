@@ -107,11 +107,20 @@ WHERE a.visibility = 'public'
     OR a.name::text % sqlc.arg(query)::text
   )
   AND (sqlc.narg('kind')::text IS NULL OR a.kind = sqlc.narg('kind'))
+  -- capability= means "this agent actually asks for it", not merely "the key
+  -- is present": a manifest that says `network: {egress: none}` serializes
+  -- with the network key set, so key existence alone would match every agent
+  -- ever published. A capability counts when its value is not null/none/empty
+  -- and, for object-valued ones, when at least one member is not.
   AND (sqlc.narg('capability')::text IS NULL OR (
         lv.capabilities IS NOT NULL
         AND jsonb_exists(lv.capabilities, sqlc.narg('capability')::text)
         AND lv.capabilities -> sqlc.narg('capability')::text
-            NOT IN ('"none"'::jsonb, 'null'::jsonb, '[]'::jsonb, '{}'::jsonb)))
+            NOT IN ('"none"'::jsonb, 'null'::jsonb, '[]'::jsonb, '{}'::jsonb)
+        AND (jsonb_typeof(lv.capabilities -> sqlc.narg('capability')::text) <> 'object'
+             OR EXISTS (
+               SELECT 1 FROM jsonb_each(lv.capabilities -> sqlc.narg('capability')::text) AS cap_member(k, v)
+               WHERE cap_member.v NOT IN ('"none"'::jsonb, 'null'::jsonb, '[]'::jsonb, '{}'::jsonb)))))
   AND (sqlc.narg('license')::text IS NULL
        OR lower(lv.manifest ->> 'license') = lower(sqlc.narg('license')::text))
   AND (sqlc.arg(verified_only)::boolean = false

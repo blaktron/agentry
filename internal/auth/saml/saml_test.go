@@ -57,6 +57,9 @@ type assertionOpts struct {
 	assertionID  string
 	sign         bool
 	tamper       bool
+	// inResponseTo, when set, marks the assertion as answering an
+	// SP-initiated AuthnRequest with that id (§12.4).
+	inResponseTo string
 }
 
 // testSubject is the fixed NameID/email the in-test IdP asserts.
@@ -95,6 +98,9 @@ func (k *testIdP) mintResponse(t *testing.T, o assertionOpts) string {
 	scd := sc.CreateElement("saml:SubjectConfirmationData")
 	scd.CreateAttr("NotOnOrAfter", o.notOnOrAfter.UTC().Format(time.RFC3339))
 	scd.CreateAttr("Recipient", o.recipient)
+	if o.inResponseTo != "" {
+		scd.CreateAttr("InResponseTo", o.inResponseTo)
+	}
 
 	cond := assertion.CreateElement("saml:Conditions")
 	cond.CreateAttr("NotBefore", o.notBefore.UTC().Format(time.RFC3339))
