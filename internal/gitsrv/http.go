@@ -10,7 +10,9 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,6 +20,8 @@ import (
 	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/metrics"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/ratelimit"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
 	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
@@ -46,6 +50,26 @@ type Handler struct {
 	// PostReceive is invoked after a successful push with the updated refs
 	// (M3 wires tag→submission here).
 	PostReceive func(ctx context.Context, agent registry.Agent, refs []RefUpdate, pusher *auth.Principal)
+	// pushes enforces the §19 60-pushes-per-hour-per-repo budget. Per
+	// process, so an N-replica git fleet allows roughly N× that (D-06:
+	// Redis replaces this on multi-node SaaS).
+	pushes *ratelimit.Buckets
+	// mx records §16.2 git op counts, durations, concurrency and the §16.1
+	// clone first-byte SLI. nil is a working no-op.
+	mx *metrics.Metrics
+	// inflight is the live count behind the GitOpConcurrency gauge.
+	inflight atomic.Int64
+}
+
+// SetMetrics wires the §16.2 instrument set.
+func (h *Handler) SetMetrics(m *metrics.Metrics) { h.mx = m }
+
+// Close releases the push-limiter's collector goroutine.
+func (h *Handler) Close() error {
+	if h == nil {
+		return nil
+	}
+	return h.pushes.Close()
 }
 
 // NewHandler assembles the git HTTP layer.
@@ -60,7 +84,20 @@ func NewHandler(cfg config.Config, st *store.Store, repos *RepoStore, reg *regis
 		opTimeout:          5 * time.Minute,
 		postReceiveTimeout: 2 * time.Minute,
 		diskUsage:          repos.DiskUsage,
+		// The idle TTL must exceed the one-hour push window: a bucket evicted
+		// sooner comes back full, which would let a repo at its limit reset
+		// the budget simply by pausing.
+		pushes: ratelimit.New(2 * time.Hour),
 	}
+}
+
+// pushesPerHour is the §19 per-repo push budget from config, with the shipped
+// default when unset.
+func (h *Handler) pushesPerHour() int {
+	if n := h.cfg.Limits.GitPushesPerHour; n > 0 {
+		return n
+	}
+	return 60
 }
 
 // Mount registers the git routes on a mux (shared in `all`, alone in `git`).
@@ -259,6 +296,22 @@ func (h *Handler) receivePack(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// §19: 60 pushes/h per repo. Enforced HERE, at the admission point, rather
+	// than in the pre-receive hook: the hook is a fresh process per push with
+	// no shared state, so a bucket there would be empty every time. Refusing
+	// before the git subprocess starts also means a repo being hammered costs
+	// nothing but a 429.
+	//
+	// Burst is the full hourly budget: §19 says "60 pushes/h", not "one per
+	// minute", and a developer landing a run of commits should not be paced.
+	res := h.pushes.Allow("push", agent.RepoID.String(),
+		ratelimit.PerHour(h.pushesPerHour()), h.pushesPerHour())
+	if !res.OK {
+		h.mx.RecordGitOp(r.Context(), "receive-pack", "throttled", 0)
+		w.Header().Set("Retry-After", strconv.Itoa(int(res.Reset.Round(time.Second)/time.Second)))
+		http.Error(w, "push rate exceeded for this repository (§19: 60/h)", http.StatusTooManyRequests)
+		return
+	}
 	var cmds bytes.Buffer
 	h.rpc(w, r, agent, principal, role, "receive-pack", &cmds)
 }
@@ -269,6 +322,16 @@ func (h *Handler) receivePack(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) rpc(w http.ResponseWriter, r *http.Request, agent registry.Agent, principal *auth.Principal, role auth.AgentRole, service string, cmdCapture *bytes.Buffer) {
 	ctx, cancel := context.WithTimeout(r.Context(), h.opTimeout)
 	defer cancel()
+
+	// §16.2 git op telemetry. outcome is set on the way out of each branch so
+	// a refused or failed operation is distinguishable from a served one.
+	start := time.Now()
+	outcome := "ok"
+	h.mx.RecordGitConcurrency(ctx, service, h.inflight.Add(1))
+	defer func() {
+		h.mx.RecordGitConcurrency(ctx, service, h.inflight.Add(-1))
+		h.mx.RecordGitOp(ctx, service, outcome, time.Since(start))
+	}()
 
 	body := r.Body
 	if r.Header.Get("Content-Encoding") == "gzip" {
@@ -297,23 +360,37 @@ func (h *Handler) rpc(w http.ResponseWriter, r *http.Request, agent registry.Age
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		outcome = "error"
 		http.Error(w, "git error", http.StatusInternalServerError)
 		return
 	}
 	release, err := h.acquireGit(ctx, agent.RepoID)
 	if err != nil {
+		outcome = "busy"
 		http.Error(w, "git busy", http.StatusServiceUnavailable)
 		return
 	}
 	defer release()
 	if err := cmd.Start(); err != nil {
+		outcome = "error"
 		h.log.Error("git start", "service", service, "err", err)
 		http.Error(w, "git error", http.StatusInternalServerError)
 		return
 	}
-	_, _ = io.Copy(w, stdout)
+	// §16.1 SLI: p95 first-byte under 2 s for a clone. Measured from the
+	// start of the request, so it includes both the semaphore wait and git's
+	// own startup — which is what a client actually experiences, and the
+	// reason a queued clone must not look fast.
+	var packOut io.Reader = stdout
+	if service == "upload-pack" {
+		packOut = &firstByteTimer{r: stdout, start: start, record: func(d time.Duration) {
+			h.mx.RecordGitCloneFirstByte(ctx, d)
+		}}
+	}
+	_, _ = io.Copy(w, packOut)
 	err = cmd.Wait()
 	if err != nil {
+		outcome = "error"
 		// Headers are already sent; the pkt-line stream carries the error
 		// report to the client. Log for operators.
 		h.log.Warn("git rpc exit", "service", service, "err", err, "stderr", stderr.String())
@@ -323,6 +400,26 @@ func (h *Handler) rpc(w http.ResponseWriter, r *http.Request, agent registry.Age
 	if service == "receive-pack" {
 		h.afterReceive(r.Context(), agent, principal, cmdCapture)
 	}
+}
+
+// firstByteTimer records how long the first byte of pack data took to arrive.
+// It wraps the git subprocess's stdout rather than the ResponseWriter because
+// the writer has already had the smart-HTTP prelude written to it — timing
+// that would measure our own header, not git's work.
+type firstByteTimer struct {
+	r      io.Reader
+	start  time.Time
+	record func(time.Duration)
+	fired  bool
+}
+
+func (f *firstByteTimer) Read(p []byte) (int, error) {
+	n, err := f.r.Read(p)
+	if n > 0 && !f.fired {
+		f.fired = true
+		f.record(time.Since(f.start))
+	}
+	return n, err
 }
 
 // afterReceive updates repo bookkeeping and audit for the ref updates a push

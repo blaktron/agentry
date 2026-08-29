@@ -7,6 +7,7 @@ package api
 
 import (
 	"encoding/base64"
+	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"testing"
@@ -14,6 +15,8 @@ import (
 
 	"github.com/google/uuid"
 	"golang.org/x/time/rate"
+
+	"github.com/PLACEHOLDER_ORG/agentry/internal/ratelimit"
 )
 
 func mustUUID(t *testing.T) uuid.UUID {
@@ -30,13 +33,14 @@ func encodeCursorRaw(s string) string {
 }
 
 func TestRateLimitHeadersCountDownAndRefuse(t *testing.T) {
-	rl := &rateLimits{buckets: map[string]*bucketEntry{}}
+	rl := ratelimit.New(time.Hour)
+	t.Cleanup(func() { _ = rl.Close() })
 	// One request per second, burst of 3.
 	const burst = 3
 	lim := rate.Limit(1)
 
 	for i := 0; i < burst; i++ {
-		res := rl.allowWithHeaders("authed", "u1", lim, burst)
+		res := rl.Allow("authed", "u1", lim, burst)
 		if !res.OK {
 			t.Fatalf("request %d within the burst was refused", i+1)
 		}
@@ -48,7 +52,7 @@ func TestRateLimitHeadersCountDownAndRefuse(t *testing.T) {
 		}
 	}
 
-	refused := rl.allowWithHeaders("authed", "u1", lim, burst)
+	refused := rl.Allow("authed", "u1", lim, burst)
 	if refused.OK {
 		t.Fatal("the request past the burst must be refused")
 	}
@@ -60,8 +64,66 @@ func TestRateLimitHeadersCountDownAndRefuse(t *testing.T) {
 	}
 
 	// A different key has its own budget: limits are per principal, not global.
-	if other := rl.allowWithHeaders("authed", "u2", lim, burst); !other.OK {
+	if other := rl.Allow("authed", "u2", lim, burst); !other.OK {
 		t.Fatal("a second principal must not inherit the first one's exhausted bucket")
+	}
+}
+
+// X-Forwarded-For is client-supplied. Trusting it without knowing the hop
+// count would let any caller choose its own rate-limit bucket — or another
+// client's, which turns a per-IP budget into a way to exhaust someone else's.
+func TestClientIPHonorsTrustedProxyDepth(t *testing.T) {
+	req := func(xff string) *http.Request {
+		r := httptest.NewRequest("GET", "/", nil)
+		r.RemoteAddr = "10.0.0.9:1234" // the ALB
+		if xff != "" {
+			r.Header.Set("X-Forwarded-For", xff)
+		}
+		return r
+	}
+	cases := []struct {
+		name    string
+		xff     string
+		trusted int
+		want    string
+	}{
+		{"default ignores the header entirely", "1.2.3.4", 0, "10.0.0.9"},
+		{"forged header ignored when direct", "203.0.113.7, 1.2.3.4", 0, "10.0.0.9"},
+		// CloudFront -> ALB -> agentryd: the ALB is the peer, CloudFront wrote
+		// the last XFF entry, so the client is the entry before it.
+		{"two hops", "203.0.113.7, 198.51.100.2", 2, "203.0.113.7"},
+		{"one hop", "203.0.113.7, 198.51.100.2", 1, "198.51.100.2"},
+		// A client prepending junk cannot push the real entry out of range.
+		{"spoofed prefix ignored", "9.9.9.9, 203.0.113.7, 198.51.100.2", 2, "203.0.113.7"},
+		{"chain shorter than configured falls back", "203.0.113.7", 3, "203.0.113.7"},
+		{"no header at all falls back to the peer", "", 2, "10.0.0.9"},
+		{"non-IP entries are dropped", "junk, 203.0.113.7, 198.51.100.2", 2, "203.0.113.7"},
+		{"ip:port form is tolerated", "203.0.113.7:9999, 198.51.100.2", 2, "203.0.113.7"},
+	}
+	for _, c := range cases {
+		if got := clientIPWithProxies(req(c.xff), c.trusted); got != c.want {
+			t.Errorf("%s: clientIP = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// The bucket store's collector must stop on Close, or every server built in a
+// test leaks a goroutine holding every bucket it ever saw.
+func TestBucketsCloseIsIdempotent(t *testing.T) {
+	b := ratelimit.New(time.Hour)
+	b.Allow("c", "k", rate.Limit(1), 1)
+	if b.Len() != 1 {
+		t.Fatalf("Len = %d, want 1", b.Len())
+	}
+	if err := b.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if err := b.Close(); err != nil {
+		t.Fatalf("second Close: %v", err)
+	}
+	var nilBuckets *ratelimit.Buckets
+	if err := nilBuckets.Close(); err != nil {
+		t.Fatalf("nil Close: %v", err)
 	}
 }
 

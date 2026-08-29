@@ -80,6 +80,15 @@ WHERE a.id = $1;
 -- name: SetAgentQuarantineState :exec
 UPDATE agents SET quarantine_state = $2, updated_at = now() WHERE id = $1;
 
+-- name: SetAgentReadmeText :exec
+-- Denormalizes the published version's README onto the agent so the §10.4
+-- weight-C index has something to index (the tsvector trigger fires on this
+-- column). Written on publish only: an agent's searchable description should
+-- follow what people can actually install, not whatever the last submission
+-- happened to contain.
+UPDATE agents SET readme_text = $2, updated_at = now()
+WHERE id = $1 AND readme_text IS DISTINCT FROM $2;
+
 -- name: SearchAgents :many
 -- Public FTS search (§10.4, D-20): weighted tsvector + trigram fuzzy fallback
 -- on name, ranked by relevance × install popularity × recency decay. The
@@ -90,7 +99,34 @@ UPDATE agents SET quarantine_state = $2, updated_at = now() WHERE id = $1;
 SELECT a.id, a.name, a.kind, a.visibility, a.summary, a.quarantine_state,
        a.created_at, h.handle AS namespace,
        coalesce(d.installs, 0)::bigint AS installs,
-       ts_rank_cd(a.search_tsv, websearch_to_tsquery('english', sqlc.arg(query)::text)) AS rank
+       ts_rank_cd(a.search_tsv, websearch_to_tsquery('english', sqlc.arg(query)::text)) AS rank,
+       -- §10.4: relevance × log(1+installs_30d) × recency_decay, as one
+       -- score so the ordering below is a single comparison rather than the
+       -- lexicographic tie-break chain this used to be (which never combined
+       -- the three factors at all — it just fell through from one to the next).
+       --
+       --   relevance  ts_rank_cd over the weighted tsvector (A name, B
+       --              summary, C readme), floored by trigram similarity so a
+       --              fuzzy name match does not score zero and vanish. An
+       --              empty query scores 1: browsing is not searching, and
+       --              every row should then be ordered by popularity × recency.
+       --   popularity 1 + ln(1 + installs_30d). §10.4 writes log(1+installs);
+       --              taken literally that is 0 for a zero-install agent and
+       --              multiplies its whole score away, burying every new agent
+       --              beneath every old one no matter how well it matches.
+       --              The leading 1 makes popularity a multiplier of at least
+       --              1 — it can promote, never annihilate. (DEV-030)
+       --   recency    1 / (1 + age_days / 180): half weight at ~6 months.
+       --              The catalogue turns over on a scale of seasons, so a
+       --              decay measured in days would churn the front page.
+       (CASE WHEN sqlc.arg(query)::text = '' THEN 1.0
+             ELSE greatest(
+               ts_rank_cd(a.search_tsv, websearch_to_tsquery('english', sqlc.arg(query)::text))::double precision,
+               similarity(a.name::text, sqlc.arg(query)::text)::double precision)
+        END
+        * (1.0 + ln(1.0 + coalesce(d.installs, 0)::double precision))
+        * (1.0 / (1.0 + (extract(epoch FROM (now() - a.created_at)) / 86400.0) / 180.0))
+       )::double precision AS score
 FROM agents a
 JOIN handles h ON h.id = a.namespace_id
 LEFT JOIN orgs o ON o.id = a.namespace_id
@@ -128,9 +164,9 @@ WHERE a.visibility = 'public'
 ORDER BY
   CASE WHEN sqlc.arg(sort)::text = 'installs' THEN coalesce(d.installs, 0) END DESC NULLS LAST,
   CASE WHEN sqlc.arg(sort)::text = 'newest' THEN a.created_at END DESC NULLS LAST,
-  ts_rank_cd(a.search_tsv, websearch_to_tsquery('english', sqlc.arg(query)::text)) DESC,
-  coalesce(d.installs, 0) DESC,
-  a.created_at DESC
+  score DESC,
+  a.created_at DESC,
+  a.id DESC
 LIMIT $1 OFFSET $2;
 
 -- name: SearchFacetKinds :many

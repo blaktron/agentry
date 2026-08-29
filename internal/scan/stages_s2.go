@@ -1,9 +1,11 @@
 package scan
 
 import (
-	"math"
 	"regexp"
+	"strconv"
 	"strings"
+
+	"github.com/PLACEHOLDER_ORG/agentry/pkg/rules"
 )
 
 // S2 — Secrets (§8.3). Native high-signal secret detection over the archive
@@ -56,11 +58,11 @@ func (S2Secrets) Run(sc stageContext, in *Input) StageResult {
 					if rule.group > 0 && rule.group < len(loc) {
 						cand = loc[rule.group]
 					}
-					if shannonEntropy(cand) < rule.entropyMin {
+					if rules.ShannonEntropy([]byte(cand)) < rule.entropyMin {
 						continue
 					}
 				}
-				key := f.Path + "|" + rule.id + "|" + itoa(i)
+				key := f.Path + "|" + rule.id + "|" + strconv.Itoa(i)
 				if seen[key] {
 					continue
 				}
@@ -79,27 +81,6 @@ func (S2Secrets) Run(sc stageContext, in *Input) StageResult {
 	return StageResult{Scanner: "S2", Findings: findings}
 }
 
-// shannonEntropy returns bits/char for s.
-func shannonEntropy(s string) float64 {
-	if s == "" {
-		return 0
-	}
-	var freq [256]float64
-	for i := 0; i < len(s); i++ {
-		freq[s[i]]++
-	}
-	n := float64(len(s))
-	h := 0.0
-	for _, c := range freq {
-		if c == 0 {
-			continue
-		}
-		p := c / n
-		h -= p * math.Log2(p)
-	}
-	return h
-}
-
 // redact keeps a secret out of the report body: show only the match's shape.
 func redact(line string) string {
 	line = strings.TrimSpace(line)
@@ -116,17 +97,3 @@ func redact(line string) string {
 }
 
 var maskRuns = regexp.MustCompile(`[0-9A-Za-z/+_\-]{8,}`)
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var b [20]byte
-	i := len(b)
-	for n > 0 {
-		i--
-		b[i] = byte('0' + n%10)
-		n /= 10
-	}
-	return string(b[i:])
-}
