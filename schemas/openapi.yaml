@@ -29,7 +29,8 @@ info:
     verbatim. Reusing a key with a *different* body is a 409. Keys are
     scoped per user and endpoint and expire after 24 hours. Endpoints that
     honour the header: `POST /orgs`, `POST /orgs/{org}/webhooks`,
-    `POST /orgs/{org}/webhooks/{id}/ping`, `POST /platform/ruleset-releases`.
+    `POST /orgs/{org}/webhooks/{id}/ping`, `POST /platform/ruleset-releases`,
+    `POST /agents/{ns}/{name}/versions`.
   version: 0.2.0
   license:
     name: PLACEHOLDER (Q2 pending)

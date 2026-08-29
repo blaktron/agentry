@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/scan"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/scan/ruleset"
 	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
 )
@@ -99,6 +100,7 @@ func (s *Server) CreateRulesetRelease(w http.ResponseWriter, r *http.Request) {
 
 	id := newUUID()
 	var created storegen.RulesetRelease
+	var inserted bool
 	var notesPtr *string
 	if notes != "" {
 		notesPtr = &notes
@@ -110,7 +112,11 @@ func (s *Server) CreateRulesetRelease(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		created = row
+		created = storegen.RulesetRelease{
+			ID: row.ID, Semver: row.Semver, BundleDigest: row.BundleDigest,
+			Notes: row.Notes, PublishedAt: row.PublishedAt,
+		}
+		inserted = row.Inserted
 		e := auditEvent(r, audit.ActionRulesetRelease)
 		e.TargetKind, e.TargetID = "ruleset_release", row.ID
 		e.Detail = map[string]any{"semver": semver, "bundleDigest": digest}
@@ -124,6 +130,13 @@ func (s *Server) CreateRulesetRelease(w http.ResponseWriter, r *http.Request) {
 		s.log.Error("create ruleset release", "err", err)
 		problemInternal(w, r)
 		return
+	}
+	// A genuinely new semver is the §8.7 trigger for re-checking the published
+	// catalogue — same rule as boot-time registration in New().
+	if inserted {
+		scan.EnqueueRescanSweepOnNewRuleset(r.Context(), s.jobs, s.log, scan.RulesetRegistration{
+			ID: created.ID, Semver: created.Semver, New: true,
+		})
 	}
 	out := rulesetReleaseToAPI(created)
 	ik.complete(r, http.StatusCreated, out)

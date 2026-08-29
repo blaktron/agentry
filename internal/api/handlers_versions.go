@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
@@ -100,6 +102,11 @@ func (s *Server) SubmitVersion(w http.ResponseWriter, r *http.Request, ns Namesp
 	if !s.requireDB(w, r) {
 		return
 	}
+	ik, handled := s.beginIdempotent(w, r, "POST /agents/{ns}/{name}/versions")
+	if handled {
+		return
+	}
+	defer ik.abandon(r)
 	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentPublish)
 	if !ok {
 		return
@@ -145,7 +152,9 @@ func (s *Server) SubmitVersion(w http.ResponseWriter, r *http.Request, ns Namesp
 		s.writeSubmitError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusAccepted, versionToAPI(version))
+	out := versionToAPI(version)
+	ik.complete(r, http.StatusAccepted, out)
+	writeJSON(w, http.StatusAccepted, out)
 }
 
 // submitUpload handles the cli-upload source: unpack, then hand the
@@ -406,7 +415,7 @@ func (s *Server) ResolveRef(w http.ResponseWriter, r *http.Request, params Resol
 		digest = *v.ArchiveDigest
 	}
 	base := strings.TrimSuffix(s.cfg.BaseURL, "/")
-	writeJSON(w, http.StatusOK, ResolveResult{
+	out := ResolveResult{
 		Namespace:  ref.Namespace,
 		Name:       ref.Name,
 		Version:    v.Version,
@@ -414,5 +423,14 @@ func (s *Server) ResolveRef(w http.ResponseWriter, r *http.Request, params Resol
 		ArchiveUrl: fmt.Sprintf("%s/api/v1/agents/%s/%s/versions/%s/download", base, ref.Namespace, ref.Name, v.Version),
 		Manifest:   manifestDoc,
 		Yanked:     res.Yanked,
-	})
+	}
+	// §9.4 step 1: point verifiers at the attestation whenever one exists
+	// (signing happens exactly once, on publish — §7).
+	if _, err := s.q().GetAttestation(r.Context(), v.ID); err == nil {
+		u := fmt.Sprintf("%s/api/v1/agents/%s/%s/versions/%s/attestation", base, ref.Namespace, ref.Name, v.Version)
+		out.AttestationUrl = &u
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		s.log.Warn("resolve: attestation lookup", "err", err)
+	}
+	writeJSON(w, http.StatusOK, out)
 }
