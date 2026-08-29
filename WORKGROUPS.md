@@ -7,14 +7,14 @@ Derived from [PLAN.md](PLAN.md) §18 (milestones) and §18.3 (ordering/paralleli
 | WG | Milestone | Status | Acceptance |
 |---|---|---|---|
 | A — Foundation | M0 | ✅ complete | `scripts/acceptance/m0.sh` |
-| B — Identity & access | M1 | ✅ complete | `scripts/acceptance/m1.sh` (179-case authz matrix) |
+| B — Identity & access | M1 | ✅ complete | `scripts/acceptance/m1.sh` (566-case authz matrix) |
 | C — Git hosting | M2 | ✅ core complete | `scripts/acceptance/m2.sh` (21-case conformance) |
 | D — Manifest | M3 | ✅ complete | 163 subtests + fuzz |
 | E — Registry core | M3 | ✅ core complete | `scripts/acceptance/m3.sh` |
 | F — CLI | M3 | ✅ core complete | `scripts/acceptance/m3-cli.sh` |
 | G — Rules engine | M4 seed | ✅ complete | fixture runner + corpus |
 | H — Security pipeline | M4 | ✅ core complete | `scripts/acceptance/m4.sh` (attack-corpus gate) |
-| I — Web UI | M5 | ✅ public surface | `scripts/acceptance/m5.sh` (9 live SSR flows) |
+| I — Web UI | M5 | ✅ public + authed surface | `m5.sh` (9 live SSR flows) + `m8-console.sh` (signed-in) |
 | J — Enterprise SSO/SCIM | M6 | ✅ complete | `scripts/acceptance/m6.sh` (12 criteria) |
 | K — AWS infra | M7 | ✅ complete | `scripts/acceptance/m7.sh` (71 .tf validate for real) |
 | L — Launch hardening | M8 | 🟡 partial | docs + GDPR + abuse intake + T&S console + release-please done; pen test 🧍 + seed content (Q10) remain |
@@ -28,6 +28,38 @@ Bugs the build itself surfaced and fixed (each with a regression test):
 - **Silent rescan failure** — the sweep logged unreadable archives and returned nil, so a totally failed run looked clean. It now counts and reports.
 - **Fragile shared-DB test selection** (M8 console work) — `TestReviewApprovalFlow` grabbed `queue[len-1]` of the platform review queue, but that queue is shared across the whole test run (one migrated DB, no per-test truncation). New same-named review items from the console tests made it grab another author's item, so the author-self-approve assertion started passing a 204 instead of 403. Now selects its own item by namespace (the pattern the new `setupReviewItem` helper already used). A latent ordering dependency, surfaced the moment a second test wrote to the same queue.
 - **Web login cookie clobber** (M8 console work) — the login route handler appended the session via a raw `Set-Cookie` header *and* set the CSRF cookie via Next's `cookies` API; the two mechanisms don't compose and only the CSRF cookie survived, so every web sign-in silently produced a session-less browser. Caught by the acceptance script asserting both cookies land. Fixed by setting both through the one `cookies` API with the API's mirrored attributes.
+
+## Post-audit remediation (2026-08-29)
+
+An independent audit compared the shipped code against PLAN.md and found two
+things: real defects in the pipeline, git and API layers, and tracking
+documents (this file included) claiming more than the code did. The work was
+split across two waves of branches. Wave 1 is merged into the line these
+statuses describe; wave 2 lands alongside it.
+
+**Wave 1 — merged.**
+
+| Branch | What it fixed |
+|---|---|
+| `fix/gitsrv` | `git archive` export-ignore neutralization proven at startup (DEV-017), enforced-SSO gating on git writes (DEV-018), per-repo semaphore, push-bookkeeping correctness |
+| `fix/pipeline-core` | blocked versions now actually 410 (they had been serving 200s — DEV-014), a quarantine re-review exit (DEV-015), rescan sweeps triggered by ruleset registration instead of by hand, the §8.6 policy knobs (`blockedCapabilities`, `allowedLicenses`, `requireEvals`) enforced rather than merely stored, the 2FA-before-public-publish gate (DEV-016), review-decision atomicity, upload hardening, and the S0/pipeline-error finding persisted |
+| `fix/api-enterprise` | social OIDC login (DEV-019), SP-initiated SAML + `/sso/{org}`, the audit NDJSON stream + retention + `GET /platform/audit` (DEV-020), SCIM PUT semantics, GDPR explicit disposition and transfer, stars/stats/activity/tags/ping/ruleset-release endpoints, the §9.1 conventions — Idempotency-Key, `RateLimit-*`, `Link` pagination, search facets (DEV-021) — `review:act` scope enforcement, and `attestationUrl` / `verdictReason` / `finishedAt` on reports |
+
+**Wave 2 — in flight.** `fix/w2-web` (CSP nonces + hydration, light theme,
+agent-settings page, stars/facets/sessions UI); `fix/w2-cli` (install-time
+signature verification, capability diff, rules update, sessions endpoints);
+`fix/w2-scanner-depth` (S9 content diff, S8 name signals, EXIF, S7 lockfiles,
+five incident-corpus fixtures, the `make sync-rules` CI drift wiring, k6 and
+seed tooling); `fix/w2-platform-seams` (OTel/Prometheus, entitlements, SMTP
+notifier, S3 and KMS backends, a git-capable image, the `all`-role worker,
+ranking); `fix/w2-docs` (this file, README, CONTINUE, `docs/`, and the
+DEV-031..049 backfill).
+
+Statuses below were revised in that last branch where they had drifted from
+the code — the WG-B matrix count, the WG-I acceptance description and
+deferred list, and the WG-L §10.1 coverage claim.
+
+---
 
 **Critical path:** WG-A → WG-B → (WG-D ∥ WG-G) → WG-E/WG-F → WG-H → WG-I → WG-L
 **Parallel lanes:** WG-C (git) after WG-B · WG-J (enterprise) after WG-B · WG-K (infra) after WG-A
@@ -85,7 +117,9 @@ Scope:
 
 Acceptance: authz matrix test (§17.4) enumerates every route × role × org-boundary and passes; PAT lifecycle e2e; audit rows asserted for every mutating call.
 
-**Status: ✅ complete** — identity schema (00002: handles/users/orgs/memberships/teams/pats/sessions/audit partitioned+immutability trigger), register/login/TOTP (argon2id, sealed secrets), server-side sessions + CSRF, PATs (`agy_`, sha256-at-rest, 8 scopes), authz chokepoint + per-route declarations w/ completeness gate, audit writer + code-registered catalog, configurable §19 rate limits, org/member/team endpoints. Acceptance green (`scripts/acceptance/m1.sh`): 179-case authz matrix, PAT lifecycle e2e, audit coverage incl. append-only trigger, auth/TOTP/CSRF flows. Deferred to later WGs: social OIDC login (M6 SSO work), session-listing UI endpoint, GDPR delete (M8).
+**Status: ✅ complete** — identity schema (00002: handles/users/orgs/memberships/teams/pats/sessions/audit partitioned+immutability trigger), register/login/TOTP (argon2id, sealed secrets), server-side sessions + CSRF, PATs (`agy_`, sha256-at-rest, 8 scopes), authz chokepoint + per-route declarations w/ completeness gate, audit writer + code-registered catalog, configurable §19 rate limits, org/member/team endpoints. Acceptance green (`scripts/acceptance/m1.sh`): authz matrix, PAT lifecycle e2e, audit coverage incl. append-only trigger, auth/TOTP/CSRF flows. Deferred to later WGs: social OIDC login (M6 SSO work), session-listing UI endpoint, GDPR delete (M8).
+
+The matrix is generated from the route table, so its size tracks the API surface rather than being a fixed figure: **566 cases over 84 of the 96 declared routes** as of 2026-08-29 (it prints its own count — `authz matrix: N cases executed`). Earlier revisions of this file said 179 and CONTINUE.md said 355; both were true when written and neither was updated as routes were added. The twelve routes the matrix does **not** enumerate are the `SelfAuthorized: true` ones, covered by handler tests instead — see DEV-033, which treats that exclusion as the most important open item in the register.
 
 ---
 
@@ -104,6 +138,8 @@ Scope:
 Acceptance: `scripts/conformance/git.sh` matrix green (clone/fetch/push × public/private × PAT states × shallow/partial × quota/tag rejections).
 
 **Status: ✅ core complete** — smart HTTP v2 (info/refs, upload-pack, receive-pack, gzip bodies, protocol v2, shallow+partial clone), UUID-sharded bare repos w/ lazy init (git role owns storage per §13.3), PAT-only Basic auth + per-op §6.4 authz w/ private-repo existence privacy, pre-receive policy hook (`agentryd hook pre-receive`: immutable v* tags, publish-permission gating incl. PAT scope, force-push/default-branch-delete denial, nested-.git + oversize-blob rejection, quota), post-receive bookkeeping (size, audit, PostReceive hook for M3 tag→submit), agents+repos+grants schema and full agents/grants API. Conformance: 21-case matrix green (`scripts/acceptance/m2.sh`); also caught+fixed a real bug where a repo:write-only PAT could create v* tags. Deferred: gc worker job (needs M4 queue), per-IP git concurrency limits (M7 WAF layer), agent delete endpoint (M3, needs never-published check).
+
+Four departures from §6.2/§6.3 in the scope list above are recorded as **DEV-032**: there is no `post-receive` hook file (the bookkeeping runs in the HTTP handler after `receive-pack` exits), no `repo.pushed` queue event exists anywhere, hooks are installed as wrapper shell scripts rather than symlinks, and repos are initialized lazily on first git request. **DEV-045** covers the fifth: force-push to the default branch is a hardcoded deny — the "unless agent setting allows" setting §6.3 names does not exist. The 21-case matrix itself lives in `internal/gitsrv/conformance_test.go` and runs on every PR via `go test ./...`; `scripts/conformance/git.sh` is a wrapper CI never calls (DEV-047).
 
 ---
 
@@ -202,11 +238,13 @@ Scope:
 - Server-side sanitized markdown only (goldmark+bluemonday endpoint), CSP per §10.3, image proxy.
 - Search UI on Postgres FTS facets (§10.4).
 
-Acceptance: Playwright five §2.3 flows; XSS corpus rendered safe; Lighthouse a11y ≥ 90 public pages.
+Acceptance: Playwright five §2.3 flows; XSS corpus rendered safe; Lighthouse a11y ≥ 90 public pages. **Both tools were substituted — see DEV-031.**
 
-**Status: ✅ core complete** — commit 7268999 (+ 64974ef advisories page, cb89938 a11y automation). Next.js 16 App Router SSR: home, search w/ facets, agent page (capability badges + security report card + install snippet), version page (report + provenance), namespace, trust, advisories, docs. Server-side sanitized rendering only (goldmark+bluemonday in internal/render; the browser never parses user markdown), CSP without inline script, invisible-Unicode rendered as visible placeholders (§10.3 GlassWorm lesson). Postgres FTS search (§10.4). Acceptance: `scripts/acceptance/m5.sh` incl. an automated axe-core a11y pass that caught and fixed a duplicate-h1.
+**Status: ✅ core complete** — commit 7268999 (+ 64974ef advisories page, cb89938 a11y automation). Next.js 16 App Router SSR: home, search w/ facets, agent page (capability badges + security report card + install snippet), version page (report + provenance), namespace, trust, advisories, docs. Server-side sanitized rendering only (goldmark+bluemonday in internal/render; the browser never parses user markdown), CSP without inline script, invisible-Unicode rendered as visible placeholders (§10.3 GlassWorm lesson). Postgres FTS search (§10.4). Acceptance: `scripts/acceptance/m5.sh` — nine live SSR flows driven with `curl`, plus a structural accessibility pass (`scripts/dev/a11y-check.py`: landmarks, heading order and `<h1>` uniqueness, `lang`, accessible names on links and buttons, form-control labels, image `alt`) which caught and fixed a duplicate-h1. **There is no axe-core and no Playwright in this repository, and no Lighthouse score has ever been measured** — earlier revisions of this line said "an automated axe-core a11y pass", which named a tool that was never here. DEV-031 records the substitution and what it does not cover.
 
-Authed surface (commits ee29afd + a365c43): web sign-in (API session cookie mirrored + CSRF cookie, both httpOnly; mutations are plain HTML forms → web route handlers → API, zero client JS under the strict CSP), authed dashboard, review queue (platform + org), the §10.1 **reviewer detail UI** (findings w/ excerpt highlighting + verdict forms, archive file viewer w/ line-level finding overlays and invisible-Unicode revelation, capability diff vs previous published version, manifest, decision panel), backed by new API surface (enriched review bundle, review-archive file endpoints). Acceptance: `scripts/acceptance/m8-console.sh` (live sign-in through the web tier, SSR checks incl. U+200B revelation, reject→rejected, authz refusals, cross-origin 403, authed-page a11y). Still deferred: publish-flow live progress UI, org admin UI, user settings UI, new-agent wizard.
+Authed surface (commits ee29afd + a365c43): web sign-in (API session cookie mirrored + CSRF cookie, both httpOnly; mutations are plain HTML forms → web route handlers → API, zero client JS under the strict CSP), authed dashboard, review queue (platform + org), the §10.1 **reviewer detail UI** (findings w/ excerpt highlighting + verdict forms, archive file viewer w/ line-level finding overlays and invisible-Unicode revelation, capability diff vs previous published version, manifest, decision panel), backed by new API surface (enriched review bundle, review-archive file endpoints). Acceptance: `scripts/acceptance/m8-console.sh` (live sign-in through the web tier, SSR checks incl. U+200B revelation, reject→rejected, authz refusals, cross-origin 403, authed-page a11y). Also shipped in the same pass: publish flow + live progress, org admin (members/teams/policy/SSO/SCIM/domains/webhooks/audit), user settings (profile/2FA/PATs), new-agent wizard — this line previously still listed those four as deferred after they had landed.
+
+**Still not built (§10 gaps, now recorded):** the §10.1 agent-settings page (grants, visibility, auto-publish toggle, webhooks) — ships with wave 2's web branch; the "sessions" half of user settings — same branch; the platform-staff **ruleset release console** (deferred to v1.1; the release tooling exists as scripts); and three §10.3/§10.1 items recorded as DEV-049 — the camo-style image proxy (external images are consequently not displayed at all; the CSP is what makes that safe), server-side syntax highlighting, and the SSO connection test button. The org policy editor is a JSON textarea rather than the schema-validated form §10.1 specifies (DEV-040), and `style-src` carries `'unsafe-inline'` for Tailwind (DEV-041, script nonces added by the wave-2 web branch).
 
 ---
 
@@ -257,7 +295,9 @@ Acceptance: M8 criteria incl. fresh-machine self-host quickstart < 15 min; runbo
 
 release-please (commit b818fef, DEV-013): `.github/workflows/release-please.yaml` + config + manifest + seeded CHANGELOG; conventional-commit-driven release PR → CHANGELOG → `vX.Y.Z` tag → the existing `release.yaml` builds/signs/publishes. Authored + syntax-validated, not executed here (needs the GitHub API). CONTRIBUTING gained a Releasing section documenting the `RELEASE_PLEASE_TOKEN` handoff gotcha.
 
-Remaining M8: status page setup (operational/external SaaS), external pen test 🧍, seed content (10–20 first-party agents, blocked on Q10), `security@`/`abuse@` addresses live before launch. Ruleset release **console** UI is v1.1 (release tooling exists as scripts). All §10.1 UI rows are now built.
+Remaining M8: status page setup (operational/external SaaS), external pen test 🧍, seed content (10–20 first-party agents, blocked on Q10), `security@`/`abuse@` addresses live before launch.
+
+**§10.1 UI coverage, accurately.** A previous revision of this line said "All §10.1 UI rows are now built"; that was not true. Built: every Public row, every Reviewer row, the Org-admin row (with the policy editor as a JSON textarea rather than a form — DEV-040), the platform-staff T&S queue and quarantine console, and all of the Authed row except agent settings. **Not built:** the agent-settings page and the sessions view (both ship with wave 2's web branch), and the platform-staff **ruleset release console**, which stays deferred to v1.1 — the release tooling exists as scripts. The public docs page is hand-authored TSX rather than a rendering of the repository's `docs/` tree (DEV-037), and `/advisories` is an explainer page rather than the advisory feed the row implies (DEV-038).
 
 ---
 
