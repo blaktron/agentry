@@ -1,0 +1,2 @@
+go test fuzz v1
+string("<svg><animate onbegin=alert(1) attributeName=x dur=1s>")
