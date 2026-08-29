@@ -119,6 +119,174 @@ Generate a sealing key:
 openssl rand -base64 32
 ```
 
+### Object storage and KMS signing
+
+`storage.kind: local` keeps release archives on disk under `storage.localDir`,
+which is what the quickstart uses and what a single-node deployment can keep
+using indefinitely — archives are content-addressed and write-once.
+
+For S3, and for signing with a KMS key instead of a file:
+
+```yaml
+storage:
+  kind: s3
+  s3Bucket: my-agentry-releases
+  s3Region: us-east-1
+
+signing:
+  kind: kms
+  kmsKeyARN: arn:aws:kms:us-east-1:111122223333:key/…
+```
+
+Env equivalents: `AGENTRY_STORAGE_KIND`, `AGENTRY_STORAGE_S3_BUCKET`,
+`AGENTRY_STORAGE_S3_REGION`, `AGENTRY_SIGNING_KIND`,
+`AGENTRY_SIGNING_KMS_KEY_ARN`. Credentials come from the ambient AWS chain —
+an instance or task role, not keys in this file. The Terraform in
+`deploy/terraform` provisions both the bucket and a key whose `kms:Sign`
+permission is restricted to the worker task role.
+
+**Honest caveat:** these two backends have **not yet been exercised against a
+live AWS account**. The Terraform is validated but never applied, and the
+build environment has no AWS credentials, so the first real deployment is
+also the first integration test. `local` + `file` are the paths with mileage
+on them. If you are standing up production on S3 and KMS, publish a throwaway
+version first and confirm the archive round-trips and `agentry verify`
+passes before you trust it with anything.
+
+### Social login
+
+Individual accounts can sign in with Google or GitHub (§12.1). Both are
+optional and independent: **a provider with no client id is not offered at
+all** — its start endpoint returns 404, so probing cannot distinguish
+"misconfigured" from "not enabled".
+
+```yaml
+social:
+  google:
+    clientId: "…apps.googleusercontent.com"
+    clientSecret: "…"
+  github:
+    clientId: "Iv1.…"
+    clientSecret: "…"
+```
+
+Env: `AGENTRY_SOCIAL_GOOGLE_CLIENT_ID`, `AGENTRY_SOCIAL_GOOGLE_CLIENT_SECRET`,
+`AGENTRY_SOCIAL_GITHUB_CLIENT_ID`, `AGENTRY_SOCIAL_GITHUB_CLIENT_SECRET`.
+
+Register the callback with each provider as
+`{baseURL}/api/v1/auth/oidc/{google|github}/callback`, so `baseURL` must be
+set correctly for social login to work at all.
+
+Two behaviours worth knowing before you enable this (both are DEV-019):
+
+- **Google is real OIDC** — discovery, issuer pinning, PKCE, ID-token
+  signature and nonce verification. **GitHub is an OAuth 2.0 shim**: there is
+  no ID token to verify, so the trust anchor is TLS to `api.github.com` plus
+  your client secret, and there is no PKCE — a sealed single-use state cookie
+  is what binds a callback to the browser that started it. An email is
+  recorded only when GitHub reports it both primary *and* verified.
+- **Social login is not a way around 2FA.** A redirect callback has nowhere
+  to carry a TOTP code, so an account with 2FA enrolled receives a sealed
+  five-minute challenge instead of a session, completed at
+  `POST /api/v1/auth/2fa/totp/challenge`.
+
+### Audit archive and retention
+
+Every audit event is written to the `audit_events` table, which is
+partitioned monthly and protected by an append-only trigger — rows cannot be
+updated or deleted, by anyone, including you. §12.6 additionally wants a
+continuous NDJSON stream. It is **off by default**:
+
+```yaml
+audit:
+  streamKind: file            # none (default) | file | s3
+  streamDir: /var/lib/agentry/audit-stream
+  streamFlush: 30s
+  retentionDays: 400          # 0 disables pruning
+```
+
+Env: `AGENTRY_AUDIT_STREAM_KIND`, `AGENTRY_AUDIT_STREAM_DIR`,
+`AGENTRY_AUDIT_STREAM_FLUSH`, `AGENTRY_AUDIT_STREAM_S3_BUCKET`,
+`AGENTRY_AUDIT_RETENTION_DAYS`.
+
+- `file` appends one `audit-YYYY-MM-DD.ndjson` per UTC day to `streamDir`.
+  Rotate and ship those with whatever you already use.
+- `s3` is **not implemented** — the constructor refuses at startup and names
+  the bucket it was asked for, rather than silently dropping records
+  (DEV-020). Use `file` plus your log shipper.
+- An unavailable sink degrades to a no-op plus an error log; it does not stop
+  the server from booting.
+- Two deliberate trade-offs: the stream is fed by the audit writer
+  immediately after the insert, so a transaction that rolls back afterwards
+  leaves an "attempted" line in the archive with no matching row; and when
+  the buffer fills (a wedged disk) records are **dropped with an error log**
+  rather than blocking the request path. An archive that can stall writes is
+  a denial-of-service surface, and an extra line is auditable where a missing
+  one is not.
+
+**Retention is month-granular.** Pruning works by dropping whole monthly
+partitions — the only way to prune a table whose trigger refuses `DELETE`,
+and O(1) rather than a 400-day scan. A partition is dropped only once *all*
+of its rows are outside the window, so effective retention rounds **up** to a
+month boundary: with `retentionDays: 400` you will hold up to ~430 days.
+Size your storage for the upper bound.
+
+### Notification email
+
+Verification emails, review notifications and advisory notices go out over
+SMTP:
+
+```yaml
+smtp:
+  host: smtp.example.com
+  port: 587
+  username: agentry
+  password: "…"
+  from: "Agentry <noreply@example.com>"
+```
+
+Env: `AGENTRY_SMTP_HOST`, `AGENTRY_SMTP_PORT`, `AGENTRY_SMTP_USERNAME`,
+`AGENTRY_SMTP_PASSWORD`, `AGENTRY_SMTP_FROM`.
+
+In dev the compose stack's **mailpit** (http://localhost:8025) is the default
+target and catches everything, so nothing leaves the machine. With no SMTP
+configured at all, email verification tokens are logged at debug level —
+usable for a single-operator instance, not for anything with real users.
+
+### Metrics
+
+The API exposes Prometheus metrics at **`/metrics`**: HTTP request counts and
+latencies by route and status, queue depth and job outcomes, scan stage
+durations, and the Go runtime collectors. Scrape it from your own Prometheus;
+there is no push path and no external dependency.
+
+`/metrics` is unauthenticated and carries route-level operational data — no
+agent content and no user identifiers, but you should still keep it off the
+public internet. Bind the API's metrics exposure behind your ingress, or
+scrape over the cluster network only.
+
+`/healthz` (liveness) and `/readyz` (readiness, checks the database) are
+separate and are what your load balancer should use.
+
+### Running behind a proxy
+
+Rate limiting (§19) buckets anonymous traffic per client IP. Behind a load
+balancer, every request appears to come from the balancer unless you say
+otherwise:
+
+```yaml
+http:
+  trustedProxies: ["10.0.0.0/8"]
+```
+
+Env: `AGENTRY_HTTP_TRUSTED_PROXIES` (comma-separated CIDRs).
+
+`X-Forwarded-For` is honoured **only** for requests whose immediate peer is
+inside one of these ranges; from anywhere else the header is ignored and the
+socket address is used. Leave it empty if the server is directly exposed —
+an over-broad trusted range lets any client forge its own rate-limit bucket,
+which is worse than having no per-IP limiting at all.
+
 ## Choosing your publication policy
 
 The platform baseline lives in the `policies` table (`org_id IS NULL`) and is
@@ -138,7 +306,21 @@ look:
 }
 ```
 
-Organizations can tighten this for their own namespace but never loosen it.
+Organizations can tighten this for their own namespace but never loosen it —
+`blockedCapabilities` unions, `allowedLicenses` intersects, severity
+thresholds only move down.
+
+Two notes on the knobs:
+
+- `blockedCapabilities` rejects a submission that *declares* the capability;
+  it is a gate on the manifest, not a runtime restriction. Combine it with
+  `requireHumanReview: {"whenCapabilities": [...]}` if you want a look rather
+  than a refusal.
+- `allowedLicenses` intersects with the platform's SPDX allowlist, which is a
+  curated set of 60 common identifiers rather than the full SPDX list. A
+  valid but uncommon identifier will be refused for public publish even if
+  you list it (DEV-042). Check `pkg/manifest/spdx.go` before standardising
+  your org on something unusual.
 
 ## Operating it
 
