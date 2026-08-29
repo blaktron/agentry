@@ -21,12 +21,40 @@ go test ./internal/render -count=1 >/dev/null && echo "XSS corpus + invisible-ch
 go test ./internal/api -run 'TestAuthzMatrix|TestRouteDeclarationsComplete' -count=1 >/dev/null \
   && echo "route declarations + authz matrix (incl. search/readme): OK"
 
-# 3. Web app typecheck + production build.
+# 3. Web app typecheck, unit tests, and production build.
 if [ ! -d web/node_modules ]; then (cd web && npm install --silent); fi
 (cd web && npx tsc --noEmit) && echo "web typecheck: OK"
+(cd web && npx vitest run >/tmp/agentry-m5-vitest.log 2>&1) \
+  && echo "web unit tests (safeNext, invisible-char list, capability diff): OK" \
+  || { echo "web unit tests FAILED"; tail -30 /tmp/agentry-m5-vitest.log; exit 1; }
 (cd web && npm run build >/tmp/agentry-m5-build.log 2>&1) \
   && echo "web production build: OK" \
   || { echo "web build FAILED"; tail -20 /tmp/agentry-m5-build.log; exit 1; }
+
+# 3b. Both theme palettes survive the Tailwind build (B-17). @theme is a
+#     build-time token table, so a dark block nested inside a media query
+#     overwrites the light values instead of overriding them — the symptom is
+#     exactly one :root and a dark page for light-mode users.
+CSS=$(ls web/.next/static/chunks/*.css 2>/dev/null | head -1)
+[ -n "$CSS" ] || { echo "no compiled CSS found"; exit 1; }
+python3 - "$CSS" <<'PY'
+import re, sys
+css = open(sys.argv[1]).read()
+values = re.findall(r"--color-bg:\s*([^;}]+)", css)
+if len(values) < 2:
+    print(f"  theme palettes: FAILED — --color-bg defined {len(values)} time(s): {values}")
+    sys.exit(1)
+if "prefers-color-scheme" not in css:
+    print("  theme palettes: FAILED — no prefers-color-scheme block")
+    sys.exit(1)
+missing = [t for t in ("--color-sev-critical", "--color-sev-low", "--color-sev-info")
+           if f"{t}:" not in css]
+if missing:
+    print(f"  severity tokens: FAILED — tree-shaken out of the build: {missing}")
+    sys.exit(1)
+print(f"  light + dark palettes both present ({', '.join(v.strip() for v in values)}): OK")
+print("  per-severity tokens survive tree-shaking: OK")
+PY
 
 # 4. Live SSR smoke: boot the API + web, publish an agent, assert the agent
 #    page server-renders its capability contract and report card.
@@ -74,12 +102,17 @@ kind: skill
 version: 1.0.0
 summary: "M5 acceptance demo agent"
 license: Apache-2.0
+tags: [acceptance, summarize]
 entrypoints:
   skill: SKILL.md
 capabilities:
   network:
     egress: [api.example.com]
   secrets: [DEMO_TOKEN]
+dependencies:
+  agents:
+    - ref: acme/formatter
+      version: "^1.2"
 publish:
   include: [agent.yaml, README.md, SKILL.md, LICENSE]
 YAML
@@ -93,6 +126,11 @@ check() { # url, needle, label
 }
 echo "live SSR flows:"
 check "http://localhost:$WEBPORT/"                          "scanning step built in" "home page"
+# The trending list itself is asserted through /search?sort=installs below:
+# the home page's own fetch is cached for five minutes and this script polls
+# "/" before publishing anything, so the section heading is what is stable
+# here, not its contents.
+check "http://localhost:$WEBPORT/"                          "Most installed this month" "home page (featured/trending section)"
 check "http://localhost:$WEBPORT/search?q=demo"             "demo-skill"             "search results"
 check "http://localhost:$WEBPORT/$H/demo-skill"             "Declared capabilities"  "agent page (capability contract)"
 check "http://localhost:$WEBPORT/$H/demo-skill"             "Security report"        "agent page (report card)"
@@ -102,6 +140,74 @@ check "http://localhost:$WEBPORT/$H"                        "demo-skill"        
 check "http://localhost:$WEBPORT/trust"                     "does not guarantee"     "trust page"
 check "http://localhost:$WEBPORT/docs"                      "publish.include"        "docs page"
 check "http://localhost:$WEBPORT/advisories"                "quarantined"            "advisories page"
+
+# §10.2 elements added in wave 2. Each of these was claimed by page copy or
+# by the plan before it was rendered; they are asserted individually so a
+# regression names the missing element rather than "the agent page changed".
+echo "§10.2 agent-page elements:"
+check "http://localhost:$WEBPORT/$H/demo-skill"             "Scanned"                "agent page (scan date on report card)"
+check "http://localhost:$WEBPORT/$H/demo-skill"             "/tags/acceptance"       "agent page (tag chips link to /tags)"
+check "http://localhost:$WEBPORT/$H/demo-skill"             "acme/formatter"         "agent page (dependency list)"
+check "http://localhost:$WEBPORT/$H/demo-skill"             "target=mcp"             "agent page (install target selector)"
+check "http://localhost:$WEBPORT/$H/demo-skill"             "Star this agent"        "agent page (star control)"
+check "http://localhost:$WEBPORT/$H/demo-skill"             "Installs"               "agent page (stats panel)"
+check "http://localhost:$WEBPORT/$H/demo-skill?target=mcp"  "target=mcp"             "agent page (target=mcp renders)"
+check "http://localhost:$WEBPORT/$H/demo-skill/versions/1.0.0" "Signing key"         "version page (provenance key id)"
+check "http://localhost:$WEBPORT/$H/demo-skill/versions/1.0.0" "Dependencies"        "version page (dependency list)"
+check "http://localhost:$WEBPORT/tags/acceptance"           "demo-skill"             "tag page lists the agent"
+check "http://localhost:$WEBPORT/search"                    "verified organizations" "search (verified facet control)"
+check "http://localhost:$WEBPORT/search"                    "Capability"             "search (capability facet control)"
+check "http://localhost:$WEBPORT/search"                    "Apache-2.0"             "search (license facet counts)"
+check "http://localhost:$WEBPORT/search?sort=installs"      "demo-skill"             "search (sort=installs)"
+check "http://localhost:$WEBPORT/login"                     "company account"        "login (org SSO entry point)"
+
+# CSP + hydration (B-01). `script-src 'self'` with no nonce blocks Next's own
+# inline bootstrap: the flight payload never executes, every route throws
+# React #412, and no client component ever mounts. The policy must therefore
+# carry a per-request nonce AND every script tag must be stamped with it.
+echo "CSP nonce + hydration (§10.3, B-01):"
+curl -fsSI "http://localhost:$WEBPORT/" | grep -i '^content-security-policy:' \
+  | grep -q "script-src 'self' 'nonce-" \
+  && echo "  CSP carries a per-request script nonce: OK" \
+  || { echo "  CSP nonce: FAILED (header has no nonce)"; exit 1; }
+curl -fsS -D "$WORK/head.txt" -o "$WORK/home.html" "http://localhost:$WEBPORT/"
+python3 - "$WORK/head.txt" "$WORK/home.html" <<'PY'
+import re, sys
+head = open(sys.argv[1]).read()
+html = open(sys.argv[2]).read()
+m = re.search(r"'nonce-([^']+)'", head)
+if not m:
+    print("  hydration: FAILED — no nonce in the CSP header"); sys.exit(1)
+nonce = m.group(1)
+tags = re.findall(r"<script\b[^>]*>", html)
+if not tags:
+    print("  hydration: FAILED — no script tags served at all"); sys.exit(1)
+missing = [t for t in tags if f'nonce="{nonce}"' not in t]
+if missing:
+    print(f"  hydration: FAILED — {len(missing)}/{len(tags)} script tags lack the nonce: {missing[:2]}")
+    sys.exit(1)
+if "self.__next_f.push" not in html:
+    print("  hydration: FAILED — no flight payload in the document"); sys.exit(1)
+print(f"  every script tag ({len(tags)}) carries the CSP nonce: OK")
+print("  flight payload present (React can hydrate): OK")
+PY
+
+# Two more CSP invariants the nonce move must not have loosened.
+curl -fsSI "http://localhost:$WEBPORT/" | grep -i '^content-security-policy:' \
+  | grep -q "frame-ancestors 'none'" \
+  && echo "  other CSP directives preserved: OK" \
+  || { echo "  CSP directives: FAILED (frame-ancestors lost)"; exit 1; }
+curl -fsSI "http://localhost:$WEBPORT/" | grep -qi '^x-content-type-options: nosniff' \
+  && echo "  static security headers still applied: OK" \
+  || { echo "  static headers: FAILED"; exit 1; }
+
+# Open redirect (B-16): the sign-in form must not bounce to another origin.
+LOC=$(curl -fsS -o /dev/null -w '%{redirect_url}' -X POST "http://localhost:$WEBPORT/login/submit" \
+  --data-urlencode "login=nobody" --data-urlencode "password=wrongwrongwrong" \
+  --data-urlencode "next=//evil.example")
+echo "$LOC" | grep -q "evil.example" \
+  && { echo "  open redirect: FAILED — //evil.example survived into $LOC"; exit 1; } \
+  || echo "  scheme-relative ?next rejected (B-16): OK"
 
 # 5. Structural accessibility on the public pages. Not a full Lighthouse run,
 #    but it gates the regressions that actually happen: a lost landmark, a
@@ -113,7 +219,11 @@ python3 ./scripts/dev/a11y-check.py \
   "http://localhost:$WEBPORT/trust" \
   "http://localhost:$WEBPORT/docs" \
   "http://localhost:$WEBPORT/advisories" \
+  "http://localhost:$WEBPORT/login" \
+  "http://localhost:$WEBPORT/login/challenge" \
+  "http://localhost:$WEBPORT/tags/acceptance" \
   "http://localhost:$WEBPORT/$H/demo-skill" \
+  "http://localhost:$WEBPORT/$H/demo-skill?target=mcp" \
   "http://localhost:$WEBPORT/$H/demo-skill/versions/1.0.0"
 
 echo "== M5 acceptance PASSED =="
