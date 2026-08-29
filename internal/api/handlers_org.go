@@ -54,6 +54,11 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 	if !s.requireDB(w, r) {
 		return
 	}
+	ik, handled := s.beginIdempotent(w, r, "POST /orgs")
+	if handled {
+		return
+	}
+	defer ik.abandon(r)
 	var req CreateOrgRequest
 	if !readJSON(w, r, &req) {
 		return
@@ -100,7 +105,9 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		problemInternal(w, r)
 		return
 	}
-	writeJSON(w, http.StatusCreated, orgToAPI(row, true))
+	out := orgToAPI(row, true)
+	ik.complete(r, http.StatusCreated, out)
+	writeJSON(w, http.StatusCreated, out)
 }
 
 // GetOrg implements GET /orgs/{org} (public profile; settings for admins).

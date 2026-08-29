@@ -8,7 +8,28 @@ info:
   description: >
     Public REST API for the Agentry registry: agents, versions, publishing,
     scanning reports, orgs, and enterprise administration. Errors follow
-    RFC 9457 (application/problem+json). Pagination is cursor-based.
+    RFC 9457 (application/problem+json).
+
+
+    Pagination (§9.1): list endpoints take `?cursor=&limit=` with an opaque
+    cursor and return the next page as a `Link: <…>; rel="next"` header
+    (cursor-carrying bodies keep `nextCursor` too). `limit` outside the
+    documented bounds is clamped to them, never rejected.
+
+
+    Rate limits (§19) are reported on every response with
+    `RateLimit-Limit`, `RateLimit-Remaining` and `RateLimit-Reset`
+    (plus `Retry-After` on 429).
+
+
+    Idempotency (§9.1): mutating POSTs accept an `Idempotency-Key` request
+    header (≤255 chars). The first request under a key is executed and its
+    response recorded; a retry with the same key, by the same user, on the
+    same endpoint, with the same body replays that recorded response
+    verbatim. Reusing a key with a *different* body is a 409. Keys are
+    scoped per user and endpoint and expire after 24 hours. Endpoints that
+    honour the header: `POST /orgs`, `POST /orgs/{org}/webhooks`,
+    `POST /orgs/{org}/webhooks/{id}/ping`, `POST /platform/ruleset-releases`.
   version: 0.2.0
   license:
     name: PLACEHOLDER (Q2 pending)
@@ -45,6 +66,8 @@ tags:
     description: Org webhook endpoints and deliveries (§9.3).
   - name: domains
     description: Domain verification for JIT auto-linking (§12.4).
+  - name: stars
+    description: Stars and per-agent counters (§9.2).
 
 paths:
   /meta:
@@ -178,6 +201,96 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /auth/2fa/totp/challenge:
+    post:
+      operationId: totpChallenge
+      tags: [auth]
+      summary: Complete a pending 2FA challenge and open the session (§12.1).
+      description: >
+        Second leg of a login that could not carry a TOTP code inline — today
+        only social login, whose callback is a browser redirect. The challenge
+        is opaque, single-use and expires in five minutes; it proves nothing on
+        its own, so a valid TOTP code is still required.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [challenge, code]
+              properties:
+                challenge:
+                  type: string
+                code:
+                  type: string
+      responses:
+        "200":
+          description: Session established.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResult"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /auth/oidc/{provider}/start:
+    get:
+      operationId: socialOidcStart
+      tags: [auth]
+      summary: Begin social login with a configured provider (§12.1).
+      description: >
+        Individual-account login through a social identity provider
+        (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is
+        not an OIDC issuer). Providers must be configured on the server
+        (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured
+        providers return 404. This is individual login and never grants org
+        membership — org SSO lives under /orgs/{org}/sso (§12.4).
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/SocialProvider"
+      responses:
+        "302":
+          description: Redirect to the provider's authorization endpoint.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /auth/oidc/{provider}/callback:
+    get:
+      operationId: socialOidcCallback
+      tags: [auth]
+      summary: Social login redirect URI — establish a session (§12.1).
+      description: >
+        Exchanges the code, verifies the identity, then links or JIT-creates
+        an individual account (`identities.provider_kind='social'`).
+        Auto-linking to an existing account happens only when the provider
+        asserts a verified email that matches a verified account email
+        (T-12); otherwise the response is 409 and the accounts must be linked
+        explicitly. When the account has TOTP enabled the response is a
+        pending 2FA challenge rather than a session.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/SocialProvider"
+        - name: code
+          in: query
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Session established, or a pending TOTP challenge.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SocialLoginResult"
+        "409":
+          description: An account with this email exists; link it explicitly.
+        default:
+          $ref: "#/components/responses/Problem"
+
   /user:
     get:
       operationId: getCurrentUser
@@ -223,19 +336,57 @@ paths:
       summary: Erase the caller's account (GDPR flow, §12.7).
       description: >
         Purges personal data and pseudonymizes the account. Published public
-        versions are not deleted — they are yanked so already-installed
-        copies keep verifying — or you can transfer the agents to an org
-        first and then delete.
+        versions are never deleted (§12.7): they are either yanked, so
+        already-installed copies keep verifying, or the personal-namespace
+        agents are transferred to an organization the caller administers.
+        When the account has published public versions the choice is
+        explicit — omitting `publishedContent` is a 400, never a silent yank.
       parameters:
         - name: publishedContent
           in: query
           schema:
             type: string
             enum: [yank, transfer]
-          description: What to do with published public versions (default yank).
+          description: >
+            What to do with published public versions. Required when the
+            account has any; ignored (and defaulted to yank) when it has none.
+        - name: transferOrg
+          in: query
+          schema:
+            type: string
+            pattern: "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"
+          description: >
+            Destination org handle, required with publishedContent=transfer.
+            The caller must be an owner or admin of that org.
       responses:
         "204":
           description: Account erased; session revoked.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /user/stars/{ns}/{name}:
+    put:
+      operationId: starAgent
+      tags: [stars]
+      summary: Star an agent (idempotent, §9.2).
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+      responses:
+        "204":
+          description: Starred (already-starred is also 204).
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: unstarAgent
+      tags: [stars]
+      summary: Remove a star (idempotent, §9.2).
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+      responses:
+        "204":
+          description: Unstarred (not-starred is also 204).
         default:
           $ref: "#/components/responses/Problem"
 
@@ -665,6 +816,71 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Agent"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteAgent
+      tags: [agents]
+      summary: Delete an agent that was never published (maintain, §9.2).
+      description: >
+        Deletes the agent and its hosted repository. Refused (409) once the
+        agent has any version row, because §4.3 forbids deleting version rows:
+        a version past `submitted` is history consumers may depend on, and a
+        version still at `submitted` is mid-pipeline. Published agents are
+        yanked or blocked, never deleted.
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+      responses:
+        "204":
+          description: Deleted.
+        "409":
+          description: The agent has versions, advisories, or abuse reports.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /agents/{ns}/{name}/stats:
+    get:
+      operationId: getAgentStats
+      tags: [stars]
+      summary: Star count and install counts for an agent (§9.2).
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+      responses:
+        "200":
+          description: Counters.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentStats"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /agents/{ns}/{name}/activity:
+    get:
+      operationId: listAgentActivity
+      tags: [agents]
+      summary: Recent activity for an agent (§9.2).
+      description: >
+        Drawn from the audit log. Anyone who can see a public agent gets the
+        public-safe subset — publishes and yanks; callers with an explicit
+        read grant (or namespace-derived read) see the fuller stream
+        including submissions, settings changes, and grant changes.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit100"
+      responses:
+        "200":
+          description: 'Activity page (`Link` header with rel=next when more remain).'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityPage"
         default:
           $ref: "#/components/responses/Problem"
 
@@ -1518,6 +1734,29 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /orgs/{org}/webhooks/{id}/ping:
+    post:
+      operationId: pingWebhook
+      tags: [webhooks]
+      summary: Send a test delivery to an endpoint (admin+, §9.2).
+      description: >
+        Enqueues a signed `ping` delivery through the ordinary webhook
+        machinery — same signature header, same SSRF guard, same retry
+        schedule — so the recorded attempt appears in
+        `GET …/{id}/deliveries`. Honours `Idempotency-Key`.
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+        - $ref: "#/components/parameters/WebhookID"
+      responses:
+        "202":
+          description: Test delivery enqueued.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookDelivery"
+        default:
+          $ref: "#/components/responses/Problem"
+
   /orgs/{org}/webhooks/{id}/deliveries:
     get:
       operationId: listWebhookDeliveries
@@ -1526,9 +1765,11 @@ paths:
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
         - $ref: "#/components/parameters/WebhookID"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit100"
       responses:
         "200":
-          description: Deliveries.
+          description: 'Deliveries (`Link` header with rel=next when more remain).'
           content:
             application/json:
               schema:
@@ -1656,6 +1897,78 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuditExport"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /platform/audit:
+    get:
+      operationId: listPlatformAudit
+      tags: [audit]
+      summary: Audit events across every org (platform staff, §12.6).
+      description: >
+        The staff-wide slice of the audit log, newest first. Staff access to
+        it is itself audited (§12.6), one event per call.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit200"
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: org
+          in: query
+          description: Restrict to one org handle.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 'Audit page (`Link` header with rel=next when more remain).'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditPage"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /platform/ruleset-releases:
+    post:
+      operationId: createRulesetRelease
+      tags: [platform]
+      summary: Register a ruleset release (platform staff, §9.2).
+      description: >
+        Records the versioned scanner bundle a deployment is running, so scan
+        runs can name it. Omitting the body registers the server's own
+        embedded bundle (§8.3). Honours `Idempotency-Key`; re-registering the
+        same semver returns the existing row.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                semver:
+                  type: string
+                  pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+].*)?$"
+                bundleDigest:
+                  type: string
+                  description: "sha256:<hex> of the bundle."
+                notes:
+                  type: string
+                  maxLength: 2000
+      responses:
+        "201":
+          description: Release registered.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RulesetRelease"
+        "200":
+          description: This semver was already registered; the existing row.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RulesetRelease"
         default:
           $ref: "#/components/responses/Problem"
 
@@ -1825,6 +2138,33 @@ paths:
           in: query
           schema:
             $ref: "#/components/schemas/AgentKind"
+        - name: capability
+          in: query
+          description: >
+            Capability the latest published version actually asks for, e.g.
+            `network`, `filesystem`, `exec`, `secrets`, `dataAccess` (§5.4).
+            A capability declared as `none`, null, or empty does not match —
+            `network: {egress: none}` is not a network agent.
+          schema:
+            type: string
+            maxLength: 64
+        - name: license
+          in: query
+          description: SPDX identifier from the latest published manifest.
+          schema:
+            type: string
+            maxLength: 64
+        - name: verified
+          in: query
+          description: Only agents in an org namespace with a verified domain.
+          schema:
+            type: boolean
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [relevance, installs, newest]
+            default: relevance
         - name: limit
           in: query
           schema:
@@ -1843,6 +2183,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SearchResults"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /tags/{tag}:
+    get:
+      operationId: listAgentsByTag
+      tags: [search]
+      summary: Public agents tagged with {tag} (§9.2).
+      description: >
+        Matches the tag list of each agent's latest published manifest
+        (`manifest.tags`, V8). Blocked agents never appear.
+      security: []
+      parameters:
+        - name: tag
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit100"
+      responses:
+        "200":
+          description: 'Tagged agents (`Link` header with rel=next when more remain).'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagPage"
         default:
           $ref: "#/components/responses/Problem"
 
@@ -1933,6 +2301,37 @@ components:
       schema:
         type: string
         format: uuid
+    SocialProvider:
+      name: provider
+      in: path
+      required: true
+      description: Social identity provider id (§12.1).
+      schema:
+        type: string
+        enum: [google, github]
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque cursor from the previous page's `Link` header.
+      schema:
+        type: string
+        maxLength: 512
+    Limit100:
+      name: limit
+      in: query
+      description: Page size; values outside the range are clamped, not rejected.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+    Limit200:
+      name: limit
+      in: query
+      description: Page size; values outside the range are clamped, not rejected.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
 
   schemas:
     Meta:
@@ -1991,6 +2390,25 @@ components:
       type: object
       required: [user, csrfToken]
       properties:
+        user:
+          $ref: "#/components/schemas/User"
+        csrfToken:
+          type: string
+          description: Echo in X-Agentry-CSRF on cookie-authenticated mutations.
+
+    SocialLoginResult:
+      type: object
+      description: >
+        Outcome of a social-login callback: either a session (like password
+        login) or a pending TOTP challenge to complete at
+        POST /auth/2fa/totp/challenge.
+      required: [totpRequired]
+      properties:
+        totpRequired:
+          type: boolean
+        challenge:
+          type: string
+          description: Single-use, five-minute challenge; present iff totpRequired.
         user:
           $ref: "#/components/schemas/User"
         csrfToken:
@@ -2221,6 +2639,91 @@ components:
           type: string
           description: Opaque; absent on the last page.
 
+    ActivityEvent:
+      type: object
+      description: One agent-scoped entry from the audit log (§9.2 activity).
+      required: [id, occurredAt, action]
+      properties:
+        id:
+          type: string
+          format: uuid
+        occurredAt:
+          type: string
+          format: date-time
+        action:
+          type: string
+          description: Registered action id (internal/audit/actions.go).
+        actorHandle:
+          type: string
+          description: Absent on the public-safe subset and for system actors.
+        version:
+          type: string
+          description: The version this entry concerns, when it names one.
+        detail:
+          type: object
+          additionalProperties: true
+          description: Present only for callers with read access.
+
+    ActivityPage:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityEvent"
+        nextCursor:
+          type: string
+          description: Opaque; absent on the last page.
+
+    AgentStats:
+      type: object
+      required: [stars, installsTotal, installs30d]
+      properties:
+        stars:
+          type: integer
+          format: int64
+        starred:
+          type: boolean
+          description: Whether the calling user has starred it (authed only).
+        installsTotal:
+          type: integer
+          format: int64
+        installs30d:
+          type: integer
+          format: int64
+
+    TagPage:
+      type: object
+      required: [tag, results]
+      properties:
+        tag:
+          type: string
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchHit"
+        nextCursor:
+          type: string
+          description: Opaque; absent on the last page.
+
+    RulesetRelease:
+      type: object
+      required: [id, semver, bundleDigest, publishedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        semver:
+          type: string
+        bundleDigest:
+          type: string
+        notes:
+          type: string
+        publishedAt:
+          type: string
+          format: date-time
+
     AgentKind:
       type: string
       description: Supported agent kinds (§1.4).
@@ -2362,7 +2865,12 @@ components:
           description: Where to fetch the archive (CDN on SaaS; API path self-host).
         attestationUrl:
           type: string
-          description: DSSE attestation location (M4+; absent until signing ships).
+          description: >
+            Where to fetch the DSSE attestation over this release (§8.8,
+            §9.4 step 3). Present whenever the version has been signed —
+            every version published by a signing-enabled deployment. Absent
+            when the deployment runs `signing.kind: none` (dev/self-host
+            opt-out) or the version predates signing.
         manifest:
           type: object
           additionalProperties: true

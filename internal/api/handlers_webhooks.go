@@ -12,6 +12,13 @@ import (
 
 const webhookSecretPrefix = "whsec_"
 
+const (
+	// maxWebhookEndpointsPerOrg is the §19 quota.
+	maxWebhookEndpointsPerOrg = 20
+	deliveryDefaultLimit      = 50
+	deliveryMaxLimit          = 100
+)
+
 func webhookToAPI(row storegen.WebhookEndpoint) WebhookEndpoint {
 	return WebhookEndpoint{
 		Id: row.ID, Url: row.Url, Events: row.Events, Active: row.Active, CreatedAt: row.CreatedAt,
@@ -70,12 +77,28 @@ func (s *Server) CreateWebhook(w http.ResponseWriter, r *http.Request, org OrgHa
 	if !s.authorize(w, r, auth.ActOrgUpdate, orgRow.ID) {
 		return
 	}
+	ik, handled := s.beginIdempotent(w, r, "POST /orgs/{org}/webhooks")
+	if handled {
+		return
+	}
+	defer ik.abandon(r)
 	var req WebhookInput
 	if !readJSON(w, r, &req) {
 		return
 	}
 	if fe := validateWebhookInput(req.Url, req.Events); fe != nil {
 		problemValidation(w, r, "webhook rejected", *fe)
+		return
+	}
+	// §19: 20 webhook endpoints per org. Checked before minting a secret so a
+	// refused request never leaves a usable key in memory or the log.
+	existing, err := s.q().CountWebhookEndpoints(r.Context(), orgRow.ID)
+	if err != nil {
+		problemInternal(w, r)
+		return
+	}
+	if existing >= maxWebhookEndpointsPerOrg {
+		problemConflict(w, r, "this organization already has the maximum of 20 webhook endpoints (§19)")
 		return
 	}
 	secret, err := auth.NewToken(webhookSecretPrefix)
@@ -109,10 +132,15 @@ func (s *Server) CreateWebhook(w http.ResponseWriter, r *http.Request, org OrgHa
 		problemInternal(w, r)
 		return
 	}
-	writeJSON(w, http.StatusCreated, WebhookEndpointCreated{
+	out := WebhookEndpointCreated{
 		Id: created.ID, Url: created.Url, Events: created.Events,
 		Active: created.Active, CreatedAt: created.CreatedAt, Secret: secret,
-	})
+	}
+	// The signing secret is shown exactly once (D-22) — including on an
+	// idempotent replay, which is the whole point: a client that lost the
+	// original response gets that response back rather than a second endpoint.
+	ik.complete(r, http.StatusCreated, out)
+	writeJSON(w, http.StatusCreated, out)
 }
 
 // GetWebhook implements GET /orgs/{org}/webhooks/{id} (admin+, §9.3).
@@ -231,8 +259,64 @@ func (s *Server) DeleteWebhook(w http.ResponseWriter, r *http.Request, org OrgHa
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// PingWebhook implements POST /orgs/{org}/webhooks/{id}/ping (§9.2). It
+// enqueues a real delivery through the ordinary machinery — same HMAC
+// signature, same SSRF guard, same retry ladder — so "does my endpoint work"
+// is answered by the code that will actually call it, not by a special path
+// that might diverge from it.
+func (s *Server) PingWebhook(w http.ResponseWriter, r *http.Request, org OrgHandle, id WebhookID) {
+	if !s.requireDB(w, r) {
+		return
+	}
+	orgRow, ok := s.orgOrNotFound(w, r, org)
+	if !ok {
+		return
+	}
+	if !s.authorize(w, r, auth.ActOrgUpdate, orgRow.ID) {
+		return
+	}
+	ep, err := s.q().GetWebhookEndpoint(r.Context(), storegen.GetWebhookEndpointParams{ID: id, OrgID: orgRow.ID})
+	if err != nil {
+		problemNotFound(w, r)
+		return
+	}
+	if s.webhooks == nil {
+		problemUnavailable(w, r, "webhook delivery is not configured on this deployment")
+		return
+	}
+	ik, handled := s.beginIdempotent(w, r, "POST /orgs/{org}/webhooks/{id}/ping")
+	if handled {
+		return
+	}
+	defer ik.abandon(r)
+
+	p := principalFrom(r.Context())
+	delivery, err := s.webhooks.EmitToEndpoint(r.Context(), ep.ID, webhook.EventPing, map[string]any{
+		"org":         orgRow.Handle,
+		"endpointId":  ep.ID.String(),
+		"requestedBy": p.Handle,
+	})
+	if err != nil {
+		s.log.Error("webhook ping", "err", err, "endpoint", ep.ID)
+		problemInternal(w, r)
+		return
+	}
+	if err := s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
+		e := auditEvent(r, audit.ActionWebhookPing)
+		e.OrgID = orgRow.ID
+		e.TargetKind, e.TargetID = "webhook", ep.ID
+		e.Detail = map[string]any{"deliveryId": delivery.ID.String()}
+		return s.auditW.Write(r.Context(), q, e)
+	}); err != nil {
+		s.log.Error("webhook ping audit", "err", err)
+	}
+	out := deliveryToAPI(delivery)
+	ik.complete(r, http.StatusAccepted, out)
+	writeJSON(w, http.StatusAccepted, out)
+}
+
 // ListWebhookDeliveries implements GET /orgs/{org}/webhooks/{id}/deliveries.
-func (s *Server) ListWebhookDeliveries(w http.ResponseWriter, r *http.Request, org OrgHandle, id WebhookID) {
+func (s *Server) ListWebhookDeliveries(w http.ResponseWriter, r *http.Request, org OrgHandle, id WebhookID, params ListWebhookDeliveriesParams) {
 	if !s.requireDB(w, r) {
 		return
 	}
@@ -247,25 +331,36 @@ func (s *Server) ListWebhookDeliveries(w http.ResponseWriter, r *http.Request, o
 		problemNotFound(w, r)
 		return
 	}
-	rows, err := s.q().ListWebhookDeliveries(r.Context(), storegen.ListWebhookDeliveriesParams{EndpointID: id, Limit: 50})
+	limit := clampLimit(params.Limit, deliveryDefaultLimit, deliveryMaxLimit)
+	before, beforeID, ok := cursorParams(w, r, params.Cursor)
+	if !ok {
+		return
+	}
+	rows, err := s.q().ListWebhookDeliveries(r.Context(), storegen.ListWebhookDeliveriesParams{
+		EndpointID: id, Limit: int32(limit), BeforeTime: before, BeforeID: beforeID,
+	})
 	if err != nil {
 		problemInternal(w, r)
 		return
 	}
 	out := make([]WebhookDelivery, 0, len(rows))
 	for _, d := range rows {
-		wd := WebhookDelivery{Id: d.ID, EventType: d.EventType, Attempt: int(d.Attempt), CreatedAt: d.CreatedAt}
-		if d.StatusCode != nil {
-			sc := int(*d.StatusCode)
-			wd.StatusCode = &sc
-		}
-		if d.Error != nil {
-			wd.Error = d.Error
-		}
-		if d.DeliveredAt != nil {
-			wd.DeliveredAt = d.DeliveredAt
-		}
-		out = append(out, wd)
+		out = append(out, deliveryToAPI(d))
+	}
+	if len(rows) == limit {
+		last := rows[len(rows)-1]
+		setNextLink(w, r, encodeCursor(last.CreatedAt, last.ID))
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+func deliveryToAPI(d storegen.WebhookDelivery) WebhookDelivery {
+	wd := WebhookDelivery{Id: d.ID, EventType: d.EventType, Attempt: int(d.Attempt), CreatedAt: d.CreatedAt}
+	if d.StatusCode != nil {
+		sc := int(*d.StatusCode)
+		wd.StatusCode = &sc
+	}
+	wd.Error = d.Error
+	wd.DeliveredAt = d.DeliveredAt
+	return wd
 }

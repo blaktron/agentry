@@ -60,10 +60,11 @@ type Config struct {
 
 // SP is a configured Service Provider for one org connection.
 type SP struct {
-	inner  saml.ServiceProvider
-	acsURL url.URL
-	cfg    Config
-	replay ReplayCache
+	inner    saml.ServiceProvider
+	acsURL   url.URL
+	cfg      Config
+	replay   ReplayCache
+	requests RequestTracker
 }
 
 // Result is the validated identity extracted from an assertion.
@@ -107,6 +108,37 @@ func New(cfg Config, metadataURL, acsURL string, replay ReplayCache) (*SP, error
 		AllowIDPInitiated: true, // IdP-initiated POST to ACS (§12.4)
 	}
 	return &SP{inner: sp, acsURL: *aURL, cfg: cfg, replay: replay}, nil
+}
+
+// WithRequestTracker attaches the store of outstanding AuthnRequest ids and
+// returns sp, so a caller can chain it onto New. Without a tracker the SP
+// accepts IdP-initiated assertions only: it has no record of any login it
+// started, so an InResponseTo it cannot check is refused rather than ignored.
+func (sp *SP) WithRequestTracker(rt RequestTracker) *SP {
+	sp.requests = rt
+	return sp
+}
+
+// AuthnRequest starts an SP-initiated login (§12.4). It returns the IdP
+// redirect URL and records the request id with the tracker so the eventual
+// assertion's InResponseTo can be matched to it.
+func (sp *SP) AuthnRequest(relayState string) (string, error) {
+	loc := sp.inner.GetSSOBindingLocation(saml.HTTPRedirectBinding)
+	if loc == "" {
+		return "", fmt.Errorf("saml: IdP publishes no HTTP-Redirect SSO endpoint")
+	}
+	req, err := sp.inner.MakeAuthenticationRequest(loc, saml.HTTPRedirectBinding, saml.HTTPPostBinding)
+	if err != nil {
+		return "", fmt.Errorf("saml: build AuthnRequest: %w", err)
+	}
+	u, err := req.Redirect(relayState, &sp.inner)
+	if err != nil {
+		return "", fmt.Errorf("saml: encode AuthnRequest: %w", err)
+	}
+	if sp.requests != nil {
+		sp.requests.Track(req.ID, time.Now().Add(defaultRequestTTL))
+	}
+	return u.String(), nil
 }
 
 // idpMetadata resolves the IdP EntityDescriptor from config: the provided
@@ -170,11 +202,22 @@ func (sp *SP) ParseAndValidate(_ context.Context, samlResponseB64 string) (*Resu
 	// crewjam validates: signature (assertion must be signed when the response
 	// is not), Issuer, Destination/Recipient == ACS URL, audience restriction,
 	// Conditions NotBefore/NotOnOrAfter and SubjectConfirmationData expiry with
-	// MaxClockSkew. possibleRequestIDs is nil: AllowIDPInitiated skips the
-	// InResponseTo check.
+	// MaxClockSkew. possibleRequestIDs is nil because AllowIDPInitiated makes
+	// crewjam skip the InResponseTo check entirely — §12.4 wants BOTH flows,
+	// so we do that check ourselves below rather than give up one of them.
 	assertion, err := sp.inner.ParseXMLResponse(raw, nil, sp.acsURL)
 	if err != nil {
 		return nil, fmt.Errorf("saml: assertion rejected: %w", err)
+	}
+
+	// InResponseTo: an assertion that names a request must name one THIS
+	// server started and has not already consumed. An assertion that names
+	// none is IdP-initiated and stays allowed (§12.4). This is what stops a
+	// response to someone else's login from being pasted into our ACS.
+	if inResponseTo := assertionInResponseTo(assertion); inResponseTo != "" {
+		if sp.requests == nil || !sp.requests.Consume(inResponseTo) {
+			return nil, fmt.Errorf("saml: InResponseTo %q matches no pending AuthnRequest", inResponseTo)
+		}
 	}
 
 	// Replay guard on the assertion ID (§12.4, T-12): consume once.
@@ -207,6 +250,25 @@ func (sp *SP) ParseAndValidate(_ context.Context, samlResponseB64 string) (*Resu
 		return nil, fmt.Errorf("saml: assertion has no usable subject (NameID/attribute)")
 	}
 	return res, nil
+}
+
+// assertionInResponseTo reads the request id the assertion answers. It is
+// taken from SubjectConfirmationData, which is inside the signed assertion —
+// the Response-level attribute is not covered by the assertion signature and
+// so is not evidence of anything.
+func assertionInResponseTo(a *saml.Assertion) string {
+	if a == nil || a.Subject == nil {
+		return ""
+	}
+	for _, sc := range a.Subject.SubjectConfirmations {
+		if sc.SubjectConfirmationData == nil {
+			continue
+		}
+		if v := strings.TrimSpace(sc.SubjectConfirmationData.InResponseTo); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func (sp *SP) deriveSubject(res *Result) string {

@@ -48,14 +48,32 @@ type Writer struct {
 
 	mu            sync.Mutex
 	ensuredMonths map[string]struct{}
+	stream        Stream
 }
 
-// NewWriter builds a Writer.
+// NewWriter builds a Writer. Archiving is off until SetStream is called.
 func NewWriter(log *slog.Logger) *Writer {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Writer{log: log, ensuredMonths: map[string]struct{}{}}
+	return &Writer{log: log, ensuredMonths: map[string]struct{}{}, stream: NopStream{}}
+}
+
+// SetStream attaches the §12.6 NDJSON archive sink. Called once at startup.
+func (w *Writer) SetStream(s Stream) {
+	if s == nil {
+		s = NopStream{}
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.stream = s
+}
+
+// Stream returns the attached archive sink (tests, shutdown flush).
+func (w *Writer) Stream() Stream {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.stream
 }
 
 // Write records the event via q (pass the transaction-bound queries when the
@@ -114,6 +132,15 @@ func (w *Writer) Write(ctx context.Context, q *storegen.Queries, e Event) error 
 		w.log.Error("audit write failed", "action", e.Action, "err", err)
 		return fmt.Errorf("audit: insert: %w", err)
 	}
+
+	// Archive copy (§12.6). Queued only after the row is written, so the
+	// stream never gets an event the database refused. Best-effort by
+	// design — see the stream.go package comment.
+	w.Stream().Append(Record{
+		ID: id, OccurredAt: now, ActorID: params.ActorID, ActorKind: string(e.ActorKind),
+		OrgID: params.OrgID, Action: string(e.Action), TargetKind: e.TargetKind,
+		TargetID: params.TargetID, Detail: detail,
+	})
 	return nil
 }
 

@@ -107,10 +107,7 @@ func (s *Server) ListAbuseReports(w http.ResponseWriter, r *http.Request, params
 	if !s.requireStaff(w, r) {
 		return
 	}
-	limit := int32(50)
-	if params.Limit != nil {
-		limit = int32(*params.Limit)
-	}
+	limit := int32(clampLimit(params.Limit, 50, 200))
 	state := "open"
 	if params.State != nil {
 		state = string(*params.State)

@@ -53,31 +53,68 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		problemInternal(w, r)
 		return
 	}
-	disposition := "yank"
+	// The chooser is EXPLICIT when there is published content (§12.7). It
+	// used to default to "yank", which made the guard below unreachable and
+	// silently pulled a user's published packages out from under everyone who
+	// had installed them. With nothing published there is nothing to choose,
+	// so the parameter stays optional in that case.
+	disposition := ""
 	if params.PublishedContent != nil {
 		disposition = string(*params.PublishedContent)
 	}
 	if publishedCount > 0 && disposition == "" {
-		problemValidation(w, r,
+		problemBadRequest(w, r,
 			fmt.Sprintf("this account has %d published public version(s); pass publishedContent=yank or transfer", publishedCount))
 		return
 	}
-	if disposition == "transfer" {
-		// Transfer needs a destination org and org-owner consent; that flow
-		// is a separate, deliberate action rather than a side effect of
-		// deletion. Refuse clearly instead of guessing.
-		problemValidation(w, r,
-			"transfer the agents to an org first (PATCH the agent's namespace), then delete the account")
-		return
+	if disposition == "" {
+		disposition = "yank"
 	}
 
-	// Yank every published version under the personal namespace, then
-	// pseudonymize. All of it in one transaction so a partial erasure can
-	// never leave PII behind with content already yanked.
 	agents, err := q.ListPersonalNamespaceAgents(r.Context(), p.UserID)
 	if err != nil {
 		problemInternal(w, r)
 		return
+	}
+
+	// transfer: hand the personal namespace's agents to an org the caller
+	// administers, so published content keeps a maintainer instead of being
+	// yanked out from under its consumers (§12.7 "transfer to an org or
+	// yank-all"). Done before the erasure transaction: a transfer that fails
+	// must leave the account intact rather than orphan the agents.
+	var transferOrgID uuid.UUID
+	if disposition == "transfer" {
+		orgHandle := ""
+		if params.TransferOrg != nil {
+			orgHandle = strings.TrimSpace(*params.TransferOrg)
+		}
+		if orgHandle == "" {
+			problemBadRequest(w, r, "publishedContent=transfer requires transferOrg=<org handle>")
+			return
+		}
+		orgRow, ok := s.orgOrNotFound(w, r, orgHandle)
+		if !ok {
+			return
+		}
+		// Owner or admin: transferring content into an org binds that org to
+		// maintaining it, which is an administrative act, not a membership one.
+		switch p.Role(orgRow.ID) {
+		case auth.RoleOwner, auth.RoleAdmin:
+		default:
+			problemForbidden(w, r, "you must be an owner or admin of "+orgRow.Handle+" to transfer agents into it")
+			return
+		}
+		transferOrgID = orgRow.ID
+		if err := s.transferAgents(r, agents, orgRow); err != nil {
+			if isUniqueViolation(err) {
+				problemConflict(w, r,
+					"an agent of the same name already exists in "+orgRow.Handle+"; rename it and retry")
+				return
+			}
+			s.log.Error("gdpr transfer", "err", err)
+			problemInternal(w, r)
+			return
+		}
 	}
 
 	tombstone, err := json.Marshal(map[string]any{
@@ -100,23 +137,27 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 	// Yank outside the erasure transaction: each yank is its own audited
 	// state-machine transition (§7) and must not be rolled back by a later
 	// failure — a yanked version is safe, a half-erased account is not.
-	for _, a := range agents {
-		if a.LatestPublishedVersionID == nil {
-			continue
-		}
-		versions, err := q.ListVersions(r.Context(), a.ID)
-		if err != nil {
-			continue
-		}
-		for _, v := range versions {
-			if v.Status != string(registry.StatusPublished) {
+	// Transferred agents are deliberately skipped: their whole point is that
+	// the content survives with a new maintainer.
+	if disposition == "yank" {
+		for _, a := range agents {
+			if a.LatestPublishedVersionID == nil {
 				continue
 			}
-			e := auditEvent(r, audit.ActionVersionYank)
-			e.Detail = map[string]any{"reason": "author account deleted"}
-			if err := s.reg.Transition(r.Context(), v.ID, registry.StatusYanked,
-				"author account deleted", e); err != nil {
-				s.log.Warn("gdpr yank", "version", v.ID, "err", err)
+			versions, err := q.ListVersions(r.Context(), a.ID)
+			if err != nil {
+				continue
+			}
+			for _, v := range versions {
+				if v.Status != string(registry.StatusPublished) {
+					continue
+				}
+				e := auditEvent(r, audit.ActionVersionYank)
+				e.Detail = map[string]any{"reason": "author account deleted"}
+				if err := s.reg.Transition(r.Context(), v.ID, registry.StatusYanked,
+					"author account deleted", e); err != nil {
+					s.log.Warn("gdpr yank", "version", v.ID, "err", err)
+				}
 			}
 		}
 	}
@@ -147,7 +188,13 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		}
 		e := auditEvent(r, audit.ActionUserDelete)
 		e.TargetKind, e.TargetID = "user", p.UserID
-		e.Detail = map[string]any{"publishedVersionsYanked": publishedCount}
+		e.Detail = map[string]any{
+			"publishedContent":  disposition,
+			"publishedVersions": publishedCount,
+		}
+		if transferOrgID != uuid.Nil {
+			e.OrgID = transferOrgID
+		}
 		return s.auditW.Write(r.Context(), tq, e)
 	})
 	if err != nil {
@@ -161,6 +208,34 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		Secure: s.cfg.Auth.CookieSecure, SameSite: http.SameSiteLaxMode, MaxAge: -1,
 	})
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// transferAgents moves every agent in a personal namespace to an org, in one
+// transaction: a partial transfer would split an author's catalogue across
+// two namespaces with no owner able to finish the job.
+func (s *Server) transferAgents(r *http.Request, agents []storegen.ListPersonalNamespaceAgentsRow, orgRow storegen.GetOrgByHandleRow) error {
+	if len(agents) == 0 {
+		return nil
+	}
+	return s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
+		for _, a := range agents {
+			if err := q.SetAgentNamespace(r.Context(), storegen.SetAgentNamespaceParams{
+				ID: a.ID, NamespaceID: orgRow.ID,
+			}); err != nil {
+				return err
+			}
+			e := auditEvent(r, audit.ActionAgentTransfer)
+			e.OrgID = orgRow.ID
+			e.TargetKind, e.TargetID = "agent", a.ID
+			e.Detail = map[string]any{
+				"name": a.Name, "toNamespace": orgRow.Handle, "reason": "account erasure",
+			}
+			if err := s.auditW.Write(r.Context(), q, e); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // hashForTombstone derives a keyed hash of an email for abuse-recurrence

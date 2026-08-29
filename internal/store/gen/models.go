@@ -191,6 +191,18 @@ type Handle struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type IdempotencyKey struct {
+	Key            string     `json:"key"`
+	UserID         uuid.UUID  `json:"user_id"`
+	Endpoint       string     `json:"endpoint"`
+	RequestHash    string     `json:"request_hash"`
+	ResponseStatus *int32     `json:"response_status"`
+	ResponseBody   []byte     `json:"response_body"`
+	ResourceID     *uuid.UUID `json:"resource_id"`
+	CreatedAt      time.Time  `json:"created_at"`
+	ExpiresAt      time.Time  `json:"expires_at"`
+}
+
 type Identity struct {
 	ID              uuid.UUID  `json:"id"`
 	UserID          uuid.UUID  `json:"user_id"`
@@ -343,6 +355,12 @@ type SsoConnection struct {
 	Kind      string    `json:"kind"`
 	Config    []byte    `json:"config"`
 	Enabled   bool      `json:"enabled"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type Star struct {
+	UserID    uuid.UUID `json:"user_id"`
+	AgentID   uuid.UUID `json:"agent_id"`
 	CreatedAt time.Time `json:"created_at"`
 }
 

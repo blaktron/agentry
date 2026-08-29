@@ -69,6 +69,20 @@ func (q *Queries) CountJobs(ctx context.Context, arg CountJobsParams) (int64, er
 	return count, err
 }
 
+const countPendingJobsOfKind = `-- name: CountPendingJobsOfKind :one
+SELECT count(*)::bigint FROM jobs
+WHERE kind = $1 AND state IN ('available', 'running')
+`
+
+// Singleton guard for self-rescheduling maintenance jobs (audit retention):
+// a worker restart must not stack another copy on the queue.
+func (q *Queries) CountPendingJobsOfKind(ctx context.Context, kind string) (int64, error) {
+	row := q.db.QueryRow(ctx, countPendingJobsOfKind, kind)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const enqueueJob = `-- name: EnqueueJob :one
 
 INSERT INTO jobs (id, kind, queue, args, max_attempts, run_at)

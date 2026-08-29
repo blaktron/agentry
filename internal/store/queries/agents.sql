@@ -82,13 +82,19 @@ UPDATE agents SET quarantine_state = $2, updated_at = now() WHERE id = $1;
 
 -- name: SearchAgents :many
 -- Public FTS search (§10.4, D-20): weighted tsvector + trigram fuzzy fallback
--- on name, ranked by relevance × install popularity × recency decay.
+-- on name, ranked by relevance × install popularity × recency decay. The
+-- §9.2 facets (capability, license, verified) filter on the LATEST PUBLISHED
+-- version's manifest/capabilities, so an agent's facets always describe what
+-- someone would actually install today. `sort` picks the primary ordering;
+-- the trailing keys keep every ordering total (stable pages).
 SELECT a.id, a.name, a.kind, a.visibility, a.summary, a.quarantine_state,
        a.created_at, h.handle AS namespace,
        coalesce(d.installs, 0)::bigint AS installs,
        ts_rank_cd(a.search_tsv, websearch_to_tsquery('english', sqlc.arg(query)::text)) AS rank
 FROM agents a
 JOIN handles h ON h.id = a.namespace_id
+LEFT JOIN orgs o ON o.id = a.namespace_id
+LEFT JOIN agent_versions lv ON lv.id = a.latest_published_version_id
 LEFT JOIN (
   SELECT agent_id, sum(installs) AS installs
   FROM download_stats WHERE day >= current_date - 30 GROUP BY agent_id
@@ -101,7 +107,27 @@ WHERE a.visibility = 'public'
     OR a.name::text % sqlc.arg(query)::text
   )
   AND (sqlc.narg('kind')::text IS NULL OR a.kind = sqlc.narg('kind'))
+  -- capability= means "this agent actually asks for it", not merely "the key
+  -- is present": a manifest that says `network: {egress: none}` serializes
+  -- with the network key set, so key existence alone would match every agent
+  -- ever published. A capability counts when its value is not null/none/empty
+  -- and, for object-valued ones, when at least one member is not.
+  AND (sqlc.narg('capability')::text IS NULL OR (
+        lv.capabilities IS NOT NULL
+        AND jsonb_exists(lv.capabilities, sqlc.narg('capability')::text)
+        AND lv.capabilities -> sqlc.narg('capability')::text
+            NOT IN ('"none"'::jsonb, 'null'::jsonb, '[]'::jsonb, '{}'::jsonb)
+        AND (jsonb_typeof(lv.capabilities -> sqlc.narg('capability')::text) <> 'object'
+             OR EXISTS (
+               SELECT 1 FROM jsonb_each(lv.capabilities -> sqlc.narg('capability')::text) AS cap_member(k, v)
+               WHERE cap_member.v NOT IN ('"none"'::jsonb, 'null'::jsonb, '[]'::jsonb, '{}'::jsonb)))))
+  AND (sqlc.narg('license')::text IS NULL
+       OR lower(lv.manifest ->> 'license') = lower(sqlc.narg('license')::text))
+  AND (sqlc.arg(verified_only)::boolean = false
+       OR (h.kind = 'org' AND o.verified_domain IS NOT NULL))
 ORDER BY
+  CASE WHEN sqlc.arg(sort)::text = 'installs' THEN coalesce(d.installs, 0) END DESC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'newest' THEN a.created_at END DESC NULLS LAST,
   ts_rank_cd(a.search_tsv, websearch_to_tsquery('english', sqlc.arg(query)::text)) DESC,
   coalesce(d.installs, 0) DESC,
   a.created_at DESC
@@ -113,3 +139,59 @@ FROM agents a
 WHERE a.visibility = 'public' AND a.quarantine_state <> 'blocked'
   AND (sqlc.arg(query)::text = '' OR a.search_tsv @@ websearch_to_tsquery('english', sqlc.arg(query)::text))
 GROUP BY a.kind ORDER BY a.kind;
+
+-- name: SearchFacetLicenses :many
+-- License facet over the same public corpus, read from the latest published
+-- manifest (V7 requires an SPDX id for public publish).
+SELECT (lv.manifest ->> 'license')::text AS license, count(*)::bigint AS n
+FROM agents a
+JOIN agent_versions lv ON lv.id = a.latest_published_version_id
+WHERE a.visibility = 'public' AND a.quarantine_state <> 'blocked'
+  AND lv.manifest ->> 'license' IS NOT NULL
+  AND (sqlc.arg(query)::text = '' OR a.search_tsv @@ websearch_to_tsquery('english', sqlc.arg(query)::text))
+GROUP BY 1 ORDER BY n DESC, 1 LIMIT 20;
+
+-- name: ListAgentsByTag :many
+-- GET /tags/{tag} (§9.2): public agents whose LATEST PUBLISHED manifest
+-- carries the tag (V8 tags are lowercase [a-z0-9-]). Keyset-paged on
+-- (created_at, id) so the cursor is stable across inserts.
+SELECT a.id, a.name, a.kind, a.summary, a.quarantine_state, a.created_at,
+       h.handle AS namespace,
+       coalesce(d.installs, 0)::bigint AS installs
+FROM agents a
+JOIN handles h ON h.id = a.namespace_id
+JOIN agent_versions lv ON lv.id = a.latest_published_version_id
+LEFT JOIN (
+  SELECT agent_id, sum(installs) AS installs
+  FROM download_stats WHERE day >= current_date - 30 GROUP BY agent_id
+) d ON d.agent_id = a.id
+WHERE a.visibility = 'public'
+  AND a.quarantine_state <> 'blocked'
+  AND lv.manifest -> 'tags' @> to_jsonb(sqlc.arg(tag)::text)
+  AND (sqlc.narg('before_time')::timestamptz IS NULL
+       OR a.created_at < sqlc.narg('before_time')
+       OR (a.created_at = sqlc.narg('before_time') AND a.id < sqlc.narg('before_id')))
+ORDER BY a.created_at DESC, a.id DESC
+LIMIT $1;
+
+-- name: CountAgentDeleteBlockers :one
+-- Everything that makes DELETE /agents/{ns}/{name} unsafe (§9.2, §4.3).
+-- Version rows can never be deleted, so ANY version row blocks the delete;
+-- versions_past_submitted separates "never published" from "in flight" for
+-- the error message. Advisories and abuse reports are trust & safety
+-- records: they outlive the author's wish to remove the agent.
+SELECT
+  (SELECT count(*) FROM agent_versions av WHERE av.agent_id = $1)::bigint AS versions,
+  (SELECT count(*) FROM agent_versions av2 WHERE av2.agent_id = $1 AND av2.status <> 'submitted')::bigint AS versions_past_submitted,
+  (SELECT count(*) FROM advisories adv WHERE adv.agent_id = $1)::bigint AS advisories,
+  (SELECT count(*) FROM abuse_reports ab WHERE ab.agent_id = $1)::bigint AS abuse_reports;
+
+-- name: DeleteAgentByID :execrows
+DELETE FROM agents WHERE id = $1;
+
+-- name: DeleteRepoByID :exec
+DELETE FROM repos WHERE id = $1;
+
+-- name: SetAgentNamespace :exec
+-- Moves an agent between namespaces (§12.7 deletion-with-transfer).
+UPDATE agents SET namespace_id = $2, updated_at = now() WHERE id = $1;

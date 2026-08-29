@@ -57,8 +57,7 @@ func auditEvent(r *http.Request, action audit.Action) audit.Event {
 
 // Register implements POST /auth/register (§12.1).
 func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
-	if !s.limits.allow("login", clientIP(r), s.classes.login, s.classes.loginBurst) {
-		problemTooMany(w, r, "try again later")
+	if !s.allowLogin(w, r) {
 		return
 	}
 	if !s.requireDB(w, r) {
@@ -151,8 +150,7 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 
 // VerifyEmail implements POST /auth/verify-email.
 func (s *Server) VerifyEmail(w http.ResponseWriter, r *http.Request) {
-	if !s.limits.allow("login", clientIP(r), s.classes.login, s.classes.loginBurst) {
-		problemTooMany(w, r, "try again later")
+	if !s.allowLogin(w, r) {
 		return
 	}
 	if !s.requireDB(w, r) {
@@ -191,8 +189,7 @@ func (s *Server) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 
 // Login implements POST /auth/login: password + optional TOTP → session.
 func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
-	if !s.limits.allow("login", clientIP(r), s.classes.login, s.classes.loginBurst) {
-		problemTooMany(w, r, "try again later")
+	if !s.allowLogin(w, r) {
 		return
 	}
 	if !s.requireDB(w, r) {

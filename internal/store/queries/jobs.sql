@@ -28,6 +28,12 @@ UPDATE jobs SET state = 'failed', last_error = $2, finished_at = now() WHERE id 
 -- name: CountJobs :one
 SELECT count(*) FROM jobs WHERE queue = $1 AND state = $2;
 
+-- name: CountPendingJobsOfKind :one
+-- Singleton guard for self-rescheduling maintenance jobs (audit retention):
+-- a worker restart must not stack another copy on the queue.
+SELECT count(*)::bigint FROM jobs
+WHERE kind = $1 AND state IN ('available', 'running');
+
 -- name: ResetStuckJobs :execrows
 UPDATE jobs SET state = 'available', locked_at = NULL
 WHERE state = 'running' AND locked_at < $1;

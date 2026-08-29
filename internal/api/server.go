@@ -74,6 +74,9 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		panic(serr)
 	}
 	aud := audit.NewWriter(log)
+	// §12.6 continuous NDJSON archive (see internal/audit/stream.go).
+	aud.SetStream(audit.NewStream(cfg.Audit.StreamKind, cfg.Audit.StreamDir,
+		cfg.Audit.StreamS3Bucket, cfg.Audit.StreamFlush, log))
 	srv := &Server{
 		cfg:      cfg,
 		st:       st,
@@ -181,6 +184,7 @@ func (s *Server) RegisterQueueHandlers(q queue.Client) {
 		s.webhooks.RegisterHandlers(q)
 	}
 	q.Register(jobAuditExport, s.runAuditExport)
+	s.registerAuditRetention(q) // §4.3 hot-table retention (audit_retention.go)
 }
 
 // emitAgentEvent is the registry event sink (§9.3): it resolves the agent's
@@ -320,6 +324,11 @@ func NewHandlerWithGit(s *Server, mountGit func(*http.ServeMux)) http.Handler {
 	// authenticates by SCIM bearer token (not the RBAC chokepoint), so it is
 	// deliberately not part of the OpenAPI surface (see handlers_scim.go).
 	s.mountSCIM(mux)
+
+	// Org SSO landing (§12.4 endpoint list): `https://…/sso/{org}` starts the
+	// org's configured SAML/OIDC login. Root-mounted for the same reason as
+	// SCIM — it is a browser destination, not part of the JSON API surface.
+	s.mountSSOLanding(mux)
 
 	// Generated OpenAPI routes under /api/v1 (spec-first, D-09).
 	apiHandler := HandlerWithOptions(s, StdHTTPServerOptions{
