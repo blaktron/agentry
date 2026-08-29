@@ -23,6 +23,17 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ org: strin
     return redirectBack(req, back, { ok: "webhook deleted." });
   }
 
+  // A test delivery is enqueued, not sent inline (202), so the useful landing
+  // is the delivery list for that endpoint rather than a claim of success.
+  if (action === "ping") {
+    const id = String(form.get("id") ?? "");
+    const res = await apiSend("POST", `/orgs/${o}/webhooks/${encodeURIComponent(id)}/ping`);
+    if (!res.ok) return redirectBack(req, back, { error: await problemDetail(res) });
+    return redirectBack(req, `${back}?deliveries=${encodeURIComponent(id)}`, {
+      ok: "test delivery enqueued — its attempt appears in the delivery list below.",
+    });
+  }
+
   const url = String(form.get("url") ?? "");
   const events = form.getAll("events").map(String);
   if (events.length === 0) return redirectBack(req, back, { error: "pick at least one event" });

@@ -131,8 +131,8 @@ export default async function AgentPage({
           </p>
           <p className="mt-1 text-sm">
             {agent.quarantineState === "blocked"
-              ? "Downloads are refused by the registry. Installed copies should be removed."
-              : "New installs are discouraged while a reviewer investigates a finding."}
+              ? "The registry refuses every download for this agent (410 Gone). Installed copies should be removed."
+              : "It no longer resolves for installs while a reviewer investigates a finding. Copies you already installed are untouched — the registry cannot reach them."}
           </p>
         </div>
       )}

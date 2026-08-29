@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Card, SeverityBadge, StatusBadge } from "@/components/ui";
+import { Card, RefusalCard, SeverityBadge, StatusBadge } from "@/components/ui";
 import { Refresher } from "@/components/refresher";
 import type { AgentVersion, ScanReport } from "@/lib/api";
-import { authedGet, currentUser } from "@/lib/session";
+import { AccessError, authedGet, currentUser } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Pipeline progress" };
 
@@ -26,12 +26,31 @@ export default async function ProgressPage({
   searchParams: Promise<{ ok?: string }>;
 }) {
   const { ns, name, version } = await params;
-  if (!(await currentUser())) redirect(`/login?next=/${ns}/${name}/versions/${version}/progress`);
+  const n = encodeURIComponent(ns);
+  const a = encodeURIComponent(name);
+  const ver = encodeURIComponent(version);
+  const vbase = `/agents/${n}/${a}/versions/${ver}`;
+  if (!(await currentUser())) redirect(`/login?next=/${n}/${a}/versions/${ver}/progress`);
   const q = await searchParams;
 
-  const v = await authedGet<AgentVersion>(`/agents/${ns}/${name}/versions/${version}`);
-  if (!v) notFound();
-  const report = await authedGet<ScanReport>(`/agents/${ns}/${name}/versions/${version}/report`);
+  let v: AgentVersion | null = null;
+  let report: ScanReport | null = null;
+  try {
+    v = await authedGet<AgentVersion>(vbase);
+    if (!v) notFound();
+    report = await authedGet<ScanReport>(`${vbase}/report`);
+  } catch (e) {
+    // Same shape as the other authed pages: a refusal is rendered, not
+    // thrown into the error boundary as if the server had failed.
+    if (e instanceof AccessError) {
+      return (
+        <RefusalCard>
+          You do not have access to the pipeline for {`${ns}/${name}@${version}`}.
+        </RefusalCard>
+      );
+    }
+    throw e;
+  }
 
   const inFlight = v.status === "submitted" || v.status === "scanning";
   const stepState = (key: string): "done" | "active" | "todo" => {
@@ -50,7 +69,7 @@ export default async function ProgressPage({
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
       {inFlight && <Refresher />}
       <h1 className="text-xl font-semibold">
-        <Link href={`/${ns}/${name}`} className="hover:underline">
+        <Link href={`/${n}/${a}`} className="hover:underline">
           {`${ns}/${name}`}
         </Link>
         {`@${version}`} — pipeline
@@ -84,7 +103,7 @@ export default async function ProgressPage({
         </ol>
         {inFlight ? (
           <p className="mt-3 text-sm" style={{ color: "var(--color-muted)" }}>
-            Updating automatically… (or <Link href={`/${ns}/${name}/versions/${version}/progress`} className="underline">refresh</Link>)
+            Updating automatically… (or <Link href={`/${n}/${a}/versions/${ver}/progress`} className="underline">refresh</Link>)
           </p>
         ) : (
           <div className="mt-3 flex flex-col gap-2 text-sm">
@@ -99,7 +118,7 @@ export default async function ProgressPage({
               </p>
             )}
             <p>
-              <Link href={`/${ns}/${name}/versions/${version}`} className="underline">
+              <Link href={`/${n}/${a}/versions/${ver}`} className="underline">
                 Full report and provenance
               </Link>
               {v.status === "needs_review" && (
