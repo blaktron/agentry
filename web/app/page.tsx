@@ -1,16 +1,19 @@
 import Link from "next/link";
-import { apiGet, type Meta } from "@/lib/api";
-import { Card, CodeBlock } from "@/components/ui";
+import { apiGet, type Meta, type SearchResults } from "@/lib/api";
+import { fmtCount } from "@/lib/format";
+import { AgentRow, Card, CodeBlock } from "@/components/ui";
 
-// Home (§10.1): what Agentry is, how to install, and an honest statement of
-// what scanning does and does not prove. SSR for SEO (D-08).
+// Home (§10.1): what Agentry is, what people are actually installing, how to
+// install, and an honest statement of what scanning does and does not prove.
+// SSR for SEO (D-08).
 export default async function HomePage() {
-  let meta: Meta | null = null;
-  try {
-    meta = await apiGet<Meta>("/meta", { revalidate: 60 });
-  } catch {
-    meta = null; // the marketing page must render even if the API is down
-  }
+  const [meta, trending] = await Promise.all([
+    // Both must fail soft: the home page is the one page that has to render
+    // when the API is down.
+    apiGet<Meta>("/meta", { revalidate: 60 }).catch(() => null),
+    apiGet<SearchResults>("/search?sort=installs&limit=6", { revalidate: 300 }).catch(() => null),
+  ]);
+  const featured = trending?.results ?? [];
 
   return (
     <div className="space-y-12">
@@ -40,6 +43,48 @@ export default async function HomePage() {
             How scanning works
           </Link>
         </div>
+      </section>
+
+      {/* Featured/trending (§10.4): the registry's own answer to "what are
+          people installing", ranked by installs in the last 30 days. It
+          replaces a static marketing block — an empty registry says so
+          plainly rather than showing invented placeholders. */}
+      <section>
+        <div className="flex items-baseline justify-between gap-4">
+          <h2 className="text-xl font-semibold">Most installed this month</h2>
+          <Link href="/search" className="text-sm underline">
+            Browse all agents
+          </Link>
+        </div>
+        {featured.length === 0 ? (
+          <Card className="mt-3">
+            <p className="text-sm">
+              {trending === null
+                ? "The registry index is not reachable right now."
+                : "Nothing has been published to this registry yet — the first agent could be yours."}
+            </p>
+          </Card>
+        ) : (
+          <ul className="mt-3">
+            {featured.map((hit) => (
+              <AgentRow
+                key={`${hit.namespace}/${hit.name}`}
+                namespace={hit.namespace}
+                name={hit.name}
+                summary={
+                  hit.installs30d
+                    ? `${hit.summary} · ${fmtCount(hit.installs30d)} installs in 30 days`
+                    : hit.summary
+                }
+                kind={hit.kind}
+              />
+            ))}
+          </ul>
+        )}
+        <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>
+          Ranked by installs, which is a popularity signal and not a safety one. Every one of them
+          still has a report worth reading.
+        </p>
       </section>
 
       <section className="grid gap-6 md:grid-cols-3">

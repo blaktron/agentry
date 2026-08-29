@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Card, StatusBadge } from "@/components/ui";
+import { Card, RefusalCard, StatusBadge } from "@/components/ui";
 import type { Agent, AgentVersion } from "@/lib/api";
+import { fmtUTC } from "@/lib/format";
 import { AccessError, authedGet, currentUser } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Publish" };
@@ -18,22 +19,21 @@ export default async function PublishPage({
   searchParams: Promise<{ ok?: string; error?: string }>;
 }) {
   const { ns, name } = await params;
-  if (!(await currentUser())) redirect(`/login?next=/${ns}/${name}/publish`);
+  const n = encodeURIComponent(ns);
+  const a = encodeURIComponent(name);
+  const base = `/agents/${n}/${a}`;
+  if (!(await currentUser())) redirect(`/login?next=/${n}/${a}/publish`);
   const q = await searchParams;
 
   let agent: Agent | null = null;
   let versions: AgentVersion[] = [];
   try {
-    agent = await authedGet<Agent>(`/agents/${ns}/${name}`);
+    agent = await authedGet<Agent>(base);
     if (!agent) notFound();
-    versions = (await authedGet<AgentVersion[]>(`/agents/${ns}/${name}/versions`)) ?? [];
+    versions = (await authedGet<AgentVersion[]>(`${base}/versions`)) ?? [];
   } catch (e) {
     if (e instanceof AccessError) {
-      return (
-        <Card>
-          <p>You do not have access to this agent.</p>
-        </Card>
-      );
+      return <RefusalCard>You do not have access to {`${ns}/${name}`}.</RefusalCard>;
     }
     throw e;
   }
@@ -44,7 +44,7 @@ export default async function PublishPage({
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">
         Publish{" "}
-        <Link href={`/${ns}/${name}`} className="hover:underline">
+        <Link href={`/${n}/${a}`} className="hover:underline">
           {`${ns}/${name}`}
         </Link>
       </h1>
@@ -66,7 +66,7 @@ export default async function PublishPage({
           <ul className="text-sm">
             {inFlight.map((v) => (
               <li key={v.id}>
-                <Link href={`/${ns}/${name}/versions/${v.version}/progress`} className="underline">
+                <Link href={`/${n}/${a}/versions/${encodeURIComponent(v.version)}/progress`} className="underline">
                   {v.version}
                 </Link>{" "}
                 <StatusBadge status={v.status} />
@@ -83,7 +83,7 @@ export default async function PublishPage({
           look like <code>v1.2.3</code>. Every submission runs the full §8 pipeline — no path
           skips the gate.
         </p>
-        <form method="post" action={`/${ns}/${name}/publish/submit`} className="flex items-end gap-2 text-sm">
+        <form method="post" action={`/${n}/${a}/publish/submit`} className="flex items-end gap-2 text-sm">
           <label>
             Tag
             <input
@@ -115,12 +115,12 @@ export default async function PublishPage({
           <ul className="flex flex-col gap-1 text-sm">
             {versions.map((v) => (
               <li key={v.id} className="flex items-center gap-2">
-                <Link href={`/${ns}/${name}/versions/${v.version}`} className="font-mono hover:underline">
+                <Link href={`/${n}/${a}/versions/${encodeURIComponent(v.version)}`} className="font-mono hover:underline">
                   {v.version}
                 </Link>
                 <StatusBadge status={v.status} />
                 <span className="text-xs" style={{ color: "var(--color-muted)" }}>
-                  {new Date(v.createdAt).toLocaleString()}
+                  {fmtUTC(v.createdAt)}
                 </span>
               </li>
             ))}

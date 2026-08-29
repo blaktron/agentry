@@ -123,6 +123,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/2fa/totp/challenge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete a pending 2FA challenge and open the session (§12.1).
+         * @description Second leg of a login that could not carry a TOTP code inline — today only social login, whose callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+         */
+        post: operations["totpChallenge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/oidc/{provider}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Begin social login with a configured provider (§12.1).
+         * @description Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership — org SSO lives under /orgs/{org}/sso (§12.4).
+         */
+        get: operations["socialOidcStart"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/oidc/{provider}/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Social login redirect URI — establish a session (§12.1).
+         * @description Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session.
+         */
+        get: operations["socialOidcCallback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/user": {
         parameters: {
             query?: never;
@@ -152,10 +212,28 @@ export interface paths {
         put?: never;
         /**
          * Erase the caller's account (GDPR flow, §12.7).
-         * @description Purges personal data and pseudonymizes the account. Published public versions are not deleted — they are yanked so already-installed copies keep verifying — or you can transfer the agents to an org first and then delete.
+         * @description Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit — omitting `publishedContent` is a 400, never a silent yank.
          */
         post: operations["deleteCurrentUser"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/user/stars/{ns}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Star an agent (idempotent, §9.2). */
+        put: operations["starAgent"];
+        post?: never;
+        /** Remove a star (idempotent, §9.2). */
+        delete: operations["unstarAgent"];
         options?: never;
         head?: never;
         patch?: never;
@@ -399,11 +477,52 @@ export interface paths {
         get: operations["getAgent"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete an agent that was never published (maintain, §9.2).
+         * @description Deletes the agent and its hosted repository. Refused (409) once the agent has any version row, because §4.3 forbids deleting version rows: a version past `submitted` is history consumers may depend on, and a version still at `submitted` is mid-pipeline. Published agents are yanked or blocked, never deleted.
+         */
+        delete: operations["deleteAgent"];
         options?: never;
         head?: never;
         /** Update agent settings (maintain). */
         patch: operations["updateAgent"];
+        trace?: never;
+    };
+    "/agents/{ns}/{name}/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Star count and install counts for an agent (§9.2). */
+        get: operations["getAgentStats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{ns}/{name}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recent activity for an agent (§9.2).
+         * @description Drawn from the audit log. Anyone who can see a public agent gets the public-safe subset — publishes and yanks; callers with an explicit read grant (or namespace-derived read) see the fuller stream including submissions, settings changes, and grant changes.
+         */
+        get: operations["listAgentActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/agents/{ns}/{name}/grants": {
@@ -911,6 +1030,26 @@ export interface paths {
         patch: operations["updateWebhook"];
         trace?: never;
     };
+    "/orgs/{org}/webhooks/{id}/ping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a test delivery to an endpoint (admin+, §9.2).
+         * @description Enqueues a signed `ping` delivery through the ordinary webhook machinery — same signature header, same SSRF guard, same retry schedule — so the recorded attempt appears in `GET …/{id}/deliveries`. Honours `Idempotency-Key`.
+         */
+        post: operations["pingWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/webhooks/{id}/deliveries": {
         parameters: {
             query?: never;
@@ -991,6 +1130,46 @@ export interface paths {
         get: operations["getAuditExport"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Audit events across every org (platform staff, §12.6).
+         * @description The staff-wide slice of the audit log, newest first. Staff access to it is itself audited (§12.6), one event per call.
+         */
+        get: operations["listPlatformAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/ruleset-releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register a ruleset release (platform staff, §9.2).
+         * @description Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle (§8.3). Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
+         */
+        post: operations["createRulesetRelease"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1099,6 +1278,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tags/{tag}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Public agents tagged with {tag} (§9.2).
+         * @description Matches the tag list of each agent's latest published manifest (`manifest.tags`, V8). Blocked agents never appear.
+         */
+        get: operations["listAgentsByTag"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{ns}/{name}/readme": {
         parameters: {
             query?: never;
@@ -1159,6 +1358,15 @@ export interface components {
             user: components["schemas"]["User"];
             /** @description Echo in X-Agentry-CSRF on cookie-authenticated mutations. */
             csrfToken: string;
+        };
+        /** @description Outcome of a social-login callback: either a session (like password login) or a pending TOTP challenge to complete at POST /auth/2fa/totp/challenge. */
+        SocialLoginResult: {
+            totpRequired: boolean;
+            /** @description Single-use, five-minute challenge; present iff totpRequired. */
+            challenge?: string;
+            user?: components["schemas"]["User"];
+            /** @description Echo in X-Agentry-CSRF on cookie-authenticated mutations. */
+            csrfToken?: string;
         };
         TotpSetupResult: {
             /** @description Base32 TOTP secret (display once for authenticator apps). */
@@ -1274,6 +1482,53 @@ export interface components {
             /** @description Opaque; absent on the last page. */
             nextCursor?: string;
         };
+        /** @description One agent-scoped entry from the audit log (§9.2 activity). */
+        ActivityEvent: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            occurredAt: string;
+            /** @description Registered action id (internal/audit/actions.go). */
+            action: string;
+            /** @description Absent on the public-safe subset and for system actors. */
+            actorHandle?: string;
+            /** @description The version this entry concerns, when it names one. */
+            version?: string;
+            /** @description Present only for callers with read access. */
+            detail?: {
+                [key: string]: unknown;
+            };
+        };
+        ActivityPage: {
+            events: components["schemas"]["ActivityEvent"][];
+            /** @description Opaque; absent on the last page. */
+            nextCursor?: string;
+        };
+        AgentStats: {
+            /** Format: int64 */
+            stars: number;
+            /** @description Whether the calling user has starred it (authed only). */
+            starred?: boolean;
+            /** Format: int64 */
+            installsTotal: number;
+            /** Format: int64 */
+            installs30d: number;
+        };
+        TagPage: {
+            tag: string;
+            results: components["schemas"]["SearchHit"][];
+            /** @description Opaque; absent on the last page. */
+            nextCursor?: string;
+        };
+        RulesetRelease: {
+            /** Format: uuid */
+            id: string;
+            semver: string;
+            bundleDigest: string;
+            notes?: string;
+            /** Format: date-time */
+            publishedAt: string;
+        };
         /**
          * @description Supported agent kinds (§1.4).
          * @enum {string}
@@ -1361,7 +1616,7 @@ export interface components {
             digest: string;
             /** @description Where to fetch the archive (CDN on SaaS; API path self-host). */
             archiveUrl: string;
-            /** @description DSSE attestation location (M4+; absent until signing ships). */
+            /** @description Where to fetch the DSSE attestation over this release (§8.8, §9.4 step 3). Present whenever the version has been signed — every version published by a signing-enabled deployment. Absent when the deployment runs `signing.kind: none` (dev/self-host opt-out) or the version predates signing. */
             attestationUrl?: string;
             manifest: {
                 [key: string]: unknown;
@@ -1387,6 +1642,8 @@ export interface components {
             };
             /** @enum {string} */
             verdict: "open" | "confirmed" | "dismissed_false_positive" | "dismissed_accepted_risk";
+            /** @description Why a reviewer dismissed or confirmed this finding. Dismissed findings stay on the public report WITH their rationale (PLAN §8.5) — a finding that vanishes without explanation is exactly what the report exists to prevent. */
+            verdictReason?: string;
         };
         ScanReport: {
             /** Format: uuid */
@@ -1396,6 +1653,11 @@ export interface components {
             reportDigest?: string;
             judgeModel?: string;
             scanStatus?: string;
+            /**
+             * Format: date-time
+             * @description When this scan run completed — the date the report describes.
+             */
+            finishedAt?: string;
             findingCounts?: {
                 [key: string]: number;
             };
@@ -1608,6 +1870,14 @@ export interface components {
         TeamSlug: string;
         SsoKind: "saml" | "oidc";
         WebhookID: string;
+        /** @description Social identity provider id (§12.1). */
+        SocialProvider: "google" | "github";
+        /** @description Opaque cursor from the previous page's `Link` header. */
+        Cursor: string;
+        /** @description Page size; values outside the range are clamped, not rejected. */
+        Limit100: number;
+        /** @description Page size; values outside the range are clamped, not rejected. */
+        Limit200: number;
     };
     requestBodies: never;
     headers: never;
@@ -1776,6 +2046,90 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    totpChallenge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    challenge: string;
+                    code: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Session established. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResult"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    socialOidcStart: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Social identity provider id (§12.1). */
+                provider: components["parameters"]["SocialProvider"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to the provider's authorization endpoint. */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    socialOidcCallback: {
+        parameters: {
+            query?: {
+                code?: string;
+                state?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Social identity provider id (§12.1). */
+                provider: components["parameters"]["SocialProvider"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session established, or a pending TOTP challenge. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SocialLoginResult"];
+                };
+            };
+            /** @description An account with this email exists; link it explicitly. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     getCurrentUser: {
         parameters: {
             query?: never;
@@ -1827,8 +2181,10 @@ export interface operations {
     deleteCurrentUser: {
         parameters: {
             query?: {
-                /** @description What to do with published public versions (default yank). */
+                /** @description What to do with published public versions. Required when the account has any; ignored (and defaulted to yank) when it has none. */
                 publishedContent?: "yank" | "transfer";
+                /** @description Destination org handle, required with publishedContent=transfer. The caller must be an owner or admin of that org. */
+                transferOrg?: string;
             };
             header?: never;
             path?: never;
@@ -1837,6 +2193,50 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Account erased; session revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    starAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Starred (already-starred is also 204). */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    unstarAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unstarred (not-starred is also 204). */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -2333,6 +2733,35 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    deleteAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The agent has versions, advisories, or abuse reports. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     updateAgent: {
         parameters: {
             query?: never;
@@ -2361,6 +2790,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Agent"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getAgentStats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Counters. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentStats"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listAgentActivity: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor from the previous page's `Link` header. */
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Page size; values outside the range are clamped, not rejected. */
+                limit?: components["parameters"]["Limit100"];
+            };
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Activity page (`Link` header with rel=next when more remain). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityPage"];
                 };
             };
             default: components["responses"]["Problem"];
@@ -3360,7 +3842,7 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
-    listWebhookDeliveries: {
+    pingWebhook: {
         parameters: {
             query?: never;
             header?: never;
@@ -3372,7 +3854,36 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deliveries. */
+            /** @description Test delivery enqueued. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookDelivery"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listWebhookDeliveries: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor from the previous page's `Link` header. */
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Page size; values outside the range are clamped, not rejected. */
+                limit?: components["parameters"]["Limit100"];
+            };
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+                id: components["parameters"]["WebhookID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deliveries (`Link` header with rel=next when more remain). */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3514,6 +4025,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditExport"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listPlatformAudit: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor from the previous page's `Link` header. */
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Page size; values outside the range are clamped, not rejected. */
+                limit?: components["parameters"]["Limit200"];
+                action?: string;
+                /** @description Restrict to one org handle. */
+                org?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Audit page (`Link` header with rel=next when more remain). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createRulesetRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    semver?: string;
+                    /** @description sha256:<hex> of the bundle. */
+                    bundleDigest?: string;
+                    notes?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description This semver was already registered; the existing row. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesetRelease"];
+                };
+            };
+            /** @description Release registered. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesetRelease"];
                 };
             };
             default: components["responses"]["Problem"];
@@ -3663,6 +4242,13 @@ export interface operations {
                 /** @description Free-text query; empty lists by popularity. */
                 q?: string;
                 kind?: components["schemas"]["AgentKind"];
+                /** @description Capability the latest published version actually asks for, e.g. `network`, `filesystem`, `exec`, `secrets`, `dataAccess` (§5.4). A capability declared as `none`, null, or empty does not match — `network: {egress: none}` is not a network agent. */
+                capability?: string;
+                /** @description SPDX identifier from the latest published manifest. */
+                license?: string;
+                /** @description Only agents in an org namespace with a verified domain. */
+                verified?: boolean;
+                sort?: "relevance" | "installs" | "newest";
                 limit?: number;
                 offset?: number;
             };
@@ -3679,6 +4265,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SearchResults"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listAgentsByTag: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor from the previous page's `Link` header. */
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Page size; values outside the range are clamped, not rejected. */
+                limit?: components["parameters"]["Limit100"];
+            };
+            header?: never;
+            path: {
+                tag: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tagged agents (`Link` header with rel=next when more remain). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagPage"];
                 };
             };
             default: components["responses"]["Problem"];

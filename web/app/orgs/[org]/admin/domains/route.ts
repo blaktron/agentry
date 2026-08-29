@@ -6,7 +6,10 @@ import { apiSend, problemDetail } from "@/lib/session";
 export async function POST(req: NextRequest, ctx: { params: Promise<{ org: string }> }) {
   if (!sameOrigin(req)) return new NextResponse("cross-origin form post rejected", { status: 403 });
   const { org } = await ctx.params;
-  const back = `/orgs/${org}/admin`;
+  // Every interpolated API path segment is escaped: `org` is route
+  // input, and a handle-shaped value is a convention, not a guarantee.
+  const o = encodeURIComponent(org);
+  const back = `/orgs/${o}/admin`;
   const form = await req.formData();
   const domain = String(form.get("domain") ?? "").trim().toLowerCase();
   const action = String(form.get("action") ?? "claim");
@@ -14,8 +17,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ org: strin
 
   const res =
     action === "verify"
-      ? await apiSend("POST", `/orgs/${org}/domain-claims/verify`, { domain })
-      : await apiSend("POST", `/orgs/${org}/domain-claims`, { domain });
+      ? await apiSend("POST", `/orgs/${o}/domain-claims/verify`, { domain })
+      : await apiSend("POST", `/orgs/${o}/domain-claims`, { domain });
   if (!res.ok) return redirectBack(req, back, { error: await problemDetail(res) });
   return redirectBack(req, back, {
     ok: action === "verify" ? `${domain} verified.` : `${domain} claimed — publish the TXT record shown below it.`,

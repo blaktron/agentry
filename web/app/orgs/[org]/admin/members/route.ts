@@ -6,7 +6,10 @@ import { apiSend, problemDetail } from "@/lib/session";
 export async function POST(req: NextRequest, ctx: { params: Promise<{ org: string }> }) {
   if (!sameOrigin(req)) return new NextResponse("cross-origin form post rejected", { status: 403 });
   const { org } = await ctx.params;
-  const back = `/orgs/${org}/admin`;
+  // Every interpolated API path segment is escaped: `org` is route
+  // input, and a handle-shaped value is a convention, not a guarantee.
+  const o = encodeURIComponent(org);
+  const back = `/orgs/${o}/admin`;
   const form = await req.formData();
   const handle = String(form.get("handle") ?? "").trim();
   const action = String(form.get("action") ?? "");
@@ -14,10 +17,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ org: strin
 
   let res: Response;
   if (action === "remove") {
-    res = await apiSend("DELETE", `/orgs/${org}/members/${encodeURIComponent(handle)}`);
+    res = await apiSend("DELETE", `/orgs/${o}/members/${encodeURIComponent(handle)}`);
   } else {
     const role = String(form.get("role") ?? "member");
-    res = await apiSend("PUT", `/orgs/${org}/members/${encodeURIComponent(handle)}`, { role });
+    res = await apiSend("PUT", `/orgs/${o}/members/${encodeURIComponent(handle)}`, { role });
   }
   if (!res.ok) return redirectBack(req, back, { error: await problemDetail(res) });
   return redirectBack(req, back, { ok: action === "remove" ? `${handle} removed.` : `${handle} updated.` });

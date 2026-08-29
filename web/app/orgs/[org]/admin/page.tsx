@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Badge, Card } from "@/components/ui";
+import { Badge, Card, RefusalCard } from "@/components/ui";
+import type { WebhookDelivery } from "@/lib/api";
+import { fmtUTC, fmtUTCDate } from "@/lib/format";
 import { AccessError, authedGet, currentUser } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Org admin" };
@@ -76,25 +78,22 @@ export default async function OrgAdminPage({
   searchParams,
 }: {
   params: Promise<{ org: string }>;
-  searchParams: Promise<{ ok?: string; error?: string; export?: string }>;
+  searchParams: Promise<{ ok?: string; error?: string; export?: string; deliveries?: string }>;
 }) {
   const { org } = await params;
+  const o = encodeURIComponent(org);
   const q = await searchParams;
-  if (!(await currentUser())) redirect(`/login?next=/orgs/${org}/admin`);
+  if (!(await currentUser())) redirect(`/login?next=/orgs/${o}/admin`);
 
   let orgInfo: OrgInfo | null = null;
   let members: Membership[] = [];
   try {
-    orgInfo = await authedGet<OrgInfo>(`/orgs/${org}`);
+    orgInfo = await authedGet<OrgInfo>(`/orgs/${o}`);
     if (!orgInfo) notFound();
-    members = (await authedGet<Membership[]>(`/orgs/${org}/members`)) ?? [];
+    members = (await authedGet<Membership[]>(`/orgs/${o}/members`)) ?? [];
   } catch (e) {
     if (e instanceof AccessError) {
-      return (
-        <Card>
-          <p>Org administration requires the admin or owner role in {org}.</p>
-        </Card>
-      );
+      return <RefusalCard>Org administration requires the admin or owner role in {org}.</RefusalCard>;
     }
     throw e;
   }
@@ -111,19 +110,31 @@ export default async function OrgAdminPage({
   };
 
   const [teams, policy, baseline, sso, scim, domains, webhooks, audit] = await Promise.all([
-    safe(authedGet<Team[]>(`/orgs/${org}/teams`)),
-    safe(authedGet<Record<string, unknown>>(`/orgs/${org}/policy`)),
+    safe(authedGet<Team[]>(`/orgs/${o}/teams`)),
+    safe(authedGet<Record<string, unknown>>(`/orgs/${o}/policy`)),
     safe(authedGet<Record<string, unknown>>(`/platform/policy`)),
-    safe(authedGet<SsoConnection[]>(`/orgs/${org}/sso/connections`)),
-    safe(authedGet<ScimToken[]>(`/orgs/${org}/scim/tokens`)),
-    safe(authedGet<DomainClaim[]>(`/orgs/${org}/domain-claims`)),
-    safe(authedGet<Webhook[]>(`/orgs/${org}/webhooks`)),
-    safe(authedGet<{ events: AuditEvent[]; nextCursor?: string }>(`/orgs/${org}/audit?limit=50`)),
+    safe(authedGet<SsoConnection[]>(`/orgs/${o}/sso/connections`)),
+    safe(authedGet<ScimToken[]>(`/orgs/${o}/scim/tokens`)),
+    safe(authedGet<DomainClaim[]>(`/orgs/${o}/domain-claims`)),
+    safe(authedGet<Webhook[]>(`/orgs/${o}/webhooks`)),
+    safe(authedGet<{ events: AuditEvent[]; nextCursor?: string }>(`/orgs/${o}/audit?limit=50`)),
   ]);
   const exportStatus =
     q.export && /^[0-9a-f-]{36}$/.test(q.export)
-      ? await safe(authedGet<AuditExport>(`/orgs/${org}/audit/exports/${q.export}`))
+      ? await safe(authedGet<AuditExport>(`/orgs/${o}/audit/exports/${encodeURIComponent(q.export)}`))
       : null;
+
+  // Delivery history for the endpoint the admin asked about (?deliveries=id),
+  // which is where a "send test delivery" lands: the ping travels the ordinary
+  // webhook path, so its recorded attempt shows up here like any other.
+  const deliveriesFor = q.deliveries && /^[0-9a-f-]{36}$/.test(q.deliveries) ? q.deliveries : null;
+  const deliveries = deliveriesFor
+    ? await safe(
+        authedGet<WebhookDelivery[]>(
+          `/orgs/${o}/webhooks/${encodeURIComponent(deliveriesFor)}/deliveries?limit=20`,
+        ),
+      )
+    : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -174,7 +185,7 @@ export default async function OrgAdminPage({
                 </td>
                 <td className="py-2 pr-4">{m.role}</td>
                 <td className="py-2">
-                  <form method="post" action={`/orgs/${org}/admin/members`} className="flex flex-wrap items-center gap-2">
+                  <form method="post" action={`/orgs/${o}/admin/members`} className="flex flex-wrap items-center gap-2">
                     <input type="hidden" name="handle" value={m.user.handle} />
                     <label>
                       <span className="sr-only">Role for {m.user.handle}</span>
@@ -198,7 +209,7 @@ export default async function OrgAdminPage({
             ))}
           </tbody>
         </table>
-        <form method="post" action={`/orgs/${org}/admin/members`} className="mt-3 flex flex-wrap items-end gap-2 text-sm">
+        <form method="post" action={`/orgs/${o}/admin/members`} className="mt-3 flex flex-wrap items-end gap-2 text-sm">
           <input type="hidden" name="action" value="set" />
           <label>
             Add member (existing handle)
@@ -231,7 +242,7 @@ export default async function OrgAdminPage({
               {(teams ?? []).map((t) => (
                 <li key={t.id} className="flex items-center gap-2">
                   <span className="font-mono">{t.slug}</span>
-                  <form method="post" action={`/orgs/${org}/admin/teams`}>
+                  <form method="post" action={`/orgs/${o}/admin/teams`}>
                     <input type="hidden" name="slug" value={t.slug} />
                     <button type="submit" name="action" value="delete" className="rounded-md border px-2 py-0.5 text-xs" style={{ borderColor: "var(--color-sev-high)", color: "var(--color-sev-high)" }}>
                       Delete
@@ -243,7 +254,7 @@ export default async function OrgAdminPage({
                 <li style={{ color: "var(--color-muted)" }}>No teams.</li>
               )}
             </ul>
-            <form method="post" action={`/orgs/${org}/admin/teams`} className="mt-3 flex items-end gap-2 text-sm">
+            <form method="post" action={`/orgs/${o}/admin/teams`} className="mt-3 flex items-end gap-2 text-sm">
               <input type="hidden" name="action" value="create" />
               <label>
                 New team slug
@@ -268,7 +279,7 @@ export default async function OrgAdminPage({
               Org policy may only tighten the platform baseline (§8.6). Baseline:{" "}
               <code className="text-xs">{baseline && baseline !== "forbidden" ? JSON.stringify(baseline) : "…"}</code>
             </p>
-            <form method="post" action={`/orgs/${org}/admin/policy`} className="flex flex-col gap-2">
+            <form method="post" action={`/orgs/${o}/admin/policy`} className="flex flex-col gap-2">
               <label className="text-sm">
                 Policy document (JSON)
                 <textarea
@@ -301,7 +312,7 @@ export default async function OrgAdminPage({
                 <li key={c.kind} className="flex items-center gap-2">
                   <Badge tone={c.enabled ? "ok" : "neutral"}>{c.kind}</Badge>
                   <span style={{ color: "var(--color-muted)" }}>{c.enabled ? "enabled" : "configured, disabled"}</span>
-                  <form method="post" action={`/orgs/${org}/admin/sso`}>
+                  <form method="post" action={`/orgs/${o}/admin/sso`}>
                     <input type="hidden" name="kind" value={c.kind} />
                     <button type="submit" name="action" value="delete" className="rounded-md border px-2 py-0.5 text-xs" style={{ borderColor: "var(--color-sev-high)", color: "var(--color-sev-high)" }}>
                       Delete
@@ -313,7 +324,7 @@ export default async function OrgAdminPage({
             </ul>
             <details className="mb-2">
               <summary className="cursor-pointer text-sm font-medium">Configure SAML</summary>
-              <form method="post" action={`/orgs/${org}/admin/sso`} className="mt-2 flex flex-col gap-2 text-sm">
+              <form method="post" action={`/orgs/${o}/admin/sso`} className="mt-2 flex flex-col gap-2 text-sm">
                 <input type="hidden" name="kind" value="saml" />
                 <input type="hidden" name="action" value="put" />
                 <label>
@@ -332,7 +343,7 @@ export default async function OrgAdminPage({
             </details>
             <details>
               <summary className="cursor-pointer text-sm font-medium">Configure OIDC</summary>
-              <form method="post" action={`/orgs/${org}/admin/sso`} className="mt-2 flex flex-col gap-2 text-sm">
+              <form method="post" action={`/orgs/${o}/admin/sso`} className="mt-2 flex flex-col gap-2 text-sm">
                 <input type="hidden" name="kind" value="oidc" />
                 <input type="hidden" name="action" value="put" />
                 <label>
@@ -376,8 +387,8 @@ export default async function OrgAdminPage({
               {(scim ?? []).map((t) => (
                 <li key={t.id} className="flex items-center gap-2">
                   <span className="font-mono text-xs">{t.id}</span>
-                  <span style={{ color: "var(--color-muted)" }}>created {new Date(t.createdAt).toLocaleDateString()}</span>
-                  <form method="post" action={`/orgs/${org}/admin/scim`}>
+                  <span style={{ color: "var(--color-muted)" }}>created {fmtUTCDate(t.createdAt)}</span>
+                  <form method="post" action={`/orgs/${o}/admin/scim`}>
                     <input type="hidden" name="tokenId" value={t.id} />
                     <button type="submit" name="action" value="revoke" className="rounded-md border px-2 py-0.5 text-xs" style={{ borderColor: "var(--color-sev-high)", color: "var(--color-sev-high)" }}>
                       Revoke
@@ -387,7 +398,7 @@ export default async function OrgAdminPage({
               ))}
               {(scim ?? []).length === 0 && <li style={{ color: "var(--color-muted)" }}>No SCIM tokens.</li>}
             </ul>
-            <form method="post" action={`/orgs/${org}/admin/scim`}>
+            <form method="post" action={`/orgs/${o}/admin/scim`}>
               <button type="submit" name="action" value="create" className="rounded-md border px-3 py-1.5 text-sm" style={{ borderColor: "var(--color-border)" }}>
                 Create SCIM token
               </button>
@@ -414,7 +425,7 @@ export default async function OrgAdminPage({
                     {d.verified ? (
                       <Badge tone="ok">verified</Badge>
                     ) : (
-                      <form method="post" action={`/orgs/${org}/admin/domains`} className="inline">
+                      <form method="post" action={`/orgs/${o}/admin/domains`} className="inline">
                         <input type="hidden" name="domain" value={d.domain} />
                         <button type="submit" name="action" value="verify" className="rounded-md border px-2 py-0.5 text-xs" style={{ borderColor: "var(--color-border)" }}>
                           Verify now
@@ -431,7 +442,7 @@ export default async function OrgAdminPage({
               ))}
               {(domains ?? []).length === 0 && <li style={{ color: "var(--color-muted)" }}>No domain claims.</li>}
             </ul>
-            <form method="post" action={`/orgs/${org}/admin/domains`} className="flex items-end gap-2 text-sm">
+            <form method="post" action={`/orgs/${o}/admin/domains`} className="flex items-end gap-2 text-sm">
               <input type="hidden" name="action" value="claim" />
               <label>
                 Claim domain
@@ -458,17 +469,30 @@ export default async function OrgAdminPage({
                   <span className="font-mono text-xs">{wh.url}</span>
                   <span style={{ color: "var(--color-muted)" }}>{wh.events.join(", ")}</span>
                   {!wh.active && <Badge tone="warn">inactive</Badge>}
-                  <form method="post" action={`/orgs/${org}/admin/webhooks`}>
+                  <form method="post" action={`/orgs/${o}/admin/webhooks`} className="flex items-center gap-2">
                     <input type="hidden" name="id" value={wh.id} />
+                    {/* A ping goes through the ordinary delivery machinery —
+                        same envelope, HMAC signature, SSRF guard and retry
+                        ladder — so it answers "does my endpoint work" with the
+                        code that will actually call it (DEV-021). */}
+                    <button type="submit" name="action" value="ping" className="rounded-md border px-2 py-0.5 text-xs" style={{ borderColor: "var(--color-border)" }}>
+                      Send test delivery
+                    </button>
                     <button type="submit" name="action" value="delete" className="rounded-md border px-2 py-0.5 text-xs" style={{ borderColor: "var(--color-sev-high)", color: "var(--color-sev-high)" }}>
                       Delete
                     </button>
                   </form>
+                  <Link
+                    href={`/orgs/${o}/admin?deliveries=${encodeURIComponent(wh.id)}`}
+                    className="text-xs underline"
+                  >
+                    {deliveriesFor === wh.id ? "deliveries (shown below)" : "deliveries"}
+                  </Link>
                 </li>
               ))}
               {(webhooks ?? []).length === 0 && <li style={{ color: "var(--color-muted)" }}>No webhook endpoints.</li>}
             </ul>
-            <form method="post" action={`/orgs/${org}/admin/webhooks`} className="flex flex-wrap items-end gap-2 text-sm">
+            <form method="post" action={`/orgs/${o}/admin/webhooks`} className="flex flex-wrap items-end gap-2 text-sm">
               <input type="hidden" name="action" value="create" />
               <label className="grow">
                 HTTPS endpoint
@@ -490,6 +514,55 @@ export default async function OrgAdminPage({
             <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>
               Deliveries are HMAC-signed; the secret is shown once on creation (§9.3).
             </p>
+
+            {deliveriesFor && deliveries !== "forbidden" && (
+              <div className="mt-4">
+                <h3 className="mb-2 text-sm font-semibold">
+                  Recent deliveries{" "}
+                  <span className="font-normal" style={{ color: "var(--color-muted)" }}>
+                    for <code className="text-xs">{deliveriesFor.slice(0, 8)}</code>
+                  </span>
+                </h3>
+                {(deliveries ?? []).length === 0 ? (
+                  <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+                    No delivery attempts recorded yet. Send a test delivery to make one.
+                  </p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left" style={{ borderColor: "var(--color-border)" }}>
+                        <th className="py-1 pr-4 font-medium">Queued</th>
+                        <th className="py-1 pr-4 font-medium">Event</th>
+                        <th className="py-1 pr-4 font-medium">Attempt</th>
+                        <th className="py-1 font-medium">Result</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(deliveries ?? []).map((d) => (
+                        <tr key={d.id} className="border-b last:border-0" style={{ borderColor: "var(--color-border)" }}>
+                          <td className="py-1 pr-4 whitespace-nowrap" style={{ color: "var(--color-muted)" }}>
+                            {fmtUTC(d.createdAt)}
+                          </td>
+                          <td className="py-1 pr-4 font-mono text-xs">{d.eventType}</td>
+                          <td className="py-1 pr-4">{d.attempt}</td>
+                          <td className="py-1">
+                            {d.statusCode ? (
+                              <Badge tone={d.statusCode < 300 ? "ok" : "danger"}>{d.statusCode}</Badge>
+                            ) : d.error ? (
+                              <Badge tone="danger" title={d.error}>
+                                failed
+                              </Badge>
+                            ) : (
+                              <Badge tone="neutral">pending</Badge>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
           </>
         )}
       </Card>
@@ -502,7 +575,7 @@ export default async function OrgAdminPage({
         ) : (
           <>
             <div className="mb-3 flex items-center gap-3">
-              <form method="post" action={`/orgs/${org}/admin/audit`}>
+              <form method="post" action={`/orgs/${o}/admin/audit`}>
                 <button type="submit" className="rounded-md border px-3 py-1.5 text-sm" style={{ borderColor: "var(--color-border)" }}>
                   Export as NDJSON
                 </button>
@@ -534,7 +607,7 @@ export default async function OrgAdminPage({
                 {(audit?.events ?? []).map((ev) => (
                   <tr key={ev.id} className="border-b last:border-0" style={{ borderColor: "var(--color-border)" }}>
                     <td className="py-1 pr-4 whitespace-nowrap" style={{ color: "var(--color-muted)" }}>
-                      {new Date(ev.occurredAt).toLocaleString()}
+                      {fmtUTC(ev.occurredAt)}
                     </td>
                     <td className="py-1 pr-4">{ev.actorHandle ?? ev.actorKind}</td>
                     <td className="py-1 pr-4 font-mono text-xs">{ev.action}</td>

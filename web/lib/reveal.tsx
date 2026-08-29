@@ -1,10 +1,18 @@
 // Invisible-Unicode revelation for the review UI (§10.3, the GlassWorm
 // lesson): any content a reviewer reads must show zero-width/bidi/tag-block
 // characters as visible placeholders — the reviewer must never see less than
-// the scanner saw. Mirrors internal/render.isInvisible; the two lists are
-// asserted equal by the corpus fixture rendered in both stacks.
+// the scanner saw.
+//
+// This is the browser-side half of a rule enforced in two places. The
+// authority is `isInvisible` in internal/render/render.go (Go, applied to
+// sanitized README HTML server-side); this function is the TypeScript mirror
+// used where the web tier renders text itself (finding excerpts, the review
+// file viewer). The two lists MUST stay identical — a character revealed by
+// one and not the other is a hiding place. The class list is pinned by
+// lib/__tests__/reveal.test.ts on this side and by
+// internal/render/render_test.go on the other, and the shared attack corpus
+// is rendered through both.
 
-// eslint-disable-next-line no-misleading-character-class -- the class is the point
 const CF_RE = /\p{Cf}/u;
 
 export function isInvisible(cp: number): boolean {
