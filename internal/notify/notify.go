@@ -1,14 +1,27 @@
-// Package notify sends user-facing notifications (email in v1). M1 ships the
-// interface plus a log-based dev implementation; SMTP (mailpit/SES) lands
-// with the flows that need real delivery (M6/M8).
+// Package notify sends user-facing notifications (email in v1).
+//
+// Two implementations: LogNotifier (the default — a fresh install says what it
+// would have sent rather than pretending to send it) and SMTPNotifier, which
+// speaks to mailpit on :1025 in the compose dev stack and to SES's SMTP
+// endpoint on AWS (§13.4).
+//
+// Message bodies follow §1.6.3: they say what was found and what happens next.
+// Nothing here calls an agent safe, secure, or verified — scanning reduces
+// risk, it does not prove absence of it, and a notification is exactly where
+// that overclaim would be most tempting and most damaging.
 package notify
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"strings"
+	"time"
 )
 
-// Notifier delivers transactional notifications.
+// Notifier delivers transactional notifications. Every method returns an error
+// only for a delivery failure the caller could act on; callers treat
+// notification failure as non-fatal to the state change that triggered it.
 type Notifier interface {
 	// EmailVerification sends the address-confirmation message. token is the
 	// one-time secret the user posts back to /auth/verify-email.
@@ -17,6 +30,14 @@ type Notifier interface {
 	// pulled by a rescan (§8.7: author notification is one of the three
 	// notification paths, alongside the org webhook and the advisory).
 	AgentQuarantined(ctx context.Context, n QuarantineNotice) error
+	// ReviewDecided tells an author the outcome of a review (§7, §8.7).
+	ReviewDecided(ctx context.Context, n ReviewNotice) error
+	// AdvisoryPublished tells an author that an advisory naming their agent
+	// is now public (§8.7).
+	AdvisoryPublished(ctx context.Context, n AdvisoryNotice) error
+	// OrgInvite tells someone they have been added to an organisation
+	// (§13.4 lists invites among the transactional mails).
+	OrgInvite(ctx context.Context, n InviteNotice) error
 }
 
 // QuarantineNotice is what an author is told when a published version is
@@ -29,6 +50,74 @@ type QuarantineNotice struct {
 	Version  string
 	Severity string
 	Reason   string
+	// ReportURL points at the full report, where the findings are shown to
+	// someone the authorization check has already passed.
+	ReportURL string
+}
+
+// ReviewNotice is a review verdict delivered to the version's author.
+type ReviewNotice struct {
+	ToEmail string
+	Agent   string
+	Version string
+	// Decision is the §7 outcome: published | rejected | needs_review.
+	Decision string
+	// Reviewer is the deciding reviewer's handle, when the decision was made
+	// by a human rather than by the automated gate.
+	Reviewer string
+	// Rationale is the reviewer's stated reason (§1.6.2 transparency).
+	Rationale string
+	ReportURL string
+}
+
+// AdvisoryNotice announces a published advisory.
+type AdvisoryNotice struct {
+	ToEmail  string
+	Agent    string
+	Severity string
+	Summary  string
+	// AdvisoryURL is the public advisory page.
+	AdvisoryURL string
+}
+
+// InviteNotice announces org membership.
+type InviteNotice struct {
+	ToEmail string
+	Org     string
+	// Role is the granted org role.
+	Role string
+	// InvitedBy is the acting admin's handle.
+	InvitedBy string
+	// URL is where the recipient goes to see the org.
+	URL string
+}
+
+// Options selects and configures the notifier.
+type Options struct {
+	// Kind is log | smtp. Empty means log.
+	Kind string
+	// BaseURL is the public origin, used to build links in message bodies.
+	BaseURL string
+	// Registry is the deployment's display name in message subjects.
+	Registry string
+	SMTP     SMTPOptions
+	Log      *slog.Logger
+}
+
+// New builds the configured notifier.
+func New(opt Options) (Notifier, error) {
+	reg := opt.Registry
+	if reg == "" {
+		reg = "Agentry"
+	}
+	switch opt.Kind {
+	case "", "log":
+		return LogNotifier{Log: opt.Log}, nil
+	case "smtp":
+		return NewSMTP(opt.SMTP, reg, opt.BaseURL, opt.Log)
+	default:
+		return nil, fmt.Errorf("notify: unknown kind %q (want log|smtp)", opt.Kind)
+	}
 }
 
 // LogNotifier writes notifications to the log (dev/self-host default until
@@ -37,12 +126,16 @@ type LogNotifier struct {
 	Log *slog.Logger
 }
 
+func (n LogNotifier) logger() *slog.Logger {
+	if n.Log == nil {
+		return slog.Default()
+	}
+	return n.Log
+}
+
 // EmailVerification implements Notifier.
 func (n LogNotifier) EmailVerification(_ context.Context, toEmail, token string) error {
-	log := n.Log
-	if log == nil {
-		log = slog.Default()
-	}
+	log := n.logger()
 	log.Info("notify: email verification queued", "to", toEmail)
 	log.Debug("notify: email verification token (dev only)", "to", toEmail, "token", token)
 	return nil
@@ -52,12 +145,187 @@ func (n LogNotifier) EmailVerification(_ context.Context, toEmail, token string)
 // instance without SMTP this line is the only trace that an author was
 // supposed to hear about a quarantine.
 func (n LogNotifier) AgentQuarantined(_ context.Context, notice QuarantineNotice) error {
-	log := n.Log
-	if log == nil {
-		log = slog.Default()
-	}
-	log.Warn("notify: agent quarantined (author notification)",
+	n.logger().Warn("notify: agent quarantined (author notification)",
 		"to", notice.ToEmail, "agent", notice.Agent, "version", notice.Version,
 		"severity", notice.Severity, "reason", notice.Reason)
 	return nil
 }
+
+// ReviewDecided implements Notifier.
+func (n LogNotifier) ReviewDecided(_ context.Context, notice ReviewNotice) error {
+	n.logger().Info("notify: review decided (author notification)",
+		"to", notice.ToEmail, "agent", notice.Agent, "version", notice.Version,
+		"decision", notice.Decision, "reviewer", notice.Reviewer)
+	return nil
+}
+
+// AdvisoryPublished implements Notifier.
+func (n LogNotifier) AdvisoryPublished(_ context.Context, notice AdvisoryNotice) error {
+	n.logger().Warn("notify: advisory published (author notification)",
+		"to", notice.ToEmail, "agent", notice.Agent, "severity", notice.Severity)
+	return nil
+}
+
+// OrgInvite implements Notifier.
+func (n LogNotifier) OrgInvite(_ context.Context, notice InviteNotice) error {
+	n.logger().Info("notify: org invite",
+		"to", notice.ToEmail, "org", notice.Org, "role", notice.Role)
+	return nil
+}
+
+// message is a rendered plain-text email.
+type message struct {
+	Subject string
+	Body    string
+}
+
+// renderer builds message bodies. Held apart from the transport so the
+// templates are testable without a socket, and so LogNotifier could adopt them
+// later without moving code.
+type renderer struct {
+	registry string
+	baseURL  string
+}
+
+func (r renderer) link(path string) string {
+	if r.baseURL == "" {
+		return ""
+	}
+	return strings.TrimSuffix(r.baseURL, "/") + path
+}
+
+// footer closes every message the same way: who sent it and that it is
+// automated. Kept short — a wall of legal boilerplate on a security notice
+// buries the part that matters.
+func (r renderer) footer() string {
+	return "\n--\n" + r.registry + " sent this automatically. Do not reply to this message.\n"
+}
+
+func (r renderer) verification(token string) message {
+	url := r.link("/auth/verify-email?token=" + token)
+	body := "Confirm this address to finish setting up your " + r.registry + " account.\n\n"
+	if url != "" {
+		body += url + "\n\n"
+	} else {
+		body += "Verification code: " + token + "\n\n"
+	}
+	body += "If you did not create an account, ignore this message; the address\n" +
+		"will not be used.\n"
+	return message{Subject: r.registry + ": confirm your email address", Body: body + r.footer()}
+}
+
+func (r renderer) quarantine(n QuarantineNotice) message {
+	// §8.7: a rescan under a newer ruleset found something in an already
+	// published version. Say what happened and what it means for installs;
+	// do not editorialise about severity beyond the label the scan assigned.
+	body := "A rescan of " + n.Agent + " " + n.Version + " under a newer ruleset produced a\n" +
+		severityLine(n.Severity) + " finding, and the version is now quarantined.\n\n" +
+		"What that means: the version no longer resolves for new installs and its\n" +
+		"download page carries a warning. Copies already installed elsewhere are\n" +
+		"not reached by this change.\n\n"
+	if n.Reason != "" {
+		body += "Reason recorded: " + n.Reason + "\n\n"
+	}
+	if u := firstNonEmpty(n.ReportURL, r.link("/agents/"+n.Agent+"/versions/"+n.Version+"/report")); u != "" {
+		body += "Full report (findings, ruleset version, scan date):\n" + u + "\n\n"
+	}
+	body += "A platform reviewer will look at this. If you believe the finding is\n" +
+		"wrong, reply through the report page so the rationale is recorded with\n" +
+		"the version.\n"
+	return message{
+		Subject: r.registry + ": " + n.Agent + " " + n.Version + " quarantined after rescan",
+		Body:    body + r.footer(),
+	}
+}
+
+func (r renderer) review(n ReviewNotice) message {
+	var headline, detail string
+	switch n.Decision {
+	case "published":
+		// §1.6.3: "scanned, N findings, signed" — never "safe".
+		headline = "published"
+		detail = "The version is now resolvable and its attestation is signed. The full\n" +
+			"scan report stays public: publication records what was found, it does\n" +
+			"not certify that nothing was missed.\n"
+	case "rejected":
+		headline = "rejected"
+		detail = "The version will not be published. Submitting a new version with the\n" +
+			"findings addressed starts a fresh scan.\n"
+	case "needs_review":
+		headline = "held for review"
+		detail = "The automated gate could not decide, so a human reviewer has the\n" +
+			"version. No action is needed from you until they respond.\n"
+	default:
+		headline = n.Decision
+		detail = ""
+	}
+	body := n.Agent + " " + n.Version + " was " + headline + ".\n\n" + detail
+	if n.Reviewer != "" {
+		body += "\nReviewer: " + n.Reviewer + "\n"
+	}
+	if n.Rationale != "" {
+		body += "Rationale: " + n.Rationale + "\n"
+	}
+	if u := firstNonEmpty(n.ReportURL, r.link("/agents/"+n.Agent+"/versions/"+n.Version+"/report")); u != "" {
+		body += "\nFull report:\n" + u + "\n"
+	}
+	return message{
+		Subject: r.registry + ": " + n.Agent + " " + n.Version + " " + headline,
+		Body:    body + r.footer(),
+	}
+}
+
+func (r renderer) advisory(n AdvisoryNotice) message {
+	body := "An advisory naming " + n.Agent + " is now public.\n\n" +
+		"Severity: " + severityLine(n.Severity) + "\n"
+	if n.Summary != "" {
+		body += "Summary: " + n.Summary + "\n"
+	}
+	if u := firstNonEmpty(n.AdvisoryURL, r.link("/advisories")); u != "" {
+		body += "\n" + u + "\n"
+	}
+	body += "\nAdvisories are how installed copies learn about this: there is no\n" +
+		"mechanism that reaches them directly.\n"
+	return message{
+		Subject: r.registry + ": advisory published for " + n.Agent,
+		Body:    body + r.footer(),
+	}
+}
+
+func (r renderer) invite(n InviteNotice) message {
+	body := "You were added to the " + n.Org + " organisation on " + r.registry + "."
+	if n.InvitedBy != "" {
+		body += "\nAdded by: " + n.InvitedBy
+	}
+	if n.Role != "" {
+		body += "\nRole: " + n.Role
+	}
+	body += "\n"
+	if u := firstNonEmpty(n.URL, r.link("/orgs/"+n.Org)); u != "" {
+		body += "\n" + u + "\n"
+	}
+	body += "\nIf you did not expect this, tell the organisation's owners: org\n" +
+		"membership is granted by an admin, not accepted by you.\n"
+	return message{Subject: r.registry + ": you were added to " + n.Org, Body: body + r.footer()}
+}
+
+// severityLine renders a severity label, defaulting to something honest when
+// the caller did not set one.
+func severityLine(s string) string {
+	if s == "" {
+		return "unspecified-severity"
+	}
+	return s
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// rfc5322Date formats a Date header.
+func rfc5322Date(t time.Time) string { return t.Format(time.RFC1123Z) }

@@ -28,6 +28,23 @@ UPDATE jobs SET state = 'failed', last_error = $2, finished_at = now() WHERE id 
 -- name: CountJobs :one
 SELECT count(*) FROM jobs WHERE queue = $1 AND state = $2;
 
+-- name: QueueBacklog :one
+-- Depth and oldest-waiting-job age for one queue, feeding the §16.2
+-- QueueDepth/QueueAgeSeconds metrics and the §16.3 "queue age > 15 min" page
+-- alarm. Counts only jobs that are actually waiting to be picked up: a job
+-- already running is not backlog, and counting it would make a single slow
+-- handler look like a stalled queue.
+--
+-- run_at <= now() matters as much as state: a retry scheduled for the future
+-- is deliberately waiting, and including it would show permanent backlog on a
+-- queue that is keeping up. Served by jobs_poll_idx (queue, state, run_at)
+-- WHERE state = 'available' — the same partial index the claim uses.
+SELECT
+  count(*)::bigint AS depth,
+  coalesce(extract(epoch FROM (now() - min(run_at))), 0)::double precision AS oldest_seconds
+FROM jobs
+WHERE queue = $1 AND state = 'available' AND run_at <= now();
+
 -- name: CountPendingJobsOfKind :one
 -- Singleton guard for self-rescheduling maintenance jobs (audit retention):
 -- a worker restart must not stack another copy on the queue.

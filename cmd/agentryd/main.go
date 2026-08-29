@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/gitsrv"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/metrics"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/queue"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/scan"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
@@ -108,11 +110,36 @@ func run(ctx context.Context, cfgPath, role string) error {
 		defer st.Close()
 	}
 
+	// §16.2 telemetry. OTLP export is opt-in (AGENTRY_OTEL_ENDPOINT); the
+	// Prometheus /metrics endpoint is always on (D-25), so a self-hosted
+	// instance is never dark even without a collector.
+	mx, err := metrics.New(ctx, metrics.Config{
+		OTLPEndpoint:   cfg.Telemetry.OTLPEndpoint,
+		ServiceName:    "agentryd",
+		ServiceVersion: version.Version,
+		Role:           role,
+		Env:            cfg.Env,
+		ExportInterval: cfg.Telemetry.ExportInterval,
+	})
+	if err != nil {
+		return fmt.Errorf("telemetry: %w", err)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := mx.Shutdown(shutdownCtx); err != nil {
+			log.Warn("telemetry shutdown", "err", err)
+		}
+	}()
+	if cfg.Telemetry.OTLPEndpoint != "" {
+		log.Info("otlp metrics enabled", "endpoint", cfg.Telemetry.OTLPEndpoint)
+	}
+
 	switch role {
 	case "api", "git", "all":
-		return serveHTTP(ctx, cfg, st, log, role)
+		return serveHTTP(ctx, cfg, st, log, role, mx)
 	case "worker":
-		return runWorker(ctx, cfg, st, log)
+		return runWorker(ctx, cfg, st, log, mx)
 	default:
 		return fmt.Errorf("unknown role %q", role)
 	}
@@ -121,7 +148,7 @@ func run(ctx context.Context, cfgPath, role string) error {
 // runWorker runs the async scan/notification worker (§8.2, §13.3). It wires
 // the pipeline's job handlers onto the Postgres queue and works the sandbox
 // and core queues until the context is cancelled.
-func runWorker(ctx context.Context, cfg config.Config, st *store.Store, log *slog.Logger) error {
+func runWorker(ctx context.Context, cfg config.Config, st *store.Store, log *slog.Logger, mx *metrics.Metrics) error {
 	if st == nil {
 		return errors.New("the worker role requires a database")
 	}
@@ -131,12 +158,35 @@ func runWorker(ctx context.Context, cfg config.Config, st *store.Store, log *slo
 	// event sink, so every rescan-driven agent.quarantined webhook — the
 	// notification path §8.7 relies on — was dropped on the floor.
 	srv := api.New(cfg, st, log)
-	pipeline := srv.Pipeline()
-	if pipeline == nil {
-		return fmt.Errorf("the worker role requires archive storage (storage.kind=%q has none wired)", cfg.Storage.Kind)
+	srv.SetMetrics(mx)
+	defer func() { _ = srv.Close() }()
+	q, err := newWorkerQueue(ctx, cfg, srv, st, log, mx)
+	if err != nil {
+		return err
 	}
 
+	// Queues: "core" (webhooks, audit exports, reconcile) and "sandbox"
+	// (scans — §8.2's untrusted-content task profile). There is no "judge"
+	// queue: S5 runs inside the orchestrator's DAG, and §8.4's separate task
+	// profile for it is a deployment boundary, not a second queue. Working a
+	// queue nothing enqueues to only burns claim attempts.
+	log.Info("worker started", "queues", "core,sandbox")
+	return q.Work(ctx, workerQueues...)
+}
+
+// workerQueues are the queues a worker drains.
+var workerQueues = []string{"core", "sandbox"}
+
+// newWorkerQueue registers every async handler on a queue client and starts
+// the §7 watchdog ticker. Shared by the `worker` role and by `all`, so the
+// single-process shape runs exactly the handler set the split shape does.
+func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st *store.Store, log *slog.Logger, mx *metrics.Metrics) (*queue.PGClient, error) {
+	pipeline := srv.Pipeline()
+	if pipeline == nil {
+		return nil, fmt.Errorf("the worker role requires archive storage (storage.kind=%q has none wired)", cfg.Storage.Kind)
+	}
 	q := queue.NewPGClient(st, log)
+	q.SetMetrics(mx, cfg.Telemetry.QueueSampleInterval)
 	pipeline.RegisterHandlers(q)
 	// Enterprise async handlers (M6/WG-J): webhook delivery (§9.3) and audit
 	// export (§12.6).
@@ -146,14 +196,7 @@ func runWorker(ctx context.Context, cfg config.Config, st *store.Store, log *slo
 	// replicas exactly one runs it per interval (SKIP LOCKED), and so an
 	// operator can trigger a reconcile by hand.
 	go reconcileTicker(ctx, q, log)
-
-	// Queues: "core" (webhooks, audit exports, reconcile) and "sandbox"
-	// (scans — §8.2's untrusted-content task profile). There is no "judge"
-	// queue: S5 runs inside the orchestrator's DAG, and §8.4's separate task
-	// profile for it is a deployment boundary, not a second queue. Working a
-	// queue nothing enqueues to only burns claim attempts.
-	log.Info("worker started", "queues", "core,sandbox")
-	return q.Work(ctx, "core", "sandbox")
+	return q, nil
 }
 
 // reconcileWindow is how often the watchdog job is enqueued. Versions become
@@ -180,11 +223,12 @@ func reconcileTicker(ctx context.Context, q queue.Client, log *slog.Logger) {
 	}
 }
 
-func serveHTTP(ctx context.Context, cfg config.Config, st *store.Store, log *slog.Logger, role string) error {
-	handler, err := buildHandler(cfg, st, log, role)
+func serveHTTP(ctx context.Context, cfg config.Config, st *store.Store, log *slog.Logger, role string, mx *metrics.Metrics) error {
+	handler, closeHandler, err := buildHandler(ctx, cfg, st, log, role, mx)
 	if err != nil {
 		return err
 	}
+	defer func() { _ = closeHandler() }()
 	srv := &http.Server{
 		Addr:              cfg.HTTP.Addr,
 		Handler:           handler,
@@ -228,36 +272,63 @@ func newLogger(level string) *slog.Logger {
 }
 
 // buildHandler assembles the HTTP surface for a role: api routes, git
-// smart-HTTP routes, or both (`all`, the self-host default).
-func buildHandler(cfg config.Config, st *store.Store, log *slog.Logger, role string) (http.Handler, error) {
+// smart-HTTP routes, or both (`all`, the self-host default). The returned
+// close function releases the background goroutines the handler's components
+// own (rate-limit collectors, exporters).
+func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *slog.Logger, role string, mx *metrics.Metrics) (http.Handler, func() error, error) {
 	switch role {
 	case "api":
-		return api.NewHandler(api.New(cfg, st, log)), nil
+		s := api.New(cfg, st, log)
+		s.SetMetrics(mx)
+		return api.NewHandler(s), s.Close, nil
 	case "git", "all":
 		if st == nil {
-			return nil, errors.New("the git role requires a database")
+			return nil, nil, errors.New("the git role requires a database")
 		}
 		repos, err := gitsrv.NewRepoStore(cfg)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		s := api.New(cfg, st, log)
+		s.SetMetrics(mx)
 		reg := s.Reg()
 		reg.SetGitArchiver(repos)
 		aud := audit.NewWriter(log)
 		git := gitsrv.NewHandler(cfg, st, repos, reg, aud, log)
+		git.SetMetrics(mx)
+		closeAll := func() error { return errors.Join(git.Close(), s.Close()) }
 		if role == "git" {
 			mux := http.NewServeMux()
 			mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = w.Write([]byte(`{"status":"ok"}`))
 			})
+			// The git role has no /api/v1 surface, so /metrics is mounted
+			// here too — a git deployment is exactly the one whose clone
+			// first-byte SLI (§16.1) needs scraping.
+			mux.Handle("GET /metrics", mx.Handler())
 			git.Mount(mux)
-			return mux, nil
+			return mux, closeAll, nil
 		}
-		return api.NewHandlerWithGit(s, git.Mount), nil
+
+		// §2.4: `all` runs EVERY role in-process. Without this the
+		// single-process self-host shape started no worker at all, so webhook
+		// deliveries, audit exports and queue-driven scans were enqueued and
+		// never claimed — enqueued work that silently never runs is worse than
+		// work that fails, because nothing reports it.
+		q, err := newWorkerQueue(ctx, cfg, s, st, log, mx)
+		if err != nil {
+			return nil, nil, err
+		}
+		go func() {
+			log.Info("in-process worker started", "queues", strings.Join(workerQueues, ","))
+			if err := q.Work(ctx, workerQueues...); err != nil && ctx.Err() == nil {
+				log.Error("in-process worker stopped", "err", err)
+			}
+		}()
+		return api.NewHandlerWithGit(s, git.Mount), closeAll, nil
 	default:
-		return nil, fmt.Errorf("unknown http role %q", role)
+		return nil, nil, fmt.Errorf("unknown http role %q", role)
 	}
 }
 

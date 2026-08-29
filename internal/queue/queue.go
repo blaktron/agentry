@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/PLACEHOLDER_ORG/agentry/internal/metrics"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
 	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
 )
@@ -68,6 +69,10 @@ func WithMaxAttempts(n int) EnqueueOption {
 const (
 	defaultReclaimAfter = 30 * time.Minute
 	defaultReclaimEvery = 5 * time.Minute
+	// defaultSampleEvery refreshes the backlog gauges. Well under the §16.3
+	// 15-minute queue-age alarm threshold, so the alarm never fires — or
+	// clears — on a stale sample.
+	defaultSampleEvery = 15 * time.Second
 )
 
 // PGClient is the Postgres-backed Client.
@@ -80,6 +85,19 @@ type PGClient struct {
 	// reclaimAfter / reclaimEvery drive orphaned-job recovery.
 	reclaimAfter time.Duration
 	reclaimEvery time.Duration
+	// mx records §16.2 job outcomes and the queue depth/age gauges the §16.3
+	// page alarm reads. nil is a working no-op.
+	mx *metrics.Metrics
+	// sampleEvery is how often the backlog gauges are refreshed.
+	sampleEvery time.Duration
+}
+
+// SetMetrics wires the §16.2 instrument set and the backlog sample interval.
+func (c *PGClient) SetMetrics(m *metrics.Metrics, sampleEvery time.Duration) {
+	c.mx = m
+	if sampleEvery > 0 {
+		c.sampleEvery = sampleEvery
+	}
 }
 
 // NewPGClient builds the Postgres queue client.
@@ -92,6 +110,7 @@ func NewPGClient(st *store.Store, log *slog.Logger) *PGClient {
 		pollInterval: time.Second,
 		reclaimAfter: defaultReclaimAfter,
 		reclaimEvery: defaultReclaimEvery,
+		sampleEvery:  defaultSampleEvery,
 	}
 }
 
@@ -140,18 +159,45 @@ func (c *PGClient) Work(ctx context.Context, queues ...string) error {
 	defer ticker.Stop()
 	reclaim := time.NewTicker(c.reclaimEvery)
 	defer reclaim.Stop()
+	// The backlog gauges are sampled on their OWN ticker, not inside the claim
+	// loop: that loop drains each queue every tick, so a reading taken there
+	// would see zero on an idle worker and miss the very backlog the §16.3
+	// alarm exists to catch.
+	sample := time.NewTicker(c.sampleEvery)
+	defer sample.Stop()
+	c.sampleBacklog(ctx, queues)
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-reclaim.C:
 			c.ReclaimOrphanedJobs(ctx)
+		case <-sample.C:
+			c.sampleBacklog(ctx, queues)
 		case <-ticker.C:
 			for _, q := range queues {
 				for c.claimOne(ctx, q) { //nolint:revive // drain the queue each tick
 				}
 			}
 		}
+	}
+}
+
+// sampleBacklog publishes QueueDepth and QueueAgeSeconds per queue.
+func (c *PGClient) sampleBacklog(ctx context.Context, queues []string) {
+	if c.mx == nil {
+		return
+	}
+	for _, q := range queues {
+		row, err := c.st.Queries().QueueBacklog(ctx, q)
+		if err != nil {
+			if ctx.Err() == nil {
+				c.log.Error("queue: backlog sample", "queue", q, "err", err)
+			}
+			continue
+		}
+		c.mx.RecordQueueStats(ctx, q, row.Depth,
+			time.Duration(row.OldestSeconds*float64(time.Second)))
 	}
 }
 
@@ -204,6 +250,9 @@ func (c *PGClient) claimOne(ctx context.Context, queueName string) bool {
 	}
 	h, ok := c.handlers[job.Kind]
 	if !ok {
+		// Distinct from a job failure: nothing ran, and it is a wiring bug
+		// rather than anything the job did.
+		c.mx.RecordQueueJob(ctx, job.Queue, job.Kind, "no_handler", 0)
 		c.log.Error("queue: no handler", "kind", job.Kind, "job", job.ID)
 		if err := c.st.Queries().FailJob(ctx, storegen.FailJobParams{
 			ID: job.ID, LastError: strptr("no handler registered"),
@@ -212,14 +261,18 @@ func (c *PGClient) claimOne(ctx context.Context, queueName string) bool {
 		}
 		return true
 	}
+	started := time.Now()
 	err = c.runHandler(ctx, h, Job{ID: job.ID, Kind: job.Kind, Queue: job.Queue, Args: job.Args, Attempt: int(job.Attempt)})
+	elapsed := time.Since(started)
 	if err == nil {
+		c.mx.RecordQueueJob(ctx, job.Queue, job.Kind, "ok", elapsed)
 		if err := c.st.Queries().CompleteJob(ctx, job.ID); err != nil {
 			c.log.Error("queue: complete", "err", err)
 		}
 		return true
 	}
 	if int(job.Attempt) >= int(job.MaxAttempts) {
+		c.mx.RecordQueueJob(ctx, job.Queue, job.Kind, "failed", elapsed)
 		c.log.Error("queue: job failed permanently", "kind", job.Kind, "job", job.ID,
 			"attempt", job.Attempt, "err", err)
 		if ferr := c.st.Queries().FailJob(ctx, storegen.FailJobParams{
@@ -229,6 +282,7 @@ func (c *PGClient) claimOne(ctx context.Context, queueName string) bool {
 		}
 		return true
 	}
+	c.mx.RecordQueueJob(ctx, job.Queue, job.Kind, "retry", elapsed)
 	backoff := time.Duration(1<<uint(job.Attempt)) * time.Second
 	if err := c.st.Queries().RetryJob(ctx, storegen.RetryJobParams{
 		ID: job.ID, LastError: strptr(err.Error()), RunAt: time.Now().Add(backoff),

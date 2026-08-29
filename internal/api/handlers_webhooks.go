@@ -1,11 +1,13 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/entitlements"
 	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/webhook"
 )
@@ -13,10 +15,9 @@ import (
 const webhookSecretPrefix = "whsec_"
 
 const (
-	// maxWebhookEndpointsPerOrg is the §19 quota.
-	maxWebhookEndpointsPerOrg = 20
-	deliveryDefaultLimit      = 50
-	deliveryMaxLimit          = 100
+	// The §19 endpoint cap comes from the entitlements resolver (§14.2).
+	deliveryDefaultLimit = 50
+	deliveryMaxLimit     = 100
 )
 
 func webhookToAPI(row storegen.WebhookEndpoint) WebhookEndpoint {
@@ -90,15 +91,21 @@ func (s *Server) CreateWebhook(w http.ResponseWriter, r *http.Request, org OrgHa
 		problemValidation(w, r, "webhook rejected", *fe)
 		return
 	}
-	// §19: 20 webhook endpoints per org. Checked before minting a secret so a
-	// refused request never leaves a usable key in memory or the log.
+	// §19 endpoint cap. Checked before minting a secret so a refused request
+	// never leaves a usable key in memory or the log.
+	lim, err := s.entitlements().Limits(r.Context(), entitlements.ForOrg(orgRow.ID))
+	if err != nil {
+		problemInternal(w, r)
+		return
+	}
 	existing, err := s.q().CountWebhookEndpoints(r.Context(), orgRow.ID)
 	if err != nil {
 		problemInternal(w, r)
 		return
 	}
-	if existing >= maxWebhookEndpointsPerOrg {
-		problemConflict(w, r, "this organization already has the maximum of 20 webhook endpoints (§19)")
+	if existing >= lim.WebhookEndpoints {
+		problemConflict(w, r, fmt.Sprintf(
+			"this organization already has the maximum of %d webhook endpoints (§19)", lim.WebhookEndpoints))
 		return
 	}
 	secret, err := auth.NewToken(webhookSecretPrefix)

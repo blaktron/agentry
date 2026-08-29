@@ -141,6 +141,36 @@ func (q *Queries) FailJob(ctx context.Context, arg FailJobParams) error {
 	return err
 }
 
+const queueBacklog = `-- name: QueueBacklog :one
+SELECT
+  count(*)::bigint AS depth,
+  coalesce(extract(epoch FROM (now() - min(run_at))), 0)::double precision AS oldest_seconds
+FROM jobs
+WHERE queue = $1 AND state = 'available' AND run_at <= now()
+`
+
+type QueueBacklogRow struct {
+	Depth         int64   `json:"depth"`
+	OldestSeconds float64 `json:"oldest_seconds"`
+}
+
+// Depth and oldest-waiting-job age for one queue, feeding the §16.2
+// QueueDepth/QueueAgeSeconds metrics and the §16.3 "queue age > 15 min" page
+// alarm. Counts only jobs that are actually waiting to be picked up: a job
+// already running is not backlog, and counting it would make a single slow
+// handler look like a stalled queue.
+//
+// run_at <= now() matters as much as state: a retry scheduled for the future
+// is deliberately waiting, and including it would show permanent backlog on a
+// queue that is keeping up. Served by jobs_poll_idx (queue, state, run_at)
+// WHERE state = 'available' — the same partial index the claim uses.
+func (q *Queries) QueueBacklog(ctx context.Context, queue string) (QueueBacklogRow, error) {
+	row := q.db.QueryRow(ctx, queueBacklog, queue)
+	var i QueueBacklogRow
+	err := row.Scan(&i.Depth, &i.OldestSeconds)
+	return i, err
+}
+
 const resetStuckJobs = `-- name: ResetStuckJobs :execrows
 UPDATE jobs SET state = 'available', locked_at = NULL
 WHERE state = 'running' AND locked_at < $1

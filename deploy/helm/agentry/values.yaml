@@ -35,6 +35,12 @@ config:
   migrateOnStart: true
   http:
     addr: ":8080"
+    # Reverse-proxy hops in front of agentryd, for per-IP rate limits and
+    # audit records. 0 = ignore X-Forwarded-For entirely (the safe default:
+    # the header is client-supplied). Behind an nginx ingress set 1; behind
+    # CDN → ingress set 2. Setting this HIGHER than the real hop count lets
+    # callers pick their own rate-limit bucket, so it must match exactly.
+    trustedProxies: 0
   auth:
     cookieSecure: true
     sessionTTL: 24h
@@ -43,24 +49,67 @@ config:
     kind: s3 # s3 | local
     s3Bucket: ""
     s3Region: ""
+    s3Prefix: "" # optional key prefix, letting one bucket host several envs
+    s3Endpoint: "" # set for MinIO/Ceph; empty uses AWS
+    s3UsePathStyle: false # MinIO needs true; AWS does not
   git:
     dataDir: /data/git
   signing:
     kind: kms # kms | file (prod must not be none)
     kmsKeyARN: ""
+    kmsRegion: "" # empty uses the pod's ambient region
+    # §8.8 rotation is done with OVERLAPPING validity windows, so the key
+    # discovery document must be able to list more than one key. notBefore/
+    # notAfter (RFC3339) bound the ACTIVE key; additionalKeys publishes
+    # verification-only keys alongside it — the outgoing key stays listed,
+    # with a notAfter, until every attestation it signed has aged out.
+    notBefore: ""
+    notAfter: ""
+    additionalKeys: []
+    # - keyId: "previous-key-id"
+    #   publicKeyPem: |
+    #     -----BEGIN PUBLIC KEY-----
+    #     ...
+    #     -----END PUBLIC KEY-----
+    #   notAfter: "2026-12-31T00:00:00Z"
   judge:
     provider: bedrock # bedrock | anthropic | classifier | none
     model: ""
     region: ""
+  telemetry:
+    # OTLP/HTTP endpoint (an OTel collector or ADOT sidecar). Empty disables
+    # OTLP export; /metrics stays served either way, so a cluster with a
+    # Prometheus scrape needs nothing here.
+    otlpEndpoint: ""
+  notify:
+    # log | smtp. log records what WOULD have been sent — a fresh install
+    # never silently fails to deliver.
+    kind: log
+  smtp:
+    # Point at SES's SMTP endpoint on AWS, or any relay. The password is a
+    # secret: set it via secret.smtpPassword / existingSecret, never here.
+    host: ""
+    port: 587
+    from: "" # e.g. "Agentry <no-reply@agentry.example>"
+    startTLS: true
+    username: ""
+  # §19 quotas. Omit to take the shipped defaults; anything set here is what
+  # the entitlements resolver hands out (§14.2).
+  limits: {}
+  # authedPerHour: 5000
+  # webhookDeliveriesPerSecond: 5
+  # gitPushesPerHour: 60
+  # agentsPerOrgNamespace: 500
 
 # Sensitive values. In production prefer existingSecret (e.g. managed by
 # external-secrets / sealed-secrets) over inlining here.
 secret:
   create: true
-  existingSecret: "" # if set, must provide keys: AGENTRY_DATABASE_URL, AGENTRY_AUTH_SEALING_KEY, and optionally AGENTRY_REDIS_URL
+  existingSecret: "" # if set, must provide keys: AGENTRY_DATABASE_URL, AGENTRY_AUTH_SEALING_KEY, and optionally AGENTRY_REDIS_URL / AGENTRY_SMTP_PASS
   databaseUrl: "" # postgres://user:pass@host:5432/agentry?sslmode=require
   redisUrl: "" # rediss://:pass@host:6379/0 (optional)
   sealingKey: "" # base64 32 bytes; required outside dev (§ config Validate)
+  smtpPassword: "" # required when config.notify.kind=smtp and smtp.username is set
 
 serviceAccount:
   create: true

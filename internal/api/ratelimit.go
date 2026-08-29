@@ -4,32 +4,14 @@ import (
 	"net"
 	"net/http"
 	"strconv"
-	"sync"
+	"strings"
 	"time"
 
 	"golang.org/x/time/rate"
 
 	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/ratelimit"
 )
-
-// rateLimits implements the §19 API rate quotas with in-memory token buckets
-// (the D-06 fallback; a Redis-backed implementation replaces this on SaaS
-// multi-node deployments behind the same interface).
-type rateLimits struct {
-	mu      sync.Mutex
-	buckets map[string]*bucketEntry
-}
-
-type bucketEntry struct {
-	lim  *rate.Limiter
-	seen time.Time
-}
-
-func newRateLimits() *rateLimits {
-	rl := &rateLimits{buckets: map[string]*bucketEntry{}}
-	go rl.gcLoop()
-	return rl
-}
 
 // limitClasses holds the computed §19 rate classes from config.
 type limitClasses struct {
@@ -43,26 +25,18 @@ type limitClasses struct {
 
 func classesFromConfig(l config.Limits) limitClasses {
 	return limitClasses{
-		authed:      rate.Limit(float64(l.AuthedPerHour) / 3600.0),
+		authed:      ratelimit.PerHour(l.AuthedPerHour),
 		authedBurst: l.AuthedBurstPerMin,
-		anon:        rate.Limit(float64(l.AnonymousPerMin) / 60.0),
+		anon:        ratelimit.PerMinute(l.AnonymousPerMin),
 		anonBurst:   l.AnonymousPerMin,
-		login:       rate.Limit(float64(l.LoginPerMin) / 60.0),
+		login:       ratelimit.PerMinute(l.LoginPerMin),
 		loginBurst:  l.LoginPerMin,
 	}
 }
 
 // limitResult is one rate-limit decision plus the numbers the §9.1
 // RateLimit-* headers report back to the caller.
-type limitResult struct {
-	OK bool
-	// Limit is the burst budget for the class (the quota the headers describe).
-	Limit int
-	// Remaining is the whole tokens left after this request.
-	Remaining int
-	// Reset is how long until at least one more token exists.
-	Reset time.Duration
-}
+type limitResult = ratelimit.Result
 
 // allowLogin applies the §19 login/register class limit (per client IP),
 // writes the §9.1 RateLimit-* headers, and on refusal writes the 429 problem.
@@ -70,51 +44,13 @@ type limitResult struct {
 // callback, the SSO landing — sit outside the chokepoint, so this is the one
 // budget standing between them and a password-spraying client.
 func (s *Server) allowLogin(w http.ResponseWriter, r *http.Request) bool {
-	res := s.limits.allowWithHeaders("login", clientIP(r), s.classes.login, s.classes.loginBurst)
+	res := s.limits.Allow("login", clientIP(r), s.classes.login, s.classes.loginBurst)
 	writeRateLimitHeaders(w, res)
 	if !res.OK {
 		problemTooMany(w, r, "try again later")
 		return false
 	}
 	return true
-}
-
-// allowWithHeaders checks-and-consumes one token for the class+key pair. Both the decision and
-// the numbers come from the same locked read, so the headers can never
-// describe a different moment than the decision they accompany.
-func (rl *rateLimits) allowWithHeaders(class, key string, lim rate.Limit, burst int) limitResult {
-	now := time.Now()
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-	k := class + "|" + key
-	e, ok := rl.buckets[k]
-	if !ok {
-		e = &bucketEntry{lim: rate.NewLimiter(lim, burst)}
-		rl.buckets[k] = e
-	}
-	e.seen = now
-	res := limitResult{OK: e.lim.AllowN(now, 1), Limit: burst}
-
-	remaining := int(e.lim.TokensAt(now))
-	if remaining < 0 {
-		remaining = 0
-	}
-	res.Remaining = remaining
-	// Time to the next whole token. A zero rate never refills; report the
-	// window so clients back off rather than hot-looping.
-	if r := float64(e.lim.Limit()); r > 0 {
-		need := 1 - (e.lim.TokensAt(now) - float64(remaining))
-		if need < 0 {
-			need = 0
-		}
-		res.Reset = time.Duration(need / r * float64(time.Second))
-	} else {
-		res.Reset = time.Hour
-	}
-	if res.Reset < time.Second {
-		res.Reset = time.Second
-	}
-	return res
 }
 
 // writeRateLimitHeaders emits the §9.1 RateLimit-* trio, plus Retry-After
@@ -135,23 +71,78 @@ func writeRateLimitHeaders(w http.ResponseWriter, res limitResult) {
 	}
 }
 
-func (rl *rateLimits) gcLoop() {
-	for {
-		time.Sleep(10 * time.Minute)
-		cutoff := time.Now().Add(-30 * time.Minute)
-		rl.mu.Lock()
-		for k, e := range rl.buckets {
-			if e.seen.Before(cutoff) {
-				delete(rl.buckets, k)
-			}
-		}
-		rl.mu.Unlock()
+// clientIP is the caller's address as resolved once by withMiddleware, and
+// the key every per-IP §19 budget and audit record uses. Outside the
+// middleware stack (a handler mounted directly on a bare mux) it falls back to
+// the peer address rather than guessing at a header nobody validated.
+func clientIP(r *http.Request) string {
+	if ip, ok := r.Context().Value(clientIPKey).(string); ok && ip != "" {
+		return ip
 	}
+	return peerIP(r)
 }
 
-// clientIP extracts the peer IP (ALB/CloudFront X-Forwarded-For handling is
-// an M7 edge concern; direct connections here).
-func clientIP(r *http.Request) string {
+// clientIPWithProxies resolves the caller's address from the peer address and
+// X-Forwarded-For.
+//
+// With http.trustedProxies at 0 (the default, and correct for a directly
+// addressed agentryd) this is the peer address and X-Forwarded-For is ignored
+// entirely: the header is client-supplied, so trusting it unconditionally
+// would let anyone pick their own rate-limit bucket — and, worse, spend any
+// other client's, since sharing a bucket means being able to exhaust it.
+//
+// Behind N trusted hops (CloudFront → ALB → agentryd is 2), the last N-1
+// entries of X-Forwarded-For were appended by infrastructure we control (the
+// peer itself never appears in the header), so the entry before them is the
+// furthest address a trusted hop vouched for. Anything earlier in the list was
+// written by the client and is ignored.
+func clientIPWithProxies(r *http.Request, trusted int) string {
+	peer := peerIP(r)
+	if trusted <= 0 {
+		return peer
+	}
+	fwd := parseForwardedFor(r.Header.Values("X-Forwarded-For"))
+	// The peer itself is one of the trusted hops and never appears in the
+	// header, so N trusted hops means N-1 trusted entries at the tail.
+	idx := len(fwd) - trusted
+	if idx < 0 {
+		// Fewer entries than hops: the chain is shorter than configured
+		// (a health check, or a direct connection that bypassed the edge).
+		// Fall back to the oldest entry we have, or the peer.
+		if len(fwd) == 0 {
+			return peer
+		}
+		idx = 0
+	}
+	return fwd[idx]
+}
+
+// parseForwardedFor flattens X-Forwarded-For headers into a list of valid IPs,
+// oldest first. Entries that are not IPs are dropped rather than used as a
+// bucket key: a garbage value is a key too, and an attacker who can choose it
+// can choose which bucket to spend.
+func parseForwardedFor(values []string) []string {
+	var out []string
+	for _, v := range values {
+		for _, part := range strings.Split(v, ",") {
+			host := strings.TrimSpace(part)
+			if host == "" {
+				continue
+			}
+			// Tolerate the "ip:port" form some proxies emit.
+			if h, _, err := net.SplitHostPort(host); err == nil {
+				host = h
+			}
+			if ip := net.ParseIP(strings.Trim(host, "[]")); ip != nil {
+				out = append(out, ip.String())
+			}
+		}
+	}
+	return out
+}
+
+// peerIP is the transport-level remote address.
+func peerIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr
