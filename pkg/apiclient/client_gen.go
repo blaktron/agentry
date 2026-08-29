@@ -495,6 +495,24 @@ func (e VersionStatus) Valid() bool {
 	}
 }
 
+// Defines values for SocialProvider.
+const (
+	SocialProviderGithub SocialProvider = "github"
+	SocialProviderGoogle SocialProvider = "google"
+)
+
+// Valid indicates whether the value is a known member of the SocialProvider enum.
+func (e SocialProvider) Valid() bool {
+	switch e {
+	case SocialProviderGithub:
+		return true
+	case SocialProviderGoogle:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SsoKind.
 const (
 	SsoKindOidc SsoKind = "oidc"
@@ -558,6 +576,42 @@ func (e ReportAbuseJSONBodyCategory) Valid() bool {
 	case Spam:
 		return true
 	case Typosquat:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SocialOidcCallbackParamsProvider.
+const (
+	SocialOidcCallbackParamsProviderGithub SocialOidcCallbackParamsProvider = "github"
+	SocialOidcCallbackParamsProviderGoogle SocialOidcCallbackParamsProvider = "google"
+)
+
+// Valid indicates whether the value is a known member of the SocialOidcCallbackParamsProvider enum.
+func (e SocialOidcCallbackParamsProvider) Valid() bool {
+	switch e {
+	case SocialOidcCallbackParamsProviderGithub:
+		return true
+	case SocialOidcCallbackParamsProviderGoogle:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SocialOidcStartParamsProvider.
+const (
+	SocialOidcStartParamsProviderGithub SocialOidcStartParamsProvider = "github"
+	SocialOidcStartParamsProviderGoogle SocialOidcStartParamsProvider = "google"
+)
+
+// Valid indicates whether the value is a known member of the SocialOidcStartParamsProvider enum.
+func (e SocialOidcStartParamsProvider) Valid() bool {
+	switch e {
+	case SocialOidcStartParamsProviderGithub:
+		return true
+	case SocialOidcStartParamsProviderGoogle:
 		return true
 	default:
 		return false
@@ -741,6 +795,27 @@ func (e ListReviewQueueParamsQueue) Valid() bool {
 	}
 }
 
+// Defines values for SearchAgentsParamsSort.
+const (
+	Installs  SearchAgentsParamsSort = "installs"
+	Newest    SearchAgentsParamsSort = "newest"
+	Relevance SearchAgentsParamsSort = "relevance"
+)
+
+// Valid indicates whether the value is a known member of the SearchAgentsParamsSort enum.
+func (e SearchAgentsParamsSort) Valid() bool {
+	switch e {
+	case Installs:
+		return true
+	case Newest:
+		return true
+	case Relevance:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DeleteCurrentUserParamsPublishedContent.
 const (
 	Transfer DeleteCurrentUserParamsPublishedContent = "transfer"
@@ -773,6 +848,31 @@ type AbuseReport struct {
 
 // AbuseReportState defines model for AbuseReport.State.
 type AbuseReportState string
+
+// ActivityEvent One agent-scoped entry from the audit log (§9.2 activity).
+type ActivityEvent struct {
+	// Action Registered action id (internal/audit/actions.go).
+	Action string `json:"action"`
+
+	// ActorHandle Absent on the public-safe subset and for system actors.
+	ActorHandle *string `json:"actorHandle,omitempty"`
+
+	// Detail Present only for callers with read access.
+	Detail     *map[string]interface{} `json:"detail,omitempty"`
+	Id         openapi_types.UUID      `json:"id"`
+	OccurredAt time.Time               `json:"occurredAt"`
+
+	// Version The version this entry concerns, when it names one.
+	Version *string `json:"version,omitempty"`
+}
+
+// ActivityPage defines model for ActivityPage.
+type ActivityPage struct {
+	Events []ActivityEvent `json:"events"`
+
+	// NextCursor Opaque; absent on the last page.
+	NextCursor *string `json:"nextCursor,omitempty"`
+}
 
 // Advisory defines model for Advisory.
 type Advisory struct {
@@ -828,6 +928,16 @@ type AgentKind string
 
 // AgentRole Per-agent grant levels (§12.2), read < write < maintain < publish.
 type AgentRole string
+
+// AgentStats defines model for AgentStats.
+type AgentStats struct {
+	Installs30d   int64 `json:"installs30d"`
+	InstallsTotal int64 `json:"installsTotal"`
+
+	// Starred Whether the calling user has starred it (authed only).
+	Starred *bool `json:"starred,omitempty"`
+	Stars   int64 `json:"stars"`
+}
 
 // AgentVersion defines model for AgentVersion.
 type AgentVersion struct {
@@ -1075,7 +1185,7 @@ type ResolveResult struct {
 	// ArchiveUrl Where to fetch the archive (CDN on SaaS; API path self-host).
 	ArchiveUrl string `json:"archiveUrl"`
 
-	// AttestationUrl DSSE attestation location (M4+; absent until signing ships).
+	// AttestationUrl Where to fetch the DSSE attestation over this release (§8.8, §9.4 step 3). Present whenever the version has been signed — every version published by a signing-enabled deployment. Absent when the deployment runs `signing.kind: none` (dev/self-host opt-out) or the version predates signing.
 	AttestationUrl *string                `json:"attestationUrl,omitempty"`
 	Digest         string                 `json:"digest"`
 	Manifest       map[string]interface{} `json:"manifest"`
@@ -1137,6 +1247,15 @@ type ReviewItemQueue string
 
 // ReviewItemState defines model for ReviewItem.State.
 type ReviewItemState string
+
+// RulesetRelease defines model for RulesetRelease.
+type RulesetRelease struct {
+	BundleDigest string             `json:"bundleDigest"`
+	Id           openapi_types.UUID `json:"id"`
+	Notes        *string            `json:"notes,omitempty"`
+	PublishedAt  time.Time          `json:"publishedAt"`
+	Semver       string             `json:"semver"`
+}
 
 // ScanFinding defines model for ScanFinding.
 type ScanFinding struct {
@@ -1224,6 +1343,17 @@ type SearchResults struct {
 	Total   *int                       `json:"total,omitempty"`
 }
 
+// SocialLoginResult Outcome of a social-login callback: either a session (like password login) or a pending TOTP challenge to complete at POST /auth/2fa/totp/challenge.
+type SocialLoginResult struct {
+	// Challenge Single-use, five-minute challenge; present iff totpRequired.
+	Challenge *string `json:"challenge,omitempty"`
+
+	// CsrfToken Echo in X-Agentry-CSRF on cookie-authenticated mutations.
+	CsrfToken    *string `json:"csrfToken,omitempty"`
+	TotpRequired bool    `json:"totpRequired"`
+	User         *User   `json:"user,omitempty"`
+}
+
 // SsoConnection defines model for SsoConnection.
 type SsoConnection struct {
 	// Config Non-secret connection settings (client secrets are redacted).
@@ -1240,6 +1370,14 @@ type SsoConnectionInput struct {
 	// Config SAML (idpMetadataXml or idpEntityId+idpCertificatePem+idpSsoUrl) or OIDC (issuer, clientId, clientSecret) settings.
 	Config  map[string]interface{} `json:"config"`
 	Enabled bool                   `json:"enabled"`
+}
+
+// TagPage defines model for TagPage.
+type TagPage struct {
+	// NextCursor Opaque; absent on the last page.
+	NextCursor *string     `json:"nextCursor,omitempty"`
+	Results    []SearchHit `json:"results"`
+	Tag        string      `json:"tag"`
 }
 
 // Team defines model for Team.
@@ -1320,14 +1458,26 @@ type WebhookInput struct {
 // AgentName defines model for AgentName.
 type AgentName = string
 
+// Cursor defines model for Cursor.
+type Cursor = string
+
 // Handle defines model for Handle.
 type Handle = string
+
+// Limit100 defines model for Limit100.
+type Limit100 = int
+
+// Limit200 defines model for Limit200.
+type Limit200 = int
 
 // Namespace defines model for Namespace.
 type Namespace = string
 
 // OrgHandle defines model for OrgHandle.
 type OrgHandle = string
+
+// SocialProvider defines model for SocialProvider.
+type SocialProvider string
 
 // SsoKind defines model for SsoKind.
 type SsoKind string
@@ -1372,6 +1522,15 @@ type ReportAbuseJSONBody struct {
 // ReportAbuseJSONBodyCategory defines parameters for ReportAbuse.
 type ReportAbuseJSONBodyCategory string
 
+// ListAgentActivityParams defines parameters for ListAgentActivity.
+type ListAgentActivityParams struct {
+	// Cursor Opaque cursor from the previous page's `Link` header.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit Page size; values outside the range are clamped, not rejected.
+	Limit *Limit100 `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // SetAgentTeamGrantJSONBody defines parameters for SetAgentTeamGrant.
 type SetAgentTeamGrantJSONBody struct {
 	// Role Per-agent grant levels (§12.2), read < write < maintain < publish.
@@ -1409,10 +1568,28 @@ type YankVersionJSONBody struct {
 	Reason string `json:"reason"`
 }
 
+// TotpChallengeJSONBody defines parameters for TotpChallenge.
+type TotpChallengeJSONBody struct {
+	Challenge string `json:"challenge"`
+	Code      string `json:"code"`
+}
+
 // TotpVerifyJSONBody defines parameters for TotpVerify.
 type TotpVerifyJSONBody struct {
 	Code string `json:"code"`
 }
+
+// SocialOidcCallbackParams defines parameters for SocialOidcCallback.
+type SocialOidcCallbackParams struct {
+	Code  *string `form:"code,omitempty" json:"code,omitempty"`
+	State *string `form:"state,omitempty" json:"state,omitempty"`
+}
+
+// SocialOidcCallbackParamsProvider defines parameters for SocialOidcCallback.
+type SocialOidcCallbackParamsProvider string
+
+// SocialOidcStartParamsProvider defines parameters for SocialOidcStart.
+type SocialOidcStartParamsProvider string
 
 // VerifyEmailJSONBody defines parameters for VerifyEmail.
 type VerifyEmailJSONBody struct {
@@ -1497,6 +1674,15 @@ type UpdateWebhookJSONBody struct {
 	Url    *string   `json:"url,omitempty"`
 }
 
+// ListWebhookDeliveriesParams defines parameters for ListWebhookDeliveries.
+type ListWebhookDeliveriesParams struct {
+	// Cursor Opaque cursor from the previous page's `Link` header.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit Page size; values outside the range are clamped, not rejected.
+	Limit *Limit100 `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // ListAbuseReportsParams defines parameters for ListAbuseReports.
 type ListAbuseReportsParams struct {
 	// State Filter by triage state; defaults to open.
@@ -1523,6 +1709,27 @@ type PlatformAgentActionJSONBody struct {
 
 // PlatformAgentActionParamsAction defines parameters for PlatformAgentAction.
 type PlatformAgentActionParamsAction string
+
+// ListPlatformAuditParams defines parameters for ListPlatformAudit.
+type ListPlatformAuditParams struct {
+	// Cursor Opaque cursor from the previous page's `Link` header.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit Page size; values outside the range are clamped, not rejected.
+	Limit  *Limit200 `form:"limit,omitempty" json:"limit,omitempty"`
+	Action *string   `form:"action,omitempty" json:"action,omitempty"`
+
+	// Org Restrict to one org handle.
+	Org *string `form:"org,omitempty" json:"org,omitempty"`
+}
+
+// CreateRulesetReleaseJSONBody defines parameters for CreateRulesetRelease.
+type CreateRulesetReleaseJSONBody struct {
+	// BundleDigest sha256:<hex> of the bundle.
+	BundleDigest *string `json:"bundleDigest,omitempty"`
+	Notes        *string `json:"notes,omitempty"`
+	Semver       *string `json:"semver,omitempty"`
+}
 
 // ResolveRefParams defines parameters for ResolveRef.
 type ResolveRefParams struct {
@@ -1561,10 +1768,32 @@ type ListReviewQueueParamsQueue string
 // SearchAgentsParams defines parameters for SearchAgents.
 type SearchAgentsParams struct {
 	// Q Free-text query; empty lists by popularity.
-	Q      *string    `form:"q,omitempty" json:"q,omitempty"`
-	Kind   *AgentKind `form:"kind,omitempty" json:"kind,omitempty"`
-	Limit  *int       `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset *int       `form:"offset,omitempty" json:"offset,omitempty"`
+	Q    *string    `form:"q,omitempty" json:"q,omitempty"`
+	Kind *AgentKind `form:"kind,omitempty" json:"kind,omitempty"`
+
+	// Capability Capability the latest published version actually asks for, e.g. `network`, `filesystem`, `exec`, `secrets`, `dataAccess` (§5.4). A capability declared as `none`, null, or empty does not match — `network: {egress: none}` is not a network agent.
+	Capability *string `form:"capability,omitempty" json:"capability,omitempty"`
+
+	// License SPDX identifier from the latest published manifest.
+	License *string `form:"license,omitempty" json:"license,omitempty"`
+
+	// Verified Only agents in an org namespace with a verified domain.
+	Verified *bool                   `form:"verified,omitempty" json:"verified,omitempty"`
+	Sort     *SearchAgentsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+	Limit    *int                    `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset   *int                    `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// SearchAgentsParamsSort defines parameters for SearchAgents.
+type SearchAgentsParamsSort string
+
+// ListAgentsByTagParams defines parameters for ListAgentsByTag.
+type ListAgentsByTagParams struct {
+	// Cursor Opaque cursor from the previous page's `Link` header.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit Page size; values outside the range are clamped, not rejected.
+	Limit *Limit100 `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // UpdateCurrentUserJSONBody defines parameters for UpdateCurrentUser.
@@ -1574,8 +1803,11 @@ type UpdateCurrentUserJSONBody struct {
 
 // DeleteCurrentUserParams defines parameters for DeleteCurrentUser.
 type DeleteCurrentUserParams struct {
-	// PublishedContent What to do with published public versions (default yank).
+	// PublishedContent What to do with published public versions. Required when the account has any; ignored (and defaulted to yank) when it has none.
 	PublishedContent *DeleteCurrentUserParamsPublishedContent `form:"publishedContent,omitempty" json:"publishedContent,omitempty"`
+
+	// TransferOrg Destination org handle, required with publishedContent=transfer. The caller must be an owner or admin of that org.
+	TransferOrg *string `form:"transferOrg,omitempty" json:"transferOrg,omitempty"`
 }
 
 // DeleteCurrentUserParamsPublishedContent defines parameters for DeleteCurrentUser.
@@ -1604,6 +1836,9 @@ type SubmitVersionMultipartRequestBody SubmitVersionMultipartBody
 
 // YankVersionJSONRequestBody defines body for YankVersion for application/json ContentType.
 type YankVersionJSONRequestBody YankVersionJSONBody
+
+// TotpChallengeJSONRequestBody defines body for TotpChallenge for application/json ContentType.
+type TotpChallengeJSONRequestBody TotpChallengeJSONBody
 
 // TotpVerifyJSONRequestBody defines body for TotpVerify for application/json ContentType.
 type TotpVerifyJSONRequestBody TotpVerifyJSONBody
@@ -1661,6 +1896,9 @@ type TriageAbuseReportJSONRequestBody TriageAbuseReportJSONBody
 
 // PlatformAgentActionJSONRequestBody defines body for PlatformAgentAction for application/json ContentType.
 type PlatformAgentActionJSONRequestBody PlatformAgentActionJSONBody
+
+// CreateRulesetReleaseJSONRequestBody defines body for CreateRulesetRelease for application/json ContentType.
+type CreateRulesetReleaseJSONRequestBody CreateRulesetReleaseJSONBody
 
 // DecideReviewItemJSONRequestBody defines body for DecideReviewItem for application/json ContentType.
 type DecideReviewItemJSONRequestBody DecideReviewItemJSONBody
@@ -1769,6 +2007,13 @@ type ClientInterface interface {
 	// Corresponds with POST /agents (the `CreateAgent` operationId).
 	CreateAgent(ctx context.Context, body CreateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// DeleteAgent Delete an agent that was never published (maintain, §9.2).
+	//
+	// Deletes the agent and its hosted repository. Refused (409) once the agent has any version row, because §4.3 forbids deleting version rows: a version past `submitted` is history consumers may depend on, and a version still at `submitted` is mid-pipeline. Published agents are yanked or blocked, never deleted.
+	//
+	// Corresponds with DELETE /agents/{ns}/{name} (the `DeleteAgent` operationId).
+	DeleteAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetAgent Agent metadata (public agents readable by anyone).
 	//
 	// Corresponds with GET /agents/{ns}/{name} (the `GetAgent` operationId).
@@ -1801,6 +2046,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /agents/{ns}/{name}/abuse-reports (the `ReportAbuse` operationId).
 	ReportAbuse(ctx context.Context, ns Namespace, name AgentName, body ReportAbuseJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListAgentActivity Recent activity for an agent (§9.2).
+	//
+	// Drawn from the audit log. Anyone who can see a public agent gets the public-safe subset — publishes and yanks; callers with an explicit read grant (or namespace-derived read) see the fuller stream including submissions, settings changes, and grant changes.
+	//
+	// Corresponds with GET /agents/{ns}/{name}/activity (the `ListAgentActivity` operationId).
+	ListAgentActivity(ctx context.Context, ns Namespace, name AgentName, params *ListAgentActivityParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListAgentGrants List explicit grants (maintain).
 	//
@@ -1851,6 +2103,11 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /agents/{ns}/{name}/readme (the `GetAgentReadme` operationId).
 	GetAgentReadme(ctx context.Context, ns Namespace, name AgentName, params *GetAgentReadmeParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAgentStats Star count and install counts for an agent (§9.2).
+	//
+	// Corresponds with GET /agents/{ns}/{name}/stats (the `GetAgentStats` operationId).
+	GetAgentStats(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListVersions Version history, newest first.
 	//
@@ -1914,6 +2171,24 @@ type ClientInterface interface {
 	// Corresponds with POST /agents/{ns}/{name}/versions/{version}/yank (the `YankVersion` operationId).
 	YankVersion(ctx context.Context, ns Namespace, name AgentName, version VersionString, body YankVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// TotpChallengeWithBody Complete a pending 2FA challenge and open the session (§12.1).
+	//
+	// Second leg of a login that could not carry a TOTP code inline — today only social login, whose callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /auth/2fa/totp/challenge (the `TotpChallenge` operationId).
+	TotpChallengeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// TotpChallenge Complete a pending 2FA challenge and open the session (§12.1).
+	//
+	// Second leg of a login that could not carry a TOTP code inline — today only social login, whose callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /auth/2fa/totp/challenge (the `TotpChallenge` operationId).
+	TotpChallenge(ctx context.Context, body TotpChallengeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// TotpSetup Begin TOTP enrollment; returns the provisioning secret.
 	//
 	// Corresponds with POST /auth/2fa/totp/setup (the `TotpSetup` operationId).
@@ -1951,6 +2226,20 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /auth/logout (the `Logout` operationId).
 	Logout(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SocialOidcCallback Social login redirect URI — establish a session (§12.1).
+	//
+	// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session.
+	//
+	// Corresponds with GET /auth/oidc/{provider}/callback (the `SocialOidcCallback` operationId).
+	SocialOidcCallback(ctx context.Context, provider SocialOidcCallbackParamsProvider, params *SocialOidcCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SocialOidcStart Begin social login with a configured provider (§12.1).
+	//
+	// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership — org SSO lives under /orgs/{org}/sso (§12.4).
+	//
+	// Corresponds with GET /auth/oidc/{provider}/start (the `SocialOidcStart` operationId).
+	SocialOidcStart(ctx context.Context, provider SocialOidcStartParamsProvider, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RegisterWithBody Create an individual account (email+password, §12.1).
 	//
@@ -2285,7 +2574,14 @@ type ClientInterface interface {
 	// ListWebhookDeliveries Recent delivery attempts for an endpoint (admin+, §9.3).
 	//
 	// Corresponds with GET /orgs/{org}/webhooks/{id}/deliveries (the `ListWebhookDeliveries` operationId).
-	ListWebhookDeliveries(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListWebhookDeliveries(ctx context.Context, org OrgHandle, id WebhookID, params *ListWebhookDeliveriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PingWebhook Send a test delivery to an endpoint (admin+, §9.2).
+	//
+	// Enqueues a signed `ping` delivery through the ordinary webhook machinery — same signature header, same SSRF guard, same retry schedule — so the recorded attempt appears in `GET …/{id}/deliveries`. Honours `Idempotency-Key`.
+	//
+	// Corresponds with POST /orgs/{org}/webhooks/{id}/ping (the `PingWebhook` operationId).
+	PingWebhook(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListAbuseReports Abuse reports for triage (platform staff).
 	//
@@ -2320,10 +2616,35 @@ type ClientInterface interface {
 	// Corresponds with POST /platform/agents/{ns}/{name}/{action} (the `PlatformAgentAction` operationId).
 	PlatformAgentAction(ctx context.Context, ns Namespace, name AgentName, action PlatformAgentActionParamsAction, body PlatformAgentActionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListPlatformAudit Audit events across every org (platform staff, §12.6).
+	//
+	// The staff-wide slice of the audit log, newest first. Staff access to it is itself audited (§12.6), one event per call.
+	//
+	// Corresponds with GET /platform/audit (the `ListPlatformAudit` operationId).
+	ListPlatformAudit(ctx context.Context, params *ListPlatformAuditParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetPlatformPolicy The read-only platform baseline policy (§8.6).
 	//
 	// Corresponds with GET /platform/policy (the `GetPlatformPolicy` operationId).
 	GetPlatformPolicy(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateRulesetReleaseWithBody Register a ruleset release (platform staff, §9.2).
+	//
+	// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle (§8.3). Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /platform/ruleset-releases (the `CreateRulesetRelease` operationId).
+	CreateRulesetReleaseWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateRulesetRelease Register a ruleset release (platform staff, §9.2).
+	//
+	// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle (§8.3). Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /platform/ruleset-releases (the `CreateRulesetRelease` operationId).
+	CreateRulesetRelease(ctx context.Context, body CreateRulesetReleaseJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ResolveRef Resolve ns/name@range to a concrete version (§9.4 step 1).
 	//
@@ -2369,6 +2690,13 @@ type ClientInterface interface {
 	// Corresponds with GET /search (the `SearchAgents` operationId).
 	SearchAgents(ctx context.Context, params *SearchAgentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListAgentsByTag Public agents tagged with {tag} (§9.2).
+	//
+	// Matches the tag list of each agent's latest published manifest (`manifest.tags`, V8). Blocked agents never appear.
+	//
+	// Corresponds with GET /tags/{tag} (the `ListAgentsByTag` operationId).
+	ListAgentsByTag(ctx context.Context, tag string, params *ListAgentsByTagParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetCurrentUser The authenticated user.
 	//
 	// Corresponds with GET /user (the `GetCurrentUser` operationId).
@@ -2390,10 +2718,20 @@ type ClientInterface interface {
 
 	// DeleteCurrentUser Erase the caller's account (GDPR flow, §12.7).
 	//
-	// Purges personal data and pseudonymizes the account. Published public versions are not deleted — they are yanked so already-installed copies keep verifying — or you can transfer the agents to an org first and then delete.
+	// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit — omitting `publishedContent` is a 400, never a silent yank.
 	//
 	// Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
 	DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UnstarAgent Remove a star (idempotent, §9.2).
+	//
+	// Corresponds with DELETE /user/stars/{ns}/{name} (the `UnstarAgent` operationId).
+	UnstarAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// StarAgent Star an agent (idempotent, §9.2).
+	//
+	// Corresponds with PUT /user/stars/{ns}/{name} (the `StarAgent` operationId).
+	StarAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListTokens List the caller's personal access tokens (metadata only).
 	//
@@ -2489,6 +2827,23 @@ func (c *Client) CreateAgent(ctx context.Context, body CreateAgentJSONRequestBod
 	return c.Client.Do(req)
 }
 
+// DeleteAgent Delete an agent that was never published (maintain, §9.2).
+//
+// Deletes the agent and its hosted repository. Refused (409) once the agent has any version row, because §4.3 forbids deleting version rows: a version past `submitted` is history consumers may depend on, and a version still at `submitted` is mid-pipeline. Published agents are yanked or blocked, never deleted.
+//
+// Corresponds with DELETE /agents/{ns}/{name} (the `DeleteAgent` operationId).
+func (c *Client) DeleteAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteAgentRequest(c.Server, ns, name)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetAgent Agent metadata (public agents readable by anyone).
 //
 // Corresponds with GET /agents/{ns}/{name} (the `GetAgent` operationId).
@@ -2562,6 +2917,23 @@ func (c *Client) ReportAbuseWithBody(ctx context.Context, ns Namespace, name Age
 // Corresponds with POST /agents/{ns}/{name}/abuse-reports (the `ReportAbuse` operationId).
 func (c *Client) ReportAbuse(ctx context.Context, ns Namespace, name AgentName, body ReportAbuseJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReportAbuseRequest(c.Server, ns, name, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListAgentActivity Recent activity for an agent (§9.2).
+//
+// Drawn from the audit log. Anyone who can see a public agent gets the public-safe subset — publishes and yanks; callers with an explicit read grant (or namespace-derived read) see the fuller stream including submissions, settings changes, and grant changes.
+//
+// Corresponds with GET /agents/{ns}/{name}/activity (the `ListAgentActivity` operationId).
+func (c *Client) ListAgentActivity(ctx context.Context, ns Namespace, name AgentName, params *ListAgentActivityParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAgentActivityRequest(c.Server, ns, name, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2692,6 +3064,21 @@ func (c *Client) SetAgentUserGrant(ctx context.Context, ns Namespace, name Agent
 // Corresponds with GET /agents/{ns}/{name}/readme (the `GetAgentReadme` operationId).
 func (c *Client) GetAgentReadme(ctx context.Context, ns Namespace, name AgentName, params *GetAgentReadmeParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetAgentReadmeRequest(c.Server, ns, name, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetAgentStats Star count and install counts for an agent (§9.2).
+//
+// Corresponds with GET /agents/{ns}/{name}/stats (the `GetAgentStats` operationId).
+func (c *Client) GetAgentStats(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAgentStatsRequest(c.Server, ns, name)
 	if err != nil {
 		return nil, err
 	}
@@ -2864,6 +3251,44 @@ func (c *Client) YankVersion(ctx context.Context, ns Namespace, name AgentName, 
 	return c.Client.Do(req)
 }
 
+// TotpChallengeWithBody Complete a pending 2FA challenge and open the session (§12.1).
+//
+// Second leg of a login that could not carry a TOTP code inline — today only social login, whose callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /auth/2fa/totp/challenge (the `TotpChallenge` operationId).
+func (c *Client) TotpChallengeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTotpChallengeRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// TotpChallenge Complete a pending 2FA challenge and open the session (§12.1).
+//
+// Second leg of a login that could not carry a TOTP code inline — today only social login, whose callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /auth/2fa/totp/challenge (the `TotpChallenge` operationId).
+func (c *Client) TotpChallenge(ctx context.Context, body TotpChallengeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTotpChallengeRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // TotpSetup Begin TOTP enrollment; returns the provisioning secret.
 //
 // Corresponds with POST /auth/2fa/totp/setup (the `TotpSetup` operationId).
@@ -2952,6 +3377,40 @@ func (c *Client) Login(ctx context.Context, body LoginJSONRequestBody, reqEditor
 // Corresponds with POST /auth/logout (the `Logout` operationId).
 func (c *Client) Logout(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewLogoutRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SocialOidcCallback Social login redirect URI — establish a session (§12.1).
+//
+// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session.
+//
+// Corresponds with GET /auth/oidc/{provider}/callback (the `SocialOidcCallback` operationId).
+func (c *Client) SocialOidcCallback(ctx context.Context, provider SocialOidcCallbackParamsProvider, params *SocialOidcCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSocialOidcCallbackRequest(c.Server, provider, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SocialOidcStart Begin social login with a configured provider (§12.1).
+//
+// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership — org SSO lives under /orgs/{org}/sso (§12.4).
+//
+// Corresponds with GET /auth/oidc/{provider}/start (the `SocialOidcStart` operationId).
+func (c *Client) SocialOidcStart(ctx context.Context, provider SocialOidcStartParamsProvider, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSocialOidcStartRequest(c.Server, provider)
 	if err != nil {
 		return nil, err
 	}
@@ -3835,8 +4294,25 @@ func (c *Client) UpdateWebhook(ctx context.Context, org OrgHandle, id WebhookID,
 // ListWebhookDeliveries Recent delivery attempts for an endpoint (admin+, §9.3).
 //
 // Corresponds with GET /orgs/{org}/webhooks/{id}/deliveries (the `ListWebhookDeliveries` operationId).
-func (c *Client) ListWebhookDeliveries(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListWebhookDeliveriesRequest(c.Server, org, id)
+func (c *Client) ListWebhookDeliveries(ctx context.Context, org OrgHandle, id WebhookID, params *ListWebhookDeliveriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListWebhookDeliveriesRequest(c.Server, org, id, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PingWebhook Send a test delivery to an endpoint (admin+, §9.2).
+//
+// Enqueues a signed `ping` delivery through the ordinary webhook machinery — same signature header, same SSRF guard, same retry schedule — so the recorded attempt appears in `GET …/{id}/deliveries`. Honours `Idempotency-Key`.
+//
+// Corresponds with POST /orgs/{org}/webhooks/{id}/ping (the `PingWebhook` operationId).
+func (c *Client) PingWebhook(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPingWebhookRequest(c.Server, org, id)
 	if err != nil {
 		return nil, err
 	}
@@ -3930,11 +4406,66 @@ func (c *Client) PlatformAgentAction(ctx context.Context, ns Namespace, name Age
 	return c.Client.Do(req)
 }
 
+// ListPlatformAudit Audit events across every org (platform staff, §12.6).
+//
+// The staff-wide slice of the audit log, newest first. Staff access to it is itself audited (§12.6), one event per call.
+//
+// Corresponds with GET /platform/audit (the `ListPlatformAudit` operationId).
+func (c *Client) ListPlatformAudit(ctx context.Context, params *ListPlatformAuditParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListPlatformAuditRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetPlatformPolicy The read-only platform baseline policy (§8.6).
 //
 // Corresponds with GET /platform/policy (the `GetPlatformPolicy` operationId).
 func (c *Client) GetPlatformPolicy(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetPlatformPolicyRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateRulesetReleaseWithBody Register a ruleset release (platform staff, §9.2).
+//
+// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle (§8.3). Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /platform/ruleset-releases (the `CreateRulesetRelease` operationId).
+func (c *Client) CreateRulesetReleaseWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRulesetReleaseRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateRulesetRelease Register a ruleset release (platform staff, §9.2).
+//
+// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle (§8.3). Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /platform/ruleset-releases (the `CreateRulesetRelease` operationId).
+func (c *Client) CreateRulesetRelease(ctx context.Context, body CreateRulesetReleaseJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRulesetReleaseRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4069,6 +4600,23 @@ func (c *Client) SearchAgents(ctx context.Context, params *SearchAgentsParams, r
 	return c.Client.Do(req)
 }
 
+// ListAgentsByTag Public agents tagged with {tag} (§9.2).
+//
+// Matches the tag list of each agent's latest published manifest (`manifest.tags`, V8). Blocked agents never appear.
+//
+// Corresponds with GET /tags/{tag} (the `ListAgentsByTag` operationId).
+func (c *Client) ListAgentsByTag(ctx context.Context, tag string, params *ListAgentsByTagParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAgentsByTagRequest(c.Server, tag, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetCurrentUser The authenticated user.
 //
 // Corresponds with GET /user (the `GetCurrentUser` operationId).
@@ -4120,11 +4668,41 @@ func (c *Client) UpdateCurrentUser(ctx context.Context, body UpdateCurrentUserJS
 
 // DeleteCurrentUser Erase the caller's account (GDPR flow, §12.7).
 //
-// Purges personal data and pseudonymizes the account. Published public versions are not deleted — they are yanked so already-installed copies keep verifying — or you can transfer the agents to an org first and then delete.
+// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit — omitting `publishedContent` is a 400, never a silent yank.
 //
 // Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
 func (c *Client) DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteCurrentUserRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UnstarAgent Remove a star (idempotent, §9.2).
+//
+// Corresponds with DELETE /user/stars/{ns}/{name} (the `UnstarAgent` operationId).
+func (c *Client) UnstarAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUnstarAgentRequest(c.Server, ns, name)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// StarAgent Star an agent (idempotent, §9.2).
+//
+// Corresponds with PUT /user/stars/{ns}/{name} (the `StarAgent` operationId).
+func (c *Client) StarAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStarAgentRequest(c.Server, ns, name)
 	if err != nil {
 		return nil, err
 	}
@@ -4354,6 +4932,47 @@ func NewCreateAgentRequestWithBody(server string, contentType string, body io.Re
 	return req, nil
 }
 
+// NewDeleteAgentRequest constructs an http.Request for the DeleteAgent method
+func NewDeleteAgentRequest(server string, ns Namespace, name AgentName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetAgentRequest constructs an http.Request for the GetAgent method
 func NewGetAgentRequest(server string, ns Namespace, name AgentName) (*http.Request, error) {
 	var err error
@@ -4499,6 +5118,86 @@ func NewReportAbuseRequestWithBody(server string, ns Namespace, name AgentName, 
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListAgentActivityRequest constructs an http.Request for the ListAgentActivity method
+func NewListAgentActivityRequest(server string, ns Namespace, name AgentName, params *ListAgentActivityParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/activity", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -4820,6 +5519,47 @@ func NewGetAgentReadmeRequest(server string, ns Namespace, name AgentName, param
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
 		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetAgentStatsRequest constructs an http.Request for the GetAgentStats method
+func NewGetAgentStatsRequest(server string, ns Namespace, name AgentName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/stats", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -5226,6 +5966,46 @@ func NewYankVersionRequestWithBody(server string, ns Namespace, name AgentName, 
 	return req, nil
 }
 
+// NewTotpChallengeRequest calls the generic TotpChallenge builder with application/json body
+func NewTotpChallengeRequest(server string, body TotpChallengeJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewTotpChallengeRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewTotpChallengeRequestWithBody constructs an http.Request for the TotpChallenge method, with any body, and a specified content type
+func NewTotpChallengeRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/auth/2fa/totp/challenge")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewTotpSetupRequest constructs an http.Request for the TotpSetup method
 func NewTotpSetupRequest(server string) (*http.Request, error) {
 	var err error
@@ -5353,6 +6133,113 @@ func NewLogoutRequest(server string) (*http.Request, error) {
 	}
 
 	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSocialOidcCallbackRequest constructs an http.Request for the SocialOidcCallback method
+func NewSocialOidcCallbackRequest(server string, provider SocialOidcCallbackParamsProvider, params *SocialOidcCallbackParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "provider", provider, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/auth/oidc/%s/callback", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Code != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "code", *params.Code, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.State != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "state", *params.State, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSocialOidcStartRequest constructs an http.Request for the SocialOidcStart method
+func NewSocialOidcStartRequest(server string, provider SocialOidcStartParamsProvider) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "provider", provider, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/auth/oidc/%s/start", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -7049,7 +7936,7 @@ func NewUpdateWebhookRequestWithBody(server string, org OrgHandle, id WebhookID,
 }
 
 // NewListWebhookDeliveriesRequest constructs an http.Request for the ListWebhookDeliveries method
-func NewListWebhookDeliveriesRequest(server string, org OrgHandle, id WebhookID) (*http.Request, error) {
+func NewListWebhookDeliveriesRequest(server string, org OrgHandle, id WebhookID, params *ListWebhookDeliveriesParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -7081,7 +7968,87 @@ func NewListWebhookDeliveriesRequest(server string, org OrgHandle, id WebhookID)
 		return nil, err
 	}
 
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPingWebhookRequest constructs an http.Request for the PingWebhook method
+func NewPingWebhookRequest(server string, org OrgHandle, id WebhookID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/webhooks/%s/ping", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -7263,6 +8230,96 @@ func NewPlatformAgentActionRequestWithBody(server string, ns Namespace, name Age
 	return req, nil
 }
 
+// NewListPlatformAuditRequest constructs an http.Request for the ListPlatformAudit method
+func NewListPlatformAuditRequest(server string, params *ListPlatformAuditParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/platform/audit")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Action != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "action", *params.Action, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Org != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "org", *params.Org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetPlatformPolicyRequest constructs an http.Request for the GetPlatformPolicy method
 func NewGetPlatformPolicyRequest(server string) (*http.Request, error) {
 	var err error
@@ -7286,6 +8343,46 @@ func NewGetPlatformPolicyRequest(server string) (*http.Request, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewCreateRulesetReleaseRequest calls the generic CreateRulesetRelease builder with application/json body
+func NewCreateRulesetReleaseRequest(server string, body CreateRulesetReleaseJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateRulesetReleaseRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateRulesetReleaseRequestWithBody constructs an http.Request for the CreateRulesetRelease method, with any body, and a specified content type
+func NewCreateRulesetReleaseRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/platform/ruleset-releases")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -7650,6 +8747,54 @@ func NewSearchAgentsRequest(server string, params *SearchAgentsParams) (*http.Re
 
 		}
 
+		if params.Capability != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "capability", *params.Capability, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.License != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "license", *params.License, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Verified != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "verified", *params.Verified, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.Limit != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
@@ -7665,6 +8810,79 @@ func NewSearchAgentsRequest(server string, params *SearchAgentsParams) (*http.Re
 		if params.Offset != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListAgentsByTagRequest constructs an http.Request for the ListAgentsByTag method
+func NewListAgentsByTagRequest(server string, tag string, params *ListAgentsByTagParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "tag", tag, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/tags/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -7795,6 +9013,18 @@ func NewDeleteCurrentUserRequest(server string, params *DeleteCurrentUserParams)
 
 		}
 
+		if params.TransferOrg != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "transferOrg", *params.TransferOrg, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -7802,6 +9032,88 @@ func NewDeleteCurrentUserRequest(server string, params *DeleteCurrentUserParams)
 	}
 
 	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUnstarAgentRequest constructs an http.Request for the UnstarAgent method
+func NewUnstarAgentRequest(server string, ns Namespace, name AgentName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/stars/%s/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewStarAgentRequest constructs an http.Request for the StarAgent method
+func NewStarAgentRequest(server string, ns Namespace, name AgentName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/stars/%s/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -8016,6 +9328,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /agents (the `CreateAgent` operationId).
 	CreateAgentWithResponse(ctx context.Context, body CreateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAgentResponse, error)
 
+	// DeleteAgentWithResponse Delete an agent that was never published (maintain, §9.2).
+	//
+	// Deletes the agent and its hosted repository. Refused (409) once the agent has any version row, because §4.3 forbids deleting version rows: a version past `submitted` is history consumers may depend on, and a version still at `submitted` is mid-pipeline. Published agents are yanked or blocked, never deleted.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /agents/{ns}/{name} (the `DeleteAgent` operationId).
+	DeleteAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*DeleteAgentResponse, error)
+
 	// GetAgentWithResponse Agent metadata (public agents readable by anyone).
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -8050,6 +9371,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /agents/{ns}/{name}/abuse-reports (the `ReportAbuse` operationId).
 	ReportAbuseWithResponse(ctx context.Context, ns Namespace, name AgentName, body ReportAbuseJSONRequestBody, reqEditors ...RequestEditorFn) (*ReportAbuseResponse, error)
+
+	// ListAgentActivityWithResponse Recent activity for an agent (§9.2).
+	//
+	// Drawn from the audit log. Anyone who can see a public agent gets the public-safe subset — publishes and yanks; callers with an explicit read grant (or namespace-derived read) see the fuller stream including submissions, settings changes, and grant changes.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /agents/{ns}/{name}/activity (the `ListAgentActivity` operationId).
+	ListAgentActivityWithResponse(ctx context.Context, ns Namespace, name AgentName, params *ListAgentActivityParams, reqEditors ...RequestEditorFn) (*ListAgentActivityResponse, error)
 
 	// ListAgentGrantsWithResponse List explicit grants (maintain).
 	//
@@ -8108,6 +9438,13 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /agents/{ns}/{name}/readme (the `GetAgentReadme` operationId).
 	GetAgentReadmeWithResponse(ctx context.Context, ns Namespace, name AgentName, params *GetAgentReadmeParams, reqEditors ...RequestEditorFn) (*GetAgentReadmeResponse, error)
+
+	// GetAgentStatsWithResponse Star count and install counts for an agent (§9.2).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /agents/{ns}/{name}/stats (the `GetAgentStats` operationId).
+	GetAgentStatsWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*GetAgentStatsResponse, error)
 
 	// ListVersionsWithResponse Version history, newest first.
 	//
@@ -8183,6 +9520,24 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /agents/{ns}/{name}/versions/{version}/yank (the `YankVersion` operationId).
 	YankVersionWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, body YankVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*YankVersionResponse, error)
 
+	// TotpChallengeWithBodyWithResponse Complete a pending 2FA challenge and open the session (§12.1).
+	//
+	// Second leg of a login that could not carry a TOTP code inline — today only social login, whose callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /auth/2fa/totp/challenge (the `TotpChallenge` operationId).
+	TotpChallengeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TotpChallengeResponse, error)
+
+	// TotpChallengeWithResponse Complete a pending 2FA challenge and open the session (§12.1).
+	//
+	// Second leg of a login that could not carry a TOTP code inline — today only social login, whose callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /auth/2fa/totp/challenge (the `TotpChallenge` operationId).
+	TotpChallengeWithResponse(ctx context.Context, body TotpChallengeJSONRequestBody, reqEditors ...RequestEditorFn) (*TotpChallengeResponse, error)
+
 	// TotpSetupWithResponse Begin TOTP enrollment; returns the provisioning secret.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -8224,6 +9579,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /auth/logout (the `Logout` operationId).
 	LogoutWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*LogoutResponse, error)
+
+	// SocialOidcCallbackWithResponse Social login redirect URI — establish a session (§12.1).
+	//
+	// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /auth/oidc/{provider}/callback (the `SocialOidcCallback` operationId).
+	SocialOidcCallbackWithResponse(ctx context.Context, provider SocialOidcCallbackParamsProvider, params *SocialOidcCallbackParams, reqEditors ...RequestEditorFn) (*SocialOidcCallbackResponse, error)
+
+	// SocialOidcStartWithResponse Begin social login with a configured provider (§12.1).
+	//
+	// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership — org SSO lives under /orgs/{org}/sso (§12.4).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /auth/oidc/{provider}/start (the `SocialOidcStart` operationId).
+	SocialOidcStartWithResponse(ctx context.Context, provider SocialOidcStartParamsProvider, reqEditors ...RequestEditorFn) (*SocialOidcStartResponse, error)
 
 	// RegisterWithBodyWithResponse Create an individual account (email+password, §12.1).
 	//
@@ -8608,7 +9981,16 @@ type ClientWithResponsesInterface interface {
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/webhooks/{id}/deliveries (the `ListWebhookDeliveries` operationId).
-	ListWebhookDeliveriesWithResponse(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*ListWebhookDeliveriesResponse, error)
+	ListWebhookDeliveriesWithResponse(ctx context.Context, org OrgHandle, id WebhookID, params *ListWebhookDeliveriesParams, reqEditors ...RequestEditorFn) (*ListWebhookDeliveriesResponse, error)
+
+	// PingWebhookWithResponse Send a test delivery to an endpoint (admin+, §9.2).
+	//
+	// Enqueues a signed `ping` delivery through the ordinary webhook machinery — same signature header, same SSRF guard, same retry schedule — so the recorded attempt appears in `GET …/{id}/deliveries`. Honours `Idempotency-Key`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/webhooks/{id}/ping (the `PingWebhook` operationId).
+	PingWebhookWithResponse(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*PingWebhookResponse, error)
 
 	// ListAbuseReportsWithResponse Abuse reports for triage (platform staff).
 	//
@@ -8645,12 +10027,39 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /platform/agents/{ns}/{name}/{action} (the `PlatformAgentAction` operationId).
 	PlatformAgentActionWithResponse(ctx context.Context, ns Namespace, name AgentName, action PlatformAgentActionParamsAction, body PlatformAgentActionJSONRequestBody, reqEditors ...RequestEditorFn) (*PlatformAgentActionResponse, error)
 
+	// ListPlatformAuditWithResponse Audit events across every org (platform staff, §12.6).
+	//
+	// The staff-wide slice of the audit log, newest first. Staff access to it is itself audited (§12.6), one event per call.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /platform/audit (the `ListPlatformAudit` operationId).
+	ListPlatformAuditWithResponse(ctx context.Context, params *ListPlatformAuditParams, reqEditors ...RequestEditorFn) (*ListPlatformAuditResponse, error)
+
 	// GetPlatformPolicyWithResponse The read-only platform baseline policy (§8.6).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /platform/policy (the `GetPlatformPolicy` operationId).
 	GetPlatformPolicyWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetPlatformPolicyResponse, error)
+
+	// CreateRulesetReleaseWithBodyWithResponse Register a ruleset release (platform staff, §9.2).
+	//
+	// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle (§8.3). Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /platform/ruleset-releases (the `CreateRulesetRelease` operationId).
+	CreateRulesetReleaseWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRulesetReleaseResponse, error)
+
+	// CreateRulesetReleaseWithResponse Register a ruleset release (platform staff, §9.2).
+	//
+	// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle (§8.3). Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /platform/ruleset-releases (the `CreateRulesetRelease` operationId).
+	CreateRulesetReleaseWithResponse(ctx context.Context, body CreateRulesetReleaseJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRulesetReleaseResponse, error)
 
 	// ResolveRefWithResponse Resolve ns/name@range to a concrete version (§9.4 step 1).
 	//
@@ -8708,6 +10117,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /search (the `SearchAgents` operationId).
 	SearchAgentsWithResponse(ctx context.Context, params *SearchAgentsParams, reqEditors ...RequestEditorFn) (*SearchAgentsResponse, error)
 
+	// ListAgentsByTagWithResponse Public agents tagged with {tag} (§9.2).
+	//
+	// Matches the tag list of each agent's latest published manifest (`manifest.tags`, V8). Blocked agents never appear.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /tags/{tag} (the `ListAgentsByTag` operationId).
+	ListAgentsByTagWithResponse(ctx context.Context, tag string, params *ListAgentsByTagParams, reqEditors ...RequestEditorFn) (*ListAgentsByTagResponse, error)
+
 	// GetCurrentUserWithResponse The authenticated user.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -8731,12 +10149,26 @@ type ClientWithResponsesInterface interface {
 
 	// DeleteCurrentUserWithResponse Erase the caller's account (GDPR flow, §12.7).
 	//
-	// Purges personal data and pseudonymizes the account. Published public versions are not deleted — they are yanked so already-installed copies keep verifying — or you can transfer the agents to an org first and then delete.
+	// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit — omitting `publishedContent` is a 400, never a silent yank.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
 	DeleteCurrentUserWithResponse(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*DeleteCurrentUserResponse, error)
+
+	// UnstarAgentWithResponse Remove a star (idempotent, §9.2).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /user/stars/{ns}/{name} (the `UnstarAgent` operationId).
+	UnstarAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*UnstarAgentResponse, error)
+
+	// StarAgentWithResponse Star an agent (idempotent, §9.2).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /user/stars/{ns}/{name} (the `StarAgent` operationId).
+	StarAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*StarAgentResponse, error)
 
 	// ListTokensWithResponse List the caller's personal access tokens (metadata only).
 	//
@@ -8918,6 +10350,47 @@ func (r CreateAgentResponse) ContentType() string {
 	return ""
 }
 
+type DeleteAgentResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DeleteAgentResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteAgentResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteAgentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteAgentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteAgentResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetAgentResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -9049,6 +10522,54 @@ func (r ReportAbuseResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ReportAbuseResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListAgentActivityResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ActivityPage
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListAgentActivityResponse) GetJSON200() *ActivityPage {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListAgentActivityResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListAgentActivityResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAgentActivityResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAgentActivityResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListAgentActivityResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -9302,6 +10823,54 @@ func (r GetAgentReadmeResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetAgentReadmeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetAgentStatsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AgentStats
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetAgentStatsResponse) GetJSON200() *AgentStats {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetAgentStatsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetAgentStatsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAgentStatsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAgentStatsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetAgentStatsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -9678,6 +11247,54 @@ func (r YankVersionResponse) ContentType() string {
 	return ""
 }
 
+type TotpChallengeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *LoginResult
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r TotpChallengeResponse) GetJSON200() *LoginResult {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r TotpChallengeResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r TotpChallengeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r TotpChallengeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r TotpChallengeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r TotpChallengeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type TotpSetupResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -9850,6 +11467,95 @@ func (r LogoutResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r LogoutResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SocialOidcCallbackResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *SocialLoginResult
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SocialOidcCallbackResponse) GetJSON200() *SocialLoginResult {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r SocialOidcCallbackResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SocialOidcCallbackResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SocialOidcCallbackResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SocialOidcCallbackResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SocialOidcCallbackResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SocialOidcStartResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r SocialOidcStartResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SocialOidcStartResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SocialOidcStartResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SocialOidcStartResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SocialOidcStartResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -11699,6 +13405,54 @@ func (r ListWebhookDeliveriesResponse) ContentType() string {
 	return ""
 }
 
+type PingWebhookResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *WebhookDelivery
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r PingWebhookResponse) GetJSON202() *WebhookDelivery {
+	return r.JSON202
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r PingWebhookResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PingWebhookResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PingWebhookResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PingWebhookResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PingWebhookResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListAbuseReportsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11829,6 +13583,54 @@ func (r PlatformAgentActionResponse) ContentType() string {
 	return ""
 }
 
+type ListPlatformAuditResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AuditPage
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListPlatformAuditResponse) GetJSON200() *AuditPage {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListPlatformAuditResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListPlatformAuditResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListPlatformAuditResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListPlatformAuditResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListPlatformAuditResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetPlatformPolicyResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11871,6 +13673,61 @@ func (r GetPlatformPolicyResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetPlatformPolicyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateRulesetReleaseResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *RulesetRelease
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *RulesetRelease
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r CreateRulesetReleaseResponse) GetJSON200() *RulesetRelease {
+	return r.JSON200
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateRulesetReleaseResponse) GetJSON201() *RulesetRelease {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r CreateRulesetReleaseResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateRulesetReleaseResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateRulesetReleaseResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateRulesetReleaseResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateRulesetReleaseResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -12206,6 +14063,54 @@ func (r SearchAgentsResponse) ContentType() string {
 	return ""
 }
 
+type ListAgentsByTagResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *TagPage
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListAgentsByTagResponse) GetJSON200() *TagPage {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListAgentsByTagResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListAgentsByTagResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAgentsByTagResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAgentsByTagResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListAgentsByTagResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetCurrentUserResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -12337,6 +14242,88 @@ func (r DeleteCurrentUserResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r DeleteCurrentUserResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UnstarAgentResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r UnstarAgentResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r UnstarAgentResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UnstarAgentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UnstarAgentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UnstarAgentResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type StarAgentResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r StarAgentResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r StarAgentResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r StarAgentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StarAgentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r StarAgentResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -12580,6 +14567,21 @@ func (c *ClientWithResponses) CreateAgentWithResponse(ctx context.Context, body 
 	return ParseCreateAgentResponse(rsp)
 }
 
+// DeleteAgentWithResponse Delete an agent that was never published (maintain, §9.2).
+//
+// Deletes the agent and its hosted repository. Refused (409) once the agent has any version row, because §4.3 forbids deleting version rows: a version past `submitted` is history consumers may depend on, and a version still at `submitted` is mid-pipeline. Published agents are yanked or blocked, never deleted.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /agents/{ns}/{name} (the `DeleteAgent` operationId).
+func (c *ClientWithResponses) DeleteAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*DeleteAgentResponse, error) {
+	rsp, err := c.DeleteAgent(ctx, ns, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteAgentResponse(rsp)
+}
+
 // GetAgentWithResponse Agent metadata (public agents readable by anyone).
 //
 // Returns a wrapper object for the known response body format(s).
@@ -12643,6 +14645,21 @@ func (c *ClientWithResponses) ReportAbuseWithResponse(ctx context.Context, ns Na
 		return nil, err
 	}
 	return ParseReportAbuseResponse(rsp)
+}
+
+// ListAgentActivityWithResponse Recent activity for an agent (§9.2).
+//
+// Drawn from the audit log. Anyone who can see a public agent gets the public-safe subset — publishes and yanks; callers with an explicit read grant (or namespace-derived read) see the fuller stream including submissions, settings changes, and grant changes.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /agents/{ns}/{name}/activity (the `ListAgentActivity` operationId).
+func (c *ClientWithResponses) ListAgentActivityWithResponse(ctx context.Context, ns Namespace, name AgentName, params *ListAgentActivityParams, reqEditors ...RequestEditorFn) (*ListAgentActivityResponse, error) {
+	rsp, err := c.ListAgentActivity(ctx, ns, name, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAgentActivityResponse(rsp)
 }
 
 // ListAgentGrantsWithResponse List explicit grants (maintain).
@@ -12749,6 +14766,19 @@ func (c *ClientWithResponses) GetAgentReadmeWithResponse(ctx context.Context, ns
 		return nil, err
 	}
 	return ParseGetAgentReadmeResponse(rsp)
+}
+
+// GetAgentStatsWithResponse Star count and install counts for an agent (§9.2).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /agents/{ns}/{name}/stats (the `GetAgentStats` operationId).
+func (c *ClientWithResponses) GetAgentStatsWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*GetAgentStatsResponse, error) {
+	rsp, err := c.GetAgentStats(ctx, ns, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAgentStatsResponse(rsp)
 }
 
 // ListVersionsWithResponse Version history, newest first.
@@ -12885,6 +14915,36 @@ func (c *ClientWithResponses) YankVersionWithResponse(ctx context.Context, ns Na
 	return ParseYankVersionResponse(rsp)
 }
 
+// TotpChallengeWithBodyWithResponse Complete a pending 2FA challenge and open the session (§12.1).
+//
+// Second leg of a login that could not carry a TOTP code inline — today only social login, whose callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /auth/2fa/totp/challenge (the `TotpChallenge` operationId).
+func (c *ClientWithResponses) TotpChallengeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TotpChallengeResponse, error) {
+	rsp, err := c.TotpChallengeWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTotpChallengeResponse(rsp)
+}
+
+// TotpChallengeWithResponse Complete a pending 2FA challenge and open the session (§12.1).
+//
+// Second leg of a login that could not carry a TOTP code inline — today only social login, whose callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /auth/2fa/totp/challenge (the `TotpChallenge` operationId).
+func (c *ClientWithResponses) TotpChallengeWithResponse(ctx context.Context, body TotpChallengeJSONRequestBody, reqEditors ...RequestEditorFn) (*TotpChallengeResponse, error) {
+	rsp, err := c.TotpChallenge(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTotpChallengeResponse(rsp)
+}
+
 // TotpSetupWithResponse Begin TOTP enrollment; returns the provisioning secret.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -12961,6 +15021,36 @@ func (c *ClientWithResponses) LogoutWithResponse(ctx context.Context, reqEditors
 		return nil, err
 	}
 	return ParseLogoutResponse(rsp)
+}
+
+// SocialOidcCallbackWithResponse Social login redirect URI — establish a session (§12.1).
+//
+// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /auth/oidc/{provider}/callback (the `SocialOidcCallback` operationId).
+func (c *ClientWithResponses) SocialOidcCallbackWithResponse(ctx context.Context, provider SocialOidcCallbackParamsProvider, params *SocialOidcCallbackParams, reqEditors ...RequestEditorFn) (*SocialOidcCallbackResponse, error) {
+	rsp, err := c.SocialOidcCallback(ctx, provider, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSocialOidcCallbackResponse(rsp)
+}
+
+// SocialOidcStartWithResponse Begin social login with a configured provider (§12.1).
+//
+// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership — org SSO lives under /orgs/{org}/sso (§12.4).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /auth/oidc/{provider}/start (the `SocialOidcStart` operationId).
+func (c *ClientWithResponses) SocialOidcStartWithResponse(ctx context.Context, provider SocialOidcStartParamsProvider, reqEditors ...RequestEditorFn) (*SocialOidcStartResponse, error) {
+	rsp, err := c.SocialOidcStart(ctx, provider, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSocialOidcStartResponse(rsp)
 }
 
 // RegisterWithBodyWithResponse Create an individual account (email+password, §12.1).
@@ -13670,12 +15760,27 @@ func (c *ClientWithResponses) UpdateWebhookWithResponse(ctx context.Context, org
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /orgs/{org}/webhooks/{id}/deliveries (the `ListWebhookDeliveries` operationId).
-func (c *ClientWithResponses) ListWebhookDeliveriesWithResponse(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*ListWebhookDeliveriesResponse, error) {
-	rsp, err := c.ListWebhookDeliveries(ctx, org, id, reqEditors...)
+func (c *ClientWithResponses) ListWebhookDeliveriesWithResponse(ctx context.Context, org OrgHandle, id WebhookID, params *ListWebhookDeliveriesParams, reqEditors ...RequestEditorFn) (*ListWebhookDeliveriesResponse, error) {
+	rsp, err := c.ListWebhookDeliveries(ctx, org, id, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseListWebhookDeliveriesResponse(rsp)
+}
+
+// PingWebhookWithResponse Send a test delivery to an endpoint (admin+, §9.2).
+//
+// Enqueues a signed `ping` delivery through the ordinary webhook machinery — same signature header, same SSRF guard, same retry schedule — so the recorded attempt appears in `GET …/{id}/deliveries`. Honours `Idempotency-Key`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/webhooks/{id}/ping (the `PingWebhook` operationId).
+func (c *ClientWithResponses) PingWebhookWithResponse(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*PingWebhookResponse, error) {
+	rsp, err := c.PingWebhook(ctx, org, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePingWebhookResponse(rsp)
 }
 
 // ListAbuseReportsWithResponse Abuse reports for triage (platform staff).
@@ -13743,6 +15848,21 @@ func (c *ClientWithResponses) PlatformAgentActionWithResponse(ctx context.Contex
 	return ParsePlatformAgentActionResponse(rsp)
 }
 
+// ListPlatformAuditWithResponse Audit events across every org (platform staff, §12.6).
+//
+// The staff-wide slice of the audit log, newest first. Staff access to it is itself audited (§12.6), one event per call.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /platform/audit (the `ListPlatformAudit` operationId).
+func (c *ClientWithResponses) ListPlatformAuditWithResponse(ctx context.Context, params *ListPlatformAuditParams, reqEditors ...RequestEditorFn) (*ListPlatformAuditResponse, error) {
+	rsp, err := c.ListPlatformAudit(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListPlatformAuditResponse(rsp)
+}
+
 // GetPlatformPolicyWithResponse The read-only platform baseline policy (§8.6).
 //
 // Returns a wrapper object for the known response body format(s).
@@ -13754,6 +15874,36 @@ func (c *ClientWithResponses) GetPlatformPolicyWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseGetPlatformPolicyResponse(rsp)
+}
+
+// CreateRulesetReleaseWithBodyWithResponse Register a ruleset release (platform staff, §9.2).
+//
+// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle (§8.3). Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /platform/ruleset-releases (the `CreateRulesetRelease` operationId).
+func (c *ClientWithResponses) CreateRulesetReleaseWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRulesetReleaseResponse, error) {
+	rsp, err := c.CreateRulesetReleaseWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRulesetReleaseResponse(rsp)
+}
+
+// CreateRulesetReleaseWithResponse Register a ruleset release (platform staff, §9.2).
+//
+// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle (§8.3). Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /platform/ruleset-releases (the `CreateRulesetRelease` operationId).
+func (c *ClientWithResponses) CreateRulesetReleaseWithResponse(ctx context.Context, body CreateRulesetReleaseJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRulesetReleaseResponse, error) {
+	rsp, err := c.CreateRulesetRelease(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRulesetReleaseResponse(rsp)
 }
 
 // ResolveRefWithResponse Resolve ns/name@range to a concrete version (§9.4 step 1).
@@ -13860,6 +16010,21 @@ func (c *ClientWithResponses) SearchAgentsWithResponse(ctx context.Context, para
 	return ParseSearchAgentsResponse(rsp)
 }
 
+// ListAgentsByTagWithResponse Public agents tagged with {tag} (§9.2).
+//
+// Matches the tag list of each agent's latest published manifest (`manifest.tags`, V8). Blocked agents never appear.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /tags/{tag} (the `ListAgentsByTag` operationId).
+func (c *ClientWithResponses) ListAgentsByTagWithResponse(ctx context.Context, tag string, params *ListAgentsByTagParams, reqEditors ...RequestEditorFn) (*ListAgentsByTagResponse, error) {
+	rsp, err := c.ListAgentsByTag(ctx, tag, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAgentsByTagResponse(rsp)
+}
+
 // GetCurrentUserWithResponse The authenticated user.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -13901,7 +16066,7 @@ func (c *ClientWithResponses) UpdateCurrentUserWithResponse(ctx context.Context,
 
 // DeleteCurrentUserWithResponse Erase the caller's account (GDPR flow, §12.7).
 //
-// Purges personal data and pseudonymizes the account. Published public versions are not deleted — they are yanked so already-installed copies keep verifying — or you can transfer the agents to an org first and then delete.
+// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit — omitting `publishedContent` is a 400, never a silent yank.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -13912,6 +16077,32 @@ func (c *ClientWithResponses) DeleteCurrentUserWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseDeleteCurrentUserResponse(rsp)
+}
+
+// UnstarAgentWithResponse Remove a star (idempotent, §9.2).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /user/stars/{ns}/{name} (the `UnstarAgent` operationId).
+func (c *ClientWithResponses) UnstarAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*UnstarAgentResponse, error) {
+	rsp, err := c.UnstarAgent(ctx, ns, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUnstarAgentResponse(rsp)
+}
+
+// StarAgentWithResponse Star an agent (idempotent, §9.2).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /user/stars/{ns}/{name} (the `StarAgent` operationId).
+func (c *ClientWithResponses) StarAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*StarAgentResponse, error) {
+	rsp, err := c.StarAgent(ctx, ns, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStarAgentResponse(rsp)
 }
 
 // ListTokensWithResponse List the caller's personal access tokens (metadata only).
@@ -14078,6 +16269,38 @@ func ParseCreateAgentResponse(rsp *http.Response) (*CreateAgentResponse, error) 
 	return response, nil
 }
 
+// ParseDeleteAgentResponse parses an HTTP response from a DeleteAgentWithResponse call
+func ParseDeleteAgentResponse(rsp *http.Response) (*DeleteAgentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteAgentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case rsp.StatusCode == 409:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetAgentResponse parses an HTTP response from a GetAgentWithResponse call
 func ParseGetAgentResponse(rsp *http.Response) (*GetAgentResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -14160,6 +16383,39 @@ func ParseReportAbuseResponse(rsp *http.Response) (*ReportAbuseResponse, error) 
 	switch {
 	case rsp.StatusCode == 202:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListAgentActivityResponse parses an HTTP response from a ListAgentActivityWithResponse call
+func ParseListAgentActivityResponse(rsp *http.Response) (*ListAgentActivityResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAgentActivityResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ActivityPage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
@@ -14336,6 +16592,39 @@ func ParseGetAgentReadmeResponse(rsp *http.Response) (*GetAgentReadmeResponse, e
 	}
 
 	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAgentStatsResponse parses an HTTP response from a GetAgentStatsWithResponse call
+func ParseGetAgentStatsResponse(rsp *http.Response) (*GetAgentStatsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAgentStatsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentStats
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -14610,6 +16899,39 @@ func ParseYankVersionResponse(rsp *http.Response) (*YankVersionResponse, error) 
 	return response, nil
 }
 
+// ParseTotpChallengeResponse parses an HTTP response from a TotpChallengeWithResponse call
+func ParseTotpChallengeResponse(rsp *http.Response) (*TotpChallengeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &TotpChallengeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest LoginResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseTotpSetupResponse parses an HTTP response from a TotpSetupWithResponse call
 func ParseTotpSetupResponse(rsp *http.Response) (*TotpSetupResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -14720,6 +17042,71 @@ func ParseLogoutResponse(rsp *http.Response) (*LogoutResponse, error) {
 
 	switch {
 	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSocialOidcCallbackResponse parses an HTTP response from a SocialOidcCallbackWithResponse call
+func ParseSocialOidcCallbackResponse(rsp *http.Response) (*SocialOidcCallbackResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SocialOidcCallbackResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SocialLoginResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 409:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSocialOidcStartResponse parses an HTTP response from a SocialOidcStartWithResponse call
+func ParseSocialOidcStartResponse(rsp *http.Response) (*SocialOidcStartResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SocialOidcStartResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 302:
 		break // No content-type
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
@@ -16007,6 +18394,39 @@ func ParseListWebhookDeliveriesResponse(rsp *http.Response) (*ListWebhookDeliver
 	return response, nil
 }
 
+// ParsePingWebhookResponse parses an HTTP response from a PingWebhookWithResponse call
+func ParsePingWebhookResponse(rsp *http.Response) (*PingWebhookResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PingWebhookResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest WebhookDelivery
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListAbuseReportsResponse parses an HTTP response from a ListAbuseReportsWithResponse call
 func ParseListAbuseReportsResponse(rsp *http.Response) (*ListAbuseReportsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -16098,6 +18518,39 @@ func ParsePlatformAgentActionResponse(rsp *http.Response) (*PlatformAgentActionR
 	return response, nil
 }
 
+// ParseListPlatformAuditResponse parses an HTTP response from a ListPlatformAuditWithResponse call
+func ParseListPlatformAuditResponse(rsp *http.Response) (*ListPlatformAuditResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListPlatformAuditResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AuditPage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetPlatformPolicyResponse parses an HTTP response from a GetPlatformPolicyWithResponse call
 func ParseGetPlatformPolicyResponse(rsp *http.Response) (*GetPlatformPolicyResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -16118,6 +18571,46 @@ func ParseGetPlatformPolicyResponse(rsp *http.Response) (*GetPlatformPolicyRespo
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateRulesetReleaseResponse parses an HTTP response from a CreateRulesetReleaseWithResponse call
+func ParseCreateRulesetReleaseResponse(rsp *http.Response) (*CreateRulesetReleaseResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateRulesetReleaseResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RulesetRelease
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest RulesetRelease
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
@@ -16358,6 +18851,39 @@ func ParseSearchAgentsResponse(rsp *http.Response) (*SearchAgentsResponse, error
 	return response, nil
 }
 
+// ParseListAgentsByTagResponse parses an HTTP response from a ListAgentsByTagWithResponse call
+func ParseListAgentsByTagResponse(rsp *http.Response) (*ListAgentsByTagResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAgentsByTagResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TagPage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetCurrentUserResponse parses an HTTP response from a GetCurrentUserWithResponse call
 func ParseGetCurrentUserResponse(rsp *http.Response) (*GetCurrentUserResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -16433,6 +18959,64 @@ func ParseDeleteCurrentUserResponse(rsp *http.Response) (*DeleteCurrentUserRespo
 	}
 
 	response := &DeleteCurrentUserResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUnstarAgentResponse parses an HTTP response from a UnstarAgentWithResponse call
+func ParseUnstarAgentResponse(rsp *http.Response) (*UnstarAgentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UnstarAgentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseStarAgentResponse parses an HTTP response from a StarAgentWithResponse call
+func ParseStarAgentResponse(rsp *http.Response) (*StarAgentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StarAgentResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}

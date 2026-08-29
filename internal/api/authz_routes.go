@@ -64,6 +64,14 @@ var routeAuthz = map[string]RouteDecl{
 	"getAgent":              {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
 	"listAgents":            {Action: auth.ActPublicRead, Anonymous: true},
 	"updateAgent":           {Action: auth.ActAgentMaintain, AgentScoped: true},
+	"deleteAgent":           {Action: auth.ActAgentMaintain, AgentScoped: true},
+	"listAgentActivity":     {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
+	"getAgentStats":         {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
+	// Stars are per-agent reads that mutate the CALLER's list, so they carry
+	// the agent read action (you cannot star what you cannot see) and refuse
+	// anonymous callers in the handler — there is no anonymous star list.
+	"starAgent":   {Action: auth.ActAgentRead, AgentScoped: true},
+	"unstarAgent": {Action: auth.ActAgentRead, AgentScoped: true},
 	"listAgentGrants":       {Action: auth.ActAgentMaintain, AgentScoped: true},
 	"setAgentUserGrant":     {Action: auth.ActAgentMaintain, AgentScoped: true},
 	"removeAgentUserGrant":  {Action: auth.ActAgentMaintain, AgentScoped: true},
@@ -90,6 +98,16 @@ var routeAuthz = map[string]RouteDecl{
 	"platformAgentAction":   {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"listAdvisories":        {Action: auth.ActPublicRead, Anonymous: true},
 	"searchAgents":          {Action: auth.ActPublicRead, Anonymous: true},
+	"listAgentsByTag":       {Action: auth.ActPublicRead, Anonymous: true},
+	// Platform-staff surfaces: the staff flag is not an org role, so the
+	// generic chokepoint cannot express them (requireStaff does).
+	"createRulesetRelease": {Action: auth.ActPublicRead, SelfAuthorized: true},
+	"listPlatformAudit":    {Action: auth.ActPublicRead, SelfAuthorized: true},
+	// Social login establishes a credential (like login/register), so it sits
+	// outside the chokepoint and is rate-limited instead (§12.1).
+	"socialOidcStart":    {NoAuthz: true, Anonymous: true},
+	"socialOidcCallback": {NoAuthz: true, Anonymous: true},
+	"totpChallenge":      {NoAuthz: true, Anonymous: true},
 	"getAgentReadme":        {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
 	"deleteCurrentUser":     {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	"reportAbuse":           {Action: auth.ActPublicRead, SelfAuthorized: true},
@@ -117,6 +135,7 @@ var routeAuthz = map[string]RouteDecl{
 	"updateWebhook":         {Action: auth.ActOrgUpdate, OrgScoped: true},
 	"deleteWebhook":         {Action: auth.ActOrgUpdate, OrgScoped: true},
 	"listWebhookDeliveries": {Action: auth.ActOrgUpdate, OrgScoped: true},
+	"pingWebhook":           {Action: auth.ActOrgUpdate, OrgScoped: true},
 	"listDomainClaims":      {Action: auth.ActOrgUpdate, OrgScoped: true},
 	"createDomainClaim":     {Action: auth.ActOrgUpdate, OrgScoped: true},
 	"verifyDomainClaim":     {Action: auth.ActOrgUpdate, OrgScoped: true},

@@ -62,6 +62,11 @@ const (
 	ActOrgCreate Action = "org.create"
 	// Anonymous-capable reads.
 	ActPublicRead Action = "public.read"
+	// ActReviewAct is the review surface (§12.3 review:act). Check only
+	// enforces the PAT scope gate for it: WHO may review — platform staff or
+	// an org security_reviewer who is not the version's author (§12.2) — is a
+	// per-item judgement the handler makes with the review item in hand.
+	ActReviewAct Action = "review.act"
 )
 
 // Principal is the resolved caller identity for one request.
@@ -151,6 +156,7 @@ var scopeFor = map[Action]Scope{
 	ActUserSelfRead:      ScopeUserProfile,
 	ActUserSelfUpdate:    ScopeUserProfile,
 	ActUserTokensRead:    ScopeUserProfile,
+	ActReviewAct:         ScopeReviewAct,
 }
 
 // minRole is the role threshold per org-scoped action.
@@ -193,9 +199,11 @@ func Check(p *Principal, res Resource, act Action) error {
 	switch act {
 	case ActUserSelfRead, ActUserSelfUpdate, ActUserTokensRead,
 		ActUserTokensManage, ActUserSecurityManage, ActOrgCreate,
-		ActAgentCreate:
+		ActAgentCreate, ActReviewAct:
 		// ActAgentCreate: namespace-level authorization (self vs org
 		// admin+) happens in registry.CreateAgent with the target ns.
+		// ActReviewAct: the scope gate above is the whole contribution here;
+		// the reviewer/author checks need the review item (§12.2).
 		return nil
 	}
 

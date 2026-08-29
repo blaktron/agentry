@@ -54,6 +54,12 @@ func newSAMLTestIdP(t *testing.T) *samlTestIdP {
 func (k *samlTestIdP) GetKeyPair() (*rsa.PrivateKey, []byte, error) { return k.key, k.certDER, nil }
 
 func (k *samlTestIdP) signedResponse(t *testing.T, audience, recipient, nameID string, tamper bool) string {
+	return k.signedResponseFor(t, audience, recipient, nameID, "", tamper)
+}
+
+// signedResponseFor additionally sets InResponseTo, marking the assertion as
+// the answer to an SP-initiated AuthnRequest (§12.4).
+func (k *samlTestIdP) signedResponseFor(t *testing.T, audience, recipient, nameID, inResponseTo string, tamper bool) string {
 	t.Helper()
 	doc := etree.NewDocument()
 	resp := doc.CreateElement("samlp:Response")
@@ -80,8 +86,11 @@ func (k *samlTestIdP) signedResponse(t *testing.T, audience, recipient, nameID s
 	scd := subj.CreateElement("saml:SubjectConfirmation")
 	scd.CreateAttr("Method", "urn:oasis:names:tc:SAML:2.0:cm:bearer")
 	scd.CreateElement("saml:SubjectConfirmationData").CreateAttr("Recipient", recipient)
-	subj.FindElement("saml:SubjectConfirmation/saml:SubjectConfirmationData").
-		CreateAttr("NotOnOrAfter", time.Now().Add(5*time.Minute).UTC().Format(time.RFC3339))
+	scdEl := subj.FindElement("saml:SubjectConfirmation/saml:SubjectConfirmationData")
+	scdEl.CreateAttr("NotOnOrAfter", time.Now().Add(5*time.Minute).UTC().Format(time.RFC3339))
+	if inResponseTo != "" {
+		scdEl.CreateAttr("InResponseTo", inResponseTo)
+	}
 	cond := a.CreateElement("saml:Conditions")
 	cond.CreateAttr("NotBefore", time.Now().Add(-time.Minute).UTC().Format(time.RFC3339))
 	cond.CreateAttr("NotOnOrAfter", time.Now().Add(5*time.Minute).UTC().Format(time.RFC3339))

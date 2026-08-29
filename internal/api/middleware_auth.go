@@ -73,18 +73,35 @@ func (s *Server) principalMiddleware(next http.Handler) http.Handler {
 			// on public pages must not 401).
 		}
 
-		// Rate limiting by class.
+		// Rate limiting by class. The §9.1 RateLimit-* headers are written on
+		// every response, not only refusals, so a client can pace itself
+		// before it is throttled.
+		var res limitResult
 		if p.Anonymous {
-			if !s.limits.allow("anon", clientIP(r), s.classes.anon, s.classes.anonBurst) {
-				problemTooMany(w, r, "anonymous rate limit exceeded")
-				return
-			}
+			res = s.limits.allowWithHeaders("anon", clientIP(r), s.classes.anon, s.classes.anonBurst)
 		} else {
-			if !s.limits.allow("authed", p.UserID.String(), s.classes.authed, s.classes.authedBurst) {
-				problemTooMany(w, r, "rate limit exceeded")
-				return
-			}
+			res = s.limits.allowWithHeaders("authed", p.UserID.String(), s.classes.authed, s.classes.authedBurst)
 		}
+		writeRateLimitHeaders(w, res)
+		if !res.OK {
+			if p.Anonymous {
+				problemTooMany(w, r, "anonymous rate limit exceeded")
+			} else {
+				problemTooMany(w, r, "rate limit exceeded")
+			}
+			return
+		}
+
+		// PAT scope gate for route families the generic chokepoint cannot
+		// express (§12.3 review:act, see authz_scope_routes.go).
+		if !s.checkPathScope(w, r, p) {
+			return
+		}
+
+		// The access log names the actor (§16.2 allows ids, never secrets);
+		// the log line is emitted by the outer middleware, which sees only
+		// the pre-auth request, so hand the identity back through the holder.
+		recordActor(r.Context(), p)
 
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), principalKey, p)))
 	})

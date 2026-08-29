@@ -38,6 +38,18 @@ func (q *Queries) CompleteAuditExport(ctx context.Context, arg CompleteAuditExpo
 	return err
 }
 
+const countWebhookEndpoints = `-- name: CountWebhookEndpoints :one
+SELECT count(*)::bigint FROM webhook_endpoints WHERE org_id = $1
+`
+
+// §19: 20 webhook endpoints per org.
+func (q *Queries) CountWebhookEndpoints(ctx context.Context, orgID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countWebhookEndpoints, orgID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createAuditExport = `-- name: CreateAuditExport :one
 
 INSERT INTO audit_exports (id, org_id, requested_by, action_filter, status)
@@ -621,6 +633,27 @@ func (q *Queries) GetScimUser(ctx context.Context, arg GetScimUserParams) (GetSc
 	return i, err
 }
 
+const getSocialIdentity = `-- name: GetSocialIdentity :one
+SELECT id, user_id, provider_kind, sso_connection_id, subject, created_at FROM identities
+WHERE sso_connection_id IS NULL AND provider_kind = 'social' AND subject = $1
+`
+
+// Social login (§12.1) has no sso_connection: the subject is namespaced by
+// provider ("google:1234") and unique on its own.
+func (q *Queries) GetSocialIdentity(ctx context.Context, subject string) (Identity, error) {
+	row := q.db.QueryRow(ctx, getSocialIdentity, subject)
+	var i Identity
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.ProviderKind,
+		&i.SsoConnectionID,
+		&i.Subject,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getTeamByID = `-- name: GetTeamByID :one
 SELECT id, org_id, slug, scim_group_id, created_at FROM teams WHERE id = $1 AND org_id = $2
 `
@@ -933,16 +966,31 @@ func (q *Queries) ListTeamMemberIDs(ctx context.Context, teamID uuid.UUID) ([]uu
 }
 
 const listWebhookDeliveries = `-- name: ListWebhookDeliveries :many
-SELECT id, endpoint_id, event_type, payload, attempt, status_code, error, delivered_at, next_retry_at, created_at FROM webhook_deliveries WHERE endpoint_id = $1 ORDER BY created_at DESC LIMIT $2
+SELECT id, endpoint_id, event_type, payload, attempt, status_code, error, delivered_at, next_retry_at, created_at FROM webhook_deliveries
+WHERE endpoint_id = $1
+  AND ($3::timestamptz IS NULL
+       OR created_at < $3
+       OR (created_at = $3 AND id < $4))
+ORDER BY created_at DESC, id DESC
+LIMIT $2
 `
 
 type ListWebhookDeliveriesParams struct {
-	EndpointID uuid.UUID `json:"endpoint_id"`
-	Limit      int32     `json:"limit"`
+	EndpointID uuid.UUID  `json:"endpoint_id"`
+	Limit      int32      `json:"limit"`
+	BeforeTime *time.Time `json:"before_time"`
+	BeforeID   *uuid.UUID `json:"before_id"`
 }
 
+// Keyset-paged on (created_at, id) so the §9.1 cursor stays stable while new
+// deliveries land at the head.
 func (q *Queries) ListWebhookDeliveries(ctx context.Context, arg ListWebhookDeliveriesParams) ([]WebhookDelivery, error) {
-	rows, err := q.db.Query(ctx, listWebhookDeliveries, arg.EndpointID, arg.Limit)
+	rows, err := q.db.Query(ctx, listWebhookDeliveries,
+		arg.EndpointID,
+		arg.Limit,
+		arg.BeforeTime,
+		arg.BeforeID,
+	)
 	if err != nil {
 		return nil, err
 	}

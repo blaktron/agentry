@@ -77,6 +77,83 @@ func (q *Queries) InsertAuditEvent(ctx context.Context, arg InsertAuditEventPara
 	return err
 }
 
+const listAgentActivity = `-- name: ListAgentActivity :many
+SELECT a.id, a.occurred_at, a.action, a.detail, a.target_kind, a.target_id,
+       h.handle AS actor_handle, v.version AS version
+FROM audit_events a
+LEFT JOIN handles h ON h.id = a.actor_id
+LEFT JOIN agent_versions v ON a.target_kind = 'agent_version' AND v.id = a.target_id
+WHERE (
+    (a.target_kind = 'agent' AND a.target_id = $2)
+    OR v.agent_id = $2
+  )
+  AND (cardinality($3::text[]) = 0
+       OR a.action = ANY($3::text[]))
+  AND ($4::timestamptz IS NULL
+       OR a.occurred_at < $4
+       OR (a.occurred_at = $4 AND a.id < $5))
+ORDER BY a.occurred_at DESC, a.id DESC
+LIMIT $1
+`
+
+type ListAgentActivityParams struct {
+	Limit         int32      `json:"limit"`
+	AgentID       *uuid.UUID `json:"agent_id"`
+	PublicActions []string   `json:"public_actions"`
+	BeforeTime    *time.Time `json:"before_time"`
+	BeforeID      *uuid.UUID `json:"before_id"`
+}
+
+type ListAgentActivityRow struct {
+	ID          uuid.UUID  `json:"id"`
+	OccurredAt  time.Time  `json:"occurred_at"`
+	Action      string     `json:"action"`
+	Detail      []byte     `json:"detail"`
+	TargetKind  *string    `json:"target_kind"`
+	TargetID    *uuid.UUID `json:"target_id"`
+	ActorHandle *string    `json:"actor_handle"`
+	Version     *string    `json:"version"`
+}
+
+// GET /agents/{ns}/{name}/activity (§9.2). Entries targeting the agent
+// itself, plus entries targeting any of its versions (joined so the version
+// string can be surfaced). public_actions, when non-empty, restricts the
+// result to the public-safe subset.
+func (q *Queries) ListAgentActivity(ctx context.Context, arg ListAgentActivityParams) ([]ListAgentActivityRow, error) {
+	rows, err := q.db.Query(ctx, listAgentActivity,
+		arg.Limit,
+		arg.AgentID,
+		arg.PublicActions,
+		arg.BeforeTime,
+		arg.BeforeID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAgentActivityRow
+	for rows.Next() {
+		var i ListAgentActivityRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OccurredAt,
+			&i.Action,
+			&i.Detail,
+			&i.TargetKind,
+			&i.TargetID,
+			&i.ActorHandle,
+			&i.Version,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrgAuditEvents = `-- name: ListOrgAuditEvents :many
 SELECT a.id, a.occurred_at, a.actor_id, a.actor_kind, a.org_id, a.action, a.target_kind, a.target_id, a.ip, a.user_agent, a.detail, h.handle AS actor_handle
 FROM audit_events a
@@ -150,4 +227,95 @@ func (q *Queries) ListOrgAuditEvents(ctx context.Context, arg ListOrgAuditEvents
 		return nil, err
 	}
 	return items, nil
+}
+
+const listPlatformAuditEvents = `-- name: ListPlatformAuditEvents :many
+SELECT a.id, a.occurred_at, a.actor_id, a.actor_kind, a.org_id, a.action, a.target_kind, a.target_id, a.ip, a.user_agent, a.detail, h.handle AS actor_handle
+FROM audit_events a
+LEFT JOIN handles h ON h.id = a.actor_id
+WHERE ($2::text IS NULL OR a.action = $2)
+  AND ($3::uuid IS NULL OR a.org_id = $3)
+  AND ($4::timestamptz IS NULL
+       OR a.occurred_at < $4
+       OR (a.occurred_at = $4 AND a.id < $5))
+ORDER BY a.occurred_at DESC, a.id DESC
+LIMIT $1
+`
+
+type ListPlatformAuditEventsParams struct {
+	Limit      int32      `json:"limit"`
+	Action     *string    `json:"action"`
+	OrgID      *uuid.UUID `json:"org_id"`
+	BeforeTime *time.Time `json:"before_time"`
+	BeforeID   *uuid.UUID `json:"before_id"`
+}
+
+type ListPlatformAuditEventsRow struct {
+	ID          uuid.UUID   `json:"id"`
+	OccurredAt  time.Time   `json:"occurred_at"`
+	ActorID     *uuid.UUID  `json:"actor_id"`
+	ActorKind   string      `json:"actor_kind"`
+	OrgID       *uuid.UUID  `json:"org_id"`
+	Action      string      `json:"action"`
+	TargetKind  *string     `json:"target_kind"`
+	TargetID    *uuid.UUID  `json:"target_id"`
+	Ip          *netip.Addr `json:"ip"`
+	UserAgent   *string     `json:"user_agent"`
+	Detail      []byte      `json:"detail"`
+	ActorHandle *string     `json:"actor_handle"`
+}
+
+// The platform-staff slice: every org plus un-scoped events (§12.6). Same
+// keyset cursor as the org view so one decoder serves both.
+func (q *Queries) ListPlatformAuditEvents(ctx context.Context, arg ListPlatformAuditEventsParams) ([]ListPlatformAuditEventsRow, error) {
+	rows, err := q.db.Query(ctx, listPlatformAuditEvents,
+		arg.Limit,
+		arg.Action,
+		arg.OrgID,
+		arg.BeforeTime,
+		arg.BeforeID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPlatformAuditEventsRow
+	for rows.Next() {
+		var i ListPlatformAuditEventsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OccurredAt,
+			&i.ActorID,
+			&i.ActorKind,
+			&i.OrgID,
+			&i.Action,
+			&i.TargetKind,
+			&i.TargetID,
+			&i.Ip,
+			&i.UserAgent,
+			&i.Detail,
+			&i.ActorHandle,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const pruneAuditPartitions = `-- name: PruneAuditPartitions :one
+SELECT audit_prune_partitions($1::date)::int AS dropped
+`
+
+// §4.3 retention: drop whole monthly partitions older than the cutoff rather
+// than DELETE rows (the append-only trigger refuses row deletes, and dropping
+// a partition is O(1)). Returns the number of partitions dropped.
+func (q *Queries) PruneAuditPartitions(ctx context.Context, dollar_1 pgtype.Date) (int32, error) {
+	row := q.db.QueryRow(ctx, pruneAuditPartitions, dollar_1)
+	var dropped int32
+	err := row.Scan(&dropped)
+	return dropped, err
 }
