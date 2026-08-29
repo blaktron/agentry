@@ -92,6 +92,14 @@ app.kubernetes.io/instance: {{ .Release.Name }}
       key: AGENTRY_REDIS_URL
       optional: true
 {{- end }}
+{{- if or .Values.secret.smtpPassword .Values.secret.existingSecret }}
+- name: AGENTRY_SMTP_PASS
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "agentry.secretName" . }}
+      key: AGENTRY_SMTP_PASS
+      optional: true
+{{- end }}
 {{- with .Values.extraEnv }}
 {{ toYaml . }}
 {{- end }}

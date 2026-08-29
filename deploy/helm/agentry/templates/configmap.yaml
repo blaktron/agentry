@@ -13,6 +13,7 @@ data:
     baseURL: {{ .Values.config.baseURL | quote }}
     http:
       addr: {{ .Values.config.http.addr | quote }}
+      trustedProxies: {{ .Values.config.http.trustedProxies }}
     database:
       migrateOnStart: {{ .Values.config.migrateOnStart }}
     log:
@@ -25,12 +26,44 @@ data:
       kind: {{ .Values.config.storage.kind }}
       s3Bucket: {{ .Values.config.storage.s3Bucket | quote }}
       s3Region: {{ .Values.config.storage.s3Region | quote }}
+      s3Prefix: {{ .Values.config.storage.s3Prefix | quote }}
+      s3Endpoint: {{ .Values.config.storage.s3Endpoint | quote }}
+      s3UsePathStyle: {{ .Values.config.storage.s3UsePathStyle }}
     git:
       dataDir: {{ .Values.config.git.dataDir | quote }}
     signing:
       kind: {{ .Values.config.signing.kind }}
       kmsKeyARN: {{ .Values.config.signing.kmsKeyARN | quote }}
+      kmsRegion: {{ .Values.config.signing.kmsRegion | quote }}
+      {{- with .Values.config.signing.notBefore }}
+      notBefore: {{ . | quote }}
+      {{- end }}
+      {{- with .Values.config.signing.notAfter }}
+      notAfter: {{ . | quote }}
+      {{- end }}
+      {{- with .Values.config.signing.additionalKeys }}
+      additionalKeys:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
     judge:
       provider: {{ .Values.config.judge.provider }}
       model: {{ .Values.config.judge.model | quote }}
       region: {{ .Values.config.judge.region | quote }}
+    telemetry:
+      otlpEndpoint: {{ .Values.config.telemetry.otlpEndpoint | quote }}
+    notify:
+      kind: {{ .Values.config.notify.kind }}
+    {{- if eq .Values.config.notify.kind "smtp" }}
+    smtp:
+      host: {{ .Values.config.smtp.host | quote }}
+      port: {{ .Values.config.smtp.port }}
+      from: {{ .Values.config.smtp.from | quote }}
+      startTLS: {{ .Values.config.smtp.startTLS }}
+      {{- with .Values.config.smtp.username }}
+      username: {{ . | quote }}
+      {{- end }}
+    {{- end }}
+    {{- with .Values.config.limits }}
+    limits:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
