@@ -40,7 +40,7 @@ func (t *MemoryRequestTracker) Track(id string, exp time.Time) {
 		return
 	}
 	now := time.Now()
-	if !exp.After(now) {
+	if exp.IsZero() {
 		exp = now.Add(defaultRequestTTL)
 	}
 	t.mu.Lock()

@@ -1765,7 +1765,7 @@ type SearchAgentsParams struct {
 	Q    *string    `form:"q,omitempty" json:"q,omitempty"`
 	Kind *AgentKind `form:"kind,omitempty" json:"kind,omitempty"`
 
-	// Capability Capability key the latest published version declares, e.g. `network`, `exec`, `filesystem`, `secrets` (§5.4).
+	// Capability Capability the latest published version actually asks for, e.g. `network`, `filesystem`, `exec`, `secrets`, `dataAccess` (§5.4). A capability declared as `none`, null, or empty does not match — `network: {egress: none}` is not a network agent.
 	Capability *string `form:"capability,omitempty" json:"capability,omitempty"`
 
 	// License SPDX identifier from the latest published manifest.

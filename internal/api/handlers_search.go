@@ -36,7 +36,7 @@ func (s *Server) SearchAgents(w http.ResponseWriter, r *http.Request, params Sea
 	// §9.1: out-of-range paging parameters are clamped, not rejected. A
 	// negative limit used to reach LIMIT/OFFSET verbatim and 500.
 	limit := clampLimit(params.Limit, searchDefaultLimit, searchMaxLimit)
-	offset := clampOffset(params.Offset, maxListOffset)
+	offset := clampOffset(params.Offset)
 
 	sort := "relevance"
 	if params.Sort != nil && *params.Sort != "" {

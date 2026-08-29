@@ -35,20 +35,20 @@ func clampLimit(v *int, def, max int) int {
 	}
 }
 
-// clampOffset resolves a ?offset= to a non-negative value bounded by max.
-func clampOffset(v *int, max int) int {
-	if v == nil || *v < 0 {
-		return 0
-	}
-	if *v > max {
-		return max
-	}
-	return *v
-}
-
 // maxListOffset bounds deep offset paging (cursor endpoints are unbounded;
 // offset paging past this is a crawler, not a reader).
 const maxListOffset = 10000
+
+// clampOffset resolves a ?offset= to a non-negative value within maxListOffset.
+func clampOffset(v *int) int {
+	if v == nil || *v < 0 {
+		return 0
+	}
+	if *v > maxListOffset {
+		return maxListOffset
+	}
+	return *v
+}
 
 // ---- Opaque keyset cursors ----
 

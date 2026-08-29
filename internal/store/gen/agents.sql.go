@@ -543,11 +543,20 @@ WHERE a.visibility = 'public'
     OR a.name::text % $3::text
   )
   AND ($4::text IS NULL OR a.kind = $4)
+  -- capability= means "this agent actually asks for it", not merely "the key
+  -- is present": a manifest that says ` + "`" + `network: {egress: none}` + "`" + ` serializes
+  -- with the network key set, so key existence alone would match every agent
+  -- ever published. A capability counts when its value is not null/none/empty
+  -- and, for object-valued ones, when at least one member is not.
   AND ($5::text IS NULL OR (
         lv.capabilities IS NOT NULL
         AND jsonb_exists(lv.capabilities, $5::text)
         AND lv.capabilities -> $5::text
-            NOT IN ('"none"'::jsonb, 'null'::jsonb, '[]'::jsonb, '{}'::jsonb)))
+            NOT IN ('"none"'::jsonb, 'null'::jsonb, '[]'::jsonb, '{}'::jsonb)
+        AND (jsonb_typeof(lv.capabilities -> $5::text) <> 'object'
+             OR EXISTS (
+               SELECT 1 FROM jsonb_each(lv.capabilities -> $5::text) AS cap_member(k, v)
+               WHERE cap_member.v NOT IN ('"none"'::jsonb, 'null'::jsonb, '[]'::jsonb, '{}'::jsonb)))))
   AND ($6::text IS NULL
        OR lower(lv.manifest ->> 'license') = lower($6::text))
   AND ($7::boolean = false
