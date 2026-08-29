@@ -7,6 +7,19 @@ import { FindingsList } from "@/components/report";
 
 type Params = { ns: string; name: string; version: string };
 
+// The DSSE envelope (§8.8) as far as this page reads it: the signature array
+// carries the key id. Everything else is passed through untouched.
+interface DsseEnvelope {
+  signatures?: { keyid?: string; sig?: string }[];
+}
+
+interface VersionManifest {
+  license?: string;
+  tags?: string[];
+  dependencies?: { agents?: { ref: string; version?: string }[] };
+  [key: string]: unknown;
+}
+
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { ns, name, version } = await params;
   return { title: `${ns}/${name}@${version}` };
@@ -16,25 +29,30 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 // provenance detail for one immutable release.
 export default async function VersionPage({ params }: { params: Promise<Params> }) {
   const { ns, name, version } = await params;
+  const n = encodeURIComponent(ns);
+  const a = encodeURIComponent(name);
+  const v = encodeURIComponent(version);
+  const vbase = `/agents/${n}/${a}/versions/${v}`;
 
   const [agent, ver] = await Promise.all([
-    apiGet<Agent>(`/agents/${ns}/${name}`, { revalidate: 60 }),
-    apiGet<AgentVersion>(`/agents/${ns}/${name}/versions/${version}`, { revalidate: 60 }),
+    apiGet<Agent>(`/agents/${n}/${a}`, { revalidate: 60 }),
+    apiGet<AgentVersion>(vbase, { revalidate: 60 }),
   ]);
   if (!agent || !ver) notFound();
 
   const [report, manifest, attestation] = await Promise.all([
-    apiGet<ScanReport>(`/agents/${ns}/${name}/versions/${version}/report`, { revalidate: 60 }).catch(() => null),
-    apiGet<Record<string, unknown>>(`/agents/${ns}/${name}/versions/${version}/manifest`, {
-      revalidate: 300,
-    }).catch(() => null),
-    apiGet<Record<string, unknown>>(`/agents/${ns}/${name}/versions/${version}/attestation`, {
-      revalidate: 300,
-    }).catch(() => null),
+    apiGet<ScanReport>(`${vbase}/report`, { revalidate: 60 }).catch(() => null),
+    apiGet<VersionManifest>(`${vbase}/manifest`, { revalidate: 300 }).catch(() => null),
+    apiGet<DsseEnvelope>(`${vbase}/attestation`, { revalidate: 300 }).catch(() => null),
   ]);
 
   const counts = report?.findingCounts ?? {};
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  const total = Object.values(counts).reduce((x, y) => x + y, 0);
+  // The DSSE envelope names the key that signed this release (§8.8). Showing
+  // it is what makes "signed" checkable: a reader can compare it against
+  // /.well-known/agentry-signing-keys instead of taking the badge on trust.
+  const keyID = attestation?.signatures?.find((s) => s.keyid)?.keyid;
+  const deps = manifest?.dependencies?.agents ?? [];
 
   return (
     <div className="space-y-8">
@@ -126,11 +144,49 @@ export default async function VersionPage({ params }: { params: Promise<Params> 
                   )}
                 </dd>
               </div>
+              {attestation && (
+                <div>
+                  <dt style={{ color: "var(--color-muted)" }}>Signing key</dt>
+                  <dd className="break-all font-mono">
+                    {keyID ?? "the envelope names no key id"}
+                  </dd>
+                </div>
+              )}
             </dl>
             <div className="mt-3">
-              <CodeBlock>{`agentry verify ${ns}/${name}@${ver.version}`}</CodeBlock>
+              <CodeBlock>{`agentry verify ${agent.namespace}/${agent.name}@${ver.version}`}</CodeBlock>
             </div>
+            {attestation && (
+              <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>
+                Check the key id against the registry&apos;s published set at{" "}
+                <code>/.well-known/agentry-signing-keys</code>. A signature proves who built this
+                release, not that its contents are safe.
+              </p>
+            )}
           </Card>
+
+          {deps.length > 0 && (
+            <Card>
+              <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
+                Dependencies
+              </h2>
+              <ul className="mt-3 space-y-1 text-sm">
+                {deps.map((d) => (
+                  <li key={`${d.ref}@${d.version ?? "*"}`} className="flex flex-wrap items-baseline gap-2">
+                    <Link href={`/${d.ref}`} className="font-mono hover:underline">
+                      {d.ref}
+                    </Link>
+                    <span className="font-mono text-xs" style={{ color: "var(--color-muted)" }}>
+                      {d.version ?? "any version"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>
+                Declared, not installed (v1). Each has its own report.
+              </p>
+            </Card>
+          )}
 
           {manifest && (
             <Card>
