@@ -35,7 +35,7 @@ Do **not** read PLAN.md end-to-end (it is ~44k tokens). Read targeted sections.
 | 3 | `DEVIATIONS.md` | **38 recorded deviations** (DEV-001…021 and DEV-031…049; 003/004 were never issued and the 022…030 block belongs to the wave-2 branches). PLAN.md §0.5 makes PLAN immutable; deviations go here. Read before questioning any design choice — and note the "Post-audit backfill" divider, after which entries are recorded after the fact rather than at the time. |
 | 4 | `PLAN.md` **§0** (builder contract) + **§18.2** (milestone table w/ acceptance criteria) + **§20** (open questions) + **§21** (decision log index) | the contract and the map. ~3k tokens total. |
 | 5 | PLAN.md sections **on demand only** | §5 manifest, §6 git, §7 state machine, §8 security pipeline, §9 API, §10 web, §11 CLI, §12 identity/enterprise, §13 AWS, §17 testing, §19 quotas. Grep for what you need. |
-| 6 | `WORKGROUPS.md` — the "Bugs the build itself surfaced" list (~line 22) | the 8 real bugs this build caught and how — useful signal on where the sharp edges are. |
+| 6 | `WORKGROUPS.md` — the "Bugs the build itself surfaced" list, and the "Post-audit remediation" section above it | the seven bugs the build caught itself, plus the ones the audit caught that it did not. Together they are the best available map of where the sharp edges are. |
 
 **Golden rule from PLAN §0.1:** do not re-research settled decisions. If you disagree, record it in `DEVIATIONS.md` and proceed as specified.
 
@@ -157,7 +157,7 @@ None of these block anything already built — placeholders are mechanical per P
 - **All SQL in `internal/store`** via sqlc (D-04); domain packages take `*storegen.Queries`. `store.WithTx` passes transaction-bound queries so an audit row commits with its mutation.
 - **The pipeline is the product** (§8): `internal/scan`. `Orchestrator.Run` is pure over its `Input`; `Pipeline` does the DB + state-machine side. Fail-closed everywhere: any stage error becomes an `S0/pipeline-error` finding that forces human review — **no path to `published` skips the gate** (property-tested).
 - **Two load-bearing test rules** (from CONTRIBUTING.md): every route declares authz; every scanner rule ships match **and** benign-lookalike fixtures. The attack corpus (`testdata/attack-corpus`, 35 fixtures) gates CI on 100% recall and zero benign false positives — a security doc *discussing* injection must stay publishable.
-- **Rules bundle is duplicated by necessity**: canonical `/rules`, embedded copy `internal/scan/ruleset/rules/` (go:embed can't reach outside a package). `make sync-rules` + a CI drift check keep them identical. Note the DEV-011 errata: `scripts/dev/sync-rules.sh --check` existed from M4 but its only caller was `m4.sh`, which CI did not run — so the drift gate was claimed long before it was real. Wave 2's scanner-depth branch adds the `make sync-rules` target and wires the check into `.github/workflows/ci.yaml`.
+- **Rules bundle is duplicated by necessity**: canonical `/rules`, embedded copy `internal/scan/ruleset/rules/` (go:embed can't reach outside a package). `make sync-rules` + a CI drift check keep them identical. Note the DEV-011 errata: `scripts/dev/sync-rules.sh --check` existed from M4 but its only caller was `m4.sh`, which CI did not run — so the drift gate was claimed long before it was real, and **`make sync-rules` is still a target that does not exist**; run the script directly until wave 2's scanner-depth branch adds the target and the CI step.
 
 ---
 
