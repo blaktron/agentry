@@ -13,6 +13,9 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
+
+	"github.com/spf13/cobra"
 
 	"github.com/PLACEHOLDER_ORG/agentry/pkg/apiclient"
 	"github.com/PLACEHOLDER_ORG/agentry/pkg/manifest"
@@ -27,10 +30,21 @@ const (
 	extractMaxTotalBytes int64 = 200 << 20
 )
 
+// httpTimeout bounds every request the CLI makes. Archive downloads are the
+// long pole (a 100 MB release over a slow link), so the budget is generous —
+// but it is finite: http.DefaultClient has no timeout at all, and a hung
+// registry would otherwise wedge a CI job until the job's own timeout fires,
+// with no error message explaining why.
+const httpTimeout = 5 * time.Minute
+
+// httpClient is the one client every CLI request goes through. Per-request
+// deadlines still come from the command's context; this is the backstop.
+var httpClient = &http.Client{Timeout: httpTimeout}
+
 // newAPIClient builds a generated client rooted at {registry}/api/v1,
 // attaching "Authorization: Bearer <token>" when a token is known.
 func newAPIClient(regURL, token string) (*apiclient.ClientWithResponses, error) {
-	var opts []apiclient.ClientOption
+	opts := []apiclient.ClientOption{apiclient.WithHTTPClient(httpClient)}
 	if token != "" {
 		opts = append(opts, apiclient.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
 			req.Header.Set("Authorization", "Bearer "+token)
@@ -40,6 +54,22 @@ func newAPIClient(regURL, token string) (*apiclient.ClientWithResponses, error) 
 	c, err := apiclient.NewClientWithResponses(regURL+"/api/v1", opts...)
 	if err != nil {
 		return nil, fmt.Errorf("create API client for %s: %w", regURL, err)
+	}
+	return c, nil
+}
+
+// newAPIClientChecked is newAPIClient plus the §11 min-version gate: the
+// first API-using command in an invocation asks the registry what CLI version
+// it still supports, and reports (or refuses) before doing any work. Every
+// command that talks to a registry goes through here, so no command can
+// forget the check.
+func newAPIClientChecked(cmd *cobra.Command, regURL, token string) (*apiclient.ClientWithResponses, error) {
+	c, err := newAPIClient(regURL, token)
+	if err != nil {
+		return nil, err
+	}
+	if err := minVersionGate(cmd.Context(), cmd.ErrOrStderr(), regURL, token); err != nil {
+		return nil, err
 	}
 	return c, nil
 }
@@ -98,7 +128,7 @@ func downloadArchive(ctx context.Context, regURL, token string, res *apiclient.R
 	if token != "" && sameHost(archiveURL, regURL) {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("download %s: %w", archiveURL, err)
 	}

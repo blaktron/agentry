@@ -60,7 +60,7 @@ func fetchSigningKeys(ctx context.Context, registryURL string) (signingKeySet, e
 	if err != nil {
 		return signingKeySet{}, err
 	}
-	res, err := http.DefaultClient.Do(req)
+	res, err := httpClient.Do(req)
 	if err != nil {
 		return signingKeySet{}, fmt.Errorf("fetch signing keys: %w", err)
 	}
@@ -124,6 +124,47 @@ func savePinnedKeys(registryURL string, set signingKeySet) error {
 	return os.WriteFile(path, data, 0o600)
 }
 
+// pinSigningKeysAtLogin implements the §11 login row: "pins signing keys
+// (TOFU)". Pinning at login rather than at first verify is the whole point —
+// login is the moment a human deliberately chose this registry and typed a
+// credential for it, which is exactly when trust-on-first-use should be
+// established. Pinning later, at the first `verify` or `install`, silently
+// moves that decision to whichever download happens to come first.
+//
+// It returns a human-readable note describing what happened, and never fails
+// the login: a registry with signing switched off publishes an empty key set,
+// and that is a legitimate self-host configuration (§8.8), not a login error.
+func pinSigningKeysAtLogin(ctx context.Context, registryURL string) string {
+	existing, err := loadPinnedKeys(registryURL)
+	if err != nil {
+		return "could not read pinned signing keys: " + err.Error()
+	}
+
+	fetched, err := fetchSigningKeys(ctx, registryURL)
+	if err != nil {
+		return "could not fetch signing keys (" + err.Error() + "); they will be pinned on first verify"
+	}
+	if len(fetched.Keys) == 0 {
+		return "the registry publishes no signing keys — releases from it are unsigned"
+	}
+
+	if len(existing.Keys) == 0 {
+		if err := savePinnedKeys(registryURL, fetched); err != nil {
+			return "could not pin signing keys: " + err.Error()
+		}
+		return fmt.Sprintf("pinned %d signing key(s) on first use (TOFU)", len(fetched.Keys))
+	}
+	if sameKeyIDs(existing, fetched) {
+		return fmt.Sprintf("signing keys unchanged (%d pinned)", len(existing.Keys))
+	}
+	// A changed key set at login is reported, never silently adopted:
+	// re-pinning on the strength of a fresh fetch would defeat the pin.
+	path, _ := pinnedKeysPath(registryURL)
+	return "WARNING: the registry advertises signing key ids that differ from the pinned set — " +
+		"rotation or compromise. Verification will keep using the pinned keys; " +
+		"delete " + path + " to re-pin deliberately"
+}
+
 // verifyAttestation fetches and verifies the attestation for a version.
 // archiveDigest is the digest the client computed from the downloaded bytes,
 // so a verified attestation binds the signature to what is actually on disk.
@@ -144,7 +185,7 @@ func verifyAttestation(ctx context.Context, registryURL, token, attestationURL, 
 	if token != "" && sameHost(url, registryURL) {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
-	res, err := http.DefaultClient.Do(req)
+	res, err := httpClient.Do(req)
 	if err != nil {
 		return AttestationResult{State: "unverifiable", Detail: "fetch attestation: " + err.Error()}
 	}
@@ -190,23 +231,23 @@ func verifyAttestation(ctx context.Context, registryURL, token, attestationURL, 
 	if !ok {
 		fetched, ferr := fetchSigningKeys(ctx, registryURL)
 		if ferr == nil && !sameKeyIDs(trusted, fetched) {
+			out.State = "unverifiable"
 			out.KeyRotated = true
-			return AttestationResult{
-				State: "unverifiable", KeyRotated: true,
-				Detail: "signature does not match any pinned key; the registry now advertises different key ids (rotation or compromise) — re-pin deliberately",
-			}
+			out.Detail = "signature does not match any pinned key; the registry now advertises different key ids (rotation or compromise) — re-pin deliberately"
+			return out
 		}
-		return AttestationResult{State: "mismatch", Detail: "no pinned key verifies this signature"}
+		out.State = "mismatch"
+		out.Detail = "no pinned key verifies this signature"
+		return out
 	}
 
 	// The signature is valid — now bind it to the bytes we downloaded.
 	wantDigest := strings.TrimPrefix(archiveDigest, "sha256:")
 	if len(stmt.Subject) == 0 || stmt.Subject[0].Digest["sha256"] != wantDigest {
-		return AttestationResult{
-			State:  "mismatch",
-			Detail: "attestation subject digest does not match the downloaded archive",
-			KeyID:  keyID,
-		}
+		out.State = "mismatch"
+		out.Detail = "attestation subject digest does not match the downloaded archive"
+		out.KeyID = keyID
+		return out
 	}
 
 	out.State = "verified"
