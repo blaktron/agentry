@@ -32,6 +32,12 @@ INSERT INTO identities (id, user_id, provider_kind, sso_connection_id, subject)
 VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
+-- name: GetSocialIdentity :one
+-- Social login (§12.1) has no sso_connection: the subject is namespaced by
+-- provider ("google:1234") and unique on its own.
+SELECT * FROM identities
+WHERE sso_connection_id IS NULL AND provider_kind = 'social' AND subject = $1;
+
 -- ============================ Enforced SSO ============================
 
 -- name: SetOrgSSORequired :exec
@@ -157,7 +163,19 @@ SET attempt = $2, status_code = $3, error = $4, delivered_at = $5, next_retry_at
 WHERE id = $1;
 
 -- name: ListWebhookDeliveries :many
-SELECT * FROM webhook_deliveries WHERE endpoint_id = $1 ORDER BY created_at DESC LIMIT $2;
+-- Keyset-paged on (created_at, id) so the §9.1 cursor stays stable while new
+-- deliveries land at the head.
+SELECT * FROM webhook_deliveries
+WHERE endpoint_id = $1
+  AND (sqlc.narg('before_time')::timestamptz IS NULL
+       OR created_at < sqlc.narg('before_time')
+       OR (created_at = sqlc.narg('before_time') AND id < sqlc.narg('before_id')))
+ORDER BY created_at DESC, id DESC
+LIMIT $2;
+
+-- name: CountWebhookEndpoints :one
+-- §19: 20 webhook endpoints per org.
+SELECT count(*)::bigint FROM webhook_endpoints WHERE org_id = $1;
 
 -- ============================ Domain claims ============================
 

@@ -12,6 +12,38 @@ import (
 	"github.com/google/uuid"
 )
 
+const countAgentDeleteBlockers = `-- name: CountAgentDeleteBlockers :one
+SELECT
+  (SELECT count(*) FROM agent_versions av WHERE av.agent_id = $1)::bigint AS versions,
+  (SELECT count(*) FROM agent_versions av2 WHERE av2.agent_id = $1 AND av2.status <> 'submitted')::bigint AS versions_past_submitted,
+  (SELECT count(*) FROM advisories adv WHERE adv.agent_id = $1)::bigint AS advisories,
+  (SELECT count(*) FROM abuse_reports ab WHERE ab.agent_id = $1)::bigint AS abuse_reports
+`
+
+type CountAgentDeleteBlockersRow struct {
+	Versions              int64 `json:"versions"`
+	VersionsPastSubmitted int64 `json:"versions_past_submitted"`
+	Advisories            int64 `json:"advisories"`
+	AbuseReports          int64 `json:"abuse_reports"`
+}
+
+// Everything that makes DELETE /agents/{ns}/{name} unsafe (§9.2, §4.3).
+// Version rows can never be deleted, so ANY version row blocks the delete;
+// versions_past_submitted separates "never published" from "in flight" for
+// the error message. Advisories and abuse reports are trust & safety
+// records: they outlive the author's wish to remove the agent.
+func (q *Queries) CountAgentDeleteBlockers(ctx context.Context, agentID uuid.UUID) (CountAgentDeleteBlockersRow, error) {
+	row := q.db.QueryRow(ctx, countAgentDeleteBlockers, agentID)
+	var i CountAgentDeleteBlockersRow
+	err := row.Scan(
+		&i.Versions,
+		&i.VersionsPastSubmitted,
+		&i.Advisories,
+		&i.AbuseReports,
+	)
+	return i, err
+}
+
 const countAgentsInNamespace = `-- name: CountAgentsInNamespace :one
 SELECT count(*) FROM agents WHERE namespace_id = $1
 `
@@ -87,6 +119,18 @@ func (q *Queries) CreateRepo(ctx context.Context, id uuid.UUID) (Repo, error) {
 	return i, err
 }
 
+const deleteAgentByID = `-- name: DeleteAgentByID :execrows
+DELETE FROM agents WHERE id = $1
+`
+
+func (q *Queries) DeleteAgentByID(ctx context.Context, id uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteAgentByID, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteAgentTeamGrant = `-- name: DeleteAgentTeamGrant :execrows
 DELETE FROM agent_team_grants WHERE agent_id = $1 AND team_id = $2
 `
@@ -119,6 +163,15 @@ func (q *Queries) DeleteAgentUserGrant(ctx context.Context, arg DeleteAgentUserG
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const deleteRepoByID = `-- name: DeleteRepoByID :exec
+DELETE FROM repos WHERE id = $1
+`
+
+func (q *Queries) DeleteRepoByID(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteRepoByID, id)
+	return err
 }
 
 const getAgentByID = `-- name: GetAgentByID :one
@@ -393,6 +446,82 @@ func (q *Queries) ListAgentsByNamespace(ctx context.Context, arg ListAgentsByNam
 	return items, nil
 }
 
+const listAgentsByTag = `-- name: ListAgentsByTag :many
+SELECT a.id, a.name, a.kind, a.summary, a.quarantine_state, a.created_at,
+       h.handle AS namespace,
+       coalesce(d.installs, 0)::bigint AS installs
+FROM agents a
+JOIN handles h ON h.id = a.namespace_id
+JOIN agent_versions lv ON lv.id = a.latest_published_version_id
+LEFT JOIN (
+  SELECT agent_id, sum(installs) AS installs
+  FROM download_stats WHERE day >= current_date - 30 GROUP BY agent_id
+) d ON d.agent_id = a.id
+WHERE a.visibility = 'public'
+  AND a.quarantine_state <> 'blocked'
+  AND lv.manifest -> 'tags' @> to_jsonb($2::text)
+  AND ($3::timestamptz IS NULL
+       OR a.created_at < $3
+       OR (a.created_at = $3 AND a.id < $4))
+ORDER BY a.created_at DESC, a.id DESC
+LIMIT $1
+`
+
+type ListAgentsByTagParams struct {
+	Limit      int32      `json:"limit"`
+	Tag        string     `json:"tag"`
+	BeforeTime *time.Time `json:"before_time"`
+	BeforeID   *uuid.UUID `json:"before_id"`
+}
+
+type ListAgentsByTagRow struct {
+	ID              uuid.UUID `json:"id"`
+	Name            string    `json:"name"`
+	Kind            string    `json:"kind"`
+	Summary         string    `json:"summary"`
+	QuarantineState string    `json:"quarantine_state"`
+	CreatedAt       time.Time `json:"created_at"`
+	Namespace       string    `json:"namespace"`
+	Installs        int64     `json:"installs"`
+}
+
+// GET /tags/{tag} (§9.2): public agents whose LATEST PUBLISHED manifest
+// carries the tag (V8 tags are lowercase [a-z0-9-]). Keyset-paged on
+// (created_at, id) so the cursor is stable across inserts.
+func (q *Queries) ListAgentsByTag(ctx context.Context, arg ListAgentsByTagParams) ([]ListAgentsByTagRow, error) {
+	rows, err := q.db.Query(ctx, listAgentsByTag,
+		arg.Limit,
+		arg.Tag,
+		arg.BeforeTime,
+		arg.BeforeID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAgentsByTagRow
+	for rows.Next() {
+		var i ListAgentsByTagRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Kind,
+			&i.Summary,
+			&i.QuarantineState,
+			&i.CreatedAt,
+			&i.Namespace,
+			&i.Installs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const searchAgents = `-- name: SearchAgents :many
 SELECT a.id, a.name, a.kind, a.visibility, a.summary, a.quarantine_state,
        a.created_at, h.handle AS namespace,
@@ -400,6 +529,8 @@ SELECT a.id, a.name, a.kind, a.visibility, a.summary, a.quarantine_state,
        ts_rank_cd(a.search_tsv, websearch_to_tsquery('english', $3::text)) AS rank
 FROM agents a
 JOIN handles h ON h.id = a.namespace_id
+LEFT JOIN orgs o ON o.id = a.namespace_id
+LEFT JOIN agent_versions lv ON lv.id = a.latest_published_version_id
 LEFT JOIN (
   SELECT agent_id, sum(installs) AS installs
   FROM download_stats WHERE day >= current_date - 30 GROUP BY agent_id
@@ -412,7 +543,18 @@ WHERE a.visibility = 'public'
     OR a.name::text % $3::text
   )
   AND ($4::text IS NULL OR a.kind = $4)
+  AND ($5::text IS NULL OR (
+        lv.capabilities IS NOT NULL
+        AND jsonb_exists(lv.capabilities, $5::text)
+        AND lv.capabilities -> $5::text
+            NOT IN ('"none"'::jsonb, 'null'::jsonb, '[]'::jsonb, '{}'::jsonb)))
+  AND ($6::text IS NULL
+       OR lower(lv.manifest ->> 'license') = lower($6::text))
+  AND ($7::boolean = false
+       OR (h.kind = 'org' AND o.verified_domain IS NOT NULL))
 ORDER BY
+  CASE WHEN $8::text = 'installs' THEN coalesce(d.installs, 0) END DESC NULLS LAST,
+  CASE WHEN $8::text = 'newest' THEN a.created_at END DESC NULLS LAST,
   ts_rank_cd(a.search_tsv, websearch_to_tsquery('english', $3::text)) DESC,
   coalesce(d.installs, 0) DESC,
   a.created_at DESC
@@ -420,10 +562,14 @@ LIMIT $1 OFFSET $2
 `
 
 type SearchAgentsParams struct {
-	Limit  int32   `json:"limit"`
-	Offset int32   `json:"offset"`
-	Query  string  `json:"query"`
-	Kind   *string `json:"kind"`
+	Limit        int32   `json:"limit"`
+	Offset       int32   `json:"offset"`
+	Query        string  `json:"query"`
+	Kind         *string `json:"kind"`
+	Capability   *string `json:"capability"`
+	License      *string `json:"license"`
+	VerifiedOnly bool    `json:"verified_only"`
+	Sort         string  `json:"sort"`
 }
 
 type SearchAgentsRow struct {
@@ -440,13 +586,21 @@ type SearchAgentsRow struct {
 }
 
 // Public FTS search (§10.4, D-20): weighted tsvector + trigram fuzzy fallback
-// on name, ranked by relevance × install popularity × recency decay.
+// on name, ranked by relevance × install popularity × recency decay. The
+// §9.2 facets (capability, license, verified) filter on the LATEST PUBLISHED
+// version's manifest/capabilities, so an agent's facets always describe what
+// someone would actually install today. `sort` picks the primary ordering;
+// the trailing keys keep every ordering total (stable pages).
 func (q *Queries) SearchAgents(ctx context.Context, arg SearchAgentsParams) ([]SearchAgentsRow, error) {
 	rows, err := q.db.Query(ctx, searchAgents,
 		arg.Limit,
 		arg.Offset,
 		arg.Query,
 		arg.Kind,
+		arg.Capability,
+		arg.License,
+		arg.VerifiedOnly,
+		arg.Sort,
 	)
 	if err != nil {
 		return nil, err
@@ -508,6 +662,58 @@ func (q *Queries) SearchFacetKinds(ctx context.Context, query string) ([]SearchF
 		return nil, err
 	}
 	return items, nil
+}
+
+const searchFacetLicenses = `-- name: SearchFacetLicenses :many
+SELECT (lv.manifest ->> 'license')::text AS license, count(*)::bigint AS n
+FROM agents a
+JOIN agent_versions lv ON lv.id = a.latest_published_version_id
+WHERE a.visibility = 'public' AND a.quarantine_state <> 'blocked'
+  AND lv.manifest ->> 'license' IS NOT NULL
+  AND ($1::text = '' OR a.search_tsv @@ websearch_to_tsquery('english', $1::text))
+GROUP BY 1 ORDER BY n DESC, 1 LIMIT 20
+`
+
+type SearchFacetLicensesRow struct {
+	License string `json:"license"`
+	N       int64  `json:"n"`
+}
+
+// License facet over the same public corpus, read from the latest published
+// manifest (V7 requires an SPDX id for public publish).
+func (q *Queries) SearchFacetLicenses(ctx context.Context, query string) ([]SearchFacetLicensesRow, error) {
+	rows, err := q.db.Query(ctx, searchFacetLicenses, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchFacetLicensesRow
+	for rows.Next() {
+		var i SearchFacetLicensesRow
+		if err := rows.Scan(&i.License, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setAgentNamespace = `-- name: SetAgentNamespace :exec
+UPDATE agents SET namespace_id = $2, updated_at = now() WHERE id = $1
+`
+
+type SetAgentNamespaceParams struct {
+	ID          uuid.UUID `json:"id"`
+	NamespaceID uuid.UUID `json:"namespace_id"`
+}
+
+// Moves an agent between namespaces (§12.7 deletion-with-transfer).
+func (q *Queries) SetAgentNamespace(ctx context.Context, arg SetAgentNamespaceParams) error {
+	_, err := q.db.Exec(ctx, setAgentNamespace, arg.ID, arg.NamespaceID)
+	return err
 }
 
 const setAgentQuarantineState = `-- name: SetAgentQuarantineState :exec
