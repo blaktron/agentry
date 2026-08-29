@@ -50,6 +50,7 @@ type Agent struct {
 	SearchTsv                interface{} `json:"search_tsv"`
 	CreatedAt                time.Time   `json:"created_at"`
 	UpdatedAt                time.Time   `json:"updated_at"`
+	ReadmeText               string      `json:"readme_text"`
 }
 
 type AgentTeamGrant struct {

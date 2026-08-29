@@ -58,7 +58,7 @@ func (q *Queries) CountAgentsInNamespace(ctx context.Context, namespaceID uuid.U
 const createAgent = `-- name: CreateAgent :one
 INSERT INTO agents (id, namespace_id, name, kind, visibility, repo_id, summary)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, namespace_id, name, kind, visibility, repo_id, summary, latest_published_version_id, quarantine_state, auto_publish_tags, search_tsv, created_at, updated_at
+RETURNING id, namespace_id, name, kind, visibility, repo_id, summary, latest_published_version_id, quarantine_state, auto_publish_tags, search_tsv, created_at, updated_at, readme_text
 `
 
 type CreateAgentParams struct {
@@ -96,6 +96,7 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent
 		&i.SearchTsv,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ReadmeText,
 	)
 	return i, err
 }
@@ -175,7 +176,7 @@ func (q *Queries) DeleteRepoByID(ctx context.Context, id uuid.UUID) error {
 }
 
 const getAgentByID = `-- name: GetAgentByID :one
-SELECT a.id, a.namespace_id, a.name, a.kind, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, h.handle AS namespace, h.kind AS namespace_kind
+SELECT a.id, a.namespace_id, a.name, a.kind, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, h.handle AS namespace, h.kind AS namespace_kind
 FROM agents a JOIN handles h ON h.id = a.namespace_id
 WHERE a.id = $1
 `
@@ -194,6 +195,7 @@ type GetAgentByIDRow struct {
 	SearchTsv                interface{} `json:"search_tsv"`
 	CreatedAt                time.Time   `json:"created_at"`
 	UpdatedAt                time.Time   `json:"updated_at"`
+	ReadmeText               string      `json:"readme_text"`
 	Namespace                string      `json:"namespace"`
 	NamespaceKind            string      `json:"namespace_kind"`
 }
@@ -215,6 +217,7 @@ func (q *Queries) GetAgentByID(ctx context.Context, id uuid.UUID) (GetAgentByIDR
 		&i.SearchTsv,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ReadmeText,
 		&i.Namespace,
 		&i.NamespaceKind,
 	)
@@ -222,7 +225,7 @@ func (q *Queries) GetAgentByID(ctx context.Context, id uuid.UUID) (GetAgentByIDR
 }
 
 const getAgentByPath = `-- name: GetAgentByPath :one
-SELECT a.id, a.namespace_id, a.name, a.kind, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, h.handle AS namespace, h.kind AS namespace_kind, r.default_branch, r.size_bytes
+SELECT a.id, a.namespace_id, a.name, a.kind, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, h.handle AS namespace, h.kind AS namespace_kind, r.default_branch, r.size_bytes
 FROM agents a
 JOIN handles h ON h.id = a.namespace_id
 JOIN repos r ON r.id = a.repo_id
@@ -248,6 +251,7 @@ type GetAgentByPathRow struct {
 	SearchTsv                interface{} `json:"search_tsv"`
 	CreatedAt                time.Time   `json:"created_at"`
 	UpdatedAt                time.Time   `json:"updated_at"`
+	ReadmeText               string      `json:"readme_text"`
 	Namespace                string      `json:"namespace"`
 	NamespaceKind            string      `json:"namespace_kind"`
 	DefaultBranch            string      `json:"default_branch"`
@@ -271,6 +275,7 @@ func (q *Queries) GetAgentByPath(ctx context.Context, arg GetAgentByPathParams) 
 		&i.SearchTsv,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ReadmeText,
 		&i.Namespace,
 		&i.NamespaceKind,
 		&i.DefaultBranch,
@@ -382,7 +387,7 @@ func (q *Queries) ListAgentTeamGrantsForUser(ctx context.Context, arg ListAgentT
 }
 
 const listAgentsByNamespace = `-- name: ListAgentsByNamespace :many
-SELECT a.id, a.namespace_id, a.name, a.kind, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, h.handle AS namespace
+SELECT a.id, a.namespace_id, a.name, a.kind, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, h.handle AS namespace
 FROM agents a JOIN handles h ON h.id = a.namespace_id
 WHERE h.handle = $1
   AND (a.visibility = 'public' OR $2::boolean)
@@ -408,6 +413,7 @@ type ListAgentsByNamespaceRow struct {
 	SearchTsv                interface{} `json:"search_tsv"`
 	CreatedAt                time.Time   `json:"created_at"`
 	UpdatedAt                time.Time   `json:"updated_at"`
+	ReadmeText               string      `json:"readme_text"`
 	Namespace                string      `json:"namespace"`
 }
 
@@ -434,6 +440,7 @@ func (q *Queries) ListAgentsByNamespace(ctx context.Context, arg ListAgentsByNam
 			&i.SearchTsv,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ReadmeText,
 			&i.Namespace,
 		); err != nil {
 			return nil, err
@@ -526,7 +533,34 @@ const searchAgents = `-- name: SearchAgents :many
 SELECT a.id, a.name, a.kind, a.visibility, a.summary, a.quarantine_state,
        a.created_at, h.handle AS namespace,
        coalesce(d.installs, 0)::bigint AS installs,
-       ts_rank_cd(a.search_tsv, websearch_to_tsquery('english', $3::text)) AS rank
+       ts_rank_cd(a.search_tsv, websearch_to_tsquery('english', $3::text)) AS rank,
+       -- §10.4: relevance × log(1+installs_30d) × recency_decay, as one
+       -- score so the ordering below is a single comparison rather than the
+       -- lexicographic tie-break chain this used to be (which never combined
+       -- the three factors at all — it just fell through from one to the next).
+       --
+       --   relevance  ts_rank_cd over the weighted tsvector (A name, B
+       --              summary, C readme), floored by trigram similarity so a
+       --              fuzzy name match does not score zero and vanish. An
+       --              empty query scores 1: browsing is not searching, and
+       --              every row should then be ordered by popularity × recency.
+       --   popularity 1 + ln(1 + installs_30d). §10.4 writes log(1+installs);
+       --              taken literally that is 0 for a zero-install agent and
+       --              multiplies its whole score away, burying every new agent
+       --              beneath every old one no matter how well it matches.
+       --              The leading 1 makes popularity a multiplier of at least
+       --              1 — it can promote, never annihilate. (DEV-030)
+       --   recency    1 / (1 + age_days / 180): half weight at ~6 months.
+       --              The catalogue turns over on a scale of seasons, so a
+       --              decay measured in days would churn the front page.
+       (CASE WHEN $3::text = '' THEN 1.0
+             ELSE greatest(
+               ts_rank_cd(a.search_tsv, websearch_to_tsquery('english', $3::text))::double precision,
+               similarity(a.name::text, $3::text)::double precision)
+        END
+        * (1.0 + ln(1.0 + coalesce(d.installs, 0)::double precision))
+        * (1.0 / (1.0 + (extract(epoch FROM (now() - a.created_at)) / 86400.0) / 180.0))
+       )::double precision AS score
 FROM agents a
 JOIN handles h ON h.id = a.namespace_id
 LEFT JOIN orgs o ON o.id = a.namespace_id
@@ -564,9 +598,9 @@ WHERE a.visibility = 'public'
 ORDER BY
   CASE WHEN $8::text = 'installs' THEN coalesce(d.installs, 0) END DESC NULLS LAST,
   CASE WHEN $8::text = 'newest' THEN a.created_at END DESC NULLS LAST,
-  ts_rank_cd(a.search_tsv, websearch_to_tsquery('english', $3::text)) DESC,
-  coalesce(d.installs, 0) DESC,
-  a.created_at DESC
+  score DESC,
+  a.created_at DESC,
+  a.id DESC
 LIMIT $1 OFFSET $2
 `
 
@@ -592,6 +626,7 @@ type SearchAgentsRow struct {
 	Namespace       string    `json:"namespace"`
 	Installs        int64     `json:"installs"`
 	Rank            float32   `json:"rank"`
+	Score           float64   `json:"score"`
 }
 
 // Public FTS search (§10.4, D-20): weighted tsvector + trigram fuzzy fallback
@@ -629,6 +664,7 @@ func (q *Queries) SearchAgents(ctx context.Context, arg SearchAgentsParams) ([]S
 			&i.Namespace,
 			&i.Installs,
 			&i.Rank,
+			&i.Score,
 		); err != nil {
 			return nil, err
 		}
@@ -736,6 +772,26 @@ type SetAgentQuarantineStateParams struct {
 
 func (q *Queries) SetAgentQuarantineState(ctx context.Context, arg SetAgentQuarantineStateParams) error {
 	_, err := q.db.Exec(ctx, setAgentQuarantineState, arg.ID, arg.QuarantineState)
+	return err
+}
+
+const setAgentReadmeText = `-- name: SetAgentReadmeText :exec
+UPDATE agents SET readme_text = $2, updated_at = now()
+WHERE id = $1 AND readme_text IS DISTINCT FROM $2
+`
+
+type SetAgentReadmeTextParams struct {
+	ID         uuid.UUID `json:"id"`
+	ReadmeText string    `json:"readme_text"`
+}
+
+// Denormalizes the published version's README onto the agent so the §10.4
+// weight-C index has something to index (the tsvector trigger fires on this
+// column). Written on publish only: an agent's searchable description should
+// follow what people can actually install, not whatever the last submission
+// happened to contain.
+func (q *Queries) SetAgentReadmeText(ctx context.Context, arg SetAgentReadmeTextParams) error {
+	_, err := q.db.Exec(ctx, setAgentReadmeText, arg.ID, arg.ReadmeText)
 	return err
 }
 

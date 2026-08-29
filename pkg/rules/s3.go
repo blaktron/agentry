@@ -123,8 +123,11 @@ func lineRuneFinding(path, ruleID, title string, sev Severity, conf Confidence, 
 	}
 }
 
-// shannonEntropy returns the Shannon entropy (bits per symbol) of b.
-func shannonEntropy(b []byte) float64 {
+// ShannonEntropy returns the Shannon entropy (bits per symbol) of b.
+// Exported because internal/scan's S2 secret detector needs the same measure:
+// it had its own byte-for-byte copy, and two implementations of a scoring
+// function that gates findings are two thresholds waiting to drift apart.
+func ShannonEntropy(b []byte) float64 {
 	if len(b) == 0 {
 		return 0
 	}
@@ -604,7 +607,7 @@ func detectEncodedBlob(path string, content []byte, lm *lineMap) []Finding {
 	var out []Finding
 	emit := func(loc []int, kind string) {
 		run := content[loc[0]:loc[1]]
-		entropy := shannonEntropy(run)
+		entropy := ShannonEntropy(run)
 		if entropy <= encodedBlobEntropyMin {
 			return
 		}

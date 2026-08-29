@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/notify"
 	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/webhook"
 )
@@ -22,6 +24,23 @@ func (s *Server) orgOrNotFound(w http.ResponseWriter, r *http.Request, handle st
 		return storegen.GetOrgByHandleRow{}, false
 	}
 	return row, true
+}
+
+// notifyOrgInvite tells someone they were added to an organisation (§13.4).
+// Best-effort: the membership is already committed, and a mail failure must
+// not turn a successful grant into a 500 the admin would retry.
+func (s *Server) notifyOrgInvite(ctx context.Context, org storegen.GetOrgByHandleRow, target storegen.GetUserByHandleRow, role, invitedBy string) {
+	if s.notifier == nil {
+		return
+	}
+	if err := s.notifier.OrgInvite(ctx, notify.InviteNotice{
+		ToEmail:   target.Email,
+		Org:       org.Handle,
+		Role:      role,
+		InvitedBy: invitedBy,
+	}); err != nil {
+		s.log.Error("org invite notification", "org", org.ID, "user", target.ID, "err", err)
+	}
 }
 
 // userOrNotFound resolves a user handle or writes 404.
@@ -309,6 +328,14 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 	if s.webhooks != nil && current == auth.RoleNone {
 		_ = s.webhooks.Emit(r.Context(), orgRow.ID, webhook.EventMemberAdded,
 			map[string]any{"user": target.Handle, "role": string(requested)})
+	}
+	// §13.4 lists invites among the transactional mails. There is no separate
+	// invite object in v1 — org membership is GRANTED by an admin, not offered
+	// and accepted — so the notification belongs on the same transition the
+	// member.added webhook fires on. Telling someone they were added to an org
+	// they did not ask to join is also how they find out to object.
+	if current == auth.RoleNone {
+		s.notifyOrgInvite(r.Context(), orgRow, target, string(requested), principalFrom(r.Context()).Handle)
 	}
 	via := false
 	writeJSON(w, http.StatusOK, Membership{

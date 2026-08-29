@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/metrics"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/notify"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
@@ -40,6 +41,24 @@ type Pipeline struct {
 	rulesetVer  string
 	// rescanBatch is the sweep page size (tests shrink it to force paging).
 	rescanBatch int32
+	// mx records the §16.2 publish funnel. nil is a working no-op.
+	mx *metrics.Metrics
+}
+
+// SetMetrics wires the §16.2 instrument set onto the pipeline and the
+// orchestrator it drives.
+func (p *Pipeline) SetMetrics(m *metrics.Metrics) {
+	p.mx = m
+	if p.orch != nil {
+		p.orch.SetMetrics(m)
+	}
+}
+
+// SetNotifier overrides the author-notification transport (§8.7).
+func (p *Pipeline) SetNotifier(n notify.Notifier) {
+	if n != nil {
+		p.notifier = n
+	}
 }
 
 // PipelineDeps bundles the pipeline's collaborators.
@@ -84,6 +103,10 @@ func NewPipeline(d PipelineDeps) *Pipeline {
 // VersionSubmitted implements registry.Pipeline: run the scan for a version
 // that just entered `scanning`. Idempotent — safe to call again after a crash.
 func (p *Pipeline) VersionSubmitted(ctx context.Context, versionID uuid.UUID) error {
+	// Top of the §16.2 publish funnel. Counted here rather than in the
+	// registry so that the submitted count and the verdict counts come from
+	// the same object and cannot drift apart.
+	p.mx.RecordPublishSubmitted(ctx)
 	if err := p.Scan(ctx, versionID, "publish"); err != nil {
 		p.log.Error("pipeline: scan failed", "version", versionID, "err", err)
 		// Fail closed: the version stays in scanning and the watchdog routes
@@ -481,17 +504,24 @@ func (p *Pipeline) finishRun(ctx context.Context, runID uuid.UUID, result RunRes
 // signs the attestation.
 func (p *Pipeline) applyDecision(ctx context.Context, agent storegen.GetAgentByIDRow, v storegen.AgentVersion, runID uuid.UUID, result RunResult, policyVer int) error {
 	sysEvent := audit.Event{ActorKind: audit.ActorSystem}
+	// §16.2 publish funnel: one verdict per version, recorded where the
+	// decision is acted on rather than where it is computed (the orchestrator
+	// can run more than once for a version — rescans, resumes).
 	switch result.Decision.Outcome {
 	case OutcomePublish:
+		p.mx.RecordVerdict(ctx, metrics.VerdictClean)
 		if err := p.reg.Transition(ctx, v.ID, registry.StatusPublished, result.Decision.Reason, sysEvent); err != nil {
 			return err
 		}
+		p.indexReadme(ctx, agent.ID, v)
 		return p.sign(ctx, p.st.Queries(), agent, v, runID, result.ReportDigest, result.JudgeModel, policyVer)
 
 	case OutcomeRejected:
+		p.mx.RecordVerdict(ctx, metrics.VerdictBlocked)
 		return p.reg.Transition(ctx, v.ID, registry.StatusRejected, result.Decision.Reason, sysEvent)
 
 	case OutcomeNeedsReview:
+		p.mx.RecordVerdict(ctx, metrics.VerdictReview)
 		if err := p.reg.Transition(ctx, v.ID, registry.StatusNeedsReview, result.Decision.Reason, sysEvent); err != nil {
 			return err
 		}
@@ -500,6 +530,35 @@ func (p *Pipeline) applyDecision(ctx context.Context, agent storegen.GetAgentByI
 		})
 	}
 	return nil
+}
+
+// indexReadme denormalizes the just-published version's README onto the agent
+// row so the §10.4 weight-C part of search_tsv has text to index.
+//
+// Best-effort by design: an agent whose README could not be read is still
+// published, just less findable. Failing the publish over a search-index
+// detail would turn a cosmetic problem into an outage of the thing the
+// registry is for. Runs after the transition so it only ever indexes text
+// that is actually resolvable.
+func (p *Pipeline) indexReadme(ctx context.Context, agentID uuid.UUID, v storegen.AgentVersion) {
+	if v.ArchiveKey == nil || p.blobs == nil {
+		return
+	}
+	raw, err := ExtractREADME(ctx, p.blobs, *v.ArchiveKey, v.ArchiveSize)
+	if err != nil {
+		if !errors.Is(err, ErrNoReadme) {
+			p.log.Warn("scan: readme index skipped", "version", v.ID, "err", err)
+		}
+		// An agent that had a README and then removed it should stop being
+		// found by its old text, so an absent README clears the column rather
+		// than leaving the previous version's prose indexed.
+		raw = nil
+	}
+	if err := p.st.Queries().SetAgentReadmeText(ctx, storegen.SetAgentReadmeTextParams{
+		ID: agentID, ReadmeText: ReadmeIndexText(raw),
+	}); err != nil {
+		p.log.Warn("scan: readme index write failed", "agent", agentID, "err", err)
+	}
 }
 
 // createReviewItem files a version for human review on the right queue
@@ -814,7 +873,50 @@ func (p *Pipeline) PublishAdvisory(ctx context.Context, agentID uuid.UUID, affec
 		"advisoryId": adv.ID.String(), "affectedVersions": affected,
 		"severity": severity, "summary": summary,
 	})
+	p.notifyAdvisoryPublished(ctx, agentID, severity, summary)
 	return nil
+}
+
+// notifyAdvisoryPublished mails the agent's author (§8.7 lists the advisory
+// alongside the webhook and the author notification). Best-effort: the
+// advisory is the record that matters, and it is already written.
+//
+// §7 is explicit that installed copies are never reached, so the advisory and
+// this mail ARE the notification path — which is why a failure here is logged
+// at error rather than swallowed.
+func (p *Pipeline) notifyAdvisoryPublished(ctx context.Context, agentID uuid.UUID, severity, summary string) {
+	if p.notifier == nil {
+		return
+	}
+	q := p.st.Queries()
+	agent, err := q.GetAgentByID(ctx, agentID)
+	if err != nil {
+		p.log.Error("advisory notification: load agent", "agent", agentID, "err", err)
+		return
+	}
+	// The author of the latest published version is the person who can act on
+	// this; an agent with nothing published has no one to tell.
+	if agent.LatestPublishedVersionID == nil {
+		return
+	}
+	v, err := q.GetVersionByID(ctx, *agent.LatestPublishedVersionID)
+	if err != nil {
+		p.log.Error("advisory notification: load version", "agent", agentID, "err", err)
+		return
+	}
+	u, err := q.GetUserByID(ctx, v.SubmittedBy)
+	if err != nil {
+		p.log.Error("advisory notification: load author", "agent", agentID, "err", err)
+		return
+	}
+	if err := p.notifier.AdvisoryPublished(ctx, notify.AdvisoryNotice{
+		ToEmail:  u.Email,
+		Agent:    agent.Namespace + "/" + agent.Name,
+		Severity: severity,
+		Summary:  summary,
+	}); err != nil {
+		p.log.Error("advisory notification", "agent", agentID, "err", err)
+	}
 }
 
 func strptrOrNil(s string) *string {

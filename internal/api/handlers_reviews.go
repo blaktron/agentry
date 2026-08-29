@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/notify"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/scan"
 	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
@@ -361,7 +363,38 @@ func (s *Server) DecideReviewItem(w http.ResponseWriter, r *http.Request, id ope
 		problemInternal(w, r)
 		return
 	}
+	s.notifyReviewDecided(r.Context(), v, string(target), p.Handle, rationale)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// notifyReviewDecided tells the version's author what a reviewer decided
+// (§8.7 author notification). Best-effort: the decision has already been
+// committed, and a mail failure must not turn a successful review into a 500
+// the reviewer would retry against an "already decided" item.
+func (s *Server) notifyReviewDecided(ctx context.Context, v storegen.AgentVersion, decision, reviewer, rationale string) {
+	if s.notifier == nil {
+		return
+	}
+	author, err := s.q().GetUserByID(ctx, v.SubmittedBy)
+	if err != nil {
+		s.log.Error("review notification: load author", "version", v.ID, "err", err)
+		return
+	}
+	agent, err := s.q().GetAgentByID(ctx, v.AgentID)
+	if err != nil {
+		s.log.Error("review notification: load agent", "version", v.ID, "err", err)
+		return
+	}
+	if err := s.notifier.ReviewDecided(ctx, notify.ReviewNotice{
+		ToEmail:   author.Email,
+		Agent:     agent.Namespace + "/" + agent.Name,
+		Version:   v.Version,
+		Decision:  decision,
+		Reviewer:  reviewer,
+		Rationale: rationale,
+	}); err != nil {
+		s.log.Error("review notification", "version", v.ID, "err", err)
+	}
 }
 
 // SetFindingVerdict implements POST /findings/{id}/verdict (§8.5). Only org

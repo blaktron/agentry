@@ -78,9 +78,9 @@ func (s *Server) principalMiddleware(next http.Handler) http.Handler {
 		// before it is throttled.
 		var res limitResult
 		if p.Anonymous {
-			res = s.limits.allowWithHeaders("anon", clientIP(r), s.classes.anon, s.classes.anonBurst)
+			res = s.limits.Allow("anon", clientIP(r), s.classes.anon, s.classes.anonBurst)
 		} else {
-			res = s.limits.allowWithHeaders("authed", p.UserID.String(), s.classes.authed, s.classes.authedBurst)
+			res = s.limits.Allow("authed", p.UserID.String(), s.classes.authed, s.classes.authedBurst)
 		}
 		writeRateLimitHeaders(w, res)
 		if !res.OK {

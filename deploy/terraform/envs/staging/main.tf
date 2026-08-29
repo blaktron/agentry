@@ -42,6 +42,20 @@ locals {
     AGENTRY_JUDGE_PROVIDER      = "bedrock"
     AGENTRY_JUDGE_MODEL         = var.judge_model
     AGENTRY_JUDGE_REGION        = var.aws_region
+
+    # OTLP to the ADOT sidecar on loopback (§16.2, D-25). Every agentryd
+    # service in this file runs the sidecar, so this is set once here. Without
+    # it the sidecar receives nothing and the §16.3 alarms below read metrics
+    # that are never emitted — which is exactly the state this replaces.
+    AGENTRY_OTEL_ENDPOINT = "http://localhost:4318"
+
+    # CloudFront -> app ALB -> task, so the last two X-Forwarded-For hops were
+    # written by infrastructure in this account. Anything earlier came from the
+    # client. This MUST match the real hop count: set too high, callers can
+    # pick their own per-IP rate-limit bucket (§19) and forge the address the
+    # audit log records. The git service overrides it below — git.<domain> has
+    # no CDN in front of it (§13.5).
+    AGENTRY_TRUSTED_PROXIES = "2"
   }
 
   # Secrets injected from Secrets Manager (execution role reads; app sees value).
@@ -537,6 +551,8 @@ module "git" {
 
   environment_variables = merge(local.agentryd_env, {
     AGENTRY_GIT_DATA_DIR = "/data/git"
+    # git traffic reaches its own ALB directly — one trusted hop, not two.
+    AGENTRY_TRUSTED_PROXIES = "1"
   })
   secrets                  = local.core_secrets
   kms_key_arns_for_secrets = [module.kms.data_key_arn]

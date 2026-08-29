@@ -15,6 +15,7 @@ import (
 
 	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
+	"github.com/PLACEHOLDER_ORG/agentry/internal/entitlements"
 	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
 	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
 	"github.com/PLACEHOLDER_ORG/agentry/pkg/manifest"
@@ -23,11 +24,9 @@ import (
 // AgentNameRe is the §4.2 agent-name grammar.
 var AgentNameRe = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,63}[a-z0-9])?$`)
 
-// Namespace agent quotas (§19).
-const (
-	MaxAgentsUserNamespace = 200
-	MaxAgentsOrgNamespace  = 500
-)
+// Namespace agent quotas come from the entitlements Resolver (§14.2, §19),
+// not from constants here: an org on a larger plan raises the number without
+// this package learning that plans exist.
 
 // Service is the agent-domain service shared by the API and git layers.
 // Bare repositories are NOT created here: the git layer initializes them
@@ -49,7 +48,9 @@ type Service struct {
 	policyGate PolicyGate
 	// require2FAPublic turns on the §12.1/§19 gate for public publishes.
 	require2FAPublic bool
-	log              *slog.Logger
+	// entitlements resolves the §19 quotas (§14.2). nil = shipped defaults.
+	entitlements entitlements.Resolver
+	log          *slog.Logger
 }
 
 // PolicyGate evaluates the §8.6 policy knobs that reject a submission before
@@ -110,6 +111,20 @@ func NewService(st *store.Store, aud *audit.Writer) *Service {
 
 // SetBlobStore wires archive storage (required for submissions).
 func (s *Service) SetBlobStore(b BlobStore) { s.blobs = b }
+
+// SetEntitlements wires the §14.2 quota resolver.
+func (s *Service) SetEntitlements(r entitlements.Resolver) { s.entitlements = r }
+
+// Entitlements returns the wired resolver, or the shipped §19 defaults when
+// none was set. Defaulting to the OSS resolver rather than to nil means a
+// half-wired service still enforces quotas — an unwired seam must not read as
+// "no limits".
+func (s *Service) Entitlements() entitlements.Resolver {
+	if s.entitlements == nil {
+		return entitlements.Default()
+	}
+	return s.entitlements
+}
 
 // SetGitArchiver wires tag-archive production for git-tag submissions.
 func (s *Service) SetGitArchiver(g GitArchiver) { s.gitArchiver = g }
@@ -213,7 +228,7 @@ func (s *Service) CreateAgent(ctx context.Context, p *auth.Principal, in CreateA
 	}
 
 	// Namespace authorization + quota (§19).
-	var quota int64 = MaxAgentsUserNamespace
+	subject := entitlements.ForUser(ns.ID)
 	switch ns.Kind {
 	case "user":
 		if ns.ID != p.UserID {
@@ -223,18 +238,23 @@ func (s *Service) CreateAgent(ctx context.Context, p *auth.Principal, in CreateA
 		if r := p.Role(ns.ID); r != auth.RoleOwner && r != auth.RoleAdmin {
 			return Agent{}, auth.ErrForbidden
 		}
-		quota = MaxAgentsOrgNamespace
+		subject = entitlements.ForOrg(ns.ID)
 	}
 	// Publishing requires verified email (§19); creating an agent is the
 	// first step of that path, so gate here where the journey starts.
 	if !p.EmailVerified {
 		return Agent{}, fmt.Errorf("%w: email verification required", ErrDenied)
 	}
+	lim, err := s.Entitlements().Limits(ctx, subject)
+	if err != nil {
+		// Fail closed: an unresolvable entitlement is not permission.
+		return Agent{}, fmt.Errorf("registry: entitlements: %w", err)
+	}
 	n, err := q.CountAgentsInNamespace(ctx, ns.ID)
 	if err != nil {
 		return Agent{}, fmt.Errorf("registry: quota count: %w", err)
 	}
-	if n >= quota {
+	if n >= lim.AgentsPerNamespace {
 		return Agent{}, fmt.Errorf("%w: namespace agent quota reached", ErrDenied)
 	}
 

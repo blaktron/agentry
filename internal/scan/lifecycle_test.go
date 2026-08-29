@@ -991,11 +991,27 @@ func TestApprovalRefusesToSignAnEmptyDigest(t *testing.T) {
 // -------------------------------------- M-07 quarantine notification surfaces
 
 // recordingNotifier captures author notifications (§8.7).
-type recordingNotifier struct{ notices []notify.QuarantineNotice }
+// The embedded LogNotifier supplies the notification kinds this test does not
+// assert on, so adding one to the interface does not break this stub again.
+type recordingNotifier struct {
+	notify.LogNotifier
+	notices    []notify.QuarantineNotice
+	reviews    []notify.ReviewNotice
+	advisories []notify.AdvisoryNotice
+}
 
-func (n *recordingNotifier) EmailVerification(context.Context, string, string) error { return nil }
 func (n *recordingNotifier) AgentQuarantined(_ context.Context, notice notify.QuarantineNotice) error {
 	n.notices = append(n.notices, notice)
+	return nil
+}
+
+func (n *recordingNotifier) ReviewDecided(_ context.Context, notice notify.ReviewNotice) error {
+	n.reviews = append(n.reviews, notice)
+	return nil
+}
+
+func (n *recordingNotifier) AdvisoryPublished(_ context.Context, notice notify.AdvisoryNotice) error {
+	n.advisories = append(n.advisories, notice)
 	return nil
 }
 

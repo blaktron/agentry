@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/PLACEHOLDER_ORG/agentry/internal/metrics"
 	"github.com/PLACEHOLDER_ORG/agentry/pkg/rules"
 )
 
@@ -27,7 +28,14 @@ type Orchestrator struct {
 	// stageTimeout bounds one stage; scanTimeout bounds the whole run.
 	stageTimeout time.Duration
 	scanTimeout  time.Duration
+	// mx records §16.2 per-stage durations and the ScanStageRuns/
+	// ScanStageErrors pair the §16.3 error-rate page alarm divides. nil is a
+	// working no-op.
+	mx *metrics.Metrics
 }
+
+// SetMetrics wires the §16.2 instrument set.
+func (o *Orchestrator) SetMetrics(m *metrics.Metrics) { o.mx = m }
 
 // NewOrchestrator builds the orchestrator with the loaded ruleset and judge.
 func NewOrchestrator(bundle *rules.Bundle, judge JudgeProvider, log *slog.Logger) *Orchestrator {
@@ -268,6 +276,14 @@ func (o *Orchestrator) runStage(sc stageContext, st Stage, in *Input) (res Stage
 	defer cancel()
 	inner := sc
 	inner.ctx = stageCtx
+
+	// §16.2 stage telemetry. Deferred on the named return so the timeout path
+	// below is measured too — a stage that hangs is exactly the one the
+	// error-rate alarm needs to hear about.
+	start := time.Now()
+	defer func() {
+		o.mx.RecordScanStage(sc.ctx, st.ID(), time.Since(start), len(res.Findings), res.Err)
+	}()
 
 	done := make(chan StageResult, 1)
 	go func() {

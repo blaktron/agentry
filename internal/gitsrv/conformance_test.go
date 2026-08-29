@@ -60,6 +60,13 @@ type gitEnv struct {
 
 func newGitEnv(t *testing.T) *gitEnv {
 	t.Helper()
+	return newGitEnvCfg(t, nil)
+}
+
+// newGitEnvCfg is newGitEnv with a hook to adjust the config before the
+// handler is built (quota tests need a budget small enough to exhaust).
+func newGitEnvCfg(t *testing.T, cfgFn func(*config.Config)) *gitEnv {
+	t.Helper()
 	url := os.Getenv("AGENTRY_TEST_DATABASE_URL")
 	if url == "" {
 		t.Skip("AGENTRY_TEST_DATABASE_URL not set; skipping git conformance")
@@ -84,6 +91,9 @@ func newGitEnv(t *testing.T) *gitEnv {
 	cfg.Limits.AuthedBurstPerMin = 1000000
 
 	cfg.Storage.LocalDir = t.TempDir()
+	if cfgFn != nil {
+		cfgFn(&cfg)
+	}
 
 	repos, err := gitsrv.NewRepoStore(cfg)
 	if err != nil {

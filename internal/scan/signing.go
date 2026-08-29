@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -231,19 +232,32 @@ func trimSHA(d string) string {
 	return d
 }
 
+// SignerOptions selects and configures the signer (D-16: none|file|kms).
+type SignerOptions struct {
+	Kind string // none | file | kms
+	// KeyFile is the file signer's PEM private key.
+	KeyFile string
+	// KMSKeyARN identifies the KMS key (kms kind).
+	KMSKeyARN string
+	// KMSRegion overrides the ambient region for the KMS client.
+	KMSRegion string
+	// DevMode allows the ephemeral in-memory key.
+	DevMode bool
+}
+
 // NewSigner builds the configured signer (D-16: none|file|kms).
-func NewSigner(kind, keyFile string, devMode bool) (Signer, error) {
-	switch kind {
+func NewSigner(ctx context.Context, opt SignerOptions) (Signer, error) {
+	switch opt.Kind {
 	case "file":
-		return NewFileSigner(keyFile, devMode)
+		return NewFileSigner(opt.KeyFile, opt.DevMode)
 	case "none":
-		if devMode {
+		if opt.DevMode {
 			return NewFileSigner("", true) // ephemeral dev key
 		}
 		return nil, fmt.Errorf("scan: signing.kind none not allowed outside dev")
 	case "kms":
-		return nil, fmt.Errorf("scan: kms signer not yet wired (WG-K); use file")
+		return NewKMSSigner(ctx, KMSOptions{KeyARN: opt.KMSKeyARN, Region: opt.KMSRegion})
 	default:
-		return nil, fmt.Errorf("scan: unknown signer kind %q", kind)
+		return nil, fmt.Errorf("scan: unknown signer kind %q", opt.Kind)
 	}
 }
