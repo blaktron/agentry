@@ -1,8 +1,7 @@
 // POST /logout — revoke the API session and clear both cookies.
 import { NextRequest, NextResponse } from "next/server";
-import { apiSend } from "@/lib/session";
 import { sameOrigin } from "@/lib/forms";
-import { CSRF_COOKIE, SESSION_COOKIE } from "@/lib/session";
+import { apiSend, CSRF_COOKIE, SESSION_COOKIE } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
   if (!sameOrigin(req)) {

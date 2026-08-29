@@ -114,6 +114,15 @@ checkw "/dashboard"              "Review work"          "dashboard (review work 
 checkw "/dashboard"              "Sign out"             "dashboard (account nav)"
 checkw "/review?queue=platform"  "$AUTHOR/gated@1.0.0"  "review queue lists the item"
 
+# Cross-org audit browser (§12.6). Reading it is itself audited, so it must
+# be fetched only when its own tab is open.
+checkw "/staff"                  "Cross-org audit"      "staff console (audit tab link)"
+checkw "/staff?view=audit"       "audit.platform_read"  "staff console (audit tab names its own audit trail)"
+checkw "/staff?view=audit"       "user.register"        "staff console (audit rows render)"
+checkw "/staff?view=audit&action=user.register" "user.register" "staff console (audit action filter)"
+# The enforcement copy claims a specific API behaviour; it must match §7.
+checkw "/staff"                  "410 Gone"             "staff console (block copy matches the 410 the API returns)"
+
 ITEM=$(curl -fsS -b "$JAR" "$API/review-queue?queue=platform&limit=100" \
   | python3 -c "import json,sys; items=[i for i in json.load(sys.stdin) if i['namespace']=='$AUTHOR']; print(items[-1]['id'])")
 checkw "/review/$ITEM" "Decision"                    "review detail (decision panel)"
@@ -216,6 +225,22 @@ curl -fsS -b "$JARA" -X POST "$WEB/orgs/$ORG/admin/webhooks" \
   --data-urlencode "events=version.published" | grep -q "shown once" \
   && echo "  org admin: webhook secret shown once: OK" || { echo "webhook create page missing"; exit 1; }
 
+# webhook test delivery: the ping travels the ordinary delivery path, so its
+# attempt has to turn up in the endpoint's own delivery list.
+WHID=$(curl -fsS -b "$JARA" "$API/orgs/$ORG/webhooks" | python3 -c 'import json,sys;print(json.load(sys.stdin)[0]["id"])')
+LOC=$(curl -fsS -b "$JARA" -o /dev/null -w '%{redirect_url}' -X POST "$WEB/orgs/$ORG/admin/webhooks" \
+  --data-urlencode "action=ping" --data-urlencode "id=$WHID")
+echo "$LOC" | grep -q "deliveries=$WHID" \
+  && echo "  org admin: webhook test delivery enqueued: OK" \
+  || { echo "webhook ping failed: $LOC"; exit 1; }
+for i in $(seq 1 40); do
+  curl -fsS -b "$JARA" "$WEB/orgs/$ORG/admin?deliveries=$WHID" | grep -q "ping" && break
+  sleep 0.25
+done
+curl -fsS -b "$JARA" "$WEB/orgs/$ORG/admin?deliveries=$WHID" | grep -q "Recent deliveries" \
+  && echo "  org admin: delivery list renders the attempt: OK" \
+  || { echo "delivery list missing"; exit 1; }
+
 # audit export
 LOC=$(curl -fsS -b "$JARA" -o /dev/null -w '%{redirect_url}' -X POST "$WEB/orgs/$ORG/admin/audit")
 echo "$LOC" | grep -q "export=" && echo "  org admin: audit export started: OK" || { echo "audit export failed: $LOC"; exit 1; }
@@ -225,6 +250,80 @@ curl -fsS -b "$JARA" -X POST "$WEB/settings/tokens" \
   --data-urlencode "action=create" --data-urlencode "name=web-pat" --data-urlencode "scopes=agent:read" \
   | grep -q "agy_" && echo "  settings: PAT shown once on creation: OK" || { echo "PAT create page missing token"; exit 1; }
 checkao "/settings" "Personal access tokens" "settings page renders"
+# Sessions section: built against the /user/sessions contract, and required to
+# say so plainly on a server that does not serve it rather than rendering an
+# empty list (which would claim there are no other sessions).
+checkao "/settings" "Sessions" "settings: sessions section present"
+if curl -fsS -b "$CJA" "$API/user/sessions" >/dev/null 2>&1; then
+  checkao "/settings" "started" "settings: sessions listed"
+else
+  checkao "/settings" "not available on this server" "settings: sessions degrade honestly when absent"
+fi
+
+# 9b. Agent settings (§9.2): the maintain-gated console for one agent. Driven
+#     against a fresh agent rather than `gated`, which staff blocked above —
+#     the point here is the settings surface, not enforcement interactions.
+SETNAME="wsettings$SFX"
+curl -fsS -b "$CJA" -H "X-Agentry-CSRF: $CSRFA" -X POST "$API/agents" -H 'Content-Type: application/json' \
+  -d "{\"namespace\":\"$AUTHOR\",\"name\":\"$SETNAME\",\"kind\":\"skill\",\"visibility\":\"private\",\"summary\":\"settings acceptance\"}" >/dev/null
+checkao "/$AUTHOR/$SETNAME/settings" "Publish on tag push" "agent settings: auto-publish toggle"
+checkao "/$AUTHOR/$SETNAME/settings" "Access ("            "agent settings: grants section"
+LOC=$(curl -fsS -b "$JARA" -o /dev/null -w '%{redirect_url}' -X POST "$WEB/$AUTHOR/$SETNAME/settings/save" \
+  --data-urlencode "action=profile" --data-urlencode "summary=edited via the settings form" \
+  --data-urlencode "visibility=public")
+echo "$LOC" | grep -q "ok=" || { echo "agent settings save failed: $LOC"; exit 1; }
+curl -fsS "$API/agents/$AUTHOR/$SETNAME" | grep -q "edited via the settings form" \
+  && echo "  agent settings: summary/visibility saved: OK" || { echo "summary not persisted"; exit 1; }
+LOC=$(curl -fsS -b "$JARA" -o /dev/null -w '%{redirect_url}' -X POST "$WEB/$AUTHOR/$SETNAME/settings/save" \
+  --data-urlencode "action=autopublish" --data-urlencode "autoPublishTags=true")
+echo "$LOC" | grep -q "ok=" || { echo "auto-publish toggle failed: $LOC"; exit 1; }
+curl -fsS -b "$CJA" "$API/agents/$AUTHOR/$SETNAME" \
+  | python3 -c 'import json,sys;sys.exit(0 if json.load(sys.stdin).get("autoPublishTags") else 1)' \
+  && echo "  agent settings: auto-publish toggled: OK" || { echo "auto-publish not persisted"; exit 1; }
+
+# Grants round trip.
+GRANTEE="congrant$SFX"
+register "$GRANTEE"
+LOC=$(curl -fsS -b "$JARA" -o /dev/null -w '%{redirect_url}' -X POST "$WEB/$AUTHOR/$SETNAME/settings/grants" \
+  --data-urlencode "action=set" --data-urlencode "kind=user" --data-urlencode "grantee=$GRANTEE" \
+  --data-urlencode "role=read")
+echo "$LOC" | grep -q "ok=" || { echo "grant add failed: $LOC"; exit 1; }
+curl -fsS -b "$CJA" "$API/agents/$AUTHOR/$SETNAME/grants" | grep -q "$GRANTEE" \
+  && echo "  agent settings: user grant added: OK" || { echo "grant not persisted"; exit 1; }
+LOC=$(curl -fsS -b "$JARA" -o /dev/null -w '%{redirect_url}' -X POST "$WEB/$AUTHOR/$SETNAME/settings/grants" \
+  --data-urlencode "action=remove" --data-urlencode "kind=user" --data-urlencode "grantee=$GRANTEE")
+echo "$LOC" | grep -q "ok=" || { echo "grant remove failed: $LOC"; exit 1; }
+curl -fsS -b "$CJA" "$API/agents/$AUTHOR/$SETNAME/grants" | grep -q "$GRANTEE" \
+  && { echo "grant not removed"; exit 1; } || echo "  agent settings: user grant removed: OK"
+
+# 9c. Star control (§9.2): a plain form over the idempotent PUT/DELETE pair.
+LOC=$(curl -fsS -b "$JARA" -o /dev/null -w '%{redirect_url}' -X POST "$WEB/$AUTHOR/$SETNAME/star" \
+  --data-urlencode "starred=0")
+echo "$LOC" | grep -q "ok=" || { echo "star failed: $LOC"; exit 1; }
+curl -fsS -b "$CJA" "$API/agents/$AUTHOR/$SETNAME/stats" | grep -q '"stars":1' \
+  && echo "  star via web form: OK" || { echo "star not recorded"; exit 1; }
+curl -fsS -b "$JARA" -o /dev/null -X POST "$WEB/$AUTHOR/$SETNAME/star" --data-urlencode "starred=1"
+curl -fsS -b "$CJA" "$API/agents/$AUTHOR/$SETNAME/stats" | grep -q '"stars":0' \
+  && echo "  unstar via web form: OK" || { echo "unstar not recorded"; exit 1; }
+
+# 9d. Deletion (§9.2 / DEV-021): refused once an agent has any version row,
+#     allowed for a draft that has none. The refusal is the load-bearing half.
+LOC=$(curl -fsS -b "$JARA" -o /dev/null -w '%{redirect_url}' -X POST "$WEB/$AUTHOR/gated/settings/delete" \
+  --data-urlencode "confirm=gated")
+echo "$LOC" | grep -q "error=" \
+  && echo "  agent settings: delete refused for an agent with versions: OK" \
+  || { echo "delete of an agent with versions was not refused: $LOC"; exit 1; }
+curl -fsS "$API/agents/$AUTHOR/gated" >/dev/null || { echo "agent disappeared despite the refusal"; exit 1; }
+LOC=$(curl -fsS -b "$JARA" -o /dev/null -w '%{redirect_url}' -X POST "$WEB/$AUTHOR/$SETNAME/settings/delete" \
+  --data-urlencode "confirm=wrong-name")
+echo "$LOC" | grep -q "error=" || { echo "delete accepted a mistyped confirmation: $LOC"; exit 1; }
+echo "  agent settings: delete requires the exact name typed back: OK"
+LOC=$(curl -fsS -b "$JARA" -o /dev/null -w '%{redirect_url}' -X POST "$WEB/$AUTHOR/$SETNAME/settings/delete" \
+  --data-urlencode "confirm=$SETNAME")
+echo "$LOC" | grep -q "ok=" || { echo "draft delete failed: $LOC"; exit 1; }
+DC=$(curl -s -o /dev/null -w '%{http_code}' "$API/agents/$AUTHOR/$SETNAME")
+[ "$DC" = "404" ] && echo "  agent settings: never-published draft deleted: OK" \
+  || { echo "draft still present (status $DC)"; exit 1; }
 
 # 10. Publish flow: submit a git tag through the web form and watch progress.
 #     Reuse the author's repo (gated agent already has a v1.0.0 tag pushed by
@@ -245,9 +344,12 @@ python3 ./scripts/dev/a11y-check.py --cookie-jar "$JAR" \
   "$WEB/staff"
 python3 ./scripts/dev/a11y-check.py --cookie-jar "$JARA" \
   "$WEB/orgs/$ORG/admin" \
+  "$WEB/orgs/$ORG/admin?deliveries=$WHID" \
   "$WEB/settings" \
   "$WEB/new" \
+  "$WEB/$AUTHOR/gated/settings" \
   "$WEB/$AUTHOR/gated/publish" \
   "$WEB/$AUTHOR/gated/versions/1.0.0/progress"
+python3 ./scripts/dev/a11y-check.py --cookie-jar "$JAR" "$WEB/staff?view=audit"
 
 echo "== M8 console acceptance PASSED =="

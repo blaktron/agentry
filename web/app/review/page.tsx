@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Badge, Card } from "@/components/ui";
+import { Badge, Card, RefusalCard } from "@/components/ui";
 import type { ReviewItem } from "@/lib/api";
+import { fmtUTC } from "@/lib/format";
 import { AccessError, authedGet, currentUser, reviewerOrgs } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Review queue" };
@@ -21,12 +22,10 @@ export default async function ReviewQueuePage({
   const canPlatform = user.platformStaff === true;
   if (!canPlatform && orgs.length === 0) {
     return (
-      <Card>
-        <p>
-          Reviewing requires the <strong>security_reviewer</strong> role in an organization, or
-          platform staff. Your account has neither.
-        </p>
-      </Card>
+      <RefusalCard>
+        Reviewing requires the <strong>security_reviewer</strong> role in an organization, or
+        platform staff. Your account has neither.
+      </RefusalCard>
     );
   }
 
@@ -71,6 +70,8 @@ export default async function ReviewQueuePage({
         </nav>
       </div>
 
+      {/* Not RefusalCard here: that component owns the page's <h1>, and this
+          refusal renders inside a page that already has one. */}
       {denied ? (
         <Card>
           <p>You do not have access to this queue.</p>
@@ -104,7 +105,7 @@ export default async function ReviewQueuePage({
                     <Badge tone={it.queue === "platform" ? "accent" : "neutral"}>{it.queue}</Badge>
                   </td>
                   <td className="px-4 py-2" style={{ color: "var(--color-muted)" }}>
-                    {it.createdAt ? new Date(it.createdAt).toLocaleString() : "—"}
+                    {fmtUTC(it.createdAt)}
                   </td>
                   <td className="px-4 py-2 text-right">
                     <Link href={`/review/${it.id}`} className="underline">

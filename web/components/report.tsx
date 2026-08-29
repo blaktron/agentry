@@ -2,6 +2,8 @@
 // deliberately "scanned, N findings, signed" — never "safe" (§1.6.3).
 import Link from "next/link";
 import type { ScanReport, Severity } from "@/lib/api";
+import { fmtUTC } from "@/lib/format";
+import { RevealText } from "@/lib/reveal";
 import { Badge, Card, SeverityBadge } from "./ui";
 
 const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low", "info"];
@@ -48,6 +50,12 @@ export function ReportCard({
       </div>
 
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs" style={{ color: "var(--color-muted)" }}>
+        {/* The scan date. The page copy has always claimed agent pages show
+            "the findings, the ruleset version, and the scan date" — this is
+            the third of those, and it is what tells a reader whether the
+            report predates the ruleset they care about. */}
+        <dt>Scanned</dt>
+        <dd>{report.finishedAt ? fmtUTC(report.finishedAt) : "date not recorded"}</dd>
         {report.rulesetVersion && (
           <>
             <dt>Ruleset</dt>
@@ -104,6 +112,16 @@ export function FindingsList({ report }: { report: ScanReport }) {
               {f.verdict !== "open" && <Badge tone="neutral">{f.verdict.replace(/_/g, " ")}</Badge>}
             </div>
             <p className="mt-2 font-medium">{f.title}</p>
+            {/* §8.5: a dismissed finding stays on the public report WITH the
+                reviewer's rationale. Rendering the verdict without the reason
+                is the same disappearance the rule exists to prevent, so the
+                absence is stated rather than hidden. */}
+            {f.verdict !== "open" && (
+              <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
+                Reviewer&apos;s rationale:{" "}
+                {f.verdictReason ? <RevealText text={f.verdictReason} /> : <em>none recorded</em>}
+              </p>
+            )}
             {f.filePath && (
               <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>
                 {f.filePath}
