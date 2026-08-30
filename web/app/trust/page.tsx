@@ -18,9 +18,9 @@ const STAGES = [
   ["S3", "Hidden & obfuscated content", "Invisible Unicode, bidi overrides, the Unicode tag block, confusables, hidden HTML/CSS, data URIs, and encoded blobs in prose."],
   ["S4", "Injection signatures", "A versioned rule bundle for instruction-override frames, exfiltration directives, tool coercion, credential harvesting, persistence, and obfuscation markers."],
   ["S5", "LLM adjudication", "A model reviews the instructions against a fixed rubric with no tools and returns cited, structured scores. If it shows signs of having been manipulated, that is itself a finding."],
-  ["S6", "Capability consistency", "For code-bearing agents, detects network, subprocess, filesystem, and dynamic-eval use and diffs it against the declared capabilities."],
+  ["S6", "Capability consistency", "For code-bearing BriefAgents, detects network, subprocess, filesystem, and dynamic-eval use and diffs it against the declared capabilities."],
   ["S7", "Dependencies & licenses", "Lockfile analysis, install-script detection, and typosquat heuristics."],
-  ["S8", "Metadata & publisher signals", "Name confusability against popular agents, URL reputation, and publish-velocity anomalies from new accounts."],
+  ["S8", "Metadata & publisher signals", "Name confusability against popular BriefAgents, URL reputation, and publish-velocity anomalies from new accounts."],
   ["S9", "Release-diff risk", "Compares against the previous published version: new egress hosts, widened capabilities, new install scripts, first appearance of obfuscation."],
   ["S10", "Report assembly", "Produces the canonical report whose digest is signed into the attestation."],
 ];

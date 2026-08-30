@@ -7,9 +7,9 @@ export const metadata: Metadata = {
 };
 
 const SECTIONS = [
-  ["Information we collect", "Account details you provide, the agents and versions you publish, and operational logs needed to run the service securely."],
+  ["Information we collect", "Account details you provide, the BriefAgents and versions you publish, and operational logs needed to run the service securely."],
   ["How we use it", "To operate the registry, scan and sign published versions, prevent abuse, and communicate with you about your account."],
-  ["Sharing", "We do not sell personal data. Public agents and their security reports are, by design, public."],
+  ["Sharing", "We do not sell personal data. Public BriefAgents and their security reports are, by design, public."],
   ["Your rights", "You may access, correct, export, or delete your account data; account deletion pseudonymizes your records while preserving the immutability that installed consumers rely on."],
   ["Retention", "Operational and audit records are retained for a limited period and then archived or purged."],
 ];

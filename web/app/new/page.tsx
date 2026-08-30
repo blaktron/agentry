@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { Card } from "@/components/ui";
 import { currentUser } from "@/lib/session";
 
-export const metadata: Metadata = { title: "New agent" };
+export const metadata: Metadata = { title: "New BriefAgent" };
 
 // New-agent wizard (§10.1 authed row): create the agent record + its git
 // repo, then hand off to `agentry init` / `git push` for content. Publishing
@@ -20,7 +20,7 @@ export default async function NewAgentPage({
 
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-6">
-      <h1 className="text-xl font-semibold">New agent</h1>
+      <h1 className="text-xl font-semibold">New BriefAgent</h1>
       {q.error && (
         <p role="alert" className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: "var(--color-sev-high)", color: "var(--color-sev-high)" }}>
           {q.error}
@@ -44,7 +44,7 @@ export default async function NewAgentPage({
               name="name"
               required
               pattern="[a-z0-9][a-z0-9-]*"
-              placeholder="my-agent"
+              placeholder="my-briefagent"
               className="mt-1 w-full rounded-md border px-2 py-1.5 font-mono"
               style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
             />
