@@ -16,9 +16,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/queue"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/webhook"
+	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/queue"
+	"github.com/blaktron/agentry/internal/webhook"
 )
 
 // countingEndpoint accepts every delivery and counts them.

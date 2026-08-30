@@ -9,8 +9,8 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/ratelimit"
+	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/ratelimit"
 )
 
 // limitClasses holds the computed §19 rate classes from config.

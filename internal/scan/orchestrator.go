@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/metrics"
-	"github.com/PLACEHOLDER_ORG/agentry/pkg/rules"
+	"github.com/blaktron/agentry/internal/metrics"
+	"github.com/blaktron/agentry/pkg/rules"
 )
 
 // Orchestrator runs the scanner DAG (§8.2): S1 first (builds the inventory),

@@ -19,7 +19,7 @@ infrastructure.
 ## Quickstart with Docker Compose
 
 ```bash
-git clone https://github.com/PLACEHOLDER_ORG/agentry.git
+git clone https://github.com/blaktron/agentry.git
 cd agentry
 docker compose -f deploy/compose/docker-compose.yaml up -d   # postgres, minio, mailpit
 docker compose -f deploy/compose/docker-compose.yaml --profile server up -d

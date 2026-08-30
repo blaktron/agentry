@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
+	"github.com/blaktron/agentry/internal/registry"
 )
 
 // exactVersionRe mirrors the API's VersionString pattern: verify only works

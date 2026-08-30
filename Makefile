@@ -6,7 +6,7 @@ export PATH := /opt/homebrew/bin:$(PATH)
 
 GO      ?= go
 BIN_DIR := bin
-LDFLAGS := -X github.com/PLACEHOLDER_ORG/agentry/internal/version.Version=$(shell git describe --tags --always --dirty 2>/dev/null || echo 0.0.0-dev)
+LDFLAGS := -X github.com/blaktron/agentry/internal/version.Version=$(shell git describe --tags --always --dirty 2>/dev/null || echo 0.0.0-dev)
 
 .PHONY: all build test lint vuln generate generate-check check dev db-up db-down clean web-install web-check e2e sync-rules sync-rules-check fuzz deps-audit
 

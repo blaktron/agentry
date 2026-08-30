@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
-	"github.com/PLACEHOLDER_ORG/agentry/pkg/manifest"
+	"github.com/blaktron/agentry/internal/registry"
+	"github.com/blaktron/agentry/pkg/manifest"
 )
 
 // The §8.6 policy knobs that reject BEFORE the state machine: submissions

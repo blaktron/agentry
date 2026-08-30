@@ -136,7 +136,7 @@ None of these block anything already built — placeholders are mechanical per P
 
 | Q | Question | Blocks |
 |---|---|---|
-| **Q1** | Product name (replaces `agentry`) | public repo creation. Rename is mechanical: module `github.com/PLACEHOLDER_ORG/agentry`, binaries `agentryd`/`agentry`, env prefix `AGENTRY_`, config `agentry.yaml` |
+| **Q1** | ~~Product name~~ **Answered: SecureAgentry** (repo blaktron/agentry). Module renamed to `github.com/blaktron/agentry`; binaries `agentryd`/`agentry`, env prefix `AGENTRY_`, config `agentry.yaml` unchanged |
 | **Q2** | OSS license (planning default Apache-2.0) | first public release |
 | **Q3** | SaaS judge provider + model | wiring the bedrock/anthropic providers |
 | **Q4** | Launch policy strictness (e.g. all first-time publishers → human review) | policy seed only; engine supports it today |

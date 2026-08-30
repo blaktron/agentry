@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/PLACEHOLDER_ORG/agentry/pkg/rules"
+	"github.com/blaktron/agentry/pkg/rules"
 )
 
 // stageContext is what a stage may reach: a cancellable context (per-stage

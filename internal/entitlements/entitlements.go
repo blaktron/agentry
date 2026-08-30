@@ -16,7 +16,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/config"
 )
 
 // NamespaceKind distinguishes the two namespace flavours §19 gives different

@@ -17,9 +17,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/metrics"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
-	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/internal/metrics"
+	"github.com/blaktron/agentry/internal/store"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 // Job is a claimed unit of work handed to a Handler.

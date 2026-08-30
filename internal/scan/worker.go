@@ -8,11 +8,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/notify"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/queue"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
-	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/internal/audit"
+	"github.com/blaktron/agentry/internal/notify"
+	"github.com/blaktron/agentry/internal/queue"
+	"github.com/blaktron/agentry/internal/registry"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 // Job kinds handled by the scan worker (§8.2, §8.7, §7).

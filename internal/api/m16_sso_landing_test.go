@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	samlsp "github.com/PLACEHOLDER_ORG/agentry/internal/auth/saml"
+	samlsp "github.com/blaktron/agentry/internal/auth/saml"
 )
 
 var reAuthnRequestID = regexp.MustCompile(`\bID="([^"]+)"`)

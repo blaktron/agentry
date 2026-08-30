@@ -14,8 +14,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/queue"
-	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/internal/queue"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 // EventPing is the event type recorded for a test delivery. It is

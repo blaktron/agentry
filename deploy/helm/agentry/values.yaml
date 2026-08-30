@@ -17,11 +17,11 @@ fullnameOverride: ""
 
 image:
   agentryd:
-    repository: ghcr.io/PLACEHOLDER_ORG/agentry/agentryd
+    repository: ghcr.io/blaktron/agentry/agentryd
     tag: "" # defaults to .Chart.AppVersion
     pullPolicy: IfNotPresent
   web:
-    repository: ghcr.io/PLACEHOLDER_ORG/agentry/web
+    repository: ghcr.io/blaktron/agentry/web
     tag: ""
     pullPolicy: IfNotPresent
   pullSecrets: []

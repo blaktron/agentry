@@ -13,7 +13,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/PLACEHOLDER_ORG/agentry/pkg/manifest"
+	"github.com/blaktron/agentry/pkg/manifest"
 )
 
 // ensureSkillFrontmatter returns content guaranteed to start with YAML

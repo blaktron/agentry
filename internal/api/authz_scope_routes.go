@@ -21,7 +21,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/auth"
 )
 
 // scopedPathPrefixes maps an /api/v1 path prefix to the action whose scope a

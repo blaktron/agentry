@@ -2,5 +2,5 @@
 package version
 
 // Version is stamped at build time via
-// -ldflags "-X github.com/PLACEHOLDER_ORG/agentry/internal/version.Version=vX.Y.Z".
+// -ldflags "-X github.com/blaktron/agentry/internal/version.Version=vX.Y.Z".
 var Version = "0.0.0-dev"

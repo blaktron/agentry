@@ -15,11 +15,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
-	oidcrp "github.com/PLACEHOLDER_ORG/agentry/internal/auth/oidc"
-	samlsp "github.com/PLACEHOLDER_ORG/agentry/internal/auth/saml"
-	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/internal/audit"
+	"github.com/blaktron/agentry/internal/auth"
+	oidcrp "github.com/blaktron/agentry/internal/auth/oidc"
+	samlsp "github.com/blaktron/agentry/internal/auth/saml"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 // ssoURLs returns the SP metadata/ACS and OIDC redirect URLs for an org,

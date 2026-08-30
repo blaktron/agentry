@@ -4,7 +4,7 @@
 package scan
 
 import (
-	"github.com/PLACEHOLDER_ORG/agentry/pkg/rules"
+	"github.com/blaktron/agentry/pkg/rules"
 )
 
 // Severity is a finding severity (§8, ordered).

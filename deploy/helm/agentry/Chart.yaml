@@ -13,6 +13,6 @@ keywords:
   - security
 home: https://agentry.example
 sources:
-  - https://github.com/PLACEHOLDER_ORG/agentry
+  - https://github.com/blaktron/agentry
 maintainers:
   - name: agentry

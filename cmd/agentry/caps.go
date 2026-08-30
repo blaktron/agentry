@@ -6,7 +6,7 @@ package main
 import (
 	"strings"
 
-	"github.com/PLACEHOLDER_ORG/agentry/pkg/manifest"
+	"github.com/blaktron/agentry/pkg/manifest"
 )
 
 // capabilityLines renders the §5.4 capability block as stable, indentable

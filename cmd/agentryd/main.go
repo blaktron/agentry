@@ -16,15 +16,15 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/api"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/gitsrv"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/metrics"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/queue"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/scan"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/version"
+	"github.com/blaktron/agentry/internal/api"
+	"github.com/blaktron/agentry/internal/audit"
+	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/gitsrv"
+	"github.com/blaktron/agentry/internal/metrics"
+	"github.com/blaktron/agentry/internal/queue"
+	"github.com/blaktron/agentry/internal/scan"
+	"github.com/blaktron/agentry/internal/store"
+	"github.com/blaktron/agentry/internal/version"
 )
 
 func main() {

@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/version"
+	"github.com/blaktron/agentry/internal/version"
 )
 
 // defaultRegistryURL is the fallback registry when neither --registry nor the

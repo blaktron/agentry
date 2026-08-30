@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/PLACEHOLDER_ORG/agentry/pkg/manifest"
+	"github.com/blaktron/agentry/pkg/manifest"
 )
 
 // TestArchiveReproducible pins D-15: identical trees produce byte-identical

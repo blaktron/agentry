@@ -23,8 +23,8 @@ import (
 	coreoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/coreos/go-oidc/v3/oidc/oidctest"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/api"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/api"
+	"github.com/blaktron/agentry/internal/config"
 )
 
 // ---- in-process GitHub OAuth app ----

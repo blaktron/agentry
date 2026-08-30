@@ -13,7 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/PLACEHOLDER_ORG/agentry/pkg/apiclient"
+	"github.com/blaktron/agentry/pkg/apiclient"
 )
 
 // newInfoCmd builds the info command.

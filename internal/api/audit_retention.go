@@ -19,9 +19,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/queue"
-	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/internal/audit"
+	"github.com/blaktron/agentry/internal/queue"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 // jobAuditPrune is the queue kind for the retention sweep.

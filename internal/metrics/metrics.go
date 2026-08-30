@@ -35,7 +35,7 @@ import (
 )
 
 // scopeName identifies this instrumentation scope in OTLP output.
-const scopeName = "github.com/PLACEHOLDER_ORG/agentry/internal/metrics"
+const scopeName = "github.com/blaktron/agentry/internal/metrics"
 
 // secondsBuckets are the explicit histogram boundaries for every *Seconds
 // instrument. The SDK default boundaries top out at 10,000 and are shaped for

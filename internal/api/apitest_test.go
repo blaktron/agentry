@@ -19,9 +19,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/api"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
+	"github.com/blaktron/agentry/internal/api"
+	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/store"
 )
 
 var (

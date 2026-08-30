@@ -32,7 +32,7 @@ import (
 	coreoidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 
-	oidcrp "github.com/PLACEHOLDER_ORG/agentry/internal/auth/oidc"
+	oidcrp "github.com/blaktron/agentry/internal/auth/oidc"
 )
 
 // Provider ids (§12.1). Closed set: an unknown id is a 404, never a guess.

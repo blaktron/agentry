@@ -13,13 +13,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/metrics"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/notify"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
-	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/webhook"
+	"github.com/blaktron/agentry/internal/audit"
+	"github.com/blaktron/agentry/internal/metrics"
+	"github.com/blaktron/agentry/internal/notify"
+	"github.com/blaktron/agentry/internal/registry"
+	"github.com/blaktron/agentry/internal/store"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/internal/webhook"
 )
 
 // Pipeline is the M4 implementation of registry.Pipeline (§8): it fetches the

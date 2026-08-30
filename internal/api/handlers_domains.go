@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/dnsx"
-	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/internal/audit"
+	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/dnsx"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 func domainClaimToAPI(row storegen.DomainClaim) DomainClaim {

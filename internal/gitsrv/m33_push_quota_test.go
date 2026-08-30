@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/config"
 )
 
 // receivePackAttempt makes the admission-level request a `git push` makes,

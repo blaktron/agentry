@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/PLACEHOLDER_ORG/agentry/pkg/manifest"
+	"github.com/blaktron/agentry/pkg/manifest"
 )
 
 func TestEnsureSkillFrontmatter(t *testing.T) {

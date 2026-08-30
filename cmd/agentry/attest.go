@@ -17,7 +17,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/scan"
+	"github.com/blaktron/agentry/internal/scan"
 )
 
 // signingKey is one entry from /.well-known/agentry/signing-keys.json.
