@@ -93,7 +93,7 @@ jobs:
       - name: npm lockfile matches package.json
         run: cd web && npm ci --ignore-scripts --dry-run
       - name: osv-scanner (go.mod + web/package-lock.json)
-        uses: google/osv-scanner-action/osv-scanner-action@v2
+        uses: google/osv-scanner-action@v2.5.1
         with:
           scan-args: |-
             --lockfile=go.mod
@@ -111,7 +111,7 @@ jobs:
       - name: build image
         run: docker build -t agentry:ci -f deploy/compose/Dockerfile .
       - name: trivy
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: agentry:ci
           severity: HIGH,CRITICAL
