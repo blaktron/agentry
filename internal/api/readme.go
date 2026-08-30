@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/scan"
+	"github.com/blaktron/agentry/internal/scan"
 )
 
 // errNoReadme means the release archive carries no README. Aliased from scan,

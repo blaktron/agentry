@@ -8,7 +8,7 @@ import (
 	"embed"
 	"io/fs"
 
-	"github.com/PLACEHOLDER_ORG/agentry/pkg/rules"
+	"github.com/blaktron/agentry/pkg/rules"
 )
 
 //go:embed rules/*.yaml

@@ -1,4 +1,4 @@
-module github.com/PLACEHOLDER_ORG/agentry
+module github.com/blaktron/agentry
 
 go 1.27.0
 

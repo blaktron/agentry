@@ -11,10 +11,10 @@ import (
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/queue"
-	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/internal/audit"
+	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/queue"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 // jobAuditExport is the queue kind for an async audit export (§12.6).

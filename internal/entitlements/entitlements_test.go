@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/config"
 )
 
 // The point of the seam is that wiring it changed nothing: these are the §19

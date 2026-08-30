@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/auth"
 )
 
 const (

@@ -12,7 +12,7 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 
-	"github.com/PLACEHOLDER_ORG/agentry/pkg/manifest"
+	"github.com/blaktron/agentry/pkg/manifest"
 )
 
 // Deterministic release archives (D-15): sorted entries, zeroed mtimes,

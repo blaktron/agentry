@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/version"
+	"github.com/blaktron/agentry/internal/version"
 )
 
 // The policy, stated once so help text and behavior cannot drift:

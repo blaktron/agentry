@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
-	"github.com/PLACEHOLDER_ORG/agentry/pkg/manifest"
+	"github.com/blaktron/agentry/internal/registry"
+	"github.com/blaktron/agentry/pkg/manifest"
 )
 
 // uploadVersionCLI packs files into a deterministic archive (as the CLI does)

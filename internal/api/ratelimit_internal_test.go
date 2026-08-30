@@ -16,7 +16,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/time/rate"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/ratelimit"
+	"github.com/blaktron/agentry/internal/ratelimit"
 )
 
 func mustUUID(t *testing.T) uuid.UUID {

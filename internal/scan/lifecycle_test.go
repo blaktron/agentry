@@ -14,14 +14,14 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/notify"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/queue"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/scan"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/scan/ruleset"
-	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/internal/audit"
+	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/notify"
+	"github.com/blaktron/agentry/internal/queue"
+	"github.com/blaktron/agentry/internal/registry"
+	"github.com/blaktron/agentry/internal/scan"
+	"github.com/blaktron/agentry/internal/scan/ruleset"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 // ---------------------------------------------------------------- B-02 block

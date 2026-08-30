@@ -7,10 +7,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/queue"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
-	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
-	"github.com/PLACEHOLDER_ORG/agentry/pkg/rules"
+	"github.com/blaktron/agentry/internal/queue"
+	"github.com/blaktron/agentry/internal/store"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/pkg/rules"
 )
 
 // Ruleset registration is startup wiring shared by every role that owns a

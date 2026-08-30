@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/PLACEHOLDER_ORG/agentry/pkg/rules"
+	"github.com/blaktron/agentry/pkg/rules"
 )
 
 // S1 — Inventory & hygiene (§8.3). Unpacks were done by the orchestrator;

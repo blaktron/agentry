@@ -22,7 +22,7 @@ RUN go mod download
 COPY . .
 ARG VERSION=dev
 RUN CGO_ENABLED=0 go build -trimpath \
-      -ldflags "-s -w -X github.com/PLACEHOLDER_ORG/agentry/internal/version.Version=${VERSION}" \
+      -ldflags "-s -w -X github.com/blaktron/agentry/internal/version.Version=${VERSION}" \
       -o /out/agentryd ./cmd/agentryd
 
 FROM debian:trixie-slim

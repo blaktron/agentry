@@ -9,8 +9,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/scan"
+	"github.com/blaktron/agentry/internal/registry"
+	"github.com/blaktron/agentry/internal/scan"
 )
 
 // laterRulesetProvider is a judge that scores nothing on the first pass and

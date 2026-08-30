@@ -7,7 +7,7 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 
-	"github.com/PLACEHOLDER_ORG/agentry/pkg/rules"
+	"github.com/blaktron/agentry/pkg/rules"
 )
 
 // Release-diff helpers for S9 (§8.3). S9's job is to compare THIS version's

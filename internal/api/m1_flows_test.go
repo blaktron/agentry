@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
-	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/internal/auth"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 // TestAuthLifecycle: register → login → CSRF enforcement → logout.

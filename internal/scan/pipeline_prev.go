@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 // Baseline materialization for S9's content diff (§8.3 S9).

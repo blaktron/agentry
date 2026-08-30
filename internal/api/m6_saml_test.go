@@ -18,7 +18,7 @@ import (
 	"github.com/beevik/etree"
 	dsig "github.com/russellhaering/goxmldsig"
 
-	samlsp "github.com/PLACEHOLDER_ORG/agentry/internal/auth/saml"
+	samlsp "github.com/blaktron/agentry/internal/auth/saml"
 )
 
 // samlTestIdP is an in-process signing IdP for the ACS endpoint test.

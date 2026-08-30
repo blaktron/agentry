@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/entitlements"
-	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/webhook"
+	"github.com/blaktron/agentry/internal/audit"
+	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/entitlements"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/internal/webhook"
 )
 
 const webhookSecretPrefix = "whsec_"

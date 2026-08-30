@@ -13,7 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/PLACEHOLDER_ORG/agentry/pkg/manifest"
+	"github.com/blaktron/agentry/pkg/manifest"
 )
 
 // newInitCmd builds the init command.

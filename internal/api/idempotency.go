@@ -31,7 +31,7 @@ import (
 
 	"github.com/google/uuid"
 
-	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 const (

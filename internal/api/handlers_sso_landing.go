@@ -17,8 +17,8 @@ import (
 	"net/http"
 	"strings"
 
-	samlsp "github.com/PLACEHOLDER_ORG/agentry/internal/auth/saml"
-	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
+	samlsp "github.com/blaktron/agentry/internal/auth/saml"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 // samlRequests holds the AuthnRequest ids this process has issued, so the ACS

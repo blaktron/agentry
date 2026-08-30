@@ -15,7 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 
-	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 //go:embed migrations/*.sql

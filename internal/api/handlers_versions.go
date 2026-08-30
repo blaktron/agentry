@@ -11,11 +11,11 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/scan"
-	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/internal/audit"
+	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/registry"
+	"github.com/blaktron/agentry/internal/scan"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 // Upload limits for cli-upload archives (§19: 10 MB post-filter; accept a

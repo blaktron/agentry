@@ -19,8 +19,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
-	"github.com/PLACEHOLDER_ORG/agentry/pkg/manifest"
+	"github.com/blaktron/agentry/internal/registry"
+	"github.com/blaktron/agentry/pkg/manifest"
 )
 
 // kindFixture returns manifest + files for one agent kind.

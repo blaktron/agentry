@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/api"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/dnsx"
+	"github.com/blaktron/agentry/internal/api"
+	"github.com/blaktron/agentry/internal/dnsx"
 )
 
 // ---- shared M6 helpers ----

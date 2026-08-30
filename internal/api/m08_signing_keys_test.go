@@ -20,7 +20,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/config"
 )
 
 type publishedKey struct {

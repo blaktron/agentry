@@ -15,8 +15,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
-	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/internal/store"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 func newQueueTestClient(t *testing.T) (*PGClient, *store.Store) {

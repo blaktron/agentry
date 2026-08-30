@@ -13,7 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/config"
 )
 
 // RepoStore manages bare repositories under cfg.Git.DataDir:

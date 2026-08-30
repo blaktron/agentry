@@ -3,7 +3,7 @@ package api
 import (
 	"strings"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/auth"
 )
 
 // RouteDecl declares the authorization contract of one API operation

@@ -13,10 +13,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/scan"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/scan/ruleset"
-	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/internal/audit"
+	"github.com/blaktron/agentry/internal/scan"
+	"github.com/blaktron/agentry/internal/scan/ruleset"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 var reSemver = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(?:[-+].*)?$`)

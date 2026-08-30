@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/version"
+	"github.com/blaktron/agentry/internal/version"
 )
 
 // metaServer serves GET /api/v1/meta with the given minCLIVersion ("" omits

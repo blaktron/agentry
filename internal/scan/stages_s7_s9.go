@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/PLACEHOLDER_ORG/agentry/pkg/rules"
+	"github.com/blaktron/agentry/pkg/rules"
 )
 
 // S7 — Dependencies & licenses (§8.3). Lockfile audit: the stage parses the

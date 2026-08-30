@@ -13,7 +13,7 @@ variable "manage_organization" {
 variable "github_repository" {
   description = "owner/repo allowed to assume the deploy role via OIDC."
   type        = string
-  default     = "PLACEHOLDER_ORG/agentry"
+  default     = "blaktron/agentry"
 }
 
 variable "apex_domain" {

@@ -9,7 +9,7 @@ import (
 	coreoidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/auth"
 )
 
 const oidcStateCookie = "agentry_oidc_state"

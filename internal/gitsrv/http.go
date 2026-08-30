@@ -17,14 +17,14 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/audit"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/auth"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/metrics"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/ratelimit"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/store"
-	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/internal/audit"
+	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/metrics"
+	"github.com/blaktron/agentry/internal/ratelimit"
+	"github.com/blaktron/agentry/internal/registry"
+	"github.com/blaktron/agentry/internal/store"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 // Handler serves the git smart-HTTP surface (§6.1): info/refs,

@@ -15,7 +15,7 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc/oidctest"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/api"
+	"github.com/blaktron/agentry/internal/api"
 )
 
 // oidcEndpointIdP is a fake IdP whose /authorize records the nonce per code and

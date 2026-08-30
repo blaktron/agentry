@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/scan/ruleset"
-	"github.com/PLACEHOLDER_ORG/agentry/pkg/rules"
+	"github.com/blaktron/agentry/internal/scan/ruleset"
+	"github.com/blaktron/agentry/pkg/rules"
 )
 
 // tarWith builds a tar from alternating name/content arguments.

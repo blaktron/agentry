@@ -17,10 +17,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/registry"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/scan"
-	"github.com/PLACEHOLDER_ORG/agentry/pkg/apiclient"
-	"github.com/PLACEHOLDER_ORG/agentry/pkg/manifest"
+	"github.com/blaktron/agentry/internal/registry"
+	"github.com/blaktron/agentry/internal/scan"
+	"github.com/blaktron/agentry/pkg/apiclient"
+	"github.com/blaktron/agentry/pkg/manifest"
 )
 
 // installOpts carries the install command's flags.

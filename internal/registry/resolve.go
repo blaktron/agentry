@@ -8,7 +8,7 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 
-	storegen "github.com/PLACEHOLDER_ORG/agentry/internal/store/gen"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 // Resolution semantics (§5.5, §9.4): ranges resolve over PUBLISHED versions

@@ -27,7 +27,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/PLACEHOLDER_ORG/agentry/pkg/rules"
+	"github.com/blaktron/agentry/pkg/rules"
 )
 
 // maxBundleBytes bounds what the CLI will read from the bundle endpoint.

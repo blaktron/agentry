@@ -24,11 +24,11 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 
-	"github.com/PLACEHOLDER_ORG/agentry/internal/api"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/config"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/scan"
-	"github.com/PLACEHOLDER_ORG/agentry/internal/scan/ruleset"
-	"github.com/PLACEHOLDER_ORG/agentry/pkg/rules"
+	"github.com/blaktron/agentry/internal/api"
+	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/scan"
+	"github.com/blaktron/agentry/internal/scan/ruleset"
+	"github.com/blaktron/agentry/pkg/rules"
 )
 
 // ---------------------------------------------------------------- fixtures
