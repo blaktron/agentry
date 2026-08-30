@@ -12,7 +12,7 @@ require (
 	github.com/beevik/etree v1.7.0
 	github.com/coreos/go-oidc/v3 v3.20.0
 	github.com/crewjam/saml v0.5.1
-	github.com/getkin/kin-openapi v0.142.0
+	github.com/getkin/kin-openapi v0.144.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/klauspost/compress v1.19.2
