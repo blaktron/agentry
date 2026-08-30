@@ -82,8 +82,10 @@ services:
       AGENTRY_SMTP_PORT: "1025"
       AGENTRY_SMTP_STARTTLS: "false"
       AGENTRY_SMTP_FROM: Agentry <no-reply@agentry.localhost>
-      # Override with AGENTRY_PUBLIC_URL (compose .env or shell) when the box
-      # is reached under another name — clone/install URLs render from this.
+      # Override with AGENTRY_PUBLIC_URL when the box is reached under another
+      # name — clone/install/download URLs all render live from this. Set it
+      # in deploy/compose/.env (compose reads .env from the compose file's
+      # own directory, NOT the cwd) or export it in the shell before `up`.
       AGENTRY_BASE_URL: ${AGENTRY_PUBLIC_URL:-http://localhost:8080}
       # Archive store against minio (S3-compatible), exercising the same code
       # path SaaS uses rather than the local-FS one.
