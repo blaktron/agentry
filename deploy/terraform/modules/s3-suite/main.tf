@@ -7,8 +7,12 @@
 #                   replicated to the security account.
 # All buckets: SSE-KMS, public access fully blocked, TLS-only.
 
+locals {
+  # The environment tag rides with every resource this module creates.
+  tags = merge(var.tags, { Environment = var.environment })
+}
+
 data "aws_caller_identity" "current" {}
-data "aws_partition" "current" {}
 
 # ===========================================================================
 # releases
@@ -17,7 +21,7 @@ data "aws_partition" "current" {}
 resource "aws_s3_bucket" "releases" {
   bucket              = "${var.name}-releases"
   object_lock_enabled = true
-  tags                = merge(var.tags, { Name = "${var.name}-releases" })
+  tags                = merge(local.tags, { Name = "${var.name}-releases" })
 }
 
 resource "aws_s3_bucket_versioning" "releases" {
@@ -119,7 +123,7 @@ resource "aws_s3_bucket_policy" "releases" {
 
 resource "aws_s3_bucket" "evidence" {
   bucket = "${var.name}-evidence"
-  tags   = merge(var.tags, { Name = "${var.name}-evidence" })
+  tags   = merge(local.tags, { Name = "${var.name}-evidence" })
 }
 
 resource "aws_s3_bucket_versioning" "evidence" {
@@ -191,7 +195,7 @@ resource "aws_s3_bucket_policy" "evidence" {
 resource "aws_s3_bucket" "audit" {
   bucket              = "${var.name}-audit-archive"
   object_lock_enabled = true
-  tags                = merge(var.tags, { Name = "${var.name}-audit-archive" })
+  tags                = merge(local.tags, { Name = "${var.name}-audit-archive" })
 }
 
 resource "aws_s3_bucket_versioning" "audit" {
@@ -285,7 +289,7 @@ resource "aws_iam_role" "replication" {
   count              = local.replication_enabled ? 1 : 0
   name               = "${var.name}-audit-replication"
   assume_role_policy = data.aws_iam_policy_document.replication_assume[0].json
-  tags               = var.tags
+  tags               = local.tags
 }
 
 data "aws_iam_policy_document" "replication" {

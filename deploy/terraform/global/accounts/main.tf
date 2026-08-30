@@ -6,7 +6,6 @@
 # long-lived keys anywhere — GitHub Actions deploys by assuming an OIDC role.
 
 data "aws_partition" "current" {}
-data "aws_caller_identity" "current" {}
 
 # --- Organization + member accounts (management account only) --------------
 
