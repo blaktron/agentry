@@ -6,7 +6,7 @@ import type { Agent, AgentGrant, AgentRole, AgentVersion, Org } from "@/lib/api"
 import { fmtUTC } from "@/lib/format";
 import { AccessError, authedGet, currentUser } from "@/lib/session";
 
-export const metadata: Metadata = { title: "Agent settings" };
+export const metadata: Metadata = { title: "BriefAgent settings" };
 
 const ROLES: AgentRole[] = ["read", "write", "maintain", "publish"];
 
@@ -42,7 +42,7 @@ export default async function AgentSettingsPage({
     grants = (await authedGet<AgentGrant[]>(`${base}/grants`)) ?? [];
   } catch (e) {
     if (e instanceof AccessError) {
-      return <RefusalCard>Managing {`${ns}/${name}`} requires the maintain role on the agent.</RefusalCard>;
+      return <RefusalCard>Managing {`${ns}/${name}`} requires the maintain role on the BriefAgent.</RefusalCard>;
     }
     throw e;
   }
@@ -50,7 +50,7 @@ export default async function AgentSettingsPage({
   // Present iff the caller has maintain. A reader with plain read access can
   // reach the page but must not be shown editable controls.
   if (agent.autoPublishTags === undefined) {
-    return <RefusalCard>Managing {`${ns}/${name}`} requires the maintain role on the agent.</RefusalCard>;
+    return <RefusalCard>Managing {`${ns}/${name}`} requires the maintain role on the BriefAgent.</RefusalCard>;
   }
 
   const [versions, org] = await Promise.all([
@@ -116,7 +116,7 @@ export default async function AgentSettingsPage({
             </div>
           </fieldset>
           <p className="text-xs" style={{ color: "var(--color-muted)" }}>
-            Making an agent private hides it from search and anonymous reads. It does not un-publish
+            Making a BriefAgent private hides it from search and anonymous reads. It does not un-publish
             versions that are already out there, and it does not remove copies people installed.
           </p>
           <div>
@@ -231,19 +231,19 @@ export default async function AgentSettingsPage({
         </form>
         {!isOrg && (
           <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>
-            Team grants apply to org-owned agents only; this one lives in a personal namespace.
+            Team grants apply to org-owned BriefAgents only; this one lives in a personal namespace.
           </p>
         )}
       </Card>
 
       <Card>
         <h2 className="mb-2 font-semibold" style={{ color: "var(--color-sev-high)" }}>
-          Delete this agent
+          Delete this BriefAgent
         </h2>
         {deletable ? (
           <>
             <p className="mb-3 text-sm">
-              This agent has no version rows, so it can still be deleted along with its hosted
+              This BriefAgent has no version rows, so it can still be deleted along with its hosted
               repository. This cannot be undone, and the name becomes available again.
             </p>
             <form method="post" action={`/${n}/${a}/settings/delete`} className="flex flex-wrap items-end gap-2 text-sm">
@@ -264,10 +264,10 @@ export default async function AgentSettingsPage({
           </>
         ) : (
           <p className="text-sm">
-            Not available: this agent has {history.length} version
+            Not available: this BriefAgent has {history.length} version
             {history.length === 1 ? "" : "s"} on record. §4.3 forbids deleting version rows — a
             published version is history that consumers may depend on, and a version still in the
-            pipeline is mid-flight. Published agents are{" "}
+            pipeline is mid-flight. Published BriefAgents are{" "}
             <Link href={`/${n}/${a}`} className="underline">
               yanked or blocked
             </Link>

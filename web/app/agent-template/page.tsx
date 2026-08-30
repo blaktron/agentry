@@ -30,7 +30,7 @@ export default function AgentTemplatePage() {
           A <strong>BriefAgent</strong> is a single-purpose AI agent as a small, reviewable package:
           a manifest that declares what it is and what it may touch, the instruction content itself,
           and optionally a little code. BriefAgents carry no tool code — at run time the declared
-          capabilities become exactly the tools the agent gets, and nothing else.
+          capabilities become exactly the tools the BriefAgent gets, and nothing else.
         </p>
         <p className="mt-3 text-sm">
           <a href={TEMPLATE_REPO} className="underline">

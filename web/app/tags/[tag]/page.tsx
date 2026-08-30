@@ -12,7 +12,7 @@ const TAG_RE = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/;
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { tag } = await params;
-  return { title: `#${tag}`, description: `Public agents tagged ${tag} on SecureAgentry.` };
+  return { title: `#${tag}`, description: `Public BriefAgents tagged ${tag} on SecureAgentry.` };
 }
 
 // Tag listing (§9.2): the agents whose latest published manifest carries this
@@ -44,7 +44,7 @@ export default async function TagPage({
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">#{page.tag}</h1>
         <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-          Public agents whose latest published manifest declares this tag. Blocked agents never
+          Public BriefAgents whose latest published manifest declares this tag. Blocked BriefAgents never
           appear here.
         </p>
       </div>
@@ -52,7 +52,7 @@ export default async function TagPage({
       {results.length === 0 ? (
         <Card>
           <p className="text-sm">
-            {cursor ? "No further BriefAgents on this page." : `No public agents are tagged #${page.tag}.`}
+            {cursor ? "No further BriefAgents on this page." : `No public BriefAgents are tagged #${page.tag}.`}
           </p>
         </Card>
       ) : (
@@ -75,7 +75,7 @@ export default async function TagPage({
             href={`/tags/${encodeURIComponent(page.tag)}?cursor=${encodeURIComponent(page.nextCursor)}`}
             className="underline"
           >
-            More agents →
+            More BriefAgents →
           </Link>
         )}
         <Link href="/search" className="underline" style={{ color: "var(--color-muted)" }}>

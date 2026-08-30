@@ -278,12 +278,12 @@ export default async function StaffPage({
             )}
             <p className="mt-3 text-xs" style={{ color: "var(--color-muted)" }}>
               Triage records the outcome. Enforcement (quarantine/block) is a separate action below so
-              its audit trail names the agent (§8.7).
+              its audit trail names the BriefAgent (§8.7).
             </p>
           </Card>
 
           <Card>
-            <h2 className="mb-2 font-semibold">Agent enforcement</h2>
+            <h2 className="mb-2 font-semibold">BriefAgent enforcement</h2>
             <form method="post" action="/staff/agent-action" className="flex flex-wrap items-end gap-2 text-sm">
               <label>
                 Agent
@@ -316,15 +316,15 @@ export default async function StaffPage({
               </button>
             </form>
             {/* Checked against the handlers rather than repeated from memory:
-                the agent flag alone changes nothing a consumer can observe, so
+                the BriefAgent flag alone changes nothing a consumer can observe, so
                 each action also walks the §7 version state machine. */}
             <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>
-              Quarantine hides the agent from search and resolution and moves its latest published
-              version to <code>quarantined</code> — downloads of it answer 409. Block marks the agent{" "}
-              <code>blocked</code> and moves its live versions with it: every download for the agent
+              Quarantine hides the BriefAgent from search and resolution and moves its latest published
+              version to <code>quarantined</code> — downloads of it answer 409. Block marks the BriefAgent{" "}
+              <code>blocked</code> and moves its live versions with it: every download for the BriefAgent
               then answers <strong>410 Gone</strong>. Reinstate walks both steps back —{" "}
               <code>blocked</code> to <code>quarantined</code> to <code>published</code> — so a
-              blocked agent returns to normal in one action (§7). Mass-incident procedure:
+              blocked BriefAgent returns to normal in one action (§7). Mass-incident procedure:
               docs/ops/runbooks.md.
             </p>
           </Card>
