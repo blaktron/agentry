@@ -26,7 +26,7 @@ export function showOnce(opts: {
 <body style="font-family:system-ui,sans-serif;max-width:640px;margin:48px auto;padding:0 16px">
 <main><header><h1 style="font-size:20px">${esc(opts.title)}</h1></header>
 <nav aria-label="Back"><a href="${esc(opts.backHref)}">&larr; Back</a></nav>
-<p>Copy the value below now — it is not stored and cannot be shown again.</p>
+<p>Copy the value below now. It is not stored and cannot be shown again.</p>
 ${rows}
 </main></body></html>`;
   return new NextResponse(html, {

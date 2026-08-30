@@ -17,8 +17,8 @@ export default function AdvisoriesPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Advisories</h1>
         <p className="mt-2" style={{ color: "var(--color-muted)" }}>
           When a rescan or a valid abuse report surfaces a new high-severity
-          finding on a version that is already published, that version is
-          quarantined and an advisory is raised against it.
+          finding on a published version, that version is quarantined and an
+          advisory is raised against it.
         </p>
       </header>
 
@@ -45,7 +45,7 @@ export default function AdvisoriesPage() {
         <h2 className="font-medium">What we cannot do</h2>
         <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
           We cannot reach into an installation. A quarantined version stops resolving for new
-          installs and warns on direct download, but a copy already on your disk stays there — which
+          installs and warns on direct download, but a copy already on your disk stays there. That
           is why advisories and webhooks exist, and why pinning versions in a lockfile you review is
           worth the trouble.
         </p>

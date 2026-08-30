@@ -18,6 +18,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return redirectBack(req, `/review/${i}`, { error: await problemDetail(res) });
   }
   return redirectBack(req, `/review/${i}`, {
-    ok: decision === "approve" ? "Approved — the version is publishing and signing now." : "Rejected.",
+    ok: decision === "approve" ? "Approved. The version is publishing and signing now." : "Rejected.",
   });
 }

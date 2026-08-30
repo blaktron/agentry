@@ -26,13 +26,13 @@ export default async function HomePage() {
     <div className="space-y-12">
       <section className="max-w-3xl">
         <h1 className="text-3xl font-semibold tracking-tight">
-          A registry for BriefAgents — single-purpose AI agents, with the scanning step built in
+          A registry for BriefAgents, single-purpose AI agents
         </h1>
         <p className="mt-4 text-lg" style={{ color: "var(--color-muted)" }}>
-          BriefAgent instructions run with your credentials and your tool access. SecureAgentry hosts
-          them in git, and nothing becomes installable until it has passed a layered scan for prompt
-          injection, hidden instructions, capability escalation, secrets, and supply-chain problems —
-          then it is signed.
+          BriefAgent instructions run with your credentials and your tool access. SecureAgentry
+          hosts them in git, and nothing becomes installable until it has passed a layered scan
+          for prompt injection, hidden instructions, capability escalation, secrets, and
+          supply-chain problems. Every published version is signed.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
@@ -68,7 +68,7 @@ export default async function HomePage() {
             <p className="text-sm">
               {trending === null
                 ? "The registry index is not reachable right now."
-                : "Nothing has been published to this registry yet — the first BriefAgent could be yours."}
+                : "Nothing has been published to this registry yet."}
             </p>
           </Card>
         ) : (
@@ -105,9 +105,9 @@ export default async function HomePage() {
         <Card>
           <h2 className="font-medium">Capabilities are declared up front</h2>
           <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
-            Network egress, filesystem access, subprocess execution, and expected secrets are part of
-            the manifest — so your runtime can enforce least privilege, and you can see what changed
-            between versions.
+            Network egress, filesystem access, subprocess execution, and expected secrets are part
+            of the manifest. Your runtime can enforce least privilege, and diffs between versions
+            stay visible.
           </p>
         </Card>
         <Card>

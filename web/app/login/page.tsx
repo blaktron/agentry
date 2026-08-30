@@ -8,7 +8,7 @@ import { currentUser } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Sign in" };
 
-// Sign-in (§10 authed surface). A plain form posting to /login/submit — the
+// Sign-in (§10 authed surface). A plain form posting to /login/submit. The
 // web tier forwards credentials to the API once and stores only the session
 // cookie the API minted. TOTP is a single optional field: the API answers
 // totp-required and the page re-renders asking for the code.
@@ -16,7 +16,7 @@ export const metadata: Metadata = { title: "Sign in" };
 // Two other entry points sit below it: social login (§12.1, individual
 // accounts) and the org SSO landing (§12.4, "sign in with your company
 // account"). Both are ordinary links/forms to endpoints the API serves on
-// this same origin — no client JS is involved in either.
+// this same origin; no client JS is involved in either.
 export default async function LoginPage({
   searchParams,
 }: {
@@ -104,7 +104,7 @@ export default async function LoginPage({
             ))}
           </div>
           <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>
-            Provider sign-in creates or links an individual account only — it never grants
+            Provider sign-in creates or links an individual account only. It never grants
             organization membership. Two-factor still applies:{" "}
             <Link href="/login/challenge" className="underline">
               finish a pending challenge
@@ -137,7 +137,7 @@ export default async function LoginPage({
           </button>
         </form>
         <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>
-          Sends you to <code>/sso/&lt;org&gt;</code>, which starts whichever SAML or OIDC
+          Sends you to <code>/sso/&lt;org&gt;</code>. That starts whichever SAML or OIDC
           connection the organization has enabled (§12.4).
         </p>
       </Card>
