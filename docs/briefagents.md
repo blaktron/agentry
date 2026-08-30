@@ -1,16 +1,16 @@
 # BriefAgents
 
 A **BriefAgent** is a single-purpose AI agent packaged for SecureAgentry:
-one manifest declaring what it is and what it may touch, the instruction
-content itself, and nothing else. BriefAgents carry **no tool code** — at
-run time the SecureAgentry runner serves exactly the tools the manifest
-declares through an isolated MCP gateway, and when installed into an
-existing coding agent the host's built-in tools stand in under the same
+one manifest declaring what it is and what it may touch, plus the instruction
+content itself. Nothing else. BriefAgents carry **no tool code**. At run
+time the SecureAgentry runner serves exactly the tools the manifest declares
+through an isolated MCP gateway, and when a BriefAgent is installed into an
+existing coding agent, the host's built-in tools stand in under the same
 declared contract.
 
 Start from the **[BriefAgent template](https://github.com/blaktron/agentry-template)**
-(`github.com/blaktron/agentry-template`) — a runnable package with every
-option below shown in a commented `agent.yaml`, or scaffold one with
+(`github.com/blaktron/agentry-template`), a runnable package with every
+option below shown in a commented `agent.yaml`. Or scaffold one with
 `agentry init`.
 
 ```bash
@@ -33,7 +33,7 @@ my-briefagent/
 
 ## The manifest, option by option
 
-`agent.yaml` uses manifest schema v1 — a **closed** schema: unknown keys
+`agent.yaml` uses manifest schema v1, a **closed** schema: unknown keys
 are rejected, so a typo cannot silently disable a control.
 
 ### Identity and metadata
@@ -55,18 +55,18 @@ are rejected, so a typo cannot silently disable a control.
 
 | `kind` | What it is | Entrypoint | Runnable by `agentry run`? |
 |---|---|---|---|
-| `skill` | an instruction package (Claude-skill-shaped) | `entrypoints.skill:` — the repo-relative skill file (default `SKILL.md`); frontmatter is stripped, the body becomes the harness instruction | yes |
-| `prompt-agent` | pure instructions, no code entrypoint | none — the runner reads `AGENT.md`, else `PROMPT.md`, at the archive root | yes |
-| `mcp-server` | a tool server other BriefAgents can use | `entrypoints.mcp: {command, args[], transport: stdio\|http}`; args naming repo files must appear in `publish.include` | no — it is a tool, not an agent (exit 12) |
+| `skill` | an instruction package (Claude-skill-shaped) | `entrypoints.skill:`, the repo-relative skill file (default `SKILL.md`); frontmatter is stripped, the body becomes the harness instruction | yes |
+| `prompt-agent` | pure instructions, no code entrypoint | none; the runner reads `AGENT.md`, else `PROMPT.md`, at the archive root | yes |
+| `mcp-server` | a tool server other BriefAgents can use | `entrypoints.mcp: {command, args[], transport: stdio\|http}`; args naming repo files must appear in `publish.include` | no; it is a tool, not an agent (exit 12) |
 
-### `runtime` — informational hints
+### `runtime`: informational hints
 
 | Field | Meaning |
 |---|---|
 | `runtime.models` | free-form model hint patterns (e.g. `["claude-*"]`). A hint, never a lock: the **operator's** runner policy chooses the model and owns the API key |
 | `runtime.interfaces` | which install targets the package supports: `claude-skill`, `mcp`, `agents-md` |
 
-### `capabilities` — the security contract
+### `capabilities`: the security contract
 
 Closed vocabulary. Omitted or empty means a **pure-text BriefAgent**
 (its only run-time tool is `write_report`). The registry scans releases
@@ -90,7 +90,7 @@ turns each line into a concrete control:
 | `workspace` | the whole task workspace | `read` grants `fs_read` + `fs_list`; `write` grants `fs_write`; the workspace is bind-mounted into the **tools** container `ro`/`rw` accordingly |
 | `{paths: [repo/relative, …]}` | only these paths | per-path bind mounts plus server-side grant checks; a directory entry covers everything under it |
 
-The agent container itself never mounts the workspace — file access goes
+The agent container itself never mounts the workspace. File access goes
 through the gateway's tools, which is what makes the contract enforceable.
 
 **`exec`**
@@ -100,28 +100,28 @@ through the gateway's tools, which is what makes the contract enforceable.
 | `none` / omitted | no subprocesses | no `run_command` tool; harness built-in shells are never enabled |
 | `{commands: [jq, git, …]}` | only these binaries | `run_command` restricted to the listed commands via an argv allowlist plus a shim `PATH` containing only them |
 
-**`secrets`** — a list of environment variable **names**, never values.
+**`secrets`**: a list of environment variable **names**, never values.
 The runner resolves each from the operator's secret source before any
 container starts (missing ⇒ refuse, exit 11, naming the variable), and
 injects values only into the tools container. The `fetch` tool can send a
 declared secret as an auth header without the value entering model
 context; values never appear in plans, receipts, or process listings.
 
-**`dataAccess`** — semantic categories for review and audit: `email`,
+**`dataAccess`** holds semantic categories for review and audit: `email`,
 `calendar`, `files`, `tickets`, `code`, `messages`, `payments`, `other`.
 Operators may catalog extra MCP servers per category in their runner
 policy; undeclared categories are never wired in.
 
 ### `dependencies`
 
-`dependencies.agents: [{ref: ns/name, version: "^1.2"}]` — informational
+`dependencies.agents: [{ref: ns/name, version: "^1.2"}]` is informational
 in v1: recorded and displayed, not auto-installed.
 
 ### `publish`
 
 | Field | Meaning |
 |---|---|
-| `publish.include` | **required** — the release archive allowlist of glob patterns (`path.Match` segments; a whole segment `**` matches any depth). Nothing outside it ships |
+| `publish.include` | **required**; the release archive allowlist of glob patterns (`path.Match` segments; a whole segment `**` matches any depth). Nothing outside it ships |
 | `publish.channel` | `stable` (default) or `beta` |
 
 ## What a BriefAgent gets at run time
@@ -129,15 +129,14 @@ in v1: recorded and displayed, not auto-installed.
 `agentry run` verifies the release exactly like `agentry install`
 (sha256 digest + DSSE attestation against pinned keys; unsigned requires
 `--allow-unsigned`), compiles manifest + operator policy into a
-deterministic run plan, then executes one container tree: an isolated
-agent container on an internal-only network — its only reachable
+deterministic run plan, then executes one container tree. The isolated
+agent container sits on an internal-only network; its only reachable
 endpoints are the MCP gateway and an allowlisting egress proxy for the
-model API — plus a per-run Docker MCP Gateway fronting the companion
-tools server.
+model API. A per-run Docker MCP Gateway fronts the companion tools server.
 
 | Manifest declaration | Tool(s) granted |
 |---|---|
-| — (always) | `write_report` — write files into the run's output folder |
+| (always) | `write_report`: write files into the run's output folder |
 | `filesystem.read` | `fs_read`, `fs_list` |
 | `filesystem.write` | `fs_write` |
 | `network.egress` hosts | `fetch` (with optional declared-secret auth) |
@@ -150,8 +149,8 @@ run's result.
 
 **Structured output.** Ship an `output.schema.json` at the archive root
 (listed in `publish.include`) and the runner embeds the schema in the
-instruction and requires the final message to parse as JSON — exit 17
-otherwise, raw output preserved in the receipts.
+instruction and requires the final message to parse as JSON. Exit 17
+otherwise, with the raw output preserved in the receipts.
 
 **Task input and composition.** `--input FILE`, else piped stdin, else an
 empty task. Runs compose: `agentry run a … | agentry run b …`.
@@ -177,7 +176,7 @@ the secret source, and gates wildcard egress.
 ## Installing into an existing coding agent
 
 The same package installs into a host coding agent with the host's
-built-in tools standing in — nothing is bundled either way:
+built-in tools standing in. Nothing is bundled either way:
 
 | Target | What lands | Contract mapping |
 |---|---|---|
@@ -185,7 +184,7 @@ built-in tools standing in — nothing is bundled either way:
 | `agents-md` | `./agents/<name>/` + a section in `./AGENTS.md` | the section records the same contract as a Tools note |
 | `mcp` | `./agents/<name>/` + a server entry merged into `.mcp.json` | for `kind: mcp-server`; declared secrets become empty env placeholders |
 
-Enforcement in embedded mode is the host's — the
+Enforcement in embedded mode is the host's. The
 [trust model](trust.md) page explains what each layer does and does not
 prove.
 
@@ -195,5 +194,5 @@ prove.
 validation, content scanning against the declared capabilities, and DSSE
 signing. Published releases are immutable and content-addressed. The
 language rule applies to BriefAgents as it does to everything here: a
-release is *scanned, with N findings, signed* — never "safe". Declare the
+release is *scanned, with N findings, signed*, never "safe". Declare the
 least you need and the whole chain stays reviewable.

@@ -1,7 +1,7 @@
 # Deployment (WG-K)
 
-How Agentry is deployed, the three shapes it runs in, and the operational
-targets. Infra-as-code lives in `deploy/terraform/` (SaaS reference + reusable
+How Agentry is deployed in its three shapes, and the operational targets.
+Infra-as-code lives in `deploy/terraform/` (SaaS reference + reusable
 modules) and `deploy/helm/agentry/` (self-host HA). Authoritative design:
 [PLAN.md](https://github.com/blaktron/agentry/blob/main/PLAN.md) §2.4, §13, §16.
 
@@ -35,14 +35,14 @@ One agentryd image rather than a separate git image: the `git` role needs a git
 binary, and so does `all`, which mounts the git routes in-process. Splitting
 would have fixed one and left the other broken, and would mean two tags per
 commit to keep in step. The base is debian-slim rather than distroless because
-git needs a real userland — see DEV-030.
+git needs a real userland. See DEV-030.
 
 ## SaaS topology (Terraform)
 
 Region: single-region v1, `us-east-1` by default (**Q8**, set per env in
 `terraform.tfvars`). Accounts (§13.1): `prod`, `nonprod` (dev + staging as
 separate VPCs), `security` (org CloudTrail + audit-archive replication target).
-Humans use IAM Identity Center; **no IAM users** — GitHub Actions deploys via an
+Humans use IAM Identity Center; **no IAM users**. GitHub Actions deploys via an
 OIDC role.
 
 ```
@@ -75,12 +75,12 @@ Route53 ─┬─ CloudFront ── WAF(web) ── ALB(app) ─┬─ ECS web
 
 | Service | Command | LB | Egress profile | Extra |
 |---|---|---|---|---|
-| web | (Next.js) | app ALB | full (NAT) | — |
+| web | (Next.js) | app ALB | full (NAT) | none |
 | api | `agentryd api` | app ALB | full (NAT) + S3/RDS/Redis | task role: read releases, r/w evidence |
 | git | `agentryd git` | git ALB | **no NAT**; endpoints + RDS + EFS | EFS mount `/data/git`; no S3-releases write |
-| worker-core | `agentryd worker --queues=core` | — | full (NAT) + S3/RDS/Redis/EFS | **only** role with `kms:Sign` + SES |
-| worker-sandbox | `agentryd worker --queues=sandbox` | — | **no NAT**; endpoints + S3 + RDS | read-only rootfs; read releases, findings via DB only |
-| worker-judge | `agentryd worker --queues=judge` | — | **no NAT**; endpoints + S3 + RDS | read-only rootfs; `bedrock:InvokeModel` |
+| worker-core | `agentryd worker --queues=core` | none | full (NAT) + S3/RDS/Redis/EFS | **only** role with `kms:Sign` + SES |
+| worker-sandbox | `agentryd worker --queues=sandbox` | none | **no NAT**; endpoints + S3 + RDS | read-only rootfs; read releases, findings via DB only |
+| worker-judge | `agentryd worker --queues=judge` | none | **no NAT**; endpoints + S3 + RDS | read-only rootfs; `bedrock:InvokeModel` |
 
 The sandbox/judge jails (§8.2) are expressed in `modules/ecs-service` by setting
 `allow_all_egress = false`: with no `0.0.0.0/0` route, the only egress rules that
@@ -122,7 +122,7 @@ above the §12.3/§12.4 maxima (24 h session, 1 y PAT, 90 d org-bound PAT).
 PVC at `/data/git`), `worker` (all queues by default), and `web`, with Services,
 Ingress (web + git hosts), HPAs, a ConfigMap (`agentry.yaml`), and a Secret.
 
-Operator-supplied (NOT bundled — see `values.yaml`): PostgreSQL 16
+Operator-supplied (NOT bundled; see `values.yaml`): PostgreSQL 16
 (`secret.databaseUrl`), object storage (`config.storage.*` + IRSA/creds), and
 optional Redis (`secret.redisUrl`). Provide a `ReadWriteMany` StorageClass for
 the git volume (EFS CSI, Filestore, NFS).
@@ -135,10 +135,10 @@ the git volume (EFS CSI, Filestore, NFS).
 2. **Plan on PR**: `terraform plan` per env, via OIDC role assumption
    (no long-lived keys). Requires `AWS_DEPLOY_ROLE_ARN` repo var.
 3. **Apply on merge to `main`**: dev + staging apply automatically; **prod apply
-   is gated by the `prod` GitHub Environment** — add required reviewers there for
+   is gated by the `prod` GitHub Environment**. Add required reviewers there for
    the §13.7 manual approval.
 
-State is S3 + DynamoDB lock, one key per env (`backend.tf`, placeholders — create
+State is S3 + DynamoDB lock, one key per env (`backend.tf`, placeholders; create
 the bucket/table out-of-band, then `terraform init`).
 
 ### First-time bring-up order
@@ -173,7 +173,7 @@ the bucket/table out-of-band, then `terraform init`).
 - **OTLP/HTTP** when `AGENTRY_OTEL_ENDPOINT` is set. The terraform envs set it
   to `http://localhost:4318`, the ADOT sidecar every agentryd service runs. The
   collector ships traces to X-Ray and metrics to CloudWatch as EMF under the
-  `Agentry` namespace. Unset (the default) disables OTLP entirely — no
+  `Agentry` namespace. Unset (the default) disables OTLP entirely: no
   exporter, no connection attempts.
 - **Prometheus** at `GET /metrics`, always on, for self-host (D-25). See the
   bind-address note below.
@@ -196,28 +196,28 @@ series.
 | `ScanStageErrors` | counter | stage | **PAGE**: scan error rate > 5% (numerator) |
 | `ScanStageDurationSeconds` | histogram | stage | pipeline dashboard |
 | `ScanStageHits` | counter | stage | security dashboard (an S3 spike is an attack-wave signal) |
-| `PublishSubmitted` | counter | — | publish funnel |
-| `PublishVerdictClean` / `…Review` / `…Blocked` | counter | — | publish funnel, verdict mix |
-| `JudgeCostCents` | counter | — | budget anomaly (ticket) — **not yet emitted, see below** |
+| `PublishSubmitted` | counter | none | publish funnel |
+| `PublishVerdictClean` / `…Review` / `…Blocked` | counter | none | publish funnel, verdict mix |
+| `JudgeCostCents` | counter | none | budget anomaly (ticket); **not yet emitted, see below** |
 | `GitOps` | counter | op, outcome | git dashboard |
 | `GitOpDurationSeconds` | histogram | op | git dashboard |
 | `GitOpConcurrency` | gauge | op | git dashboard, git autoscaling signal |
-| `GitCloneFirstByteSeconds` | histogram | — | §16.1 SLI: p95 < 2 s |
+| `GitCloneFirstByteSeconds` | histogram | none | §16.1 SLI: p95 < 2 s |
 | `WebhookDeliveries` | counter | outcome (`ok`/`error`/`throttled`) | delivery health |
 
 `route` is the **matched route pattern** (`/agents/{ns}/{name}`), never the
-concrete path — a per-path metric would let any caller mint unbounded series.
+concrete path; a per-path metric would let any caller mint unbounded series.
 `status_class` is `2xx`/`4xx`/`5xx` for the same reason.
 
-An instrument with no observations yet is simply absent from a scrape; the
+An instrument with no observations yet is absent from a scrape; the
 alarms are configured `treat_missing_data = "notBreaching"` to match.
 
 **`JudgeCostCents` carries no data today.** The instrument exists and the
 pipeline dashboard plots it, but no judge provider reports a cost:
 `bedrock`, `anthropic` and `classifier` all resolve to `UnconfiguredProvider`,
 and `scan.JudgeVerdict` has no cost field to carry one. The recording seam is
-`metrics.RecordJudgeCost`, one call from the S5 stage away — whoever
-implements a real provider should populate it, and until then that dashboard
+`metrics.RecordJudgeCost`, one call from the S5 stage away. Whoever
+implements a real provider should populate it; until then that dashboard
 panel is empty rather than zero. Do not read an empty panel as "no spend".
 
 **Dimension rollup.** The §16.3 alarms address `QueueAgeSeconds`,
@@ -228,13 +228,13 @@ zero-dimension aggregate alongside the per-attribute series. Under the previous
 `NoDimensionRollup` the zero-dimension series would not exist and those three
 page alarms would never fire, while looking correctly configured.
 
-### `/metrics` is unauthenticated — bind it accordingly
+### `/metrics` is unauthenticated, so bind it accordingly
 
 `/metrics` is mounted outside `/api/v1` next to `/healthz` and `/readyz`, and
 like them it has no auth: a scraper is infrastructure, not a principal, and the
 §12.2 RBAC chokepoint has no way to express one.
 
-It exposes no user content — request rates, queue depth, stage timings — but it
+It exposes no user content (request rates, queue depth, stage timings) but it
 does describe traffic shape and catalogue activity. On SaaS the ALB listener
 rules only forward `/api/*`, `/.well-known/*` and `/scim/*` to the api service,
 so `/metrics` is not reachable from the internet. Self-hosting: either bind
@@ -254,12 +254,12 @@ per env.
 
 | Kind | Behaviour |
 |---|---|
-| `log` (default) | Writes what it *would* have sent to the log. A fresh install never silently fails to deliver — the line says the mail was not sent. |
+| `log` (default) | Writes what it *would* have sent to the log. A fresh install never silently fails to deliver; the line says the mail was not sent. |
 | `smtp` | Real delivery via `AGENTRY_SMTP_{HOST,PORT,USER,PASS,FROM}` + `AGENTRY_SMTP_STARTTLS`. |
 
 Sent on: email verification, review verdict decided, quarantine after rescan,
 advisory published, and org membership granted. Bodies are plain text and
-follow §1.6.3 — they say "scanned, N findings, signed", never "safe".
+follow §1.6.3: they say "scanned, N findings, signed", never "safe".
 
 There is no separate invite object in v1: org membership is granted by an
 admin rather than offered and accepted, so the "invite" mail rides the same
@@ -268,7 +268,7 @@ transition that fires the `member.added` webhook.
 **Dev.** The compose stack runs mailpit; `deploy/compose/docker-compose.yaml`
 points the server service at `mailpit:1025` with STARTTLS off, and every message
 lands in the web UI on `:8025`. Plaintext SMTP is correct for mailpit and wrong
-for anything else — config validation refuses `smtp.username` without STARTTLS
+for anything else; config validation refuses `smtp.username` without STARTTLS
 outside dev mode.
 
 **AWS.** Point SMTP at **SES's SMTP endpoint**
@@ -281,7 +281,7 @@ operator setup that depends on the unresolved **Q8** region/domain decision.
 See DEV-028.
 
 Put the SMTP password in Secrets Manager (SaaS) or `secret.smtpPassword` /
-`existingSecret` (Helm) — never in the ConfigMap.
+`existingSecret` (Helm), never in the ConfigMap.
 
 ## Signing keys and rotation (§8.8)
 
@@ -306,12 +306,12 @@ correct description of a deployment that has never rotated.
 ## Quotas (§19)
 
 The §19 limits are resolved through `internal/entitlements`, whose OSS
-implementation reads them from config — so an operator raises a limit by
+implementation reads them from config, so an operator raises a limit by
 setting a value, not by patching a constant. Chart: `config.limits.*`. Env:
 `AGENTRY_LIMITS_*` (see `internal/config/config.go`).
 
 Two of them are enforced with in-process token buckets and are therefore
-**approximate across replicas** — an N-replica fleet allows roughly N× the
+**approximate across replicas**: an N-replica fleet allows roughly N× the
 budget:
 
 - webhook deliveries, 5/s per org (over budget, the delivery is deferred back
@@ -323,28 +323,28 @@ the same `internal/ratelimit` interface.
 
 ### Client IP behind a proxy
 
-Per-IP rate limits and audit records key on `AGENTRY_TRUSTED_PROXIES` — the
+Per-IP rate limits and audit records key on `AGENTRY_TRUSTED_PROXIES`, the
 number of reverse-proxy hops in front of agentryd:
 
 | Deployment | Value |
 |---|---|
 | Direct (default, `0`) | X-Forwarded-For ignored entirely |
 | Behind one ingress/ALB | `1` |
-| CloudFront → ALB → task | `2` (what the terraform envs set for api/web; git is `1` — no CDN in front of `git.*`) |
+| CloudFront → ALB → task | `2` (what the terraform envs set for api/web; git is `1`; no CDN in front of `git.*`) |
 
 X-Forwarded-For is client-supplied. Setting this **higher** than the real hop
-count lets a caller choose which rate-limit bucket to spend — including someone
-else's — and forge the address the audit log records. It must match the
+count lets a caller choose which rate-limit bucket to spend, including someone
+else's, and forge the address the audit log records. It must match the
 deployment exactly.
 
 ## Open questions this IaC leaves as tfvars (§20)
 
-- **Q8 region / data residency** — `aws_region` (default `us-east-1`) in each env
+- **Q8 region / data residency**: `aws_region` (default `us-east-1`) in each env
   and in `global`; `backend.tf` region comment.
-- **Q3 judge model** — `judge_model` (default Sonnet-class Bedrock id).
-- Cross-account audit replication + T-09 alarm source —
+- **Q3 judge model**: `judge_model` (default Sonnet-class Bedrock id).
+- Cross-account audit replication + T-09 alarm source:
   `audit_replication_destination_bucket_arn` / `..._account_id`,
   `cloudtrail_log_group_name` (empty ⇒ feature off).
-- Domains + certs — `apex_domain`, `git_domain`, `acm_*_certificate_arn`,
+- Domains + certs: `apex_domain`, `git_domain`, `acm_*_certificate_arn`,
   `route53_zone_id` (all placeholder; empty zone id skips DNS records).
 - Image URIs, alert subscriptions, and the state bucket/table names.
