@@ -1,25 +1,25 @@
 # Trust and security model
 
 What Agentry checks before a version becomes installable, what its signature
-proves, and — the part most registries leave out — what none of it
-guarantees. This is the repository-side companion to the `/trust` page any
+proves, and what none of it guarantees (the part most registries leave out).
+This is the repository-side companion to the `/trust` page any
 running instance serves; that page additionally shows the live signing keys
 and the current ruleset version.
 
 ## The premise
 
 An agent instruction file is executed with the reader's credentials and the
-reader's tool access. It is, functionally, code. It is also — today, across
-every mainstream distribution channel — shipped with no signature, no
-malware scan, and no review. Agentry's whole reason to exist is that gap,
-and the whole reason for this document is to be precise about how far it
+reader's tool access. It is, functionally, code. Today it is also shipped
+through every mainstream distribution channel with no signature and no
+malware scan, and no one reviews it. Agentry's whole reason to exist is that
+gap, and the whole reason for this document is to be precise about how far it
 closes.
 
 ## Nothing publishes unscanned
 
 There is no flag, plan, or role that lets a public version skip the pipeline
 (PLAN §1.6 principle 1). A version is scanned on **the exact bytes that will
-ship** — the deterministic archive, not the working tree, not the tag as the
+ship**: the deterministic archive, not the working tree, not the tag as the
 author describes it.
 
 Ten stages run against those bytes:
@@ -34,20 +34,20 @@ Ten stages run against those bytes:
 | **S6** | Capability consistency: what the manifest declares versus what the code does |
 | **S7** | Dependencies, licenses, install scripts, typosquat heuristics |
 | **S8** | Metadata, namespace and publisher-behaviour abuse |
-| **S9** | Release-diff risk — the rug-pull check, comparing a version against its predecessor |
+| **S9** | Release-diff risk: the rug-pull check, comparing a version against its predecessor |
 | **S10** | Report assembly into a canonical, digest-addressed document |
 
 The gate then decides: clean and low-severity versions publish
 automatically, medium and high findings go to human review, critical
 findings are rejected. **A scanner that errors or times out fails toward
-review, never through** — any stage error becomes an `S0/pipeline-error`
+review, never through.** Any stage error becomes an `S0/pipeline-error`
 finding that forces a human look, and "no path to `published` skips the
 gate" is a property test, not a promise.
 
 ## What a signature proves
 
 Each published release is content-addressed. On the transition to
-`published` — once, and never re-issued — the registry signs an in-toto
+`published` (once, and never re-issued), the registry signs an in-toto
 statement binding the archive digest to the scan report that produced the
 decision, the ruleset version, the judge model, and the policy in force.
 It is wrapped in a DSSE envelope and served alongside the archive.
@@ -66,8 +66,8 @@ warns when the advertised key ids change.
 
 ## What this does not guarantee
 
-The language throughout the product is **"scanned, N findings, signed"** —
-never "safe", never "verified secure" (PLAN §1.6 principle 3). That is a
+The language throughout the product is **"scanned, N findings, signed"**,
+never "safe" or "verified secure" (PLAN §1.6 principle 3). That is a
 rule about honesty, and these are the specific things behind it:
 
 - **Static analysis cannot prove an agent safe.** A sufficiently novel
@@ -76,7 +76,7 @@ rule about honesty, and these are the specific things behind it:
   agent page publishes finding counts and the ruleset version so a reader
   can judge the freshness of the check instead of trusting a badge.
 - **Declared capabilities are a contract, not a sandbox.** The manifest says
-  what an agent claims to need — network egress, filesystem access,
+  what an agent claims to need: network egress, filesystem access,
   subprocess execution, secrets. The registry checks that claim against the
   code (S6) and gates on it (§8.6 policy), but it cannot enforce anything
   once the agent is running on your machine. Your runtime should read the
@@ -89,13 +89,13 @@ rule about honesty, and these are the specific things behind it:
   everything the committed attack corpus exercises; they are not those
   tools. See DEV-006.
 - **Review is human, and humans are the ones deciding.** Reviewer
-  dismissals — false positive, or accepted risk — stay on the public report
+  dismissals (false positive, or accepted risk) stay on the public report
   with their rationale, so a waived finding is visible rather than erased.
 
 ## Because detection improves after publication
 
 A scan is a statement about one moment. Published versions are therefore
-**rescanned when a new ruleset ships** — the sweep is triggered by ruleset
+**rescanned when a new ruleset ships**. The sweep is triggered by ruleset
 registration, not by a human remembering. A version that newly trips a
 high-severity finding is quarantined: it stops resolving for new installs,
 a direct download is refused with `409 Conflict` and the reason, the web
@@ -114,9 +114,9 @@ global advisory feed (DEV-038).
 ## Everything here is auditable
 
 The scanners, the rulesets, the gate and the review queue are open source.
-The attack corpus that gates CI — attack fixtures and their benign
+The attack corpus that gates CI (attack fixtures and their benign
 lookalikes, including a security-documentation agent that must stay
-publishable — is in `testdata/attack-corpus/`. The claims on this page are
+publishable) is in `testdata/attack-corpus/`. The claims on this page are
 checkable against the code that makes them.
 
 Known departures from the plan, including the ones that weaken a claim, are
@@ -127,6 +127,6 @@ recorded in [DEVIATIONS.md](https://github.com/blaktron/agentry/blob/main/DEVIAT
 - **Malicious content on a registry:** the report link on the agent page, or
   `abuse@` the registry's domain.
 - **A vulnerability in Agentry itself:** [SECURITY.md](https://github.com/blaktron/agentry/blob/main/SECURITY.md), which
-  documents the coordinated-disclosure process and — deliberately — the
+  documents the coordinated-disclosure process and, deliberately, the
   classes of finding that are *not* vulnerabilities because they are
   documented limitations of a static pipeline.
