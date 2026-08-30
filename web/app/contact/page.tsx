@@ -15,7 +15,7 @@ const CHANNELS = [
   },
   {
     title: "Security",
-    body: "Report a vulnerability in the platform, or abuse of a hosted agent. Please do not open a public issue for a security report.",
+    body: "Report a vulnerability in the platform, or abuse of a hosted BriefAgent. Please do not open a public issue for a security report.",
     email: SITE.securityEmail,
   },
 ];

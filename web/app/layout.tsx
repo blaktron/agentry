@@ -172,8 +172,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <input
                 type="search"
                 name="q"
-                placeholder="Search agents…"
-                aria-label="Search agents"
+                placeholder="Search BriefAgents…"
+                aria-label="Search BriefAgents"
                 className="w-56 rounded-md border px-3 py-1.5 text-sm"
                 style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
               />

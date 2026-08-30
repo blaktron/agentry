@@ -7,9 +7,9 @@ export const metadata: Metadata = {
 };
 
 const SECTIONS = [
-  ["Acceptable use", "Publish and install agents in good faith. Malicious agents, attempts to evade the scanning gate, and abuse of the platform are prohibited."],
+  ["Acceptable use", "Publish and install BriefAgents in good faith. Malicious BriefAgents, attempts to evade the scanning gate, and abuse of the platform are prohibited."],
   ["Your content", "You retain ownership of what you publish and are responsible for having the rights to distribute it under the license you declare."],
-  ["Security scanning", "Every published version is scanned and signed. Scanning reduces risk but does not warrant that any agent is safe; you install at your own discretion."],
+  ["Security scanning", "Every published version is scanned and signed. Scanning reduces risk but does not warrant that any BriefAgent is safe; you install at your own discretion."],
   ["Availability", "The service is provided on an as-is basis. We work to keep it available and secure but do not guarantee uninterrupted operation."],
   ["Changes", "These terms will evolve as the product matures; material changes will be announced."],
 ];
