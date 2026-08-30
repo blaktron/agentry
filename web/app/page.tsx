@@ -3,7 +3,7 @@ import { apiGet, type Meta, type SearchResults } from "@/lib/api";
 import { fmtCount } from "@/lib/format";
 import { AgentRow, Card, CodeBlock } from "@/components/ui";
 
-// Home (§10.1): what Agentry is, what people are actually installing, how to
+// Home (§10.1): what SecureAgentry is, what people are actually installing, how to
 // install, and an honest statement of what scanning does and does not prove.
 // SSR for SEO (D-08).
 //
@@ -29,7 +29,7 @@ export default async function HomePage() {
           A registry for single-purpose AI agents — with the scanning step built in
         </h1>
         <p className="mt-4 text-lg" style={{ color: "var(--color-muted)" }}>
-          Agent instructions run with your credentials and your tool access. Agentry hosts them in
+          Agent instructions run with your credentials and your tool access. SecureAgentry hosts them in
           git, and nothing becomes installable until it has passed a layered scan for prompt
           injection, hidden instructions, capability escalation, secrets, and supply-chain problems —
           then it is signed.

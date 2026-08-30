@@ -53,7 +53,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   if (!agent) return { title: `${ns}/${name}` };
   return {
     title: `${agent.namespace}/${agent.name}`,
-    description: agent.summary || `A ${agent.kind} agent on Agentry, scanned and signed.`,
+    description: agent.summary || `A ${agent.kind} agent on SecureAgentry, scanned and signed.`,
   };
 }
 

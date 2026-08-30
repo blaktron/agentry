@@ -121,10 +121,38 @@ services:
       dockerfile: deploy/compose/Dockerfile.web
     environment:
       AGENTRY_API_BASE: http://server:8080
+      # The docs and developers sites are separate deployments; the nav/footer
+      # link to them by URL. In production these are docs./developers.
+      # secureagentry.net; override per-deployment via .env in this directory.
+      AGENTRY_SITE_URL: ${AGENTRY_PUBLIC_WEB_URL:-http://localhost:3000}
+      AGENTRY_DOCS_URL: ${AGENTRY_DOCS_PUBLIC_URL:-http://localhost:8000}
+      AGENTRY_DEVELOPERS_URL: ${AGENTRY_DEVELOPERS_PUBLIC_URL:-http://localhost:8001}
     ports:
       - "3000:3000"
     depends_on:
       - server
+
+  # Separate deployment: the wiki-style documentation site (docs.secureagentry.net).
+  docs:
+    profiles: ["server"]
+    restart: unless-stopped
+    build:
+      context: ../..
+      dockerfile: deploy/docs-site/Dockerfile
+      args:
+        SITE_URL: ${AGENTRY_DOCS_PUBLIC_URL:-http://localhost:8000}
+    ports:
+      - "8000:80"
+
+  # Separate deployment: the developers / API-reference site (developers.secureagentry.net).
+  developers:
+    profiles: ["server"]
+    restart: unless-stopped
+    build:
+      context: ../..
+      dockerfile: deploy/developers-site/Dockerfile
+    ports:
+      - "8001:80"
 
 volumes:
   pgdata:

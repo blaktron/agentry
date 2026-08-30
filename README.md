@@ -1,15 +1,17 @@
-# Agentry
+# SecureAgentry
 
 **A registry and git host for single-purpose AI agents, with a mandatory
 pre-publication security pipeline and signed provenance.**
 
-> Codename. All names here are placeholders pending a trademark decision
-> (PLAN §20 Q1); the module path, binaries, and env prefix keep the
-> `agentry` / `agentryd` / `AGENTRY_` forms so a rename stays mechanical.
+> **SecureAgentry** is the product and hosted service (secureagentry.net). The
+> open-source framework it is built on, and the technical identifiers in this
+> repository — the Go module path, the `agentryd` / `agentry` binaries, and the
+> `AGENTRY_` env prefix — keep the `agentry` name. The brand is distinct from
+> the command, the way many products ship a differently-named CLI.
 
 Agent instruction files — skills, system prompts, small MCP servers — are
 executed with your credentials and your tool access. They are also, today,
-distributed with no signing, no malware scanning, and no review. Agentry
+distributed with no signing, no malware scanning, and no review. SecureAgentry
 treats that as the problem worth solving: every published version is scanned
 on the exact bytes that will ship, and nothing becomes installable until the
 gate decides.
