@@ -4,13 +4,13 @@
 // ever reads.
 import { NextRequest, NextResponse } from "next/server";
 import { API_BASE } from "@/lib/session";
-import { establishSession, redirectBack, safeNext, sameOrigin, requestOrigin} from "@/lib/forms";
+import { establishSession, redirectBack, safeNext, sameOrigin, requestOrigin, readForm } from "@/lib/forms";
 
 export async function POST(req: NextRequest) {
   if (!sameOrigin(req)) {
     return new NextResponse("cross-origin form post rejected", { status: 403 });
   }
-  const form = await req.formData();
+  const form = await readForm(req);
   const next = safeNext(form.get("next"), "/dashboard");
   const login = String(form.get("login") ?? "");
   const password = String(form.get("password") ?? "");

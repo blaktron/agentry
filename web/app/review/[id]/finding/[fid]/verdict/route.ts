@@ -1,6 +1,6 @@
 // POST /review/{id}/finding/{fid}/verdict — record a finding verdict (§8.5).
 import { NextRequest, NextResponse } from "next/server";
-import { redirectBack, sameOrigin } from "@/lib/forms";
+import { redirectBack, sameOrigin, readForm } from "@/lib/forms";
 import { apiSend, problemDetail } from "@/lib/session";
 
 const VERDICTS = new Set(["confirmed", "dismissed_false_positive", "dismissed_accepted_risk"]);
@@ -10,7 +10,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const { id, fid } = await ctx.params;
   const i = encodeURIComponent(id);
   const f = encodeURIComponent(fid);
-  const form = await req.formData();
+  const form = await readForm(req);
   const verdict = String(form.get("verdict") ?? "");
   const reason = String(form.get("reason") ?? "");
   if (!VERDICTS.has(verdict)) {

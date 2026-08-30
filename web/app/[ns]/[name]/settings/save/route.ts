@@ -5,7 +5,7 @@
 // the `action` field says which fields to send, so a toggle never silently
 // resubmits a stale summary.
 import { NextRequest, NextResponse } from "next/server";
-import { redirectBack, sameOrigin } from "@/lib/forms";
+import { redirectBack, sameOrigin, readForm } from "@/lib/forms";
 import { apiSend, problemDetail } from "@/lib/session";
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ ns: string; name: string }> }) {
@@ -14,7 +14,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ ns: string
   const n = encodeURIComponent(ns);
   const a = encodeURIComponent(name);
   const back = `/${n}/${a}/settings`;
-  const form = await req.formData();
+  const form = await readForm(req);
   const action = String(form.get("action") ?? "profile");
 
   let body: Record<string, unknown>;

@@ -7,12 +7,12 @@
 // than reporting a generic failure, because "not built yet" and "refused"
 // are different things to the person pressing the button.
 import { NextRequest, NextResponse } from "next/server";
-import { redirectBack, sameOrigin } from "@/lib/forms";
+import { redirectBack, sameOrigin, readForm } from "@/lib/forms";
 import { apiSend, problemDetail } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
   if (!sameOrigin(req)) return new NextResponse("cross-origin form post rejected", { status: 403 });
-  const form = await req.formData();
+  const form = await readForm(req);
   const action = String(form.get("action") ?? "revoke");
 
   let res: Response;

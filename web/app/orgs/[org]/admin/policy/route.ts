@@ -1,6 +1,6 @@
 // POST /orgs/{org}/admin/policy — save the org policy (tighten-only, §8.6).
 import { NextRequest, NextResponse } from "next/server";
-import { redirectBack, sameOrigin } from "@/lib/forms";
+import { redirectBack, sameOrigin, readForm } from "@/lib/forms";
 import { apiSend, problemDetail } from "@/lib/session";
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ org: string }> }) {
@@ -10,7 +10,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ org: strin
   // input, and a handle-shaped value is a convention, not a guarantee.
   const o = encodeURIComponent(org);
   const back = `/orgs/${o}/admin`;
-  const form = await req.formData();
+  const form = await readForm(req);
   let doc: unknown;
   try {
     doc = JSON.parse(String(form.get("policy") ?? ""));
