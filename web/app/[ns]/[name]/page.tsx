@@ -53,7 +53,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   if (!agent) return { title: `${ns}/${name}` };
   return {
     title: `${agent.namespace}/${agent.name}`,
-    description: agent.summary || `A ${agent.kind} agent on SecureAgentry, scanned and signed.`,
+    description: agent.summary || `A ${agent.kind} BriefAgent on SecureAgentry, scanned and signed.`,
   };
 }
 
@@ -171,7 +171,7 @@ export default async function AgentPage({
           {org?.verifiedDomain && (
             <Badge
               tone="ok"
-              title={`${org.handle} has proved control of ${org.verifiedDomain} by DNS. It says who publishes this agent — not that the agent is safe.`}
+              title={`${org.handle} has proved control of ${org.verifiedDomain} by DNS. It says who publishes this BriefAgent — not that the BriefAgent is safe.`}
             >
               verified {org.verifiedDomain}
             </Badge>
@@ -318,7 +318,7 @@ export default async function AgentPage({
                       color: stats.starred ? "var(--color-accent)" : "inherit",
                     }}
                   >
-                    {stats.starred ? "★ Starred — remove" : "☆ Star this agent"}
+                    {stats.starred ? "★ Starred — remove" : "☆ Star this BriefAgent"}
                   </button>
                 </form>
                 <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>

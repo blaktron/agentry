@@ -74,7 +74,7 @@ export default async function SearchPage({
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Browse BriefAgents</h1>
         <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-          Every listed version has been scanned and signed. Open an agent to read its security report
+          Every listed version has been scanned and signed. Open a BriefAgent to read its security report
           before installing.
         </p>
       </div>
@@ -173,7 +173,7 @@ export default async function SearchPage({
         <Card>
           <p className="text-sm">
             {filtered
-              ? `No public agents match${q ? ` “${q}”` : ""} with these filters.`
+              ? `No public BriefAgents match${q ? ` “${q}”` : ""} with these filters.`
               : "No public BriefAgents have been published yet."}
           </p>
           {filtered && (
