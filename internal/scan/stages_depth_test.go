@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blaktron/agentry/internal/scan/ruleset"
+	"github.com/blaktron/agentry/pkg/ruleset"
 )
 
 // Unit coverage for the §8.3 depth work: S7's lockfile audit and install-script

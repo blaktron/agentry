@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"errors"
+	"github.com/blaktron/agentry/pkg/attest"
 	"strings"
 	"testing"
 
@@ -157,7 +158,7 @@ func TestKMSKeyIDMatchesTheFileSignerDerivation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewKMSSignerWithAPI: %v", err)
 	}
-	if want := keyIDFor(&f.priv.PublicKey); s.KeyID() != want {
+	if want := attest.KeyIDFor(&f.priv.PublicKey); s.KeyID() != want {
 		t.Errorf("KeyID = %q, want %q", s.KeyID(), want)
 	}
 }

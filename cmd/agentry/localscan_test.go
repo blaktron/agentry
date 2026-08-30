@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/blaktron/agentry/internal/scan"
-	"github.com/blaktron/agentry/internal/scan/ruleset"
+	"github.com/blaktron/agentry/pkg/ruleset"
 )
 
 // s1Fixtures are the files both scanners see. Names are deliberately

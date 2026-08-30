@@ -29,11 +29,11 @@ import (
 	"github.com/blaktron/agentry/internal/registry"
 	"github.com/blaktron/agentry/internal/render"
 	"github.com/blaktron/agentry/internal/scan"
-	"github.com/blaktron/agentry/internal/scan/ruleset"
 	"github.com/blaktron/agentry/internal/store"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 	"github.com/blaktron/agentry/internal/version"
 	"github.com/blaktron/agentry/internal/webhook"
+	"github.com/blaktron/agentry/pkg/ruleset"
 )
 
 // Server implements the generated ServerInterface plus non-spec endpoints

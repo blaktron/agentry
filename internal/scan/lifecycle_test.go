@@ -20,8 +20,8 @@ import (
 	"github.com/blaktron/agentry/internal/queue"
 	"github.com/blaktron/agentry/internal/registry"
 	"github.com/blaktron/agentry/internal/scan"
-	"github.com/blaktron/agentry/internal/scan/ruleset"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/pkg/ruleset"
 )
 
 // ---------------------------------------------------------------- B-02 block

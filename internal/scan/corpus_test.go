@@ -9,7 +9,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/blaktron/agentry/internal/scan/ruleset"
+	"github.com/blaktron/agentry/pkg/ruleset"
 )
 
 // The §17.3 pipeline golden-corpus gate, run through the ORCHESTRATOR (not
