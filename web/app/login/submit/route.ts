@@ -4,7 +4,7 @@
 // ever reads.
 import { NextRequest, NextResponse } from "next/server";
 import { API_BASE } from "@/lib/session";
-import { establishSession, redirectBack, safeNext, sameOrigin } from "@/lib/forms";
+import { establishSession, redirectBack, safeNext, sameOrigin, requestOrigin} from "@/lib/forms";
 
 export async function POST(req: NextRequest) {
   if (!sameOrigin(req)) {
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     } catch {
       // fall through with the generic message
     }
-    const back = new URL("/login", req.nextUrl.origin);
+    const back = new URL("/login", requestOrigin(req));
     back.searchParams.set("next", next);
     if (type.endsWith("totp-required")) {
       back.searchParams.set("totp", "1");
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { csrfToken } = (await res.json()) as { csrfToken: string };
-  const out = NextResponse.redirect(new URL(next, req.nextUrl.origin), 303);
+  const out = NextResponse.redirect(new URL(next, requestOrigin(req)), 303);
   if (!establishSession(res, csrfToken, out)) {
     return redirectBack(req, "/login", { error: "sign-in succeeded but no session was issued" });
   }
