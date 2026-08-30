@@ -9,7 +9,7 @@ import { adminOrgs, authedGet, currentUser, reviewerOrgs } from "@/lib/session";
 export const metadata: Metadata = { title: "Dashboard" };
 
 // A namespace's agents, or the reason we could not say. An empty list and a
-// failed request look identical once both become `[]`, and "No agents yet"
+// failed request look identical once both become `[]`, and "No BriefAgents yet"
 // is a much worse lie than "we could not read this".
 type NamespaceAgents = { ns: string; agents: Agent[]; failed: boolean };
 
@@ -103,7 +103,7 @@ export default async function DashboardPage({
         <h1 className="text-xl font-semibold">Dashboard</h1>
         <div className="flex items-baseline gap-3 text-sm">
           <Link href="/new" className="underline">
-            New agent
+            New BriefAgent
           </Link>
           <Link href="/settings" className="underline">
             Settings
@@ -205,7 +205,7 @@ export default async function DashboardPage({
             </p>
           ) : agents.length === 0 ? (
             <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-              No agents yet — create one with <code>agentry init</code> and{" "}
+              No BriefAgents yet — create one with <code>agentry init</code> and{" "}
               <code>agentry publish</code>.
             </p>
           ) : (

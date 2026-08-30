@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { apiGet, type AgentKind, type SearchResults } from "@/lib/api";
 import { AgentRow, Card } from "@/components/ui";
 
-export const metadata: Metadata = { title: "Browse agents" };
+export const metadata: Metadata = { title: "Browse BriefAgents" };
 
 const KINDS: AgentKind[] = ["skill", "prompt-agent", "mcp-server"];
 
@@ -72,7 +72,7 @@ export default async function SearchPage({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Browse agents</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Browse BriefAgents</h1>
         <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
           Every listed version has been scanned and signed. Open an agent to read its security report
           before installing.
@@ -153,7 +153,7 @@ export default async function SearchPage({
           </label>
           <label className="flex items-center gap-2">
             <input type="checkbox" name="verified" value="1" defaultChecked={verified} />
-            <span title="Only agents in an organization namespace whose domain has been verified by DNS.">
+            <span title="Only BriefAgents in an organization namespace whose domain has been verified by DNS.">
               verified organizations only
             </span>
           </label>
@@ -174,7 +174,7 @@ export default async function SearchPage({
           <p className="text-sm">
             {filtered
               ? `No public agents match${q ? ` “${q}”` : ""} with these filters.`
-              : "No public agents have been published yet."}
+              : "No public BriefAgents have been published yet."}
           </p>
           {filtered && (
             <p className="mt-1 text-sm">

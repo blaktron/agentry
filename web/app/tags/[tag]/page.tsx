@@ -52,7 +52,7 @@ export default async function TagPage({
       {results.length === 0 ? (
         <Card>
           <p className="text-sm">
-            {cursor ? "No further agents on this page." : `No public agents are tagged #${page.tag}.`}
+            {cursor ? "No further BriefAgents on this page." : `No public agents are tagged #${page.tag}.`}
           </p>
         </Card>
       ) : (

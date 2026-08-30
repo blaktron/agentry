@@ -126,12 +126,12 @@ export default async function AgentPage({
         >
           <p className="font-medium" style={{ color: "var(--color-sev-high)" }}>
             {agent.quarantineState === "blocked"
-              ? "This agent has been blocked by trust & safety."
-              : "This agent is quarantined pending review."}
+              ? "This BriefAgent has been blocked by trust & safety."
+              : "This BriefAgent is quarantined pending review."}
           </p>
           <p className="mt-1 text-sm">
             {agent.quarantineState === "blocked"
-              ? "The registry refuses every download for this agent (410 Gone). Installed copies should be removed."
+              ? "The registry refuses every download for this BriefAgent (410 Gone). Installed copies should be removed."
               : "It no longer resolves for installs while a reviewer investigates a finding. Copies you already installed are untouched — the registry cannot reach them."}
           </p>
         </div>
