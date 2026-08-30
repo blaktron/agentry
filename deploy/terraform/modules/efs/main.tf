@@ -2,6 +2,11 @@
 # throughput, encrypted, uid-scoped access points, mount targets in the data
 # subnets, and AWS Backup daily/35d.
 
+locals {
+  # The environment tag rides with every resource this module creates.
+  tags = merge(var.tags, { Environment = var.environment })
+}
+
 resource "aws_efs_file_system" "this" {
   creation_token   = "${var.name}-git"
   encrypted        = true
@@ -16,14 +21,14 @@ resource "aws_efs_file_system" "this" {
     }
   }
 
-  tags = merge(var.tags, { Name = "${var.name}-git" })
+  tags = merge(local.tags, { Name = "${var.name}-git" })
 }
 
 resource "aws_security_group" "this" {
   name        = "${var.name}-efs"
   description = "EFS mount targets — 2049 from git-tier SGs only."
   vpc_id      = var.vpc_id
-  tags        = merge(var.tags, { Name = "${var.name}-efs" })
+  tags        = merge(local.tags, { Name = "${var.name}-efs" })
 }
 
 resource "aws_vpc_security_group_ingress_rule" "nfs" {
@@ -62,7 +67,7 @@ resource "aws_efs_access_point" "this" {
     }
   }
 
-  tags = merge(var.tags, { Name = "${var.name}-${each.key}" })
+  tags = merge(local.tags, { Name = "${var.name}-${each.key}" })
 }
 
 # --- AWS Backup (daily, 35 d) ---------------------------------------------
@@ -70,7 +75,7 @@ resource "aws_efs_access_point" "this" {
 resource "aws_backup_vault" "this" {
   name        = "${var.name}-efs"
   kms_key_arn = var.kms_key_arn
-  tags        = var.tags
+  tags        = local.tags
 }
 
 resource "aws_iam_role" "backup" {
@@ -83,7 +88,7 @@ resource "aws_iam_role" "backup" {
       Action    = "sts:AssumeRole"
     }]
   })
-  tags = var.tags
+  tags = local.tags
 }
 
 resource "aws_iam_role_policy_attachment" "backup" {
@@ -106,7 +111,7 @@ resource "aws_backup_plan" "this" {
     }
   }
 
-  tags = var.tags
+  tags = local.tags
 }
 
 resource "aws_backup_selection" "this" {

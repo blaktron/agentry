@@ -3,6 +3,11 @@
 #   git     — managed core with body-inspection rules set to COUNT (they
 #             false-positive on git packfiles) + per-IP rate rule.
 
+locals {
+  # The environment tag rides with every resource this module creates.
+  tags = merge(var.tags, { Environment = var.environment })
+}
+
 # ===========================================================================
 # web / API
 # ===========================================================================
@@ -78,7 +83,7 @@ resource "aws_wafv2_web_acl" "web" {
     sampled_requests_enabled   = true
   }
 
-  tags = var.tags
+  tags = local.tags
 }
 
 # ===========================================================================
@@ -148,5 +153,5 @@ resource "aws_wafv2_web_acl" "git" {
     sampled_requests_enabled   = true
   }
 
-  tags = var.tags
+  tags = local.tags
 }
