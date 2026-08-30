@@ -37,7 +37,7 @@ export default async function TrustPage() {
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Trust &amp; security</h1>
         <p className="mt-3" style={{ color: "var(--color-muted)" }}>
-          Agent instructions are executed with your credentials and your tool access, but they are
+          BriefAgent instructions are executed with your credentials and your tool access, but they are
           usually distributed with no signing, no scanning, and no review. SecureAgentry exists to close
           that gap — and to be precise about how far it closes.
         </p>
@@ -104,14 +104,14 @@ export default async function TrustPage() {
         <h2 className="text-xl font-semibold">What this does not guarantee</h2>
         <div className="mt-3 space-y-3 text-sm" style={{ color: "var(--color-muted)" }}>
           <p>
-            Static analysis cannot prove an agent safe. A sufficiently novel injection technique will
+            Static analysis cannot prove a BriefAgent safe. A sufficiently novel injection technique will
             pass a scan that was written before it existed. We publish finding counts, the ruleset
             version, and the scan date precisely so you can judge the freshness of the check rather
             than trust a badge.
           </p>
           <p>
             Declared capabilities are a contract from the author and the input to policy and scanning
-            — the registry cannot enforce them while your agent runs. Your runtime should use the
+            — the registry cannot enforce them while your BriefAgent runs. Your runtime should use the
             manifest to sandbox accordingly.
           </p>
           <p>
@@ -125,7 +125,7 @@ export default async function TrustPage() {
       <section>
         <h2 className="text-xl font-semibold">Reporting a problem</h2>
         <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
-          Malicious content: use the report link on the agent page, or email abuse@ the registry
+          Malicious content: use the report link on the BriefAgent page, or email abuse@ the registry
           domain. A vulnerability in SecureAgentry itself: see SECURITY.md in the open-source repository for
           the coordinated-disclosure process. The scanners and rulesets are open source, so the claims
           on this page are auditable rather than promised.

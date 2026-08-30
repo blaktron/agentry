@@ -90,7 +90,7 @@ export default async function NewAgentPage({
         </form>
       </Card>
       <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-        Creating an agent provisions its git repo. Next steps: <code>agentry init</code> a
+        Creating a BriefAgent provisions its git repo. Next steps: <code>agentry init</code> a
         workspace, push to the repo, then publish a <code>v*</code> tag or run{" "}
         <code>agentry publish</code>.
       </p>

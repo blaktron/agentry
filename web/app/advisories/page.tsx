@@ -26,7 +26,7 @@ export default function AdvisoriesPage() {
         <h2 className="font-medium">How you find out</h2>
         <ul className="mt-2 space-y-2 text-sm" style={{ color: "var(--color-muted)" }}>
           <li>
-            <strong>On the agent page.</strong> Advisories appear on the affected agent, alongside its
+            <strong>On the BriefAgent page.</strong> Advisories appear on the affected BriefAgent, alongside its
             security report. Check there before installing or upgrading.
           </li>
           <li>
