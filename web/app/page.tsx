@@ -6,6 +6,13 @@ import { AgentRow, Card, CodeBlock } from "@/components/ui";
 // Home (§10.1): what Agentry is, what people are actually installing, how to
 // install, and an honest statement of what scanning does and does not prove.
 // SSR for SEO (D-08).
+//
+// force-dynamic: the Docker image builds with no API reachable, so a static
+// prerender bakes the "nothing published yet" empty state and serves it as
+// the first view after every deploy. Render per request instead — the
+// fetches below still fail soft, and their revalidate hints still cache.
+export const dynamic = "force-dynamic";
+
 export default async function HomePage() {
   const [meta, trending] = await Promise.all([
     // Both must fail soft: the home page is the one page that has to render

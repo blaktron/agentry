@@ -82,7 +82,9 @@ services:
       AGENTRY_SMTP_PORT: "1025"
       AGENTRY_SMTP_STARTTLS: "false"
       AGENTRY_SMTP_FROM: Agentry <no-reply@agentry.localhost>
-      AGENTRY_BASE_URL: http://localhost:8080
+      # Override with AGENTRY_PUBLIC_URL (compose .env or shell) when the box
+      # is reached under another name — clone/install URLs render from this.
+      AGENTRY_BASE_URL: ${AGENTRY_PUBLIC_URL:-http://localhost:8080}
       # Archive store against minio (S3-compatible), exercising the same code
       # path SaaS uses rather than the local-FS one.
       AGENTRY_STORAGE_KIND: s3
