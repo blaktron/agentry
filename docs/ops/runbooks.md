@@ -27,7 +27,7 @@ during a rollout:
 
 **Roll back.** Code rolls back freely; **migrations do not**. Redeploy the
 previous image tag and leave the schema alone. If a migration itself is the
-problem, write a new forward migration — never `goose down` in production.
+problem, write a new forward migration. Never `goose down` in production.
 
 **Verify:** `/readyz` green on every task, `publish→verdict` p50 back under
 10 minutes, no new `S0/pipeline-error` findings.
@@ -45,7 +45,7 @@ problem, write a new forward migration — never `goose down` in production.
    partially applied (possible only for migrations with multiple statements
    outside a transaction), reconcile by hand in a transaction, then mark it:
    `psql "$DB" -c "insert into goose_db_version (version_id, is_applied) values (N, true)"`.
-4. Old code keeps serving throughout — do not scale to zero to "get a clean
+4. Old code keeps serving throughout. Do not scale to zero to "get a clean
    slate".
 
 **Verify:** `agentryd migrate` is a no-op, tasks boot, `/readyz` green.
@@ -74,7 +74,7 @@ problem, write a new forward migration — never `goose down` in production.
    select id, kind, attempt, last_error from jobs where state='failed' order by finished_at desc limit 20;
    ```
    Capture `last_error`, open a bug, then park it: `update jobs set state='failed' where id='…'`.
-   A parked scan job leaves its version in `scanning` — that is **fail-closed
+   A parked scan job leaves its version in `scanning`. That is **fail-closed
    and correct**; the version is not published. Re-run it after the fix with
    a `manual` scan trigger rather than transitioning the version by hand.
 
@@ -94,7 +94,7 @@ is hundreds of malicious agents from a handful of accounts, so assume the
 blast radius is an *account cluster*, not one agent.
 
 **A rescan sweep is now the most likely way you find out.** Registering a new
-ruleset release enqueues the §8.7 catalogue sweep automatically — you do not
+ruleset release enqueues the §8.7 catalogue sweep automatically. You do not
 schedule it, and shipping detection for a live technique will surface every
 already-published version that trips it, all at once. Expect a wave of
 quarantines within a sweep of publishing a rule that matters, and read that
@@ -102,9 +102,9 @@ as the system working rather than as an incident of its own. (Sweeps used to
 need triggering by hand, which meant new detection sat unapplied; that was
 fixed in the 2026-08-29 remediation.)
 
-Note also that S8's publisher-behaviour signal covers **account age ×
-publish velocity** but does **not** correlate publisher IPs across accounts —
-the "or IP cluster" half of §8.3. The actual ClawHavoc incident (1,184 skills
+S8's publisher-behaviour signal also covers **account age ×
+publish velocity** but does **not** correlate publisher IPs across accounts
+(the "or IP cluster" half of §8.3). The actual ClawHavoc incident (1,184 skills
 from 12 accounts) turned on exactly that axis, so step 1 below is manual work
 the scanner will not do for you.
 
@@ -121,30 +121,30 @@ the scanner will not do for you.
    Look for shared signals: account age, IP, naming pattern, identical
    findings.
 2. **Stop the inflow first.** Suspend the accounts (`update users set
-   state='suspended' where id in (…)`) — this kills sessions and PATs on next
+   state='suspended' where id in (…)`). This kills sessions and PATs on next
    use. New publishes stop; existing content is untouched.
 3. **Quarantine, then block.** Quarantine is reversible: it stops resolution
    and refuses direct downloads with `409`. Block is for confirmed malware and
-   returns **`410 Gone`** on every download of that agent or version — which
+   returns **`410 Gone`** on every download of that agent or version, which
    is now true in fact and not only on paper. Until the 2026-08-29
    remediation, `block` set the agent's quarantine state and nothing else, so
    a blocked agent kept serving `200`s and its archive stayed downloadable;
    the `410` branch was unreachable code. If you ran this runbook before that
-   fix, **re-check anything you blocked** — it may still be being served.
+   fix, **re-check anything you blocked**; it may still be being served.
    Work through the API (`POST /platform/agents/{ns}/{name}/quarantine`, then
-   `.../block`) so every action is audited with a reason — not in SQL.
+   `.../block`) so every action is audited with a reason, not in SQL.
 4. **Publish one advisory per affected agent** (or one covering the cluster,
    referenced from each). Consumers who already installed are reached by
    advisory + webhook, not by any push we control.
 5. **Write the timeline as you go.** Who, what, when, and what signal caught
-   it — this becomes the postmortem and, usually, the next S8 rule.
+   it. This becomes the postmortem and, usually, the next S8 rule.
 
 **Dual control:** `blocked` should be set by a second platform admin, not the
 one who quarantined. If you are alone, block anyway and get review after.
 
 **Verify:** no new versions from the cluster; quarantined/blocked states
 reflected on the agent pages; **an actual `curl` of a blocked version's
-download URL returns `410`** (verify the effect, not the state column —
+download URL returns `410`** (verify the effect, not the state column;
 that is the exact failure that hid here once); advisories visible; audit
 trail complete.
 
@@ -156,7 +156,7 @@ trail complete.
 alert.
 
 Keys rotate with **overlapping validity windows** because clients pin what
-they have seen (TOFU) — a hard swap makes every installed client report a key
+they have seen (TOFU). A hard swap makes every installed client report a key
 mismatch.
 
 1. Create the new key (Terraform, `modules/kms`). Do not delete the old one.
@@ -166,7 +166,7 @@ mismatch.
    workers. New attestations use the new key; old ones still verify.
 4. Leave the old key published for at least one CLI release cycle, then remove
    it from the key set. Keep the key material itself (old attestations must
-   stay verifiable) — **never schedule deletion of a key that signed a
+   stay verifiable). **Never schedule deletion of a key that signed a
    published version.**
 
 **If the key is suspected compromised:** rotate immediately as above, then
@@ -192,8 +192,8 @@ version from a client that pinned the old key.
    the restore is post-migration), scale `api`/`worker` back up.
 4. Reconcile object storage: S3 release archives are content-addressed and
    write-once, so they are ahead of, never behind, the database. Any archive
-   whose version row vanished in the restore is simply unreferenced garbage —
-   leave it. Conversely, a version row referencing a missing archive means the
+   whose version row vanished in the restore is unreferenced garbage.
+   Leave it. Conversely, a version row referencing a missing archive means the
    restore went *back past* a publish: those versions are broken and must be
    quarantined, not silently served:
    ```sql
@@ -203,7 +203,7 @@ version from a client that pinned the old key.
    ```
 5. Announce the restore window on the status page; publishes inside it were
    lost and authors must re-publish (version strings are burned, so they need
-   a new version number — say so explicitly).
+   a new version number; say so explicitly).
 
 **Verify:** `/readyz` green, a test publish reaches `published`, `agentry
 verify` passes on a pre-incident version.
@@ -220,7 +220,7 @@ verify` passes on a pre-incident version.
    read-only alongside, and copy only the affected `{uuid[0:2]}/{uuid}.git`
    directories back.
 3. A missing repo is recoverable from any clone: `git push --mirror`. Release
-   archives are **not** affected by EFS loss — they live in S3 and are what
+   archives are **not** affected by EFS loss; they live in S3 and are what
    consumers download. Published versions keep working through a total repo
    loss; only pushes and new git-tag publishes break.
 
@@ -239,8 +239,8 @@ flood.
    (see §4 quarantine wave).
 2. Cheap levers first: WAF rate rule threshold, `AGENTRY_LIMITS_*` anonymous
    limits, CloudFront caching on public GETs. Release downloads are
-   content-addressed and CDN-cached — they should never be the bottleneck; if
-   they are, check that `Cache-Control: immutable` is surviving.
+   content-addressed and CDN-cached, so they should never be the bottleneck;
+   if they are, check that `Cache-Control: immutable` is surviving.
 3. Do not disable authentication rate limits to "reduce load"; login is the
    endpoint you least want unthrottled.
 
@@ -253,19 +253,19 @@ publisher locked out (check `user.login_failed` audit volume by handle).
 
 **Trigger:** a verified account-owner request.
 
-1. The self-service path is `POST /api/v1/user/delete` — prefer it; it is
+1. The self-service path is `POST /api/v1/user/delete`. Prefer it; it is
    audited and transactional.
 2. It purges PII, pseudonymizes the account, retires the handle (reserved, not
    recycled), revokes every credential, and disposes of published public
    versions **without ever deleting them**: consumers who already installed
    keep a verifiable artifact, which is the §5.5 contract. Explain this to the
-   requester — it is a lawful-interest position, not an oversight.
+   requester; it is a lawful-interest position, not an oversight.
 3. **The requester must choose a disposition.** If the account has any
    published public versions, the call requires `publishedContent=yank` or
    `publishedContent=transfer` (the latter also needs
    `transferOrg=<org handle>`, and the caller must be an owner or admin
    there); without it the request is refused with `400` naming the count.
-   There is no default — it used to silently default to `yank`, which meant
+   There is no default. It used to silently default to `yank`, which meant
    nobody was being asked. Ask before you run it, and record the answer.
 4. If they insist published bytes be removed, that is a `blocked` decision by
    trust & safety with a written rationale, not an erasure step.
@@ -288,7 +288,7 @@ disposition.
    proof-of-concept content into a production publish.
 3. Severity by what it bypasses: publication gate, authorization, or signing
    are automatically high or critical.
-4. Fix forward with a regression test — for scanner evasion, that means a new
+4. Fix forward with a regression test. For scanner evasion, that means a new
    fixture pair in `testdata/attack-corpus/` so it can never silently return.
 5. Ship, then publish the advisory with credit.
 

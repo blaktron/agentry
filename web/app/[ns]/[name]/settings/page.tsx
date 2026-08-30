@@ -265,7 +265,7 @@ export default async function AgentSettingsPage({
         ) : (
           <p className="text-sm">
             Not available: this BriefAgent has {history.length} version
-            {history.length === 1 ? "" : "s"} on record. §4.3 forbids deleting version rows — a
+            {history.length === 1 ? "" : "s"} on record. §4.3 forbids deleting version rows. A
             published version is history that consumers may depend on, and a version still in the
             pipeline is mid-flight. Published BriefAgents are{" "}
             <Link href={`/${n}/${a}`} className="underline">

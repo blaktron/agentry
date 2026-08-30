@@ -40,7 +40,7 @@ export function Badge({
   return (
     <span
       title={title}
-      className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium"
+      className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-mono text-xs font-medium"
       style={{ background: bg, color: fg, borderColor: "var(--color-border)" }}
     >
       {children}
@@ -69,7 +69,7 @@ export function SeverityBadge({ severity, count }: { severity: Severity; count?:
   const color = SEVERITY_COLOR[severity] ?? "var(--color-muted)";
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium"
+      className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-mono text-xs font-medium"
       style={{
         background: `color-mix(in srgb, ${color} 16%, transparent)`,
         color,
@@ -164,12 +164,12 @@ export function CapabilityBadges({ capabilities }: { capabilities?: Record<strin
   }
 
   if (items.length === 0) {
-    return <Badge tone="ok">pure text — no capabilities declared</Badge>;
+    return <Badge tone="ok">pure text, no capabilities declared</Badge>;
   }
   return (
     <div className="flex flex-wrap gap-2">
       {items.map((i) => (
-        <Badge key={i.label} tone={i.tone} title={`${i.detail} — declared by the author, not enforced by the registry`}>
+        <Badge key={i.label} tone={i.tone} title={`${i.detail} (declared by the author, not enforced by the registry)`}>
           {i.label}
         </Badge>
       ))}
@@ -212,7 +212,7 @@ export function AgentRow({
   return (
     <li className="border-b py-3 last:border-0" style={{ borderColor: "var(--color-border)" }}>
       <div className="flex items-baseline gap-3">
-        <Link href={`/${namespace}/${name}`} className="font-medium hover:underline">
+        <Link href={`/${namespace}/${name}`} className="font-mono font-medium hover:underline">
           {namespace}/{name}
         </Link>
         <KindBadge kind={kind} />

@@ -22,9 +22,9 @@ describe("fmtUTC", () => {
   });
 
   it("shows an em dash for a missing timestamp", () => {
-    expect(fmtUTC(undefined)).toBe("—");
-    expect(fmtUTC(null)).toBe("—");
-    expect(fmtUTC("")).toBe("—");
+    expect(fmtUTC(undefined)).toBe("none");
+    expect(fmtUTC(null)).toBe("none");
+    expect(fmtUTC("")).toBe("none");
   });
 
   it("passes an unparseable value through instead of printing Invalid Date", () => {
@@ -33,7 +33,7 @@ describe("fmtUTC", () => {
 
   it("fmtUTCDate drops the clock but keeps the zone label", () => {
     expect(fmtUTCDate("2026-08-29T23:30:00-04:00")).toBe("2026-08-30 UTC");
-    expect(fmtUTCDate(undefined)).toBe("—");
+    expect(fmtUTCDate(undefined)).toBe("none");
   });
 });
 

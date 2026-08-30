@@ -28,7 +28,7 @@ compatibility boundary, show the before and after:
   additive; anything breaking needs `/api/v2` and a migration story.
 - **Attestation predicate changes:** what old verifiers do with new
   envelopes, and what new verifiers do with old ones. Signatures already
-  issued must keep verifying — forever.
+  issued must keep verifying, forever.
 
 ## Compatibility and migration
 

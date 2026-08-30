@@ -941,7 +941,7 @@ type AgentStats struct {
 
 // AgentVersion defines model for AgentVersion.
 type AgentVersion struct {
-	// ArchiveDigest sha256:<hex> — the release identity (D-15).
+	// ArchiveDigest sha256:<hex>, the release identity (D-15).
 	ArchiveDigest *string `json:"archiveDigest,omitempty"`
 	ArchiveSize   *int64  `json:"archiveSize,omitempty"`
 
@@ -1185,7 +1185,7 @@ type ResolveResult struct {
 	// ArchiveUrl Where to fetch the archive (CDN on SaaS; API path self-host).
 	ArchiveUrl string `json:"archiveUrl"`
 
-	// AttestationUrl Where to fetch the DSSE attestation over this release (§8.8, §9.4 step 3). Present whenever the version has been signed — every version published by a signing-enabled deployment. Absent when the deployment runs `signing.kind: none` (dev/self-host opt-out) or the version predates signing.
+	// AttestationUrl Where to fetch the DSSE attestation over this release (§8.8, §9.4 step 3). Present whenever the version has been signed: every version published by a signing-enabled deployment. Absent when the deployment runs `signing.kind: none` (dev/self-host opt-out) or the version predates signing.
 	AttestationUrl *string                `json:"attestationUrl,omitempty"`
 	Digest         string                 `json:"digest"`
 	Manifest       map[string]interface{} `json:"manifest"`
@@ -1271,7 +1271,7 @@ type ScanFinding struct {
 	Title      string                  `json:"title"`
 	Verdict    ScanFindingVerdict      `json:"verdict"`
 
-	// VerdictReason Why a reviewer dismissed or confirmed this finding. Dismissed findings stay on the public report WITH their rationale (PLAN §8.5) — a finding that vanishes without explanation is exactly what the report exists to prevent.
+	// VerdictReason Why a reviewer dismissed or confirmed this finding. Dismissed findings stay on the public report WITH their rationale (PLAN §8.5). A finding that vanishes without explanation is exactly what the report exists to prevent.
 	VerdictReason *string `json:"verdictReason,omitempty"`
 }
 
@@ -1289,7 +1289,7 @@ type ScanReport struct {
 	FindingCounts *map[string]int `json:"findingCounts,omitempty"`
 	Findings      []ScanFinding   `json:"findings"`
 
-	// FinishedAt When this scan run completed — the date the report describes.
+	// FinishedAt When this scan run completed: the date the report describes.
 	FinishedAt     *time.Time          `json:"finishedAt,omitempty"`
 	JudgeModel     *string             `json:"judgeModel,omitempty"`
 	ReportDigest   *string             `json:"reportDigest,omitempty"`
@@ -1792,7 +1792,7 @@ type SearchAgentsParams struct {
 	Q    *string    `form:"q,omitempty" json:"q,omitempty"`
 	Kind *AgentKind `form:"kind,omitempty" json:"kind,omitempty"`
 
-	// Capability Capability the latest published version actually asks for, e.g. `network`, `filesystem`, `exec`, `secrets`, `dataAccess` (§5.4). A capability declared as `none`, null, or empty does not match — `network: {egress: none}` is not a network agent.
+	// Capability Capability the latest published version actually asks for, e.g. `network`, `filesystem`, `exec`, `secrets`, `dataAccess` (§5.4). A capability declared as `none`, null, or empty does not match: `network: {egress: none}` is not a network agent.
 	Capability *string `form:"capability,omitempty" json:"capability,omitempty"`
 
 	// License SPDX identifier from the latest published manifest.
@@ -2070,7 +2070,7 @@ type ClientInterface interface {
 
 	// ListAgentActivity Recent activity for an agent (§9.2).
 	//
-	// Drawn from the audit log. Anyone who can see a public agent gets the public-safe subset — publishes and yanks; callers with an explicit read grant (or namespace-derived read) see the fuller stream including submissions, settings changes, and grant changes.
+	// Drawn from the audit log. Anyone who can see a public agent gets the public-safe subset: publishes and yanks; callers with an explicit read grant (or namespace-derived read) see the fuller stream including submissions, settings changes, and grant changes.
 	//
 	// Corresponds with GET /agents/{ns}/{name}/activity (the `ListAgentActivity` operationId).
 	ListAgentActivity(ctx context.Context, ns Namespace, name AgentName, params *ListAgentActivityParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2137,7 +2137,7 @@ type ClientInterface interface {
 
 	// SubmitVersionWithBody Submit a version for publication (§7 state machine entry).
 	//
-	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests — client packing is never trusted).
+	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2146,7 +2146,7 @@ type ClientInterface interface {
 
 	// SubmitVersion Submit a version for publication (§7 state machine entry).
 	//
-	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests — client packing is never trusted).
+	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2194,7 +2194,7 @@ type ClientInterface interface {
 
 	// TotpChallengeWithBody Complete a pending 2FA challenge and open the session (§12.1).
 	//
-	// Second leg of a login that could not carry a TOTP code inline — today only social login, whose callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+	// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2203,7 +2203,7 @@ type ClientInterface interface {
 
 	// TotpChallenge Complete a pending 2FA challenge and open the session (§12.1).
 	//
-	// Second leg of a login that could not carry a TOTP code inline — today only social login, whose callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+	// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2248,7 +2248,7 @@ type ClientInterface interface {
 	// Corresponds with POST /auth/logout (the `Logout` operationId).
 	Logout(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SocialOidcCallback Social login redirect URI — establish a session (§12.1).
+	// SocialOidcCallback Social login redirect URI: establish a session (§12.1).
 	//
 	// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session.
 	//
@@ -2257,7 +2257,7 @@ type ClientInterface interface {
 
 	// SocialOidcStart Begin social login with a configured provider (§12.1).
 	//
-	// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership — org SSO lives under /orgs/{org}/sso (§12.4).
+	// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership. Org SSO lives under /orgs/{org}/sso (§12.4).
 	//
 	// Corresponds with GET /auth/oidc/{provider}/start (the `SocialOidcStart` operationId).
 	SocialOidcStart(ctx context.Context, provider SocialOidcStartParamsProvider, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2490,7 +2490,7 @@ type ClientInterface interface {
 	// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
 	PutSsoConnection(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, body PutSsoConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// OidcCallback OIDC redirect URI — exchange the code and establish a session (§12.4).
+	// OidcCallback OIDC redirect URI: exchange the code and establish a session (§12.4).
 	//
 	// Corresponds with GET /orgs/{org}/sso/oidc/callback (the `OidcCallback` operationId).
 	OidcCallback(ctx context.Context, org OrgHandle, params *OidcCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2500,7 +2500,7 @@ type ClientInterface interface {
 	// Corresponds with GET /orgs/{org}/sso/oidc/start (the `OidcStart` operationId).
 	OidcStart(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SamlAcs SAML Assertion Consumer Service — consume a signed assertion (§12.4).
+	// SamlAcs SAML Assertion Consumer Service: consume a signed assertion (§12.4).
 	//
 	// Corresponds with POST /orgs/{org}/sso/saml/acs (the `SamlAcs` operationId).
 	SamlAcs(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2599,7 +2599,7 @@ type ClientInterface interface {
 
 	// PingWebhook Send a test delivery to an endpoint (admin+, §9.2).
 	//
-	// Enqueues a signed `ping` delivery through the ordinary webhook machinery — same signature header, same SSRF guard, same retry schedule — so the recorded attempt appears in `GET …/{id}/deliveries`. Honours `Idempotency-Key`.
+	// Enqueues a signed `ping` delivery through the ordinary webhook machinery (same signature header, same SSRF guard, same retry schedule), so the recorded attempt appears in `GET …/{id}/deliveries`. Honours `Idempotency-Key`.
 	//
 	// Corresponds with POST /orgs/{org}/webhooks/{id}/ping (the `PingWebhook` operationId).
 	PingWebhook(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2710,7 +2710,7 @@ type ClientInterface interface {
 	//
 	// Returns the deployment's rule bundle as an uncompressed tar of the bundle directory (`bundle.yaml` plus the family YAML files), exactly the bytes `pkg/rules.LoadBundle` reads. The advertised identity travels in headers so a client can check what it got without unpacking first:
 	//
-	// `X-Agentry-Bundle-Semver` — the ruleset release semver; `X-Agentry-Bundle-Digest` — the `sha256:<hex>` content digest recorded on the `ruleset_releases` row; `ETag` — the same digest.
+	// `X-Agentry-Bundle-Semver`: the ruleset release semver; `X-Agentry-Bundle-Digest`: the `sha256:<hex>` content digest recorded on the `ruleset_releases` row; `ETag`: the same digest.
 	//
 	// The digest is the pin: a client MUST recompute it over the received bundle and refuse a mismatch. Bundle-level *signatures* do not exist yet (see DEVIATIONS DEV-024); this endpoint pins by digest only.
 	//
@@ -2750,7 +2750,7 @@ type ClientInterface interface {
 
 	// DeleteCurrentUser Erase the caller's account (GDPR flow, §12.7).
 	//
-	// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit — omitting `publishedContent` is a 400, never a silent yank.
+	// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank.
 	//
 	// Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
 	DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2764,14 +2764,14 @@ type ClientInterface interface {
 
 	// ListUserSessions List the caller's active browser sessions (§12.1).
 	//
-	// Sessions are cookie sessions. A PAT-authenticated caller has no sessions of its own, so the list is empty (200, not an error) — a PAT is not a way to enumerate someone's browser sessions.
+	// Sessions are cookie sessions. A PAT-authenticated caller has no sessions of its own, so the list is empty (200, not an error). A PAT is not a way to enumerate someone's browser sessions.
 	//
 	// Corresponds with GET /user/sessions (the `ListUserSessions` operationId).
 	ListUserSessions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RevokeUserSession Revoke one of the caller's own sessions (§12.1).
 	//
-	// Own sessions only. An id that is not one of the caller's live sessions answers 404 whether it does not exist or belongs to somebody else — the two are deliberately indistinguishable. Session-only: a PAT cannot revoke sessions (403).
+	// Own sessions only. An id that is not one of the caller's live sessions answers 404 whether it does not exist or belongs to somebody else. The two are deliberately indistinguishable. Session-only: a PAT cannot revoke sessions (403).
 	//
 	// Corresponds with DELETE /user/sessions/{sessionId} (the `RevokeUserSession` operationId).
 	RevokeUserSession(ctx context.Context, sessionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2982,7 +2982,7 @@ func (c *Client) ReportAbuse(ctx context.Context, ns Namespace, name AgentName, 
 
 // ListAgentActivity Recent activity for an agent (§9.2).
 //
-// Drawn from the audit log. Anyone who can see a public agent gets the public-safe subset — publishes and yanks; callers with an explicit read grant (or namespace-derived read) see the fuller stream including submissions, settings changes, and grant changes.
+// Drawn from the audit log. Anyone who can see a public agent gets the public-safe subset: publishes and yanks; callers with an explicit read grant (or namespace-derived read) see the fuller stream including submissions, settings changes, and grant changes.
 //
 // Corresponds with GET /agents/{ns}/{name}/activity (the `ListAgentActivity` operationId).
 func (c *Client) ListAgentActivity(ctx context.Context, ns Namespace, name AgentName, params *ListAgentActivityParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -3159,7 +3159,7 @@ func (c *Client) ListVersions(ctx context.Context, ns Namespace, name AgentName,
 
 // SubmitVersionWithBody Submit a version for publication (§7 state machine entry).
 //
-// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests — client packing is never trusted).
+// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
 //
 // Takes any type of body and a specified content type.
 //
@@ -3178,7 +3178,7 @@ func (c *Client) SubmitVersionWithBody(ctx context.Context, ns Namespace, name A
 
 // SubmitVersion Submit a version for publication (§7 state machine entry).
 //
-// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests — client packing is never trusted).
+// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -3306,7 +3306,7 @@ func (c *Client) YankVersion(ctx context.Context, ns Namespace, name AgentName, 
 
 // TotpChallengeWithBody Complete a pending 2FA challenge and open the session (§12.1).
 //
-// Second leg of a login that could not carry a TOTP code inline — today only social login, whose callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
 //
 // Takes any type of body and a specified content type.
 //
@@ -3325,7 +3325,7 @@ func (c *Client) TotpChallengeWithBody(ctx context.Context, contentType string, 
 
 // TotpChallenge Complete a pending 2FA challenge and open the session (§12.1).
 //
-// Second leg of a login that could not carry a TOTP code inline — today only social login, whose callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -3440,7 +3440,7 @@ func (c *Client) Logout(ctx context.Context, reqEditors ...RequestEditorFn) (*ht
 	return c.Client.Do(req)
 }
 
-// SocialOidcCallback Social login redirect URI — establish a session (§12.1).
+// SocialOidcCallback Social login redirect URI: establish a session (§12.1).
 //
 // Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session.
 //
@@ -3459,7 +3459,7 @@ func (c *Client) SocialOidcCallback(ctx context.Context, provider SocialOidcCall
 
 // SocialOidcStart Begin social login with a configured provider (§12.1).
 //
-// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership — org SSO lives under /orgs/{org}/sso (§12.4).
+// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership. Org SSO lives under /orgs/{org}/sso (§12.4).
 //
 // Corresponds with GET /auth/oidc/{provider}/start (the `SocialOidcStart` operationId).
 func (c *Client) SocialOidcStart(ctx context.Context, provider SocialOidcStartParamsProvider, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4062,7 +4062,7 @@ func (c *Client) PutSsoConnection(ctx context.Context, org OrgHandle, kind PutSs
 	return c.Client.Do(req)
 }
 
-// OidcCallback OIDC redirect URI — exchange the code and establish a session (§12.4).
+// OidcCallback OIDC redirect URI: exchange the code and establish a session (§12.4).
 //
 // Corresponds with GET /orgs/{org}/sso/oidc/callback (the `OidcCallback` operationId).
 func (c *Client) OidcCallback(ctx context.Context, org OrgHandle, params *OidcCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4092,7 +4092,7 @@ func (c *Client) OidcStart(ctx context.Context, org OrgHandle, reqEditors ...Req
 	return c.Client.Do(req)
 }
 
-// SamlAcs SAML Assertion Consumer Service — consume a signed assertion (§12.4).
+// SamlAcs SAML Assertion Consumer Service: consume a signed assertion (§12.4).
 //
 // Corresponds with POST /orgs/{org}/sso/saml/acs (the `SamlAcs` operationId).
 func (c *Client) SamlAcs(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4361,7 +4361,7 @@ func (c *Client) ListWebhookDeliveries(ctx context.Context, org OrgHandle, id We
 
 // PingWebhook Send a test delivery to an endpoint (admin+, §9.2).
 //
-// Enqueues a signed `ping` delivery through the ordinary webhook machinery — same signature header, same SSRF guard, same retry schedule — so the recorded attempt appears in `GET …/{id}/deliveries`. Honours `Idempotency-Key`.
+// Enqueues a signed `ping` delivery through the ordinary webhook machinery (same signature header, same SSRF guard, same retry schedule), so the recorded attempt appears in `GET …/{id}/deliveries`. Honours `Idempotency-Key`.
 //
 // Corresponds with POST /orgs/{org}/webhooks/{id}/ping (the `PingWebhook` operationId).
 func (c *Client) PingWebhook(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4642,7 +4642,7 @@ func (c *Client) ListReviewQueue(ctx context.Context, params *ListReviewQueuePar
 //
 // Returns the deployment's rule bundle as an uncompressed tar of the bundle directory (`bundle.yaml` plus the family YAML files), exactly the bytes `pkg/rules.LoadBundle` reads. The advertised identity travels in headers so a client can check what it got without unpacking first:
 //
-// `X-Agentry-Bundle-Semver` — the ruleset release semver; `X-Agentry-Bundle-Digest` — the `sha256:<hex>` content digest recorded on the `ruleset_releases` row; `ETag` — the same digest.
+// `X-Agentry-Bundle-Semver`: the ruleset release semver; `X-Agentry-Bundle-Digest`: the `sha256:<hex>` content digest recorded on the `ruleset_releases` row; `ETag`: the same digest.
 //
 // The digest is the pin: a client MUST recompute it over the received bundle and refuse a mismatch. Bundle-level *signatures* do not exist yet (see DEVIATIONS DEV-024); this endpoint pins by digest only.
 //
@@ -4742,7 +4742,7 @@ func (c *Client) UpdateCurrentUser(ctx context.Context, body UpdateCurrentUserJS
 
 // DeleteCurrentUser Erase the caller's account (GDPR flow, §12.7).
 //
-// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit — omitting `publishedContent` is a 400, never a silent yank.
+// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank.
 //
 // Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
 func (c *Client) DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4776,7 +4776,7 @@ func (c *Client) RevokeOtherUserSessions(ctx context.Context, reqEditors ...Requ
 
 // ListUserSessions List the caller's active browser sessions (§12.1).
 //
-// Sessions are cookie sessions. A PAT-authenticated caller has no sessions of its own, so the list is empty (200, not an error) — a PAT is not a way to enumerate someone's browser sessions.
+// Sessions are cookie sessions. A PAT-authenticated caller has no sessions of its own, so the list is empty (200, not an error). A PAT is not a way to enumerate someone's browser sessions.
 //
 // Corresponds with GET /user/sessions (the `ListUserSessions` operationId).
 func (c *Client) ListUserSessions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4793,7 +4793,7 @@ func (c *Client) ListUserSessions(ctx context.Context, reqEditors ...RequestEdit
 
 // RevokeUserSession Revoke one of the caller's own sessions (§12.1).
 //
-// Own sessions only. An id that is not one of the caller's live sessions answers 404 whether it does not exist or belongs to somebody else — the two are deliberately indistinguishable. Session-only: a PAT cannot revoke sessions (403).
+// Own sessions only. An id that is not one of the caller's live sessions answers 404 whether it does not exist or belongs to somebody else. The two are deliberately indistinguishable. Session-only: a PAT cannot revoke sessions (403).
 //
 // Corresponds with DELETE /user/sessions/{sessionId} (the `RevokeUserSession` operationId).
 func (c *Client) RevokeUserSession(ctx context.Context, sessionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -9614,7 +9614,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListAgentActivityWithResponse Recent activity for an agent (§9.2).
 	//
-	// Drawn from the audit log. Anyone who can see a public agent gets the public-safe subset — publishes and yanks; callers with an explicit read grant (or namespace-derived read) see the fuller stream including submissions, settings changes, and grant changes.
+	// Drawn from the audit log. Anyone who can see a public agent gets the public-safe subset: publishes and yanks; callers with an explicit read grant (or namespace-derived read) see the fuller stream including submissions, settings changes, and grant changes.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -9695,7 +9695,7 @@ type ClientWithResponsesInterface interface {
 
 	// SubmitVersionWithBodyWithResponse Submit a version for publication (§7 state machine entry).
 	//
-	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests — client packing is never trusted).
+	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -9704,7 +9704,7 @@ type ClientWithResponsesInterface interface {
 
 	// SubmitVersionWithResponse Submit a version for publication (§7 state machine entry).
 	//
-	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests — client packing is never trusted).
+	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -9762,7 +9762,7 @@ type ClientWithResponsesInterface interface {
 
 	// TotpChallengeWithBodyWithResponse Complete a pending 2FA challenge and open the session (§12.1).
 	//
-	// Second leg of a login that could not carry a TOTP code inline — today only social login, whose callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+	// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -9771,7 +9771,7 @@ type ClientWithResponsesInterface interface {
 
 	// TotpChallengeWithResponse Complete a pending 2FA challenge and open the session (§12.1).
 	//
-	// Second leg of a login that could not carry a TOTP code inline — today only social login, whose callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+	// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -9820,7 +9820,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /auth/logout (the `Logout` operationId).
 	LogoutWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*LogoutResponse, error)
 
-	// SocialOidcCallbackWithResponse Social login redirect URI — establish a session (§12.1).
+	// SocialOidcCallbackWithResponse Social login redirect URI: establish a session (§12.1).
 	//
 	// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session.
 	//
@@ -9831,7 +9831,7 @@ type ClientWithResponsesInterface interface {
 
 	// SocialOidcStartWithResponse Begin social login with a configured provider (§12.1).
 	//
-	// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership — org SSO lives under /orgs/{org}/sso (§12.4).
+	// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership. Org SSO lives under /orgs/{org}/sso (§12.4).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -10090,7 +10090,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
 	PutSsoConnectionWithResponse(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, body PutSsoConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*PutSsoConnectionResponse, error)
 
-	// OidcCallbackWithResponse OIDC redirect URI — exchange the code and establish a session (§12.4).
+	// OidcCallbackWithResponse OIDC redirect URI: exchange the code and establish a session (§12.4).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -10104,7 +10104,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/sso/oidc/start (the `OidcStart` operationId).
 	OidcStartWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*OidcStartResponse, error)
 
-	// SamlAcsWithResponse SAML Assertion Consumer Service — consume a signed assertion (§12.4).
+	// SamlAcsWithResponse SAML Assertion Consumer Service: consume a signed assertion (§12.4).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -10225,7 +10225,7 @@ type ClientWithResponsesInterface interface {
 
 	// PingWebhookWithResponse Send a test delivery to an endpoint (admin+, §9.2).
 	//
-	// Enqueues a signed `ping` delivery through the ordinary webhook machinery — same signature header, same SSRF guard, same retry schedule — so the recorded attempt appears in `GET …/{id}/deliveries`. Honours `Idempotency-Key`.
+	// Enqueues a signed `ping` delivery through the ordinary webhook machinery (same signature header, same SSRF guard, same retry schedule), so the recorded attempt appears in `GET …/{id}/deliveries`. Honours `Idempotency-Key`.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -10354,7 +10354,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns the deployment's rule bundle as an uncompressed tar of the bundle directory (`bundle.yaml` plus the family YAML files), exactly the bytes `pkg/rules.LoadBundle` reads. The advertised identity travels in headers so a client can check what it got without unpacking first:
 	//
-	// `X-Agentry-Bundle-Semver` — the ruleset release semver; `X-Agentry-Bundle-Digest` — the `sha256:<hex>` content digest recorded on the `ruleset_releases` row; `ETag` — the same digest.
+	// `X-Agentry-Bundle-Semver`: the ruleset release semver; `X-Agentry-Bundle-Digest`: the `sha256:<hex>` content digest recorded on the `ruleset_releases` row; `ETag`: the same digest.
 	//
 	// The digest is the pin: a client MUST recompute it over the received bundle and refuse a mismatch. Bundle-level *signatures* do not exist yet (see DEVIATIONS DEV-024); this endpoint pins by digest only.
 	//
@@ -10402,7 +10402,7 @@ type ClientWithResponsesInterface interface {
 
 	// DeleteCurrentUserWithResponse Erase the caller's account (GDPR flow, §12.7).
 	//
-	// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit — omitting `publishedContent` is a 400, never a silent yank.
+	// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -10420,7 +10420,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListUserSessionsWithResponse List the caller's active browser sessions (§12.1).
 	//
-	// Sessions are cookie sessions. A PAT-authenticated caller has no sessions of its own, so the list is empty (200, not an error) — a PAT is not a way to enumerate someone's browser sessions.
+	// Sessions are cookie sessions. A PAT-authenticated caller has no sessions of its own, so the list is empty (200, not an error). A PAT is not a way to enumerate someone's browser sessions.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -10429,7 +10429,7 @@ type ClientWithResponsesInterface interface {
 
 	// RevokeUserSessionWithResponse Revoke one of the caller's own sessions (§12.1).
 	//
-	// Own sessions only. An id that is not one of the caller's live sessions answers 404 whether it does not exist or belongs to somebody else — the two are deliberately indistinguishable. Session-only: a PAT cannot revoke sessions (403).
+	// Own sessions only. An id that is not one of the caller's live sessions answers 404 whether it does not exist or belongs to somebody else. The two are deliberately indistinguishable. Session-only: a PAT cannot revoke sessions (403).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -15109,7 +15109,7 @@ func (c *ClientWithResponses) ReportAbuseWithResponse(ctx context.Context, ns Na
 
 // ListAgentActivityWithResponse Recent activity for an agent (§9.2).
 //
-// Drawn from the audit log. Anyone who can see a public agent gets the public-safe subset — publishes and yanks; callers with an explicit read grant (or namespace-derived read) see the fuller stream including submissions, settings changes, and grant changes.
+// Drawn from the audit log. Anyone who can see a public agent gets the public-safe subset: publishes and yanks; callers with an explicit read grant (or namespace-derived read) see the fuller stream including submissions, settings changes, and grant changes.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -15256,7 +15256,7 @@ func (c *ClientWithResponses) ListVersionsWithResponse(ctx context.Context, ns N
 
 // SubmitVersionWithBodyWithResponse Submit a version for publication (§7 state machine entry).
 //
-// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests — client packing is never trusted).
+// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -15271,7 +15271,7 @@ func (c *ClientWithResponses) SubmitVersionWithBodyWithResponse(ctx context.Cont
 
 // SubmitVersionWithResponse Submit a version for publication (§7 state machine entry).
 //
-// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests — client packing is never trusted).
+// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -15377,7 +15377,7 @@ func (c *ClientWithResponses) YankVersionWithResponse(ctx context.Context, ns Na
 
 // TotpChallengeWithBodyWithResponse Complete a pending 2FA challenge and open the session (§12.1).
 //
-// Second leg of a login that could not carry a TOTP code inline — today only social login, whose callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -15392,7 +15392,7 @@ func (c *ClientWithResponses) TotpChallengeWithBodyWithResponse(ctx context.Cont
 
 // TotpChallengeWithResponse Complete a pending 2FA challenge and open the session (§12.1).
 //
-// Second leg of a login that could not carry a TOTP code inline — today only social login, whose callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -15483,7 +15483,7 @@ func (c *ClientWithResponses) LogoutWithResponse(ctx context.Context, reqEditors
 	return ParseLogoutResponse(rsp)
 }
 
-// SocialOidcCallbackWithResponse Social login redirect URI — establish a session (§12.1).
+// SocialOidcCallbackWithResponse Social login redirect URI: establish a session (§12.1).
 //
 // Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session.
 //
@@ -15500,7 +15500,7 @@ func (c *ClientWithResponses) SocialOidcCallbackWithResponse(ctx context.Context
 
 // SocialOidcStartWithResponse Begin social login with a configured provider (§12.1).
 //
-// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership — org SSO lives under /orgs/{org}/sso (§12.4).
+// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership. Org SSO lives under /orgs/{org}/sso (§12.4).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -15981,7 +15981,7 @@ func (c *ClientWithResponses) PutSsoConnectionWithResponse(ctx context.Context, 
 	return ParsePutSsoConnectionResponse(rsp)
 }
 
-// OidcCallbackWithResponse OIDC redirect URI — exchange the code and establish a session (§12.4).
+// OidcCallbackWithResponse OIDC redirect URI: exchange the code and establish a session (§12.4).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16007,7 +16007,7 @@ func (c *ClientWithResponses) OidcStartWithResponse(ctx context.Context, org Org
 	return ParseOidcStartResponse(rsp)
 }
 
-// SamlAcsWithResponse SAML Assertion Consumer Service — consume a signed assertion (§12.4).
+// SamlAcsWithResponse SAML Assertion Consumer Service: consume a signed assertion (§12.4).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16230,7 +16230,7 @@ func (c *ClientWithResponses) ListWebhookDeliveriesWithResponse(ctx context.Cont
 
 // PingWebhookWithResponse Send a test delivery to an endpoint (admin+, §9.2).
 //
-// Enqueues a signed `ping` delivery through the ordinary webhook machinery — same signature header, same SSRF guard, same retry schedule — so the recorded attempt appears in `GET …/{id}/deliveries`. Honours `Idempotency-Key`.
+// Enqueues a signed `ping` delivery through the ordinary webhook machinery (same signature header, same SSRF guard, same retry schedule), so the recorded attempt appears in `GET …/{id}/deliveries`. Honours `Idempotency-Key`.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16461,7 +16461,7 @@ func (c *ClientWithResponses) ListReviewQueueWithResponse(ctx context.Context, p
 //
 // Returns the deployment's rule bundle as an uncompressed tar of the bundle directory (`bundle.yaml` plus the family YAML files), exactly the bytes `pkg/rules.LoadBundle` reads. The advertised identity travels in headers so a client can check what it got without unpacking first:
 //
-// `X-Agentry-Bundle-Semver` — the ruleset release semver; `X-Agentry-Bundle-Digest` — the `sha256:<hex>` content digest recorded on the `ruleset_releases` row; `ETag` — the same digest.
+// `X-Agentry-Bundle-Semver`: the ruleset release semver; `X-Agentry-Bundle-Digest`: the `sha256:<hex>` content digest recorded on the `ruleset_releases` row; `ETag`: the same digest.
 //
 // The digest is the pin: a client MUST recompute it over the received bundle and refuse a mismatch. Bundle-level *signatures* do not exist yet (see DEVIATIONS DEV-024); this endpoint pins by digest only.
 //
@@ -16545,7 +16545,7 @@ func (c *ClientWithResponses) UpdateCurrentUserWithResponse(ctx context.Context,
 
 // DeleteCurrentUserWithResponse Erase the caller's account (GDPR flow, §12.7).
 //
-// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit — omitting `publishedContent` is a 400, never a silent yank.
+// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16575,7 +16575,7 @@ func (c *ClientWithResponses) RevokeOtherUserSessionsWithResponse(ctx context.Co
 
 // ListUserSessionsWithResponse List the caller's active browser sessions (§12.1).
 //
-// Sessions are cookie sessions. A PAT-authenticated caller has no sessions of its own, so the list is empty (200, not an error) — a PAT is not a way to enumerate someone's browser sessions.
+// Sessions are cookie sessions. A PAT-authenticated caller has no sessions of its own, so the list is empty (200, not an error). A PAT is not a way to enumerate someone's browser sessions.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16590,7 +16590,7 @@ func (c *ClientWithResponses) ListUserSessionsWithResponse(ctx context.Context, 
 
 // RevokeUserSessionWithResponse Revoke one of the caller's own sessions (§12.1).
 //
-// Own sessions only. An id that is not one of the caller's live sessions answers 404 whether it does not exist or belongs to somebody else — the two are deliberately indistinguishable. Session-only: a PAT cannot revoke sessions (403).
+// Own sessions only. An id that is not one of the caller's live sessions answers 404 whether it does not exist or belongs to somebody else. The two are deliberately indistinguishable. Session-only: a PAT cannot revoke sessions (403).
 //
 // Returns a wrapper object for the known response body format(s).
 //

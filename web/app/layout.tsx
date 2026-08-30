@@ -144,8 +144,8 @@ function SiteFooter() {
           style={{ borderColor: "var(--color-border)" }}
         >
           <p>
-            © {SITE.copyrightYear} {SITE.brand}. Scanning reduces risk; it does not prove a BriefAgent
-            safe — read the{" "}
+            © {SITE.copyrightYear} {SITE.brand}. Scanning reduces risk; it does not prove a
+            BriefAgent safe. Read the{" "}
             <Link href="/trust" className="underline">
               security model
             </Link>

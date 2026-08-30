@@ -14,6 +14,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ org: strin
   if (!res.ok) return redirectBack(req, back, { error: await problemDetail(res) });
   const created = (await res.json()) as { id: string };
   return redirectBack(req, `${back}?export=${created.id}`, {
-    ok: "export started — this panel shows its status.",
+    ok: "export started. This panel shows its status.",
   });
 }

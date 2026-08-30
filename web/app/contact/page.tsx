@@ -26,7 +26,7 @@ export default function ContactPage() {
       <header>
         <h1 className="text-3xl font-semibold tracking-tight">Contact us</h1>
         <p className="mt-3 text-lg" style={{ color: "var(--color-muted)" }}>
-          We would like to hear from you. Reach the right team below.
+          Reach the right team below.
         </p>
       </header>
       <div className="grid gap-4 sm:grid-cols-2">

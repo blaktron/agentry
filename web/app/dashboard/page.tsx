@@ -201,11 +201,11 @@ export default async function DashboardPage({
           {failed ? (
             <p className="text-sm" style={{ color: "var(--color-sev-medium)" }}>
               The registry did not answer for this namespace, so we cannot say what is in it. This is
-              not the same as it being empty — reload to try again.
+              not the same as it being empty. Reload to try again.
             </p>
           ) : agents.length === 0 ? (
             <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-              No BriefAgents yet — create one with <code>agentry init</code> and{" "}
+              No BriefAgents yet. Create one with <code>agentry init</code> and{" "}
               <code>agentry publish</code>.
             </p>
           ) : (

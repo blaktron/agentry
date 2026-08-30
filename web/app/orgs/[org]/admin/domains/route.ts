@@ -21,6 +21,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ org: strin
       : await apiSend("POST", `/orgs/${o}/domain-claims`, { domain });
   if (!res.ok) return redirectBack(req, back, { error: await problemDetail(res) });
   return redirectBack(req, back, {
-    ok: action === "verify" ? `${domain} verified.` : `${domain} claimed — publish the TXT record shown below it.`,
+    ok: action === "verify" ? `${domain} verified.` : `${domain} claimed. Publish the TXT record shown below it.`,
   });
 }

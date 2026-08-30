@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Two-factor challenge" };
 // A social-login callback lands on the API, not here, and answers with JSON:
 // either a session or `{totpRequired:true, challenge:"…"}`. Until the API
 // redirects the browser back to this page with ?challenge=…, an account with
-// 2FA has to bring the value over by hand — so the field accepts a paste and
+// 2FA has to bring the value over by hand, so the field accepts a paste and
 // the copy says plainly where the value comes from.
 export default async function ChallengePage({
   searchParams,

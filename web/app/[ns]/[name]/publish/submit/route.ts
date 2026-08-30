@@ -17,6 +17,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ ns: string
   if (!res.ok) return redirectBack(req, back, { error: await problemDetail(res) });
   const v = (await res.json()) as { version: string };
   return redirectBack(req, `/${n}/${a}/versions/${encodeURIComponent(v.version)}/progress`, {
-    ok: `tag ${tag} submitted — watching the pipeline.`,
+    ok: `tag ${tag} submitted. Watching the pipeline now.`,
   });
 }

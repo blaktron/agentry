@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Org admin" };
 
 // Org administration (§10.1 Org admin row): members & teams, policy editor,
 // SSO config, SCIM tokens, domain verification, webhooks, audit browser.
-// Server-rendered forms over the tested M1/M6 APIs — authorization lives at
+// Server-rendered forms over the tested M1/M6 APIs. Authorization lives at
 // the API chokepoint; this page renders refusals, it does not gate.
 
 interface Membership {
@@ -99,7 +99,7 @@ export default async function OrgAdminPage({
   }
 
   // The sections below tolerate individual 403s (e.g. an admin who is not
-  // owner cannot read SSO/SCIM config — owner-only) by rendering the refusal.
+  // owner cannot read SSO/SCIM config, which is owner-only) by rendering the refusal.
   const safe = async <T,>(p: Promise<T | null>): Promise<T | null | "forbidden"> => {
     try {
       return await p;
@@ -471,9 +471,9 @@ export default async function OrgAdminPage({
                   {!wh.active && <Badge tone="warn">inactive</Badge>}
                   <form method="post" action={`/orgs/${o}/admin/webhooks`} className="flex items-center gap-2">
                     <input type="hidden" name="id" value={wh.id} />
-                    {/* A ping goes through the ordinary delivery machinery —
-                        same envelope, HMAC signature, SSRF guard and retry
-                        ladder — so it answers "does my endpoint work" with the
+                    {/* A ping goes through the ordinary delivery machinery
+                        (same envelope, HMAC signature, SSRF guard and retry
+                        ladder), so it answers "does my endpoint work" with the
                         code that will actually call it (DEV-021). */}
                     <button type="submit" name="action" value="ping" className="rounded-md border px-2 py-0.5 text-xs" style={{ borderColor: "var(--color-border)" }}>
                       Send test delivery
