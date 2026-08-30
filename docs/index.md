@@ -1,12 +1,15 @@
 # SecureAgentry Documentation
 
-**SecureAgentry** is a registry and git host for single-purpose AI agents, with a
-mandatory pre-publication security pipeline and signed provenance. This site is
-the guide to using it — as an author publishing agents, as a consumer installing
-them, and as an operator running your own instance.
+**SecureAgentry** is a registry and git host for **BriefAgents** — single-purpose
+AI agents — with a mandatory pre-publication security pipeline and signed
+provenance. This site is the guide to using it — as an author publishing
+BriefAgents, as a consumer installing and running them, and as an operator
+running your own instance.
 
 ## Start here
 
+- **[BriefAgents](briefagents.md)** — the package format, every manifest option, and the
+  [BriefAgent template](https://github.com/blaktron/agentry-template) to start from.
 - **[Getting started](dev/getting-started.md)** — set up a local development environment.
 - **[Self-hosting](self-hosting.md)** — run your own instance with Docker or Helm.
 - **[API conventions](api-conventions.md)** — pagination, idempotency, rate limits, and error format.
