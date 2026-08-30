@@ -2,9 +2,14 @@ package store
 
 import (
 	"context"
+	"fmt"
+	"net/url"
 	"os"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // testDatabaseURL returns the integration-test DSN or skips. Real-Postgres
@@ -50,5 +55,74 @@ func TestMigrateAndConnect(t *testing.T) {
 	}
 	if n != 2 {
 		t.Fatalf("expected citext+pg_trgm installed, got %d", n)
+	}
+}
+
+// TestMigrateConcurrentFreshDatabase pins Migrate's doc promise: N migrators
+// racing at a database that has never been migrated must all succeed. Before
+// the advisory lock (DEV-052) the run raced through goose's version-table
+// bootstrap and all but one failed inside the first migrations with
+// duplicate pg_type rows — which is exactly what every multi-replica first
+// boot does when migrateOnStart is set, and what `go test ./...` does to a
+// fresh shared test database.
+func TestMigrateConcurrentFreshDatabase(t *testing.T) {
+	baseURL := testDatabaseURL(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	cfg, err := pgx.ParseConfig(baseURL)
+	if err != nil {
+		t.Fatalf("parse test DSN: %v", err)
+	}
+	// Name is generated, so it is safe to interpolate: digits and one
+	// underscore only. CREATE/DROP DATABASE cannot take parameters.
+	scratch := fmt.Sprintf("agentry_migrate_race_%d", time.Now().UnixNano())
+	scratchURL := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
+		cfg.User, url.PathEscape(cfg.Password), cfg.Host, cfg.Port, scratch)
+
+	admin, err := Connect(ctx, baseURL)
+	if err != nil {
+		t.Fatalf("connect (admin): %v", err)
+	}
+	if _, err := admin.Pool().Exec(ctx, "CREATE DATABASE "+scratch); err != nil {
+		admin.Close()
+		t.Fatalf("create scratch database: %v", err)
+	}
+	admin.Close()
+	defer func() {
+		cleanup, err := Connect(context.WithoutCancel(ctx), baseURL)
+		if err != nil {
+			t.Errorf("connect (cleanup): %v", err)
+			return
+		}
+		if _, err := cleanup.Pool().Exec(context.Background(), "DROP DATABASE IF EXISTS "+scratch); err != nil {
+			t.Errorf("drop scratch database: %v", err)
+		}
+		cleanup.Close()
+	}()
+
+	const migrators = 4
+	errs := make([]error, migrators)
+	var wg sync.WaitGroup
+	for i := 0; i < migrators; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			errs[i] = Migrate(ctx, scratchURL)
+		}(i)
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Errorf("migrator %d failed: %v", i, err)
+		}
+	}
+
+	ver, err := MigrationStatus(ctx, scratchURL)
+	if err != nil {
+		t.Fatalf("MigrationStatus: %v", err)
+	}
+	if ver < 1 {
+		t.Fatalf("expected migration version >= 1 after concurrent run, got %d", ver)
 	}
 }
