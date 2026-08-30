@@ -26,11 +26,11 @@ export default async function HomePage() {
     <div className="space-y-12">
       <section className="max-w-3xl">
         <h1 className="text-3xl font-semibold tracking-tight">
-          A registry for single-purpose AI agents — with the scanning step built in
+          A registry for BriefAgents — single-purpose AI agents, with the scanning step built in
         </h1>
         <p className="mt-4 text-lg" style={{ color: "var(--color-muted)" }}>
-          Agent instructions run with your credentials and your tool access. SecureAgentry hosts them in
-          git, and nothing becomes installable until it has passed a layered scan for prompt
+          BriefAgent instructions run with your credentials and your tool access. SecureAgentry hosts
+          them in git, and nothing becomes installable until it has passed a layered scan for prompt
           injection, hidden instructions, capability escalation, secrets, and supply-chain problems —
           then it is signed.
         </p>
@@ -40,7 +40,7 @@ export default async function HomePage() {
             className="rounded-md px-4 py-2 text-sm font-medium"
             style={{ background: "var(--color-accent)", color: "var(--color-accent-fg)" }}
           >
-            Browse agents
+            Browse BriefAgents
           </Link>
           <Link
             href="/trust"
@@ -60,7 +60,7 @@ export default async function HomePage() {
         <div className="flex items-baseline justify-between gap-4">
           <h2 className="text-xl font-semibold">Most installed this month</h2>
           <Link href="/search" className="text-sm underline">
-            Browse all agents
+            Browse all BriefAgents
           </Link>
         </div>
         {featured.length === 0 ? (
@@ -68,7 +68,7 @@ export default async function HomePage() {
             <p className="text-sm">
               {trending === null
                 ? "The registry index is not reachable right now."
-                : "Nothing has been published to this registry yet — the first agent could be yours."}
+                : "Nothing has been published to this registry yet — the first BriefAgent could be yours."}
             </p>
           </Card>
         ) : (
@@ -120,7 +120,7 @@ export default async function HomePage() {
       </section>
 
       <section className="max-w-3xl">
-        <h2 className="text-xl font-semibold">Install an agent</h2>
+        <h2 className="text-xl font-semibold">Install a BriefAgent</h2>
         <div className="mt-3">
           <CodeBlock>{`agentry install acme/incident-summarizer --target=claude-skill`}</CodeBlock>
         </div>
@@ -133,8 +133,8 @@ export default async function HomePage() {
       <section className="max-w-3xl">
         <h2 className="text-xl font-semibold">What this does not claim</h2>
         <p className="mt-3 text-sm" style={{ color: "var(--color-muted)" }}>
-          Static analysis cannot prove an agent safe, and we do not say it does. Agent pages show the
-          findings, the ruleset version, and the scan date so you can judge for yourself. Novel
+          Static analysis cannot prove a BriefAgent safe, and we do not say it does. BriefAgent pages
+          show the findings, the ruleset version, and the scan date so you can judge for yourself. Novel
           injection techniques will get through; that is why versions are rescanned as the rulesets
           improve, and why advisories and quarantine exist.
         </p>
