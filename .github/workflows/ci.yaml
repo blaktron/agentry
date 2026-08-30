@@ -92,12 +92,15 @@ jobs:
             || { echo "web/package-lock.json is not lockfileVersion >= 2"; exit 1; }
       - name: npm lockfile matches package.json
         run: cd web && npm ci --ignore-scripts --dry-run
+      # The osv-scanner release binary (v2.5.1, the latest release) is built
+      # with Go 1.26 and cannot load this go 1.27 module for call analysis,
+      # so the action degrades to a lockfile-only scan and re-reports
+      # GO-2026-5932 (the standing x/crypto/openpgp deprecation advisory —
+      # this repo imports only x/crypto/argon2). Compile the scanner with
+      # the runner's Go 1.27 toolchain instead, which restores call
+      # analysis — the same mechanism `make deps-audit` uses locally.
       - name: osv-scanner (go.mod + web/package-lock.json)
-        uses: google/osv-scanner-action/osv-scanner-action@v2.5.1
-        with:
-          scan-args: |-
-            --lockfile=go.mod
-            --lockfile=web/package-lock.json
+        run: go run github.com/google/osv-scanner/v2/cmd/osv-scanner@latest scan --lockfile=go.mod --lockfile=web/package-lock.json
 
   # Container image scan. The ECR-side scan (§13) covers what is deployed;
   # this catches a base-image CVE at PR time instead of at push time.
