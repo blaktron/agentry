@@ -69,7 +69,7 @@ agentry version`}</CodeBlock>
               className="rounded-full px-2 py-0.5 text-xs"
               style={{ background: "var(--color-surface)", color: "var(--color-muted)" }}
             >
-              v0.1 — early access
+              v0.1, early access
             </span>
           </div>
           <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>

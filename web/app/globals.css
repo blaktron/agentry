@@ -4,6 +4,10 @@
    prefers-color-scheme dark override. Kept deliberately restrained — a
    trust product should read as calm and legible, not flashy.
 
+   Palette: warm paper and warm ink, one deep viridian accent. Deliberately
+   NOT the framework-default indigo/slate: the site should look like this
+   product, not like a starter template.
+
    @theme is a BUILD-TIME token table, not a cascade participant: Tailwind
    flattens every @theme block it finds into one `:root` rule regardless of
    the at-rules around it. Nesting a second @theme inside a media query
@@ -15,12 +19,12 @@
    unlayered, always beats Tailwind's `@layer theme` output). */
 
 @theme {
-  --color-bg: #ffffff;
-  --color-fg: #0f172a;
-  --color-muted: #64748b;
-  --color-border: #e2e8f0;
-  --color-surface: #f8fafc;
-  --color-accent: #4f46e5;
+  --color-bg: #faf9f7;
+  --color-fg: #1c1917;
+  --color-muted: #57534e;
+  --color-border: #e7e5e4;
+  --color-surface: #f5f5f4;
+  --color-accent: #0e7a63;
   --color-accent-fg: #ffffff;
 
   --color-sev-critical: #b91c1c;
@@ -46,13 +50,13 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-bg: #0b1120;
-    --color-fg: #e2e8f0;
-    --color-muted: #94a3b8;
-    --color-border: #1e293b;
-    --color-surface: #111827;
-    --color-accent: #818cf8;
-    --color-accent-fg: #0b1120;
+    --color-bg: #141210;
+    --color-fg: #e7e5e4;
+    --color-muted: #a8a29e;
+    --color-border: #292524;
+    --color-surface: #1c1917;
+    --color-accent: #4fd1b0;
+    --color-accent-fg: #141210;
   }
 }
 
@@ -60,6 +64,26 @@ body {
   background: var(--color-bg);
   color: var(--color-fg);
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Technical values (identifiers, versions, capabilities, commands) set in
+   the monospace stack: one visual register for "this is a value", the sans
+   register for prose. */
+code,
+pre,
+kbd,
+samp {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+/* One focus affordance everywhere, in the accent. */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 25%, transparent);
 }
 
 /* Rendered README (server-sanitized HTML, §10.3). Scope typography here so

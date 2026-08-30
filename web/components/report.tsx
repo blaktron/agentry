@@ -43,7 +43,7 @@ export function ReportCard({
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {total === 0 ? (
-          <Badge tone="ok">scanned — 0 findings</Badge>
+          <Badge tone="ok">scanned, 0 findings</Badge>
         ) : (
           present.map((s) => <SeverityBadge key={s} severity={s} count={counts[s]} />)
         )}

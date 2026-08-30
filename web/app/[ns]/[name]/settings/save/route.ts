@@ -23,7 +23,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ ns: string
     const enable = String(form.get("autoPublishTags") ?? "") === "true";
     body = { autoPublishTags: enable };
     ok = enable
-      ? "publish on tag push enabled — pushed v* tags now enter the pipeline."
+      ? "publish on tag push enabled. Pushed v* tags now enter the pipeline."
       : "publish on tag push disabled.";
   } else {
     const visibility = String(form.get("visibility") ?? "");

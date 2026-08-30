@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Pipeline progress" };
 
 // Live pipeline progress (§10.1 publish flow): the page re-renders itself
 // every few seconds while the version is submitted/scanning, then lands on
-// the verdict. The §7 states are the truth — this view never invents
+// the verdict. The §7 states are the truth; this view never invents
 // intermediate progress the pipeline didn't report.
 const STEPS: { key: string; label: string }[] = [
   { key: "submitted", label: "Submitted" },
@@ -72,7 +72,7 @@ export default async function ProgressPage({
         <Link href={`/${n}/${a}`} className="hover:underline">
           {`${ns}/${name}`}
         </Link>
-        {`@${version}`} — pipeline
+        {`@${version}`}: pipeline
       </h1>
 
       {q.ok && (
@@ -123,8 +123,8 @@ export default async function ProgressPage({
               </Link>
               {v.status === "needs_review" && (
                 <span style={{ color: "var(--color-muted)" }}>
-                  {" "}
-                  — a human reviewer decides next; the version publishes only on approval (§7).
+                  {". "}
+                  A human reviewer decides next; the version publishes only on approval (§7).
                 </span>
               )}
             </p>

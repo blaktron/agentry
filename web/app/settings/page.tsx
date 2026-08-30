@@ -23,7 +23,7 @@ interface Pat {
 //   DELETE /user/sessions/{id}  -> 204
 //   DELETE /user/sessions       -> 204 (revoke every other session)
 // A server that has not shipped it answers 404, which apiGet/authedGet map
-// to null — the section then says so instead of pretending there are none.
+// to null; the section then says so instead of pretending there are none.
 interface UserSession {
   id: string;
   createdAt: string;
@@ -210,12 +210,12 @@ export default async function SettingsPage({
         {sessions === undefined ? (
           <p className="text-sm" style={{ color: "var(--color-muted)" }}>
             Session listing is not available on this server. Signing out ends the session you are
-            using; revoking the others needs the <code>/user/sessions</code> endpoint, which this
-            registry build does not serve.
+            using. Revoking the others needs the <code>/user/sessions</code> endpoint, and this
+            registry build does not serve it.
           </p>
         ) : sessions.length === 0 ? (
           <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-            No sessions are recorded — unusual, since you are signed in with one.
+            No sessions are recorded. That is unusual, since you are signed in with one.
           </p>
         ) : (
           <>
@@ -255,7 +255,7 @@ export default async function SettingsPage({
             )}
             <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>
               Revoking a session invalidates its cookie immediately. It does not revoke personal
-              access tokens — those are listed above and revoked separately.
+              access tokens. Those are listed above and revoked separately.
             </p>
           </>
         )}

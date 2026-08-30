@@ -13,7 +13,7 @@ function pad(n: number): string {
 // who is not sitting in the datacentre. Audit logs, scan dates and publish
 // times are evidence; they get one unambiguous rendering.
 export function fmtUTC(iso?: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "none";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return (
@@ -25,7 +25,7 @@ export function fmtUTC(iso?: string | null): string {
 // fmtUTCDate is fmtUTC without the clock, for places where the day is the
 // whole of the information (token last-used, claim dates).
 export function fmtUTCDate(iso?: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "none";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} UTC`;

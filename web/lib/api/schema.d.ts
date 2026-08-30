@@ -134,7 +134,7 @@ export interface paths {
         put?: never;
         /**
          * Complete a pending 2FA challenge and open the session (§12.1).
-         * @description Second leg of a login that could not carry a TOTP code inline — today only social login, whose callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+         * @description Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
          */
         post: operations["totpChallenge"];
         delete?: never;
@@ -152,7 +152,7 @@ export interface paths {
         };
         /**
          * Begin social login with a configured provider (§12.1).
-         * @description Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership — org SSO lives under /orgs/{org}/sso (§12.4).
+         * @description Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership. Org SSO lives under /orgs/{org}/sso (§12.4).
          */
         get: operations["socialOidcStart"];
         put?: never;
@@ -171,7 +171,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Social login redirect URI — establish a session (§12.1).
+         * Social login redirect URI: establish a session (§12.1).
          * @description Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session.
          */
         get: operations["socialOidcCallback"];
@@ -212,7 +212,7 @@ export interface paths {
         put?: never;
         /**
          * Erase the caller's account (GDPR flow, §12.7).
-         * @description Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit — omitting `publishedContent` is a 400, never a silent yank.
+         * @description Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank.
          */
         post: operations["deleteCurrentUser"];
         delete?: never;
@@ -300,7 +300,7 @@ export interface paths {
         };
         /**
          * List the caller's active browser sessions (§12.1).
-         * @description Sessions are cookie sessions. A PAT-authenticated caller has no sessions of its own, so the list is empty (200, not an error) — a PAT is not a way to enumerate someone's browser sessions.
+         * @description Sessions are cookie sessions. A PAT-authenticated caller has no sessions of its own, so the list is empty (200, not an error). A PAT is not a way to enumerate someone's browser sessions.
          */
         get: operations["listUserSessions"];
         put?: never;
@@ -327,7 +327,7 @@ export interface paths {
         post?: never;
         /**
          * Revoke one of the caller's own sessions (§12.1).
-         * @description Own sessions only. An id that is not one of the caller's live sessions answers 404 whether it does not exist or belongs to somebody else — the two are deliberately indistinguishable. Session-only: a PAT cannot revoke sessions (403).
+         * @description Own sessions only. An id that is not one of the caller's live sessions answers 404 whether it does not exist or belongs to somebody else. The two are deliberately indistinguishable. Session-only: a PAT cannot revoke sessions (403).
          */
         delete: operations["revokeUserSession"];
         options?: never;
@@ -346,7 +346,7 @@ export interface paths {
          * The newest published S3/S4 rule bundle, for `agentry validate --rules-update`.
          * @description Returns the deployment's rule bundle as an uncompressed tar of the bundle directory (`bundle.yaml` plus the family YAML files), exactly the bytes `pkg/rules.LoadBundle` reads. The advertised identity travels in headers so a client can check what it got without unpacking first:
          *
-         *     `X-Agentry-Bundle-Semver` — the ruleset release semver; `X-Agentry-Bundle-Digest` — the `sha256:<hex>` content digest recorded on the `ruleset_releases` row; `ETag` — the same digest.
+         *     `X-Agentry-Bundle-Semver`: the ruleset release semver; `X-Agentry-Bundle-Digest`: the `sha256:<hex>` content digest recorded on the `ruleset_releases` row; `ETag`: the same digest.
          *
          *     The digest is the pin: a client MUST recompute it over the received bundle and refuse a mismatch. Bundle-level *signatures* do not exist yet (see DEVIATIONS DEV-024); this endpoint pins by digest only.
          */
@@ -582,7 +582,7 @@ export interface paths {
         };
         /**
          * Recent activity for an agent (§9.2).
-         * @description Drawn from the audit log. Anyone who can see a public agent gets the public-safe subset — publishes and yanks; callers with an explicit read grant (or namespace-derived read) see the fuller stream including submissions, settings changes, and grant changes.
+         * @description Drawn from the audit log. Anyone who can see a public agent gets the public-safe subset: publishes and yanks; callers with an explicit read grant (or namespace-derived read) see the fuller stream including submissions, settings changes, and grant changes.
          */
         get: operations["listAgentActivity"];
         put?: never;
@@ -658,7 +658,7 @@ export interface paths {
         put?: never;
         /**
          * Submit a version for publication (§7 state machine entry).
-         * @description Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests — client packing is never trusted).
+         * @description Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
          */
         post: operations["submitVersion"];
         delete?: never;
@@ -984,7 +984,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** SAML Assertion Consumer Service — consume a signed assertion (§12.4). */
+        /** SAML Assertion Consumer Service: consume a signed assertion (§12.4). */
         post: operations["samlAcs"];
         delete?: never;
         options?: never;
@@ -1016,7 +1016,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** OIDC redirect URI — exchange the code and establish a session (§12.4). */
+        /** OIDC redirect URI: exchange the code and establish a session (§12.4). */
         get: operations["oidcCallback"];
         put?: never;
         post?: never;
@@ -1109,7 +1109,7 @@ export interface paths {
         put?: never;
         /**
          * Send a test delivery to an endpoint (admin+, §9.2).
-         * @description Enqueues a signed `ping` delivery through the ordinary webhook machinery — same signature header, same SSRF guard, same retry schedule — so the recorded attempt appears in `GET …/{id}/deliveries`. Honours `Idempotency-Key`.
+         * @description Enqueues a signed `ping` delivery through the ordinary webhook machinery (same signature header, same SSRF guard, same retry schedule), so the recorded attempt appears in `GET …/{id}/deliveries`. Honours `Idempotency-Key`.
          */
         post: operations["pingWebhook"];
         delete?: never;
@@ -1678,7 +1678,7 @@ export interface components {
             /** @enum {string} */
             source: "git-tag" | "cli-upload";
             commitSha?: string;
-            /** @description sha256:<hex> — the release identity (D-15). */
+            /** @description sha256:<hex>, the release identity (D-15). */
             archiveDigest?: string;
             /** Format: int64 */
             archiveSize?: number;
@@ -1701,7 +1701,7 @@ export interface components {
             digest: string;
             /** @description Where to fetch the archive (CDN on SaaS; API path self-host). */
             archiveUrl: string;
-            /** @description Where to fetch the DSSE attestation over this release (§8.8, §9.4 step 3). Present whenever the version has been signed — every version published by a signing-enabled deployment. Absent when the deployment runs `signing.kind: none` (dev/self-host opt-out) or the version predates signing. */
+            /** @description Where to fetch the DSSE attestation over this release (§8.8, §9.4 step 3). Present whenever the version has been signed: every version published by a signing-enabled deployment. Absent when the deployment runs `signing.kind: none` (dev/self-host opt-out) or the version predates signing. */
             attestationUrl?: string;
             manifest: {
                 [key: string]: unknown;
@@ -1727,7 +1727,7 @@ export interface components {
             };
             /** @enum {string} */
             verdict: "open" | "confirmed" | "dismissed_false_positive" | "dismissed_accepted_risk";
-            /** @description Why a reviewer dismissed or confirmed this finding. Dismissed findings stay on the public report WITH their rationale (PLAN §8.5) — a finding that vanishes without explanation is exactly what the report exists to prevent. */
+            /** @description Why a reviewer dismissed or confirmed this finding. Dismissed findings stay on the public report WITH their rationale (PLAN §8.5). A finding that vanishes without explanation is exactly what the report exists to prevent. */
             verdictReason?: string;
         };
         ScanReport: {
@@ -1740,7 +1740,7 @@ export interface components {
             scanStatus?: string;
             /**
              * Format: date-time
-             * @description When this scan run completed — the date the report describes.
+             * @description When this scan run completed: the date the report describes.
              */
             finishedAt?: string;
             findingCounts?: {
@@ -4414,7 +4414,7 @@ export interface operations {
                 /** @description Free-text query; empty lists by popularity. */
                 q?: string;
                 kind?: components["schemas"]["AgentKind"];
-                /** @description Capability the latest published version actually asks for, e.g. `network`, `filesystem`, `exec`, `secrets`, `dataAccess` (§5.4). A capability declared as `none`, null, or empty does not match — `network: {egress: none}` is not a network agent. */
+                /** @description Capability the latest published version actually asks for, e.g. `network`, `filesystem`, `exec`, `secrets`, `dataAccess` (§5.4). A capability declared as `none`, null, or empty does not match: `network: {egress: none}` is not a network agent. */
                 capability?: string;
                 /** @description SPDX identifier from the latest published manifest. */
                 license?: string;

@@ -61,7 +61,7 @@ export default async function ReviewDetailPage({
       );
     }
   } catch {
-    // Archive may be missing (conflict) — the page still shows findings.
+    // Archive may be missing (conflict). The page still shows findings.
   }
 
   const fileFindings = selected ? findings.filter((f) => f.filePath === selected) : [];
@@ -154,7 +154,7 @@ export default async function ReviewDetailPage({
             </div>
             <p className="text-xs" style={{ color: "var(--color-muted)" }}>
               Approving publishes and signs this version. Authors cannot decide their own
-              submissions (§12.2) — the server enforces this.
+              submissions (§12.2). The server enforces this.
             </p>
           </form>
         ) : (
@@ -174,7 +174,7 @@ export default async function ReviewDetailPage({
             </span>
           ) : (
             <span className="text-sm font-normal" style={{ color: "var(--color-muted)" }}>
-              — first published version, no baseline
+              first published version, no baseline
             </span>
           )}
         </h2>
@@ -184,7 +184,7 @@ export default async function ReviewDetailPage({
           </p>
         ) : caps.length === 0 ? (
           <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-            No capabilities declared — pure text agent.
+            No capabilities declared. Pure text agent.
           </p>
         ) : (
           <table className="w-full text-sm">
@@ -201,9 +201,9 @@ export default async function ReviewDetailPage({
                 <tr key={r.key} className="border-b last:border-0 align-top" style={{ borderColor: "var(--color-border)" }}>
                   <td className="py-1 pr-4">{r.key}</td>
                   <td className="py-1 pr-4" style={{ color: "var(--color-muted)" }}>
-                    {r.before ?? "—"}
+                    {r.before ?? "none"}
                   </td>
-                  <td className="py-1 pr-4">{r.after ?? "—"}</td>
+                  <td className="py-1 pr-4">{r.after ?? "none"}</td>
                   <td className="py-1">
                     {r.change === "added" && <Badge tone="danger">added</Badge>}
                     {r.change === "removed" && <Badge tone="ok">removed</Badge>}
@@ -222,7 +222,7 @@ export default async function ReviewDetailPage({
         <h2 className="mb-2 font-semibold">Findings ({findings.length})</h2>
         {findings.length === 0 ? (
           <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-            No findings — this version gated to review by policy (e.g. first publish or capability
+            No findings. This version gated to review by policy (e.g. first publish or capability
             change), not by scanner output.
           </p>
         ) : (

@@ -79,7 +79,7 @@ export default async function ReviewQueuePage({
       ) : items.length === 0 ? (
         <Card>
           <p style={{ color: "var(--color-muted)" }}>
-            Queue is empty — nothing is waiting for human review.
+            Queue is empty. Nothing is waiting for human review.
           </p>
         </Card>
       ) : (
@@ -119,7 +119,7 @@ export default async function ReviewQueuePage({
         </Card>
       )}
       <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-        A pending item blocks its version from publishing until a reviewer decides (§7 — the gate
+        A pending item blocks its version from publishing until a reviewer decides (§7: the gate
         fails closed). Authors can never decide their own versions.
       </p>
     </div>

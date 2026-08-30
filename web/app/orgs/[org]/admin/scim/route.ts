@@ -18,7 +18,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ org: strin
     const id = String(form.get("tokenId") ?? "");
     const res = await apiSend("DELETE", `/orgs/${o}/scim/tokens/${encodeURIComponent(id)}`);
     if (!res.ok) return redirectBack(req, back, { error: await problemDetail(res) });
-    return redirectBack(req, back, { ok: "SCIM token revoked — provisioned access stops immediately." });
+    return redirectBack(req, back, { ok: "SCIM token revoked. Provisioned access stops immediately." });
   }
 
   const res = await apiSend("POST", `/orgs/${o}/scim/tokens`, {});

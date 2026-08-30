@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: "Browse BriefAgents" };
 const KINDS: AgentKind[] = ["skill", "prompt-agent", "mcp-server"];
 
 // §5.4 capability groups, which is what `capability=` filters on. A
-// capability declared as `none`/null/empty does not match (DEV-021) — the
+// capability declared as `none`/null/empty does not match (DEV-021): the
 // filter answers "asks for this", not "mentions this".
 const CAPABILITIES = ["network", "filesystem", "exec", "secrets", "dataAccess"];
 
@@ -22,7 +22,7 @@ function inputStyle() {
   return { borderColor: "var(--color-border)", background: "var(--color-surface)" } as const;
 }
 
-// Search / browse (§10.1, §10.4). A plain GET form — no client JS — so the
+// Search / browse (§10.1, §10.4). A plain GET form with no client JS, so the
 // page works with a strict CSP and is crawlable (D-08).
 export default async function SearchPage({
   searchParams,
