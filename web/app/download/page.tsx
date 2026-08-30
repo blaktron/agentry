@@ -69,12 +69,20 @@ agentry version`}</CodeBlock>
               className="rounded-full px-2 py-0.5 text-xs"
               style={{ background: "var(--color-surface)", color: "var(--color-muted)" }}
             >
-              Coming soon
+              v0.1 — early access
             </span>
           </div>
           <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
-            A desktop client for browsing the registry, reviewing security reports, and managing
-            installs is on the roadmap. It will be published here when it ships.
+            A desktop client for macOS, Windows, and Linux: browse the registry, read security
+            report cards, install with on-device digest and signature verification, and validate
+            local agent folders with the same scanners the registry runs.
+          </p>
+          <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
+            Builds are published on the{" "}
+            <a href="https://github.com/blaktron/agentry-desktop/releases" className="underline">
+              agentry-desktop releases page
+            </a>{" "}
+            while the project is in early access; public downloads will move here at launch.
           </p>
         </Card>
       </section>
