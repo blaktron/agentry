@@ -5,7 +5,7 @@ import { Card, CodeBlock } from "@/components/ui";
 export const metadata: Metadata = {
   title: "Trust & security",
   description:
-    "How Agentry scans every published version, what the scanners look for, what signing proves, and what none of it guarantees.",
+    "How SecureAgentry scans every published version, what the scanners look for, what signing proves, and what none of it guarantees.",
 };
 
 interface SigningKeys {
@@ -38,7 +38,7 @@ export default async function TrustPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Trust &amp; security</h1>
         <p className="mt-3" style={{ color: "var(--color-muted)" }}>
           Agent instructions are executed with your credentials and your tool access, but they are
-          usually distributed with no signing, no scanning, and no review. Agentry exists to close
+          usually distributed with no signing, no scanning, and no review. SecureAgentry exists to close
           that gap — and to be precise about how far it closes.
         </p>
       </header>
@@ -126,7 +126,7 @@ export default async function TrustPage() {
         <h2 className="text-xl font-semibold">Reporting a problem</h2>
         <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
           Malicious content: use the report link on the agent page, or email abuse@ the registry
-          domain. A vulnerability in Agentry itself: see SECURITY.md in the open-source repository for
+          domain. A vulnerability in SecureAgentry itself: see SECURITY.md in the open-source repository for
           the coordinated-disclosure process. The scanners and rulesets are open source, so the claims
           on this page are auditable rather than promised.
         </p>

@@ -24,7 +24,7 @@ export default function GlobalError({
         }}
       >
         <main>
-          <h1 style={{ fontSize: "20px", margin: "0 0 12px" }}>Agentry is not able to render this page</h1>
+          <h1 style={{ fontSize: "20px", margin: "0 0 12px" }}>SecureAgentry is not able to render this page</h1>
           <p style={{ margin: "0 0 12px", lineHeight: 1.6 }}>
             The console itself failed, not just the page you asked for. Nothing was changed by the
             request that failed.

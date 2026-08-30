@@ -120,13 +120,13 @@ publishable — is in `testdata/attack-corpus/`. The claims on this page are
 checkable against the code that makes them.
 
 Known departures from the plan, including the ones that weaken a claim, are
-recorded in [DEVIATIONS.md](../DEVIATIONS.md) rather than left implicit.
+recorded in [DEVIATIONS.md](https://github.com/blaktron/agentry/blob/main/DEVIATIONS.md) rather than left implicit.
 
 ## Reporting
 
 - **Malicious content on a registry:** the report link on the agent page, or
   `abuse@` the registry's domain.
-- **A vulnerability in Agentry itself:** [SECURITY.md](../SECURITY.md), which
+- **A vulnerability in Agentry itself:** [SECURITY.md](https://github.com/blaktron/agentry/blob/main/SECURITY.md), which
   documents the coordinated-disclosure process and — deliberately — the
   classes of finding that are *not* vulnerabilities because they are
   documented limitations of a static pipeline.

@@ -12,7 +12,7 @@ const TAG_RE = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/;
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { tag } = await params;
-  return { title: `#${tag}`, description: `Public agents tagged ${tag} on Agentry.` };
+  return { title: `#${tag}`, description: `Public agents tagged ${tag} on SecureAgentry.` };
 }
 
 // Tag listing (§9.2): the agents whose latest published manifest carries this
