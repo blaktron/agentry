@@ -18,9 +18,9 @@ import (
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/registry"
 	"github.com/blaktron/agentry/internal/scan"
-	"github.com/blaktron/agentry/internal/scan/ruleset"
 	"github.com/blaktron/agentry/internal/store"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/pkg/ruleset"
 )
 
 type pipeEnv struct {

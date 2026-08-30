@@ -1,7 +1,6 @@
 package scan
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/blaktron/agentry/pkg/archive"
 	"github.com/blaktron/agentry/pkg/rules"
 )
 
@@ -20,23 +20,8 @@ type S1Inventory struct{}
 
 func (S1Inventory) ID() string { return "S1" }
 
-// imageExt and archiveExt drive content classification.
-var imageExt = map[string]bool{".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true, ".bmp": true, ".ico": true}
-var archiveMagic = [][]byte{
-	{0x50, 0x4b, 0x03, 0x04},       // zip
-	{0x1f, 0x8b},                   // gzip
-	{0x28, 0xb5, 0x2f, 0xfd},       // zstd
-	{0x42, 0x5a, 0x68},             // bzip2
-	{0xfd, 0x37, 0x7a, 0x58},       // xz
-	{0x75, 0x73, 0x74, 0x61, 0x72}, // ustar (tar) — offset 257, handled below
-}
-var execMagic = [][]byte{
-	{0x7f, 0x45, 0x4c, 0x46}, // ELF
-	{0xcf, 0xfa, 0xed, 0xfe}, // Mach-O 64 LE
-	{0xfe, 0xed, 0xfa, 0xcf}, // Mach-O 64 BE
-	{0xca, 0xfe, 0xba, 0xbe}, // Mach-O universal / Java class
-	{0x4d, 0x5a},             // PE/DOS (MZ)
-}
+// Content classification (magic tables, text heuristic, image extensions)
+// lives in pkg/archive so the CLI's `agentry validate` shares it (D-12).
 
 func (S1Inventory) Run(sc stageContext, in *Input) StageResult {
 	var findings []Finding
@@ -78,23 +63,23 @@ func (S1Inventory) Run(sc stageContext, in *Input) StageResult {
 		}
 
 		switch {
-		case hasAnyPrefix(data, execMagic):
+		case archive.IsExecutable(data):
 			findings = append(findings, Finding{
 				Scanner: "S1/binary-executable", Severity: SevCritical, Confidence: ConfHigh,
 				Title: "Executable binary in package", FilePath: rel,
 				Detail:   map[string]any{"reason": "executables and shared libraries are blocked for all kinds in v1"},
 				Taxonomy: []string{"ASI05"},
 			})
-		case isArchive(data):
+		case archive.IsArchiveData(data):
 			findings = append(findings, Finding{
 				Scanner: "S1/nested-archive", Severity: SevCritical, Confidence: ConfHigh,
 				Title: "Nested archive in package", FilePath: rel,
 				Detail:   map[string]any{"reason": "nested archives are not allowed (unpack depth > 1)"},
 				Taxonomy: []string{"ASI05"},
 			})
-		case imageExt[strings.ToLower(filepath.Ext(rel))]:
+		case archive.IsImagePath(rel):
 			entry.IsImage = true
-		case looksText(head):
+		case archive.LooksText(head):
 			entry.IsText = true
 			if !utf8.Valid(data) {
 				findings = append(findings, Finding{
@@ -123,45 +108,6 @@ func (S1Inventory) Run(sc stageContext, in *Input) StageResult {
 	}
 	in.Files = inv
 	return StageResult{Scanner: "S1", Findings: findings}
-}
-
-func hasAnyPrefix(data []byte, magics [][]byte) bool {
-	for _, m := range magics {
-		if bytes.HasPrefix(data, m) {
-			return true
-		}
-	}
-	return false
-}
-
-func isArchive(data []byte) bool {
-	for _, m := range archiveMagic[:len(archiveMagic)-1] {
-		if bytes.HasPrefix(data, m) {
-			return true
-		}
-	}
-	// ustar magic lives at offset 257.
-	if len(data) > 262 && bytes.Equal(data[257:262], []byte("ustar")) {
-		return true
-	}
-	return false
-}
-
-// looksText reports whether head is plausibly text (no NUL, mostly printable).
-func looksText(head []byte) bool {
-	if len(head) == 0 {
-		return true
-	}
-	if bytes.IndexByte(head, 0) >= 0 {
-		return false
-	}
-	nonPrint := 0
-	for _, b := range head {
-		if b < 0x09 || (b > 0x0d && b < 0x20) {
-			nonPrint++
-		}
-	}
-	return nonPrint*100/len(head) < 5
 }
 
 // inventoryDir builds a text-file inventory for a directory without emitting
@@ -193,9 +139,9 @@ func inventoryDir(dir string) []FileEntry {
 			head = head[:512]
 		}
 		switch {
-		case imageExt[strings.ToLower(filepath.Ext(rel))]:
+		case archive.IsImagePath(rel):
 			entry.IsImage = true
-		case looksText(head):
+		case archive.LooksText(head):
 			entry.IsText = true
 			if int64(len(data)) <= textScanCap {
 				entry.Content = data

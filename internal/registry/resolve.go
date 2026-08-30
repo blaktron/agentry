@@ -9,6 +9,7 @@ import (
 	"github.com/Masterminds/semver/v3"
 
 	storegen "github.com/blaktron/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/pkg/manifest"
 )
 
 // Resolution semantics (§5.5, §9.4): ranges resolve over PUBLISHED versions
@@ -16,32 +17,15 @@ import (
 // a warning flag); quarantined versions never resolve; blocked agents 410
 // at download.
 
-// Ref is a parsed "ns/name[@range]" reference.
-type Ref struct {
-	Namespace string
-	Name      string
-	Range     string // "" = latest on channel
-	Channel   string // stable | beta (from @beta shorthand or explicit param)
-}
+// Ref and ParseRef were promoted to pkg/manifest so the CLI (a separate
+// module) parses references identically; aliases keep internal call sites.
+type Ref = manifest.Ref
+
+// ParseRef parses "ns/name[@range]" (see manifest.ParseRef).
+var ParseRef = manifest.ParseRef
 
 // ErrNoMatch means no published version satisfies the request.
 var ErrNoMatch = errors.New("registry: no version matches")
-
-// ParseRef parses "ns/name", "ns/name@^1.2", "ns/name@1.2.3", "ns/name@beta".
-func ParseRef(ref string) (Ref, error) {
-	path, rng, _ := strings.Cut(ref, "@")
-	ns, name, ok := strings.Cut(path, "/")
-	if !ok || ns == "" || name == "" {
-		return Ref{}, fmt.Errorf("registry: invalid ref %q (want ns/name[@range])", ref)
-	}
-	out := Ref{Namespace: ns, Name: name, Range: rng, Channel: "stable"}
-	switch rng {
-	case "beta", "stable":
-		out.Channel = rng
-		out.Range = ""
-	}
-	return out, nil
-}
 
 // Resolved is the outcome of a resolution.
 type Resolved struct {

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blaktron/agentry/internal/scan/ruleset"
+	"github.com/blaktron/agentry/pkg/ruleset"
 )
 
 // The EXIF/alt-text half of §8.3 S3, and its benign twin. The images are

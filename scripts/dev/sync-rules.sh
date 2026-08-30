@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Sync the canonical /rules bundle into the embeddable copy under
-# internal/scan/ruleset/rules (go:embed cannot reach outside a package dir).
+# pkg/ruleset/rules (go:embed cannot reach outside a package dir).
 # --check fails (CI) when the copy has drifted.
 set -euo pipefail
 cd "$(cd "$(dirname "$0")/../.." && pwd)"
 SRC=rules
-DST=internal/scan/ruleset/rules
+DST=pkg/ruleset/rules
 
 if [ "${1:-}" = "--check" ]; then
   for f in "$SRC"/*.yaml; do

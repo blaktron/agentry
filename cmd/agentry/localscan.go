@@ -29,12 +29,13 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"sort"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/blaktron/agentry/pkg/archive"
 )
 
 // localFinding is one S1-subset result, shaped for the same printer the S3/S4
@@ -52,32 +53,9 @@ type localFinding struct {
 	Detail string
 }
 
-// Magic tables, mirroring internal/scan/stages_s1_s4.go. Kept as literal
-// bytes rather than strings so a stray escape cannot change what is matched.
-var (
-	localExecMagic = [][]byte{
-		{0x7f, 0x45, 0x4c, 0x46}, // ELF
-		{0xcf, 0xfa, 0xed, 0xfe}, // Mach-O 64 LE
-		{0xfe, 0xed, 0xfa, 0xcf}, // Mach-O 64 BE
-		{0xca, 0xfe, 0xba, 0xbe}, // Mach-O universal / Java class
-		{0x4d, 0x5a},             // PE/DOS (MZ)
-	}
-	localArchiveMagic = [][]byte{
-		{0x50, 0x4b, 0x03, 0x04}, // zip
-		{0x1f, 0x8b},             // gzip
-		{0x28, 0xb5, 0x2f, 0xfd}, // zstd
-		{0x42, 0x5a, 0x68},       // bzip2
-		{0xfd, 0x37, 0x7a, 0x58}, // xz
-	}
-)
-
-// localImageExt mirrors the pipeline's image classification: an image is not
-// text and is not "opaque binary", so it must be recognized before the
-// text/binary split or every PNG becomes a finding.
-var localImageExt = map[string]bool{
-	".png": true, ".jpg": true, ".jpeg": true, ".gif": true,
-	".webp": true, ".bmp": true, ".ico": true,
-}
+// Detection (magic bytes, text heuristic, image extensions) is pkg/archive —
+// the same predicates the server's S1 stage classifies with, which is what
+// makes this subset parity by construction rather than by mirroring.
 
 // scanS1Local runs the S1 subset over already-read file contents. It takes
 // the same []rules.File-shaped pairs validate already assembled, so no file
@@ -86,23 +64,23 @@ func scanS1Local(files []localFile) []localFinding {
 	var out []localFinding
 	for _, f := range files {
 		switch {
-		case hasMagic(f.Content, localExecMagic):
+		case archive.IsExecutable(f.Content):
 			out = append(out, localFinding{
 				Scanner: "S1/binary-executable", Severity: "critical",
 				Title:    "Executable binary in package",
 				FilePath: f.Path,
 				Detail:   "executables and shared libraries are blocked for all kinds in v1",
 			})
-		case looksArchive(f.Content):
+		case archive.IsArchiveData(f.Content):
 			out = append(out, localFinding{
 				Scanner: "S1/nested-archive", Severity: "critical",
 				Title:    "Nested archive in package",
 				FilePath: f.Path,
 				Detail:   "nested archives are not allowed (unpack depth > 1)",
 			})
-		case localImageExt[strings.ToLower(extOf(f.Path))]:
+		case archive.IsImagePath(f.Path):
 			// An image: not text, not a finding.
-		case looksTextLocal(head(f.Content)):
+		case archive.LooksText(archive.Head(f.Content)):
 			if !utf8.Valid(f.Content) {
 				out = append(out, localFinding{
 					Scanner: "S1/non-utf8", Severity: "low",
@@ -133,62 +111,6 @@ func scanS1Local(files []localFile) []localFinding {
 type localFile struct {
 	Path    string
 	Content []byte
-}
-
-// hasMagic reports whether data opens with any of the given signatures.
-func hasMagic(data []byte, magics [][]byte) bool {
-	for _, m := range magics {
-		if bytes.HasPrefix(data, m) {
-			return true
-		}
-	}
-	return false
-}
-
-// looksArchive detects compressed containers by prefix, plus tar, whose
-// "ustar" magic lives at offset 257 rather than at the start.
-func looksArchive(data []byte) bool {
-	if hasMagic(data, localArchiveMagic) {
-		return true
-	}
-	return len(data) > 262 && bytes.Equal(data[257:262], []byte("ustar"))
-}
-
-// looksTextLocal reports whether a file head is plausibly text: no NUL byte,
-// and under 5% control characters.
-func looksTextLocal(h []byte) bool {
-	if len(h) == 0 {
-		return true
-	}
-	if bytes.IndexByte(h, 0) >= 0 {
-		return false
-	}
-	nonPrint := 0
-	for _, b := range h {
-		if b < 0x09 || (b > 0x0d && b < 0x20) {
-			nonPrint++
-		}
-	}
-	return nonPrint*100/len(h) < 5
-}
-
-// head returns the first 512 bytes used for sniffing.
-func head(data []byte) []byte {
-	if len(data) > 512 {
-		return data[:512]
-	}
-	return data
-}
-
-// extOf returns the lowercase extension of a slash-separated path.
-func extOf(p string) string {
-	if i := strings.LastIndexByte(p, '/'); i >= 0 {
-		p = p[i+1:]
-	}
-	if i := strings.LastIndexByte(p, '.'); i > 0 {
-		return p[i:]
-	}
-	return ""
 }
 
 // localSeverityRank orders S1 findings for display, most severe first.

@@ -15,6 +15,8 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	kmstypes "github.com/aws/aws-sdk-go-v2/service/kms/types"
+
+	"github.com/blaktron/agentry/pkg/attest"
 )
 
 // KMSAPI is the slice of the KMS client KMSSigner uses. Two calls, so the
@@ -91,7 +93,7 @@ func NewKMSSignerWithAPI(ctx context.Context, api KMSAPI, keyARN string) (*KMSSi
 	// material rather than the backend that happens to hold it. Rotating from
 	// file to KMS with the same key would keep the id stable, and the CLI's
 	// TOFU pin (§8.8) would not see a discontinuity where there is none.
-	s.keyID = keyIDFor(pub)
+	s.keyID = attest.KeyIDFor(pub)
 	return s, nil
 }
 
@@ -110,7 +112,7 @@ func (s *KMSSigner) Sign(stmt InTotoStatement) (DSSEEnvelope, error) {
 	if err != nil {
 		return DSSEEnvelope{}, err
 	}
-	pae := dssePAE(dssePayloadType, payload)
+	pae := attest.PAE(attest.PayloadType, payload)
 	digest := sha256.Sum256(pae)
 
 	out, err := s.api.Sign(context.Background(), &kms.SignInput{
@@ -129,7 +131,7 @@ func (s *KMSSigner) Sign(stmt InTotoStatement) (DSSEEnvelope, error) {
 	// form to ecdsa.SignASN1 — so VerifyEnvelope and the CLI verify a KMS
 	// envelope and a file envelope by exactly the same code path.
 	return DSSEEnvelope{
-		PayloadType: dssePayloadType,
+		PayloadType: attest.PayloadType,
 		Payload:     base64.StdEncoding.EncodeToString(payload),
 		Signatures: []DSSESignature{{
 			KeyID: s.keyID,

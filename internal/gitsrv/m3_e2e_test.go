@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/blaktron/agentry/internal/registry"
+	pkgarchive "github.com/blaktron/agentry/pkg/archive"
 	"github.com/blaktron/agentry/pkg/manifest"
 )
 
@@ -155,7 +156,7 @@ func (e *gitEnv) installRoundTrip(agent, rangeStr, wantVersion string, wantFiles
 	}
 
 	dst := e.t.TempDir()
-	if err := registry.ExtractArchive(bytes.NewReader(archive), dst, 5<<20, 10<<20); err != nil {
+	if err := pkgarchive.Unpack(bytes.NewReader(archive), dst, 5<<20, 10<<20); err != nil {
 		e.t.Fatal(err)
 	}
 	for _, f := range wantFiles {

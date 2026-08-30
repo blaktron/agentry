@@ -15,9 +15,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/blaktron/agentry/internal/registry"
-	"github.com/blaktron/agentry/internal/scan/ruleset"
 	"github.com/blaktron/agentry/pkg/manifest"
 	"github.com/blaktron/agentry/pkg/rules"
+	"github.com/blaktron/agentry/pkg/ruleset"
 )
 
 // newValidateCmd builds the validate command.

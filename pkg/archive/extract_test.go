@@ -1,4 +1,4 @@
-package scan
+package archive
 
 import (
 	"archive/tar"
