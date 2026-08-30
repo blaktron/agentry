@@ -64,7 +64,7 @@ function PrimaryNav() {
         Trust &amp; security
       </Link>
       <Link href="/agent-template" className={linkClass}>
-        Agent Template
+        BriefAgent Template
       </Link>
       <Link href="/advisories" className={linkClass}>
         Advisories
@@ -120,9 +120,9 @@ function SiteFooter() {
       <div className="mx-auto max-w-6xl px-4">
         <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
           <FooterColumn title="Product">
-            <FooterLink href="/search">Browse agents</FooterLink>
+            <FooterLink href="/search">Browse BriefAgents</FooterLink>
             <FooterLink href="/download">Download</FooterLink>
-            <FooterLink href="/agent-template">Agent Template</FooterLink>
+            <FooterLink href="/agent-template">BriefAgent Template</FooterLink>
             <FooterLink href="/advisories">Advisories</FooterLink>
           </FooterColumn>
           <FooterColumn title="Developers">
