@@ -575,6 +575,11 @@ LEFT JOIN (
 ) d ON d.agent_id = a.id
 WHERE a.visibility = 'public'
   AND a.quarantine_state <> 'blocked'
+  -- Only agents with something installable: a public agent whose every
+  -- version is still in review (or which has none) is not a search result,
+  -- a trending row, or a tag entry yet — browsing surfaces what can be
+  -- installed, and "most installed" must not list the uninstallable.
+  AND a.latest_published_version_id IS NOT NULL
   AND (
     $3::text = ''
     OR a.search_tsv @@ websearch_to_tsquery('english', $3::text)

@@ -12,11 +12,21 @@ export { safeNext } from "./urls";
 
 // sameOrigin rejects cross-site form posts (belt over the SameSite=Lax
 // cookie braces; the API's CSRF token is the third layer).
+//
+// Compare against the Host header the browser actually addressed, not
+// req.nextUrl.host: in a standalone deployment Next normalizes nextUrl to
+// the server's own localhost:<port>, so a site served under any other
+// hostname (LAN, Tailscale, a real domain) rejected every legitimate form
+// post. The Host header is what the same-origin policy keyed the Origin
+// header to in the first place. x-forwarded-host wins when a proxy fronts
+// the app (it is set by the proxy, not the client).
 export function sameOrigin(req: NextRequest): boolean {
   const origin = req.headers.get("origin");
   if (!origin) return true; // non-browser clients (curl) carry the cookie or fail at the API
+  const host =
+    req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? req.nextUrl.host;
   try {
-    return new URL(origin).host === req.nextUrl.host;
+    return new URL(origin).host === host;
   } catch {
     return false;
   }

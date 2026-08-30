@@ -26,3 +26,6 @@ coverage.out
 
 # stray dev data written by tests run from package dirs
 **/.devdata/
+
+# compose interpolation values (deploy-local)
+.env
