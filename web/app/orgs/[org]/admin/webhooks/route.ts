@@ -30,7 +30,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ org: strin
     const res = await apiSend("POST", `/orgs/${o}/webhooks/${encodeURIComponent(id)}/ping`);
     if (!res.ok) return redirectBack(req, back, { error: await problemDetail(res) });
     return redirectBack(req, `${back}?deliveries=${encodeURIComponent(id)}`, {
-      ok: "test delivery enqueued — its attempt appears in the delivery list below.",
+      ok: "test delivery enqueued. Its attempt appears in the delivery list below.",
     });
   }
 
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ org: strin
     title: "Webhook created",
     lines: [
       ["Endpoint", url],
-      ["Signing secret (shown once — deliveries carry X-Agentry-Signature)", created.secret ?? "(not returned)"],
+      ["Signing secret (shown once; deliveries carry X-Agentry-Signature)", created.secret ?? "(not returned)"],
     ],
     backHref: back,
   });

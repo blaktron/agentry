@@ -20,7 +20,7 @@ export default function PrivacyPage() {
       <header>
         <h1 className="text-3xl font-semibold tracking-tight">Privacy Policy</h1>
         <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
-          Draft — this summary will be replaced by the full policy before general availability.
+          Draft. This summary will be replaced by the full policy before general availability.
         </p>
       </header>
       <div className="flex flex-col gap-5">

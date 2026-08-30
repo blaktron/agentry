@@ -17,7 +17,7 @@ const VIEWS = [
 
 // Platform T&S console (§10.1 Platform staff row): the platform review
 // queue, abuse-report triage, the quarantine console, and the cross-org
-// audit view (§12.6). Staff-only — the API enforces it; this page just
+// audit view (§12.6). Staff-only: the API enforces it; this page just
 // renders the refusal honestly.
 export default async function StaffPage({
   searchParams,
@@ -194,7 +194,7 @@ export default async function StaffPage({
             <h2 className="mb-1 font-semibold">Platform review queue</h2>
             <p className="text-sm">
               {queue.length === 0 ? (
-                <span style={{ color: "var(--color-muted)" }}>Empty — nothing awaiting platform review.</span>
+                <span style={{ color: "var(--color-muted)" }}>Empty. Nothing is awaiting platform review.</span>
               ) : (
                 <>
                   <strong>{queue.length}</strong> version{queue.length === 1 ? "" : "s"} waiting.{" "}
@@ -320,10 +320,10 @@ export default async function StaffPage({
                 each action also walks the §7 version state machine. */}
             <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>
               Quarantine hides the BriefAgent from search and resolution and moves its latest published
-              version to <code>quarantined</code> — downloads of it answer 409. Block marks the BriefAgent{" "}
+              version to <code>quarantined</code>. Downloads of it answer 409. Block marks the BriefAgent{" "}
               <code>blocked</code> and moves its live versions with it: every download for the BriefAgent
-              then answers <strong>410 Gone</strong>. Reinstate walks both steps back —{" "}
-              <code>blocked</code> to <code>quarantined</code> to <code>published</code> — so a
+              then answers <strong>410 Gone</strong>. Reinstate walks both steps back,{" "}
+              <code>blocked</code> to <code>quarantined</code> to <code>published</code>, so a
               blocked BriefAgent returns to normal in one action (§7). Mass-incident procedure:
               docs/ops/runbooks.md.
             </p>

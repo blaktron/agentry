@@ -30,7 +30,7 @@ export default function RouteError({
         </p>
         {error.digest && (
           <p className="mt-3 text-xs" style={{ color: "var(--color-muted)" }}>
-            Reference <code className="font-mono">{error.digest}</code> — quote it if you report
+            Reference <code className="font-mono">{error.digest}</code>. Quote it if you report
             this; the matching stack trace is in the server log.
           </p>
         )}

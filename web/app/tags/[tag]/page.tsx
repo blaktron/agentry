@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 }
 
 // Tag listing (§9.2): the agents whose latest published manifest carries this
-// tag. Cursor-paged — the API returns nextCursor (and a Link header) rather
+// tag. Cursor-paged: the API returns nextCursor (and a Link header) rather
 // than an offset, so "more" is a link, never a page number.
 export default async function TagPage({
   params,

@@ -16,6 +16,6 @@ export async function POST(req: NextRequest) {
   const res = await apiSend("POST", "/agents", { namespace, name, kind, visibility, summary });
   if (!res.ok) return redirectBack(req, "/new", { error: await problemDetail(res) });
   return redirectBack(req, `/${namespace}/${name}/publish`, {
-    ok: "agent created — push content to its repo, then submit a tag here.",
+    ok: "agent created. Push content to its repo, then submit a tag here.",
   });
 }

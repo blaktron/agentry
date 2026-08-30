@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     // on purpose, so that the landing cannot enumerate which orgs have SSO.
     // Repeat that ambiguity rather than resolving it here.
     return redirectBack(req, "/login", {
-      error: `no single sign-on is available for “${org}” — check the handle with your administrator`,
+      error: `no single sign-on is available for “${org}”. Check the handle with your administrator`,
     });
   }
 

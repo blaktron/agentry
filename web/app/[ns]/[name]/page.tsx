@@ -28,7 +28,7 @@ import { ReportCard } from "@/components/report";
 type Params = { ns: string; name: string };
 
 // §5.6 install targets. The default follows the agent kind, exactly as the
-// CLI does (cmd/agentry/caps.go defaultTarget) — the page must not suggest a
+// CLI does (cmd/agentry/caps.go defaultTarget). The page must not suggest a
 // command that differs from what `agentry install` would do on its own.
 const TARGETS = ["claude-skill", "mcp", "agents-md"] as const;
 type Target = (typeof TARGETS)[number];
@@ -132,7 +132,7 @@ export default async function AgentPage({
           <p className="mt-1 text-sm">
             {agent.quarantineState === "blocked"
               ? "The registry refuses every download for this BriefAgent (410 Gone). Installed copies should be removed."
-              : "It no longer resolves for installs while a reviewer investigates a finding. Copies you already installed are untouched — the registry cannot reach them."}
+              : "It no longer resolves for installs while a reviewer investigates a finding. Copies you already installed are untouched. The registry cannot reach them."}
           </p>
         </div>
       )}
@@ -171,7 +171,7 @@ export default async function AgentPage({
           {org?.verifiedDomain && (
             <Badge
               tone="ok"
-              title={`${org.handle} has proved control of ${org.verifiedDomain} by DNS. It says who publishes this BriefAgent — not that the BriefAgent is safe.`}
+              title={`${org.handle} has proved control of ${org.verifiedDomain} by DNS. It says who publishes this BriefAgent. It does not say the BriefAgent is safe.`}
             >
               verified {org.verifiedDomain}
             </Badge>
@@ -206,8 +206,8 @@ export default async function AgentPage({
               <CapabilityBadges capabilities={latest?.capabilities} />
             </div>
             <p className="mt-3 text-xs" style={{ color: "var(--color-muted)" }}>
-              Capabilities are the author&apos;s declaration and the basis for policy and scanning —
-              the registry cannot enforce them at run time. Your runtime should.
+              Capabilities are the author&apos;s declaration and the basis for policy and scanning.
+              The registry cannot enforce them at run time. Your runtime should.
             </p>
           </Card>
 
@@ -318,7 +318,7 @@ export default async function AgentPage({
                       color: stats.starred ? "var(--color-accent)" : "inherit",
                     }}
                   >
-                    {stats.starred ? "★ Starred — remove" : "☆ Star this BriefAgent"}
+                    {stats.starred ? "★ Starred (remove)" : "☆ Star this BriefAgent"}
                   </button>
                 </form>
                 <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>
@@ -340,7 +340,7 @@ export default async function AgentPage({
               <dl className="mt-3 space-y-2 text-xs">
                 <div>
                   <dt style={{ color: "var(--color-muted)" }}>Archive digest</dt>
-                  <dd className="break-all font-mono">{latest.archiveDigest ?? "—"}</dd>
+                  <dd className="break-all font-mono">{latest.archiveDigest ?? "none"}</dd>
                 </div>
                 <div>
                   <dt style={{ color: "var(--color-muted)" }}>Source</dt>

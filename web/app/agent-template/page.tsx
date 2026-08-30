@@ -23,21 +23,22 @@ export default function AgentTemplatePage() {
           className="mb-3 inline-block rounded-full px-3 py-1 text-xs"
           style={{ background: "var(--color-surface)", color: "var(--color-muted)" }}
         >
-          Start from the template — every option documented
+          Start from the template. Every option documented.
         </div>
         <h1 className="text-3xl font-semibold tracking-tight">The BriefAgent format</h1>
         <p className="mt-3 text-lg" style={{ color: "var(--color-muted)" }}>
           A <strong>BriefAgent</strong> is a single-purpose AI agent as a small, reviewable package:
           a manifest that declares what it is and what it may touch, the instruction content itself,
-          and optionally a little code. BriefAgents carry no tool code — at run time the declared
+          and optionally a little code. BriefAgents carry no tool code. At run time the declared
           capabilities become exactly the tools the BriefAgent gets, and nothing else.
         </p>
         <p className="mt-3 text-sm">
           <a href={TEMPLATE_REPO} className="underline">
-            <strong>BriefAgent template</strong> — github.com/blaktron/agentry-template
+            <strong>BriefAgent template</strong>
           </a>{" "}
           <span style={{ color: "var(--color-muted)" }}>
-            — a runnable starting point with every manifest option documented in its README.
+            (github.com/blaktron/agentry-template): a runnable starting point with every manifest
+            option documented in its README.
           </span>
         </p>
       </header>
@@ -63,7 +64,7 @@ export default function AgentTemplatePage() {
         <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
           <code>agent.yaml</code> is the security contract. Capabilities are declared up front so the
           registry can scan against them, installs can prompt on them, and the runner can enforce
-          least privilege — an undeclared capability is a tool the BriefAgent does not have.
+          least privilege. An undeclared capability is a tool the BriefAgent does not have.
         </p>
         <div className="mt-3">
           <CodeBlock>{`schemaVersion: "1"
@@ -77,7 +78,7 @@ license: Apache-2.0
 entrypoints:
   skill: SKILL.md
 
-capabilities:               # the security contract — closed vocabulary
+capabilities:               # the security contract: closed vocabulary
   network:
     egress: [api.pagerduty.com]   # exact hosts, or "none"
   filesystem:
@@ -102,7 +103,7 @@ publish:
         <Card>
           <div className="font-medium">prompt-agent</div>
           <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-            Pure instructions — a system prompt, persona, or workflow. No code.
+            Pure instructions: a system prompt, persona, or workflow. No code.
           </p>
         </Card>
         <Card>
@@ -132,8 +133,8 @@ agentry run acme/incident-summarizer@^1 --input incident.json`}</CodeBlock>
 
       <section>
         <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-          Field-by-field documentation for every manifest option — and everything the runner
-          enforces — lives in the{" "}
+          Field-by-field documentation for every manifest option, and everything the runner
+          enforces, lives in the{" "}
           <a href={`${SITE.docsUrl}/briefagents/`} className="underline">
             BriefAgents documentation
           </a>

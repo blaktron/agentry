@@ -14,7 +14,7 @@ interface SigningKeys {
 
 const STAGES = [
   ["S1", "Inventory & hygiene", "Unpacks the exact bytes that will ship, sniffs file types, and rejects executables, nested archives, and structural anomalies."],
-  ["S2", "Secrets", "Scans for credentials — provider key formats and high-entropy assignments — in the archive."],
+  ["S2", "Secrets", "Scans for credentials in the archive: provider key formats and high-entropy assignments."],
   ["S3", "Hidden & obfuscated content", "Invisible Unicode, bidi overrides, the Unicode tag block, confusables, hidden HTML/CSS, data URIs, and encoded blobs in prose."],
   ["S4", "Injection signatures", "A versioned rule bundle for instruction-override frames, exfiltration directives, tool coercion, credential harvesting, persistence, and obfuscation markers."],
   ["S5", "LLM adjudication", "A model reviews the instructions against a fixed rubric with no tools and returns cited, structured scores. If it shows signs of having been manipulated, that is itself a finding."],
@@ -39,7 +39,7 @@ export default async function TrustPage() {
         <p className="mt-3" style={{ color: "var(--color-muted)" }}>
           BriefAgent instructions are executed with your credentials and your tool access, but they are
           usually distributed with no signing, no scanning, and no review. SecureAgentry exists to close
-          that gap — and to be precise about how far it closes.
+          that gap, and to be precise about how far it closes.
         </p>
       </header>
 
@@ -49,7 +49,7 @@ export default async function TrustPage() {
           Publication is a gate, not a formality. A version is scanned on the exact bytes that will
           ship. Findings decide the outcome: clean and low-severity versions publish automatically,
           medium and high findings go to human review, and critical findings are rejected. There is no
-          flag, plan, or role that skips it — and if a scanner errors or times out, the version fails
+          flag, plan, or role that skips it. If a scanner errors or times out, the version fails
           toward review rather than through.
         </p>
         <ul className="mt-4 space-y-3">
@@ -110,8 +110,8 @@ export default async function TrustPage() {
             than trust a badge.
           </p>
           <p>
-            Declared capabilities are a contract from the author and the input to policy and scanning
-            — the registry cannot enforce them while your BriefAgent runs. Your runtime should use the
+            Declared capabilities are a contract from the author and the input to policy and scanning.
+            The registry cannot enforce them while your BriefAgent runs. Your runtime should use the
             manifest to sandbox accordingly.
           </p>
           <p>

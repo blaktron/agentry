@@ -86,7 +86,7 @@ export default async function VersionPage({ params }: { params: Promise<Params> 
             <h2 className="text-lg font-semibold">
               Security report{" "}
               <span className="text-sm font-normal" style={{ color: "var(--color-muted)" }}>
-                {total === 0 ? "— no findings" : `— ${total} finding${total === 1 ? "" : "s"}`}
+                {total === 0 ? ": no findings" : `: ${total} finding${total === 1 ? "" : "s"}`}
               </span>
             </h2>
           </div>
@@ -120,7 +120,7 @@ export default async function VersionPage({ params }: { params: Promise<Params> 
             <dl className="mt-3 space-y-2 text-xs">
               <div>
                 <dt style={{ color: "var(--color-muted)" }}>Archive digest</dt>
-                <dd className="break-all font-mono">{ver.archiveDigest ?? "—"}</dd>
+                <dd className="break-all font-mono">{ver.archiveDigest ?? "none"}</dd>
               </div>
               {ver.commitSha && (
                 <div>
