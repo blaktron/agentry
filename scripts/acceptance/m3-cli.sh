@@ -38,7 +38,7 @@ API="$BASE/api/v1"
 
 echo "== build agentryd + agentry =="
 go build -o "$TMP/agentryd" ./cmd/agentryd
-go build -o "$TMP/agentry" ./cmd/agentry
+cp "$(./scripts/dev/cli-bin.sh)" "$TMP/agentry"
 AGENTRY="$TMP/agentry"
 
 echo "== boot agentryd all on $BASE =="

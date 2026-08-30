@@ -21,7 +21,7 @@ echo "db: $AGENTRY_TEST_DATABASE_URL"
 # 2. Build binaries.
 make build >/dev/null
 ./bin/agentryd --version
-./bin/agentry --version
+# The CLI moved to github.com/blaktron/agentry-cli (built via scripts/dev/cli-bin.sh).
 
 # 3. Migrations against a clean-ish DB.
 AGENTRY_DATABASE_URL="$AGENTRY_TEST_DATABASE_URL" ./bin/agentryd migrate

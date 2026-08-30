@@ -69,16 +69,17 @@ Then [docs/self-hosting.md](docs/self-hosting.md) for a real deployment, or
 | Path | What |
 |---|---|
 | `cmd/agentryd` | the server: `agentryd api\|git\|worker\|all` |
-| `cmd/agentry` | the CLI |
+| — | the CLI lives in [blaktron/agentry-cli](https://github.com/blaktron/agentry-cli) (depends on this module's `pkg/`) |
 | `internal/scan` | the security pipeline: orchestrator, stages S1–S10, gate, judge, signing |
 | `internal/registry` | agents, versions, the publication state machine, deterministic archives |
 | `internal/gitsrv` | git smart-HTTP, repo storage, policy hooks |
 | `internal/api` `internal/auth` `internal/store` | HTTP layer, identity/authz, Postgres |
 | `internal/render` | the only path by which author markdown reaches a browser |
-| `pkg/manifest` `pkg/rules` | public: the manifest spec, and the rules engine that powers `agentry validate` |
+| `pkg/` | public: manifest spec + refs, rules engine, embedded ruleset, deterministic archives + extractor, attestation verify, generated API client — the surface the CLI and third parties build on |
 | `rules/` | the versioned S3/S4 rule bundle |
 | `testdata/attack-corpus/` | the golden corpus: attack fixtures and their benign twins |
 | `web/` | the Next.js registry UI |
+| — | the docs & developers sites live in [blaktron/agentry-docs](https://github.com/blaktron/agentry-docs) (they clone this repo's `docs/` and `schemas/` at build) |
 | `deploy/` | compose, Helm, Terraform |
 | `docs/` | user, operator, and API docs — start with `trust.md`, `self-hosting.md`, `api-conventions.md` |
 
@@ -119,12 +120,12 @@ explicitly deferred, and [DEVIATIONS.md](DEVIATIONS.md) for where the
 implementation departs from the plan — including the departures that make a
 claim weaker, not just the ones that make it stronger.
 
-Not yet decided (they need a human, per PLAN §20): the product name, the open
-source license, the SaaS judge provider and region, and how strict the launch
-baseline policy should be.
+Decided since the plan was written: the product name (**SecureAgentry**, PLAN
+§20 Q1 — this module keeps the `agentry` technical name) and the license
+(**MIT**, Q2). Still needing a human: the SaaS judge provider and region (Q3)
+and how strict the launch baseline policy should be (Q4).
 
 ## License
 
-Pending (PLAN §20 Q2); the planning default is Apache-2.0 with a DCO and no
-CLA. Contributions are accepted on that basis — see
+MIT (see [LICENSE](LICENSE)), with a DCO and no CLA — see
 [CONTRIBUTING.md](CONTRIBUTING.md).

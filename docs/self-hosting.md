@@ -47,12 +47,15 @@ make build
 ./bin/agentryd all                  # every role in one process
 ```
 
-Point the CLI at it:
+Point the CLI at it (the CLI lives in its own repo,
+[blaktron/agentry-cli](https://github.com/blaktron/agentry-cli); the helper
+clones and builds it, using a sibling checkout when one exists):
 
 ```bash
-./bin/agentry login --registry http://localhost:8080
-./bin/agentry init --kind=skill my-first-agent
-cd my-first-agent && ../bin/agentry validate
+CLI=$(./scripts/dev/cli-bin.sh)
+$CLI login --registry http://localhost:8080
+$CLI init --kind=skill my-first-agent
+cd my-first-agent && $CLI validate
 ```
 
 `validate` runs the same manifest rules and the same hidden-content and
