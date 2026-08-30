@@ -9,7 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/kms v1.57.1
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.109.1
 	github.com/aws/smithy-go v1.28.1
-	github.com/beevik/etree v1.5.0
+	github.com/beevik/etree v1.7.0
 	github.com/coreos/go-oidc/v3 v3.20.0
 	github.com/crewjam/saml v0.5.1
 	github.com/getkin/kin-openapi v0.142.0
@@ -21,7 +21,7 @@ require (
 	github.com/oapi-codegen/runtime v1.7.0
 	github.com/pquerna/otp v1.5.0
 	github.com/pressly/goose/v3 v3.27.3
-	github.com/russellhaering/goxmldsig v1.4.0
+	github.com/russellhaering/goxmldsig v1.6.1
 	github.com/spf13/cobra v1.10.2
 	github.com/yuin/goldmark v1.8.5
 	github.com/zalando/go-keyring v0.2.8

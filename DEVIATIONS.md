@@ -456,3 +456,12 @@ Two smaller calls, recorded for completeness. The §12.4 SSO freshness ceiling i
 **Why:** Operator decision (2026-08-29): components ship and version independently; builders have access to all repos, and the cli/docs repos may depend on the main one.
 
 **Impact:** PLAN §18.1's single-monorepo layout is superseded for the CLI and site machinery — everything else in §18.1 stands. The compose file stays here and builds the two sites from `agentry-docs` git contexts (token via `deploy/compose/.env` `GITHUB_TOKEN`, passed as a BuildKit secret). Acceptance scripts that need the CLI resolve it through `scripts/dev/cli-bin.sh` (env override, sibling checkout, or clone). Two Go-level tests did not survive the split: the CLI's in-process server e2e (equivalently covered by `m3-cli.sh` against a live server) and the S1 drift test (obsolete — detection now IS the shared `pkg/archive` implementation rather than a mirror). When the CI workflows return (see the workflow-scope note on DEV-013's neighbor commit), the release job must drop its CLI build steps — releases of the CLI belong to agentry-cli.
+
+## DEV-051 — goxmldsig bumped v1.4.0 → v1.6.1 (GO-2026-4753) (2026-08-30)
+
+**What:** `github.com/russellhaering/goxmldsig` is raised from v1.4.0 to v1.6.1 (`go get` + `go mod tidy`; beevik/etree comes along v1.5.0 → v1.7.0 as its dependency). DEV-008 pinned ≥ v1.3.0 "past the CVE-2022-41912 signature-bypass fix"; govulncheck (2026-08-30) reports v1.4.0 itself vulnerable to GO-2026-4753, a loop-variable-capture signature bypass, with call traces reaching it through `internal/auth/saml.SP.ParseAndValidate` — the enterprise SAML login path. v1.6.1 is the latest release; the advisory's fixed version is v1.6.0.
+
+**Why:** A reachable signature-bypass class advisory on the SAML validation path is exactly the threat §12.4's validation list exists to defeat. The pin in DEV-008 was correct when written and is now superseded.
+
+**Impact:** SAML/OIDC/SSO/SCIM tests (`internal/auth/saml`, `internal/auth/oidc`, the M6/SAML/OIDC subset of `internal/api`) pass unchanged; `govulncheck ./...` now reports zero reachable vulnerabilities. The CLI and desktop repos pin this module only transitively through their `github.com/blaktron/agentry` pseudo-version; their pins pick this fix up when they next bump that require. Until then, govulncheck run against those repos still names GO-2026-4753 via the old pinned core version.
+
