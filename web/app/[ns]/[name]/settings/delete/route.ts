@@ -6,7 +6,7 @@
 // forbids deleting version rows at all), so it is surfaced as its own
 // message rather than as a raw problem detail.
 import { NextRequest, NextResponse } from "next/server";
-import { redirectBack, sameOrigin } from "@/lib/forms";
+import { redirectBack, sameOrigin, readForm } from "@/lib/forms";
 import { apiSend, problemDetail } from "@/lib/session";
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ ns: string; name: string }> }) {
@@ -15,7 +15,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ ns: string
   const n = encodeURIComponent(ns);
   const a = encodeURIComponent(name);
   const back = `/${n}/${a}/settings`;
-  const form = await req.formData();
+  const form = await readForm(req);
 
   if (String(form.get("confirm") ?? "").trim() !== name) {
     return redirectBack(req, back, { error: `type "${name}" exactly to confirm deletion` });

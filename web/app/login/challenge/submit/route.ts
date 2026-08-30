@@ -7,13 +7,13 @@
 // session and returns a csrfToken, so it mirrors through the same helper.
 import { NextRequest, NextResponse } from "next/server";
 import { API_BASE } from "@/lib/session";
-import { establishSession, redirectBack, safeNext, sameOrigin, requestOrigin} from "@/lib/forms";
+import { establishSession, redirectBack, safeNext, sameOrigin, requestOrigin, readForm } from "@/lib/forms";
 
 export async function POST(req: NextRequest) {
   if (!sameOrigin(req)) {
     return new NextResponse("cross-origin form post rejected", { status: 403 });
   }
-  const form = await req.formData();
+  const form = await readForm(req);
   const next = safeNext(form.get("next"), "/dashboard");
   const challenge = String(form.get("challenge") ?? "").trim();
   const code = String(form.get("code") ?? "").trim();

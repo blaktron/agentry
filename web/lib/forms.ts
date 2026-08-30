@@ -10,6 +10,20 @@ import { CSRF_COOKIE, SESSION_COOKIE } from "./session";
 // every route handler already imports from this module.
 export { safeNext } from "./urls";
 
+// readForm parses a form POST, degrading a malformed or bodyless request to
+// an empty FormData instead of throwing. req.formData() rejects when the body
+// is absent or not form-encoded; unhandled, that surfaced as a 500 on a
+// hand-crafted empty POST. An empty FormData routes through each handler's
+// own field validation, which answers 400/redirect-with-error — the right
+// code for bad input. Real browser form submissions are unaffected.
+export async function readForm(req: NextRequest): Promise<FormData> {
+  try {
+    return await req.formData();
+  } catch {
+    return new FormData();
+  }
+}
+
 // sameOrigin rejects cross-site form posts (belt over the SameSite=Lax
 // cookie braces; the API's CSRF token is the third layer).
 //

@@ -2,7 +2,7 @@
 // Creation returns the HMAC secret exactly once: rendered as a page, never
 // put in a URL.
 import { NextRequest, NextResponse } from "next/server";
-import { redirectBack, sameOrigin } from "@/lib/forms";
+import { redirectBack, sameOrigin, readForm } from "@/lib/forms";
 import { apiSend, problemDetail } from "@/lib/session";
 import { showOnce } from "@/lib/show-once";
 
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ org: strin
   // input, and a handle-shaped value is a convention, not a guarantee.
   const o = encodeURIComponent(org);
   const back = `/orgs/${o}/admin`;
-  const form = await req.formData();
+  const form = await readForm(req);
   const action = String(form.get("action") ?? "create");
 
   if (action === "delete") {

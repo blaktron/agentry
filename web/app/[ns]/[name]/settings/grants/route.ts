@@ -1,7 +1,7 @@
 // POST /{ns}/{name}/settings/grants — set or remove a per-agent grant
 // (§12.2). PUT is an upsert, so "add" and "change role" are the same call.
 import { NextRequest, NextResponse } from "next/server";
-import { redirectBack, sameOrigin } from "@/lib/forms";
+import { redirectBack, sameOrigin, readForm } from "@/lib/forms";
 import { apiSend, problemDetail } from "@/lib/session";
 
 const ROLES = new Set(["read", "write", "maintain", "publish"]);
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ ns: string
   const n = encodeURIComponent(ns);
   const a = encodeURIComponent(name);
   const back = `/${n}/${a}/settings`;
-  const form = await req.formData();
+  const form = await readForm(req);
 
   const kind = String(form.get("kind") ?? "");
   const grantee = String(form.get("grantee") ?? "").trim().toLowerCase();

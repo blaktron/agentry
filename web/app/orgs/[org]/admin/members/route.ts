@@ -1,6 +1,6 @@
 // POST /orgs/{org}/admin/members — set a member's role or remove them.
 import { NextRequest, NextResponse } from "next/server";
-import { redirectBack, sameOrigin } from "@/lib/forms";
+import { redirectBack, sameOrigin, readForm } from "@/lib/forms";
 import { apiSend, problemDetail } from "@/lib/session";
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ org: string }> }) {
@@ -10,7 +10,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ org: strin
   // input, and a handle-shaped value is a convention, not a guarantee.
   const o = encodeURIComponent(org);
   const back = `/orgs/${o}/admin`;
-  const form = await req.formData();
+  const form = await readForm(req);
   const handle = String(form.get("handle") ?? "").trim();
   const action = String(form.get("action") ?? "");
   if (!/^[a-z0-9][a-z0-9-]*$/i.test(handle)) return redirectBack(req, back, { error: "invalid handle" });

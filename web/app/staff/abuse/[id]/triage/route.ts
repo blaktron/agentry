@@ -1,6 +1,6 @@
 // POST /staff/abuse/{id}/triage — record an abuse-report triage outcome.
 import { NextRequest, NextResponse } from "next/server";
-import { redirectBack, sameOrigin } from "@/lib/forms";
+import { redirectBack, sameOrigin, readForm } from "@/lib/forms";
 import { apiSend, problemDetail } from "@/lib/session";
 
 const STATES = new Set(["triaged", "actioned", "dismissed"]);
@@ -8,7 +8,7 @@ const STATES = new Set(["triaged", "actioned", "dismissed"]);
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   if (!sameOrigin(req)) return new NextResponse("cross-origin form post rejected", { status: 403 });
   const { id } = await ctx.params;
-  const form = await req.formData();
+  const form = await readForm(req);
   const state = String(form.get("state") ?? "");
   const resolution = String(form.get("resolution") ?? "");
   if (!STATES.has(state)) {

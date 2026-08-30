@@ -1,13 +1,13 @@
 // POST /review/{id}/decide — forward an approve/reject decision to the API.
 import { NextRequest, NextResponse } from "next/server";
-import { redirectBack, sameOrigin } from "@/lib/forms";
+import { redirectBack, sameOrigin, readForm } from "@/lib/forms";
 import { apiSend, problemDetail } from "@/lib/session";
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   if (!sameOrigin(req)) return new NextResponse("cross-origin form post rejected", { status: 403 });
   const { id } = await ctx.params;
   const i = encodeURIComponent(id);
-  const form = await req.formData();
+  const form = await readForm(req);
   const decision = String(form.get("decision") ?? "");
   const rationale = String(form.get("rationale") ?? "");
   if (decision !== "approve" && decision !== "reject") {
