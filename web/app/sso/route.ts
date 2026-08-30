@@ -14,7 +14,7 @@
 // /api/v1/orgs/{org}/sso/oidc/start, which is same-origin and reachable).
 import { NextRequest, NextResponse } from "next/server";
 import { API_BASE } from "@/lib/session";
-import { redirectBack } from "@/lib/forms";
+import { redirectBack, requestOrigin} from "@/lib/forms";
 
 export async function GET(req: NextRequest) {
   const org = (req.nextUrl.searchParams.get("org") ?? "").trim().toLowerCase();
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const out = NextResponse.redirect(new URL(location, req.nextUrl.origin), 303);
+  const out = NextResponse.redirect(new URL(location, requestOrigin(req)), 303);
   // Forward anything the landing set (today: nothing; a future SAML relay
   // cookie would break silently otherwise).
   for (const c of res.headers.getSetCookie()) out.headers.append("set-cookie", c);

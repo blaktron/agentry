@@ -4,7 +4,7 @@
 // are both idempotent 204s, so a double-submit is harmless and the page can
 // simply re-render with the new count.
 import { NextRequest, NextResponse } from "next/server";
-import { redirectBack, sameOrigin } from "@/lib/forms";
+import { redirectBack, sameOrigin, requestOrigin} from "@/lib/forms";
 import { apiSend, problemDetail } from "@/lib/session";
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ ns: string; name: string }> }) {
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ ns: string
   const res = await apiSend(starred ? "DELETE" : "PUT", `/user/stars/${n}/${a}`);
   if (res.status === 401) {
     return NextResponse.redirect(
-      new URL(`/login?next=${encodeURIComponent(back)}`, req.nextUrl.origin),
+      new URL(`/login?next=${encodeURIComponent(back)}`, requestOrigin(req)),
       303,
     );
   }

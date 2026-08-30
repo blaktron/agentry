@@ -7,7 +7,7 @@
 // session and returns a csrfToken, so it mirrors through the same helper.
 import { NextRequest, NextResponse } from "next/server";
 import { API_BASE } from "@/lib/session";
-import { establishSession, redirectBack, safeNext, sameOrigin } from "@/lib/forms";
+import { establishSession, redirectBack, safeNext, sameOrigin, requestOrigin} from "@/lib/forms";
 
 export async function POST(req: NextRequest) {
   if (!sameOrigin(req)) {
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { csrfToken } = (await res.json()) as { csrfToken: string };
-  const out = NextResponse.redirect(new URL(next, req.nextUrl.origin), 303);
+  const out = NextResponse.redirect(new URL(next, requestOrigin(req)), 303);
   if (!establishSession(res, csrfToken, out)) {
     return redirectBack(req, "/login", { error: "the code was accepted but no session was issued" });
   }

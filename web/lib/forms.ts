@@ -59,6 +59,20 @@ export function establishSession(apiRes: Response, csrfToken: string, out: NextR
   return true;
 }
 
+// requestOrigin is the origin the BROWSER addressed, for building absolute
+// redirect URLs. req.nextUrl.origin is the server's own notion — in a
+// standalone deployment that is http://0.0.0.0:<port> or localhost, and a
+// browser told to redirect there off-box goes nowhere. The Host header (or
+// x-forwarded-host/-proto when a proxy fronts the app) is what the client
+// can actually reach.
+export function requestOrigin(req: NextRequest): string {
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  if (!host) return req.nextUrl.origin;
+  const proto =
+    req.headers.get("x-forwarded-proto") ?? req.nextUrl.protocol.replace(":", "");
+  return `${proto}://${host}`;
+}
+
 // redirectBack sends a 303 to path with an optional flash message in the
 // query string (?ok= / ?error= — rendered by the page, never echoed as HTML).
 export function redirectBack(
@@ -66,7 +80,7 @@ export function redirectBack(
   path: string,
   flash?: { ok?: string; error?: string },
 ): NextResponse {
-  const url = new URL(path, req.nextUrl.origin);
+  const url = new URL(path, requestOrigin(req));
   if (flash?.ok) url.searchParams.set("ok", flash.ok);
   if (flash?.error) url.searchParams.set("error", flash.error);
   return NextResponse.redirect(url, 303);
