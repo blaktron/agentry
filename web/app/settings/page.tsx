@@ -135,7 +135,7 @@ export default async function SettingsPage({
           <form method="post" action="/settings/totp">
             <input type="hidden" name="action" value="setup" />
             <p className="mb-2 text-sm" style={{ color: "var(--color-muted)" }}>
-              2FA is required before publishing public agents (§19).
+              2FA is required before publishing public BriefAgents (§19).
             </p>
             <button type="submit" className="rounded-md border px-3 py-1.5 text-sm" style={{ borderColor: "var(--color-border)" }}>
               Set up TOTP

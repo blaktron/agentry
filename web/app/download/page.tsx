@@ -75,7 +75,7 @@ agentry version`}</CodeBlock>
           <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
             A desktop client for macOS, Windows, and Linux: browse the registry, read security
             report cards, install with on-device digest and signature verification, and validate
-            local agent folders with the same scanners the registry runs.
+            local BriefAgent folders with the same scanners the registry runs.
           </p>
           <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
             Builds are published on the{" "}
@@ -90,7 +90,7 @@ agentry version`}</CodeBlock>
       <section>
         <h2 className="text-xl font-semibold">Verify what you downloaded</h2>
         <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
-          The CLI verifies agents; you can also verify the CLI itself against the published release
+          The CLI verifies BriefAgents; you can also verify the CLI itself against the published release
           signatures and checksums. Full instructions live in the{" "}
           <a href={SITE.docsUrl} className="underline">
             documentation

@@ -79,7 +79,7 @@ export default async function PublishPage({
       <Card>
         <h2 className="mb-2 font-semibold">Submit a repo tag</h2>
         <p className="mb-3 text-sm" style={{ color: "var(--color-muted)" }}>
-          The tag must exist in the agent&apos;s git repo (<code>{agent.gitHttpUrl}</code>) and
+          The tag must exist in the BriefAgent&apos;s git repo (<code>{agent.gitHttpUrl}</code>) and
           look like <code>v1.2.3</code>. Every submission runs the full §8 pipeline — no path
           skips the gate.
         </p>

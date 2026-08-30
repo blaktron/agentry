@@ -77,7 +77,7 @@ export function ReportCard({
       </dl>
 
       <p className="mt-3 text-xs" style={{ color: "var(--color-muted)" }}>
-        Static scanning reduces risk; it cannot prove an agent safe. Review the declared capabilities
+        Static scanning reduces risk; it cannot prove a BriefAgent safe. Review the declared capabilities
         and the findings before installing.
       </p>
     </Card>
