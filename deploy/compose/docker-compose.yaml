@@ -132,27 +132,48 @@ services:
     depends_on:
       - server
 
-  # Separate deployment: the wiki-style documentation site (docs.secureagentry.net).
+  # Separate deployment: the wiki-style documentation site
+  # (docs.secureagentry.net). The site machinery lives in the agentry-docs
+  # repo; its build clones THIS repo for the docs/ content. While the repos
+  # are private, GITHUB_TOKEN (deploy/compose/.env) authenticates both the
+  # compose build context fetch and, as a BuildKit secret, the inner clone.
+  # For local hacking on the sites, point AGENTRY_DOCS_CONTEXT at a checkout
+  # (e.g. ../../../agentry-docs).
   docs:
     profiles: ["server"]
     restart: unless-stopped
     build:
-      context: ../..
-      dockerfile: deploy/docs-site/Dockerfile
+      context: ${AGENTRY_DOCS_CONTEXT:-https://x-access-token:${GITHUB_TOKEN:?set GITHUB_TOKEN in deploy/compose/.env}@github.com/blaktron/agentry-docs.git#main}
+      dockerfile: docs-site/Dockerfile
       args:
         SITE_URL: ${AGENTRY_DOCS_PUBLIC_URL:-http://localhost:8000}
+        AGENTRY_REF: ${AGENTRY_CONTENT_REF:-main}
+      secrets:
+        - gh_token
     ports:
       - "8000:80"
 
-  # Separate deployment: the developers / API-reference site (developers.secureagentry.net).
+  # Separate deployment: the developers / API-reference site
+  # (developers.secureagentry.net) — Redoc over this repo's OpenAPI spec,
+  # built from the agentry-docs repo the same way.
   developers:
     profiles: ["server"]
     restart: unless-stopped
     build:
-      context: ../..
-      dockerfile: deploy/developers-site/Dockerfile
+      context: ${AGENTRY_DOCS_CONTEXT:-https://x-access-token:${GITHUB_TOKEN:?set GITHUB_TOKEN in deploy/compose/.env}@github.com/blaktron/agentry-docs.git#main}
+      dockerfile: developers-site/Dockerfile
+      args:
+        AGENTRY_REF: ${AGENTRY_CONTENT_REF:-main}
+      secrets:
+        - gh_token
     ports:
       - "8001:80"
+
+secrets:
+  # Read token for the private blaktron repos, consumed by the site builds'
+  # inner clone of this repo. Set in deploy/compose/.env.
+  gh_token:
+    environment: GITHUB_TOKEN
 
 volumes:
   pgdata:

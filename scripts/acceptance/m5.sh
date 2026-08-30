@@ -63,6 +63,7 @@ WEBPORT=3099
 WORK=$(mktemp -d)
 DB="$(./scripts/dev/pg.sh url)"
 make build >/dev/null
+AGENTRY_CLI=$(./scripts/dev/cli-bin.sh)
 # Acceptance traffic is a tight scripted loop from one IP; the real §19
 # limits are exercised by m1.sh, not here.
 AGENTRY_LIMITS_AUTHED_BURST_PER_MIN="100000" \
@@ -125,7 +126,7 @@ YAML
 printf '# demo-skill\n\nA **well-behaved** demo agent for the M5 acceptance check.\n' > "$AG/README.md"
 printf 'Summarize the input politely and cite sources.\n' > "$AG/SKILL.md"
 echo "Apache-2.0" > "$AG/LICENSE"
-AGENTRY_TOKEN="$PAT" ./bin/agentry --registry "http://localhost:$PORT" publish "$AG" >/dev/null 2>&1
+AGENTRY_TOKEN="$PAT" "$AGENTRY_CLI" --registry "http://localhost:$PORT" publish "$AG" >/dev/null 2>&1
 
 check() { # url, needle, label
   if curl -fsS "$1" | grep -q "$2"; then echo "  $3: OK"; else echo "  $3: FAILED (missing '$2')"; exit 1; fi

@@ -12,11 +12,11 @@ LDFLAGS := -X github.com/blaktron/agentry/internal/version.Version=$(shell git d
 
 all: build
 
-## build: compile all packages and both binaries into ./bin
+## build: compile all packages and agentryd into ./bin (the CLI lives in
+## github.com/blaktron/agentry-cli; scripts/dev/cli-bin.sh resolves/builds it)
 build:
 	$(GO) build ./...
 	$(GO) build -ldflags '$(LDFLAGS)' -o $(BIN_DIR)/agentryd ./cmd/agentryd
-	$(GO) build -ldflags '$(LDFLAGS)' -o $(BIN_DIR)/agentry ./cmd/agentry
 
 ## test: run all Go tests (DB tests honor AGENTRY_TEST_DATABASE_URL)
 test:
