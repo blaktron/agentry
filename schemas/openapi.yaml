@@ -1,4 +1,4 @@
-# Agentry public REST API — spec-first contract (PLAN D-09, §9).
+# Agentry public REST API: spec-first contract (PLAN D-09, §9).
 # This file is the source of truth; server stubs and clients are generated
 # from it (make generate). Changes within /api/v1 must be additive; the CI
 # oasdiff gate enforces it. Document version 3.0.3 per DEVIATIONS.md DEV-002.
@@ -13,8 +13,8 @@ info:
 
     Pagination (§9.1): list endpoints take `?cursor=&limit=` with an opaque
     cursor and return the next page as a `Link: <…>; rel="next"` header
-    (cursor-carrying bodies keep `nextCursor` too). `limit` outside the
-    documented bounds is clamped to them, never rejected.
+    (cursor-carrying bodies keep `nextCursor` too). A `limit` outside the
+    documented bounds is clamped, never rejected.
 
 
     Rate limits (§19) are reported on every response with
@@ -23,13 +23,13 @@ info:
 
 
     Idempotency (§9.1): mutating POSTs accept an `Idempotency-Key` request
-    header (≤255 chars). The first request under a key is executed and its
-    response recorded; a retry with the same key, by the same user, on the
-    same endpoint, with the same body replays that recorded response
-    verbatim. Reusing a key with a *different* body is a 409. Keys are
-    scoped per user and endpoint and expire after 24 hours. Endpoints that
-    honour the header: `POST /orgs`, `POST /orgs/{org}/webhooks`,
-    `POST /orgs/{org}/webhooks/{id}/ping`, `POST /platform/ruleset-releases`,
+    header (≤255 chars). The first request under a key executes and its
+    response is recorded. A retry with the same key, user, endpoint, and
+    body replays that recorded response verbatim. Reusing a key with a
+    *different* body is a 409. Keys are scoped per user and endpoint and
+    expire after 24 hours. Endpoints that honour the header: `POST /orgs`,
+    `POST /orgs/{org}/webhooks`, `POST /orgs/{org}/webhooks/{id}/ping`,
+    `POST /platform/ruleset-releases`,
     `POST /agents/{ns}/{name}/versions`.
   version: 0.2.0
   license:
@@ -61,7 +61,7 @@ tags:
   - name: platform
     description: Trust & safety actions and advisories (§7, §8.7).
   - name: sso
-    description: Enterprise SSO — SAML 2.0 SP and OIDC RP (§12.4).
+    description: "Enterprise SSO: SAML 2.0 SP and OIDC RP (§12.4)."
   - name: scim
     description: SCIM 2.0 provisioning tokens (§12.5).
   - name: webhooks
@@ -209,10 +209,11 @@ paths:
       tags: [auth]
       summary: Complete a pending 2FA challenge and open the session (§12.1).
       description: >
-        Second leg of a login that could not carry a TOTP code inline — today
-        only social login, whose callback is a browser redirect. The challenge
-        is opaque, single-use and expires in five minutes; it proves nothing on
-        its own, so a valid TOTP code is still required.
+        Second leg of a login that could not carry a TOTP code inline. Today
+        the only such login is social login: its callback is a browser
+        redirect. The challenge is opaque, single-use and expires in five
+        minutes; it proves nothing on its own, so a valid TOTP code is still
+        required.
       security: []
       requestBody:
         required: true
@@ -247,7 +248,7 @@ paths:
         not an OIDC issuer). Providers must be configured on the server
         (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured
         providers return 404. This is individual login and never grants org
-        membership — org SSO lives under /orgs/{org}/sso (§12.4).
+        membership. Org SSO lives under /orgs/{org}/sso (§12.4).
       security: []
       parameters:
         - $ref: "#/components/parameters/SocialProvider"
@@ -261,7 +262,7 @@ paths:
     get:
       operationId: socialOidcCallback
       tags: [auth]
-      summary: Social login redirect URI — establish a session (§12.1).
+      summary: "Social login redirect URI: establish a session (§12.1)."
       description: >
         Exchanges the code, verifies the identity, then links or JIT-creates
         an individual account (`identities.provider_kind='social'`).
@@ -342,7 +343,7 @@ paths:
         already-installed copies keep verifying, or the personal-namespace
         agents are transferred to an organization the caller administers.
         When the account has published public versions the choice is
-        explicit — omitting `publishedContent` is a 400, never a silent yank.
+        explicit: omitting `publishedContent` is a 400, never a silent yank.
       parameters:
         - name: publishedContent
           in: query
@@ -471,8 +472,8 @@ paths:
       summary: List the caller's active browser sessions (§12.1).
       description: >
         Sessions are cookie sessions. A PAT-authenticated caller has no
-        sessions of its own, so the list is empty (200, not an error) —
-        a PAT is not a way to enumerate someone's browser sessions.
+        sessions of its own, so the list is empty (200, not an error).
+        A PAT is not a way to enumerate someone's browser sessions.
       responses:
         "200":
           description: Active, unexpired, unrevoked sessions, newest first.
@@ -504,7 +505,7 @@ paths:
       description: >
         Own sessions only. An id that is not one of the caller's live
         sessions answers 404 whether it does not exist or belongs to
-        somebody else — the two are deliberately indistinguishable.
+        somebody else. The two are deliberately indistinguishable.
         Session-only: a PAT cannot revoke sessions (403).
       parameters:
         - name: sessionId
@@ -532,9 +533,9 @@ paths:
         unpacking first:
 
 
-        `X-Agentry-Bundle-Semver` — the ruleset release semver;
-        `X-Agentry-Bundle-Digest` — the `sha256:<hex>` content digest
-        recorded on the `ruleset_releases` row; `ETag` — the same digest.
+        `X-Agentry-Bundle-Semver`: the ruleset release semver;
+        `X-Agentry-Bundle-Digest`: the `sha256:<hex>` content digest
+        recorded on the `ruleset_releases` row; `ETag`: the same digest.
 
 
         The digest is the pin: a client MUST recompute it over the received
@@ -967,7 +968,7 @@ paths:
       summary: Recent activity for an agent (§9.2).
       description: >
         Drawn from the audit log. Anyone who can see a public agent gets the
-        public-safe subset — publishes and yanks; callers with an explicit
+        public-safe subset: publishes and yanks; callers with an explicit
         read grant (or namespace-derived read) see the fuller stream
         including submissions, settings changes, and grant changes.
       security: []
@@ -1093,7 +1094,7 @@ paths:
         (git-tag source); multipart/form-data with an `archive` part
         (tar.zst) submits a client-built package (cli-upload source; the
         server re-validates, re-packs deterministically, and compares
-        digests — client packing is never trusted).
+        digests: client packing is never trusted).
       parameters:
         - $ref: "#/components/parameters/Namespace"
         - $ref: "#/components/parameters/AgentName"
@@ -1617,7 +1618,7 @@ paths:
     post:
       operationId: samlAcs
       tags: [sso]
-      summary: SAML Assertion Consumer Service — consume a signed assertion (§12.4).
+      summary: "SAML Assertion Consumer Service: consume a signed assertion (§12.4)."
       security: []
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
@@ -1649,7 +1650,7 @@ paths:
     get:
       operationId: oidcCallback
       tags: [sso]
-      summary: OIDC redirect URI — exchange the code and establish a session (§12.4).
+      summary: "OIDC redirect URI: exchange the code and establish a session (§12.4)."
       security: []
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
@@ -1843,8 +1844,8 @@ paths:
       summary: Send a test delivery to an endpoint (admin+, §9.2).
       description: >
         Enqueues a signed `ping` delivery through the ordinary webhook
-        machinery — same signature header, same SSRF guard, same retry
-        schedule — so the recorded attempt appears in
+        machinery (same signature header, same SSRF guard, same retry
+        schedule), so the recorded attempt appears in
         `GET …/{id}/deliveries`. Honours `Idempotency-Key`.
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
@@ -2245,7 +2246,7 @@ paths:
           description: >
             Capability the latest published version actually asks for, e.g.
             `network`, `filesystem`, `exec`, `secrets`, `dataAccess` (§5.4).
-            A capability declared as `none`, null, or empty does not match —
+            A capability declared as `none`, null, or empty does not match:
             `network: {egress: none}` is not a network agent.
           schema:
             type: string
@@ -2962,7 +2963,7 @@ components:
           type: string
         archiveDigest:
           type: string
-          description: sha256:<hex> — the release identity (D-15).
+          description: sha256:<hex>, the release identity (D-15).
         archiveSize:
           type: integer
           format: int64
@@ -3001,7 +3002,7 @@ components:
           type: string
           description: >
             Where to fetch the DSSE attestation over this release (§8.8,
-            §9.4 step 3). Present whenever the version has been signed —
+            §9.4 step 3). Present whenever the version has been signed:
             every version published by a signing-enabled deployment. Absent
             when the deployment runs `signing.kind: none` (dev/self-host
             opt-out) or the version predates signing.
@@ -3048,7 +3049,7 @@ components:
           description: >-
             Why a reviewer dismissed or confirmed this finding. Dismissed
             findings stay on the public report WITH their rationale (PLAN
-            §8.5) — a finding that vanishes without explanation is exactly
+            §8.5). A finding that vanishes without explanation is exactly
             what the report exists to prevent.
 
     ScanReport:
@@ -3071,7 +3072,7 @@ components:
         finishedAt:
           type: string
           format: date-time
-          description: When this scan run completed — the date the report describes.
+          description: "When this scan run completed: the date the report describes."
         findingCounts:
           type: object
           additionalProperties:
@@ -3117,7 +3118,7 @@ components:
         versionDetail:
           $ref: "#/components/schemas/AgentVersion"
         previous:
-          # The most recent previously published version, when one exists —
+          # The most recent previously published version, when one exists:
           # the baseline for the capability diff (§10.1).
           $ref: "#/components/schemas/AgentVersion"
         manifest:
