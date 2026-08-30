@@ -4,7 +4,7 @@ import { Card } from "@/components/ui";
 
 export const metadata: Metadata = {
   title: "Advisories",
-  description: "Security advisories published against agents on this registry.",
+  description: "Security advisories published against BriefAgents on this registry.",
 };
 
 // Advisories index (§10.1). Advisories are queried per agent by the API, so

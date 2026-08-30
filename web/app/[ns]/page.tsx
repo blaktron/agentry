@@ -24,7 +24,7 @@ export default async function NamespacePage({ params }: { params: Promise<Params
       <h1 className="text-2xl font-semibold tracking-tight">{ns}</h1>
       {agents.length === 0 ? (
         <Card>
-          <p className="text-sm">This namespace has no public agents.</p>
+          <p className="text-sm">This namespace has no public BriefAgents.</p>
         </Card>
       ) : (
         <ul>
