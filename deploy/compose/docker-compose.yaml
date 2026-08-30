@@ -134,16 +134,18 @@ services:
 
   # Separate deployment: the wiki-style documentation site
   # (docs.secureagentry.net). The site machinery lives in the agentry-docs
-  # repo; its build clones THIS repo for the docs/ content. While the repos
-  # are private, GITHUB_TOKEN (deploy/compose/.env) authenticates both the
-  # compose build context fetch and, as a BuildKit secret, the inner clone.
-  # For local hacking on the sites, point AGENTRY_DOCS_CONTEXT at a checkout
-  # (e.g. ../../../agentry-docs).
+  # repo; its build clones THIS repo for the docs/ content. No token is
+  # required for public repos. While the repos are private, export
+  # GITHUB_TOKEN for the build only (e.g. GITHUB_TOKEN="$(gh auth token)"
+  # docker compose ...) — it feeds the BuildKit secret for the inner clone
+  # and, via AGENTRY_DOCS_REMOTE, the context fetch; nothing is written to
+  # disk. For local hacking on the sites, point AGENTRY_DOCS_CONTEXT at a
+  # checkout (e.g. ../../../agentry-docs).
   docs:
     profiles: ["server"]
     restart: unless-stopped
     build:
-      context: ${AGENTRY_DOCS_CONTEXT:-https://x-access-token:${GITHUB_TOKEN:?set GITHUB_TOKEN in deploy/compose/.env}@github.com/blaktron/agentry-docs.git#main}
+      context: ${AGENTRY_DOCS_CONTEXT:-${AGENTRY_DOCS_REMOTE:-https://github.com/blaktron/agentry-docs.git#main}}
       dockerfile: docs-site/Dockerfile
       args:
         SITE_URL: ${AGENTRY_DOCS_PUBLIC_URL:-http://localhost:8000}
@@ -160,7 +162,7 @@ services:
     profiles: ["server"]
     restart: unless-stopped
     build:
-      context: ${AGENTRY_DOCS_CONTEXT:-https://x-access-token:${GITHUB_TOKEN:?set GITHUB_TOKEN in deploy/compose/.env}@github.com/blaktron/agentry-docs.git#main}
+      context: ${AGENTRY_DOCS_CONTEXT:-${AGENTRY_DOCS_REMOTE:-https://github.com/blaktron/agentry-docs.git#main}}
       dockerfile: developers-site/Dockerfile
       args:
         AGENTRY_REF: ${AGENTRY_CONTENT_REF:-main}
@@ -170,8 +172,9 @@ services:
       - "8001:80"
 
 secrets:
-  # Read token for the private blaktron repos, consumed by the site builds'
-  # inner clone of this repo. Set in deploy/compose/.env.
+  # Read token for the blaktron repos, consumed by the site builds' inner
+  # clone of this repo. Export it for the build only when the repos are
+  # private; empty (the default) means the clone runs anonymously.
   gh_token:
     environment: GITHUB_TOKEN
 
