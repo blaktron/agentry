@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -74,14 +75,46 @@ func (s *Store) Ping(ctx context.Context) error { return s.pool.Ping(ctx) }
 // Close releases the pool.
 func (s *Store) Close() { s.pool.Close() }
 
+// migrateMu serializes Migrate within a process. goose.SetBaseFS /
+// SetDialect below mutate package-global state in goose, so two in-process
+// migrators are unsafe even with a database-level lock.
+var migrateMu sync.Mutex
+
+// migrateLockID is the advisory lock under which migrations run. Any stable
+// int64 works; it only has to be the same across every process that migrates
+// this schema. Session-scoped: closing the connection releases it.
+const migrateLockID int64 = 0xA6E7_2710 // "agentry migrate"
+
 // Migrate runs all pending goose migrations from the embedded FS.
-// Safe to run concurrently across instances: goose takes a session lock.
+// Safe to run concurrently within a process (migrateMu) and across
+// processes/instances (a Postgres session advisory lock held for the whole
+// run): waiters block until the leader finishes, then observe an up-to-date
+// schema and no-op. This matters at first boot — api, git and worker
+// replicas all start with migrateOnStart — and for test binaries sharing one
+// database. Locking lives here, not in goose, because goose's own lock does
+// not cover the version-table bootstrap: on a fresh database two concurrent
+// migrators raced through it and collided inside the first migrations.
 func Migrate(ctx context.Context, databaseURL string) error {
+	migrateMu.Lock()
+	defer migrateMu.Unlock()
+
 	db, err := connectStd(databaseURL)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = db.Close() }()
+
+	// One connection so the advisory lock, the migrations and the unlock all
+	// share the session that holds the lock.
+	db.SetMaxOpenConns(1)
+	if _, err := db.ExecContext(ctx, "SELECT pg_advisory_lock($1)", migrateLockID); err != nil {
+		return fmt.Errorf("store: migrate: advisory lock: %w", err)
+	}
+	defer func() {
+		// The ctx may be done by now (that is why the run failed); the pool
+		// close below releases the lock regardless, so ignore errors here.
+		_, _ = db.ExecContext(context.WithoutCancel(ctx), "SELECT pg_advisory_unlock($1)", migrateLockID)
+	}()
 
 	goose.SetBaseFS(migrationsFS)
 	if err := goose.SetDialect("postgres"); err != nil {

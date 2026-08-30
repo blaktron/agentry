@@ -465,3 +465,11 @@ Two smaller calls, recorded for completeness. The §12.4 SSO freshness ceiling i
 
 **Impact:** SAML/OIDC/SSO/SCIM tests (`internal/auth/saml`, `internal/auth/oidc`, the M6/SAML/OIDC subset of `internal/api`) pass unchanged; `govulncheck ./...` now reports zero reachable vulnerabilities. The CLI and desktop repos pin this module only transitively through their `github.com/blaktron/agentry` pseudo-version; their pins pick this fix up when they next bump that require. Until then, govulncheck run against those repos still names GO-2026-4753 via the old pinned core version.
 
+## DEV-052 — store.Migrate serializes concurrent migrators itself (2026-08-30)
+
+**What:** `store.Migrate` now takes an in-process mutex and a session-scoped Postgres advisory lock (`pg_advisory_lock`, single-connection pool) for the whole run, and its doc comment is corrected to describe that. The previous comment claimed "Safe to run concurrently across instances: goose takes a session lock." Measured false: on a fresh database, 4 concurrent migrators raced through goose's version-table bootstrap and 3 of 4 failed with duplicate `pg_type` rows in migration 00002. Reproduced both by a scratch program and by `go test ./...` itself against a never-migrated `agentry_test`.
+
+**Why:** Multi-replica first boots (Helm: api ×N, git ×N, worker ×N, all `migrateOnStart: true`) and any fresh shared test database hit this. The failure self-heals on restart but crash-loops the losers of the race and flakes test runs.
+
+**Impact:** Waiters now block on the lock, observe an up-to-date schema, and no-op. New regression test `TestMigrateConcurrentFreshDatabase` (internal/store) creates a scratch database, races 4 migrators at it, and asserts all succeed + the version table is coherent; passed 5/5 runs at introduction. Advisory-lock id is a documented constant in `internal/store/store.go`; the lock releases on pool close even if the explicit unlock is skipped.
+
