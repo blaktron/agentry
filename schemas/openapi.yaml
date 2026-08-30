@@ -4,11 +4,11 @@
 # oasdiff gate enforces it. Document version 3.0.3 per DEVIATIONS.md DEV-002.
 openapi: 3.0.3
 info:
-  title: Agentry API
+  title: SecureAgentry API
   description: >
-    Public REST API for the Agentry registry: agents, versions, publishing,
-    scanning reports, orgs, and enterprise administration. Errors follow
-    RFC 9457 (application/problem+json).
+    Public REST API for the SecureAgentry registry: agents, versions,
+    publishing, scanning reports, orgs, and enterprise administration. Errors
+    follow RFC 9457 (application/problem+json).
 
 
     Pagination (§9.1): list endpoints take `?cursor=&limit=` with an opaque
@@ -33,7 +33,8 @@ info:
     `POST /agents/{ns}/{name}/versions`.
   version: 0.2.0
   license:
-    name: PLACEHOLDER (Q2 pending)
+    name: MIT
+    url: https://github.com/blaktron/agentry/blob/main/LICENSE
 servers:
   - url: /api/v1
 tags:
