@@ -32,7 +32,12 @@ RUN apt-get update \
  && apt-get install --no-install-recommends -y git ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --gid 65532 nonroot \
- && useradd --uid 65532 --gid 65532 --home-dir /home/nonroot --create-home nonroot
+ && useradd --uid 65532 --gid 65532 --home-dir /home/nonroot --create-home nonroot \
+ # /data/git (bare repos) and /data/storage (local blob store fallback) exist
+ # in the image owned by nonroot so a fresh named volume mounted there
+ # inherits that ownership — a volume materialized at an absent path is
+ # root-owned and uid 65532 could never init a repo into it.
+ && install -d -o 65532 -g 65532 /data/git /data/storage
 
 COPY --from=build /out/agentryd /usr/bin/agentryd
 

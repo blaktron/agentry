@@ -44,6 +44,20 @@ services:
       - "1025:1025"   # SMTP
       - "8025:8025"   # web UI
 
+  # One-shot: minio starts with no buckets, and the S3 blob store does not
+  # create its bucket on demand (write-once semantics assume it exists, as in
+  # SaaS where terraform owns it). Idempotent: `mb --ignore-existing`.
+  minio-init:
+    profiles: ["server"]
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - mc alias set local http://minio:9000 agentry agentry-dev-secret &&
+        mc mb --ignore-existing local/agentry-dev
+
   # Optional: containerized agentryd (self-host trial). Build locally:
   #   docker compose -f deploy/compose/docker-compose.yaml --profile server up
   server:
@@ -74,13 +88,21 @@ services:
       AGENTRY_STORAGE_S3_USE_PATH_STYLE: "true"
       AWS_ACCESS_KEY_ID: agentry
       AWS_SECRET_ACCESS_KEY: agentry-dev-secret
+      # Bare repos live on a named volume at a path the image pre-owns for
+      # uid 65532 (see Dockerfile); the default .devdata/git would resolve
+      # to an unwritable / in-container.
+      AGENTRY_GIT_DATA_DIR: /data/git
     ports:
       - "8080:8080"
+    volumes:
+      - gitdata:/data/git
     depends_on:
       postgres:
         condition: service_healthy
       minio:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
 
   # Optional: the Next.js web app (§10).
   web:
@@ -98,3 +120,4 @@ services:
 volumes:
   pgdata:
   miniodata:
+  gitdata:
