@@ -220,7 +220,7 @@ resource "aws_cloudwatch_log_metric_filter" "kms_sign" {
 resource "aws_cloudwatch_metric_alarm" "kms_sign_anomaly" {
   count               = var.cloudtrail_log_group_name == null ? 0 : 1
   alarm_name          = "${var.name}-kms-sign-anomaly"
-  alarm_description   = "Anomalous kms:Sign volume on the attestation key (T-09)."
+  alarm_description   = var.signing_key_id == null ? "Anomalous kms:Sign volume on the attestation key (T-09)." : "Anomalous kms:Sign volume on attestation key ${var.signing_key_id} (T-09)."
   comparison_operator = "GreaterThanUpperThreshold"
   evaluation_periods  = 2
   threshold_metric_id = "ad"

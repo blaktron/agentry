@@ -94,12 +94,6 @@ variable "readonly_root_filesystem" {
   default     = true
 }
 
-variable "tmpfs_size_mib" {
-  description = "Size of the /scratch tmpfs mount (0 disables). Sandbox uses tmpfs scratch (§8.2)."
-  type        = number
-  default     = 0
-}
-
 variable "log_retention_days" {
   description = "CloudWatch log group retention."
   type        = number
