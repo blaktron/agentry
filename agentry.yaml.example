@@ -37,4 +37,11 @@ signing:
   kind: none         # none (dev) | file | kms — prod requires file or kms
 
 judge:
-  provider: none     # none | bedrock | anthropic | classifier (D-13)
+  provider: none     # none | static | openai | anthropic | bedrock | classifier (D-13)
+  # openai/anthropic talk to any endpoint speaking that wire protocol
+  # (hosted API or self-hosted gateway): set the API root and the key.
+  # Env overrides: AGENTRY_JUDGE_TYPE (same as provider), AGENTRY_JUDGE_BASE_URL,
+  # AGENTRY_JUDGE_API_KEY, AGENTRY_JUDGE_MODEL.
+  baseUrl: ""        # e.g. https://api.openai.com or https://llm.gateway.internal
+  apiKey: ""
+  model: ""          # optional; defaults per protocol when empty
