@@ -363,6 +363,14 @@ login, email-verify, and TOTP endpoints answer 410 Gone, and the web
 login page offers the directory service only. Turning the flag off (the
 default) restores the native flows — nothing was removed.
 
+To make the directory service wear the product's visual scheme (the
+tokens in `web/app/globals.css`; assets under `web/public/brand/`), run
+`scripts/dev/authentik-brand.sh` with `ASSET_BASE` set to the web app's
+public origin — it PATCHes the default brand's title, wordmark, favicon,
+flow background, and custom CSS
+(`deploy/compose/authentik/branding.css`). Re-run it after editing
+either file.
+
 `X-Forwarded-For` is honoured **only** up to that many trusted hops: behind
 CloudFront → ALB set `2`; behind a single load balancer set `1`. Leave it at
 `0` (the default) if the server is directly exposed. The header is then
