@@ -261,7 +261,9 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			method: "POST", path: agentPath("/versions/9.9.9/yank"),
 			body: func(*matrixSeed, string) any { return map[string]any{"reason": "matrix"} },
 		},
-		"downloadVersion": {method: "GET", path: agentPath("/versions/9.9.9/download")},
+		"downloadVersion":  {method: "GET", path: agentPath("/versions/9.9.9/download")},
+		"listVersionFiles": {method: "GET", path: agentPath("/versions/9.9.9/files")},
+		"getVersionFile":   {method: "GET", path: agentPath("/versions/9.9.9/file?path=agent.yaml")},
 		"resolveRef": {
 			method: "GET",
 			path:   func(s *matrixSeed, _ string) string { return "/api/v1/resolve?ref=" + s.orgH + "/mx-agent" },

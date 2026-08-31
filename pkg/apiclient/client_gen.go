@@ -1584,6 +1584,12 @@ type SubmitVersionMultipartBody struct {
 	Digest *string `json:"digest,omitempty"`
 }
 
+// GetVersionFileParams defines parameters for GetVersionFile.
+type GetVersionFileParams struct {
+	// Path Repo-relative file path exactly as listVersionFiles reports it.
+	Path string `form:"path" json:"path"`
+}
+
 // YankVersionJSONBody defines parameters for YankVersion.
 type YankVersionJSONBody struct {
 	Reason string `json:"reason"`
@@ -2167,6 +2173,20 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/download (the `DownloadVersion` operationId).
 	DownloadVersion(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetVersionFile Read one file from the version's release archive (§10.2).
+	//
+	// Text files return UTF-8 content up to the display cap with a truncation flag; binary files return metadata only (binary true), never raw bytes (§10.3). Same access gate as listVersionFiles.
+	//
+	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/file (the `GetVersionFile` operationId).
+	GetVersionFile(ctx context.Context, ns Namespace, name AgentName, version VersionString, params *GetVersionFileParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListVersionFiles List the files inside the version's release archive (§10.2).
+	//
+	// The same inventory a reviewer sees (§10.1), opened under the download access gate: published and yanked versions list, blocked versions return 410, quarantined versions 409. Browsing does not count an install.
+	//
+	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/files (the `ListVersionFiles` operationId).
+	ListVersionFiles(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetVersionManifest The validated manifest (canonical JSON, §4.2).
 	//
@@ -3230,6 +3250,40 @@ func (c *Client) GetVersionAttestation(ctx context.Context, ns Namespace, name A
 // Corresponds with GET /agents/{ns}/{name}/versions/{version}/download (the `DownloadVersion` operationId).
 func (c *Client) DownloadVersion(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDownloadVersionRequest(c.Server, ns, name, version)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetVersionFile Read one file from the version's release archive (§10.2).
+//
+// Text files return UTF-8 content up to the display cap with a truncation flag; binary files return metadata only (binary true), never raw bytes (§10.3). Same access gate as listVersionFiles.
+//
+// Corresponds with GET /agents/{ns}/{name}/versions/{version}/file (the `GetVersionFile` operationId).
+func (c *Client) GetVersionFile(ctx context.Context, ns Namespace, name AgentName, version VersionString, params *GetVersionFileParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetVersionFileRequest(c.Server, ns, name, version, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListVersionFiles List the files inside the version's release archive (§10.2).
+//
+// The same inventory a reviewer sees (§10.1), opened under the download access gate: published and yanked versions list, blocked versions return 410, quarantined versions 409. Browsing does not count an install.
+//
+// Corresponds with GET /agents/{ns}/{name}/versions/{version}/files (the `ListVersionFiles` operationId).
+func (c *Client) ListVersionFiles(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListVersionFilesRequest(c.Server, ns, name, version)
 	if err != nil {
 		return nil, err
 	}
@@ -5917,6 +5971,125 @@ func NewDownloadVersionRequest(server string, ns Namespace, name AgentName, vers
 	}
 
 	operationPath := fmt.Sprintf("/agents/%s/%s/versions/%s/download", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetVersionFileRequest constructs an http.Request for the GetVersionFile method
+func NewGetVersionFileRequest(server string, ns Namespace, name AgentName, version VersionString, params *GetVersionFileParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "version", version, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/versions/%s/file", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "path", params.Path, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListVersionFilesRequest constructs an http.Request for the ListVersionFiles method
+func NewListVersionFilesRequest(server string, ns Namespace, name AgentName, version VersionString) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "version", version, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/versions/%s/files", pathParam0, pathParam1, pathParam2)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -9732,6 +9905,24 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/download (the `DownloadVersion` operationId).
 	DownloadVersionWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*DownloadVersionResponse, error)
 
+	// GetVersionFileWithResponse Read one file from the version's release archive (§10.2).
+	//
+	// Text files return UTF-8 content up to the display cap with a truncation flag; binary files return metadata only (binary true), never raw bytes (§10.3). Same access gate as listVersionFiles.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/file (the `GetVersionFile` operationId).
+	GetVersionFileWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, params *GetVersionFileParams, reqEditors ...RequestEditorFn) (*GetVersionFileResponse, error)
+
+	// ListVersionFilesWithResponse List the files inside the version's release archive (§10.2).
+	//
+	// The same inventory a reviewer sees (§10.1), opened under the download access gate: published and yanked versions list, blocked versions return 410, quarantined versions 409. Browsing does not count an install.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/files (the `ListVersionFiles` operationId).
+	ListVersionFilesWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*ListVersionFilesResponse, error)
+
 	// GetVersionManifestWithResponse The validated manifest (canonical JSON, §4.2).
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -11384,6 +11575,102 @@ func (r DownloadVersionResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r DownloadVersionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetVersionFileResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ReviewFileContent
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetVersionFileResponse) GetJSON200() *ReviewFileContent {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetVersionFileResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetVersionFileResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetVersionFileResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetVersionFileResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetVersionFileResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListVersionFilesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ReviewFileList
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListVersionFilesResponse) GetJSON200() *ReviewFileList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListVersionFilesResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListVersionFilesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListVersionFilesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListVersionFilesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListVersionFilesResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -15323,6 +15610,36 @@ func (c *ClientWithResponses) DownloadVersionWithResponse(ctx context.Context, n
 	return ParseDownloadVersionResponse(rsp)
 }
 
+// GetVersionFileWithResponse Read one file from the version's release archive (§10.2).
+//
+// Text files return UTF-8 content up to the display cap with a truncation flag; binary files return metadata only (binary true), never raw bytes (§10.3). Same access gate as listVersionFiles.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /agents/{ns}/{name}/versions/{version}/file (the `GetVersionFile` operationId).
+func (c *ClientWithResponses) GetVersionFileWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, params *GetVersionFileParams, reqEditors ...RequestEditorFn) (*GetVersionFileResponse, error) {
+	rsp, err := c.GetVersionFile(ctx, ns, name, version, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetVersionFileResponse(rsp)
+}
+
+// ListVersionFilesWithResponse List the files inside the version's release archive (§10.2).
+//
+// The same inventory a reviewer sees (§10.1), opened under the download access gate: published and yanked versions list, blocked versions return 410, quarantined versions 409. Browsing does not count an install.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /agents/{ns}/{name}/versions/{version}/files (the `ListVersionFiles` operationId).
+func (c *ClientWithResponses) ListVersionFilesWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*ListVersionFilesResponse, error) {
+	rsp, err := c.ListVersionFiles(ctx, ns, name, version, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListVersionFilesResponse(rsp)
+}
+
 // GetVersionManifestWithResponse The validated manifest (canonical JSON, §4.2).
 //
 // Returns a wrapper object for the known response body format(s).
@@ -17312,6 +17629,78 @@ func ParseDownloadVersionResponse(rsp *http.Response) (*DownloadVersionResponse,
 	switch {
 	case rsp.StatusCode == 302:
 		break // No content-type
+
+	case rsp.StatusCode == 410:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetVersionFileResponse parses an HTTP response from a GetVersionFileWithResponse call
+func ParseGetVersionFileResponse(rsp *http.Response) (*GetVersionFileResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetVersionFileResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ReviewFileContent
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 410:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListVersionFilesResponse parses an HTTP response from a ListVersionFilesWithResponse call
+func ParseListVersionFilesResponse(rsp *http.Response) (*ListVersionFilesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListVersionFilesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ReviewFileList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case rsp.StatusCode == 410:
 		break // No content-type
