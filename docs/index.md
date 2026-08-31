@@ -11,6 +11,8 @@ running your own instance.
 - **[BriefAgents](briefagents.md)**: the package format and every manifest option,
   plus the [BriefAgent template](https://github.com/blaktron/agentry-template)
   to start from.
+- **[Runner reference](runner.md)**: every command, flag, policy key, and enforcement
+  mechanism for running BriefAgents, plus MCP profiles and the desktop app.
 - **[Getting started](dev/getting-started.md)**: set up a local development environment.
 - **[Self-hosting](self-hosting.md)**: run your own instance with Docker or Helm.
 - **[API conventions](api-conventions.md)**: pagination, idempotency, rate limits, and error format.

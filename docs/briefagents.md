@@ -1,5 +1,9 @@
 # BriefAgents
 
+*This page covers the package format. The complete runtime side — every
+command, flag, policy key, MCP profiles, and enforcement mechanism — is
+the [Runner reference](runner.md).*
+
 A **BriefAgent** is a single-purpose AI agent packaged for SecureAgentry:
 one manifest declaring what it is and what it may touch, plus the instruction
 content itself. Nothing else. BriefAgents carry **no tool code**. At run
