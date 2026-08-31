@@ -244,10 +244,15 @@ type Judge struct {
 
 // Social configures social login for individual accounts (§12.1). A provider
 // with no client id is simply not offered: the start endpoint 404s, so an
-// unconfigured deployment advertises nothing it cannot complete.
+// unconfigured deployment advertises nothing it cannot complete. Google and
+// Microsoft have built-in OIDC endpoints; OpenAI and Claude publish no fixed
+// consumer sign-in endpoints, so they additionally need an issuer override.
 type Social struct {
-	Google SocialProvider `yaml:"google"`
-	GitHub SocialProvider `yaml:"github"`
+	Google    SocialProvider `yaml:"google"`
+	GitHub    SocialProvider `yaml:"github"`
+	Microsoft SocialProvider `yaml:"microsoft"`
+	OpenAI    SocialProvider `yaml:"openai"`
+	Claude    SocialProvider `yaml:"claude"`
 }
 
 // SocialProvider is one provider's OAuth client registration.
@@ -458,6 +463,15 @@ func applyEnv(c *Config) error {
 	str("AGENTRY_SOCIAL_GITHUB_AUTH_URL", &c.Social.GitHub.AuthURL)
 	str("AGENTRY_SOCIAL_GITHUB_TOKEN_URL", &c.Social.GitHub.TokenURL)
 	str("AGENTRY_SOCIAL_GITHUB_API_BASE_URL", &c.Social.GitHub.APIBaseURL)
+	str("AGENTRY_SOCIAL_MICROSOFT_CLIENT_ID", &c.Social.Microsoft.ClientID)
+	str("AGENTRY_SOCIAL_MICROSOFT_CLIENT_SECRET", &c.Social.Microsoft.ClientSecret)
+	str("AGENTRY_SOCIAL_MICROSOFT_ISSUER", &c.Social.Microsoft.Issuer)
+	str("AGENTRY_SOCIAL_OPENAI_CLIENT_ID", &c.Social.OpenAI.ClientID)
+	str("AGENTRY_SOCIAL_OPENAI_CLIENT_SECRET", &c.Social.OpenAI.ClientSecret)
+	str("AGENTRY_SOCIAL_OPENAI_ISSUER", &c.Social.OpenAI.Issuer)
+	str("AGENTRY_SOCIAL_CLAUDE_CLIENT_ID", &c.Social.Claude.ClientID)
+	str("AGENTRY_SOCIAL_CLAUDE_CLIENT_SECRET", &c.Social.Claude.ClientSecret)
+	str("AGENTRY_SOCIAL_CLAUDE_ISSUER", &c.Social.Claude.Issuer)
 
 	// Audit stream + retention (§12.6, §4.3).
 	str("AGENTRY_AUDIT_STREAM_KIND", &c.Audit.StreamKind)

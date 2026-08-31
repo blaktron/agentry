@@ -40,6 +40,19 @@ func TestReviewApprovalFlow(t *testing.T) {
 	}
 	env.waitStatus(author, "risky", "1.0.0", "needs_review")
 
+	// Reject this test's own pending items on the way out: the platform
+	// queue is a FIFO window capped at 100 rows, and leftovers from earlier
+	// runs on the shared test DB would push fresh items past it.
+	t.Cleanup(func() {
+		_, _ = env.st.Pool().Exec(context.Background(),
+			`UPDATE review_items SET state = 'rejected', decided_at = now()
+			 WHERE state = 'pending' AND version_id IN (
+			   SELECT v.id FROM agent_versions v
+			   JOIN agents a ON a.id = v.agent_id
+			   JOIN handles h ON h.id = a.namespace_id
+			   WHERE h.handle = $1)`, author)
+	})
+
 	// Find the review item (platform queue: public + high).
 	staff := env.register("appr-staff")
 	env.verifyEmail(staff)

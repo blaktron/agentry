@@ -37,12 +37,17 @@ import (
 
 // Provider ids (§12.1). Closed set: an unknown id is a 404, never a guess.
 const (
-	ProviderGoogle = "google"
-	ProviderGitHub = "github"
+	ProviderGoogle    = "google"
+	ProviderGitHub    = "github"
+	ProviderMicrosoft = "microsoft"
+	ProviderOpenAI    = "openai"
+	ProviderClaude    = "claude"
 )
 
 // Providers lists the supported provider ids.
-func Providers() []string { return []string{ProviderGoogle, ProviderGitHub} }
+func Providers() []string {
+	return []string{ProviderGoogle, ProviderGitHub, ProviderMicrosoft, ProviderOpenAI, ProviderClaude}
+}
 
 // Known reports whether name is a supported provider id.
 func Known(name string) bool {
@@ -105,7 +110,16 @@ func New(ctx context.Context, name string, cfg Config, redirectURL string) (Prov
 	}
 	switch name {
 	case ProviderGoogle:
-		return newGoogle(ctx, cfg, redirectURL)
+		return newOIDC(ctx, ProviderGoogle, googleIssuer, cfg, redirectURL)
+	case ProviderMicrosoft:
+		return newOIDC(ctx, ProviderMicrosoft, microsoftIssuer, cfg, redirectURL)
+	case ProviderOpenAI:
+		// OpenAI and Claude publish no fixed consumer sign-in endpoints, so
+		// there are no baked-in defaults: the operator points the provider
+		// at an OIDC issuer, or it stays unconfigured and is not offered.
+		return newOIDC(ctx, ProviderOpenAI, "", cfg, redirectURL)
+	case ProviderClaude:
+		return newOIDC(ctx, ProviderClaude, "", cfg, redirectURL)
 	case ProviderGitHub:
 		return newGitHub(cfg, redirectURL), nil
 	default:
@@ -113,16 +127,28 @@ func New(ctx context.Context, name string, cfg Config, redirectURL string) (Prov
 	}
 }
 
-// ---- google (OIDC proper) ----
+// ---- OIDC proper (google, microsoft, and any operator-configured issuer) ----
 
-const googleIssuer = "https://accounts.google.com"
+const (
+	googleIssuer    = "https://accounts.google.com"
+	microsoftIssuer = "https://login.microsoftonline.com/common/v2.0"
+)
 
-type googleProvider struct{ rp *oidcrp.RP }
+// oidcProvider is a standard OpenID Connect relying party, good for any
+// issuer with a discovery document: Google and Microsoft by default, and
+// OpenAI or Claude when an operator points one at an OIDC issuer.
+type oidcProvider struct {
+	name string
+	rp   *oidcrp.RP
+}
 
-func newGoogle(ctx context.Context, cfg Config, redirectURL string) (Provider, error) {
+func newOIDC(ctx context.Context, name, defaultIssuer string, cfg Config, redirectURL string) (Provider, error) {
 	issuer := cfg.Issuer
 	if issuer == "" {
-		issuer = googleIssuer
+		issuer = defaultIssuer
+	}
+	if issuer == "" {
+		return nil, fmt.Errorf("social: %s has no default endpoints; configure an issuer or leave it unoffered", name)
 	}
 	if cfg.HTTPClient != nil {
 		ctx = coreoidc.ClientContext(ctx, cfg.HTTPClient)
@@ -137,25 +163,25 @@ func newGoogle(ctx context.Context, cfg Config, redirectURL string) (Provider, e
 	if err != nil {
 		return nil, err
 	}
-	return &googleProvider{rp: rp}, nil
+	return &oidcProvider{name: name, rp: rp}, nil
 }
 
-func (p *googleProvider) Name() string   { return ProviderGoogle }
-func (p *googleProvider) UsesPKCE() bool { return true }
+func (p *oidcProvider) Name() string   { return p.name }
+func (p *oidcProvider) UsesPKCE() bool { return true }
 
-func (p *googleProvider) AuthURL(state, nonce, verifier string) string {
+func (p *oidcProvider) AuthURL(state, nonce, verifier string) string {
 	return p.rp.AuthURL(state, nonce, verifier)
 }
 
-func (p *googleProvider) Exchange(ctx context.Context, code, verifier, nonce string) (*Identity, error) {
+func (p *oidcProvider) Exchange(ctx context.Context, code, verifier, nonce string) (*Identity, error) {
 	claims, err := p.rp.Exchange(ctx, code, verifier, nonce)
 	if err != nil {
 		return nil, err
 	}
 	return &Identity{
-		Provider:          ProviderGoogle,
+		Provider:          p.name,
 		Subject:           claims.Subject,
-		NamespacedSubject: ProviderGoogle + ":" + claims.Subject,
+		NamespacedSubject: p.name + ":" + claims.Subject,
 		Email:             claims.Email,
 		EmailVerified:     claims.EmailVerified,
 	}, nil

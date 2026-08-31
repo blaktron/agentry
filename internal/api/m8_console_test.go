@@ -52,6 +52,21 @@ publish:
 	env.verifyEmail(staff)
 	env.makePlatformStaff(t, staff)
 	staffSess := env.login(staff)
+
+	// The platform queue is a FIFO window (§8.6) capped at 100 rows, and the
+	// shared test database is never truncated. Leftover pending items from
+	// earlier runs push fresh items past that window, so each test rejects
+	// its own items on the way out.
+	t.Cleanup(func() {
+		_, _ = env.st.Pool().Exec(context.Background(),
+			`UPDATE review_items SET state = 'rejected', decided_at = now()
+			 WHERE state = 'pending' AND version_id IN (
+			   SELECT v.id FROM agent_versions v
+			   JOIN agents a ON a.id = v.agent_id
+			   JOIN handles h ON h.id = a.namespace_id
+			   WHERE h.handle = $1)`, author)
+	})
+
 	var queue []struct {
 		Id        string `json:"id"`
 		Namespace string `json:"namespace"`
