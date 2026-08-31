@@ -148,6 +148,18 @@ export default async function BuildPage({
             <span className="font-mono text-xs">email calendar files tickets code messages payments other</span>)
             <input name="dataAccess" className={inputClass} style={inputStyle} />
           </label>
+          <label className={`${label} mt-3 block`}>
+            MCP servers (one per line, exact versions — pinned to this release and installed
+            per-signature by the runner; format:{" "}
+            <span className="font-mono text-xs">npm:pkg@1.2.3 tools=a,b secrets=X egress=host</span>)
+            <textarea
+              name="mcpServers"
+              rows={3}
+              className={`${inputClass} font-mono text-xs`}
+              style={inputStyle}
+              placeholder={"npm:@modelcontextprotocol/server-github@2026.1.2 tools=list_issues secrets=GITHUB_PAT egress=api.github.com\npypi:mcp-server-fetch@0.6.2 egress=*"}
+            />
+          </label>
           <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>
             Unrestricted egress is refused by runners unless the operator's policy allows it, and
             routes the version to review by default.
