@@ -1,0 +1,3 @@
+# Default certificate directory when AGENTRY_EDGE_CERT_DIR is unset. Keys
+# never belong in the repository.
+certs/

@@ -308,6 +308,27 @@ http:
 
 Env: `AGENTRY_TRUSTED_PROXIES` (an integer hop count, not a CIDR list).
 
+The compose stack ships its own proxy, the `edge` service
+(`deploy/compose/edge/nginx.conf`): nginx on 80/443 that terminates TLS,
+serves the web app, `/api`, `/scim`, `/.well-known` and `/<ns>/<name>.git`
+from one origin (the split the Helm ingress makes), and caches
+`/_next/static` and the docs sites. **Use it even in dev.** Browsers send no
+`Sec-Fetch-Site` and — under the app's `Referrer-Policy: no-referrer` — an
+`Origin` of `null` to any origin that is not https or localhost, so on a
+plain-http hostname every form post in the web app is refused as
+cross-origin. Point `AGENTRY_EDGE_CERT_DIR` at a directory holding
+`edge.crt` and `edge.key`; on a Tailscale host
+
+```bash
+sudo tailscale cert --cert-file edge.crt --key-file edge.key <host>.<tailnet>.ts.net
+```
+
+issues a certificate browsers trust, and a self-signed pair works for a
+first boot. Then in `deploy/compose/.env`: `AGENTRY_TRUSTED_PROXIES=1`,
+`AGENTRY_PUBLIC_WEB_URL=https://<host>`, and once clients trust the
+certificate, `AGENTRY_PUBLIC_URL=https://<host>` (clone, install and
+download URLs render from it) and `AGENTRY_COOKIE_SECURE=true`.
+
 `X-Forwarded-For` is honoured **only** up to that many trusted hops: behind
 CloudFront → ALB set `2`; behind a single load balancer set `1`. Leave it at
 `0` (the default) if the server is directly exposed. The header is then
