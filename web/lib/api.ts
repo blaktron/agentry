@@ -38,6 +38,9 @@ export async function apiGetWellKnown<T>(path: string, opts?: { revalidate?: num
 // an operator-set issuer (§12.1). A provider this deployment has not
 // configured answers 404 on its start endpoint, so no button shows for it.
 export const SOCIAL_PROVIDERS: { id: string; label: string }[] = [
+  // authentik first: when the deployment runs its own directory service
+  // (DEV-057) it is THE way in, not one option among peers.
+  { id: "authentik", label: "your SecureAgentry account" },
   { id: "google", label: "Google" },
   { id: "github", label: "GitHub" },
   { id: "microsoft", label: "Microsoft" },

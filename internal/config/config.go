@@ -119,6 +119,13 @@ type Auth struct {
 	// SealingKey is a base64 32-byte key encrypting small secrets at rest
 	// (TOTP seeds). Empty is allowed only in dev (a fixed insecure key).
 	SealingKey string `yaml:"sealingKey"`
+	// ExternalOnly hands credentials and the account directory to an
+	// external IdP (DEV-057: the stack's Authentik instance). When true the
+	// native register / password-login / email-verify / TOTP endpoints
+	// answer 410 Gone and sign-in happens only through a configured social
+	// or SSO provider. Sessions, PATs, and RBAC stay native: the IdP owns
+	// who you are, this server owns what you may do.
+	ExternalOnly bool `yaml:"externalOnly"`
 }
 
 // Limits tunes the §19 quotas. These are the values internal/entitlements'
@@ -253,6 +260,10 @@ type Social struct {
 	Microsoft SocialProvider `yaml:"microsoft"`
 	OpenAI    SocialProvider `yaml:"openai"`
 	Claude    SocialProvider `yaml:"claude"`
+	// Authentik is the deployment's own directory service (DEV-057). Like
+	// openai/claude it has no default issuer; the operator points it at the
+	// instance's application (…/application/o/<slug>/).
+	Authentik SocialProvider `yaml:"authentik"`
 }
 
 // SocialProvider is one provider's OAuth client registration.
@@ -472,6 +483,9 @@ func applyEnv(c *Config) error {
 	str("AGENTRY_SOCIAL_CLAUDE_CLIENT_ID", &c.Social.Claude.ClientID)
 	str("AGENTRY_SOCIAL_CLAUDE_CLIENT_SECRET", &c.Social.Claude.ClientSecret)
 	str("AGENTRY_SOCIAL_CLAUDE_ISSUER", &c.Social.Claude.Issuer)
+	str("AGENTRY_SOCIAL_AUTHENTIK_CLIENT_ID", &c.Social.Authentik.ClientID)
+	str("AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET", &c.Social.Authentik.ClientSecret)
+	str("AGENTRY_SOCIAL_AUTHENTIK_ISSUER", &c.Social.Authentik.Issuer)
 
 	// Audit stream + retention (§12.6, §4.3).
 	str("AGENTRY_AUDIT_STREAM_KIND", &c.Audit.StreamKind)
@@ -488,6 +502,9 @@ func applyEnv(c *Config) error {
 		return err
 	}
 	if err := boolean("AGENTRY_DATABASE_MIGRATE_ON_START", &c.Database.MigrateOnStart); err != nil {
+		return err
+	}
+	if err := boolean("AGENTRY_AUTH_EXTERNAL_ONLY", &c.Auth.ExternalOnly); err != nil {
 		return err
 	}
 	if err := boolean("AGENTRY_AUTH_COOKIE_SECURE", &c.Auth.CookieSecure); err != nil {
