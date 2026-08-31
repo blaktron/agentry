@@ -27,7 +27,21 @@ export async function readForm(req: NextRequest): Promise<FormData> {
 // sameOrigin rejects cross-site form posts (belt over the SameSite=Lax
 // cookie braces; the API's CSRF token is the third layer).
 //
-// Compare against the Host header the browser actually addressed, not
+// Sec-Fetch-Site is the primary signal. It is a forbidden header name, so
+// no page script can forge it, and — unlike Origin — it does not depend on
+// the referrer policy. That distinction is load-bearing here: this app
+// sends `Referrer-Policy: no-referrer` (next.config.mjs), and per Fetch
+// ("append a request `Origin` header") a non-CORS request whose method is
+// not GET/HEAD serializes its origin as the string `null` under that
+// policy. Every plain-HTML form post therefore reaches us with
+// `Origin: null`, which the comparison below correctly refuses — so
+// without this branch the entire forms surface (login, publish, settings,
+// org admin, review decisions) 403s in a real browser while curl, which
+// implements no referrer policy, passes. `same-site` is deliberately not
+// accepted: a sibling subdomain is a cross-site request for CSRF purposes.
+//
+// The Origin fallback covers clients that send no Sec-Fetch-Site. It
+// compares against the Host header the browser actually addressed, not
 // req.nextUrl.host: in a standalone deployment Next normalizes nextUrl to
 // the server's own localhost:<port>, so a site served under any other
 // hostname (LAN, Tailscale, a real domain) rejected every legitimate form
@@ -35,6 +49,8 @@ export async function readForm(req: NextRequest): Promise<FormData> {
 // header to in the first place. x-forwarded-host wins when a proxy fronts
 // the app (it is set by the proxy, not the client).
 export function sameOrigin(req: NextRequest): boolean {
+  const site = req.headers.get("sec-fetch-site");
+  if (site) return site === "same-origin" || site === "none";
   const origin = req.headers.get("origin");
   if (!origin) return true; // non-browser clients (curl) carry the cookie or fail at the API
   const host =
