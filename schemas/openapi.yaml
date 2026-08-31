@@ -1241,6 +1241,65 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /agents/{ns}/{name}/versions/{version}/files:
+    get:
+      operationId: listVersionFiles
+      tags: [versions]
+      summary: List the files inside the version's release archive (§10.2).
+      description: >
+        The same inventory a reviewer sees (§10.1), opened under the
+        download access gate: published and yanked versions list, blocked
+        versions return 410, quarantined versions 409. Browsing does not
+        count an install.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+        - $ref: "#/components/parameters/VersionString"
+      responses:
+        "200":
+          description: File inventory (path and size of every regular file).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewFileList"
+        "410":
+          description: Version blocked by trust & safety (§7).
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /agents/{ns}/{name}/versions/{version}/file:
+    get:
+      operationId: getVersionFile
+      tags: [versions]
+      summary: Read one file from the version's release archive (§10.2).
+      description: >
+        Text files return UTF-8 content up to the display cap with a
+        truncation flag; binary files return metadata only (binary true),
+        never raw bytes (§10.3). Same access gate as listVersionFiles.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+        - $ref: "#/components/parameters/VersionString"
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Repo-relative file path exactly as listVersionFiles reports it.
+      responses:
+        "200":
+          description: File metadata and, for text files, its content.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewFileContent"
+        "410":
+          description: Version blocked by trust & safety (§7).
+        default:
+          $ref: "#/components/responses/Problem"
+
   /resolve:
     get:
       operationId: resolveRef

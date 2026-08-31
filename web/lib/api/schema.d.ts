@@ -735,6 +735,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{ns}/{name}/versions/{version}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the files inside the version's release archive (§10.2).
+         * @description The same inventory a reviewer sees (§10.1), opened under the download access gate: published and yanked versions list, blocked versions return 410, quarantined versions 409. Browsing does not count an install.
+         */
+        get: operations["listVersionFiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{ns}/{name}/versions/{version}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one file from the version's release archive (§10.2).
+         * @description Text files return UTF-8 content up to the display cap with a truncation flag; binary files return metadata only (binary true), never raw bytes (§10.3). Same access gate as listVersionFiles.
+         */
+        get: operations["getVersionFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/resolve": {
         parameters: {
             query?: never;
@@ -3318,6 +3358,73 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Version blocked by trust & safety (§7). */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listVersionFiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+                version: components["parameters"]["VersionString"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description File inventory (path and size of every regular file). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewFileList"];
+                };
+            };
+            /** @description Version blocked by trust & safety (§7). */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getVersionFile: {
+        parameters: {
+            query: {
+                /** @description Repo-relative file path exactly as listVersionFiles reports it. */
+                path: string;
+            };
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+                version: components["parameters"]["VersionString"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description File metadata and, for text files, its content. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewFileContent"];
+                };
             };
             /** @description Version blocked by trust & safety (§7). */
             410: {
