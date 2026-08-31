@@ -12,7 +12,7 @@ import {
   type Org,
   type ScanReport,
 } from "@/lib/api";
-import { fmtCount } from "@/lib/format";
+import { fmtBytes, fmtCount, fmtUTCDate } from "@/lib/format";
 import { authedGet, currentUser } from "@/lib/session";
 import {
   Badge,
@@ -45,6 +45,39 @@ interface AgentManifest {
   dependencies?: { agents?: { ref: string; version?: string }[] };
 }
 
+// Archive browsing types (schemas/openapi.yaml ReviewFileList/Content,
+// served by listVersionFiles / getVersionFile under the download gate).
+interface VersionFile {
+  path: string;
+  size: number;
+}
+interface VersionFileContent {
+  path: string;
+  size: number;
+  binary: boolean;
+  truncated: boolean;
+  content?: string;
+}
+
+// dirEntries splits a flat archive inventory into the directories and files
+// directly inside `dir` ("" is the archive root).
+function dirEntries(files: VersionFile[], dir: string): { dirs: string[]; files: VersionFile[] } {
+  const prefix = dir === "" ? "" : dir + "/";
+  const dirs = new Set<string>();
+  const here: VersionFile[] = [];
+  for (const f of files) {
+    if (!f.path.startsWith(prefix)) continue;
+    const rest = f.path.slice(prefix.length);
+    const slash = rest.indexOf("/");
+    if (slash === -1) here.push(f);
+    else dirs.add(rest.slice(0, slash));
+  }
+  return {
+    dirs: [...dirs].sort((a, b) => a.localeCompare(b)),
+    files: here.sort((a, b) => a.path.localeCompare(b.path)),
+  };
+}
+
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { ns, name } = await params;
   const agent = await apiGet<Agent>(
@@ -58,14 +91,15 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 }
 
 // The agent page (§10.2): identity, capability contract, security report
-// card, and install snippet above the fold; sanitized README, dependencies,
-// version history, stats and provenance below.
+// card, and install snippet above the fold; below, a GitHub-style code view
+// (file browser over the release archive, README under it) and a releases
+// section, with dependencies, stats and provenance alongside.
 export default async function AgentPage({
   params,
   searchParams,
 }: {
   params: Promise<Params>;
-  searchParams: Promise<{ target?: string; ok?: string; error?: string }>;
+  searchParams: Promise<{ target?: string; ok?: string; error?: string; path?: string }>;
 }) {
   const { ns, name } = await params;
   const sp = await searchParams;
@@ -113,6 +147,25 @@ export default async function AgentPage({
   const isDefaultTarget = target === defaultTarget(agent.kind);
   const deps = manifest?.dependencies?.agents ?? [];
   const tags = manifest?.tags ?? [];
+
+  // File browser state. The browser shows the latest PUBLISHED version
+  // (yanked and earlier versions keep their own pages). `path` selects a
+  // directory (default root) or one file to display.
+  const filesResp = lv
+    ? await apiGet<{ files: VersionFile[] }>(`${base}/versions/${lv}/files`, { revalidate: 60 }).catch(() => null)
+    : null;
+  const inventory = filesResp?.files ?? null;
+  const want = (sp.path ?? "").replace(/^\.\//, "").replace(/^\/+/, "");
+  const wantIsFile = inventory !== null && inventory.some((f) => f.path === want);
+  const wantIsDir = want === "" || (inventory !== null && inventory.some((f) => f.path.startsWith(want + "/")));
+  const fileContent =
+    lv && wantIsFile
+      ? await apiGet<VersionFileContent>(
+          `${base}/versions/${lv}/file?path=${encodeURIComponent(want)}`,
+          { revalidate: 60 },
+        ).catch(() => null)
+      : null;
+  const segments = want === "" ? [] : want.split("/");
 
   return (
     <div className="space-y-8">
@@ -276,18 +329,149 @@ export default async function AgentPage({
             </Card>
           )}
 
-          {readmeHtml && readmeHtml.trim() !== "" && (
-            <section>
-              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
-                Readme
+          {/* Code: file browser over the release archive of the latest
+              published version, README underneath at the root. The archive
+              is what was scanned and signed, so this is the exact content
+              an install would receive. */}
+          <section>
+            <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
+                Code
               </h2>
-              <Card>
-                {/* Server-sanitized HTML (§10.3): the API is the only renderer,
-                    the browser never parses author markdown. */}
-                <div className="readme" dangerouslySetInnerHTML={{ __html: readmeHtml }} />
-              </Card>
-            </section>
-          )}
+              {latest && (
+                <Link
+                  href={`/${n}/${a}/versions/${lv}`}
+                  className="font-mono text-xs hover:underline"
+                  style={{ color: "var(--color-accent)" }}
+                >
+                  {agent.namespace}/{agent.name}@v{latest.version}
+                </Link>
+              )}
+            </div>
+            <Card>
+              {!latest && (
+                <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+                  No published version to browse yet.
+                </p>
+              )}
+              {latest && inventory === null && (
+                <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+                  The file browser is unavailable right now. The install command above still works.
+                </p>
+              )}
+              {latest && inventory !== null && wantIsFile && (
+                <div>
+                  <div className="flex flex-wrap items-baseline justify-between gap-2 border-b pb-2" style={{ borderColor: "var(--color-border)" }}>
+                    <p className="font-mono text-sm">{want}</p>
+                    <div className="flex items-center gap-3 text-xs" style={{ color: "var(--color-muted)" }}>
+                      <span className="font-mono">{fmtBytes(fileContent?.size)}</span>
+                      <Link href={`/${n}/${a}`} className="underline">
+                        Back to files
+                      </Link>
+                    </div>
+                  </div>
+                  {fileContent === null ? (
+                    <p className="mt-3 text-sm" style={{ color: "var(--color-muted)" }}>
+                      File content is unavailable right now.
+                    </p>
+                  ) : fileContent.binary ? (
+                    <p className="mt-3 text-sm" style={{ color: "var(--color-muted)" }}>
+                      Binary file. The browser shows text files only; install or download the
+                      archive to get this one.
+                    </p>
+                  ) : (
+                    <>
+                      <pre className="codeview mt-3 overflow-x-auto rounded-md border p-3 text-xs leading-relaxed" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+                        {fileContent.content ?? ""}
+                      </pre>
+                      {fileContent.truncated && (
+                        <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>
+                          Display is truncated at the viewer cap. The archive holds the full file.
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+              {latest && inventory !== null && !wantIsFile && !wantIsDir && (
+                <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+                  Not found in this version.{" "}
+                  <Link href={`/${n}/${a}`} className="underline">
+                    Back to files
+                  </Link>
+                </p>
+              )}
+              {latest && inventory !== null && wantIsDir && !wantIsFile && (
+                <>
+                  {segments.length > 0 && (
+                    <nav className="flex flex-wrap items-center gap-1 border-b pb-2 font-mono text-sm" aria-label="Path">
+                      <Link href={`/${n}/${a}`} className="hover:underline" style={{ color: "var(--color-accent)" }}>
+                        {agent.name}
+                      </Link>
+                      {segments.map((seg, i) => {
+                        const prefix = segments.slice(0, i + 1).join("/");
+                        const last = i === segments.length - 1;
+                        return (
+                          <span key={prefix} className="flex items-center gap-1">
+                            <span style={{ color: "var(--color-muted)" }}>/</span>
+                            {last ? (
+                              <span>{seg}</span>
+                            ) : (
+                              <Link href={`/${n}/${a}?path=${encodeURIComponent(prefix)}`} className="hover:underline" style={{ color: "var(--color-accent)" }}>
+                                {seg}
+                              </Link>
+                            )}
+                          </span>
+                        );
+                      })}
+                    </nav>
+                  )}
+                  <ul className={segments.length > 0 ? "mt-2" : ""}>
+                    {segments.length > 0 && (
+                      <li className="border-b py-2" style={{ borderColor: "var(--color-border)" }}>
+                        <Link
+                          href={segments.length > 1 ? `/${n}/${a}?path=${encodeURIComponent(segments.slice(0, -1).join("/"))}` : `/${n}/${a}`}
+                          className="font-mono text-sm hover:underline"
+                        >
+                          ..
+                        </Link>
+                      </li>
+                    )}
+                    {dirEntries(inventory, want).dirs.map((d) => (
+                      <li key={d} className="border-b py-2" style={{ borderColor: "var(--color-border)" }}>
+                        <Link
+                          href={`/${n}/${a}?path=${encodeURIComponent(want === "" ? d : want + "/" + d)}`}
+                          className="font-mono text-sm hover:underline"
+                        >
+                          {d}/
+                        </Link>
+                      </li>
+                    ))}
+                    {dirEntries(inventory, want).files.map((f) => (
+                      <li key={f.path} className="flex items-baseline justify-between gap-3 border-b py-2 last:border-0" style={{ borderColor: "var(--color-border)" }}>
+                        <Link href={`/${n}/${a}?path=${encodeURIComponent(f.path)}`} className="font-mono text-sm hover:underline">
+                          {f.path.slice(want === "" ? 0 : want.length + 1)}
+                        </Link>
+                        <span className="font-mono text-xs" style={{ color: "var(--color-muted)" }}>
+                          {fmtBytes(f.size)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {want === "" && readmeHtml && readmeHtml.trim() !== "" && (
+                <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--color-border)" }}>
+                  <h3 className="mb-2 text-sm font-semibold" >
+                    README.md
+                  </h3>
+                  {/* Server-sanitized HTML (§10.3): the API is the only renderer,
+                      the browser never parses author markdown. */}
+                  <div className="readme" dangerouslySetInnerHTML={{ __html: readmeHtml }} />
+                </div>
+              )}
+            </Card>
+          </section>
         </div>
 
         <aside className="space-y-6">
@@ -387,20 +571,31 @@ export default async function AgentPage({
           )}
 
           <Card>
-            <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
-              Versions
-            </h2>
+            <div className="flex items-baseline justify-between gap-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
+                Releases
+              </h2>
+              <span className="font-mono text-xs" style={{ color: "var(--color-muted)" }}>
+                {(versions ?? []).length}
+              </span>
+            </div>
             {versions && versions.length > 0 ? (
-              <ul className="mt-3 space-y-2 text-sm">
+              <ul className="mt-3 space-y-3 text-sm">
                 {versions.slice(0, 12).map((v) => (
-                  <li key={v.id} className="flex items-center justify-between gap-2">
-                    <Link
-                      href={`/${n}/${a}/versions/${encodeURIComponent(v.version)}`}
-                      className="font-mono hover:underline"
-                    >
-                      {v.version}
-                    </Link>
-                    <StatusBadge status={v.status} />
+                  <li key={v.id}>
+                    <div className="flex items-center justify-between gap-2">
+                      <Link
+                        href={`/${n}/${a}/versions/${encodeURIComponent(v.version)}`}
+                        className="font-mono hover:underline"
+                      >
+                        v{v.version}
+                      </Link>
+                      <StatusBadge status={v.status} />
+                    </div>
+                    <p className="mt-0.5 text-xs" style={{ color: "var(--color-muted)" }}>
+                      {fmtUTCDate(v.publishedAt ?? v.createdAt)}
+                      {v.archiveDigest ? ` · ${v.archiveDigest.replace(/^sha256:/, "").slice(0, 12)}` : ""}
+                    </p>
                   </li>
                 ))}
               </ul>

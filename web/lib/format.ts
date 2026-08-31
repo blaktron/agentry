@@ -38,3 +38,12 @@ export function fmtCount(n?: number): string {
   if (n < 1_000_000) return `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}k`;
   return `${(n / 1_000_000).toFixed(1)}M`;
 }
+
+// fmtBytes renders a byte count compactly for file listings (B, kB, MB).
+// Decimal units on purpose: these are archive sizes, not memory.
+export function fmtBytes(n?: number): string {
+  if (n === undefined || n === null || Number.isNaN(n) || n < 0) return "none";
+  if (n < 1000) return `${n} B`;
+  if (n < 1_000_000) return `${(n / 1000).toFixed(1)} kB`;
+  return `${(n / 1_000_000).toFixed(1)} MB`;
+}
