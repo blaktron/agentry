@@ -46,8 +46,8 @@ COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/.next ./.next
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/next.config.mjs ./next.config.mjs
-# web/ has no public/ directory today; add a COPY for it if static assets land
-# there. Next.js serves without one.
+# Static assets (the brand SVGs the directory service references by URL).
+COPY --from=build /app/public ./public
 
 # uid 65532 matches the chart's podSecurityContext.runAsUser, so the web pods
 # and the agentryd pods run as the same non-root identity.
