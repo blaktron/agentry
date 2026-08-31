@@ -86,22 +86,6 @@ samp {
   background: color-mix(in srgb, var(--color-accent) 25%, transparent);
 }
 
-/* Home-page section flip (§10.1 hero buttons): pure CSS via :has() and
-   :target, so the CSP stays script-free. The .flip wrapper shows exactly
-   one section: the one targeted by the URL fragment, or #what-briefagent
-   when nothing inside is targeted. */
-.flip > section { display: none; }
-.flip:not(:has(> section:target)) > #what-briefagent { display: block; }
-.flip:has(> #what-briefagent:target) > #what-briefagent { display: block; }
-.flip:has(> #how-scanning:target) > #how-scanning { display: block; }
-.flip:has(> #browse:target) > #browse { display: block; }
-
-/* Browsers without :has (pre-2023) see every section instead of none: a
-   noisier page beats an empty one. */
-@supports not selector(:has(a)) {
-  .flip > section { display: block; }
-}
-
 /* Rendered README (server-sanitized HTML, §10.3). Scope typography here so
    user content can never introduce its own styles. */
 .readme :where(h1, h2, h3) { font-weight: 600; margin: 1.2em 0 0.5em; line-height: 1.25; }
