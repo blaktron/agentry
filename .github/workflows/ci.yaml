@@ -57,6 +57,40 @@ jobs:
       - name: acceptance M0
         run: ./scripts/acceptance/m0.sh
 
+  # Browser smoke (DEV-031): real Chromium over the load-bearing pages and a
+  # same-origin form post. Exists because curl-level coverage shipped a
+  # browser-only outage — every form post 403'd under real browser semantics
+  # (Referrer-Policy ⇒ Origin: null) while every scripted check stayed green.
+  e2e-browser:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: agentry
+          POSTGRES_PASSWORD: agentry
+          POSTGRES_DB: agentry_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U agentry" --health-interval 5s
+          --health-timeout 3s --health-retries 10
+    env:
+      AGENTRY_TEST_DATABASE_URL: postgres://agentry:agentry@localhost:5432/agentry_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install web deps
+        run: cd web && npm ci
+      - name: Install chromium
+        run: cd web && npx playwright install --with-deps chromium
+      - name: browser smoke
+        run: ./scripts/acceptance/e2e-browser.sh
+
   govulncheck:
     runs-on: ubuntu-latest
     steps:

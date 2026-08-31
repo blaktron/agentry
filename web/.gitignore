@@ -3,3 +3,6 @@ node_modules/
 next-env.d.ts
 # tsc's incremental state: rewrites on every run (workspace ANALYSIS.md L3).
 tsconfig.tsbuildinfo
+# Playwright artifacts.
+test-results/
+playwright-report/
