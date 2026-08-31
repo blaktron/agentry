@@ -67,10 +67,15 @@ export async function POST(req: NextRequest) {
     return redirectBack(req, "/build", { error: await problemDetail(existing) });
   }
 
-  const { bytes, digest } = packArchive(workspaceFiles(input));
+  // No `digest` field: that cross-check asserts the CLIENT's packing
+  // matches the server's canonical re-pack byte for byte (§6.5), which
+  // only holds for pkg/archive's own output — a Node zstd stream is
+  // well-formed but never byte-identical. This archive is built server-side
+  // in this very request, so there is no client packing to distrust; the
+  // server's canonical digest is the release identity either way.
+  const { bytes } = packArchive(workspaceFiles(input));
   const upload = new FormData();
   upload.append("archive", new Blob([new Uint8Array(bytes)]), "agent.tar.zst");
-  upload.append("digest", digest);
   const res = await apiUpload(`/agents/${input.namespace}/${input.name}/versions`, upload);
   if (!res.ok) return redirectBack(req, "/build", { error: await problemDetail(res) });
 

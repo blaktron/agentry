@@ -517,7 +517,7 @@ Two smaller calls, recorded for completeness. The §12.4 SSO freshness ceiling i
 
 **Why:** Operator request (2026-08-31): the builder belongs on the site, in the header slot advisories occupied; advisories are reference material and read naturally from the trust page.
 
-**Impact:** §10's page inventory grows by one authed page; no API change (the upload endpoint, agent creation, scope enforcement are exactly the shipped ones — a Builder submission is indistinguishable from a CLI upload server-side). The web tar packer is well-formed rather than byte-identical to `pkg/archive` (the digest cross-check covers the uploaded bytes; the server's canonical re-pack defines the release identity, §6.5).
+**Impact:** §10's page inventory grows by one authed page; no API change (the upload endpoint, agent creation, scope enforcement are exactly the shipped ones — a Builder submission is indistinguishable from a CLI upload server-side). The web tar packer is well-formed rather than byte-identical to `pkg/archive`, so the Builder's upload sends **no `digest` field**: that cross-check asserts byte-identity with the server's canonical re-pack (§6.5, `versions.go` "client archive digest … does not match server-built"), which only pkg/archive's own output satisfies — the first e2e run proved it by being rejected. The archive is packed server-side within the same request, so there is no client packing to distrust, and the server-built digest remains the release identity.
 
 ## DEV-058 — Desktop browser sign-in: /settings/tokens/desktop mints a PAT to a loopback listener (2026-08-31)
 
