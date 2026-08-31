@@ -13,6 +13,21 @@ import { AgentRow, Card, CodeBlock } from "@/components/ui";
 // fetches below still fail soft, and their revalidate hints still cache.
 export const dynamic = "force-dynamic";
 
+// Short stage list for the home-page scanning overview (§8). The full
+// descriptions live on the trust page; the overview only names the stages.
+const SCAN_STAGES: [string, string][] = [
+  ["S1", "Inventory & hygiene"],
+  ["S2", "Secrets"],
+  ["S3", "Hidden & obfuscated content"],
+  ["S4", "Injection signatures"],
+  ["S5", "LLM adjudication"],
+  ["S6", "Capability consistency"],
+  ["S7", "Dependencies & licenses"],
+  ["S8", "Publisher signals"],
+  ["S9", "Release-diff risk"],
+  ["S10", "Report assembly"],
+];
+
 export default async function HomePage() {
   const [meta, trending] = await Promise.all([
     // Both must fail soft: the home page is the one page that has to render
@@ -51,14 +66,14 @@ export default async function HomePage() {
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
-            href="/search"
+            href="#browse"
             className="rounded-md px-4 py-2 text-sm font-medium"
             style={{ background: "var(--color-accent)", color: "var(--color-accent-fg)" }}
           >
             Browse BriefAgents
           </Link>
           <Link
-            href="/trust"
+            href="#how-scanning"
             className="rounded-md border px-4 py-2 text-sm font-medium"
             style={{ borderColor: "var(--color-border)" }}
           >
@@ -67,11 +82,54 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {/* Section flip (§10.1): the hero buttons switch between the registry
+          view and a short scanning overview without leaving the page. Both
+          sections are rendered here; a :target rule in globals.css does the
+          switching with no client JS. #how-scanning sits first in the DOM so
+          it can hide its sibling when targeted. */}
+      <section id="how-scanning" className="space-y-4">
+        <div className="flex items-baseline justify-between gap-4">
+          <h2 className="text-xl font-semibold">How scanning works</h2>
+          <Link href="/trust" className="text-sm underline">
+            Trust &amp; security
+          </Link>
+        </div>
+        <p className="max-w-3xl text-sm" style={{ color: "var(--color-muted)" }}>
+          Every version is scanned on the exact bytes that will ship, before it can become
+          installable. Findings decide the outcome: clean publishes automatically, medium and high
+          go to human review, and critical is rejected. If a scanner errors or times out, the
+          version fails toward review, never through. No flag, plan, or role skips the gate.
+        </p>
+        <ol className="grid gap-2 sm:grid-cols-2">
+          {SCAN_STAGES.map(([id, title]) => (
+            <li
+              key={id}
+              className="flex items-baseline gap-2 rounded-md border px-3 py-2 text-sm"
+              style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+            >
+              <span className="font-mono text-xs" style={{ color: "var(--color-accent)" }}>
+                {id}
+              </span>
+              {title}
+            </li>
+          ))}
+        </ol>
+        <p className="max-w-3xl text-sm" style={{ color: "var(--color-muted)" }}>
+          A version that passes is signed, and the signature binds those exact bytes to the scan
+          report that decided them. The full model, the signing keys, and what scanning cannot
+          prove:{" "}
+          <Link href="/trust" className="underline">
+            Trust &amp; security
+          </Link>
+          .
+        </p>
+      </section>
+
       {/* Featured/trending (§10.4): the registry's own answer to "what are
           people installing", ranked by installs in the last 30 days. It
           replaces a static marketing block — an empty registry says so
           plainly rather than showing invented placeholders. */}
-      <section>
+      <section id="browse">
         <div className="flex items-baseline justify-between gap-4">
           <h2 className="text-xl font-semibold">Most installed this month</h2>
           <Link href="/search" className="text-sm underline">
