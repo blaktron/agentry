@@ -1,0 +1,65 @@
+/* SecureAgentry brand for the directory service (DEV-057).
+ *
+ * Source of truth for the palette is the web app's design tokens
+ * (web/app/globals.css): warm paper and warm ink, one deep viridian
+ * accent, theme-aware. Authentik's UI lives largely in shadow DOM, so
+ * this file steers it almost entirely through CSS custom properties —
+ * PatternFly's --pf-global-* and authentik's --ak-dark-* — which inherit
+ * across shadow boundaries; element selectors here only touch light-DOM
+ * chrome. Applied via the brand's branding_custom_css by
+ * scripts/dev/authentik-brand.sh.
+ */
+
+:root {
+  /* The web app's font stacks. */
+  --pf-global--FontFamily--sans-serif: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --pf-global--FontFamily--heading--sans-serif: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --pf-global--FontFamily--monospace: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* Viridian accent (light: #0e7a63 on white). */
+  --pf-global--primary-color--100: #0e7a63;
+  --pf-global--primary-color--200: #0b6350;
+  --pf-global--primary-color--dark-100: #0e7a63;
+  --pf-global--active-color--100: #0e7a63;
+  --pf-global--link--Color: #0e7a63;
+  --pf-global--link--Color--hover: #0b6350;
+  --pf-global--FontFamily--redhat-updated--sans-serif: ui-sans-serif, system-ui, sans-serif;
+
+  /* Soften the chrome the way the registry does. */
+  --pf-global--BorderRadius--sm: 6px;
+  --pf-global--BorderRadius--lg: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* The registry's dark ground and surfaces. */
+    --ak-dark-background: #141210;
+    --ak-dark-background-darker: #0f0d0c;
+    --ak-dark-background-light: #1c1917;
+    --ak-dark-background-light-ish: #1c1917;
+    --ak-dark-background-lighter: #292524;
+    --ak-dark-foreground: #e7e5e4;
+    --ak-dark-foreground-darker: #a8a29e;
+    --ak-dark-foreground-link: #4fd1b0;
+
+    /* Dark accent is the mint the registry uses for links and focus.
+     * Buttons stay deep viridian in both themes: PatternFly's primary
+     * button text is defined inside component shadow styles as light,
+     * and white on #0e7a63 passes contrast where it would fail on mint. */
+    --pf-global--link--Color: #4fd1b0;
+    --pf-global--link--Color--hover: #7fe0c6;
+    --pf-global--active-color--100: #4fd1b0;
+  }
+}
+
+/* Flat, calm flow background behind the sign-in card (the brand also sets
+ * branding_default_flow_background to brand/flow-bg.svg; this is the
+ * fallback color while it loads and for interfaces without the image). */
+.pf-c-background-image {
+  background-color: #faf9f7;
+}
+@media (prefers-color-scheme: dark) {
+  .pf-c-background-image {
+    background-color: #141210;
+  }
+}
