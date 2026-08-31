@@ -29,6 +29,16 @@ export default async function LoginPage({
   const social = await enabledSocialProviders();
   const providers = SOCIAL_PROVIDERS.filter((p) => social.includes(p.id));
 
+  // DEV-057: when the directory service is the only way in, this page is a
+  // stop nobody needs — every "Sign in" link forwards straight into the IdP
+  // flow. It still renders when there is something to say (an error or ok
+  // flash, e.g. from a failed callback: bouncing that back to the IdP would
+  // loop without ever showing the message) or when the deployment offers a
+  // choice of providers.
+  if (!params.error && !params.ok && providers.length === 1 && providers[0].id === "authentik") {
+    redirect("/api/v1/auth/oidc/authentik/start");
+  }
+
   return (
     <div className="mx-auto max-w-md">
       <h1 className="mb-4 text-xl font-semibold">Sign in</h1>
