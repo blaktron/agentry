@@ -162,10 +162,10 @@ passes before you trust it with anything.
 
 ### Social login
 
-Individual accounts can sign in with Google or GitHub (§12.1). Both are
-optional and independent: **a provider with no client id is not offered at
-all**. Its start endpoint returns 404, so probing cannot distinguish
-"misconfigured" from "not enabled".
+Individual accounts can sign in with Google, GitHub, Microsoft, OpenAI, or
+Claude (§12.1). All are optional and independent: **a provider with no
+client id is not offered at all**. Its start endpoint returns 404, so
+probing cannot distinguish "misconfigured" from "not enabled".
 
 ```yaml
 social:
@@ -175,23 +175,41 @@ social:
   github:
     clientId: "Iv1.…"
     clientSecret: "…"
+  microsoft:
+    clientId: "…"
+    clientSecret: "…"
+  openai:
+    clientId: "…"
+    clientSecret: "…"
+    issuer: "https://your-oidc-issuer.example"   # required for openai/claude
+  claude:
+    clientId: "…"
+    clientSecret: "…"
+    issuer: "https://your-oidc-issuer.example"
 ```
 
-Env: `AGENTRY_SOCIAL_GOOGLE_CLIENT_ID`, `AGENTRY_SOCIAL_GOOGLE_CLIENT_SECRET`,
-`AGENTRY_SOCIAL_GITHUB_CLIENT_ID`, `AGENTRY_SOCIAL_GITHUB_CLIENT_SECRET`.
+Env: `AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID` and `_CLIENT_SECRET` per provider
+(`AGENTRY_SOCIAL_MICROSOFT_CLIENT_ID`, …), plus `_ISSUER` for the OIDC
+providers.
 
 Register the callback with each provider as
-`{baseURL}/api/v1/auth/oidc/{google|github}/callback`, so `baseURL` must be
+`{baseURL}/api/v1/auth/oidc/{provider}/callback`, so `baseURL` must be
 set correctly for social login to work at all.
 
-Two behaviours worth knowing before you enable this (both are DEV-019):
+Three behaviours worth knowing before you enable this (DEV-019, DEV-055):
 
-- **Google is real OIDC**: discovery, issuer pinning, PKCE, ID-token
-  signature and nonce verification. **GitHub is an OAuth 2.0 shim**: there is
-  no ID token to verify, so the trust anchor is TLS to `api.github.com` plus
-  your client secret. There is no PKCE; a sealed single-use state cookie
-  is what binds a callback to the browser that started it. An email is
-  recorded only when GitHub reports it both primary *and* verified.
+- **Google and Microsoft are real OIDC**: discovery, issuer pinning, PKCE,
+  ID-token signature and nonce verification. Google uses
+  `accounts.google.com`; Microsoft uses the multi-tenant `common` endpoint
+  by default (override `issuer` for a single tenant). **GitHub is an
+  OAuth 2.0 shim**: there is no ID token to verify, so the trust anchor is
+  TLS to `api.github.com` plus your client secret. There is no PKCE; a
+  sealed single-use state cookie is what binds a callback to the browser
+  that started it. An email is recorded only when GitHub reports it both
+  primary *and* verified. **OpenAI and Claude publish no fixed consumer
+  sign-in endpoints**, so they need an `issuer` pointing at an
+  OIDC-compatible endpoint you operate or trust; without one they stay
+  unoffered.
 - **Social login is not a way around 2FA.** A redirect callback has nowhere
   to carry a TOTP code, so an account with 2FA enrolled receives a sealed
   five-minute challenge instead of a session, completed at

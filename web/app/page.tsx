@@ -2,7 +2,7 @@ import Link from "next/link";
 import { apiGet, type Meta, type SearchResults } from "@/lib/api";
 import { fmtCount } from "@/lib/format";
 import { AgentRow, Card, CodeBlock } from "@/components/ui";
-import HomeFlip from "@/components/home-flip";
+import FlipSections from "@/components/flip-sections";
 
 // Home (§10.1): what SecureAgentry is, what people are actually installing, how to
 // install, and an honest statement of what scanning does and does not prove.
@@ -69,11 +69,15 @@ export default async function HomePage() {
 
       {/* Section flip (§10.1): the buttons switch between three views
           without leaving the page. All three sections stay server
-          rendered; HomeFlip (a small client component) only toggles which
-          one is visible, so clicking never moves the viewport. The URL
-          fragment follows the choice via replaceState for sharing. */}
-      <HomeFlip
-        what={
+          rendered; FlipSections (a small client component) only toggles
+          which one is visible, so clicking never moves the viewport. The
+          URL fragment follows the choice via replaceState for sharing. */}
+      <FlipSections
+        views={[
+        {
+          id: "what-briefagent",
+          label: "What is a BriefAgent",
+          content: (
         <section id="what-briefagent" className="space-y-4">
           <h2 className="text-xl font-semibold">What is a BriefAgent</h2>
           <div className="grid gap-6 md:grid-cols-2">
@@ -206,8 +210,12 @@ export default async function HomePage() {
             </Card>
           </div>
         </section>
-        }
-        scanning={
+          ),
+        },
+        {
+          id: "how-scanning",
+          label: "How scanning works",
+          content: (
         <section id="how-scanning" className="space-y-4">
         <div className="flex items-baseline justify-between gap-4">
           <h2 className="text-xl font-semibold">How scanning works</h2>
@@ -245,8 +253,12 @@ export default async function HomePage() {
           .
         </p>
       </section>
-        }
-        browse={
+          ),
+        },
+        {
+          id: "browse",
+          label: "Browse BriefAgents",
+          content: (
         <section id="browse">
         <div className="flex items-baseline justify-between gap-4">
           <h2 className="text-xl font-semibold">Most installed this month</h2>
@@ -284,7 +296,9 @@ export default async function HomePage() {
           still has a report worth reading.
         </p>
       </section>
-        }
+          ),
+        },
+        ]}
       />
 
       <section className="grid gap-6 md:grid-cols-3">

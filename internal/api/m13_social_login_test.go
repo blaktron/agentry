@@ -383,14 +383,19 @@ func TestSocialLoginUnconfiguredProviderIs404(t *testing.T) {
 	gh := newFakeGitHub(t)
 	env := newTestEnvCfg(t, gh.configure) // github only
 
-	res := env.do(anonymous, http.MethodGet, "/api/v1/auth/oidc/google/start", nil)
-	_ = res.Body.Close()
-	if res.StatusCode != http.StatusNotFound {
-		t.Fatalf("unconfigured provider: got %d want 404", res.StatusCode)
+	// Every OIDC-proper provider that this deployment did not configure
+	// answers 404, so probing cannot distinguish "misconfigured" from "not
+	// offered" and the page shows no dead buttons.
+	for _, p := range []string{"google", "microsoft", "openai", "claude"} {
+		res := env.do(anonymous, http.MethodGet, "/api/v1/auth/oidc/"+p+"/start", nil)
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusNotFound {
+			t.Fatalf("unconfigured %s: got %d want 404", p, res.StatusCode)
+		}
 	}
 	// The path parameter is a closed enum, so an unknown provider never
 	// reaches the handler.
-	res = env.do(anonymous, http.MethodGet, "/api/v1/auth/oidc/evilcorp/start", nil)
+	res := env.do(anonymous, http.MethodGet, "/api/v1/auth/oidc/evilcorp/start", nil)
 	_ = res.Body.Close()
 	if res.StatusCode == http.StatusFound {
 		t.Fatal("an unknown provider must not start a login")
@@ -539,6 +544,55 @@ func TestSocialLoginGoogleOIDC(t *testing.T) {
 	}
 	if subject != "google:"+idp.sub {
 		t.Fatalf("subject = %q, want google:%s", subject, idp.sub)
+	}
+}
+
+// TestSocialLoginMicrosoftOIDC pins the second OIDC-proper provider end to
+// end: same relying-party machinery as google, namespaced under microsoft.
+func TestSocialLoginMicrosoftOIDC(t *testing.T) {
+	idp := newFakeOIDC(t)
+	env := newTestEnvCfg(t, func(cfg *config.Config) {
+		cfg.Social.Microsoft = config.SocialProvider{
+			ClientID: idp.clientID, ClientSecret: "microsoft-secret", Issuer: idp.srv.URL,
+		}
+	}, func(s *api.Server) {
+		s.SetOIDCHTTPClient(idp.srv.Client())
+	})
+
+	authURL, state, cookie := env.socialStart(t, "microsoft")
+	if authURL.Query().Get("code_challenge") == "" {
+		t.Fatal("the authorization URL carries no PKCE challenge")
+	}
+	visit, err := idp.srv.Client().Get(authURL.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = visit.Body.Close()
+
+	res := env.socialCallback(t, "microsoft", state, cookie)
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("microsoft callback: got %d want 200", res.StatusCode)
+	}
+	var out struct {
+		User struct {
+			Id    string `json:"id"`
+			Email string `json:"email"`
+		} `json:"user"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if out.User.Email != idp.email {
+		t.Fatalf("email = %q, want %q", out.User.Email, idp.email)
+	}
+	var subject string
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT subject FROM identities WHERE user_id = $1::uuid`, out.User.Id).Scan(&subject); err != nil {
+		t.Fatal(err)
+	}
+	if subject != "microsoft:"+idp.sub {
+		t.Fatalf("subject = %q, want microsoft:%s", subject, idp.sub)
 	}
 }
 

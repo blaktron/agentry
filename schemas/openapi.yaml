@@ -2467,10 +2467,13 @@ components:
       name: provider
       in: path
       required: true
-      description: Social identity provider id (§12.1).
+      description: >
+        Social identity provider id (§12.1). google and microsoft use their
+        built-in OIDC endpoints; openai and claude need an operator-set
+        issuer; an unconfigured provider answers 404.
       schema:
         type: string
-        enum: [google, github]
+        enum: [google, github, microsoft, openai, claude]
     Cursor:
       name: cursor
       in: query
