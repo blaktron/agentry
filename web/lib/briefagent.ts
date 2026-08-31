@@ -3,8 +3,11 @@
 // the tar.zst archive the cli-upload path accepts. Runs entirely in the
 // web tier's route handler — the server re-validates and re-packs every
 // upload (client packing is never trusted, §6.5), so this only has to be
-// well-formed, not canonical; the digest sent alongside is the digest of
-// these exact uploaded bytes, which the API cross-checks on receipt.
+// well-formed, not canonical. NOTE: the upload therefore sends NO digest
+// field — the API's digest cross-check asserts byte-identity with the
+// server's canonical re-pack, which only pkg/archive's own output can
+// satisfy. packArchive still returns a digest of its bytes for tests and
+// logging; it is not the release identity.
 import "server-only";
 import { createHash } from "node:crypto";
 import { zstdCompressSync } from "node:zlib";
