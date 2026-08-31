@@ -136,6 +136,7 @@ export function CapabilityBadges({ capabilities }: { capabilities?: Record<strin
     exec?: unknown;
     secrets?: string[];
     dataAccess?: string[];
+    mcpServers?: { npm?: string; pypi?: string; version?: string }[];
   };
 
   const items: { label: string; detail: string; tone: "neutral" | "warn" | "danger" }[] = [];
@@ -161,6 +162,18 @@ export function CapabilityBadges({ capabilities }: { capabilities?: Record<strin
   }
   if (caps.dataAccess?.length) {
     items.push({ label: `data: ${caps.dataAccess.join(", ")}`, detail: caps.dataAccess.join(", "), tone: "neutral" });
+  }
+  if (caps.mcpServers?.length) {
+    // Declared MCP servers (RUNNER-PLAN-3): version-pinned to this release,
+    // installed with the agent from the operator's trusted registries.
+    const detail = caps.mcpServers
+      .map((s) => `${s.npm ? `npm:${s.npm}` : `pypi:${s.pypi}`}@${s.version ?? "?"}`)
+      .join(", ");
+    items.push({
+      label: `mcp servers: ${caps.mcpServers.length}`,
+      detail,
+      tone: "warn",
+    });
   }
 
   if (items.length === 0) {
