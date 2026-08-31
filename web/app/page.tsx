@@ -2,6 +2,7 @@ import Link from "next/link";
 import { apiGet, type Meta, type SearchResults } from "@/lib/api";
 import { fmtCount } from "@/lib/format";
 import { AgentRow, Card, CodeBlock } from "@/components/ui";
+import HomeFlip from "@/components/home-flip";
 
 // Home (§10.1): what SecureAgentry is, what people are actually installing, how to
 // install, and an honest statement of what scanning does and does not prove.
@@ -64,40 +65,15 @@ export default async function HomePage() {
           finishes, every container is removed and the agent is gone, leaving a receipt that
           records what ran.
         </p>
-        <div className="mt-6 flex flex-wrap gap-3">
-          {/* Plain anchors on purpose: these are same-page fragments, not
-              routes. A Next Link would intercept the click as client-side
-              navigation, which breaks :target and native fragment
-              scrolling. */}
-          <a
-            href="#what-briefagent"
-            className="rounded-md px-4 py-2 text-sm font-medium"
-            style={{ background: "var(--color-accent)", color: "var(--color-accent-fg)" }}
-          >
-            What is a BriefAgent
-          </a>
-          <a
-            href="#how-scanning"
-            className="rounded-md border px-4 py-2 text-sm font-medium"
-            style={{ borderColor: "var(--color-border)" }}
-          >
-            How scanning works
-          </a>
-          <a
-            href="#browse"
-            className="rounded-md border px-4 py-2 text-sm font-medium"
-            style={{ borderColor: "var(--color-border)" }}
-          >
-            Browse BriefAgents
-          </a>
-        </div>
       </section>
 
-      {/* Section flip (§10.1): the hero buttons switch between three views
-          without leaving the page. All three sections are rendered in this
-          wrapper; the :has()/:target rules in globals.css show one at a
-          time, with #what-briefagent as the default. No client JS. */}
-      <div className="flip">
+      {/* Section flip (§10.1): the buttons switch between three views
+          without leaving the page. All three sections stay server
+          rendered; HomeFlip (a small client component) only toggles which
+          one is visible, so clicking never moves the viewport. The URL
+          fragment follows the choice via replaceState for sharing. */}
+      <HomeFlip
+        what={
         <section id="what-briefagent" className="space-y-4">
           <h2 className="text-xl font-semibold">What is a BriefAgent</h2>
           <div className="grid gap-6 md:grid-cols-2">
@@ -230,6 +206,8 @@ export default async function HomePage() {
             </Card>
           </div>
         </section>
+        }
+        scanning={
         <section id="how-scanning" className="space-y-4">
         <div className="flex items-baseline justify-between gap-4">
           <h2 className="text-xl font-semibold">How scanning works</h2>
@@ -267,12 +245,9 @@ export default async function HomePage() {
           .
         </p>
       </section>
-
-      {/* Featured/trending (§10.4): the registry's own answer to "what are
-          people installing", ranked by installs in the last 30 days. It
-          replaces a static marketing block — an empty registry says so
-          plainly rather than showing invented placeholders. */}
-      <section id="browse">
+        }
+        browse={
+        <section id="browse">
         <div className="flex items-baseline justify-between gap-4">
           <h2 className="text-xl font-semibold">Most installed this month</h2>
           <Link href="/search" className="text-sm underline">
@@ -309,7 +284,8 @@ export default async function HomePage() {
           still has a report worth reading.
         </p>
       </section>
-      </div>
+        }
+      />
 
       <section className="grid gap-6 md:grid-cols-3">
         <Card>
