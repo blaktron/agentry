@@ -10,6 +10,11 @@ and `RUNNER-PLAN-2.md`).
 
 ## Commands
 
+Two flags are global and available on every command below:
+`--registry URL` (the registry to talk to — otherwise the configured
+default, then `http://localhost:8080`) and `--json` (machine-readable
+output where a command supports it: `info`, `search`, `verify`).
+
 ### `agentry setup`
 
 Prepares a machine for BriefAgent runs — re-runnable, idempotent:
