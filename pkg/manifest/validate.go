@@ -240,6 +240,7 @@ func Validate(m *Manifest) []error {
 	validateEntrypoints(&s, m)
 	validateRuntime(&s, m.Runtime)
 	validateCapabilities(&s, m.Capabilities)
+	validateMCPServers(&s, m)
 	validateDependencies(&s, m.Dependencies)
 	validatePublish(&s, m.Publish)
 
@@ -397,6 +398,112 @@ func validateCapabilities(s *issues, c Capabilities) {
 		default:
 			s.errf("V5", fmt.Sprintf("capabilities.dataAccess[%d]", i),
 				"unknown dataAccess category %q (email | calendar | files | tickets | code | messages | payments | other)", da)
+		}
+	}
+}
+
+// MaxMCPServers caps capabilities.mcpServers entries (V5).
+const MaxMCPServers = 8
+
+// Package-name grammars. npm: optional @scope/ plus a lowercase name
+// (npm forbids uppercase in new packages); PyPI: the PEP-503 normalized
+// form — validate/publish require the normalized name so one spelling
+// exists per project.
+var (
+	npmNameRE  = regexp.MustCompile(`^(@[a-z0-9][a-z0-9-_.]*/)?[a-z0-9][a-z0-9-_.]*$`)
+	pypiNameRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$`)
+	// pep440ExactRE accepts an exact PEP-440 release (with optional
+	// pre/post/dev segment) and nothing else: no operators, no wildcards,
+	// no ranges — the pin IS the trust decision (RUNNER-PLAN-3).
+	pep440ExactRE = regexp.MustCompile(`^[0-9]+(\.[0-9]+)*((a|b|rc)[0-9]+)?(\.post[0-9]+)?(\.dev[0-9]+)?$`)
+)
+
+// validateMCPServers checks capabilities.mcpServers (V5, RUNNER-PLAN-3):
+// exactly one source per entry, ecosystem name grammar, EXACT version pins
+// (a range is an error — the pin rides the release archive, so a new agent
+// version is a new supply-chain decision by construction), single-token
+// tool names, env-grammar secret names, egress host grammar, no
+// duplicates, and runnable kinds only.
+func validateMCPServers(s *issues, m *Manifest) {
+	servers := m.Capabilities.MCPServers
+	if len(servers) == 0 {
+		return
+	}
+	if m.Kind == KindMCPServer {
+		s.errf("V5", "capabilities.mcpServers",
+			"an mcp-server package cannot itself require MCP servers (server composition is not in v1)")
+	}
+	if len(servers) > MaxMCPServers {
+		s.errf("V5", "capabilities.mcpServers", "at most %d MCP servers may be declared (got %d)", MaxMCPServers, len(servers))
+	}
+	seen := map[string]bool{}
+	for i, srv := range servers {
+		p := fmt.Sprintf("capabilities.mcpServers[%d]", i)
+		switch {
+		case srv.NPM != "" && srv.PyPI != "":
+			s.errf("V5", p, "declare exactly one of npm or pypi, not both")
+			continue
+		case srv.NPM == "" && srv.PyPI == "":
+			s.errf("V5", p, "declare exactly one of npm or pypi")
+			continue
+		case srv.NPM != "" && !npmNameRE.MatchString(srv.NPM):
+			s.errf("V5", p+".npm", "%q is not a valid npm package name", srv.NPM)
+			continue
+		case srv.PyPI != "" && !pypiNameRE.MatchString(srv.PyPI):
+			s.errf("V5", p+".pypi", "%q is not a PEP-503 normalized PyPI project name (lowercase, dots/dashes/underscores)", srv.PyPI)
+			continue
+		}
+		if id := srv.SourceID(); seen[id] {
+			s.errf("V5", p, "duplicate MCP server %q", id)
+		} else {
+			seen[id] = true
+		}
+
+		switch {
+		case srv.Version == "":
+			s.errf("V5", p+".version", "version is required and must be an exact release (the pin is part of this agent version's content)")
+		case srv.NPM != "":
+			if _, err := semver.StrictNewVersion(srv.Version); err != nil {
+				s.errf("V5", p+".version", "%q is not an exact semver release (ranges are not allowed): %v", srv.Version, err)
+			}
+		default:
+			if !pep440ExactRE.MatchString(srv.Version) {
+				s.errf("V5", p+".version", "%q is not an exact PEP-440 release (ranges and wildcards are not allowed)", srv.Version)
+			}
+		}
+
+		for j, tool := range srv.Tools {
+			tp := fmt.Sprintf("%s.tools[%d]", p, j)
+			if tool == "" {
+				s.errf("V5", tp, "tool name must not be empty")
+				continue
+			}
+			for _, r := range tool {
+				if unicode.IsSpace(r) || unicode.IsControl(r) {
+					s.errf("V5", tp, "tool %q must be a single token without whitespace", tool)
+					break
+				}
+			}
+		}
+		for j, name := range srv.Secrets {
+			if !envNameRE.MatchString(name) {
+				s.errf("V5", fmt.Sprintf("%s.secrets[%d]", p, j),
+					"%q is not a valid environment variable name (%s)", name, envNameRE)
+			}
+		}
+		wildcardFlagged := false
+		for j, h := range srv.Egress {
+			hp := fmt.Sprintf("%s.egress[%d]", p, j)
+			if h == "*" {
+				if !wildcardFlagged {
+					s.warnf("V5", hp, "\"*\" egress requests unrestricted network access for this server and is policy-gated (usually requires review)")
+					wildcardFlagged = true
+				}
+				continue
+			}
+			if !validDNSHost(h) {
+				s.errf("V5", hp, "%q is not a valid DNS host name", h)
+			}
 		}
 	}
 }

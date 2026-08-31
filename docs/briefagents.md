@@ -161,6 +161,37 @@ context; values never appear in plans, receipts, or process listings.
 Operators may catalog extra MCP servers per category in their runner
 policy; undeclared categories are never wired in.
 
+**`mcpServers`** declares the MCP servers the BriefAgent requires at run
+time — explicitly, version-pinned, from a trusted repository:
+
+```yaml
+capabilities:
+  mcpServers:
+    - npm: "@modelcontextprotocol/server-github"
+      version: 2026.1.2            # EXACT version — pinned to this release
+      tools: [list_issues]         # optional allowlist within the server
+      secrets: [GITHUB_PAT]        # env-var NAMES the server needs
+      egress: [api.github.com]     # the server's own outbound needs
+    - pypi: mcp-server-fetch
+      version: 0.6.2
+      egress: ["*"]
+```
+
+Each entry names exactly one package — `npm:` or `pypi:` — and an **exact
+version**: ranges are rejected at validation, because the pin is part of
+this release's content and therefore of its archive digest. Installing the
+agent installs the servers (from the operator's configured registries —
+npm and PyPI endpoints by default, private mirrors configurable), records
+the resolved artifact digests, and configures the gateway to load them
+**for that exact release signature only**. A new version of the agent is a
+new supply-chain decision: nothing carries over, not the servers, not
+their keys. Per-server `secrets` join the guided profile setup; per-server
+`egress` is that server's own allowlist (`"*"` is policy-gated, like agent
+egress). Removing the agent removes the server configuration and keys by
+default; keeping them is an explicit option, and a kept configuration is
+reachable by nothing except a reinstall of the same digest. Full runtime
+mechanics: the [Runner reference](runner.md).
+
 ### `dependencies`
 
 `dependencies.agents: [{ref: ns/name, version: "^1.2"}]` is informational
