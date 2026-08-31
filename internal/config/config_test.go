@@ -292,3 +292,34 @@ func TestJudgeEnvConfig(t *testing.T) {
 		t.Error("anthropic judge without apiKey must fail validation")
 	}
 }
+
+// The five social providers all wire from env: id/secret everywhere, plus
+// the endpoint overrides each protocol needs (issuer for the OIDC-proper
+// set, explicit URLs for the github shim).
+func TestSocialProviderEnv(t *testing.T) {
+	t.Setenv("AGENTRY_SOCIAL_GOOGLE_CLIENT_ID", "g-id")
+	t.Setenv("AGENTRY_SOCIAL_GITHUB_CLIENT_ID", "gh-id")
+	t.Setenv("AGENTRY_SOCIAL_MICROSOFT_CLIENT_ID", "ms-id")
+	t.Setenv("AGENTRY_SOCIAL_MICROSOFT_ISSUER", "https://issuer.example/ms")
+	t.Setenv("AGENTRY_SOCIAL_OPENAI_CLIENT_ID", "oai-id")
+	t.Setenv("AGENTRY_SOCIAL_OPENAI_ISSUER", "https://issuer.example/oai")
+	t.Setenv("AGENTRY_SOCIAL_CLAUDE_CLIENT_ID", "claude-id")
+	t.Setenv("AGENTRY_SOCIAL_CLAUDE_ISSUER", "https://issuer.example/claude")
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Social.Google.ClientID != "g-id" || cfg.Social.GitHub.ClientID != "gh-id" {
+		t.Errorf("google/github env not applied: %+v", cfg.Social)
+	}
+	if cfg.Social.Microsoft.ClientID != "ms-id" || cfg.Social.Microsoft.Issuer != "https://issuer.example/ms" {
+		t.Errorf("microsoft env not applied: %+v", cfg.Social.Microsoft)
+	}
+	if cfg.Social.OpenAI.ClientID != "oai-id" || cfg.Social.OpenAI.Issuer != "https://issuer.example/oai" {
+		t.Errorf("openai env not applied: %+v", cfg.Social.OpenAI)
+	}
+	if cfg.Social.Claude.ClientID != "claude-id" || cfg.Social.Claude.Issuer != "https://issuer.example/claude" {
+		t.Errorf("claude env not applied: %+v", cfg.Social.Claude)
+	}
+}

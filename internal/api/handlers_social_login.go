@@ -71,6 +71,12 @@ func (s *Server) socialProviderConfig(name string) (config.SocialProvider, bool)
 		return s.cfg.Social.Google, s.cfg.Social.Google.Configured()
 	case social.ProviderGitHub:
 		return s.cfg.Social.GitHub, s.cfg.Social.GitHub.Configured()
+	case social.ProviderMicrosoft:
+		return s.cfg.Social.Microsoft, s.cfg.Social.Microsoft.Configured()
+	case social.ProviderOpenAI:
+		return s.cfg.Social.OpenAI, s.cfg.Social.OpenAI.Configured()
+	case social.ProviderClaude:
+		return s.cfg.Social.Claude, s.cfg.Social.Claude.Configured()
 	default:
 		return config.SocialProvider{}, false
 	}

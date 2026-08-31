@@ -497,16 +497,25 @@ func (e VersionStatus) Valid() bool {
 
 // Defines values for SocialProvider.
 const (
-	SocialProviderGithub SocialProvider = "github"
-	SocialProviderGoogle SocialProvider = "google"
+	SocialProviderClaude    SocialProvider = "claude"
+	SocialProviderGithub    SocialProvider = "github"
+	SocialProviderGoogle    SocialProvider = "google"
+	SocialProviderMicrosoft SocialProvider = "microsoft"
+	SocialProviderOpenai    SocialProvider = "openai"
 )
 
 // Valid indicates whether the value is a known member of the SocialProvider enum.
 func (e SocialProvider) Valid() bool {
 	switch e {
+	case SocialProviderClaude:
+		return true
 	case SocialProviderGithub:
 		return true
 	case SocialProviderGoogle:
+		return true
+	case SocialProviderMicrosoft:
+		return true
+	case SocialProviderOpenai:
 		return true
 	default:
 		return false
@@ -584,16 +593,25 @@ func (e ReportAbuseJSONBodyCategory) Valid() bool {
 
 // Defines values for SocialOidcCallbackParamsProvider.
 const (
-	SocialOidcCallbackParamsProviderGithub SocialOidcCallbackParamsProvider = "github"
-	SocialOidcCallbackParamsProviderGoogle SocialOidcCallbackParamsProvider = "google"
+	SocialOidcCallbackParamsProviderClaude    SocialOidcCallbackParamsProvider = "claude"
+	SocialOidcCallbackParamsProviderGithub    SocialOidcCallbackParamsProvider = "github"
+	SocialOidcCallbackParamsProviderGoogle    SocialOidcCallbackParamsProvider = "google"
+	SocialOidcCallbackParamsProviderMicrosoft SocialOidcCallbackParamsProvider = "microsoft"
+	SocialOidcCallbackParamsProviderOpenai    SocialOidcCallbackParamsProvider = "openai"
 )
 
 // Valid indicates whether the value is a known member of the SocialOidcCallbackParamsProvider enum.
 func (e SocialOidcCallbackParamsProvider) Valid() bool {
 	switch e {
+	case SocialOidcCallbackParamsProviderClaude:
+		return true
 	case SocialOidcCallbackParamsProviderGithub:
 		return true
 	case SocialOidcCallbackParamsProviderGoogle:
+		return true
+	case SocialOidcCallbackParamsProviderMicrosoft:
+		return true
+	case SocialOidcCallbackParamsProviderOpenai:
 		return true
 	default:
 		return false
@@ -602,16 +620,25 @@ func (e SocialOidcCallbackParamsProvider) Valid() bool {
 
 // Defines values for SocialOidcStartParamsProvider.
 const (
-	SocialOidcStartParamsProviderGithub SocialOidcStartParamsProvider = "github"
-	SocialOidcStartParamsProviderGoogle SocialOidcStartParamsProvider = "google"
+	SocialOidcStartParamsProviderClaude    SocialOidcStartParamsProvider = "claude"
+	SocialOidcStartParamsProviderGithub    SocialOidcStartParamsProvider = "github"
+	SocialOidcStartParamsProviderGoogle    SocialOidcStartParamsProvider = "google"
+	SocialOidcStartParamsProviderMicrosoft SocialOidcStartParamsProvider = "microsoft"
+	SocialOidcStartParamsProviderOpenai    SocialOidcStartParamsProvider = "openai"
 )
 
 // Valid indicates whether the value is a known member of the SocialOidcStartParamsProvider enum.
 func (e SocialOidcStartParamsProvider) Valid() bool {
 	switch e {
+	case SocialOidcStartParamsProviderClaude:
+		return true
 	case SocialOidcStartParamsProviderGithub:
 		return true
 	case SocialOidcStartParamsProviderGoogle:
+		return true
+	case SocialOidcStartParamsProviderMicrosoft:
+		return true
+	case SocialOidcStartParamsProviderOpenai:
 		return true
 	default:
 		return false
