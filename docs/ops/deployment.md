@@ -3,7 +3,7 @@
 How Agentry is deployed in its three shapes, and the operational targets.
 Infra-as-code lives in `deploy/terraform/` (SaaS reference + reusable
 modules) and `deploy/helm/agentry/` (self-host HA). Authoritative design:
-[PLAN.md](https://github.com/blaktron/agentry/blob/main/PLAN.md) §2.4, §13, §16.
+[PLAN.md](https://github.com/blaktron/agentry-notes/blob/main/agentry/PLAN.md) §2.4, §13, §16.
 
 ## The three deployment shapes (§2.4)
 

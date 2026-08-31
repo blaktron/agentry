@@ -120,7 +120,7 @@ publishable) is in `testdata/attack-corpus/`. The claims on this page are
 checkable against the code that makes them.
 
 Known departures from the plan, including the ones that weaken a claim, are
-recorded in [DEVIATIONS.md](https://github.com/blaktron/agentry/blob/main/DEVIATIONS.md) rather than left implicit.
+recorded in [DEVIATIONS.md](https://github.com/blaktron/agentry-notes/blob/main/agentry/DEVIATIONS.md) rather than left implicit.
 
 ## Reporting
 

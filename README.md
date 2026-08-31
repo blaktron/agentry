@@ -92,7 +92,7 @@ Then [docs/self-hosting.md](docs/self-hosting.md) for a real deployment, or
 - [Operational runbooks](docs/ops/runbooks.md)
 - [Contributing](CONTRIBUTING.md) — including the rules that actually matter (route authorization, scanner fixtures)
 - [Reporting a vulnerability](SECURITY.md)
-- [PLAN.md](PLAN.md) — the full build plan this implementation follows; [WORKGROUPS.md](WORKGROUPS.md) tracks progress against it, and [DEVIATIONS.md](DEVIATIONS.md) records where reality differed
+- Development notes — the immutable build plan, workgroup tracking, and the deviations register — live in [agentry-notes](https://github.com/blaktron/agentry-notes); new deviations continue there
 
 ## Status
 
@@ -111,14 +111,14 @@ status page, seed content beyond the four example agents (blocked on PLAN §20
 Q10), and `security@` / `abuse@` addresses live before launch.
 
 An independent audit of this repository found the tracking documents
-overstating completeness and roughly nineteen departures from PLAN.md that were
-never recorded; remediation waves have since fixed the substantive gaps in the
-code and backfilled the register.
+overstating completeness and roughly nineteen departures from the plan that
+were never recorded; remediation waves have since fixed the substantive gaps
+in the code and backfilled the register.
 
-See [WORKGROUPS.md](WORKGROUPS.md) for the state of each workgroup and what is
-explicitly deferred, and [DEVIATIONS.md](DEVIATIONS.md) for where the
-implementation departs from the plan — including the departures that make a
-claim weaker, not just the ones that make it stronger.
+The full development notes — the immutable build plan, per-workgroup status,
+and the deviations register (including the departures that make a claim
+weaker, not just the ones that make it stronger) — live in
+[agentry-notes](https://github.com/blaktron/agentry-notes).
 
 Decided since the plan was written: the product name (**SecureAgentry**, PLAN
 §20 Q1 — this module keeps the `agentry` technical name) and the license

@@ -9,8 +9,8 @@ everything else is ordinary Go and TypeScript work.
 - **Security issues do not go in pull requests.** See [SECURITY.md](SECURITY.md).
 - Large changes: open an issue first. Protocol and manifest changes go through
   an RFC in `docs/rfcs/` (copy the template, open a PR with just the RFC).
-- The build plan lives in `PLAN.md` and is immutable during the v1 build.
-  Deviations get an entry in `DEVIATIONS.md` — dated, with what/why/impact —
+- The build plan lives in [agentry-notes](https://github.com/blaktron/agentry-notes) and is immutable during the v1 build.
+  Deviations get an entry in the deviations register there — dated, with what/why/impact —
   rather than an edit to the plan.
 
 ## Development setup
