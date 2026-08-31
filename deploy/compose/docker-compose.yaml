@@ -72,6 +72,13 @@ services:
     environment:
       AGENTRY_DATABASE_URL: postgres://agentry:agentry@postgres:5432/agentry_dev?sslmode=disable
       AGENTRY_HTTP_ADDR: ":8080"
+      # Optional LLM judge (S5): point at any OpenAI- or Anthropic-compatible
+      # endpoint. Leave unset and dev falls back to the static heuristic
+      # judge; self-host without them routes versions to human review.
+      AGENTRY_JUDGE_TYPE: ${AGENTRY_JUDGE_TYPE:-}
+      AGENTRY_JUDGE_BASE_URL: ${AGENTRY_JUDGE_BASE_URL:-}
+      AGENTRY_JUDGE_API_KEY: ${AGENTRY_JUDGE_API_KEY:-}
+      AGENTRY_JUDGE_MODEL: ${AGENTRY_JUDGE_MODEL:-}
       # Real SMTP against mailpit: every message the server sends lands in the
       # web UI on :8025 instead of the log, so the notification paths (§8.7)
       # can actually be read end to end in dev. No TLS, no auth — mailpit

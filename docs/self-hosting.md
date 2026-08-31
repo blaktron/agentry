@@ -101,7 +101,11 @@ signing:
   keyFile: /etc/agentry/signing-key.pem
 
 judge:
-  provider: none        # none | bedrock | anthropic
+  provider: none        # none | static | openai | anthropic
+  # For openai/anthropic, point at any endpoint speaking that protocol:
+  # baseUrl: https://api.openai.com   # AGENTRY_JUDGE_BASE_URL
+  # apiKey: sk-...                    # AGENTRY_JUDGE_API_KEY
+  # model: gpt-4o                     # AGENTRY_JUDGE_MODEL (optional)
 ```
 
 Generate a signing key:

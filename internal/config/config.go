@@ -228,10 +228,18 @@ type SMTP struct {
 }
 
 // Judge selects the S5 LLM adjudication provider (D-13).
+//
+// openai and anthropic talk to any endpoint speaking the matching wire
+// protocol (hosted APIs or self-hosted gateways alike): set BaseURL to the
+// API root and APIKey to the credential. The AGENTRY_JUDGE_TYPE,
+// AGENTRY_JUDGE_BASE_URL and AGENTRY_JUDGE_API_KEY environment variables
+// configure the same three values.
 type Judge struct {
-	Provider string `yaml:"provider"` // bedrock | anthropic | classifier | none
+	Provider string `yaml:"provider"` // openai | anthropic | bedrock | classifier | static | none
 	Model    string `yaml:"model"`
 	Region   string `yaml:"region"`
+	BaseURL  string `yaml:"baseUrl"`
+	APIKey   string `yaml:"apiKey"`
 }
 
 // Social configures social login for individual accounts (§12.1). A provider
@@ -434,6 +442,11 @@ func applyEnv(c *Config) error {
 	str("AGENTRY_JUDGE_PROVIDER", &c.Judge.Provider)
 	str("AGENTRY_JUDGE_MODEL", &c.Judge.Model)
 	str("AGENTRY_JUDGE_REGION", &c.Judge.Region)
+	str("AGENTRY_JUDGE_BASE_URL", &c.Judge.BaseURL)
+	str("AGENTRY_JUDGE_API_KEY", &c.Judge.APIKey)
+	// AGENTRY_JUDGE_TYPE is the plain spelling for "which wire protocol";
+	// when set it wins over AGENTRY_JUDGE_PROVIDER.
+	str("AGENTRY_JUDGE_TYPE", &c.Judge.Provider)
 
 	// Social login (§12.1). Listed one variable per field on purpose: the
 	// same "boring and greppable" rule the rest of this function follows.
@@ -589,9 +602,15 @@ func (c Config) Validate() error {
 		return fmt.Errorf("config: auth.sealingKey is required outside dev mode")
 	}
 	switch c.Judge.Provider {
-	case "none", "bedrock", "anthropic", "classifier":
+	case "", "none", "static", "openai", "anthropic", "bedrock", "classifier":
 	default:
-		return fmt.Errorf("config: judge.provider must be none|bedrock|anthropic|classifier, got %q", c.Judge.Provider)
+		return fmt.Errorf("config: judge.provider must be none|static|openai|anthropic|bedrock|classifier, got %q", c.Judge.Provider)
+	}
+	switch c.Judge.Provider {
+	case "openai", "anthropic":
+		if c.Judge.BaseURL == "" || c.Judge.APIKey == "" {
+			return fmt.Errorf("config: judge.baseUrl and judge.apiKey are required when judge.provider is %q", c.Judge.Provider)
+		}
 	}
 	switch c.Audit.StreamKind {
 	case "", "none", "file", "s3":
