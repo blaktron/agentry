@@ -70,11 +70,11 @@ export default async function HomePage() {
               navigation, which breaks :target and native fragment
               scrolling. */}
           <a
-            href="#browse"
+            href="#what-briefagent"
             className="rounded-md px-4 py-2 text-sm font-medium"
             style={{ background: "var(--color-accent)", color: "var(--color-accent-fg)" }}
           >
-            Browse BriefAgents
+            What is a BriefAgent
           </a>
           <a
             href="#how-scanning"
@@ -83,15 +83,154 @@ export default async function HomePage() {
           >
             How scanning works
           </a>
+          <a
+            href="#browse"
+            className="rounded-md border px-4 py-2 text-sm font-medium"
+            style={{ borderColor: "var(--color-border)" }}
+          >
+            Browse BriefAgents
+          </a>
         </div>
       </section>
 
-      {/* Section flip (§10.1): the hero buttons switch between the registry
-          view and a short scanning overview without leaving the page. Both
-          sections are rendered here; a :target rule in globals.css does the
-          switching with no client JS. #how-scanning sits first in the DOM so
-          it can hide its sibling when targeted. */}
-      <section id="how-scanning" className="space-y-4">
+      {/* Section flip (§10.1): the hero buttons switch between three views
+          without leaving the page. All three sections are rendered in this
+          wrapper; the :has()/:target rules in globals.css show one at a
+          time, with #what-briefagent as the default. No client JS. */}
+      <div className="flip">
+        <section id="what-briefagent" className="space-y-4">
+          <h2 className="text-xl font-semibold">What is a BriefAgent</h2>
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="space-y-3 text-sm" style={{ color: "var(--color-muted)" }}>
+              <p>
+                A BriefAgent is a single-purpose AI agent shipped as a small, reviewable package.
+                The manifest declares what it is and what it may touch: network egress, filesystem
+                access, subprocess execution, and the secrets it needs, named but never carried.
+                The rest is instruction content, a skill or a system prompt, and where tools are
+                needed, a small MCP server with a lockfile.
+              </p>
+              <p>
+                At run time the agentry runner verifies the package, then places it in a container
+                on an internal network. The agent itself holds no credentials and no tools. The MCP
+                gateway serves only the tools the manifest declared, and the egress proxy allows
+                only the hosts it declared. When the task ends, the run is torn down and a receipt
+                records what happened.
+              </p>
+            </div>
+            <Card>
+              <svg
+                viewBox="0 0 440 356"
+                role="img"
+                aria-label="A BriefAgent package is verified, then runs in a container on an internal network. The MCP gateway serves declared tools to it, and its network egress leaves only through the proxy to declared hosts."
+                className="h-auto w-full"
+              >
+                <title>BriefAgent run architecture</title>
+                <defs>
+                  <marker
+                    id="flip-arrow"
+                    viewBox="0 0 10 10"
+                    refX="9"
+                    refY="5"
+                    markerWidth="7"
+                    markerHeight="7"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M 0 0 L 10 5 L 0 10 z" style={{ fill: "var(--color-muted)" }} />
+                  </marker>
+                </defs>
+
+                {/* Package */}
+                <rect
+                  x="130"
+                  y="8"
+                  width="180"
+                  height="52"
+                  rx="8"
+                  style={{ fill: "var(--color-surface)", stroke: "var(--color-border)" }}
+                />
+                <text x="220" y="30" textAnchor="middle" style={{ fill: "var(--color-fg)", fontSize: 13, fontWeight: 600 }}>
+                  BriefAgent package
+                </text>
+                <text x="220" y="48" textAnchor="middle" style={{ fill: "var(--color-muted)", fontSize: 11 }}>
+                  agent.yaml · instructions · optional code
+                </text>
+
+                {/* Package → container */}
+                <line x1="220" y1="60" x2="220" y2="96" style={{ stroke: "var(--color-muted)" }} markerEnd="url(#flip-arrow)" />
+                <text x="230" y="84" style={{ fill: "var(--color-muted)", fontSize: 11 }}>
+                  verified, then run
+                </text>
+
+                {/* Agent container */}
+                <rect
+                  x="80"
+                  y="100"
+                  width="280"
+                  height="66"
+                  rx="8"
+                  style={{ fill: "var(--color-surface)", stroke: "var(--color-accent)" }}
+                />
+                <text x="220" y="127" textAnchor="middle" style={{ fill: "var(--color-fg)", fontSize: 13, fontWeight: 600 }}>
+                  Agent container
+                </text>
+                <text x="220" y="147" textAnchor="middle" style={{ fill: "var(--color-muted)", fontSize: 11 }}>
+                  internal network · no credentials
+                </text>
+
+                {/* Gateway → agent */}
+                <line x1="130" y1="252" x2="168" y2="172" style={{ stroke: "var(--color-muted)" }} markerEnd="url(#flip-arrow)" />
+                <text x="56" y="212" style={{ fill: "var(--color-muted)", fontSize: 11 }}>
+                  declared tools
+                </text>
+
+                {/* Agent → proxy */}
+                <line x1="300" y1="170" x2="332" y2="248" style={{ stroke: "var(--color-muted)" }} markerEnd="url(#flip-arrow)" />
+                <text x="318" y="212" style={{ fill: "var(--color-muted)", fontSize: 11 }}>
+                  declared egress
+                </text>
+
+                {/* MCP gateway */}
+                <rect
+                  x="20"
+                  y="252"
+                  width="180"
+                  height="58"
+                  rx="8"
+                  style={{ fill: "var(--color-surface)", stroke: "var(--color-border)" }}
+                />
+                <text x="110" y="276" textAnchor="middle" style={{ fill: "var(--color-fg)", fontSize: 13, fontWeight: 600 }}>
+                  MCP gateway
+                </text>
+                <text x="110" y="294" textAnchor="middle" style={{ fill: "var(--color-muted)", fontSize: 11 }}>
+                  declared tools only
+                </text>
+
+                {/* Egress proxy */}
+                <rect
+                  x="240"
+                  y="252"
+                  width="180"
+                  height="58"
+                  rx="8"
+                  style={{ fill: "var(--color-surface)", stroke: "var(--color-border)" }}
+                />
+                <text x="330" y="276" textAnchor="middle" style={{ fill: "var(--color-fg)", fontSize: 13, fontWeight: 600 }}>
+                  Egress proxy
+                </text>
+                <text x="330" y="294" textAnchor="middle" style={{ fill: "var(--color-muted)", fontSize: 11 }}>
+                  declared hosts only
+                </text>
+
+                {/* Proxy → internet */}
+                <line x1="330" y1="310" x2="330" y2="338" style={{ stroke: "var(--color-muted)" }} markerEnd="url(#flip-arrow)" />
+                <text x="340" y="334" style={{ fill: "var(--color-muted)", fontSize: 11 }}>
+                  the internet
+                </text>
+              </svg>
+            </Card>
+          </div>
+        </section>
+        <section id="how-scanning" className="space-y-4">
         <div className="flex items-baseline justify-between gap-4">
           <h2 className="text-xl font-semibold">How scanning works</h2>
           <Link href="/trust" className="text-sm underline">
@@ -170,6 +309,7 @@ export default async function HomePage() {
           still has a report worth reading.
         </p>
       </section>
+      </div>
 
       <section className="grid gap-6 md:grid-cols-3">
         <Card>
