@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { zstdDecompressSync } from "node:zlib";
 import {
-  BuilderInput, packArchive, renderManifest, validateInput, workspaceFiles,
+  BuilderInput, packArchive, parseServerLines, renderManifest, validateInput, workspaceFiles,
 } from "../briefagent";
 
 function input(): BuilderInput {
@@ -23,6 +23,7 @@ function input(): BuilderInput {
     execCommands: ["jq"],
     secrets: ["EXAMPLE_TOKEN"],
     dataAccess: ["code"],
+    mcpServers: [],
   };
 }
 
@@ -83,5 +84,41 @@ describe("packArchive", () => {
     const a = packArchive(workspaceFiles(input()));
     const b = packArchive(workspaceFiles(input()));
     expect(a.digest).toBe(b.digest);
+  });
+});
+
+describe("mcpServers (RUNNER-PLAN-3)", () => {
+  it("parses the line format and renders the manifest block", () => {
+    const { servers, error } = parseServerLines(
+      "npm:@scope/server-x@1.2.3 tools=list_issues secrets=GITHUB_PAT egress=api.github.com\n" +
+      "# comment\npypi:mcp-server-fetch@0.6.2 egress=*\n",
+    );
+    expect(error).toBeNull();
+    expect(servers).toHaveLength(2);
+    const i = input();
+    i.mcpServers = servers;
+    expect(validateInput(i)).toBeNull();
+    const y = renderManifest(i);
+    expect(y).toContain('- npm: "@scope/server-x"');
+    expect(y).toContain('version: "1.2.3"');
+    expect(y).toContain("tools: [list_issues]");
+    expect(y).toContain('egress: ["*"]');
+  });
+  it("refuses a range version — the pin is release content", () => {
+    const { servers, error } = parseServerLines("npm:server-x@^1.2.0");
+    expect(error).toBeNull();
+    const i = input();
+    i.mcpServers = servers;
+    expect(validateInput(i)).toMatch(/exact version/);
+  });
+  it("refuses a malformed line with the line named", () => {
+    const { error } = parseServerLines("docker:whatever@1.0.0");
+    expect(error).toMatch(/expected npm:/);
+  });
+  it("refuses duplicates", () => {
+    const { servers } = parseServerLines("npm:server-x@1.0.0\nnpm:server-x@1.0.1");
+    const i = input();
+    i.mcpServers = servers;
+    expect(validateInput(i)).toMatch(/duplicate/);
   });
 });

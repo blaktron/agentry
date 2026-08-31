@@ -63,6 +63,18 @@ operator policy recompiles the plan.
 
 Runs compose like processes: `agentry run a … | agentry run b …`.
 
+### `agentry uninstall <ns/name[@version]>`
+
+Removes this machine's runner state for a BriefAgent: the verified
+install cache (workspace + compiled plans) and — **by default** — its
+MCP profile, stored keys and installed MCP servers included
+(RUNNER-PLAN-3: remove on uninstall is the default). `--keep-mcp`
+retains the profile directory, which stays locked to the exact release
+digest it was created for: a same-digest reinstall reconnects without
+re-prompting; nothing else — no other BriefAgent, no other user, no
+newer version — can ever reference it. Embedded installs (claude-skill /
+mcp / agents-md exports) are separate state and untouched.
+
 ### `agentry profiles`
 
 `list` shows every stored MCP profile (ref, digest, keep/remove setting,
