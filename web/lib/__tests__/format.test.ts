@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fmtCount, fmtUTC, fmtUTCDate } from "../format";
+import { fmtBytes, fmtCount, fmtUTC, fmtUTCDate } from "../format";
 
 // These pages are server-rendered, so a locale-dependent formatter would
 // stamp the SERVER's timezone onto a string every reader sees. Audit rows,
@@ -21,7 +21,7 @@ describe("fmtUTC", () => {
     expect(fmtUTC("2026-08-29T23:30:00-04:00")).toBe("2026-08-30 03:30 UTC");
   });
 
-  it("shows an em dash for a missing timestamp", () => {
+  it("shows a plain 'none' for a missing timestamp", () => {
     expect(fmtUTC(undefined)).toBe("none");
     expect(fmtUTC(null)).toBe("none");
     expect(fmtUTC("")).toBe("none");
@@ -54,5 +54,24 @@ describe("fmtCount", () => {
   it("treats missing counters as zero rather than blank", () => {
     expect(fmtCount(undefined)).toBe("0");
     expect(fmtCount(NaN)).toBe("0");
+  });
+});
+
+describe("fmtBytes", () => {
+  it("shows small sizes in bytes", () => {
+    expect(fmtBytes(0)).toBe("0 B");
+    expect(fmtBytes(999)).toBe("999 B");
+  });
+
+  it("abbreviates kB and MB with one decimal", () => {
+    expect(fmtBytes(1000)).toBe("1.0 kB");
+    expect(fmtBytes(12_345)).toBe("12.3 kB");
+    expect(fmtBytes(3_400_000)).toBe("3.4 MB");
+  });
+
+  it("treats missing and negative sizes as 'none'", () => {
+    expect(fmtBytes(undefined)).toBe("none");
+    expect(fmtBytes(-1)).toBe("none");
+    expect(fmtBytes(NaN)).toBe("none");
   });
 });

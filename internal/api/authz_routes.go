@@ -83,6 +83,8 @@ var routeAuthz = map[string]RouteDecl{
 	"getVersionManifest":    {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
 	"yankVersion":           {Action: auth.ActAgentPublish, AgentScoped: true},
 	"downloadVersion":       {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
+	"listVersionFiles":      {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
+	"getVersionFile":        {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
 	"resolveRef":            {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
 	"getVersionReport":      {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
 	"getVersionAttestation": {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
