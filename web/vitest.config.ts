@@ -9,7 +9,12 @@ import { fileURLToPath } from "node:url";
 
 export default defineConfig({
   resolve: {
-    alias: { "@": fileURLToPath(new URL(".", import.meta.url)) },
+    alias: {
+      "@": fileURLToPath(new URL(".", import.meta.url)),
+      // Server modules under test import Next's "server-only" marker,
+      // which has no entry point resolvable outside a Next build.
+      "server-only": fileURLToPath(new URL("./lib/__tests__/server-only.stub.ts", import.meta.url)),
+    },
   },
   test: {
     environment: "node",
