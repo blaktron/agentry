@@ -150,6 +150,10 @@ services:
       args:
         SITE_URL: ${AGENTRY_DOCS_PUBLIC_URL:-http://localhost:8000}
         AGENTRY_REF: ${AGENTRY_CONTENT_REF:-main}
+        # Optional cache buster for the content clone (BuildKit caches the
+        # clone layer by instruction + args): export
+        # AGENTRY_CONTENT_BUST=$(date +%s) before `docker compose build`.
+        AGENTRY_CONTENT_BUST: ${AGENTRY_CONTENT_BUST:-}
       secrets:
         - gh_token
     ports:
@@ -166,6 +170,7 @@ services:
       dockerfile: developers-site/Dockerfile
       args:
         AGENTRY_REF: ${AGENTRY_CONTENT_REF:-main}
+        AGENTRY_CONTENT_BUST: ${AGENTRY_CONTENT_BUST:-}
       secrets:
         - gh_token
     ports:
