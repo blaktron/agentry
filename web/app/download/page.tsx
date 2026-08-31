@@ -87,6 +87,63 @@ agentry version`}</CodeBlock>
         </Card>
       </section>
 
+      {/* Per-provider installs (RUNNER-PLAN-2 §P5, req 6): BriefAgents that
+          run on the host application's own tool plane. Provider flags are
+          aliases for install targets, so the commands here must match what
+          `agentry install --provider` actually does. */}
+      <section>
+        <h2 className="text-xl font-semibold">Run BriefAgents in your agent app</h2>
+        <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
+          These installs use the host application&apos;s own MCP servers and built-in tools instead
+          of the docker gateway path — the declared capability contract maps onto the host&apos;s
+          tool vocabulary, and enforcement is the host&apos;s.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <Card>
+            <div className="font-medium">Claude Code</div>
+            <div className="mt-3">
+              <CodeBlock>{`agentry install ns/name --provider claude`}</CodeBlock>
+            </div>
+            <p className="mt-3 text-sm" style={{ color: "var(--color-muted)" }}>
+              Installs as a Claude skill, with <code>allowed-tools</code> derived from the declared
+              contract.
+            </p>
+          </Card>
+          <Card>
+            <div className="font-medium">Codex</div>
+            <div className="mt-3">
+              <CodeBlock>{`agentry install ns/name --provider codex`}</CodeBlock>
+            </div>
+            <p className="mt-3 text-sm" style={{ color: "var(--color-muted)" }}>
+              Installs as an AGENTS.md section plus the BriefAgent&apos;s files.
+            </p>
+          </Card>
+          <Card>
+            <div className="font-medium">OpenClaw</div>
+            <div className="mt-3">
+              <CodeBlock>{`agentry install ns/name --provider openclaw`}</CodeBlock>
+            </div>
+            <p className="mt-3 text-sm" style={{ color: "var(--color-muted)" }}>
+              Installs a Claude-format skill; OpenClaw consumes those today.
+            </p>
+          </Card>
+        </div>
+        <Card className="mt-3">
+          <div className="font-medium">Standalone (any machine with docker)</div>
+          <div className="mt-3">
+            <CodeBlock>{`agentry setup
+agentry run ns/name`}</CodeBlock>
+          </div>
+          <p className="mt-3 text-sm" style={{ color: "var(--color-muted)" }}>
+            The isolated-container path: each run executes in its own container with its tools
+            served through a per-run MCP gateway.
+          </p>
+        </Card>
+        <p className="mt-3 text-sm" style={{ color: "var(--color-muted)" }}>
+          Distribution through each provider&apos;s plugin system is planned.
+        </p>
+      </section>
+
       <section>
         <h2 className="text-xl font-semibold">Verify what you downloaded</h2>
         <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
