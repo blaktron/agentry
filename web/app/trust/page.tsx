@@ -123,6 +123,19 @@ export default async function TrustPage() {
       </section>
 
       <section>
+        <h2 className="text-xl font-semibold">Security advisories</h2>
+        <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
+          When a rescan or a report surfaces a problem in a published version, the registry
+          quarantines it and raises an advisory. The{" "}
+          <a href="/advisories" className="underline">
+            advisory feed
+          </a>{" "}
+          lists every one — what was found, which versions are affected, and what consumers
+          should do.
+        </p>
+      </section>
+
+      <section>
         <h2 className="text-xl font-semibold">Reporting a problem</h2>
         <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
           Malicious content: use the report link on the BriefAgent page, or email abuse@ the registry
