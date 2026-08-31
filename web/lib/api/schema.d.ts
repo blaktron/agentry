@@ -1995,8 +1995,8 @@ export interface components {
         TeamSlug: string;
         SsoKind: "saml" | "oidc";
         WebhookID: string;
-        /** @description Social identity provider id (§12.1). */
-        SocialProvider: "google" | "github";
+        /** @description Social identity provider id (§12.1). google and microsoft use their built-in OIDC endpoints; openai and claude need an operator-set issuer; an unconfigured provider answers 404. */
+        SocialProvider: "google" | "github" | "microsoft" | "openai" | "claude";
         /** @description Opaque cursor from the previous page's `Link` header. */
         Cursor: string;
         /** @description Page size; values outside the range are clamped, not rejected. */
@@ -2204,7 +2204,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Social identity provider id (§12.1). */
+                /** @description Social identity provider id (§12.1). google and microsoft use their built-in OIDC endpoints; openai and claude need an operator-set issuer; an unconfigured provider answers 404. */
                 provider: components["parameters"]["SocialProvider"];
             };
             cookie?: never;
@@ -2229,7 +2229,7 @@ export interface operations {
             };
             header?: never;
             path: {
-                /** @description Social identity provider id (§12.1). */
+                /** @description Social identity provider id (§12.1). google and microsoft use their built-in OIDC endpoints; openai and claude need an operator-set issuer; an unconfigured provider answers 404. */
                 provider: components["parameters"]["SocialProvider"];
             };
             cookie?: never;
