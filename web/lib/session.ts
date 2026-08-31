@@ -89,6 +89,24 @@ export async function apiSend(method: string, path: string, body?: unknown): Pro
   });
 }
 
+// apiUpload performs a cookie-authenticated multipart POST (the Builder's
+// archive upload). No Content-Type header: fetch derives the multipart
+// boundary from the FormData body.
+export async function apiUpload(path: string, form: FormData): Promise<Response> {
+  const jar = await cookies();
+  const sess = jar.get(SESSION_COOKIE)?.value;
+  const csrf = jar.get(CSRF_COOKIE)?.value;
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (sess) headers.Cookie = `${SESSION_COOKIE}=${sess}`;
+  if (csrf) headers["X-Agentry-CSRF"] = csrf;
+  return fetch(`${API_BASE}/api/v1${path}`, {
+    method: "POST",
+    headers,
+    body: form,
+    cache: "no-store",
+  });
+}
+
 // problemDetail extracts a human-readable message from a problem+json body.
 export async function problemDetail(res: Response): Promise<string> {
   try {

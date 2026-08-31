@@ -66,8 +66,10 @@ function PrimaryNav() {
       <Link href="/agent-template" className={linkClass}>
         BriefAgent Template
       </Link>
-      <Link href="/advisories" className={linkClass}>
-        Advisories
+      {/* Advisories moved into Trust & security (and stays in the footer);
+          the Builder takes its slot. */}
+      <Link href="/build" className={linkClass}>
+        BriefAgent Builder
       </Link>
       <Link href="/download" className={linkClass}>
         Download
