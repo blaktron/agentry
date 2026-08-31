@@ -193,6 +193,44 @@ type Capabilities struct {
 	Secrets []string `yaml:"secrets,omitempty" json:"secrets,omitempty"`
 	// DataAccess lists semantic data categories the agent touches.
 	DataAccess []DataAccess `yaml:"dataAccess,omitempty" json:"dataAccess,omitempty"`
+	// MCPServers lists the MCP servers this agent requires at run time
+	// (RUNNER-PLAN-3). The runner installs each from the operator's trusted
+	// repository — npm and PyPI by default — configured for this exact
+	// release only, and serves them through the per-run gateway. Versions
+	// are EXACT pins (V5): they are part of the release's content, so a new
+	// agent version is a new supply-chain decision by construction.
+	MCPServers []MCPServer `yaml:"mcpServers,omitempty" json:"mcpServers,omitempty"`
+}
+
+// MCPServer is one declared MCP server requirement (§5.4, RUNNER-PLAN-3).
+// Exactly one of NPM or PyPI names the package; Version is an exact
+// release, never a range.
+type MCPServer struct {
+	// NPM is the npm package name (optionally @scope/name).
+	NPM string `yaml:"npm,omitempty" json:"npm,omitempty"`
+	// PyPI is the PyPI project name (PEP-503 normalized form).
+	PyPI string `yaml:"pypi,omitempty" json:"pypi,omitempty"`
+	// Version is the exact package version to install (V5: no ranges).
+	Version string `yaml:"version" json:"version"`
+	// Tools optionally restricts the server to these tool names; empty
+	// grants the server's full set.
+	Tools []string `yaml:"tools,omitempty" json:"tools,omitempty"`
+	// Secrets lists environment variable NAMES this server needs — never
+	// values. Additive to capabilities.secrets; collected into the same
+	// per-signature MCP profile by the runner's guided setup.
+	Secrets []string `yaml:"secrets,omitempty" json:"secrets,omitempty"`
+	// Egress lists the exact hosts THIS SERVER may reach ("*" allowed,
+	// policy-gated at run time like agent egress). Empty means none.
+	Egress []string `yaml:"egress,omitempty" json:"egress,omitempty"`
+}
+
+// SourceID returns the ecosystem-qualified package id ("npm:@scope/x" or
+// "pypi:name") — the duplicate-detection and store key.
+func (s MCPServer) SourceID() string {
+	if s.NPM != "" {
+		return "npm:" + s.NPM
+	}
+	return "pypi:" + s.PyPI
 }
 
 // Network groups network capabilities (currently egress only).

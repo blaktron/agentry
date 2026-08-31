@@ -101,6 +101,30 @@ under `~/.agentry/runner/profiles/…` (directory `0700`, file `0600`).
   guided setup. Non-interactive runs never create profiles and behave
   exactly like v1.
 
+### Declared MCP servers (RUNNER-PLAN-3)
+
+A release that declares `capabilities.mcpServers` installs them as part
+of its own install: each entry resolves against the operator's configured
+registries (`mcpRegistries`, npm/PyPI by default) at its **exact pinned
+version**, the resolved artifact digests are recorded into the release's
+profile (`servers/`), the dependency closure is installed inside the
+pinned runtime image with egress restricted to the registry hosts, and
+the consent gate shows every server, source, version, and digest before
+anything is fetched. At run time the per-run gateway loads exactly those
+servers — each with its declared tool filter, its own egress allowlist,
+and only its own secret values — alongside the agentry tools server.
+
+The isolation rules are the profile rules: server configuration and keys
+belong to one signature (ns/name@version + digest). No other BriefAgent
+can reach them, no other user can read them (0700, per-run containers are
+the only consumers), and a **new version of the same BriefAgent starts
+over** — new digest, fresh resolve, fresh consent, fresh keys. A
+reinstall of the same signature whose registry resolution no longer
+matches the recorded digests refuses (the pin is the trust decision).
+`agentry profiles remove` deletes servers and keys with the profile —
+**remove is the default**; `--keep-servers` retains the signature
+directory so a same-digest reinstall reconnects without re-prompting.
+
 ## The operator policy (`~/.agentry/runner/policy.yaml`)
 
 Created on first use; `AGENTRY_RUNNER_HOME` moves the whole runner home.
@@ -116,6 +140,8 @@ Created on first use; `AGENTRY_RUNNER_HOME` moves the whole runner home.
 | `budgets.timeoutSeconds` / `budgets.maxTurns` | default hard stops |
 | `profiles.keepByDefault` | the default MCP-profile completion choice |
 | `dataAccessServers.<category>` | operator-cataloged MCP server-entry files attached when a manifest declares that dataAccess category |
+| `mcpRegistries.npm` / `mcpRegistries.pypi` | where declared `capabilities.mcpServers` resolve (defaults: registry.npmjs.org, pypi.org; point at private mirrors here) |
+| `images.nodeRuntime` / `images.pythonRuntime` | pinned runtime images that install and run declared npm/PyPI MCP servers |
 
 The policy participates in the plan hash: editing it invalidates cached
 plans, which recompile on next use.
