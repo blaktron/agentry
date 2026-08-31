@@ -497,6 +497,7 @@ func (e VersionStatus) Valid() bool {
 
 // Defines values for SocialProvider.
 const (
+	SocialProviderAuthentik SocialProvider = "authentik"
 	SocialProviderClaude    SocialProvider = "claude"
 	SocialProviderGithub    SocialProvider = "github"
 	SocialProviderGoogle    SocialProvider = "google"
@@ -507,6 +508,8 @@ const (
 // Valid indicates whether the value is a known member of the SocialProvider enum.
 func (e SocialProvider) Valid() bool {
 	switch e {
+	case SocialProviderAuthentik:
+		return true
 	case SocialProviderClaude:
 		return true
 	case SocialProviderGithub:
@@ -593,6 +596,7 @@ func (e ReportAbuseJSONBodyCategory) Valid() bool {
 
 // Defines values for SocialOidcCallbackParamsProvider.
 const (
+	SocialOidcCallbackParamsProviderAuthentik SocialOidcCallbackParamsProvider = "authentik"
 	SocialOidcCallbackParamsProviderClaude    SocialOidcCallbackParamsProvider = "claude"
 	SocialOidcCallbackParamsProviderGithub    SocialOidcCallbackParamsProvider = "github"
 	SocialOidcCallbackParamsProviderGoogle    SocialOidcCallbackParamsProvider = "google"
@@ -603,6 +607,8 @@ const (
 // Valid indicates whether the value is a known member of the SocialOidcCallbackParamsProvider enum.
 func (e SocialOidcCallbackParamsProvider) Valid() bool {
 	switch e {
+	case SocialOidcCallbackParamsProviderAuthentik:
+		return true
 	case SocialOidcCallbackParamsProviderClaude:
 		return true
 	case SocialOidcCallbackParamsProviderGithub:
@@ -620,6 +626,7 @@ func (e SocialOidcCallbackParamsProvider) Valid() bool {
 
 // Defines values for SocialOidcStartParamsProvider.
 const (
+	SocialOidcStartParamsProviderAuthentik SocialOidcStartParamsProvider = "authentik"
 	SocialOidcStartParamsProviderClaude    SocialOidcStartParamsProvider = "claude"
 	SocialOidcStartParamsProviderGithub    SocialOidcStartParamsProvider = "github"
 	SocialOidcStartParamsProviderGoogle    SocialOidcStartParamsProvider = "google"
@@ -630,6 +637,8 @@ const (
 // Valid indicates whether the value is a known member of the SocialOidcStartParamsProvider enum.
 func (e SocialOidcStartParamsProvider) Valid() bool {
 	switch e {
+	case SocialOidcStartParamsProviderAuthentik:
+		return true
 	case SocialOidcStartParamsProviderClaude:
 		return true
 	case SocialOidcStartParamsProviderGithub:

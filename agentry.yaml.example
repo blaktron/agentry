@@ -32,6 +32,9 @@ auth:
   sessionTTL: 24h
   patMaxTTL: 8760h   # 1 year (§12.3)
   cookieSecure: false  # true outside local dev
+  # DEV-057: true hands credentials to the directory service — native
+  # register/password/TOTP endpoints answer 410; configure social.authentik.
+  externalOnly: false
 
 signing:
   kind: none         # none (dev) | file | kms — prod requires file or kms
@@ -56,6 +59,12 @@ social:
   github:
     clientId: ""
     clientSecret: ""
+  # The deployment's own directory service (DEV-057); issuer is the
+  # Authentik application, e.g. https://auth.example/application/o/agentry/
+  authentik:
+    clientId: ""
+    clientSecret: ""
+    issuer: ""
   microsoft:
     clientId: ""
     clientSecret: ""

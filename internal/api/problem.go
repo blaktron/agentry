@@ -79,6 +79,10 @@ func problemTooMany(w http.ResponseWriter, r *http.Request, detail string) {
 	writeProblem(w, r, http.StatusTooManyRequests, "rate-limited", "Too many requests", detail)
 }
 
+func problemGone(w http.ResponseWriter, r *http.Request, detail string) {
+	writeProblem(w, r, http.StatusGone, "gone", "Gone", detail)
+}
+
 func problemUnavailable(w http.ResponseWriter, r *http.Request, detail string) {
 	writeProblem(w, r, http.StatusServiceUnavailable, "unavailable", "Service unavailable", detail)
 }

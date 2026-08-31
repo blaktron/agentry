@@ -8,8 +8,8 @@ import (
 // TestProvidersIsAClosedFive pins the §12.1 provider list: the ids the
 // start/callback routes accept and the console offers. Adding a provider is
 // a deliberate spec change, not a drive-by.
-func TestProvidersIsAClosedFive(t *testing.T) {
-	want := []string{ProviderGoogle, ProviderGitHub, ProviderMicrosoft, ProviderOpenAI, ProviderClaude}
+func TestProvidersIsAClosedSix(t *testing.T) {
+	want := []string{ProviderGoogle, ProviderGitHub, ProviderMicrosoft, ProviderOpenAI, ProviderClaude, ProviderAuthentik}
 	got := Providers()
 	if len(got) != len(want) {
 		t.Fatalf("Providers() = %v, want %v", got, want)

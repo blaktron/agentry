@@ -329,6 +329,40 @@ first boot. Then in `deploy/compose/.env`: `AGENTRY_TRUSTED_PROXIES=1`,
 certificate, `AGENTRY_PUBLIC_URL=https://<host>` (clone, install and
 download URLs render from it) and `AGENTRY_COOKIE_SECURE=true`.
 
+### The directory service (DEV-057)
+
+The compose stack ships Authentik as the account directory: passwords,
+MFA, recovery, and sign-up live there, and the registry consumes it as
+the `authentik` OIDC provider while keeping sessions, PATs, and RBAC
+native. The edge serves it as `auth.<your-domain>` and, when no such DNS
+name exists (dev), on `https://<host>:8443`.
+
+First boot, in `deploy/compose/.env`:
+
+```bash
+AUTHENTIK_SECRET_KEY=…        # openssl rand -base64 48
+AUTHENTIK_BOOTSTRAP_PASSWORD=…   # akadmin's password
+AUTHENTIK_BOOTSTRAP_TOKEN=…      # API token for the bootstrap script
+AUTHENTIK_BOOTSTRAP_EMAIL=akadmin@example.com
+```
+
+then bring the stack up and run `scripts/dev/authentik-bootstrap.sh`
+(idempotent — creates the OAuth2 provider `agentry-registry` and the
+`agentry` application), and point the registry at the result:
+
+```bash
+AGENTRY_AUTH_EXTERNAL_ONLY=true
+AGENTRY_SOCIAL_AUTHENTIK_CLIENT_ID=agentry-registry
+AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET=…   # what you gave the bootstrap script
+AGENTRY_SOCIAL_AUTHENTIK_ISSUER=https://<host>:8443/application/o/agentry/
+AGENTRY_IDP_LOGOUT_URL=https://<host>:8443/application/o/agentry/end-session/
+```
+
+With `AGENTRY_AUTH_EXTERNAL_ONLY=true` the native register, password
+login, email-verify, and TOTP endpoints answer 410 Gone, and the web
+login page offers the directory service only. Turning the flag off (the
+default) restores the native flows — nothing was removed.
+
 `X-Forwarded-For` is honoured **only** up to that many trusted hops: behind
 CloudFront → ALB set `2`; behind a single load balancer set `1`. Leave it at
 `0` (the default) if the server is directly exposed. The header is then
