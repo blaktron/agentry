@@ -94,6 +94,12 @@ services:
       # in deploy/compose/.env (compose reads .env from the compose file's
       # own directory, NOT the cwd) or export it in the shell before `up`.
       AGENTRY_BASE_URL: ${AGENTRY_PUBLIC_URL:-http://localhost:8080}
+      # Behind the `edge` service the server sees exactly one proxy hop:
+      # set AGENTRY_TRUSTED_PROXIES=1 in .env when the edge is the entry
+      # point, and AGENTRY_COOKIE_SECURE=true once it serves a certificate
+      # browsers accept (docs/self-hosting.md "Running behind a proxy").
+      AGENTRY_TRUSTED_PROXIES: ${AGENTRY_TRUSTED_PROXIES:-0}
+      AGENTRY_AUTH_COOKIE_SECURE: ${AGENTRY_COOKIE_SECURE:-false}
       # Archive store against minio (S3-compatible), exercising the same code
       # path SaaS uses rather than the local-FS one.
       AGENTRY_STORAGE_KIND: s3
@@ -183,6 +189,29 @@ services:
     ports:
       - "8001:80"
 
+  # The edge: TLS termination, one public origin split into web + server,
+  # and a cache for the immutable static assets. edge/nginx.conf explains
+  # why TLS is load-bearing here (browsers send no same-origin signal to a
+  # plain-http hostname). Certificates come from AGENTRY_EDGE_CERT_DIR as
+  # edge.crt + edge.key; on a Tailscale host `tailscale cert` issues a real
+  # one, otherwise a self-signed pair bootstraps the stack. Once the edge is
+  # the entry point, set AGENTRY_PUBLIC_WEB_URL (and, with a certificate
+  # clients trust, AGENTRY_PUBLIC_URL) to its https origin.
+  edge:
+    profiles: ["server"]
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./edge/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${AGENTRY_EDGE_CERT_DIR:-./edge/certs}:/etc/nginx/certs:ro
+      - edgecache:/var/cache/nginx/edge
+    depends_on:
+      - server
+      - web
+
 secrets:
   # Read token for the blaktron repos, consumed by the site builds' inner
   # clone of this repo. Export it for the build only when the repos are
@@ -194,3 +223,4 @@ volumes:
   pgdata:
   miniodata:
   gitdata:
+  edgecache:
