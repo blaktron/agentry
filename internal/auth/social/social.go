@@ -42,11 +42,16 @@ const (
 	ProviderMicrosoft = "microsoft"
 	ProviderOpenAI    = "openai"
 	ProviderClaude    = "claude"
+	// ProviderAuthentik is the deployment's own directory service (DEV-057):
+	// an Authentik instance shipped with the stack. OIDC proper, no default
+	// issuer — the operator points it at their instance's application slug
+	// (e.g. https://auth.example/application/o/agentry/).
+	ProviderAuthentik = "authentik"
 )
 
 // Providers lists the supported provider ids.
 func Providers() []string {
-	return []string{ProviderGoogle, ProviderGitHub, ProviderMicrosoft, ProviderOpenAI, ProviderClaude}
+	return []string{ProviderGoogle, ProviderGitHub, ProviderMicrosoft, ProviderOpenAI, ProviderClaude, ProviderAuthentik}
 }
 
 // Known reports whether name is a supported provider id.
@@ -120,6 +125,10 @@ func New(ctx context.Context, name string, cfg Config, redirectURL string) (Prov
 		return newOIDC(ctx, ProviderOpenAI, "", cfg, redirectURL)
 	case ProviderClaude:
 		return newOIDC(ctx, ProviderClaude, "", cfg, redirectURL)
+	case ProviderAuthentik:
+		// The stack's own directory service (DEV-057). No default issuer:
+		// every deployment's Authentik lives at its own URL.
+		return newOIDC(ctx, ProviderAuthentik, "", cfg, redirectURL)
 	case ProviderGitHub:
 		return newGitHub(cfg, redirectURL), nil
 	default:

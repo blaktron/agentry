@@ -77,6 +77,8 @@ func (s *Server) socialProviderConfig(name string) (config.SocialProvider, bool)
 		return s.cfg.Social.OpenAI, s.cfg.Social.OpenAI.Configured()
 	case social.ProviderClaude:
 		return s.cfg.Social.Claude, s.cfg.Social.Claude.Configured()
+	case social.ProviderAuthentik:
+		return s.cfg.Social.Authentik, s.cfg.Social.Authentik.Configured()
 	default:
 		return config.SocialProvider{}, false
 	}

@@ -56,7 +56,23 @@ func auditEvent(r *http.Request, action audit.Action) audit.Event {
 }
 
 // Register implements POST /auth/register (§12.1).
+// nativeCredsGone enforces auth.externalOnly (DEV-057): with an external
+// directory service owning credentials, the native register / password /
+// email-verify / TOTP endpoints answer 410 Gone. The handlers below stay
+// intact — clearing the flag restores them — and social/SSO sign-in plus
+// sessions, PATs, and RBAC are untouched.
+func (s *Server) nativeCredsGone(w http.ResponseWriter, r *http.Request) bool {
+	if !s.cfg.Auth.ExternalOnly {
+		return false
+	}
+	problemGone(w, r, "credentials are managed by this deployment's directory service (DEV-057); sign in through /login")
+	return true
+}
+
 func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
+	if s.nativeCredsGone(w, r) {
+		return
+	}
 	if !s.allowLogin(w, r) {
 		return
 	}
@@ -150,6 +166,9 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 
 // VerifyEmail implements POST /auth/verify-email.
 func (s *Server) VerifyEmail(w http.ResponseWriter, r *http.Request) {
+	if s.nativeCredsGone(w, r) {
+		return
+	}
 	if !s.allowLogin(w, r) {
 		return
 	}
@@ -189,6 +208,9 @@ func (s *Server) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 
 // Login implements POST /auth/login: password + optional TOTP → session.
 func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
+	if s.nativeCredsGone(w, r) {
+		return
+	}
 	if !s.allowLogin(w, r) {
 		return
 	}
@@ -345,6 +367,9 @@ func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 
 // TotpSetup implements POST /auth/2fa/totp/setup (session-only).
 func (s *Server) TotpSetup(w http.ResponseWriter, r *http.Request) {
+	if s.nativeCredsGone(w, r) {
+		return
+	}
 	if !s.authorize(w, r, auth.ActUserSecurityManage, uuid.Nil) {
 		return
 	}
@@ -374,6 +399,9 @@ func (s *Server) TotpSetup(w http.ResponseWriter, r *http.Request) {
 
 // TotpVerify implements POST /auth/2fa/totp/verify (session-only).
 func (s *Server) TotpVerify(w http.ResponseWriter, r *http.Request) {
+	if s.nativeCredsGone(w, r) {
+		return
+	}
 	if !s.authorize(w, r, auth.ActUserSecurityManage, uuid.Nil) {
 		return
 	}
