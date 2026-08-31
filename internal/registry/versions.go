@@ -512,25 +512,9 @@ func (s *Service) existingVersions(ctx context.Context, agentID uuid.UUID) (map[
 	return out, nil
 }
 
-// DevAutoApprovePipeline is the M3 stub (§18.2 M3): in dev mode every scan
-// "passes" immediately. It exists so the state machine is exercised end to
-// end; M4 replaces it with the real orchestrator. It NEVER runs outside dev
-// mode — construction enforces it.
-type DevAutoApprovePipeline struct {
-	Svc *Service
-}
-
-// VersionSubmitted implements Pipeline.
-func (d DevAutoApprovePipeline) VersionSubmitted(ctx context.Context, versionID uuid.UUID) error {
-	err := d.Svc.Transition(ctx, versionID, StatusPublished, "dev-mode auto-approve stub (M3)", audit.Event{
-		ActorKind: audit.ActorSystem,
-	})
-	if err != nil {
-		// The version stays in scanning; operators see it via status.
-		fmt.Fprintf(os.Stderr, "dev pipeline: %v\n", err)
-	}
-	return err
-}
+// (The M3 DevAutoApprovePipeline stub lived here until 2026-08-31: M4's
+// real pipeline is wired in dev mode too, which orphaned it — workspace
+// ANALYSIS.md M7, in blaktron/agentry-notes.)
 
 func isUniqueViolationErr(err error) bool {
 	var pgErr *pgconn.PgError

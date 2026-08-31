@@ -25,12 +25,6 @@ const (
 	clientIPKey
 )
 
-// RequestID returns the request id assigned by middleware, or "".
-func RequestID(ctx context.Context) string {
-	id, _ := ctx.Value(requestIDKey).(string)
-	return id
-}
-
 // actorHolder carries the resolved caller back OUT to the access log.
 // principalMiddleware runs inside the generated handler and derives a new
 // context, which the outer logging middleware never sees; a pointer placed in

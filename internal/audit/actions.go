@@ -119,12 +119,3 @@ func Registered(a Action) bool {
 	_, ok := registry[a]
 	return ok
 }
-
-// All returns the catalog (docs page, tests).
-func All() []Action {
-	out := make([]Action, 0, len(registry))
-	for a := range registry {
-		out = append(out, a)
-	}
-	return out
-}
