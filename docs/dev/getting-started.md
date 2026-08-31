@@ -4,7 +4,7 @@
 
 - Go 1.24+ (`brew install go`)
 - Node 20+ for the web layer (`brew install node`)
-- Docker (preferred) **or** PostgreSQL 16 locally (`brew install postgresql@16`); see DEVIATIONS.md DEV-001
+- Docker (preferred) **or** PostgreSQL 16 locally (`brew install postgresql@16`); see DEV-001 in the agentry-notes deviations register
 - `sqlc` for query codegen (`brew install sqlc` or `go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest`)
 
 ## Quick start
@@ -26,7 +26,7 @@ curl localhost:8080/api/v1/meta
 
 ## Layout
 
-See PLAN.md §18.1. The layout is normative. Spec-first: edit `schemas/openapi.yaml`, regenerate, then implement the new interface method on `internal/api.Server`.
+See PLAN §18.1 ([agentry-notes](https://github.com/blaktron/agentry-notes)). The layout is normative. Spec-first: edit `schemas/openapi.yaml`, regenerate, then implement the new interface method on `internal/api.Server`.
 
 ## Configuration
 

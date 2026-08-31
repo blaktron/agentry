@@ -20,7 +20,7 @@ notes: >
 #
 # Scoped to the matched line, like per-rule notPatterns, so one descriptive
 # phrase cannot whitelist a whole file. The residual risk is stated plainly in
-# DEVIATIONS.md (DEV-010): an attacker who wraps a live directive in
+# the deviations register (DEV-010, agentry-notes): an attacker who wraps a live directive in
 # cataloguing language evades the S4 line hit, and is then left to S3, S5, S6,
 # and S9 — which is why the pipeline is layered rather than a single gate.
 notPatterns:

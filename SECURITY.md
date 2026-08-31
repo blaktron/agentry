@@ -98,7 +98,7 @@ We hold ourselves to the standard we ask of publishers:
   `osv-scanner`), with a minimal-dependency policy;
 - releases are signed and ship an SBOM;
 - no AGPL dependencies are bundled, and no rules under licenses that restrict
-  competing use are imported (see `DEVIATIONS.md` and PLAN §14.4);
+  competing use are imported (see the deviations register in [agentry-notes](https://github.com/blaktron/agentry-notes) and PLAN §14.4);
 - CI runs an adversarial suite against our own scanners so we find out when
   our detection regresses.
 
