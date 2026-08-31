@@ -29,10 +29,25 @@ export default async function HomePage() {
           A registry for BriefAgents, single-purpose AI agents
         </h1>
         <p className="mt-4 text-lg" style={{ color: "var(--color-muted)" }}>
-          BriefAgent instructions run with your credentials and your tool access. SecureAgentry
-          hosts them in git, and nothing becomes installable until it has passed a layered scan
-          for prompt injection, hidden instructions, capability escalation, secrets, and
-          supply-chain problems. Every published version is signed.
+          SecureAgentry hosts BriefAgents in git: small, single-purpose AI agents, reviewed before
+          anyone can install them. Every published version is scanned on the exact bytes that ship,
+          for prompt injection, hidden instructions, undeclared capabilities, secrets, and
+          supply-chain problems. Then it is signed.
+        </p>
+        <p className="mt-4 text-lg" style={{ color: "var(--color-muted)" }}>
+          When you run one, it starts with nothing. The agentry runner launches each BriefAgent in
+          a disposable Docker container on an internal network with no route to the internet. The
+          agent holds no credentials and brings no tools of its own. Every tool it can use is
+          served by a run-scoped MCP gateway container, and only the tools declared in the manifest
+          are wired up.
+        </p>
+        <p className="mt-4 text-lg" style={{ color: "var(--color-muted)" }}>
+          Secrets never enter the agent container. Where a BriefAgent declares an API token or a
+          network endpoint, the gateway and the egress proxy receive it by name, and the agent
+          reaches it only through that declared path. Network traffic leaves through the run&apos;s
+          proxy, host by declared host. Anything not declared has no route at all. When the task
+          finishes, every container is removed and the agent is gone, leaving a receipt that
+          records what ran.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
