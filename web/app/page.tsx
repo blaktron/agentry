@@ -65,20 +65,24 @@ export default async function HomePage() {
           records what ran.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
-          <Link
+          {/* Plain anchors on purpose: these are same-page fragments, not
+              routes. A Next Link would intercept the click as client-side
+              navigation, which breaks :target and native fragment
+              scrolling. */}
+          <a
             href="#browse"
             className="rounded-md px-4 py-2 text-sm font-medium"
             style={{ background: "var(--color-accent)", color: "var(--color-accent-fg)" }}
           >
             Browse BriefAgents
-          </Link>
-          <Link
+          </a>
+          <a
             href="#how-scanning"
             className="rounded-md border px-4 py-2 text-sm font-medium"
             style={{ borderColor: "var(--color-border)" }}
           >
             How scanning works
-          </Link>
+          </a>
         </div>
       </section>
 
