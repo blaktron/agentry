@@ -14,11 +14,56 @@ option below shown in a commented `agent.yaml`. Or scaffold one with
 `agentry init`.
 
 ```bash
+agentry setup                                        # one-time: LLM provider + the docker MCP gateway
 agentry validate .                                   # the registry's checks, offline
 agentry run --local . --dry-run --allow-unsigned     # the compiled enforcement plan
 echo "task" | agentry run --local . --allow-unsigned --out ./agentry-out
 agentry publish                                      # scanned, signed, immutable
 ```
+
+## Machine setup (`agentry setup`)
+
+One idempotent command prepares a machine for BriefAgent runs before any
+agent is involved: it configures **your preferred LLM provider** for agent
+runs into the operator policy (interactively on a terminal; `--provider`,
+`--model`, `--api-key-env`, `--base-url` with `--yes` in scripts), then
+stands up the docker-mcp-gateway plane right away — pulling the pinned
+gateway and harness images and building the local runner image. The key
+itself is never stored; only the environment variable *name* that will
+hold it.
+
+| provider | default model | key env var | agent-container egress |
+|---|---|---|---|
+| `anthropic` | claude-sonnet-4-5 | `ANTHROPIC_API_KEY` | api.anthropic.com:443 |
+| `openai` | gpt-5.2 | `OPENAI_API_KEY` | api.openai.com:443 |
+| `google` | gemini-3-pro | `GEMINI_API_KEY` | generativelanguage.googleapis.com:443 |
+| `custom` | asked | asked | derived from `--base-url` |
+
+`agentry run` still self-heals (it performs the same steps lazily on first
+use), so setup is a convenience, not a gate. The desktop app drives the
+same configuration from its Settings surface.
+
+## MCP profiles — keys and identities, once per release
+
+The first run of a BriefAgent that declares secrets starts a **guided
+setup**: the runner shows the declared contract, collects each key or
+identity (input hidden, values stored only in the profile, `0600`), and
+asks whether to keep the result. The stored **MCP profile** is keyed by
+*signature* — `ns/name@version` plus the archive digest — so:
+
+- **keep** (the default): the next run of the same exact release just uses
+  the authenticated resources — no re-prompting;
+- **remove**: the profile is deleted when the run completes.
+
+The choice is configurable at install time: `--keep-profile=true|false` on
+`agentry run` (including `--prepare`), the guided setup's final question,
+or the policy default `profiles.keepByDefault`. A **different digest is a
+different trust decision** and gets a fresh guided setup. Manage stored
+profiles with `agentry profiles list` and `agentry profiles remove
+<ns/name[@version]>` (secret values are never printed); re-run the guided
+flow with `--reconfigure-profile`. Non-interactive runs behave as before:
+secrets resolve from the environment or the policy's env file, and a
+missing one refuses the run (exit 11) rather than degrading.
 
 ## Package layout
 
@@ -137,6 +182,7 @@ model API. A per-run Docker MCP Gateway fronts the companion tools server.
 | Manifest declaration | Tool(s) granted |
 |---|---|
 | (always) | `write_report`: write files into the run's output folder |
+| (always) | `list_inputs`, `read_input`: the run's provided input files, read-only |
 | `filesystem.read` | `fs_read`, `fs_list` |
 | `filesystem.write` | `fs_write` |
 | `network.egress` hosts | `fetch` (with optional declared-secret auth) |
@@ -144,8 +190,15 @@ model API. A per-run Docker MCP Gateway fronts the companion tools server.
 
 Every instruction is suffixed with the **runner contract**: tools come
 only from the gateway; the workspace is rooted at `/workspace` as seen by
-tools; report files go through `write_report`; the final message is the
-run's result.
+tools; provided input files are under `/inputs`; report files go through
+`write_report`; the final message is the run's result.
+
+**Input files.** Files and artifacts from outside the container reach a
+run through `agentry run --file PATH` (repeatable; files or directories).
+They are copied into a per-run folder mounted **read-only** at `/inputs`
+on the tool plane — a channel like stdin, operator-controlled per run, so
+it needs no manifest capability. Job output and receipts stay on the
+separate `/out` volume.
 
 **Structured output.** Ship an `output.schema.json` at the archive root
 (listed in `publish.include`) and the runner embeds the schema in the
@@ -175,8 +228,20 @@ the secret source, and gates wildcard egress.
 
 ## Installing into an existing coding agent
 
-The same package installs into a host coding agent with the host's
-built-in tools standing in. Nothing is bundled either way:
+The same package installs into a host coding agent with **that
+application's** MCP servers and built-in tools standing in. Nothing is
+bundled either way, and these users never go through the docker gateway
+path. Each major agent application has its own install entry point:
+
+```bash
+agentry install ns/name --provider claude    # Claude Code
+agentry install ns/name --provider codex     # Codex
+agentry install ns/name --provider openclaw  # OpenClaw
+```
+
+`--provider` picks the right target below (distribution through each
+provider's plugin system is planned; the web Downloads page lists these
+flows); the explicit `--target` forms remain:
 
 | Target | What lands | Contract mapping |
 |---|---|---|
