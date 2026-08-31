@@ -40,6 +40,10 @@ print(json.dumps({
 }))
 PY
 )
+# The sign-in card's heading is the flow's own title, not brand config.
+curlx -X PATCH "$API/flows/instances/default-authentication-flow/" \
+  -d '{"title": "Sign in to SecureAgentry"}' -o /dev/null && echo "flow title set"
+
 curlx -X PATCH "$API/core/brands/$UUID/" -d "$BODY" | python3 -c "
 import sys, json
 b = json.load(sys.stdin)
