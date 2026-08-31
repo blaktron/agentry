@@ -12,7 +12,19 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { zstdCompressSync } from "node:zlib";
 
+// BuilderMCPServer is one declared MCP server (RUNNER-PLAN-3): exactly one
+// ecosystem, an EXACT version (the pin rides the release digest).
+export type BuilderMCPServer = {
+  source: "npm" | "pypi";
+  pkg: string;
+  version: string;
+  tools: string[];
+  secrets: string[];
+  egress: string[];
+};
+
 export type BuilderInput = {
+  mcpServers: BuilderMCPServer[];
   name: string;
   namespace: string;
   kind: "skill" | "prompt-agent";
@@ -34,6 +46,68 @@ export type BuilderInput = {
 
 const NAME_RE = /^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$|^[a-z0-9]$/;
 const SEMVER_RE = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
+const NPM_NAME_RE = /^(@[a-z0-9][a-z0-9-_.]*\/)?[a-z0-9][a-z0-9-_.]*$/;
+const PYPI_NAME_RE = /^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$/;
+const PEP440_EXACT_RE = /^\d+(\.\d+)*((a|b|rc)\d+)?(\.post\d+)?(\.dev\d+)?$/;
+const ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+// parseServerLines parses the Builder's line-based mcpServers field (one
+// declared server per line; the plain-HTML form has no list controls,
+// DEV-012):
+//
+//	npm:@scope/server-github@2026.1.2 tools=list_issues secrets=GITHUB_PAT egress=api.github.com
+//	pypi:mcp-server-fetch@0.6.2 egress=*
+//
+// Blank lines and #-comments are skipped. Returns a message naming the
+// first bad line, or null.
+export function parseServerLines(text: string): { servers: BuilderMCPServer[]; error: string | null } {
+  const servers: BuilderMCPServer[] = [];
+  for (const rawLine of text.split("\n")) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const [head, ...opts] = line.split(/\s+/);
+    const m = /^(npm|pypi):(.+)@([^@]+)$/.exec(head);
+    if (!m) {
+      return { servers, error: `mcpServers line "${line}": expected npm:<package>@<version> or pypi:<package>@<version>` };
+    }
+    const srv: BuilderMCPServer = {
+      source: m[1] as "npm" | "pypi",
+      pkg: m[2],
+      version: m[3],
+      tools: [],
+      secrets: [],
+      egress: [],
+    };
+    for (const opt of opts) {
+      const om = /^(tools|secrets|egress)=(.*)$/.exec(opt);
+      if (!om) return { servers, error: `mcpServers line "${line}": unknown option "${opt}" (tools= secrets= egress=)` };
+      const values = om[2].split(",").map((s) => s.trim()).filter(Boolean);
+      if (om[1] === "tools") srv.tools = values;
+      else if (om[1] === "secrets") srv.secrets = values;
+      else srv.egress = values;
+    }
+    servers.push(srv);
+  }
+  return { servers, error: null };
+}
+
+// validateServers applies the V5 rules the API will re-check.
+function validateServers(servers: BuilderMCPServer[]): string | null {
+  if (servers.length > 8) return "at most 8 MCP servers may be declared";
+  const seen = new Set<string>();
+  for (const s of servers) {
+    const id = `${s.source}:${s.pkg}`;
+    if (seen.has(id)) return `duplicate MCP server ${id}`;
+    seen.add(id);
+    if (s.source === "npm" && !NPM_NAME_RE.test(s.pkg)) return `"${s.pkg}" is not a valid npm package name`;
+    if (s.source === "pypi" && !PYPI_NAME_RE.test(s.pkg)) return `"${s.pkg}" is not a PEP-503 normalized PyPI name`;
+    const exact = s.source === "npm" ? SEMVER_RE.test(s.version) : PEP440_EXACT_RE.test(s.version);
+    if (!exact) return `MCP server ${id}: "${s.version}" is not an exact version (ranges are rejected — the pin is part of this release)`;
+    for (const n of s.secrets) if (!ENV_NAME_RE.test(n)) return `MCP server ${id}: secret "${n}" is not an env-var name`;
+    for (const t of s.tools) if (/\s/.test(t) || !t) return `MCP server ${id}: tool "${t}" must be a single token`;
+  }
+  return null;
+}
 
 // validateInput applies the form-level rules; the API's V-rules are the
 // real gate and re-check everything.
@@ -47,6 +121,8 @@ export function validateInput(i: BuilderInput): string | null {
   if (i.egressMode === "hosts" && i.egressHosts.length === 0) return "egress is set to hosts but no hosts are listed";
   if (i.fsRead === "paths" && i.fsReadPaths.length === 0) return "fs read is set to paths but no paths are listed";
   if (i.fsWrite === "paths" && i.fsWritePaths.length === 0) return "fs write is set to paths but no paths are listed";
+  const serverErr = validateServers(i.mcpServers);
+  if (serverErr) return serverErr;
   return null;
 }
 
@@ -99,6 +175,16 @@ export function renderManifest(i: BuilderInput): string {
   else lines.push("  exec: none");
   if (i.secrets.length > 0) lines.push(`  secrets: [${i.secrets.join(", ")}]`);
   if (i.dataAccess.length > 0) lines.push(`  dataAccess: [${i.dataAccess.join(", ")}]`);
+  if (i.mcpServers.length > 0) {
+    lines.push("  mcpServers:");
+    for (const s of i.mcpServers) {
+      lines.push(`    - ${s.source}: ${yamlString(s.pkg)}`);
+      lines.push(`      version: ${yamlString(s.version)}`);
+      if (s.tools.length > 0) lines.push(`      tools: [${s.tools.join(", ")}]`);
+      if (s.secrets.length > 0) lines.push(`      secrets: [${s.secrets.join(", ")}]`);
+      if (s.egress.length > 0) lines.push(`      egress: [${s.egress.map((h) => (h === "*" ? `"*"` : h)).join(", ")}]`);
+    }
+  }
   lines.push(
     "",
     "publish:",
