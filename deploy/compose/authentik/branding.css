@@ -2,15 +2,17 @@
  *
  * Source of truth for the palette is the web app's design tokens
  * (web/app/globals.css): warm paper and warm ink, one deep viridian
- * accent, theme-aware. Authentik's UI lives largely in shadow DOM, so
- * this file steers it almost entirely through CSS custom properties —
- * PatternFly's --pf-global-* and authentik's --ak-dark-* — which inherit
- * across shadow boundaries; element selectors here only touch light-DOM
- * chrome. Applied via the brand's branding_custom_css by
+ * accent, theme-aware. Authentik injects this stylesheet into the
+ * document AND into its shadow roots, where a `:root` selector matches
+ * nothing — hence every token rule is scoped `:root, :host`, and the
+ * work is done through CSS custom properties (PatternFly's --pf-global-*
+ * and authentik's --ak-dark-*) so it applies wherever the sheet lands.
+ * Applied via the brand's branding_custom_css by
  * scripts/dev/authentik-brand.sh.
  */
 
-:root {
+:root,
+:host {
   /* The web app's font stacks. */
   --pf-global--FontFamily--sans-serif: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --pf-global--FontFamily--heading--sans-serif: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -31,7 +33,8 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root,
+  :host {
     /* The registry's dark ground and surfaces. */
     --ak-dark-background: #141210;
     --ak-dark-background-darker: #0f0d0c;
