@@ -45,3 +45,25 @@ judge:
   baseUrl: ""        # e.g. https://api.openai.com or https://llm.gateway.internal
   apiKey: ""
   model: ""          # optional; defaults per protocol when empty
+
+# Social login for individual accounts (§12.1). All five are optional; a
+# provider without credentials is simply not offered. google and microsoft
+# have built-in OIDC endpoints; openai and claude need an issuer override.
+social:
+  google:
+    clientId: ""
+    clientSecret: ""
+  github:
+    clientId: ""
+    clientSecret: ""
+  microsoft:
+    clientId: ""
+    clientSecret: ""
+  openai:
+    clientId: ""
+    clientSecret: ""
+    issuer: ""     # OIDC issuer serving the sign-in flow (required)
+  claude:
+    clientId: ""
+    clientSecret: ""
+    issuer: ""     # OIDC issuer serving the sign-in flow (required)
