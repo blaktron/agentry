@@ -13,6 +13,7 @@ import {
   type ScanReport,
 } from "@/lib/api";
 import { fmtBytes, fmtCount, fmtUTCDate } from "@/lib/format";
+import { embeddedAllowedTools, gatewayToolRows, parseContract } from "@/lib/mcp";
 import { authedGet, currentUser } from "@/lib/session";
 import {
   Badge,
@@ -148,6 +149,14 @@ export default async function AgentPage({
   const deps = manifest?.dependencies?.agents ?? [];
   const tags = manifest?.tags ?? [];
 
+  // MCP servers & tools (RUNNER-PLAN-2 §P6, req 3): the tool surface the
+  // latest version's declared contract becomes — through the runner's
+  // per-run gateway, and as host built-ins in an embedded install. Derived
+  // entirely from the manifest; absent capabilities read as pure text.
+  const contract = parseContract(latest?.capabilities);
+  const toolRows = gatewayToolRows(contract);
+  const hostTools = embeddedAllowedTools(contract);
+
   // File browser state. The browser shows the latest PUBLISHED version
   // (yanked and earlier versions keep their own pages). `path` selects a
   // directory (default root) or one file to display.
@@ -261,6 +270,87 @@ export default async function AgentPage({
             <p className="mt-3 text-xs" style={{ color: "var(--color-muted)" }}>
               Capabilities are the author&apos;s declaration and the basis for policy and scanning.
               The registry cannot enforce them at run time. Your runtime should.
+            </p>
+          </Card>
+
+          <Card>
+            <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
+              MCP servers &amp; tools
+            </h2>
+            <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
+              <code>agentry run</code> serves exactly the tools this contract declares, through a
+              per-run MCP gateway. An undeclared capability is a tool that does not exist at run
+              time.
+            </p>
+
+            <h3 className="mt-4 text-sm font-semibold">Tools the runner grants</h3>
+            <table className="mt-2 w-full text-sm">
+              <thead>
+                <tr className="border-b text-left" style={{ borderColor: "var(--color-border)" }}>
+                  <th className="py-1 pr-4 font-medium">Manifest declaration</th>
+                  <th className="py-1 font-medium">Tool(s) granted</th>
+                </tr>
+              </thead>
+              <tbody>
+                {toolRows.map((r) => (
+                  <tr
+                    key={`${r.declaration} ${r.tools.join(" ")}`}
+                    className="border-b align-top last:border-0"
+                    style={{ borderColor: "var(--color-border)" }}
+                  >
+                    <td className="py-1.5 pr-4 font-mono text-xs">{r.declaration}</td>
+                    <td className="py-1.5 text-xs">
+                      <span className="font-mono">{r.tools.join(", ")}</span>
+                      <span style={{ color: "var(--color-muted)" }}> — {r.note}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <h3 className="mt-4 text-sm font-semibold">MCP servers involved</h3>
+            <ul className="mt-2 space-y-1 text-sm">
+              <li>
+                <span className="font-medium">BriefAgent Tools</span>
+                <span style={{ color: "var(--color-muted)" }}>
+                  {" "}
+                  — the runner&apos;s companion server, served through a per-run Docker MCP Gateway;
+                  its tool surface is exactly the table above.
+                </span>
+              </li>
+              {contract.dataAccess.length > 0 && (
+                <li style={{ color: "var(--color-muted)" }}>
+                  Operator-cataloged MCP servers may be attached for the declared dataAccess{" "}
+                  {contract.dataAccess.length > 1 ? "categories" : "category"} (
+                  <span className="font-mono text-xs">{contract.dataAccess.join(", ")}</span>);
+                  undeclared categories are never wired in.
+                </li>
+              )}
+            </ul>
+
+            {contract.secrets.length > 0 && (
+              <>
+                <h3 className="mt-4 text-sm font-semibold">Keys &amp; identities</h3>
+                <p className="mt-2 font-mono text-sm">{contract.secrets.join(", ")}</p>
+                <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>
+                  The runner&apos;s guided setup collects these once into the BriefAgent&apos;s MCP
+                  profile, kept or removed per the operator&apos;s choice. Values are never
+                  published or shown.
+                </p>
+              </>
+            )}
+
+            <h3 className="mt-4 text-sm font-semibold">In an embedded install</h3>
+            <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
+              Installed into an existing coding agent (<code>agentry install</code>), the same
+              contract maps to the host&apos;s built-in tools — enforcement there is the
+              host&apos;s. Allowed tools:{" "}
+              {hostTools.length > 0 ? (
+                <span className="font-mono text-xs">{hostTools.join(", ")}</span>
+              ) : (
+                <span>none declared (host defaults apply)</span>
+              )}
+              .
             </p>
           </Card>
 
