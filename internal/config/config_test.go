@@ -254,3 +254,41 @@ func TestNewEnvOverridesApply(t *testing.T) {
 		t.Errorf("signing notAfter = %q", cfg.Signing.NotAfter)
 	}
 }
+
+// The judge wires from three env vars (type, base URL, key) plus the model
+// override. AGENTRY_JUDGE_TYPE wins over the legacy AGENTRY_JUDGE_PROVIDER,
+// and openai/anthropic without endpoint credentials refuse to start.
+func TestJudgeEnvConfig(t *testing.T) {
+	t.Setenv("AGENTRY_JUDGE_TYPE", "openai")
+	t.Setenv("AGENTRY_JUDGE_BASE_URL", "https://llm.example.internal")
+	t.Setenv("AGENTRY_JUDGE_API_KEY", "sk-test")
+	t.Setenv("AGENTRY_JUDGE_MODEL", "gpt-test")
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Judge.Provider != "openai" || cfg.Judge.BaseURL != "https://llm.example.internal" ||
+		cfg.Judge.APIKey != "sk-test" || cfg.Judge.Model != "gpt-test" {
+		t.Errorf("judge env not applied: %+v", cfg.Judge)
+	}
+
+	// Type wins when both spellings are set.
+	t.Setenv("AGENTRY_JUDGE_PROVIDER", "anthropic")
+	cfg, err = Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Judge.Provider != "openai" {
+		t.Errorf("AGENTRY_JUDGE_TYPE must win over AGENTRY_JUDGE_PROVIDER, got %q", cfg.Judge.Provider)
+	}
+
+	// An HTTP protocol without its credentials is a startup error, not a
+	// silent fallback: the operator meant to have a judge.
+	t.Setenv("AGENTRY_JUDGE_TYPE", "anthropic")
+	t.Setenv("AGENTRY_JUDGE_PROVIDER", "")
+	t.Setenv("AGENTRY_JUDGE_API_KEY", "")
+	if _, err := Load(""); err == nil {
+		t.Error("anthropic judge without apiKey must fail validation")
+	}
+}

@@ -147,7 +147,12 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		if rerr != nil {
 			panic(rerr)
 		}
-		judge := scan.NewJudgeProvider(judgeProviderName(cfg))
+		judge := scan.NewJudgeProvider(scan.JudgeConfig{
+			Provider: judgeProviderName(cfg),
+			Model:    cfg.Judge.Model,
+			BaseURL:  cfg.Judge.BaseURL,
+			APIKey:   cfg.Judge.APIKey,
+		})
 		signer, serr := scan.NewSigner(context.Background(), scan.SignerOptions{
 			Kind:      cfg.Signing.Kind,
 			KeyFile:   cfg.Signing.KeyFile,
@@ -542,10 +547,14 @@ func (s *Server) metricsHandler() http.Handler {
 // judgeProviderName picks the judge provider: config value, or "static" in
 // dev so the pipeline is exercisable without a live model (DEV-007).
 func judgeProviderName(cfg config.Config) string {
-	if cfg.Judge.Provider == "none" && cfg.DevMode {
+	p := cfg.Judge.Provider
+	if p == "" {
+		p = "none"
+	}
+	if p == "none" && cfg.DevMode {
 		return "static"
 	}
-	return cfg.Judge.Provider
+	return p
 }
 
 // writeJSON writes a JSON 2xx response with no-store cache semantics (§9.1).
