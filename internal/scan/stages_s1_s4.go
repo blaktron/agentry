@@ -90,7 +90,23 @@ func (S1Inventory) Run(sc stageContext, in *Input) StageResult {
 			if int64(len(data)) <= textScanCap {
 				entry.Content = data
 			} else {
+				// DEV-036 closure: bytes past the cap are NOT read by
+				// S3/S4/S5, which without a finding was a silent evasion
+				// window — a payload appended after byte 1,048,576 of a
+				// large text file reached publication with no detector and
+				// no reviewer ever seeing it, and the report did not say
+				// content was skipped. Medium severity routes the version
+				// to human review, where the file viewer shows the whole
+				// file. (inventoryDir below truncates the S9 BASELINE the
+				// same way without a finding, deliberately: that archive
+				// already passed its own scan as the previous release.)
 				entry.Content = data[:textScanCap]
+				findings = append(findings, Finding{
+					Scanner: "S1/text-scan-truncated", Severity: SevMedium, Confidence: ConfHigh,
+					Title:    "Text file exceeds the scan cap — content past 1 MiB was not scanned",
+					FilePath: rel,
+					Detail:   map[string]any{"fileBytes": len(data), "scannedBytes": textScanCap},
+				})
 			}
 		default:
 			// Unknown binary blob (not exec, not archive, not image): allowed
