@@ -34,9 +34,15 @@ export async function apiGetWellKnown<T>(path: string, opts?: { revalidate?: num
 // SOCIAL_PROVIDERS is the §12.1 individual-login provider list. Each entry's
 // start endpoint lives on the API under /api/v1, i.e. same-origin with this
 // app in every deployment that fronts both (deploy/helm ingress `apiPaths`).
+// google and microsoft have built-in OIDC endpoints; openai and claude need
+// an operator-set issuer (§12.1). A provider this deployment has not
+// configured answers 404 on its start endpoint, so no button shows for it.
 export const SOCIAL_PROVIDERS: { id: string; label: string }[] = [
   { id: "google", label: "Google" },
   { id: "github", label: "GitHub" },
+  { id: "microsoft", label: "Microsoft" },
+  { id: "openai", label: "OpenAI" },
+  { id: "claude", label: "Claude" },
 ];
 
 // enabledSocialProviders asks the API which social providers this deployment
