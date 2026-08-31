@@ -511,6 +511,14 @@ Two smaller calls, recorded for completeness. The §12.4 SSO freshness ceiling i
 
 **Why:** Operator decision (2026-08-31): "there are lots of potential issues with user authentication and storage — separate the user/directory service out," for dev now and prod soon. Passwords, MFA, recovery, and the account directory are exactly the parts of §12.1 a dedicated IdP does better (the register carries the evidence: DEV-016's unfinished enrollment story, and the product shipped with no password-reset or password-change path at all).
 
+## DEV-059 — The BriefAgent Builder joins the web app; Advisories leaves the header for /trust (2026-08-31)
+
+**What:** A `/build` page (authed, one plain HTML form per DEV-012) authors a BriefAgent — identity, the §5.4 contract, instructions, visibility — and `/build/submit` renders the workspace (agent.yaml + entrypoint + README + full MIT LICENSE), packs a ustar tar compressed with Node's built-in zstd (`node:zlib.zstdCompressSync`, Node ≥22.15), creates the agent record when missing, and uploads over the same cli-upload path the CLI and desktop use — the server re-validates and re-packs, and the pipeline decides. `web/lib/briefagent.ts` carries the manifest renderer and archive packer with unit tests (tar structure, digest determinism, YAML quoting). Header nav: **Advisories** is replaced by **BriefAgent Builder**; Advisories keeps its footer link and gains a section on `/trust`.
+
+**Why:** Operator request (2026-08-31): the builder belongs on the site, in the header slot advisories occupied; advisories are reference material and read naturally from the trust page.
+
+**Impact:** §10's page inventory grows by one authed page; no API change (the upload endpoint, agent creation, scope enforcement are exactly the shipped ones — a Builder submission is indistinguishable from a CLI upload server-side). The web tar packer is well-formed rather than byte-identical to `pkg/archive` (the digest cross-check covers the uploaded bytes; the server's canonical re-pack defines the release identity, §6.5).
+
 ## DEV-058 — Desktop browser sign-in: /settings/tokens/desktop mints a PAT to a loopback listener (2026-08-31)
 
 **What:** Two web-tier additions give the desktop app a browser sign-in: `GET /settings/tokens/desktop?port=&state=` (authed page — the login redirect walks through the directory service like everything else — asking one explicit question: authorize the desktop app on this computer?) and `POST /settings/tokens/desktop/approve`, which creates a PAT through the existing session+CSRF `apiSend` path (scopes: agent:read/publish, repo:read/write, user:profile — no review:act, no org scopes) and 303s to `http://127.0.0.1:<port>/callback?state=…&token=…`. Port (1024–65535) and state (`[A-Za-z0-9_-]{8,128}`) are validated on both the page and the route; the redirect host is hardcoded to 127.0.0.1.
