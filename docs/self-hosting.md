@@ -464,6 +464,29 @@ ignored entirely. Setting it higher than the real hop count lets any client
 choose its own rate-limit bucket and forge audit IPs, which is worse than
 having no per-IP limiting at all.
 
+## Hosting the downloads
+
+The web app's `/download` page serves binaries from a directory on the
+host rather than from the image, so publishing a build is a file copy:
+
+```bash
+scripts/release/build-downloads.sh            # → dist/downloads/
+scp dist/downloads/* host:/srv/agentry/downloads/
+```
+
+The script cross-compiles the CLI for macOS (arm64, amd64), Linux (amd64,
+arm64) and Windows (amd64) — it is pure Go — and builds the desktop app
+for the host's own platform when the GTK/WebKit dev headers are present
+(Linux only, today; macOS and Windows desktop builds need their own
+machines). It writes `SHA256SUMS` and `manifest.json`; the page renders
+from the manifest, shows every target on the release matrix, and marks the
+ones without an artifact as not yet available instead of linking to
+nothing. Point `AGENTRY_DOWNLOADS_DIR` in `.env` at the directory — the
+edge serves it at `/downloads/` and the web container reads the manifest
+from it — and re-create the `edge` and `web` services once so the mount
+exists. Versions come from `git describe` in each repo, so tag releases
+(`v0.1.0`) to get readable file names.
+
 ## Choosing your publication policy
 
 The platform baseline lives in the `policies` table (`org_id IS NULL`) and is

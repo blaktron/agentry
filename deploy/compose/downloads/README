@@ -1,0 +1,3 @@
+# Drop the output of scripts/release/build-downloads.sh here (or point
+# AGENTRY_DOWNLOADS_DIR elsewhere). The edge serves it at /downloads/ and the
+# web app renders /download from its manifest.json.

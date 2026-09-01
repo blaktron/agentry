@@ -253,8 +253,13 @@ services:
       # DEV-057: /logout also ends the directory-service session when set
       # (the IdP's end-session URL for the registry application).
       AGENTRY_IDP_LOGOUT_URL: ${AGENTRY_IDP_LOGOUT_URL:-}
+      # The /download page reads manifest.json here; the edge serves the
+      # files at AGENTRY_DOWNLOADS_URL (default /downloads).
+      AGENTRY_DOWNLOADS_DIR: /downloads
     ports:
       - "3000:3000"
+    volumes:
+      - ${AGENTRY_DOWNLOADS_DIR:-./downloads}:/downloads:ro
     depends_on:
       - server
 
@@ -322,6 +327,8 @@ services:
       - ./edge/nginx.conf:/etc/nginx/nginx.conf:ro
       - ${AGENTRY_EDGE_CERT_DIR:-./edge/certs}:/etc/nginx/certs:ro
       - edgecache:/var/cache/nginx/edge
+      # Downloadable binaries (scripts/release/build-downloads.sh output).
+      - ${AGENTRY_DOWNLOADS_DIR:-./downloads}:/srv/downloads:ro
     depends_on:
       - server
       - web
