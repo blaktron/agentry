@@ -110,6 +110,9 @@ services:
     volumes:
       - authentik-media:/media
       - authentik-templates:/templates
+      # Declarative configuration, applied on boot and re-applied when the
+      # files change (idempotent): the enrollment flow (DEV-062) lives here.
+      - ./authentik/blueprints:/blueprints/custom:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -129,6 +132,9 @@ services:
     volumes:
       - authentik-media:/media
       - authentik-templates:/templates
+      # Declarative configuration, applied on boot and re-applied when the
+      # files change (idempotent): the enrollment flow (DEV-062) lives here.
+      - ./authentik/blueprints:/blueprints/custom:ro
     depends_on:
       postgres:
         condition: service_healthy
