@@ -280,7 +280,13 @@ Env: `AGENTRY_SMTP_HOST`, `AGENTRY_SMTP_PORT`, `AGENTRY_SMTP_USER`,
 (plus `AGENTRY_NOTIFY_KIND=smtp` to switch the notifier on).
 
 In dev the compose stack's **mailpit** (http://localhost:8025) is the default
-target and catches everything, so nothing leaves the machine. With no SMTP
+target and catches everything, so nothing leaves the machine. The compose
+file reads all of these (and the directory service's `AUTHENTIK_EMAIL_*`
+set) from `.env`, so switching both senders to a real provider is an `.env`
+edit plus recreating the `server` and `authentik-*` containers — with
+Postmark, the server token is both SMTP username and password, and until
+the account is approved it only delivers to recipients on the sending
+domain. With no SMTP
 configured at all, email verification tokens are logged at debug level.
 That is usable for a single-operator instance, not for anything with real
 users.
