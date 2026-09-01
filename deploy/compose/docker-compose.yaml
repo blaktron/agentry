@@ -333,13 +333,6 @@ services:
       - server
       - web
 
-secrets:
-  # Read token for the blaktron repos, consumed by the site builds' inner
-  # clone of this repo. Export it for the build only when the repos are
-  # private; empty (the default) means the clone runs anonymously.
-  gh_token:
-    environment: GITHUB_TOKEN
-
   # Cloudflare Tunnel (profile `tunnel`): the outbound-only connector that
   # publishes the edge to the internet without opening a port. Remotely
   # managed — the public hostnames and their origin (https://edge:443, with
@@ -364,6 +357,13 @@ secrets:
     security_opt: [no-new-privileges:true]
     depends_on:
       - edge
+
+secrets:
+  # Read token for the blaktron repos, consumed by the site builds' inner
+  # clone of this repo. Export it for the build only when the repos are
+  # private; empty (the default) means the clone runs anonymously.
+  gh_token:
+    environment: GITHUB_TOKEN
 
 volumes:
   pgdata:
