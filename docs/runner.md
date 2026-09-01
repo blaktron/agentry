@@ -11,7 +11,9 @@ as-built architecture and the immutable design record
 
 Two flags are global and available on every command below:
 `--registry URL` (the registry to talk to — otherwise the configured
-default, then `http://localhost:8080`) and `--json` (machine-readable
+default, then the default baked into the binary: builds served from a
+registry's `/download` page point at that registry, and a source build
+falls back to `http://localhost:8080`) and `--json` (machine-readable
 output where a command supports it: `info`, `search`, `verify`).
 
 ### `agentry setup`
@@ -199,9 +201,14 @@ docker environment · `14` the BriefAgent failed · `15` timeout ·
 The [desktop app](https://github.com/blaktron/agentry-desktop) mirrors
 the registry (browse, report cards, the MCP servers & tools section) and
 drives the same runner packages as the CLI: one-click setup with the
-provider table, guided profile configuration as a form, and in-app runs
+provider table (including a prerequisites installer for docker and the
+MCP gateway), guided profile configuration as a form, and in-app runs
 with task input, file/folder pickers for `/inputs` and the output folder,
-a keep-profile toggle, a live log stream, and the result envelope.
+a keep-profile toggle, a live log stream, and the result envelope. It
+signs in through the browser — the registry's directory service handles
+the login and a one-click approval hands the app a scoped token on a
+loopback listener — and its Build tab authors and submits BriefAgents
+through the same pipeline as `agentry publish`.
 
 ## Verifying a runner installation
 

@@ -108,8 +108,10 @@ and the `advisory.published` / `agent.quarantined` webhooks are the
 notification path, which is why pinning versions in a lockfile you actually
 review is worth the trouble.
 
-Advisories are currently shown on the affected agent's page; there is no
-global advisory feed (DEV-038).
+Advisories are shown on the affected agent's page, and the registry's
+`/advisories` page explains the model and the notification paths. There is
+still no global advisory *feed* — no listing of everything quarantined
+lately — which is recorded as DEV-038 rather than papered over.
 
 ## Everything here is auditable
 
