@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { apiGet, type AgentKind, type SearchResults } from "@/lib/api";
 import { AgentRow, Card } from "@/components/ui";
+import { BrowsePane } from "@/components/browse-pane";
 
 export const metadata: Metadata = { title: "Browse BriefAgents" };
 
@@ -34,9 +35,14 @@ export default async function SearchPage({
     license?: string;
     verified?: string;
     sort?: string;
+    selected?: string;
   }>;
 }) {
   const sp = await searchParams;
+  // The detail pane's subject: "ns/name", validated to the manifest's own
+  // identifier shape so the value can never be anything but a lookup key.
+  const selMatch = /^([a-z0-9][a-z0-9-]*)\/([a-z0-9][a-z0-9-]*)$/.exec((sp.selected ?? "").trim());
+  const selected = selMatch ? { namespace: selMatch[1], name: selMatch[2] } : null;
   const q = (sp.q ?? "").trim();
   const kind = KINDS.includes(sp.kind as AgentKind) ? (sp.kind as AgentKind) : undefined;
   const capability = CAPABILITIES.includes(sp.capability ?? "") ? sp.capability : undefined;
@@ -68,6 +74,22 @@ export default async function SearchPage({
   // whatever has actually been published to it.
   const licenseFacets = Object.entries(data?.facets?.license ?? {}).sort((a, b) => b[1] - a[1]);
   const filtered = Boolean(q || kind || capability || license || verified);
+
+  // Row links point back at this page with the same filters plus
+  // `selected`; the close link is the same URL without it.
+  const listParams = new URLSearchParams();
+  if (q) listParams.set("q", q);
+  if (kind) listParams.set("kind", kind);
+  if (capability) listParams.set("capability", capability);
+  if (license) listParams.set("license", license);
+  if (verified) listParams.set("verified", "1");
+  if (sort !== "relevance") listParams.set("sort", sort);
+  const hrefFor = (sel: string | null) => {
+    const p = new URLSearchParams(listParams);
+    if (sel) p.set("selected", sel);
+    const qs = p.toString();
+    return qs ? `/search?${qs}` : "/search";
+  };
 
   return (
     <div className="space-y-6">
@@ -187,25 +209,39 @@ export default async function SearchPage({
       )}
 
       {results.length > 0 && (
-        <>
-          <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-            {data?.total !== undefined && data.total > results.length
-              ? `${results.length} of ${data.total} results`
-              : `${results.length} result${results.length === 1 ? "" : "s"}`}
-            {q ? ` for “${q}”` : ""}
-          </p>
-          <ul>
-            {results.map((hit) => (
-              <AgentRow
-                key={`${hit.namespace}/${hit.name}`}
-                namespace={hit.namespace}
-                name={hit.name}
-                summary={hit.summary}
-                kind={hit.kind}
-              />
-            ))}
-          </ul>
-        </>
+        <div className={selected ? "grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]" : ""}>
+          <div>
+            <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+              {data?.total !== undefined && data.total > results.length
+                ? `${results.length} of ${data.total} results`
+                : `${results.length} result${results.length === 1 ? "" : "s"}`}
+              {q ? ` for “${q}”` : ""}
+              {!selected && (
+                <span className="ml-2 hidden lg:inline">· select one to see its report and install it</span>
+              )}
+            </p>
+            <ul>
+              {results.map((hit) => (
+                <AgentRow
+                  key={`${hit.namespace}/${hit.name}`}
+                  namespace={hit.namespace}
+                  name={hit.name}
+                  summary={hit.summary}
+                  kind={hit.kind}
+                  href={hrefFor(`${hit.namespace}/${hit.name}`)}
+                  selected={selected?.namespace === hit.namespace && selected?.name === hit.name}
+                />
+              ))}
+            </ul>
+          </div>
+          {selected && (
+            // First in reading order on small screens (it is what was just
+            // asked for); beside the list, sticky, from lg up.
+            <aside className="order-first lg:order-none lg:sticky lg:top-4 lg:self-start" aria-label="Selected BriefAgent">
+              <BrowsePane namespace={selected.namespace} name={selected.name} closeHref={hrefFor(null)} />
+            </aside>
+          )}
+        </div>
       )}
 
       <p className="text-sm" style={{ color: "var(--color-muted)" }}>
