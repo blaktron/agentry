@@ -5,7 +5,7 @@
 // without the gate.
 import { NextRequest, NextResponse } from "next/server";
 import { redirectBack, sameOrigin, readForm } from "@/lib/forms";
-import { apiSend, apiUpload, problemDetail } from "@/lib/session";
+import { apiSend, apiUpload, currentUser, problemDetail } from "@/lib/session";
 import {
   BuilderInput, packArchive, parseServerLines, validateInput, workspaceFiles,
 } from "@/lib/briefagent";
@@ -19,6 +19,13 @@ function list(v: FormDataEntryValue | null): string[] {
 
 export async function POST(req: NextRequest) {
   if (!sameOrigin(req)) return new NextResponse("cross-origin form post rejected", { status: 403 });
+  // The page offers publish only when signed in, but the route is the gate:
+  // a signed-out submission gets a message, not a mystery 401.
+  if (!(await currentUser())) {
+    return redirectBack(req, "/build", {
+      error: "publishing needs an account — sign in, or use Download package instead",
+    });
+  }
   const form = await readForm(req);
 
   const kind = String(form.get("kind") ?? "skill");
