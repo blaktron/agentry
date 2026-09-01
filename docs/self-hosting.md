@@ -493,9 +493,15 @@ The web app's `/download` page serves binaries from a directory on the
 host rather than from the image, so publishing a build is a file copy:
 
 ```bash
-scripts/release/build-downloads.sh            # → dist/downloads/
+AGENTRY_DEFAULT_REGISTRY=https://your.registry.example \
+  scripts/release/build-downloads.sh          # → dist/downloads/
 scp dist/downloads/* host:/srv/agentry/downloads/
 ```
+
+`AGENTRY_DEFAULT_REGISTRY` bakes the registry these binaries talk to when
+the user configures nothing — set it to the site that serves them, so a
+download from `/download` connects back to that site by default (`--registry`
+and the config file still override). Left empty, the source defaults apply.
 
 The script cross-compiles the CLI for macOS (arm64, amd64), Linux (amd64,
 arm64) and Windows (amd64) — it is pure Go — and builds the desktop app
