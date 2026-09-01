@@ -1651,6 +1651,12 @@ type SocialOidcCallbackParams struct {
 // SocialOidcCallbackParamsProvider defines parameters for SocialOidcCallback.
 type SocialOidcCallbackParamsProvider string
 
+// SocialOidcStartParams defines parameters for SocialOidcStart.
+type SocialOidcStartParams struct {
+	// Next Browser mode. An in-app, path-absolute return target (e.g. `/dashboard`). When present and valid, the callback answers the browser with a 303 to it instead of the JSON result, and a failed login 303s to `/login?error=…`. Anything that is not a single-slash path on this origin is ignored (open-redirect guard), which leaves the API behaviour unchanged.
+	Next *string `form:"next,omitempty" json:"next,omitempty"`
+}
+
 // SocialOidcStartParamsProvider defines parameters for SocialOidcStart.
 type SocialOidcStartParamsProvider string
 
@@ -2306,7 +2312,7 @@ type ClientInterface interface {
 
 	// SocialOidcCallback Social login redirect URI: establish a session (§12.1).
 	//
-	// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session.
+	// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session. A login begun with `next` (browser mode) answers 303 to that in-app path once the session cookie is set, or to `/login?error=…` on failure; the JSON result is the API mode, used when `next` was absent.
 	//
 	// Corresponds with GET /auth/oidc/{provider}/callback (the `SocialOidcCallback` operationId).
 	SocialOidcCallback(ctx context.Context, provider SocialOidcCallbackParamsProvider, params *SocialOidcCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2316,7 +2322,7 @@ type ClientInterface interface {
 	// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership. Org SSO lives under /orgs/{org}/sso (§12.4).
 	//
 	// Corresponds with GET /auth/oidc/{provider}/start (the `SocialOidcStart` operationId).
-	SocialOidcStart(ctx context.Context, provider SocialOidcStartParamsProvider, reqEditors ...RequestEditorFn) (*http.Response, error)
+	SocialOidcStart(ctx context.Context, provider SocialOidcStartParamsProvider, params *SocialOidcStartParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RegisterWithBody Create an individual account (email+password, §12.1).
 	//
@@ -3532,7 +3538,7 @@ func (c *Client) Logout(ctx context.Context, reqEditors ...RequestEditorFn) (*ht
 
 // SocialOidcCallback Social login redirect URI: establish a session (§12.1).
 //
-// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session.
+// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session. A login begun with `next` (browser mode) answers 303 to that in-app path once the session cookie is set, or to `/login?error=…` on failure; the JSON result is the API mode, used when `next` was absent.
 //
 // Corresponds with GET /auth/oidc/{provider}/callback (the `SocialOidcCallback` operationId).
 func (c *Client) SocialOidcCallback(ctx context.Context, provider SocialOidcCallbackParamsProvider, params *SocialOidcCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -3552,8 +3558,8 @@ func (c *Client) SocialOidcCallback(ctx context.Context, provider SocialOidcCall
 // Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership. Org SSO lives under /orgs/{org}/sso (§12.4).
 //
 // Corresponds with GET /auth/oidc/{provider}/start (the `SocialOidcStart` operationId).
-func (c *Client) SocialOidcStart(ctx context.Context, provider SocialOidcStartParamsProvider, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSocialOidcStartRequest(c.Server, provider)
+func (c *Client) SocialOidcStart(ctx context.Context, provider SocialOidcStartParamsProvider, params *SocialOidcStartParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSocialOidcStartRequest(c.Server, provider, params)
 	if err != nil {
 		return nil, err
 	}
@@ -6548,7 +6554,7 @@ func NewSocialOidcCallbackRequest(server string, provider SocialOidcCallbackPara
 }
 
 // NewSocialOidcStartRequest constructs an http.Request for the SocialOidcStart method
-func NewSocialOidcStartRequest(server string, provider SocialOidcStartParamsProvider) (*http.Request, error) {
+func NewSocialOidcStartRequest(server string, provider SocialOidcStartParamsProvider, params *SocialOidcStartParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6571,6 +6577,33 @@ func NewSocialOidcStartRequest(server string, provider SocialOidcStartParamsProv
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Next != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "next", *params.Next, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -10049,7 +10082,7 @@ type ClientWithResponsesInterface interface {
 
 	// SocialOidcCallbackWithResponse Social login redirect URI: establish a session (§12.1).
 	//
-	// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session.
+	// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session. A login begun with `next` (browser mode) answers 303 to that in-app path once the session cookie is set, or to `/login?error=…` on failure; the JSON result is the API mode, used when `next` was absent.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -10063,7 +10096,7 @@ type ClientWithResponsesInterface interface {
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /auth/oidc/{provider}/start (the `SocialOidcStart` operationId).
-	SocialOidcStartWithResponse(ctx context.Context, provider SocialOidcStartParamsProvider, reqEditors ...RequestEditorFn) (*SocialOidcStartResponse, error)
+	SocialOidcStartWithResponse(ctx context.Context, provider SocialOidcStartParamsProvider, params *SocialOidcStartParams, reqEditors ...RequestEditorFn) (*SocialOidcStartResponse, error)
 
 	// RegisterWithBodyWithResponse Create an individual account (email+password, §12.1).
 	//
@@ -15838,7 +15871,7 @@ func (c *ClientWithResponses) LogoutWithResponse(ctx context.Context, reqEditors
 
 // SocialOidcCallbackWithResponse Social login redirect URI: establish a session (§12.1).
 //
-// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session.
+// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session. A login begun with `next` (browser mode) answers 303 to that in-app path once the session cookie is set, or to `/login?error=…` on failure; the JSON result is the API mode, used when `next` was absent.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -15858,8 +15891,8 @@ func (c *ClientWithResponses) SocialOidcCallbackWithResponse(ctx context.Context
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /auth/oidc/{provider}/start (the `SocialOidcStart` operationId).
-func (c *ClientWithResponses) SocialOidcStartWithResponse(ctx context.Context, provider SocialOidcStartParamsProvider, reqEditors ...RequestEditorFn) (*SocialOidcStartResponse, error) {
-	rsp, err := c.SocialOidcStart(ctx, provider, reqEditors...)
+func (c *ClientWithResponses) SocialOidcStartWithResponse(ctx context.Context, provider SocialOidcStartParamsProvider, params *SocialOidcStartParams, reqEditors ...RequestEditorFn) (*SocialOidcStartResponse, error) {
+	rsp, err := c.SocialOidcStart(ctx, provider, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -18025,6 +18058,9 @@ func ParseSocialOidcCallbackResponse(rsp *http.Response) (*SocialOidcCallbackRes
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case rsp.StatusCode == 303:
+		break // No content-type
 
 	case rsp.StatusCode == 409:
 		break // No content-type

@@ -172,7 +172,7 @@ export interface paths {
         };
         /**
          * Social login redirect URI: establish a session (§12.1).
-         * @description Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session.
+         * @description Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session. A login begun with `next` (browser mode) answers 303 to that in-app path once the session cookie is set, or to `/login?error=…` on failure; the JSON result is the API mode, used when `next` was absent.
          */
         get: operations["socialOidcCallback"];
         put?: never;
@@ -2201,7 +2201,10 @@ export interface operations {
     };
     socialOidcStart: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Browser mode. An in-app, path-absolute return target (e.g. `/dashboard`). When present and valid, the callback answers the browser with a 303 to it instead of the JSON result, and a failed login 303s to `/login?error=…`. Anything that is not a single-slash path on this origin is ignored (open-redirect guard), which leaves the API behaviour unchanged. */
+                next?: string;
+            };
             header?: never;
             path: {
                 /** @description Social identity provider id (§12.1). google and microsoft use their built-in OIDC endpoints; openai and claude need an operator-set issuer; authentik is the deployment's own directory service (DEV-057) and also needs one; an unconfigured provider answers 404. */
@@ -2244,6 +2247,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SocialLoginResult"];
                 };
+            };
+            /** @description Browser mode — session cookie set, redirect to `next`. */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description An account with this email exists; link it explicitly. */
             409: {
