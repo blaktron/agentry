@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 48" width="300" height="48" role="img" aria-label="SecureAgentry">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 48" width="300" height="48" role="img" aria-label="Agentry">
   <!-- Wordmark: the mark plus the product name in the web app's sans stack
        and ink colors (globals.css). Theme-aware via the SVG's own media
        query, which browsers evaluate for SVG used in <img>. -->
@@ -16,5 +16,5 @@
     <path class="shield" d="M24 3 41 10.5 V 23 C 41 34.5 34 42.5 24 46.5 C 14 42.5 7 34.5 7 23 V 10.5 Z"/>
     <path class="check" d="M15.5 24.5 L 21.5 30.5 L 32.5 18.5"/>
   </g>
-  <text x="48" y="33">SecureAgentry</text>
+  <text x="48" y="33">Agentry</text>
 </svg>

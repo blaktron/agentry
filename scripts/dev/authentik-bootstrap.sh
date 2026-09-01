@@ -52,7 +52,7 @@ export SCOPE_MAPPINGS EMAIL_MANAGED_PK VERIFIED_NAME VERIFIED_PK
 # the registry's T-12 auto-link rule (verified IdP email ↔ verified account
 # email) needs the assertion to be true. A custom mapping replaces the
 # managed one for the `email` scope; idempotent by name.
-VERIFIED_NAME="SecureAgentry: OpenID 'email' (directory-verified)"; export VERIFIED_NAME
+VERIFIED_NAME="Agentry: OpenID 'email' (directory-verified)"; export VERIFIED_NAME
 VERIFIED_PK=$(curlx -G --data-urlencode "name=$VERIFIED_NAME" "$API/propertymappings/provider/scope/" | jget "(d['results'][0]['pk'] if d['results'] else '')")
 if [ -z "$VERIFIED_PK" ]; then
   VERIFIED_PK=$(curlx -X POST "$API/propertymappings/provider/scope/" -d "$(python3 -c '
@@ -114,7 +114,7 @@ fi
 
 echo "== application =="
 APP=$(curlx "$API/core/applications/?slug=agentry" | jget "d['pagination']['count']")
-BODY=$(PK="$PK" python3 -c "import json,os;print(json.dumps({'name':'SecureAgentry','slug':'agentry','provider':int(os.environ['PK'])}))")
+BODY=$(PK="$PK" python3 -c "import json,os;print(json.dumps({'name':'Agentry','slug':'agentry','provider':int(os.environ['PK'])}))")
 if [ "$APP" = "0" ]; then
   curlx -X POST "$API/core/applications/" -d "$BODY" -o /dev/null
   echo "created application slug=agentry"

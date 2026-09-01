@@ -1,14 +1,15 @@
-// Central brand + external-site configuration for the SecureAgentry web app.
+// Central brand + external-site configuration for the Agentry web app.
 //
-// "SecureAgentry" is the product/brand (PLAN §20 Q1). The CLI binary and the
-// server's env/config identifiers stay `agentry`/`AGENTRY_` — a brand distinct
-// from its command name, the way many products ship (e.g. a `gh` CLI). Only
-// user-visible copy is branded here.
+// The product is "Agentry" — the same word as the CLI, the runner, and the
+// `AGENTRY_` config prefix, so what people type is what they say. (It shipped
+// briefly as "SecureAgentry"; that was retired 2026-09-01 for exactly this
+// reason. The hosted domains kept their names.) Only user-visible copy is
+// branded here.
 //
 // The docs and developers sites are SEPARATE deployments. Their URLs are
 // configurable so the same web image runs in dev (pointing at local
 // containers) and in production (docs.secureagentry.net / developers…).
-export const BRAND = "SecureAgentry";
+export const BRAND = "Agentry";
 export const TAGLINE =
   "A registry and git host for single-purpose AI agents, with mandatory pre-publication security scanning and signed provenance.";
 

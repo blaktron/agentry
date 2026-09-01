@@ -1,4 +1,4 @@
-# SecureAgentry account flows: self-enrollment, password recovery, and the
+# Agentry account flows: self-enrollment, password recovery, and the
 # abuse controls on both. Applied automatically by authentik's blueprint
 # discovery (mounted at /blueprints/custom); idempotent — every entry is
 # keyed by a stable identifier, so re-applying updates in place.
@@ -20,7 +20,7 @@
 # nothing but the emailed confirmation link activates it.
 version: 1
 metadata:
-  name: SecureAgentry - Account flows (enrollment, recovery)
+  name: Agentry - Account flows (enrollment, recovery)
   labels:
     blueprints.goauthentik.io/description: >
       Self-service sign-up with email confirmation, password recovery, and
@@ -184,8 +184,8 @@ entries:
     identifiers:
       slug: agentry-enrollment
     attrs:
-      name: SecureAgentry enrollment
-      title: Create your SecureAgentry account
+      name: Agentry enrollment
+      title: Create your Agentry account
       designation: enrollment
       authentication: require_unauthenticated
       denied_action: message_continue
@@ -259,7 +259,7 @@ entries:
     attrs:
       use_global_settings: true
       template: email/account_confirmation.html
-      subject: Confirm your SecureAgentry account
+      subject: Confirm your Agentry account
       activate_user_on_success: true
       token_expiry: minutes=30
 
@@ -312,8 +312,8 @@ entries:
     identifiers:
       slug: agentry-recovery
     attrs:
-      name: SecureAgentry recovery
-      title: Reset your SecureAgentry password
+      name: Agentry recovery
+      title: Reset your Agentry password
       designation: recovery
       authentication: require_unauthenticated
       denied_action: message_continue
@@ -346,7 +346,7 @@ entries:
     attrs:
       use_global_settings: true
       template: email/password_reset.html
-      subject: Reset your SecureAgentry password
+      subject: Reset your Agentry password
       activate_user_on_success: false
       token_expiry: minutes=30
       recovery_max_attempts: 5
