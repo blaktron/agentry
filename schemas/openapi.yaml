@@ -93,6 +93,10 @@ paths:
       operationId: register
       tags: [auth]
       summary: Create an individual account (email+password, §12.1).
+      description: >
+        When the deployment delegates accounts to an external directory
+        (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone;
+        sign in through /auth/oidc/{provider}/start instead.
       security: []
       requestBody:
         required: true
@@ -113,6 +117,10 @@ paths:
   /auth/verify-email:
     post:
       operationId: verifyEmail
+      description: >
+        When the deployment delegates accounts to an external directory
+        (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone;
+        sign in through /auth/oidc/{provider}/start instead.
       tags: [auth]
       summary: Confirm an email address with the mailed token.
       security: []
@@ -135,6 +143,10 @@ paths:
   /auth/login:
     post:
       operationId: login
+      description: >
+        When the deployment delegates accounts to an external directory
+        (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone;
+        sign in through /auth/oidc/{provider}/start instead.
       tags: [auth]
       summary: Password (+TOTP when enabled) login; sets the session cookie.
       security: []
@@ -170,6 +182,10 @@ paths:
   /auth/2fa/totp/setup:
     post:
       operationId: totpSetup
+      description: >
+        When the deployment delegates accounts to an external directory
+        (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone;
+        sign in through /auth/oidc/{provider}/start instead.
       tags: [auth]
       summary: Begin TOTP enrollment; returns the provisioning secret.
       responses:
@@ -185,6 +201,10 @@ paths:
   /auth/2fa/totp/verify:
     post:
       operationId: totpVerify
+      description: >
+        When the deployment delegates accounts to an external directory
+        (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone;
+        sign in through /auth/oidc/{provider}/start instead.
       tags: [auth]
       summary: Confirm TOTP enrollment with a current code.
       requestBody:
