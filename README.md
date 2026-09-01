@@ -1,9 +1,9 @@
-# SecureAgentry
+# Agentry
 
 **A registry and git host for single-purpose AI agents, with a mandatory
 pre-publication security pipeline and signed provenance.**
 
-> **SecureAgentry** is the product and hosted service (secureagentry.net). The
+> **Agentry** is the product and hosted service (secureagentry.net). The
 > open-source framework it is built on, and the technical identifiers in this
 > repository — the Go module path, the `agentryd` / `agentry` binaries, and the
 > `AGENTRY_` env prefix — keep the `agentry` name. The brand is distinct from
@@ -11,7 +11,7 @@ pre-publication security pipeline and signed provenance.**
 
 Agent instruction files — skills, system prompts, small MCP servers — are
 executed with your credentials and your tool access. They are also, today,
-distributed with no signing, no malware scanning, and no review. SecureAgentry
+distributed with no signing, no malware scanning, and no review. Agentry
 treats that as the problem worth solving: every published version is scanned
 on the exact bytes that will ship, and nothing becomes installable until the
 gate decides.
@@ -120,7 +120,7 @@ and the deviations register (including the departures that make a claim
 weaker, not just the ones that make it stronger) — live in
 [agentry-notes](https://github.com/blaktron/agentry-notes).
 
-Decided since the plan was written: the product name (**SecureAgentry**, PLAN
+Decided since the plan was written: the product name (**Agentry**, PLAN
 §20 Q1 — this module keeps the `agentry` technical name) and the license
 (**MIT**, Q2). Still needing a human: the SaaS judge provider and region (Q3)
 and how strict the launch baseline policy should be (Q4).

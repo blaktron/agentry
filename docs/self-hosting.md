@@ -362,7 +362,7 @@ The bootstrap script attaches the `openid`, `profile`, and `email`
 scope mappings to the provider — without them authentik issues an ID
 token carrying `sub` alone and the registry can only create a placeholder
 account (`<handle>@authentik.social.local`) instead of linking to the
-existing one. For `email` it installs its own mapping, "SecureAgentry:
+existing one. For `email` it installs its own mapping, "Agentry:
 OpenID 'email' (directory-verified)", asserting `email_verified: true`:
 authentik's managed mapping hard-codes `false` (2026.8), and the
 registry's auto-link rule (T-12) only links an IdP identity to an

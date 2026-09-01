@@ -87,7 +87,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   if (!agent) return { title: `${ns}/${name}` };
   return {
     title: `${agent.namespace}/${agent.name}`,
-    description: agent.summary || `A ${agent.kind} BriefAgent on SecureAgentry, scanned and signed.`,
+    description: agent.summary || `A ${agent.kind} BriefAgent on Agentry, scanned and signed.`,
   };
 }
 
@@ -284,6 +284,7 @@ export default async function AgentPage({
             </p>
 
             <h3 className="mt-4 text-sm font-semibold">Tools the runner grants</h3>
+            <div className="overflow-x-auto">
             <table className="mt-2 w-full text-sm">
               <thead>
                 <tr className="border-b text-left" style={{ borderColor: "var(--color-border)" }}>
@@ -307,6 +308,7 @@ export default async function AgentPage({
                 ))}
               </tbody>
             </table>
+            </div>
 
             <h3 className="mt-4 text-sm font-semibold">MCP servers involved</h3>
             <ul className="mt-2 space-y-1 text-sm">
@@ -567,21 +569,29 @@ export default async function AgentPage({
         <aside className="space-y-6">
           <ReportCard report={report} reportHref={lv ? `/${n}/${a}/versions/${lv}` : `/${n}/${a}`} />
 
-          <Card>
+          <Card tone="secondary">
             <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
               Usage
             </h2>
             {stats ? (
               <>
-                <dl className="mt-3 grid grid-cols-3 gap-3">
-                  <StatTile label="Stars" value={fmtCount(stats.stars)} />
-                  <StatTile
-                    label="Installs"
-                    value={fmtCount(stats.installsTotal)}
-                    hint="All recorded downloads through the registry."
-                  />
-                  <StatTile label="Last 30d" value={fmtCount(stats.installs30d)} />
-                </dl>
+                {/* A row of zeros is a ledger, not information: until any
+                    counter moves, the card is just the star affordance. */}
+                {stats.stars + stats.installsTotal + stats.installs30d > 0 ? (
+                  <dl className="mt-3 grid grid-cols-3 gap-3">
+                    <StatTile label="Stars" value={fmtCount(stats.stars)} />
+                    <StatTile
+                      label="Installs"
+                      value={fmtCount(stats.installsTotal)}
+                      hint="All recorded downloads through the registry."
+                    />
+                    <StatTile label="Last 30d" value={fmtCount(stats.installs30d)} />
+                  </dl>
+                ) : (
+                  <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
+                    No stars or installs recorded yet — be the first.
+                  </p>
+                )}
                 <form method="post" action={`/${n}/${a}/star`} className="mt-3">
                   <input type="hidden" name="starred" value={stats.starred ? "1" : "0"} />
                   <button
@@ -607,7 +617,7 @@ export default async function AgentPage({
           </Card>
 
           {latest && (
-            <Card>
+            <Card tone="secondary">
               <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
                 Provenance
               </h2>
@@ -660,7 +670,7 @@ export default async function AgentPage({
             </Card>
           )}
 
-          <Card>
+          <Card tone="secondary">
             <div className="flex items-baseline justify-between gap-2">
               <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
                 Releases

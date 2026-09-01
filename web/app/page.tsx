@@ -4,7 +4,7 @@ import { fmtCount } from "@/lib/format";
 import { AgentRow, Card, CodeBlock } from "@/components/ui";
 import FlipSections from "@/components/flip-sections";
 
-// Home (§10.1): what SecureAgentry is, what people are actually installing, how to
+// Home (§10.1): what Agentry is, what people are actually installing, how to
 // install, and an honest statement of what scanning does and does not prove.
 // SSR for SEO (D-08).
 //
@@ -36,7 +36,14 @@ export default async function HomePage() {
     apiGet<Meta>("/meta", { revalidate: 60 }).catch(() => null),
     apiGet<SearchResults>("/search?sort=installs&limit=6", { revalidate: 300 }).catch(() => null),
   ]);
-  const featured = trending?.results ?? [];
+  // "Most installed" over a column of zeros is a ledger of nobody. Until
+  // installs exist, the honest list is the newest releases, said so.
+  const anyInstalls = (trending?.results ?? []).some((h) => (h.installs30d ?? 0) > 0);
+  const recent =
+    trending && !anyInstalls
+      ? await apiGet<SearchResults>("/search?sort=newest&limit=6", { revalidate: 300 }).catch(() => null)
+      : null;
+  const featured = (anyInstalls ? trending?.results : (recent ?? trending)?.results) ?? [];
 
   return (
     <div className="space-y-12">
@@ -45,7 +52,7 @@ export default async function HomePage() {
           A registry for BriefAgents, single-purpose AI agents
         </h1>
         <p className="mt-4 text-lg" style={{ color: "var(--color-muted)" }}>
-          SecureAgentry hosts BriefAgents in git: small, single-purpose AI agents, reviewed before
+          Agentry hosts BriefAgents in git: small, single-purpose AI agents, reviewed before
           anyone can install them. Every published version is scanned on the exact bytes that ship,
           for prompt injection, hidden instructions, undeclared capabilities, secrets, and
           supply-chain problems. Then it is signed.
@@ -261,7 +268,9 @@ export default async function HomePage() {
           content: (
         <section id="browse">
         <div className="flex items-baseline justify-between gap-4">
-          <h2 className="text-xl font-semibold">Most installed this month</h2>
+          <h2 className="text-xl font-semibold">
+            {anyInstalls ? "Most installed this month" : "Recently published"}
+          </h2>
           <Link href="/search" className="text-sm underline">
             Browse all BriefAgents
           </Link>
@@ -292,8 +301,9 @@ export default async function HomePage() {
           </ul>
         )}
         <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>
-          Ranked by installs, which is a popularity signal and not a safety one. Every one of them
-          still has a report worth reading.
+          {anyInstalls
+            ? "Ranked by installs, which is a popularity signal and not a safety one. Every one of them still has a report worth reading."
+            : "Newest first. Recency is not a safety signal either; every one of them has a report worth reading."}
         </p>
       </section>
           ),

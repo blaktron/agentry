@@ -27,12 +27,22 @@
   --color-accent: #0e7a63;
   --color-accent-fg: #ffffff;
 
-  --color-sev-critical: #b91c1c;
-  --color-sev-high: #dc2626;
-  --color-sev-medium: #d97706;
-  --color-sev-low: #65a30d;
-  --color-sev-info: #64748b;
-  --color-ok: #16a34a;
+  /* Semantic colours. Both palettes are tuned so the badge TEXT clears
+     4.5:1 on the page in its own mode (the dark set is overridden below —
+     a single red is 6:1 on paper and 2.9:1 on ink, and a critical badge
+     that is the least readable thing on the page is the wrong failure).
+     Critical and high stay visibly distinct: §8 gates on the difference. */
+  --color-sev-critical: #991b1b;
+  --color-sev-high: #b91c1c;
+  --color-sev-medium: #b45309;
+  --color-sev-low: #4d7c0f;
+  --color-sev-info: #475569;
+  --color-ok: #15803d;
+
+  /* Type: IBM Plex Sans / Mono, self-hosted via app/fonts.ts, which sets the
+     --font-plex-* variables on <html>. */
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 
   /* Solid destructive/affirmative buttons. --color-ok is a fill, not a text
      colour: white on it is 3.0:1, so the solid variant is a step darker
@@ -46,6 +56,10 @@
   /* Both palettes exist and both follow the OS preference, so the UA may
      style form controls either way — it will agree with the tokens. */
   color-scheme: light dark;
+  /* Badge background strength. Light needs a fainter tint than dark for the
+     same text colour to stay legible on it (the tint pulls the ratio down
+     more against paper than against ink). */
+  --badge-tint: 8%;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -57,13 +71,24 @@
     --color-surface: #1c1917;
     --color-accent: #4fd1b0;
     --color-accent-fg: #141210;
+    --color-sev-critical: #fca5a5;
+    --color-sev-high: #f87171;
+    --color-sev-medium: #fbbf24;
+    --color-sev-low: #a3e635;
+    --color-sev-info: #94a3b8;
+    --color-ok: #4ade80;
+    --badge-tint: 16%;
   }
 }
 
 body {
   background: var(--color-bg);
   color: var(--color-fg);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-sans);
+}
+
+h1, h2, h3 {
+  text-wrap: balance;
 }
 
 /* Technical values (identifiers, versions, capabilities, commands) set in
@@ -73,7 +98,7 @@ code,
 pre,
 kbd,
 samp {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 /* One focus affordance everywhere, in the accent. */
