@@ -329,6 +329,29 @@ first boot. Then in `deploy/compose/.env`: `AGENTRY_TRUSTED_PROXIES=1`,
 certificate, `AGENTRY_PUBLIC_URL=https://<host>` (clone, install and
 download URLs render from it) and `AGENTRY_COOKIE_SECURE=true`.
 
+### Cloudflare Tunnel
+
+The compose stack can publish the edge through a Cloudflare Tunnel — an
+outbound-only connector, so the host opens no inbound port at all:
+
+```bash
+# .env (git-ignored, mode 600)
+CLOUDFLARE_TUNNEL_TOKEN=…          # Zero Trust → Networks → Tunnels → your tunnel → token
+COMPOSE_PROFILES=server,tunnel     # so a plain `docker compose up -d` includes it
+```
+
+The `cloudflared` service is behind the `tunnel` profile so a stack without
+a token still starts. The token reaches the connector only as the
+`TUNNEL_TOKEN` environment variable — not as a command-line argument, so it
+does not appear in `ps` or `docker inspect`'s command — and the container
+runs read-only with every capability dropped. The tunnel is remotely
+managed: configure the public hostnames in the dashboard, each with origin
+`https://edge:443` and the **origin server name** set to that hostname so
+TLS to the edge verifies (see the beta readiness notes for the full list of
+hostnames and the caching, WAF, and Access settings that matter). Running
+`docker run … --token …` by hand holds the terminal because cloudflared runs
+in the foreground; the service is the way to run it.
+
 ### The directory service (DEV-057)
 
 The compose stack ships Authentik as the account directory: passwords,
