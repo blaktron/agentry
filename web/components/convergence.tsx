@@ -84,7 +84,13 @@ export function Convergence({ className = "" }: { className?: string }) {
       <path d={outputPath} className="cv-out" />
       <circle cx={FOCUS.x} cy={FOCUS.y} r="26" fill="url(#cv-focus)" className="cv-focus" />
       <circle cx={FOCUS.x} cy={FOCUS.y} r="4" style={{ fill: "#ffffff" }} />
-      <text x={FOCUS.x + 8} y={FOCUS.y + 26} className="cv-label" style={{ fill: "var(--color-muted)" }}>
+      <text
+        x={FOCUS.x}
+        y={FOCUS.y + 34}
+        textAnchor="middle"
+        className="cv-label"
+        style={{ fill: "var(--color-muted)" }}
+      >
         one result, one receipt
       </text>
     </svg>
