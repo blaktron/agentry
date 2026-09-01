@@ -1,0 +1,497 @@
+# SecureAgentry account flows: self-enrollment, password recovery, and the
+# abuse controls on both. Applied automatically by authentik's blueprint
+# discovery (mounted at /blueprints/custom); idempotent — every entry is
+# keyed by a stable identifier, so re-applying updates in place.
+#
+# Why one file (DEV-062, DEV-063): enrollment and recovery must enforce the
+# SAME password rules, so the policy and the two password prompt fields are
+# shared objects referenced by both flows. Splitting them across files would
+# mean either duplicating the rules (drift) or a cross-file !Find whose
+# success depends on the order authentik happens to discover files in.
+#
+# Enrollment:  captcha (5) → prompt (10) → user write, inactive (20)
+#              → email confirmation, activates (30) → login (100)
+# Recovery:    identification (10) → email link (20) → new password (30)
+#              → user write (40) → login (100)
+#
+# The registry links an IdP identity to an account by VERIFIED email (T-12)
+# and the provider asserts `email_verified: true` (DEV-061). That assertion
+# is only honest because a self-enrolled account is written INACTIVE and
+# nothing but the emailed confirmation link activates it.
+version: 1
+metadata:
+  name: SecureAgentry - Account flows (enrollment, recovery)
+  labels:
+    blueprints.goauthentik.io/description: >
+      Self-service sign-up with email confirmation, password recovery, and
+      the CAPTCHA + per-IP rate limit that protect both.
+entries:
+  # ==========================================================================
+  # Shared: password fields and the one password strength rule
+  # ==========================================================================
+  # Used by BOTH the enrollment form and the password-reset form, so a
+  # password set during recovery is held to the same bar as one chosen at
+  # sign-up. That is the whole reason these live outside either flow.
+  - model: authentik_stages_prompt.prompt
+    id: field-password
+    identifiers:
+      name: agentry-password
+    attrs:
+      field_key: password
+      label: Password
+      type: password
+      required: true
+      placeholder: "At least 12 characters"
+      placeholder_expression: false
+      order: 100
+  - model: authentik_stages_prompt.prompt
+    id: field-password-repeat
+    identifiers:
+      name: agentry-password-repeat
+    attrs:
+      field_key: password_repeat
+      label: Password (repeat)
+      type: password
+      required: true
+      placeholder: "Same again"
+      placeholder_expression: false
+      order: 101
+
+  # A static 12-character minimum plus zxcvbn, so "Password1234" fails and a
+  # long passphrase passes. No HIBP lookup: it needs egress from the
+  # container, and an outage there would block sign-ups and resets outright.
+  - model: authentik_policies_password.passwordpolicy
+    id: password-policy
+    identifiers:
+      name: agentry-password-policy
+    attrs:
+      password_field: password
+      check_static_rules: true
+      length_min: 12
+      amount_digits: 0
+      amount_uppercase: 0
+      amount_lowercase: 0
+      amount_symbols: 0
+      check_zxcvbn: true
+      zxcvbn_score_threshold: 2
+      check_have_i_been_pwned: false
+      error_message: "Use at least 12 characters, and something harder to guess."
+
+  # ==========================================================================
+  # Abuse controls
+  # ==========================================================================
+  # CAPTCHA on sign-up. Defaults are Cloudflare's published Turnstile TEST
+  # keys, which always pass — that keeps the dev stack working out of the box
+  # and still exercises the real siteverify call. A real deployment MUST set
+  # AUTHENTIK_CAPTCHA_SITE_KEY and AUTHENTIK_CAPTCHA_SECRET_KEY (compose
+  # passes both through); with the test keys in place this stage stops no one.
+  # Turnstile returns no score, so score checking is off rather than
+  # configured to a threshold it will never report.
+  - model: authentik_stages_captcha.captchastage
+    id: stage-captcha
+    identifiers:
+      name: agentry-captcha
+    attrs:
+      public_key: !Env [AUTHENTIK_CAPTCHA_SITE_KEY, "1x00000000000000000000AA"]
+      private_key: !Env [AUTHENTIK_CAPTCHA_SECRET_KEY, "1x0000000000000000000000000000000AA"]
+      js_url: !Env [AUTHENTIK_CAPTCHA_JS_URL, "https://challenges.cloudflare.com/turnstile/v0/api.js"]
+      api_url: !Env [AUTHENTIK_CAPTCHA_API_URL, "https://challenges.cloudflare.com/turnstile/v0/siteverify"]
+      interactive: true
+      error_on_invalid_score: false
+      score_min_threshold: 0.0
+      score_max_threshold: 1.0
+
+  # Per-IP rate limit across both account flows. The CAPTCHA raises the cost
+  # of a single attempt; this caps how much work one address can make the
+  # system do at all, which is what stops a solver farm or a leaked-key
+  # bypass from running all night.
+  #
+  # It counts SIDE EFFECTS, not page loads: accounts actually created plus
+  # mails actually sent, from this client IP, in the last hour, read from
+  # authentik's own event log. That choice is deliberate and was arrived at
+  # by measurement, not preference:
+  #
+  #   * A policy bound to a flow is evaluated once when the flow plan is
+  #     created, not per submission — so a counter keyed on POSTs never
+  #     increments at all (verified: it silently did nothing).
+  #   * Counting flow starts instead does work, but it punishes refreshing
+  #     the sign-up page, and it needs a durable counter — which this
+  #     deployment cannot provide, because authentik's cache backend
+  #     (django_postgres_cache) ignores the per-entry timeout passed to
+  #     incr()/touch() and expires everything at the global 300s default.
+  #     A "20 per hour" limit written that way is really 20 per 5 minutes.
+  #
+  # The event log has none of those problems: it is durable, exactly
+  # hour-accurate, and counts the things worth limiting. A real person costs
+  # 2 (one account, one confirmation mail) to sign up and 1 to reset a
+  # password, so the budget below is generous for a shared office address
+  # and still ends bulk account creation.
+  #
+  # Recovery additionally has authentik's own per-user control on the email
+  # stage (recovery_max_attempts / recovery_cache_timeout, set below); this
+  # policy is the per-IP half, which is what stops one source mailing a
+  # thousand different victims.
+  #
+  # Fails OPEN on an unexpected error: a broken counter must not become an
+  # outage on the only route into the product.
+  - model: authentik_policies_expression.expressionpolicy
+    id: policy-rate-limit
+    identifiers:
+      name: agentry-account-flow-rate-limit
+    attrs:
+      execution_logging: true
+      expression: |
+        MAX_PER_HOUR = 10
+        try:
+            from datetime import timedelta
+
+            from django.db.models import Q
+            from django.utils.timezone import now
+
+            from authentik.events.models import Event, EventAction
+            from authentik.root.middleware import ClientIPMiddleware
+
+            http = request.http_request
+            if http is None:
+                return True
+            client_ip = ClientIPMiddleware.get_client_ip(http)
+            recent = (
+                Event.objects.filter(
+                    client_ip=client_ip,
+                    created__gte=now() - timedelta(hours=1),
+                )
+                .filter(
+                    Q(action=EventAction.EMAIL_SENT)
+                    | Q(action=EventAction.MODEL_CREATED, context__model__model_name="user")
+                )
+                .count()
+            )
+            if recent >= MAX_PER_HOUR:
+                ak_logger.info(
+                    "agentry: account flow rate limit hit", ip=client_ip, recent=recent
+                )
+                ak_message("Too many attempts from this network. Please try again later.")
+                return False
+        except Exception as exc:
+            ak_logger.warning("agentry: rate limit check failed, allowing", exc=str(exc))
+        return True
+
+  # ==========================================================================
+  # Enrollment
+  # ==========================================================================
+  - model: authentik_flows.flow
+    id: flow-enrollment
+    identifiers:
+      slug: agentry-enrollment
+    attrs:
+      name: SecureAgentry enrollment
+      title: Create your SecureAgentry account
+      designation: enrollment
+      authentication: require_unauthenticated
+      denied_action: message_continue
+      layout: stacked
+
+  - model: authentik_stages_prompt.prompt
+    id: field-username
+    identifiers:
+      name: agentry-enrollment-username
+    attrs:
+      field_key: username
+      label: Username
+      type: username
+      required: true
+      placeholder: "lowercase, letters and digits — this becomes your registry handle"
+      placeholder_expression: false
+      order: 0
+  - model: authentik_stages_prompt.prompt
+    id: field-name
+    identifiers:
+      name: agentry-enrollment-name
+    attrs:
+      field_key: name
+      label: Display name
+      type: text
+      required: true
+      placeholder: "How you want to appear on the registry"
+      placeholder_expression: false
+      order: 1
+  - model: authentik_stages_prompt.prompt
+    id: field-email
+    identifiers:
+      name: agentry-enrollment-email
+    attrs:
+      field_key: email
+      label: Email
+      type: email
+      required: true
+      placeholder: "We send a confirmation link here"
+      placeholder_expression: false
+      order: 2
+
+  - model: authentik_stages_prompt.promptstage
+    id: stage-enrollment-prompt
+    identifiers:
+      name: agentry-enrollment-prompt
+    attrs:
+      fields:
+        - !KeyOf field-username
+        - !KeyOf field-name
+        - !KeyOf field-email
+        - !KeyOf field-password
+        - !KeyOf field-password-repeat
+      validation_policies:
+        - !KeyOf password-policy
+
+  - model: authentik_stages_user_write.userwritestage
+    id: stage-enrollment-user-write
+    identifiers:
+      name: agentry-enrollment-user-write
+    attrs:
+      create_users_as_inactive: true
+      user_creation_mode: always_create
+      user_type: internal
+      user_path_template: users/self-enrolled
+
+  - model: authentik_stages_email.emailstage
+    id: stage-enrollment-email
+    identifiers:
+      name: agentry-enrollment-email-confirmation
+    attrs:
+      use_global_settings: true
+      template: email/account_confirmation.html
+      subject: Confirm your SecureAgentry account
+      activate_user_on_success: true
+      token_expiry: minutes=30
+
+  - model: authentik_stages_user_login.userloginstage
+    id: stage-enrollment-login
+    identifiers:
+      name: agentry-enrollment-login
+
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow-enrollment
+      stage: !KeyOf stage-captcha
+      order: 5
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow-enrollment
+      stage: !KeyOf stage-enrollment-prompt
+      order: 10
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow-enrollment
+      stage: !KeyOf stage-enrollment-user-write
+      order: 20
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow-enrollment
+      stage: !KeyOf stage-enrollment-email
+      order: 30
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow-enrollment
+      stage: !KeyOf stage-enrollment-login
+      order: 100
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      policy: !KeyOf policy-rate-limit
+      target: !KeyOf flow-enrollment
+      order: 0
+    attrs:
+      enabled: true
+      negate: false
+      timeout: 30
+
+  # ==========================================================================
+  # Password recovery
+  # ==========================================================================
+  - model: authentik_flows.flow
+    id: flow-recovery
+    identifiers:
+      slug: agentry-recovery
+    attrs:
+      name: SecureAgentry recovery
+      title: Reset your SecureAgentry password
+      designation: recovery
+      authentication: require_unauthenticated
+      denied_action: message_continue
+      layout: stacked
+
+  # pretend_user_exists is the anti-enumeration setting: an unknown address
+  # gets the same "check your email" answer a real one does, so this form
+  # cannot be used to discover who has an account.
+  - model: authentik_stages_identification.identificationstage
+    id: stage-recovery-identification
+    identifiers:
+      name: agentry-recovery-identification
+    attrs:
+      user_fields:
+        - email
+        - username
+      case_insensitive_matching: true
+      pretend_user_exists: true
+      show_matched_user: false
+
+  # activate_user_on_success is deliberately FALSE here, unlike the
+  # enrollment stage. Recovery proves control of the mailbox, but an account
+  # can also be inactive because an operator deactivated it — and a
+  # deactivated user must not be able to reactivate themselves by requesting
+  # a password reset. Only enrollment confirmation activates an account.
+  - model: authentik_stages_email.emailstage
+    id: stage-recovery-email
+    identifiers:
+      name: agentry-recovery-email
+    attrs:
+      use_global_settings: true
+      template: email/password_reset.html
+      subject: Reset your SecureAgentry password
+      activate_user_on_success: false
+      token_expiry: minutes=30
+      recovery_max_attempts: 5
+      recovery_cache_timeout: minutes=30
+
+  - model: authentik_stages_prompt.promptstage
+    id: stage-recovery-prompt
+    identifiers:
+      name: agentry-recovery-prompt
+    attrs:
+      fields:
+        - !KeyOf field-password
+        - !KeyOf field-password-repeat
+      validation_policies:
+        - !KeyOf password-policy
+
+  - model: authentik_stages_user_write.userwritestage
+    id: stage-recovery-user-write
+    identifiers:
+      name: agentry-recovery-user-write
+    attrs:
+      user_creation_mode: never_create
+
+  - model: authentik_stages_user_login.userloginstage
+    id: stage-recovery-login
+    identifiers:
+      name: agentry-recovery-login
+
+  # When the user returns by clicking the emailed link, the flow plan is
+  # restored and the identification stage has already been answered — this
+  # policy skips re-asking. Mirrors authentik's own recovery example.
+  - model: authentik_policies_expression.expressionpolicy
+    id: policy-skip-if-restored
+    identifiers:
+      name: agentry-recovery-skip-if-restored
+    attrs:
+      expression: |
+        return bool(request.context.get('is_restored', True))
+
+  - model: authentik_flows.flowstagebinding
+    id: binding-recovery-identification
+    identifiers:
+      target: !KeyOf flow-recovery
+      stage: !KeyOf stage-recovery-identification
+      order: 10
+    attrs:
+      evaluate_on_plan: true
+      re_evaluate_policies: true
+      policy_engine_mode: any
+      invalid_response_action: retry
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow-recovery
+      stage: !KeyOf stage-recovery-email
+      order: 20
+    attrs:
+      evaluate_on_plan: true
+      re_evaluate_policies: true
+      policy_engine_mode: any
+      invalid_response_action: retry
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow-recovery
+      stage: !KeyOf stage-recovery-prompt
+      order: 30
+    attrs:
+      evaluate_on_plan: true
+      re_evaluate_policies: false
+      policy_engine_mode: any
+      invalid_response_action: retry
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow-recovery
+      stage: !KeyOf stage-recovery-user-write
+      order: 40
+    attrs:
+      evaluate_on_plan: true
+      re_evaluate_policies: false
+      policy_engine_mode: any
+      invalid_response_action: retry
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow-recovery
+      stage: !KeyOf stage-recovery-login
+      order: 100
+    attrs:
+      evaluate_on_plan: true
+      re_evaluate_policies: false
+      policy_engine_mode: any
+      invalid_response_action: retry
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      policy: !KeyOf policy-skip-if-restored
+      target: !KeyOf binding-recovery-identification
+      order: 0
+    attrs:
+      enabled: true
+      negate: false
+      timeout: 30
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      policy: !KeyOf policy-rate-limit
+      target: !KeyOf flow-recovery
+      order: 0
+    attrs:
+      enabled: true
+      negate: false
+      timeout: 30
+
+  # ==========================================================================
+  # Surface both on the login page
+  # ==========================================================================
+  # The shipped identification stage renders a "Sign up" link when it has an
+  # enrollment flow and a "Forgot password?" link when it has a recovery one.
+  # user_fields is restated because authentik validates the whole stage on
+  # update and rejects "no user fields and no sources"; these are the shipped
+  # defaults, so nothing about sign-in changes.
+  - model: authentik_stages_identification.identificationstage
+    identifiers:
+      name: default-authentication-identification
+    attrs:
+      user_fields:
+        - email
+        - username
+      enrollment_flow: !KeyOf flow-enrollment
+      recovery_flow: !KeyOf flow-recovery
+
+  # ==========================================================================
+  # Cleanup: objects superseded by the shared ones above (DEV-063)
+  # ==========================================================================
+  # These were created by the first version of this blueprint, when the
+  # password field and policy lived inside the enrollment flow. They are
+  # unreferenced now that both flows share one set. No-ops on a fresh
+  # install; removable once every deployment has applied this once.
+  - model: authentik_stages_prompt.prompt
+    state: absent
+    identifiers:
+      name: agentry-enrollment-password
+  - model: authentik_stages_prompt.prompt
+    state: absent
+    identifiers:
+      name: agentry-enrollment-password-repeat
+  - model: authentik_policies_password.passwordpolicy
+    state: absent
+    identifiers:
+      name: agentry-enrollment-password-policy
