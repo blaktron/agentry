@@ -12,14 +12,16 @@ export function Card({
   className = "",
   tone = "primary",
   style,
+  ...rest
 }: {
   children: React.ReactNode;
   className?: string;
   tone?: "primary" | "secondary";
   style?: React.CSSProperties;
-}) {
+} & Omit<React.HTMLAttributes<HTMLDivElement>, "className" | "style" | "children">) {
   return (
     <div
+      {...rest}
       className={`rounded-md border p-4 ${className}`}
       style={{
         borderColor: "var(--color-border)",

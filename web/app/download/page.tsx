@@ -48,7 +48,7 @@ function DownloadCard({
       tone={artifact ? "primary" : "secondary"}
       className="download-card flex flex-col gap-2"
       // data-platform is what components/platform-hint.tsx matches on.
-      {...({ "data-platform": `${os}-${arch}` } as Record<string, string>)}
+      data-platform={`${os}-${arch}`}
     >
       <div className="flex items-baseline justify-between gap-2">
         <div className="font-medium">{label}</div>
