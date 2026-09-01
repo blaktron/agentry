@@ -229,6 +229,12 @@ samp {
 .download-card[data-yours="true"] { border-color: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent); }
 .download-card[data-yours="true"] .yours { display: inline-block; }
 
+/* Browse results: the whole row opens the detail pane (cover link), the
+   identifier goes to the page. Hovering the row hints at the first. */
+.agent-row:has(.agent-row-cover) { cursor: pointer; }
+.agent-row:has(.agent-row-cover:hover) { background: color-mix(in srgb, var(--color-accent) 4%, transparent); }
+.agent-row-cover:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+
 /* Browse results: the row the detail pane is showing. */
 .agent-row[aria-current="true"] {
   margin-left: -0.75rem;

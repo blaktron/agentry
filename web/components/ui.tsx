@@ -231,32 +231,46 @@ function describeExec(v: unknown): string | null {
 }
 
 // AgentRow is the search/listing row.
-// `href` overrides the row's link (the browse page points rows at itself
-// with `?selected=` so the detail pane opens in place); `selected` marks the
-// row the pane is showing.
+// AgentRow is the search/listing row. The identifier always links to the
+// BriefAgent's own page. When `detailHref` is given (the browse page), the
+// REST of the row — summary, badge, empty space — opens the detail pane
+// instead: a cover link laid over the row, with the identifier link raised
+// above it so the two never nest (nested anchors are invalid HTML and
+// browsers split them unpredictably). Both are real links, both reachable
+// by keyboard; `selected` marks the row the pane is showing.
 export function AgentRow({
   namespace,
   name,
   summary,
   kind,
-  href,
+  detailHref,
   selected = false,
 }: {
   namespace: string;
   name: string;
   summary: string;
   kind: AgentKind;
-  href?: string;
+  detailHref?: string;
   selected?: boolean;
 }) {
   return (
     <li
-      className="agent-row border-b py-3 last:border-0"
+      className={`agent-row border-b py-3 last:border-0 ${detailHref ? "relative" : ""}`}
       style={{ borderColor: "var(--color-border)" }}
       aria-current={selected ? "true" : undefined}
     >
+      {detailHref && (
+        <Link
+          href={detailHref}
+          className="agent-row-cover absolute inset-0 rounded-md"
+          aria-label={`Show details for ${namespace}/${name}`}
+        />
+      )}
       <div className="flex items-baseline gap-3">
-        <Link href={href ?? `/${namespace}/${name}`} className="font-mono font-medium hover:underline">
+        <Link
+          href={`/${namespace}/${name}`}
+          className={`font-mono font-medium hover:underline ${detailHref ? "relative z-10" : ""}`}
+        >
           {namespace}/{name}
         </Link>
         <KindBadge kind={kind} />
