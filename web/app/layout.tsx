@@ -4,6 +4,8 @@ import { headers } from "next/headers";
 import "./globals.css";
 import { plexMono, plexSans } from "./fonts";
 import { Mark, Wordmark } from "@/components/brand";
+import { CookieBanner, COOKIE_ACK_COOKIE } from "@/components/cookie-banner";
+import { cookies } from "next/headers";
 import { currentUser, reviewerOrgs } from "@/lib/session";
 import { SITE } from "@/lib/site";
 
@@ -258,13 +260,16 @@ function SiteFooter() {
   );
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const [user, jar] = await Promise.all([currentUser(), cookies()]);
+  const cookieAcked = Boolean(jar.get(COOKIE_ACK_COOKIE)?.value);
   return (
     <html lang="en" className={`${plexSans.variable} ${plexMono.variable}`}>
       <body>
         <SiteHeader />
         <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
         <SiteFooter />
+        <CookieBanner user={user} acked={cookieAcked} />
       </body>
     </html>
   );

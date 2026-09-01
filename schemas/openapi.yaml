@@ -358,6 +358,11 @@ paths:
                 displayName:
                   type: string
                   maxLength: 120
+                cookieAck:
+                  description: >
+                    True records acceptance of the cookie notice on the account
+                    (write-once timestamp; false is ignored).
+                  type: boolean
       responses:
         "200":
           description: Updated user.
@@ -2644,6 +2649,10 @@ components:
           type: boolean
         totpEnabled:
           type: boolean
+        cookieAckAt:
+          description: When this account acknowledged the cookie notice.
+          type: string
+          format: date-time
         platformStaff:
           type: boolean
         orgs:
