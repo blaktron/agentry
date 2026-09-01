@@ -272,10 +272,13 @@ export function AgentRow({
 
 // CodeBlock shows a copyable command. Static (no client JS) — the browser's
 // own selection is the copy affordance, keeping the CSP script-free.
-export function CodeBlock({ children }: { children: string }) {
+// `wrap` lets a single long command fold inside a narrow container (the
+// browse pane) instead of scrolling; multi-line blocks keep scrolling so
+// their alignment survives.
+export function CodeBlock({ children, wrap = false }: { children: string; wrap?: boolean }) {
   return (
     <pre
-      className="overflow-x-auto rounded-md border px-3 py-2 text-sm"
+      className={`${wrap ? "whitespace-pre-wrap break-all" : "overflow-x-auto"} rounded-md border px-3 py-2 text-sm`}
       style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
     >
       <code>{children}</code>
