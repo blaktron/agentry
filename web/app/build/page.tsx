@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
+import Link from "next/link";
 import { Card } from "@/components/ui";
 import { currentUser } from "@/lib/session";
 
@@ -18,8 +18,9 @@ export default async function BuildPage({
   searchParams: Promise<{ error?: string; ok?: string }>;
 }) {
   const params = await searchParams;
+  // Signed-out visitors can build and download; publishing needs an
+  // account, because a submission has an author.
   const user = await currentUser();
-  if (!user) redirect(`/login?next=${encodeURIComponent("/build")}`);
 
   const inputClass = "mt-1 w-full rounded-md border px-3 py-1.5";
   const inputStyle = { borderColor: "var(--color-border)", background: "var(--color-surface)" };
@@ -30,8 +31,11 @@ export default async function BuildPage({
       <h1 className="mb-1 text-xl font-semibold">BriefAgent Builder</h1>
       <p className="mb-4 text-sm" style={{ color: "var(--color-muted)" }}>
         One agent, one job. Declare the least it needs — reviewers gate on the contract,
-        installs prompt on it, and the runner enforces it. Submitting runs the full security
-        pipeline; clean versions publish, findings go to review.
+        installs prompt on it, and the runner enforces it. <strong>Download</strong> packs the
+        BriefAgent as the canonical archive for your own machine (run it with{" "}
+        <code>agentry run --local</code>, or <code>agentry publish</code> it later).{" "}
+        <strong>Publishing</strong> submits it to this registry&apos;s security pipeline: clean
+        versions publish, findings go to review.
       </p>
 
       {params.ok && (
@@ -58,7 +62,8 @@ export default async function BuildPage({
             </label>
             <label className={label}>
               Namespace
-              <input name="namespace" required defaultValue={user!.handle}
+              <input name="namespace" required defaultValue={user?.handle ?? ""}
+                placeholder={user ? undefined : "your-handle"}
                 pattern="[a-z0-9][a-z0-9-]*" className={inputClass} style={inputStyle} />
             </label>
             <label className={label}>
@@ -177,14 +182,27 @@ export default async function BuildPage({
             defaultValue={"# my-briefagent\n\nDescribe the one job this agent does.\n"} />
         </Card>
 
-        <div className="flex items-center justify-end gap-3">
-          <span className="text-xs" style={{ color: "var(--color-muted)" }}>
-            Submitting packs agent.yaml + instructions + README + LICENSE and runs the pipeline.
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <span className="mr-auto text-xs" style={{ color: "var(--color-muted)" }}>
+            Both pack agent.yaml + instructions + README + LICENSE — the same archive either way.
           </span>
-          <button type="submit" className="rounded-md px-4 py-2 text-sm font-medium"
-            style={{ background: "var(--color-accent)", color: "var(--color-accent-fg)" }}>
-            Create &amp; submit
+          <button type="submit" formAction="/build/download"
+            className="rounded-md border px-4 py-2 text-sm font-medium"
+            style={{ borderColor: "var(--color-accent)", color: "var(--color-accent)" }}>
+            Download package
           </button>
+          {user ? (
+            <button type="submit" className="rounded-md px-4 py-2 text-sm font-medium"
+              style={{ background: "var(--color-accent)", color: "var(--color-accent-fg)" }}>
+              Create &amp; submit
+            </button>
+          ) : (
+            <Link href={`/login?next=${encodeURIComponent("/build")}`}
+              className="rounded-md px-4 py-2 text-sm font-medium"
+              style={{ background: "var(--color-accent)", color: "var(--color-accent-fg)" }}>
+              Sign in to publish
+            </Link>
+          )}
         </div>
       </form>
     </div>
