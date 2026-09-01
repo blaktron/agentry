@@ -33,7 +33,44 @@ echo "== resolve flows + signing key =="
 AUTHZ_FLOW=$(curlx "$API/flows/instances/?slug=default-provider-authorization-implicit-consent" | jget "d['results'][0]['pk']")
 INVAL_FLOW=$(curlx "$API/flows/instances/?slug=default-provider-invalidation-flow" | jget "d['results'][0]['pk']" 2>/dev/null || echo "")
 CERT=$(curlx "$API/crypto/certificatekeypairs/?name=authentik+Self-signed+Certificate" | jget "d['results'][0]['pk']")
-echo "authorization flow: $AUTHZ_FLOW"; echo "signing key: $CERT"
+# The scope mappings are what put claims in the ID token: a provider with
+# none issues `sub` alone (email/profile scopes are silently ignored) and
+# the registry can then only JIT a placeholder account instead of linking
+# by verified email. Resolve authentik's managed openid/email/profile
+# mappings by their stable `managed` ids, never by display name.
+SCOPE_MAPPINGS=$(curlx "$API/propertymappings/provider/scope/?page_size=100" | python3 -c '
+import json, sys
+want = {"goauthentik.io/providers/oauth2/scope-" + s for s in ("openid", "email", "profile")}
+pks = [m["pk"] for m in json.load(sys.stdin)["results"] if m.get("managed") in want]
+if len(pks) != 3: sys.exit("expected 3 managed scope mappings, found %d" % len(pks))
+print(json.dumps(pks))')
+EMAIL_MANAGED_PK=$(curlx "$API/propertymappings/provider/scope/?managed=goauthentik.io/providers/oauth2/scope-email" | jget "d['results'][0]['pk']")
+export SCOPE_MAPPINGS EMAIL_MANAGED_PK VERIFIED_NAME VERIFIED_PK
+# authentik's managed `email` mapping hard-codes email_verified=False
+# (2026.8). This deployment's directory of record IS authentik — accounts
+# are operator-created or enrolled through a flow with an email stage — so
+# the registry's T-12 auto-link rule (verified IdP email ↔ verified account
+# email) needs the assertion to be true. A custom mapping replaces the
+# managed one for the `email` scope; idempotent by name.
+VERIFIED_NAME="SecureAgentry: OpenID 'email' (directory-verified)"; export VERIFIED_NAME
+VERIFIED_PK=$(curlx -G --data-urlencode "name=$VERIFIED_NAME" "$API/propertymappings/provider/scope/" | jget "(d['results'][0]['pk'] if d['results'] else '')")
+if [ -z "$VERIFIED_PK" ]; then
+  VERIFIED_PK=$(curlx -X POST "$API/propertymappings/provider/scope/" -d "$(python3 -c '
+import json, os
+print(json.dumps({
+  "name": os.environ["VERIFIED_NAME"], "scope_name": "email",
+  "description": "Email address (directory-verified)",
+  "expression": "# authentik is this deployment\x27s directory of record; the address is\n# asserted verified. The managed mapping hard-codes False (2026.8).\nreturn {\"email\": request.user.email, \"email_verified\": True}",
+}))')" | jget "d['pk']")
+  echo "created directory-verified email mapping $VERIFIED_PK"
+fi
+export VERIFIED_PK
+SCOPE_MAPPINGS=$(python3 -c '
+import json, os, sys
+pks = json.loads(os.environ["SCOPE_MAPPINGS"])
+pks = [p for p in pks if p != os.environ["EMAIL_MANAGED_PK"]] + [os.environ["VERIFIED_PK"]]
+print(json.dumps(pks))')
+echo "authorization flow: $AUTHZ_FLOW"; echo "signing key: $CERT"; echo "scope mappings: $SCOPE_MAPPINGS"
 
 # The provider payload. redirect_uris changed shape across authentik
 # releases (plain text vs a list of {matching_mode, url}); try the
@@ -51,6 +88,7 @@ p = {
     "signing_key": os.environ["CERT"],
     "sub_mode": "hashed_user_id",
     "include_claims_in_id_token": True,
+    "property_mappings": json.loads(os.environ["SCOPE_MAPPINGS"]),
 }
 if os.environ.get("INVAL_FLOW"):
     p["invalidation_flow"] = os.environ["INVAL_FLOW"]
@@ -59,7 +97,7 @@ p["redirect_uris"] = [{"matching_mode": "strict", "url": uri}] if structured els
 print(json.dumps(p))
 PY
 }
-export AUTHZ_FLOW INVAL_FLOW CERT CLIENT_ID CLIENT_SECRET="$AGENTRY_AUTHENTIK_CLIENT_SECRET" REDIRECT_URI="$AGENTRY_REDIRECT_URI"
+export AUTHZ_FLOW INVAL_FLOW CERT SCOPE_MAPPINGS CLIENT_ID CLIENT_SECRET="$AGENTRY_AUTHENTIK_CLIENT_SECRET" REDIRECT_URI="$AGENTRY_REDIRECT_URI"
 
 echo "== provider =="
 EXISTING=$(curlx "$API/providers/oauth2/?name=agentry-registry" | jget "d['pagination']['count']")

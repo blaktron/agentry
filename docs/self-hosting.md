@@ -358,6 +358,27 @@ AGENTRY_SOCIAL_AUTHENTIK_ISSUER=https://<host>:8443/application/o/agentry/
 AGENTRY_IDP_LOGOUT_URL=https://<host>:8443/application/o/agentry/end-session/
 ```
 
+The bootstrap script attaches the `openid`, `profile`, and `email`
+scope mappings to the provider — without them authentik issues an ID
+token carrying `sub` alone and the registry can only create a placeholder
+account (`<handle>@authentik.social.local`) instead of linking to the
+existing one. For `email` it installs its own mapping, "SecureAgentry:
+OpenID 'email' (directory-verified)", asserting `email_verified: true`:
+authentik's managed mapping hard-codes `false` (2026.8), and the
+registry's auto-link rule (T-12) only links an IdP identity to an
+existing account when *both* sides' addresses are verified. That
+assertion is sound exactly when authentik is your directory of record —
+accounts are created by operators, provisioned from an upstream
+directory, or enrolled through a flow with an email-verification stage.
+If you allow self-enrollment without one, drop that mapping and accept
+that such accounts start as new registry users.
+
+Sign-in from the web app runs in the API's browser mode: `/login`
+forwards to `/api/v1/auth/oidc/authentik/start?next=<in-app path>` and
+the callback answers a 303 back into the app (or to `/login?error=…`)
+once the session cookie is set; without `next` the same callback returns
+the JSON result the CLI and tests consume.
+
 With `AGENTRY_AUTH_EXTERNAL_ONLY=true` the native register, password
 login, email-verify, and TOTP endpoints answer 410 Gone, and the web
 login page offers the directory service only. Turning the flag off (the
