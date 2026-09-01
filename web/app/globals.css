@@ -221,3 +221,10 @@ samp {
   .convergence .cv-spark { opacity: 0; }
   .convergence .cv-beam { opacity: 0.75; }
 }
+
+/* Download cards. components/platform-hint.tsx stamps data-yours on the
+   card matching the visitor's platform; until then the pill is hidden and
+   the page is the same for everyone. */
+.download-card .yours { display: none; }
+.download-card[data-yours="true"] { border-color: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent); }
+.download-card[data-yours="true"] .yours { display: inline-block; }
