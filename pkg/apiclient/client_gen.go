@@ -1453,6 +1453,8 @@ type TotpSetupResult struct {
 
 // User defines model for User.
 type User struct {
+	// CookieAckAt When this account acknowledged the cookie notice.
+	CookieAckAt   *time.Time         `json:"cookieAckAt,omitempty"`
 	CreatedAt     time.Time          `json:"createdAt"`
 	DisplayName   string             `json:"displayName"`
 	Email         string             `json:"email"`
@@ -1867,6 +1869,8 @@ type ListAgentsByTagParams struct {
 
 // UpdateCurrentUserJSONBody defines parameters for UpdateCurrentUser.
 type UpdateCurrentUserJSONBody struct {
+	// CookieAck True records acceptance of the cookie notice on the account (write-once timestamp; false is ignored).
+	CookieAck   *bool   `json:"cookieAck,omitempty"`
 	DisplayName *string `json:"displayName,omitempty"`
 }
 
