@@ -107,6 +107,13 @@ services:
       AUTHENTIK_EMAIL__HOST: mailpit
       AUTHENTIK_EMAIL__PORT: "1025"
       AUTHENTIK_EMAIL__FROM: authentik@agentry.localhost
+      # Sign-up CAPTCHA (DEV-063). Defaults are Cloudflare's published
+      # Turnstile TEST keys, which always pass — fine for dev, useless as a
+      # control. Set real keys in .env for anything with public sign-up.
+      AUTHENTIK_CAPTCHA_SITE_KEY: ${AUTHENTIK_CAPTCHA_SITE_KEY:-1x00000000000000000000AA}
+      AUTHENTIK_CAPTCHA_SECRET_KEY: ${AUTHENTIK_CAPTCHA_SECRET_KEY:-1x0000000000000000000000000000000AA}
+      AUTHENTIK_CAPTCHA_JS_URL: ${AUTHENTIK_CAPTCHA_JS_URL:-https://challenges.cloudflare.com/turnstile/v0/api.js}
+      AUTHENTIK_CAPTCHA_API_URL: ${AUTHENTIK_CAPTCHA_API_URL:-https://challenges.cloudflare.com/turnstile/v0/siteverify}
     volumes:
       - authentik-media:/media
       - authentik-templates:/templates
