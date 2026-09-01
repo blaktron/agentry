@@ -252,6 +252,17 @@ paths:
       security: []
       parameters:
         - $ref: "#/components/parameters/SocialProvider"
+        - name: next
+          in: query
+          description: >
+            Browser mode. An in-app, path-absolute return target (e.g.
+            `/dashboard`). When present and valid, the callback answers the
+            browser with a 303 to it instead of the JSON result, and a
+            failed login 303s to `/login?error=…`. Anything that is not a
+            single-slash path on this origin is ignored (open-redirect
+            guard), which leaves the API behaviour unchanged.
+          schema:
+            type: string
       responses:
         "302":
           description: Redirect to the provider's authorization endpoint.
@@ -270,7 +281,10 @@ paths:
         asserts a verified email that matches a verified account email
         (T-12); otherwise the response is 409 and the accounts must be linked
         explicitly. When the account has TOTP enabled the response is a
-        pending 2FA challenge rather than a session.
+        pending 2FA challenge rather than a session. A login begun with
+        `next` (browser mode) answers 303 to that in-app path once the
+        session cookie is set, or to `/login?error=…` on failure; the JSON
+        result is the API mode, used when `next` was absent.
       security: []
       parameters:
         - $ref: "#/components/parameters/SocialProvider"
@@ -289,6 +303,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SocialLoginResult"
+        "303":
+          description: Browser mode — session cookie set, redirect to `next`.
         "409":
           description: An account with this email exists; link it explicitly.
         default:

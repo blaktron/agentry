@@ -27,6 +27,7 @@ import (
 	"errors"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"strings"
 	"time"
 
@@ -53,6 +54,29 @@ type socialState struct {
 	Nonce    string `json:"n"`
 	Verifier string `json:"v"`
 	Provider string `json:"p"`
+	// Next is the in-app return path when the login began from the web app
+	// (browser mode); empty means API mode and a JSON result.
+	Next string `json:"x,omitempty"`
+}
+
+// safeNextPath admits only a path-absolute reference on this origin — the
+// same rule as web/lib/urls.ts safeNext, mirrored here because the callback
+// is the one that redirects. "//host" (scheme-relative), "/\host" (browsers
+// normalize the backslash) and control characters are the open-redirect
+// shapes a naive HasPrefix("/") lets through.
+func safeNextPath(v string) string {
+	if v == "" || v[0] != '/' {
+		return ""
+	}
+	if len(v) > 1 && (v[1] == '/' || v[1] == '\\') {
+		return ""
+	}
+	for _, c := range v {
+		if c < 0x20 || c == 0x7f {
+			return ""
+		}
+	}
+	return v
 }
 
 // totpChallengeBlob is the sealed payload behind a pending 2FA challenge. It
@@ -111,7 +135,7 @@ func (s *Server) socialProvider(r *http.Request, name string) (social.Provider, 
 }
 
 // SocialOidcStart implements GET /auth/oidc/{provider}/start.
-func (s *Server) SocialOidcStart(w http.ResponseWriter, r *http.Request, provider SocialOidcStartParamsProvider) {
+func (s *Server) SocialOidcStart(w http.ResponseWriter, r *http.Request, provider SocialOidcStartParamsProvider, params SocialOidcStartParams) {
 	if !s.allowLogin(w, r) {
 		return
 	}
@@ -138,7 +162,11 @@ func (s *Server) SocialOidcStart(w http.ResponseWriter, r *http.Request, provide
 		return
 	}
 	verifier := oauth2.GenerateVerifier()
-	blob, err := json.Marshal(socialState{State: state, Nonce: nonce, Verifier: verifier, Provider: name})
+	next := ""
+	if params.Next != nil {
+		next = safeNextPath(*params.Next)
+	}
+	blob, err := json.Marshal(socialState{State: state, Nonce: nonce, Verifier: verifier, Provider: name, Next: next})
 	if err != nil {
 		problemInternal(w, r)
 		return
@@ -182,9 +210,20 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 		problemNotFound(w, r)
 		return
 	}
+	// Browser mode (DEV-061): the web app started this login with a return
+	// path, so the browser is the client and a JSON body would be the page
+	// it lands on. Failures go back to /login with the message; success is
+	// a 303 to `next` once the session cookie is set. API mode is unchanged.
+	browserFail := func(msg string) {
+		http.Redirect(w, r, "/login?error="+url.QueryEscape(msg), http.StatusSeeOther)
+	}
 	id, err := rp.Exchange(r.Context(), *params.Code, st.Verifier, st.Nonce)
 	if err != nil {
 		s.log.Warn("social login rejected", "provider", name, "err", err)
+		if st.Next != "" {
+			browserFail("sign-in with " + name + " failed; please try again")
+			return
+		}
 		problemUnauthorized(w, r, "social login failed")
 		return
 	}
@@ -192,9 +231,13 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 	userID, err := s.resolveSocialUser(r, id)
 	if err != nil {
 		if errors.Is(err, errExplicitLinkRequired) {
+			linkMsg := "an account already uses this email address; sign in and link " + name + " from your account settings"
+			if st.Next != "" {
+				browserFail(linkMsg)
+				return
+			}
 			writeProblem(w, r, http.StatusConflict, "sso-link-required",
-				"Account linking requires confirmation",
-				"an account already uses this email address; sign in and link "+name+" from your account settings")
+				"Account linking requires confirmation", linkMsg)
 			return
 		}
 		s.log.Error("social jit", "provider", name, "err", err)
@@ -208,6 +251,10 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 		return
 	}
 	if user.State != "active" {
+		if st.Next != "" {
+			browserFail("this account is not active")
+			return
+		}
 		problemUnauthorized(w, r, "this account is not active")
 		return
 	}
@@ -227,7 +274,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 		return
 	}
 
-	s.issueSocialSession(w, r, user, name)
+	s.issueSocialSession(w, r, user, name, st.Next)
 }
 
 // readSocialState opens and clears the single-use state cookie.
@@ -411,12 +458,15 @@ func (s *Server) TotpChallenge(w http.ResponseWriter, r *http.Request) {
 		problemUnauthorized(w, r, "invalid code")
 		return
 	}
-	s.issueSocialSession(w, r, user, blob.Provider)
+	s.issueSocialSession(w, r, user, blob.Provider, "")
 }
 
 // issueSocialSession opens an ordinary session (no org SSO tag) and writes
 // the LoginResult-shaped body both social endpoints return.
-func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user storegen.GetUserByIDRow, provider string) {
+// issueSocialSession creates the session and answers: a 303 to next in
+// browser mode (next non-empty, already validated by safeNextPath), else the
+// JSON result.
+func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user storegen.GetUserByIDRow, provider, next string) {
 	ctx := r.Context()
 	sessToken, err := auth.NewToken(auth.SessionPrefix)
 	if err != nil {
@@ -457,6 +507,10 @@ func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user
 		Secure: s.cfg.Auth.CookieSecure, SameSite: http.SameSiteLaxMode,
 		MaxAge: int(s.cfg.Auth.SessionTTL.Seconds()),
 	})
+	if next != "" {
+		http.Redirect(w, r, next, http.StatusSeeOther)
+		return
+	}
 	apiUser := User{
 		Id: user.ID, Handle: user.Handle, Email: user.Email, DisplayName: user.DisplayName,
 		EmailVerified: user.EmailVerifiedAt != nil, TotpEnabled: user.TotpEnabled,
