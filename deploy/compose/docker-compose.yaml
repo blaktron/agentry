@@ -84,6 +84,9 @@ services:
     profiles: ["server"]
     # Pinned by tag AND digest (2026.8.0, released 2026-08-18). Bump both
     # together; the digest is what makes the pin a supply-chain fact.
+    # Upgrades must pass through every YYYY.M release line in order (the
+    # image refuses skips before migrating) — see docs/self-hosting.md,
+    # "Upgrading the directory service".
     image: ghcr.io/goauthentik/server:2026.8.0@sha256:7421753cfea67e89a6d295a1f0173ccea3866b33768c88dad90453b151cdcfd5
     restart: unless-stopped
     command: server
