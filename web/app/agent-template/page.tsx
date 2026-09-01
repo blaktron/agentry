@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 // published links must not break over branding.
 export default function AgentTemplatePage() {
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-8">
+    <div className="flex max-w-3xl flex-col gap-8">
       <header>
         <div
           className="mb-3 inline-block rounded-full px-3 py-1 text-xs"
@@ -87,6 +87,12 @@ capabilities:               # the security contract: closed vocabulary
   exec: none                      # none | commands: […]
   secrets: [PAGERDUTY_TOKEN]      # env var names, never values
   dataAccess: [tickets]
+  # mcpServers:                   # MCP servers installed WITH this release,
+  #   - npm: "@modelcontextprotocol/server-github"   # npm or pypi
+  #     version: 2026.1.2         # exact version, pinned to this release
+  #     tools: [list_issues]      # optional allowlist within the server
+  #     secrets: [GITHUB_PAT]     # names only; collected by guided setup
+  #     egress: [api.github.com]  # the server's own outbound allowlist
 
 publish:
   include: [agent.yaml, README.md, SKILL.md, LICENSE]  # allowlist`}</CodeBlock>
@@ -127,7 +133,12 @@ agentry run acme/incident-summarizer@^1 --input incident.json`}</CodeBlock>
           <code>agentry run</code> executes one BriefAgent once, in an isolated container, with its
           tools served through a per-run MCP gateway and an output folder for its reports. Installed
           into an existing coding agent instead (<code>agentry install</code>), the same declared
-          contract maps onto that host&apos;s built-in tools.
+          contract maps onto that host&apos;s built-in tools. No repo yet? The{" "}
+          <a href="/build" className="underline">
+            BriefAgent Builder
+          </a>{" "}
+          authors a skill or prompt-agent in the browser — download it locally, or publish it
+          signed in.
         </p>
       </section>
 
