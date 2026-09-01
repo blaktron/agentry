@@ -373,6 +373,20 @@ directory, or enrolled through a flow with an email-verification stage.
 If you allow self-enrollment without one, drop that mapping and accept
 that such accounts start as new registry users.
 
+**Self-enrollment.** `deploy/compose/authentik/blueprints/agentry-enrollment.yaml`
+is mounted into authentik as a blueprint and applied automatically: a
+sign-up form (username, display name, email, password with a 12-character
++ zxcvbn strength policy), the account written **inactive**, an emailed
+confirmation link that activates it, then sign-in — and the login page
+gains a "Sign up" link (the default identification stage's enrollment
+flow). This is what makes the directory-verified `email` assertion above
+honest for self-enrolled users: no account is active, and so none reaches
+the registry, before its address is confirmed. To run invite-only instead,
+delete the blueprint file (or set its instance to disabled in authentik's
+admin UI); operator-created accounts are unaffected. The confirmation mail
+goes through authentik's own SMTP settings (`AUTHENTIK_EMAIL__*` —
+mailpit on the dev stack).
+
 Sign-in from the web app runs in the API's browser mode: `/login`
 forwards to `/api/v1/auth/oidc/authentik/start?next=<in-app path>` and
 the callback answers a 303 back into the app (or to `/login?error=…`)

@@ -1,0 +1,195 @@
+# SecureAgentry self-enrollment: create an account, confirm the email
+# address, sign in. Applied automatically by authentik's blueprint discovery
+# (mounted at /blueprints/custom); idempotent — every entry is keyed by a
+# stable identifier, so re-applying updates in place.
+#
+# Why this shape (DEV-062): the registry links an IdP identity to an account
+# by VERIFIED email (T-12), and the provider's email mapping asserts
+# `email_verified: true` (DEV-061). That assertion is only honest if every
+# self-enrolled address was actually confirmed — so the user is written
+# inactive and only the emailed confirmation link activates them. Nothing
+# reaches the registry before that.
+#
+# Sequence:  prompt (10) → user write, inactive (20) → email confirmation
+#            (30, activates on success) → login (100)
+version: 1
+metadata:
+  name: SecureAgentry - Enrollment with email confirmation
+  labels:
+    blueprints.goauthentik.io/description: >
+      Self-service sign-up for the SecureAgentry directory: one form, an
+      emailed confirmation link, then sign-in. Linked from the login page.
+entries:
+  - model: authentik_flows.flow
+    id: flow
+    identifiers:
+      slug: agentry-enrollment
+    attrs:
+      name: SecureAgentry enrollment
+      title: Create your SecureAgentry account
+      designation: enrollment
+      authentication: require_unauthenticated
+      denied_action: message_continue
+      layout: stacked
+
+  # ---- the sign-up form ----------------------------------------------------
+  - model: authentik_stages_prompt.prompt
+    id: field-username
+    identifiers:
+      name: agentry-enrollment-username
+    attrs:
+      field_key: username
+      label: Username
+      type: username
+      required: true
+      placeholder: "lowercase, letters and digits — this becomes your registry handle"
+      placeholder_expression: false
+      order: 0
+  - model: authentik_stages_prompt.prompt
+    id: field-name
+    identifiers:
+      name: agentry-enrollment-name
+    attrs:
+      field_key: name
+      label: Display name
+      type: text
+      required: true
+      placeholder: "How you want to appear on the registry"
+      placeholder_expression: false
+      order: 1
+  - model: authentik_stages_prompt.prompt
+    id: field-email
+    identifiers:
+      name: agentry-enrollment-email
+    attrs:
+      field_key: email
+      label: Email
+      type: email
+      required: true
+      placeholder: "We send a confirmation link here"
+      placeholder_expression: false
+      order: 2
+  - model: authentik_stages_prompt.prompt
+    id: field-password
+    identifiers:
+      name: agentry-enrollment-password
+    attrs:
+      field_key: password
+      label: Password
+      type: password
+      required: true
+      placeholder: "At least 12 characters"
+      placeholder_expression: false
+      order: 3
+  - model: authentik_stages_prompt.prompt
+    id: field-password-repeat
+    identifiers:
+      name: agentry-enrollment-password-repeat
+    attrs:
+      field_key: password_repeat
+      label: Password (repeat)
+      type: password
+      required: true
+      placeholder: "Same again"
+      placeholder_expression: false
+      order: 4
+
+  # Password strength is enforced at the form, not after the account exists:
+  # a static minimum plus zxcvbn so "Password1234" fails and a long
+  # passphrase passes. No HIBP call — it needs egress from the container and
+  # a failure would block sign-up.
+  - model: authentik_policies_password.passwordpolicy
+    id: password-policy
+    identifiers:
+      name: agentry-enrollment-password-policy
+    attrs:
+      password_field: password
+      check_static_rules: true
+      length_min: 12
+      amount_digits: 0
+      amount_uppercase: 0
+      amount_lowercase: 0
+      amount_symbols: 0
+      check_zxcvbn: true
+      zxcvbn_score_threshold: 2
+      check_have_i_been_pwned: false
+      error_message: "Use at least 12 characters, and something harder to guess."
+
+  - model: authentik_stages_prompt.promptstage
+    id: stage-prompt
+    identifiers:
+      name: agentry-enrollment-prompt
+    attrs:
+      fields:
+        - !KeyOf field-username
+        - !KeyOf field-name
+        - !KeyOf field-email
+        - !KeyOf field-password
+        - !KeyOf field-password-repeat
+      validation_policies:
+        - !KeyOf password-policy
+
+  # ---- create the account, inactive until confirmed -----------------------
+  - model: authentik_stages_user_write.userwritestage
+    id: stage-user-write
+    identifiers:
+      name: agentry-enrollment-user-write
+    attrs:
+      create_users_as_inactive: true
+      user_creation_mode: always_create
+      user_type: internal
+      user_path_template: users/self-enrolled
+
+  - model: authentik_stages_email.emailstage
+    id: stage-email
+    identifiers:
+      name: agentry-enrollment-email-confirmation
+    attrs:
+      use_global_settings: true
+      template: email/account_confirmation.html
+      subject: Confirm your SecureAgentry account
+      activate_user_on_success: true
+      token_expiry: minutes=30
+
+  - model: authentik_stages_user_login.userloginstage
+    id: stage-login
+    identifiers:
+      name: agentry-enrollment-login
+
+  # ---- bindings -------------------------------------------------------------
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow
+      stage: !KeyOf stage-prompt
+      order: 10
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow
+      stage: !KeyOf stage-user-write
+      order: 20
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow
+      stage: !KeyOf stage-email
+      order: 30
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow
+      stage: !KeyOf stage-login
+      order: 100
+
+  # ---- surface it: the login page's "Sign up" link -------------------------
+  # The identification stage of the default authentication flow renders an
+  # enrollment link when it has an enrollment flow; this updates the managed
+  # stage in place (identifiers only, so nothing else about it changes).
+  - model: authentik_stages_identification.identificationstage
+    identifiers:
+      name: default-authentication-identification
+    attrs:
+      # user_fields is restated because the serializer validates the whole
+      # stage on update and rejects "no user fields and no sources"; these
+      # are the shipped defaults, so nothing about sign-in changes.
+      user_fields:
+        - email
+        - username
+      enrollment_flow: !KeyOf flow
