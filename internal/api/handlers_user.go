@@ -32,6 +32,7 @@ func (s *Server) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 		DisplayName: row.DisplayName, EmailVerified: row.EmailVerifiedAt != nil,
 		TotpEnabled: row.TotpEnabled, CreatedAt: row.CreatedAt,
 		PlatformStaff: &row.PlatformStaff,
+		CookieAckAt:   row.CookieAckAt,
 	}
 	if ms, err := s.q().ListUserMembershipsWithHandles(r.Context(), p.UserID); err == nil {
 		orgs := make([]struct {
@@ -62,18 +63,29 @@ func (s *Server) UpdateCurrentUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
-	if req.DisplayName == nil {
+	ackOnly := req.CookieAck != nil && *req.CookieAck
+	if req.DisplayName == nil && !ackOnly {
 		problemValidation(w, r, "nothing to update")
 		return
 	}
-	name := strings.TrimSpace(*req.DisplayName)
-	if name == "" || len(name) > 120 {
-		problemValidation(w, r, "displayName must be 1-120 characters")
-		return
+	var name string
+	if req.DisplayName != nil {
+		name = strings.TrimSpace(*req.DisplayName)
+		if name == "" || len(name) > 120 {
+			problemValidation(w, r, "displayName must be 1-120 characters")
+			return
+		}
 	}
 	err := s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
-		if _, err := q.UpdateUserDisplayName(r.Context(), storegen.UpdateUserDisplayNameParams{ID: p.UserID, DisplayName: name}); err != nil {
-			return err
+		if req.DisplayName != nil {
+			if _, err := q.UpdateUserDisplayName(r.Context(), storegen.UpdateUserDisplayNameParams{ID: p.UserID, DisplayName: name}); err != nil {
+				return err
+			}
+		}
+		if ackOnly {
+			if err := q.SetUserCookieAck(r.Context(), p.UserID); err != nil {
+				return err
+			}
 		}
 		e := auditEvent(r, audit.ActionUserUpdate)
 		e.TargetKind, e.TargetID = "user", p.UserID

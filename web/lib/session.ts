@@ -18,6 +18,7 @@ export interface SessionUser {
   displayName?: string;
   emailVerified: boolean;
   totpEnabled: boolean;
+  cookieAckAt?: string;
   platformStaff?: boolean;
   orgs?: { handle: string; role: string }[];
 }
