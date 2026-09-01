@@ -37,7 +37,18 @@ describe() { (cd "$1" && git describe --tags --always --dirty 2>/dev/null || ech
 
 CLI_VERSION=$(describe "$CLI_DIR")
 DESKTOP_VERSION=$(describe "$DESKTOP_DIR")
-echo "cli $CLI_VERSION · desktop $DESKTOP_VERSION → $OUT"
+
+# The registry these binaries talk to when the user configures nothing.
+# Set it to the site that will serve them, so a download from /download
+# connects back to that site by default. Empty keeps the source defaults
+# (CLI: http://localhost:8080; desktop: the production URL).
+REGISTRY_LDFLAGS=""
+DESKTOP_REGISTRY_LDFLAGS=""
+if [ -n "${AGENTRY_DEFAULT_REGISTRY:-}" ]; then
+  REGISTRY_LDFLAGS=" -X main.defaultRegistryURL=${AGENTRY_DEFAULT_REGISTRY}"
+  DESKTOP_REGISTRY_LDFLAGS=" -X github.com/blaktron/agentry-desktop/internal/settings.DefaultRegistryURL=${AGENTRY_DEFAULT_REGISTRY}"
+fi
+echo "cli $CLI_VERSION · desktop $DESKTOP_VERSION · default registry ${AGENTRY_DEFAULT_REGISTRY:-<source default>} → $OUT"
 
 # ---- CLI: linux/darwin/windows ------------------------------------------
 CLI_TARGETS="linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64"
@@ -47,7 +58,7 @@ for t in $CLI_TARGETS; do
   file="agentry-${CLI_VERSION}-${os}-${arch}${ext}"
   echo "  cli  $os/$arch"
   (cd "$CLI_DIR" && CGO_ENABLED=0 GOOS=$os GOARCH=$arch $GO build -trimpath \
-     -ldflags "-s -w -X github.com/blaktron/agentry-cli/internal/version.Version=${CLI_VERSION}" \
+     -ldflags "-s -w -X github.com/blaktron/agentry-cli/internal/version.Version=${CLI_VERSION}${REGISTRY_LDFLAGS}" \
      -o "$OUT/$file" ./cmd/agentry)
 done
 
@@ -62,7 +73,7 @@ if [ "$(uname -s)" = Linux ] && [ "$(uname -m)" = x86_64 ] \
     (cd "$DESKTOP_DIR/frontend" && npm ci --silent && npm run build --silent)
   fi
   (cd "$DESKTOP_DIR" && CGO_ENABLED=1 $GO build -trimpath -tags "desktop production webkit2_41" \
-     -ldflags "-s -w -X github.com/blaktron/agentry-desktop/internal/version.Version=${DESKTOP_VERSION}" \
+     -ldflags "-s -w -X github.com/blaktron/agentry-desktop/internal/version.Version=${DESKTOP_VERSION}${DESKTOP_REGISTRY_LDFLAGS}" \
      -o "$OUT/$file" .)
   desktop_built=$file
 else
@@ -72,9 +83,9 @@ fi
 # ---- checksums + manifest ------------------------------------------------
 (cd "$OUT" && sha256sum agentry-* > SHA256SUMS)
 
-python3 - "$OUT" "$CLI_VERSION" "$DESKTOP_VERSION" <<'PY'
+python3 - "$OUT" "$CLI_VERSION" "$DESKTOP_VERSION" "${AGENTRY_DEFAULT_REGISTRY:-}" <<'PY'
 import hashlib, json, os, re, sys, datetime
-out, cli_v, desk_v = sys.argv[1:4]
+out, cli_v, desk_v, default_registry = sys.argv[1:5]
 arts = []
 for name in sorted(os.listdir(out)):
     if not name.startswith("agentry-") or name in ("SHA256SUMS", "manifest.json"):
@@ -92,6 +103,7 @@ for name in sorted(os.listdir(out)):
 json.dump({
     "generatedAt": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     "cli": {"version": cli_v}, "desktop": {"version": desk_v},
+    "defaultRegistry": default_registry or None,
     "artifacts": arts,
 }, open(os.path.join(out, "manifest.json"), "w"), indent=2)
 print(f"manifest: {len(arts)} artifacts")
