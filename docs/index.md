@@ -1,6 +1,6 @@
-# SecureAgentry documentation
+# Agentry documentation
 
-**SecureAgentry** is a registry and git host for **BriefAgents** (single-purpose
+**Agentry** is a registry and git host for **BriefAgents** (single-purpose
 AI agents) with a mandatory pre-publication security pipeline and signed
 provenance. This site is the guide to using it as an author publishing
 BriefAgents, as a consumer installing and running them, and as an operator

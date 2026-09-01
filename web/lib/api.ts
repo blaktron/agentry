@@ -40,7 +40,7 @@ export async function apiGetWellKnown<T>(path: string, opts?: { revalidate?: num
 export const SOCIAL_PROVIDERS: { id: string; label: string }[] = [
   // authentik first: when the deployment runs its own directory service
   // (DEV-057) it is THE way in, not one option among peers.
-  { id: "authentik", label: "your SecureAgentry account" },
+  { id: "authentik", label: "your Agentry account" },
   { id: "google", label: "Google" },
   { id: "github", label: "GitHub" },
   { id: "microsoft", label: "Microsoft" },

@@ -14,10 +14,10 @@ const PASS = process.env.E2E_PASS;
 
 test("home renders the product shell", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("link", { name: "BriefAgent Builder" })).toBeVisible();
+  await expect(page.getByRole("navigation").getByRole("link", { name: "Build" })).toBeVisible();
   // Scoped to the nav: the footer carries the same link (strict mode).
   await expect(page.getByRole("navigation").getByRole("link", { name: "Trust & security" })).toBeVisible();
-  await expect(page.locator("body")).toContainText("SecureAgentry");
+  await expect(page.locator("body")).toContainText("Agentry");
 });
 
 test("trust page links the advisory feed", async ({ page }) => {

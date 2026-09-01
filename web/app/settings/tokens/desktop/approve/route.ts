@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     return new NextResponse("invalid desktop callback parameters", { status: 400 });
   }
 
-  const name = `SecureAgentry Desktop (${new Date().toISOString().slice(0, 10)})`;
+  const name = `Agentry Desktop (${new Date().toISOString().slice(0, 10)})`;
   const res = await apiSend("POST", "/user/tokens", { name, scopes: SCOPES });
   if (!res.ok) return redirectBack(req, "/settings", { error: await problemDetail(res) });
   const created = (await res.json()) as { token: string };
