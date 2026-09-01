@@ -371,6 +371,21 @@ flow background, and custom CSS
 (`deploy/compose/authentik/branding.css`). Re-run it after editing
 either file.
 
+**Upgrading the directory service.** Authentik refuses to skip a release
+line: every `YYYY.M` line between the running version and the target
+must be passed through in order, and the check runs before any migration
+(a refused container crash-loops with "Major version skips are not
+allowed" and leaves the database untouched). So to move, say, 2025.6 →
+2026.8 the path is 2025.12 → 2026.2 → 2026.5 → 2026.8: `pg_dump` the
+`authentik` database first, then for each hop set the image tag in
+`docker-compose.yaml`, `docker compose --profile server up -d
+authentik-server authentik-worker`, and wait for the server container to
+report healthy before the next hop. Finish by restoring the committed
+tag+digest pin (bump it when the target is new) and `docker image prune
+-a` — each hop's image is ~1.4 GB and a full chain has filled a small
+root volume. The registry needs no restart: the OIDC issuer, client, and
+brand ride the database.
+
 `X-Forwarded-For` is honoured **only** up to that many trusted hops: behind
 CloudFront → ALB set `2`; behind a single load balancer set `1`. Leave it at
 `0` (the default) if the server is directly exposed. The header is then
