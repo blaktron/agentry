@@ -306,6 +306,33 @@ scrape over the cluster network only.
 `/healthz` (liveness) and `/readyz` (readiness, checks the database) are
 separate and are what your load balancer should use.
 
+### What the stack exposes
+
+Docker publishes ports by inserting its own firewall rules ahead of the
+host's (firewalld and ufw zones do not apply to a published port), so a
+plain `"5432:5432"` on a machine with a public address is Postgres — with
+the compose file's development password — on the internet. The stack
+therefore publishes every service **except the edge** on `AGENTRY_BIND`,
+default `127.0.0.1`: Postgres (5432), MinIO (9000/9001), mailpit
+(1025/8025), agentryd (8080), the web app (3000) and the two docs sites
+(8000/8001) answer on the host itself and nowhere else. The acceptance
+scripts, `agentry` on the host, and the quickstart above all use
+`localhost`, so nothing changes for them.
+
+```bash
+# .env — reach the direct ports from another machine on a private network
+AGENTRY_BIND=100.64.0.7        # e.g. this host's Tailscale address
+# .env — the edge is public by default; bind it privately when a tunnel
+# (below) is the only intended entry point
+AGENTRY_EDGE_BIND=100.64.0.7
+```
+
+Whatever you bind, confirm it from outside: `ss -ltn` on the host lists
+what is listening and on which address, and a request to each port from
+a machine that should *not* reach it should fail. If a public address ever
+served these ports, treat the compose defaults (`agentry` / `agentry`,
+`agentry-dev-secret`) as disclosed and change them.
+
 ### Running behind a proxy
 
 Rate limiting (§19) buckets anonymous traffic per client IP. Behind a load
@@ -343,7 +370,13 @@ download URLs render from it) and `AGENTRY_COOKIE_SECURE=true`.
 ### Cloudflare Tunnel
 
 The compose stack can publish the edge through a Cloudflare Tunnel — an
-outbound-only connector, so the host opens no inbound port at all:
+outbound-only connector, so the host needs no inbound port at all. The
+connector reaches the edge over the compose network, not through the
+published ports, so with the tunnel as the only intended entry point set
+`AGENTRY_EDGE_BIND` to a private address (or `127.0.0.1`) as well: a
+Cloudflare-fronted site whose origin also answers on its public IP gets
+none of the WAF, rate limiting, or Access rules configured at the edge,
+and the address is only ever one stale DNS record away from being known.
 
 ```bash
 # .env (git-ignored, mode 600)

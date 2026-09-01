@@ -3,6 +3,19 @@
 # minio (S3-compatible archive store), and mailpit (SMTP catcher).
 # agentryd itself runs on the host in dev (`make dev`) or as the `server`
 # service below for a full self-host trial.
+#
+# Port publishing. Docker inserts its own ACCEPT rules ahead of the host
+# firewall (firewalld/ufw zones do not apply to published ports), so a
+# `"5432:5432"` line on a host with a public address is Postgres on the
+# internet with the dev password below. Every service except the edge is
+# therefore published on AGENTRY_BIND (default 127.0.0.1): reachable from
+# the host itself — which is where the acceptance scripts and `agentry`
+# run — and from nothing else. Set AGENTRY_BIND in .env to a private
+# address (a Tailscale IP, say) to reach the direct ports from another
+# machine; the edge on 80/443 is the intended public surface and stays on
+# AGENTRY_EDGE_BIND (default all interfaces). Behind a Cloudflare Tunnel
+# the connector dials the edge over the compose network, so the edge can
+# be bound the same way (docs/self-hosting.md, "Cloudflare Tunnel").
 
 services:
   postgres:
@@ -13,7 +26,7 @@ services:
       POSTGRES_PASSWORD: agentry
       POSTGRES_DB: agentry_dev
     ports:
-      - "5432:5432"
+      - "${AGENTRY_BIND:-127.0.0.1}:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -30,8 +43,8 @@ services:
       MINIO_ROOT_USER: agentry
       MINIO_ROOT_PASSWORD: agentry-dev-secret
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${AGENTRY_BIND:-127.0.0.1}:9000:9000"
+      - "${AGENTRY_BIND:-127.0.0.1}:9001:9001"
     volumes:
       - miniodata:/data
     healthcheck:
@@ -44,8 +57,8 @@ services:
     image: axllent/mailpit:latest
     restart: unless-stopped
     ports:
-      - "1025:1025"   # SMTP
-      - "8025:8025"   # web UI
+      - "${AGENTRY_BIND:-127.0.0.1}:1025:1025"   # SMTP
+      - "${AGENTRY_BIND:-127.0.0.1}:8025:8025"   # web UI
 
   # ── Directory service (DEV-057) ──────────────────────────────────────────
   # Authentik owns accounts, passwords, and MFA; the registry consumes it as
@@ -235,7 +248,7 @@ services:
       # to an unwritable / in-container.
       AGENTRY_GIT_DATA_DIR: /data/git
     ports:
-      - "8080:8080"
+      - "${AGENTRY_BIND:-127.0.0.1}:8080:8080"
     volumes:
       - gitdata:/data/git
     depends_on:
@@ -268,7 +281,7 @@ services:
       # files at AGENTRY_DOWNLOADS_URL (default /downloads).
       AGENTRY_DOWNLOADS_DIR: /downloads
     ports:
-      - "3000:3000"
+      - "${AGENTRY_BIND:-127.0.0.1}:3000:3000"
     volumes:
       - ${AGENTRY_DOWNLOADS_DIR:-./downloads}:/downloads:ro
     depends_on:
@@ -299,7 +312,7 @@ services:
       secrets:
         - gh_token
     ports:
-      - "8000:80"
+      - "${AGENTRY_BIND:-127.0.0.1}:8000:80"
 
   # Separate deployment: the developers / API-reference site
   # (developers.secureagentry.net) — Redoc over this repo's OpenAPI spec,
@@ -316,7 +329,7 @@ services:
       secrets:
         - gh_token
     ports:
-      - "8001:80"
+      - "${AGENTRY_BIND:-127.0.0.1}:8001:80"
 
   # The edge: TLS termination, one public origin split into web + server,
   # and a cache for the immutable static assets. edge/nginx.conf explains
@@ -331,9 +344,9 @@ services:
     image: nginx:1.27-alpine
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
-      - "8443:8443"   # the directory service, when no auth.* DNS name exists (dev)
+      - "${AGENTRY_EDGE_BIND:-0.0.0.0}:80:80"
+      - "${AGENTRY_EDGE_BIND:-0.0.0.0}:443:443"
+      - "${AGENTRY_EDGE_BIND:-0.0.0.0}:8443:8443"   # the directory service, when no auth.* DNS name exists (dev)
     volumes:
       - ./edge/nginx.conf:/etc/nginx/nginx.conf:ro
       - ${AGENTRY_EDGE_CERT_DIR:-./edge/certs}:/etc/nginx/certs:ro
