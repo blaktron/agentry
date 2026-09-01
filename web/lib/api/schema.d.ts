@@ -1504,6 +1504,11 @@ export interface components {
             displayName: string;
             emailVerified: boolean;
             totpEnabled: boolean;
+            /**
+             * Format: date-time
+             * @description When this account acknowledged the cookie notice.
+             */
+            cookieAckAt?: string;
             platformStaff?: boolean;
             /** @description The caller's org memberships (present on GET /user only). */
             orgs?: {
@@ -2312,6 +2317,8 @@ export interface operations {
             content: {
                 "application/json": {
                     displayName?: string;
+                    /** @description True records acceptance of the cookie notice on the account (write-once timestamp; false is ignored). */
+                    cookieAck?: boolean;
                 };
             };
         };

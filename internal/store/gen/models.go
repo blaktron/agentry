@@ -392,6 +392,7 @@ type User struct {
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
 	PlatformStaff    bool       `json:"platform_staff"`
+	CookieAckAt      *time.Time `json:"cookie_ack_at"`
 }
 
 type WebhookDelivery struct {

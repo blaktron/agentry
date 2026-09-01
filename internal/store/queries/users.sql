@@ -32,6 +32,10 @@ UPDATE users SET totp_secret_enc = $2, totp_enabled = false, updated_at = now() 
 -- name: EnableUserTOTP :exec
 UPDATE users SET totp_enabled = true, updated_at = now() WHERE id = $1;
 
+-- name: SetUserCookieAck :exec
+-- Write-once by intent: re-acknowledging just refreshes the timestamp.
+UPDATE users SET cookie_ack_at = now(), updated_at = now() WHERE id = $1;
+
 -- name: MarkEmailVerified :exec
 UPDATE users SET email_verified_at = now(), updated_at = now() WHERE id = $1;
 
