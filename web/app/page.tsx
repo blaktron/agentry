@@ -60,7 +60,8 @@ export default async function HomePage() {
             against us.
           </p>
           <p className="mt-4 text-lg" style={{ color: "var(--color-muted)" }}>
-            To solve this we have BriefAgents, and Agentry. Agentry is the system that runs them:
+            To solve this we have BriefAgents, and Agentry. BriefAgents are the self-contained
+            agent manifests, and Agentry is the system that runs them:
             leveraging Docker&apos;s MCP gateway and proxy system, with strict controls enforced at
             every layer, you can run the most sensitive workloads with a BriefAgent without the
             headaches and risks that come from just dumping your data into Claude Desktop.
