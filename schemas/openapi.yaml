@@ -4,9 +4,9 @@
 # oasdiff gate enforces it. Document version 3.0.3 per DEVIATIONS.md DEV-002.
 openapi: 3.0.3
 info:
-  title: SecureAgentry API
+  title: Agentry API
   description: >
-    Public REST API for the SecureAgentry registry: agents, versions,
+    Public REST API for the Agentry registry: agents, versions,
     publishing, scanning reports, orgs, and enterprise administration. Errors
     follow RFC 9457 (application/problem+json).
 

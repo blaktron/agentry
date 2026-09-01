@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
-  <!-- Registry favicon: the SecureAgentry mark (see public/brand/mark.svg;
+  <!-- Registry favicon: the Agentry mark (see public/brand/mark.svg;
        app/icon.svg is what the App Router serves as the site icon). -->
   <style>
     .shield { fill: #0e7a63; }

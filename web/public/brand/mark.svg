@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="SecureAgentry">
-  <!-- The SecureAgentry mark: a shield with a check, in the viridian accent.
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="Agentry">
+  <!-- The Agentry mark: a shield with a check, in the viridian accent.
        Theme-aware via the SVG's own media query (globals.css tokens). -->
   <style>
     .shield { fill: #0e7a63; }

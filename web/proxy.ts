@@ -47,6 +47,9 @@ export default function proxy(req: NextRequest) {
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set("content-security-policy", csp);
   requestHeaders.set("x-nonce", nonce);
+  // The layout marks the current primary-nav item from this (aria-current),
+  // which keeps the header a server component with no client JS.
+  requestHeaders.set("x-pathname", req.nextUrl.pathname);
 
   const res = NextResponse.next({ request: { headers: requestHeaders } });
   res.headers.set("Content-Security-Policy", csp);

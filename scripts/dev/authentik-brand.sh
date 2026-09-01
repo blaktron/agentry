@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Apply the SecureAgentry brand to the directory service (DEV-057):
+# Apply the Agentry brand to the directory service (DEV-057):
 # title, wordmark, favicon, flow background, and the custom CSS in
 # deploy/compose/authentik/branding.css. Idempotent — PATCHes the default
 # brand; safe to re-run after editing the CSS or assets.
@@ -32,7 +32,7 @@ BODY=$(ASSET_BASE="$ASSET_BASE" CSS_FILE="$CSS_FILE" python3 <<'PY'
 import json, os
 base = os.environ["ASSET_BASE"].rstrip("/")
 print(json.dumps({
-    "branding_title": "SecureAgentry",
+    "branding_title": "Agentry",
     "branding_logo": f"{base}/brand/wordmark.svg",
     "branding_favicon": f"{base}/brand/mark.svg",
     "branding_default_flow_background": f"{base}/brand/flow-bg.svg",
@@ -42,7 +42,7 @@ PY
 )
 # The sign-in card's heading is the flow's own title, not brand config.
 curlx -X PATCH "$API/flows/instances/default-authentication-flow/" \
-  -d '{"title": "Sign in to SecureAgentry"}' -o /dev/null && echo "flow title set"
+  -d '{"title": "Sign in to Agentry"}' -o /dev/null && echo "flow title set"
 
 curlx -X PATCH "$API/core/brands/$UUID/" -d "$BODY" | python3 -c "
 import sys, json

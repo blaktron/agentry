@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { Card } from "@/components/ui";
 import { currentUser } from "@/lib/session";
 
-export const metadata: Metadata = { title: "Authorize SecureAgentry Desktop" };
+export const metadata: Metadata = { title: "Authorize Agentry Desktop" };
 
 // GET /settings/tokens/desktop?port=NNNNN&state=S — the desktop app's
 // browser sign-in (DEV-058). The app starts a one-shot listener on
@@ -38,7 +38,7 @@ export default async function DesktopAuthorizePage({
   if (!valid) {
     return (
       <div className="mx-auto max-w-md">
-        <h1 className="mb-4 text-xl font-semibold">Authorize SecureAgentry Desktop</h1>
+        <h1 className="mb-4 text-xl font-semibold">Authorize Agentry Desktop</h1>
         <Card>
           <p className="text-sm">
             This page is opened by the desktop app during sign-in, and this
@@ -52,10 +52,10 @@ export default async function DesktopAuthorizePage({
 
   return (
     <div className="mx-auto max-w-md">
-      <h1 className="mb-4 text-xl font-semibold">Authorize SecureAgentry Desktop</h1>
+      <h1 className="mb-4 text-xl font-semibold">Authorize Agentry Desktop</h1>
       <Card>
         <p className="text-sm">
-          The SecureAgentry Desktop app on <strong>this computer</strong> is asking
+          The Agentry Desktop app on <strong>this computer</strong> is asking
           for access as <strong>{user!.handle}</strong>. Approving creates a
           personal access token and hands it to the app listening on{" "}
           <code>127.0.0.1:{port}</code> — nothing leaves this machine.

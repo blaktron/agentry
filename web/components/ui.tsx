@@ -3,11 +3,29 @@
 import Link from "next/link";
 import type { AgentKind, Severity, VersionStatus } from "@/lib/api";
 
-export function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+// Two tiers of card. `primary` (the default) is a filled surface for the
+// things a page is about — the report card, the install block. `secondary`
+// is border-only on the page background for supporting panels, so the
+// primary ones can actually be more important than "Usage".
+export function Card({
+  children,
+  className = "",
+  tone = "primary",
+  style,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  tone?: "primary" | "secondary";
+  style?: React.CSSProperties;
+}) {
   return (
     <div
-      className={`rounded-lg border p-4 ${className}`}
-      style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+      className={`rounded-md border p-4 ${className}`}
+      style={{
+        borderColor: "var(--color-border)",
+        background: tone === "primary" ? "var(--color-surface)" : "transparent",
+        ...style,
+      }}
     >
       {children}
     </div>
@@ -25,10 +43,10 @@ export function Badge({
 }) {
   const bg = {
     neutral: "var(--color-surface)",
-    ok: "color-mix(in srgb, var(--color-ok) 15%, transparent)",
-    warn: "color-mix(in srgb, var(--color-sev-medium) 18%, transparent)",
-    danger: "color-mix(in srgb, var(--color-sev-high) 18%, transparent)",
-    accent: "color-mix(in srgb, var(--color-accent) 15%, transparent)",
+    ok: "color-mix(in srgb, var(--color-ok) var(--badge-tint), transparent)",
+    warn: "color-mix(in srgb, var(--color-sev-medium) var(--badge-tint), transparent)",
+    danger: "color-mix(in srgb, var(--color-sev-high) var(--badge-tint), transparent)",
+    accent: "color-mix(in srgb, var(--color-accent) var(--badge-tint), transparent)",
   }[tone];
   const fg = {
     neutral: "var(--color-muted)",
@@ -71,7 +89,7 @@ export function SeverityBadge({ severity, count }: { severity: Severity; count?:
     <span
       className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-mono text-xs font-medium"
       style={{
-        background: `color-mix(in srgb, ${color} 16%, transparent)`,
+        background: `color-mix(in srgb, ${color} var(--badge-tint), transparent)`,
         color,
         borderColor: "var(--color-border)",
       }}

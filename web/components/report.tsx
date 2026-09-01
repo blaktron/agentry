@@ -29,15 +29,29 @@ export function ReportCard({
   const counts = report.findingCounts ?? {};
   const present = SEVERITY_ORDER.filter((s) => (counts[s] ?? 0) > 0);
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  // The verdict, encoded in form as well as in the badge: a stripe on the
+  // card's edge in the colour of the worst thing found.
+  const stripe =
+    total === 0
+      ? "var(--color-ok)"
+      : present.includes("critical") || present.includes("high")
+        ? "var(--color-sev-high)"
+        : present.includes("medium")
+          ? "var(--color-sev-medium)"
+          : "var(--color-sev-info)";
 
   return (
-    <Card>
+    <Card style={{ borderLeft: `3px solid ${stripe}` }}>
       <div className="flex items-baseline justify-between gap-4">
         <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
           Security report
         </h2>
-        <Link href={reportHref} className="text-sm underline" style={{ color: "var(--color-accent)" }}>
-          view full report
+        <Link
+          href={reportHref}
+          className="rounded-md border px-2.5 py-1 text-xs font-medium hover:underline"
+          style={{ borderColor: "var(--color-accent)", color: "var(--color-accent)" }}
+        >
+          View full report
         </Link>
       </div>
 
