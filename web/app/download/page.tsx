@@ -19,7 +19,7 @@ const PLATFORMS = [
 
 export default function DownloadPage() {
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-8">
+    <div className="flex max-w-3xl flex-col gap-8">
       <header>
         <h1 className="text-3xl font-semibold tracking-tight">Download {SITE.brand}</h1>
         <p className="mt-3 text-lg" style={{ color: "var(--color-muted)" }}>
