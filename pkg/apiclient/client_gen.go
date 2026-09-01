@@ -2274,10 +2274,14 @@ type ClientInterface interface {
 
 	// TotpSetup Begin TOTP enrollment; returns the provisioning secret.
 	//
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	//
 	// Corresponds with POST /auth/2fa/totp/setup (the `TotpSetup` operationId).
 	TotpSetup(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// TotpVerifyWithBody Confirm TOTP enrollment with a current code.
+	//
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2286,6 +2290,8 @@ type ClientInterface interface {
 
 	// TotpVerify Confirm TOTP enrollment with a current code.
 	//
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /auth/2fa/totp/verify (the `TotpVerify` operationId).
@@ -2293,12 +2299,16 @@ type ClientInterface interface {
 
 	// LoginWithBody Password (+TOTP when enabled) login; sets the session cookie.
 	//
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /auth/login (the `Login` operationId).
 	LoginWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// Login Password (+TOTP when enabled) login; sets the session cookie.
+	//
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2326,12 +2336,16 @@ type ClientInterface interface {
 
 	// RegisterWithBody Create an individual account (email+password, §12.1).
 	//
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /auth/register (the `Register` operationId).
 	RegisterWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// Register Create an individual account (email+password, §12.1).
+	//
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2340,12 +2354,16 @@ type ClientInterface interface {
 
 	// VerifyEmailWithBody Confirm an email address with the mailed token.
 	//
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /auth/verify-email (the `VerifyEmail` operationId).
 	VerifyEmailWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// VerifyEmail Confirm an email address with the mailed token.
+	//
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -3440,6 +3458,8 @@ func (c *Client) TotpChallenge(ctx context.Context, body TotpChallengeJSONReques
 
 // TotpSetup Begin TOTP enrollment; returns the provisioning secret.
 //
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+//
 // Corresponds with POST /auth/2fa/totp/setup (the `TotpSetup` operationId).
 func (c *Client) TotpSetup(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewTotpSetupRequest(c.Server)
@@ -3454,6 +3474,8 @@ func (c *Client) TotpSetup(ctx context.Context, reqEditors ...RequestEditorFn) (
 }
 
 // TotpVerifyWithBody Confirm TOTP enrollment with a current code.
+//
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes any type of body and a specified content type.
 //
@@ -3472,6 +3494,8 @@ func (c *Client) TotpVerifyWithBody(ctx context.Context, contentType string, bod
 
 // TotpVerify Confirm TOTP enrollment with a current code.
 //
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+//
 // Takes a body of the `application/json` content type.
 //
 // Corresponds with POST /auth/2fa/totp/verify (the `TotpVerify` operationId).
@@ -3489,6 +3513,8 @@ func (c *Client) TotpVerify(ctx context.Context, body TotpVerifyJSONRequestBody,
 
 // LoginWithBody Password (+TOTP when enabled) login; sets the session cookie.
 //
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+//
 // Takes any type of body and a specified content type.
 //
 // Corresponds with POST /auth/login (the `Login` operationId).
@@ -3505,6 +3531,8 @@ func (c *Client) LoginWithBody(ctx context.Context, contentType string, body io.
 }
 
 // Login Password (+TOTP when enabled) login; sets the session cookie.
+//
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -3572,6 +3600,8 @@ func (c *Client) SocialOidcStart(ctx context.Context, provider SocialOidcStartPa
 
 // RegisterWithBody Create an individual account (email+password, §12.1).
 //
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+//
 // Takes any type of body and a specified content type.
 //
 // Corresponds with POST /auth/register (the `Register` operationId).
@@ -3588,6 +3618,8 @@ func (c *Client) RegisterWithBody(ctx context.Context, contentType string, body 
 }
 
 // Register Create an individual account (email+password, §12.1).
+//
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -3606,6 +3638,8 @@ func (c *Client) Register(ctx context.Context, body RegisterJSONRequestBody, req
 
 // VerifyEmailWithBody Confirm an email address with the mailed token.
 //
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+//
 // Takes any type of body and a specified content type.
 //
 // Corresponds with POST /auth/verify-email (the `VerifyEmail` operationId).
@@ -3622,6 +3656,8 @@ func (c *Client) VerifyEmailWithBody(ctx context.Context, contentType string, bo
 }
 
 // VerifyEmail Confirm an email address with the mailed token.
+//
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -10040,12 +10076,16 @@ type ClientWithResponsesInterface interface {
 
 	// TotpSetupWithResponse Begin TOTP enrollment; returns the provisioning secret.
 	//
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /auth/2fa/totp/setup (the `TotpSetup` operationId).
 	TotpSetupWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*TotpSetupResponse, error)
 
 	// TotpVerifyWithBodyWithResponse Confirm TOTP enrollment with a current code.
+	//
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -10054,6 +10094,8 @@ type ClientWithResponsesInterface interface {
 
 	// TotpVerifyWithResponse Confirm TOTP enrollment with a current code.
 	//
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /auth/2fa/totp/verify (the `TotpVerify` operationId).
@@ -10061,12 +10103,16 @@ type ClientWithResponsesInterface interface {
 
 	// LoginWithBodyWithResponse Password (+TOTP when enabled) login; sets the session cookie.
 	//
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /auth/login (the `Login` operationId).
 	LoginWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LoginResponse, error)
 
 	// LoginWithResponse Password (+TOTP when enabled) login; sets the session cookie.
+	//
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -10100,12 +10146,16 @@ type ClientWithResponsesInterface interface {
 
 	// RegisterWithBodyWithResponse Create an individual account (email+password, §12.1).
 	//
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /auth/register (the `Register` operationId).
 	RegisterWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RegisterResponse, error)
 
 	// RegisterWithResponse Create an individual account (email+password, §12.1).
+	//
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -10114,12 +10164,16 @@ type ClientWithResponsesInterface interface {
 
 	// VerifyEmailWithBodyWithResponse Confirm an email address with the mailed token.
 	//
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /auth/verify-email (the `VerifyEmail` operationId).
 	VerifyEmailWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*VerifyEmailResponse, error)
 
 	// VerifyEmailWithResponse Confirm an email address with the mailed token.
+	//
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -15793,6 +15847,8 @@ func (c *ClientWithResponses) TotpChallengeWithResponse(ctx context.Context, bod
 
 // TotpSetupWithResponse Begin TOTP enrollment; returns the provisioning secret.
 //
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+//
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /auth/2fa/totp/setup (the `TotpSetup` operationId).
@@ -15805,6 +15861,8 @@ func (c *ClientWithResponses) TotpSetupWithResponse(ctx context.Context, reqEdit
 }
 
 // TotpVerifyWithBodyWithResponse Confirm TOTP enrollment with a current code.
+//
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -15819,6 +15877,8 @@ func (c *ClientWithResponses) TotpVerifyWithBodyWithResponse(ctx context.Context
 
 // TotpVerifyWithResponse Confirm TOTP enrollment with a current code.
 //
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+//
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /auth/2fa/totp/verify (the `TotpVerify` operationId).
@@ -15832,6 +15892,8 @@ func (c *ClientWithResponses) TotpVerifyWithResponse(ctx context.Context, body T
 
 // LoginWithBodyWithResponse Password (+TOTP when enabled) login; sets the session cookie.
 //
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+//
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /auth/login (the `Login` operationId).
@@ -15844,6 +15906,8 @@ func (c *ClientWithResponses) LoginWithBodyWithResponse(ctx context.Context, con
 }
 
 // LoginWithResponse Password (+TOTP when enabled) login; sets the session cookie.
+//
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -15901,6 +15965,8 @@ func (c *ClientWithResponses) SocialOidcStartWithResponse(ctx context.Context, p
 
 // RegisterWithBodyWithResponse Create an individual account (email+password, §12.1).
 //
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+//
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /auth/register (the `Register` operationId).
@@ -15913,6 +15979,8 @@ func (c *ClientWithResponses) RegisterWithBodyWithResponse(ctx context.Context, 
 }
 
 // RegisterWithResponse Create an individual account (email+password, §12.1).
+//
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -15927,6 +15995,8 @@ func (c *ClientWithResponses) RegisterWithResponse(ctx context.Context, body Reg
 
 // VerifyEmailWithBodyWithResponse Confirm an email address with the mailed token.
 //
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+//
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /auth/verify-email (the `VerifyEmail` operationId).
@@ -15939,6 +16009,8 @@ func (c *ClientWithResponses) VerifyEmailWithBodyWithResponse(ctx context.Contex
 }
 
 // VerifyEmailWithResponse Confirm an email address with the mailed token.
+//
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

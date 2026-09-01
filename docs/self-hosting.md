@@ -37,6 +37,11 @@ Email verification is required before publishing. In a dev setup the token is
 logged at debug level and mailpit (http://localhost:8025) catches the message;
 in production configure real SMTP.
 
+If you enable the directory service below with
+`AGENTRY_AUTH_EXTERNAL_ONLY=true`, this curl answers `410 Gone` by design —
+accounts are then created on the sign-up page the directory service serves,
+not through the native register endpoint.
+
 ## Quickstart from source
 
 ```bash

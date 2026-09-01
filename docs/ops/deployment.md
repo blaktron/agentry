@@ -5,6 +5,14 @@ Infra-as-code lives in `deploy/terraform/` (SaaS reference + reusable
 modules) and `deploy/helm/agentry/` (self-host HA). Authoritative design:
 [PLAN.md](https://github.com/blaktron/agentry-notes/blob/main/agentry/PLAN.md) §2.4, §13, §16.
 
+!!! note "Compose is ahead of the IaC"
+    The dev compose stack carries three pieces the Terraform and Helm
+    shapes do not yet model: the **directory service** (authentik —
+    sign-in, self-enrollment, recovery; DEV-057/062/063), the
+    **Cloudflare Tunnel** connector (DEV-068), and the **hosted downloads**
+    directory (DEV-066). Porting them is recorded work, not an accident of
+    omission; until then this page describes the AWS reference as built.
+
 ## The three deployment shapes (§2.4)
 
 | Shape | What runs | Where it's defined |
