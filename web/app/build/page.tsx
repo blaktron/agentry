@@ -27,16 +27,18 @@ export default async function BuildPage({
   const label = "text-sm";
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <h1 className="mb-1 text-xl font-semibold">BriefAgent Builder</h1>
-      <p className="mb-4 text-sm" style={{ color: "var(--color-muted)" }}>
+    <div className="max-w-3xl space-y-6">
+      <header>
+        <h1 className="text-2xl font-semibold tracking-tight">BriefAgent Builder</h1>
+        <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
         One agent, one job. Declare the least it needs — reviewers gate on the contract,
         installs prompt on it, and the runner enforces it. <strong>Download</strong> packs the
         BriefAgent as the canonical archive for your own machine (run it with{" "}
         <code>agentry run --local</code>, or <code>agentry publish</code> it later).{" "}
         <strong>Publishing</strong> submits it to this registry&apos;s security pipeline: clean
         versions publish, findings go to review.
-      </p>
+        </p>
+      </header>
 
       {params.ok && (
         <p role="status" className="mb-4 rounded-md border px-3 py-2 text-sm"
