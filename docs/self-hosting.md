@@ -373,19 +373,55 @@ directory, or enrolled through a flow with an email-verification stage.
 If you allow self-enrollment without one, drop that mapping and accept
 that such accounts start as new registry users.
 
-**Self-enrollment.** `deploy/compose/authentik/blueprints/agentry-enrollment.yaml`
-is mounted into authentik as a blueprint and applied automatically: a
-sign-up form (username, display name, email, password with a 12-character
-+ zxcvbn strength policy), the account written **inactive**, an emailed
-confirmation link that activates it, then sign-in — and the login page
-gains a "Sign up" link (the default identification stage's enrollment
-flow). This is what makes the directory-verified `email` assertion above
-honest for self-enrolled users: no account is active, and so none reaches
-the registry, before its address is confirmed. To run invite-only instead,
-delete the blueprint file (or set its instance to disabled in authentik's
-admin UI); operator-created accounts are unaffected. The confirmation mail
-goes through authentik's own SMTP settings (`AUTHENTIK_EMAIL__*` —
-mailpit on the dev stack).
+**Account flows.** `deploy/compose/authentik/blueprints/agentry-account-flows.yaml`
+is mounted into authentik as a blueprint and applied automatically on
+boot. It defines both self-service routes and the controls on them, and
+adds the "Sign up" and "Forgot username or password?" links to the login
+page:
+
+- **Sign-up** — CAPTCHA, then a form (username, display name, email,
+  password), then the account written **inactive**, then an emailed
+  confirmation link that activates it, then sign-in. Writing the account
+  inactive is what makes the directory-verified `email` assertion above
+  honest for self-enrolled users: no account is active, and so none
+  reaches the registry, before its address is confirmed.
+- **Password recovery** — identification, an emailed reset link, then a
+  new password. The identification stage runs with `pretend_user_exists`,
+  so an unknown address gets the same answer a real one does and the form
+  cannot be used to discover who has an account. Recovery deliberately
+  does **not** activate an inactive account, unlike the confirmation
+  above: an operator-deactivated user must not be able to reactivate
+  themselves by requesting a reset.
+- Both forms enforce the **same password policy** (12 characters minimum
+  plus a zxcvbn strength score), because a password chosen during a reset
+  should be held to the same bar as one chosen at sign-up. There is no
+  Have I Been Pwned lookup: it needs egress from the container, and an
+  outage there would block sign-ups and resets outright.
+
+To run invite-only instead, delete the blueprint file (or disable its
+instance in authentik's admin UI); operator-created accounts are
+unaffected. Both mails go through authentik's own SMTP settings
+(`AUTHENTIK_EMAIL__*` — mailpit on the dev stack), which are separate from
+the registry's `AGENTRY_SMTP_*`.
+
+**Abuse controls on those flows.** Two layers, and the defaults are not
+production values:
+
+- A **CAPTCHA** stage guards sign-up. It ships configured for Cloudflare
+  Turnstile using Cloudflare's published *test* keys, which always pass —
+  that keeps a dev stack working out of the box and stops nobody. Set
+  `AUTHENTIK_CAPTCHA_SITE_KEY` and `AUTHENTIK_CAPTCHA_SECRET_KEY` (compose
+  passes both through) before opening sign-up to the internet;
+  `AUTHENTIK_CAPTCHA_JS_URL` / `_API_URL` point it at a different provider.
+- A **per-IP rate limit** caps how much work one address can cause: at most
+  10 accounts created plus mails sent per hour, counted from authentik's
+  own event log. Ordinary use costs 2 (an account and its confirmation
+  mail) to sign up and 1 to reset a password, so the budget is generous for
+  a shared office address while ending bulk account creation. Raise or
+  lower `MAX_PER_HOUR` in the blueprint to suit your users. Recovery also
+  keeps authentik's own per-user control on the email stage
+  (`recovery_max_attempts`, `recovery_cache_timeout`); the per-IP limit is
+  what stops one source mailing a thousand different victims.
 
 Sign-in from the web app runs in the API's browser mode: `/login`
 forwards to `/api/v1/auth/oidc/authentik/start?next=<in-app path>` and
