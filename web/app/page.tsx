@@ -3,6 +3,7 @@ import { apiGet, type Meta, type SearchResults } from "@/lib/api";
 import { fmtCount } from "@/lib/format";
 import { AgentRow, Card, CodeBlock } from "@/components/ui";
 import FlipSections from "@/components/flip-sections";
+import { Convergence } from "@/components/convergence";
 
 // Home (§10.1): what Agentry is, what people are actually installing, how to
 // install, and an honest statement of what scanning does and does not prove.
@@ -47,31 +48,32 @@ export default async function HomePage() {
 
   return (
     <div className="space-y-12">
-      <section className="max-w-3xl">
-        <h1 className="text-3xl font-semibold tracking-tight">
-          A registry for BriefAgents, single-purpose AI agents
-        </h1>
-        <p className="mt-4 text-lg" style={{ color: "var(--color-muted)" }}>
-          Agentry hosts BriefAgents in git: small, single-purpose AI agents, reviewed before
-          anyone can install them. Every published version is scanned on the exact bytes that ship,
-          for prompt injection, hidden instructions, undeclared capabilities, secrets, and
-          supply-chain problems. Then it is signed.
-        </p>
-        <p className="mt-4 text-lg" style={{ color: "var(--color-muted)" }}>
-          When you run one, it starts with nothing. The agentry runner launches each BriefAgent in
-          a disposable Docker container on an internal network with no route to the internet. The
-          agent holds no credentials and brings no tools of its own. Every tool it can use is
-          served by a run-scoped MCP gateway container, and only the tools declared in the manifest
-          are wired up.
-        </p>
-        <p className="mt-4 text-lg" style={{ color: "var(--color-muted)" }}>
-          Secrets never enter the agent container. Where a BriefAgent declares an API token or a
-          network endpoint, the gateway and the egress proxy receive it by name, and the agent
-          reaches it only through that declared path. Network traffic leaves through the run&apos;s
-          proxy, host by declared host. Anything not declared has no route at all. When the task
-          finishes, every container is removed and the agent is gone, leaving a receipt that
-          records what ran.
-        </p>
+      <section className="grid items-center gap-10 md:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+        <div className="max-w-3xl">
+          <h1 className="text-3xl font-semibold tracking-tight">
+            A registry for BriefAgents, single-purpose AI agents
+          </h1>
+          <p className="mt-4 text-lg" style={{ color: "var(--color-muted)" }}>
+            With AI agents becoming more common and useful every day, we are starting to enable our
+            agents with far more access and authorization than originally planned for. With memory
+            systems enabled by default, it can be difficult to work with sensitive data without a
+            cleanup process afterwards. And we leave tasks that our agents could perform to
+            ourselves, to avoid enabling them with too much access and risking it being used
+            against us.
+          </p>
+          <p className="mt-4 text-lg" style={{ color: "var(--color-muted)" }}>
+            To solve this we have BriefAgents, and Agentry. Agentry is the system that runs them:
+            leveraging Docker&apos;s MCP gateway and proxy system, with strict controls enforced at
+            every layer, you can run the most sensitive workloads with a BriefAgent without the
+            headaches and risks that come from just dumping your data into Claude Desktop.
+          </p>
+          <p className="mt-4 text-lg" style={{ color: "var(--color-muted)" }}>
+            Agentry is fully open source, fully auditable, and designed with security and privacy
+            from the outset. It lets people and teams use the full power of agentic AI without
+            leaking access keys and secrets as part of the process.
+          </p>
+        </div>
+        <Convergence />
       </section>
 
       {/* Section flip (§10.1): the buttons switch between three views
@@ -90,18 +92,26 @@ export default async function HomePage() {
           <div className="grid gap-6 md:grid-cols-2">
             <div className="space-y-3 text-sm" style={{ color: "var(--color-muted)" }}>
               <p>
-                A BriefAgent is a single-purpose AI agent shipped as a small, reviewable package.
-                The manifest declares what it is and what it may touch: network egress, filesystem
-                access, subprocess execution, and the secrets it needs, named but never carried.
-                The rest is instruction content, a skill or a system prompt, and where tools are
-                needed, a small MCP server with a lockfile.
+                A BriefAgent is a self-contained, single-use agent format: it runs with all the
+                access it needs to do its task and nothing more, built so that the credentials and
+                keys it uses cannot be turned to anything unintended.
               </p>
               <p>
-                At run time the agentry runner verifies the package, then places it in a container
-                on an internal network. The agent itself holds no credentials and no tools. The MCP
-                gateway serves only the tools the manifest declared, and the egress proxy allows
-                only the hosts it declared. When the task ends, the run is torn down and a receipt
-                records what happened.
+                It ships as a small, reviewable package. The manifest declares what it is and what
+                it may touch: network egress, filesystem access, subprocess execution, and the
+                secrets it needs, named but never carried. The rest is instruction content, a skill
+                or a system prompt, and where tools are needed, a small MCP server with a lockfile.
+              </p>
+              <p>
+                At run time the Agentry runner verifies the package, then starts it with nothing: a
+                disposable container on an internal network with no route to the internet, no
+                credentials, and no tools of its own. Every tool it can use is served by a
+                run-scoped MCP gateway, and only the tools the manifest declared are wired up.
+                Secrets never enter the agent container — where a BriefAgent declares an API token
+                or an endpoint, the gateway and the egress proxy receive it by name, and the agent
+                reaches it only through that declared path, host by declared host. Anything not
+                declared has no route at all. When the task ends, every container is removed and
+                the agent is gone, leaving a receipt that records what ran.
               </p>
             </div>
             <Card>
