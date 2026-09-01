@@ -44,9 +44,23 @@ import (
 
 const (
 	socialStateCookie = "agentry_social_state"
+	// socialRestartCookie is the loop guard for the callback's browser-mode
+	// restart: it marks "we already restarted this sign-in once", so a
+	// browser that cannot hold cookies gets an error page instead of a
+	// redirect loop.
+	socialRestartCookie = "agentry_social_restart"
 	// totpChallengeTTL bounds the second leg of a 2FA social login.
 	totpChallengeTTL = 5 * time.Minute
 )
+
+// isBrowserNavigation reports whether the request is a top-level browser
+// navigation (a person following a redirect), as opposed to an API client.
+func isBrowserNavigation(r *http.Request) bool {
+	if r.Header.Get("Sec-Fetch-Mode") == "navigate" {
+		return true
+	}
+	return strings.Contains(r.Header.Get("Accept"), "text/html")
+}
 
 // socialState is sealed into a short-lived cookie between start and callback.
 type socialState struct {
@@ -193,12 +207,48 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 		return
 	}
 	name := string(provider)
-	st, ok := s.readSocialState(w, r, name)
-	if !ok {
+
+	// A browser can arrive here without a usable state cookie and be
+	// entirely legitimate: the sign-up confirmation link was opened on a
+	// different device than the one that started the flow, or the ten-minute
+	// state cookie expired while the mail sat unread. The IdP session those
+	// flows just established is real — only OUR half of the handshake is
+	// missing. So for a top-level navigation, restart the flow instead of
+	// failing: a fresh /start issues a fresh state and the authorize
+	// round-trip completes silently against the existing IdP session. The
+	// code in hand is never accepted without its state; it is abandoned.
+	// One restart only (guard cookie): a browser that cannot hold cookies
+	// gets a message, not a redirect loop. API clients keep the 4xx.
+	restartOrFail := func(apiFail func()) {
+		if !isBrowserNavigation(r) {
+			apiFail()
+			return
+		}
+		if c, err := r.Cookie(socialRestartCookie); err == nil && c.Value != "" {
+			http.Redirect(w, r, "/login?error="+url.QueryEscape(
+				"sign-in could not complete — your browser is not keeping cookies for this site"), http.StatusSeeOther)
+			return
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name: socialRestartCookie, Value: "1", Path: "/", HttpOnly: true,
+			Secure: s.cfg.Auth.CookieSecure, SameSite: http.SameSiteLaxMode, MaxAge: 120,
+		})
+		http.Redirect(w, r, "/api/v1/auth/oidc/"+name+"/start?next="+url.QueryEscape("/dashboard"), http.StatusSeeOther)
+	}
+
+	st, stateErr, stateUnauthorized := s.peekSocialState(w, r, name)
+	if stateErr != "" {
+		restartOrFail(func() {
+			if stateUnauthorized {
+				problemUnauthorized(w, r, stateErr)
+			} else {
+				problemValidation(w, r, stateErr)
+			}
+		})
 		return
 	}
 	if params.State == nil || *params.State != st.State {
-		problemUnauthorized(w, r, "login state mismatch")
+		restartOrFail(func() { problemUnauthorized(w, r, "login state mismatch") })
 		return
 	}
 	if params.Code == nil || *params.Code == "" {
@@ -278,30 +328,29 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 }
 
 // readSocialState opens and clears the single-use state cookie.
-func (s *Server) readSocialState(w http.ResponseWriter, r *http.Request, provider string) (socialState, bool) {
+// peekSocialState reads and consumes the sealed state cookie. It never
+// writes a response body: the caller decides whether a failure is a 4xx
+// (API client) or a browser-mode flow restart. failure=="" means st is
+// valid; unauthorized says which problem class an API caller should get.
+func (s *Server) peekSocialState(w http.ResponseWriter, r *http.Request, provider string) (st socialState, failure string, unauthorized bool) {
 	c, err := r.Cookie(socialStateCookie)
 	if err != nil || c.Value == "" {
-		problemValidation(w, r, "missing login state cookie")
-		return socialState{}, false
+		return socialState{}, "missing login state cookie", false
 	}
 	// Single use regardless of outcome.
 	http.SetCookie(w, &http.Cookie{Name: socialStateCookie, Value: "", Path: "/", MaxAge: -1})
 	sealed, err := base64.RawURLEncoding.DecodeString(c.Value)
 	if err != nil {
-		problemValidation(w, r, "invalid login state")
-		return socialState{}, false
+		return socialState{}, "invalid login state", false
 	}
 	blob, err := s.sealer.Open(sealed)
 	if err != nil {
-		problemUnauthorized(w, r, "invalid login state")
-		return socialState{}, false
+		return socialState{}, "invalid login state", true
 	}
-	var st socialState
 	if err := json.Unmarshal(blob, &st); err != nil || st.Provider != provider {
-		problemUnauthorized(w, r, "invalid login state")
-		return socialState{}, false
+		return socialState{}, "invalid login state", true
 	}
-	return st, true
+	return st, "", false
 }
 
 // resolveSocialUser applies the §12.1/T-12 linking rules and returns the user.
