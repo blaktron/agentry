@@ -18,7 +18,8 @@ Your account is created **inactive** and stays that way until you click the
 confirmation link mailed to you (it expires after 30 minutes). That is not
 ceremony: the registry links identities to accounts by *verified* email, so
 nothing you do — including signing in — works before the address is
-confirmed.
+confirmed. The link works on **any device** — sign up on your desktop, open
+the mail on your phone, and you end up signed in on the phone.
 
 ## Signing in and out
 
