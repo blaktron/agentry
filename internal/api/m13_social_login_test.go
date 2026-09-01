@@ -17,6 +17,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -448,6 +449,77 @@ func TestSocialLoginBrowserModeRedirectsToNext(t *testing.T) {
 		if loc := res.Header.Get("Location"); loc != "" {
 			t.Fatalf("next=%q: redirected to %q", bad, loc)
 		}
+	}
+}
+
+// A browser landing on the callback without a usable state cookie is the
+// cross-device email-confirmation case (signed up on the desktop, confirmed
+// on the phone): the fix is a restart of the flow, not an error. One
+// restart only — with the guard cookie already present the browser gets a
+// message instead of a loop. Non-browser clients keep the 4xx.
+func TestSocialLoginCallbackRestartsBrowserWithoutState(t *testing.T) {
+	gh := newFakeGitHub(t)
+	env := newTestEnvCfg(t, gh.configure)
+	client := *env.srv.Client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+
+	get := func(cookies ...*http.Cookie) *http.Response {
+		req, err := http.NewRequest(http.MethodGet,
+			env.srv.URL+"/api/v1/auth/oidc/github/callback?code=c&state=x", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Sec-Fetch-Mode", "navigate")
+		req.Header.Set("Accept", "text/html")
+		for _, c := range cookies {
+			req.AddCookie(c)
+		}
+		res, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res
+	}
+
+	// First arrival: restart the flow, and set the guard cookie.
+	res := get()
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusSeeOther {
+		t.Fatalf("browser callback without state: got %d want 303", res.StatusCode)
+	}
+	if loc := res.Header.Get("Location"); loc != "/api/v1/auth/oidc/github/start?next=%2Fdashboard" {
+		t.Fatalf("restart Location = %q", loc)
+	}
+	var guard *http.Cookie
+	for _, c := range res.Cookies() {
+		if c.Name == "agentry_social_restart" && c.Value != "" {
+			guard = c
+		}
+	}
+	if guard == nil {
+		t.Fatal("restart did not set the loop-guard cookie")
+	}
+
+	// Second arrival with the guard: a message, not another restart.
+	res2 := get(guard)
+	defer func() { _ = res2.Body.Close() }()
+	if res2.StatusCode != http.StatusSeeOther {
+		t.Fatalf("guarded callback: got %d want 303", res2.StatusCode)
+	}
+	if loc := res2.Header.Get("Location"); !strings.HasPrefix(loc, "/login?error=") {
+		t.Fatalf("guarded callback Location = %q, want /login?error=…", loc)
+	}
+
+	// API clients (no navigation headers) keep the 422.
+	req, _ := http.NewRequest(http.MethodGet,
+		env.srv.URL+"/api/v1/auth/oidc/github/callback?code=c&state=x", nil)
+	res3, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res3.Body.Close() }()
+	if res3.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("api callback without state: got %d want 422", res3.StatusCode)
 	}
 }
 
