@@ -124,7 +124,10 @@ type Auth struct {
 	// native register / password-login / email-verify / TOTP endpoints
 	// answer 410 Gone and sign-in happens only through a configured social
 	// or SSO provider. Sessions, PATs, and RBAC stay native: the IdP owns
-	// who you are, this server owns what you may do.
+	// who you are, this server owns what you may do. The §12.1 "2FA before
+	// public publish" gate is delegated to the IdP as well, since no account
+	// can enrol a native TOTP factor while this is set (see
+	// internal/api/publish_gate.go).
 	ExternalOnly bool `yaml:"externalOnly"`
 }
 

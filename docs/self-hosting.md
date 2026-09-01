@@ -468,6 +468,18 @@ login, email-verify, and TOTP endpoints answer 410 Gone, and the web
 login page offers the directory service only. Turning the flag off (the
 default) restores the native flows — nothing was removed.
 
+**Two-factor authentication and public publishing.** Outside dev mode the
+registry normally refuses to publish to a public namespace until the
+account has a TOTP factor (§12.1, §19). With the directory service in
+charge no account can enrol one — the native TOTP endpoints are the ones
+answering 410 — so that gate is **off under `externalOnly`** and the
+requirement is yours to enforce in authentik: bind an MFA policy (or an
+authenticator-validation stage) to the authentication flow or to the
+`agentry` application, which also covers sign-in itself rather than only
+publishing. The registry does not yet read an `amr`/`acr` claim to check
+that the policy is in place, so an unenforced directory means unenforced
+MFA for publishers.
+
 To make the directory service wear the product's visual scheme (the
 tokens in `web/app/globals.css`; assets under `web/public/brand/`), run
 `scripts/dev/authentik-brand.sh` with `ASSET_BASE` set to the web app's
