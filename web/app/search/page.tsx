@@ -228,7 +228,7 @@ export default async function SearchPage({
                   name={hit.name}
                   summary={hit.summary}
                   kind={hit.kind}
-                  href={hrefFor(`${hit.namespace}/${hit.name}`)}
+                  detailHref={hrefFor(`${hit.namespace}/${hit.name}`)}
                   selected={selected?.namespace === hit.namespace && selected?.name === hit.name}
                 />
               ))}
