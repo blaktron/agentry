@@ -228,3 +228,11 @@ samp {
 .download-card .yours { display: none; }
 .download-card[data-yours="true"] { border-color: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent); }
 .download-card[data-yours="true"] .yours { display: inline-block; }
+
+/* Browse results: the row the detail pane is showing. */
+.agent-row[aria-current="true"] {
+  margin-left: -0.75rem;
+  padding-left: calc(0.75rem - 3px);
+  border-left: 3px solid var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 6%, transparent);
+}

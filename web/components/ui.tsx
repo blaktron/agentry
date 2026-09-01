@@ -231,21 +231,32 @@ function describeExec(v: unknown): string | null {
 }
 
 // AgentRow is the search/listing row.
+// `href` overrides the row's link (the browse page points rows at itself
+// with `?selected=` so the detail pane opens in place); `selected` marks the
+// row the pane is showing.
 export function AgentRow({
   namespace,
   name,
   summary,
   kind,
+  href,
+  selected = false,
 }: {
   namespace: string;
   name: string;
   summary: string;
   kind: AgentKind;
+  href?: string;
+  selected?: boolean;
 }) {
   return (
-    <li className="border-b py-3 last:border-0" style={{ borderColor: "var(--color-border)" }}>
+    <li
+      className="agent-row border-b py-3 last:border-0"
+      style={{ borderColor: "var(--color-border)" }}
+      aria-current={selected ? "true" : undefined}
+    >
       <div className="flex items-baseline gap-3">
-        <Link href={`/${namespace}/${name}`} className="font-mono font-medium hover:underline">
+        <Link href={href ?? `/${namespace}/${name}`} className="font-mono font-medium hover:underline">
           {namespace}/{name}
         </Link>
         <KindBadge kind={kind} />
