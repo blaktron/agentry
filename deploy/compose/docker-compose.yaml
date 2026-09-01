@@ -104,9 +104,16 @@ services:
       AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN:-}
       AUTHENTIK_BOOTSTRAP_EMAIL: ${AUTHENTIK_BOOTSTRAP_EMAIL:-}
       # Recovery/verification mail lands in the same mailpit as the registry's.
-      AUTHENTIK_EMAIL__HOST: mailpit
-      AUTHENTIK_EMAIL__PORT: "1025"
-      AUTHENTIK_EMAIL__FROM: authentik@agentry.localhost
+      # Defaults land in mailpit; set the AUTHENTIK_EMAIL_* values in .env
+      # for a real provider (Postmark: host smtp.postmarkapp.com, port 587,
+      # the server token as both username and password, USE_TLS for
+      # STARTTLS).
+      AUTHENTIK_EMAIL__HOST: ${AUTHENTIK_EMAIL_HOST:-mailpit}
+      AUTHENTIK_EMAIL__PORT: ${AUTHENTIK_EMAIL_PORT:-1025}
+      AUTHENTIK_EMAIL__USERNAME: ${AUTHENTIK_EMAIL_USERNAME:-}
+      AUTHENTIK_EMAIL__PASSWORD: ${AUTHENTIK_EMAIL_PASSWORD:-}
+      AUTHENTIK_EMAIL__USE_TLS: ${AUTHENTIK_EMAIL_USE_TLS:-false}
+      AUTHENTIK_EMAIL__FROM: ${AUTHENTIK_EMAIL_FROM:-authentik@agentry.localhost}
       # Sign-up CAPTCHA (DEV-063). Defaults are Cloudflare's published
       # Turnstile TEST keys, which always pass — fine for dev, useless as a
       # control. Set real keys in .env for anything with public sign-up.
@@ -188,10 +195,14 @@ services:
       # accepts plaintext on 1025, which is why startTLS is off here and must
       # never be off against a real relay.
       AGENTRY_NOTIFY_KIND: smtp
-      AGENTRY_SMTP_HOST: mailpit
-      AGENTRY_SMTP_PORT: "1025"
-      AGENTRY_SMTP_STARTTLS: "false"
-      AGENTRY_SMTP_FROM: Agentry <no-reply@agentry.localhost>
+      # Defaults land in mailpit; set the AGENTRY_SMTP_* values in .env for
+      # a real provider.
+      AGENTRY_SMTP_HOST: ${AGENTRY_SMTP_HOST:-mailpit}
+      AGENTRY_SMTP_PORT: ${AGENTRY_SMTP_PORT:-1025}
+      AGENTRY_SMTP_USER: ${AGENTRY_SMTP_USER:-}
+      AGENTRY_SMTP_PASS: ${AGENTRY_SMTP_PASS:-}
+      AGENTRY_SMTP_STARTTLS: ${AGENTRY_SMTP_STARTTLS:-false}
+      AGENTRY_SMTP_FROM: ${AGENTRY_SMTP_FROM:-Agentry <no-reply@agentry.localhost>}
       # Override with AGENTRY_PUBLIC_URL when the box is reached under another
       # name — clone/install/download URLs all render live from this. Set it
       # in deploy/compose/.env (compose reads .env from the compose file's
