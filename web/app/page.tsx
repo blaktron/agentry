@@ -50,9 +50,7 @@ export default async function HomePage() {
     <div className="space-y-12">
       <section className="grid items-center gap-10 md:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
         <div className="max-w-3xl">
-          <h1 className="text-3xl font-semibold tracking-tight">
-            A registry for BriefAgents, single-purpose AI agents
-          </h1>
+          <h1 className="text-3xl font-semibold tracking-tight">A registry for BriefAgents</h1>
           <p className="mt-4 text-lg" style={{ color: "var(--color-muted)" }}>
             With AI agents becoming more common and useful every day, we are starting to enable our
             agents with far more access and authorization than originally planned for. With memory

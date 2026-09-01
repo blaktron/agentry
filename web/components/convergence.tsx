@@ -19,7 +19,7 @@ const SOURCES: { label: string; x: number; y: number; color: string; delay: numb
   { label: "instructions", x: 24, y: 114, color: "#38bdf8", delay: 1.4 },
   { label: "tools", x: 16, y: 180, color: "#a78bfa", delay: 2.8 },
   { label: "policy", x: 24, y: 246, color: "#fbbf24", delay: 4.2 },
-  { label: "secrets, by name", x: 40, y: 312, color: "#fb7185", delay: 5.6 },
+  { label: "secrets", x: 40, y: 312, color: "#fb7185", delay: 5.6 },
 ];
 
 function beamPath(x: number, y: number): string {
