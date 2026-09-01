@@ -144,6 +144,17 @@ will not let go. Agents carrying advisories or abuse reports are also
 refused; those are trust & safety records that outlive an author's wish to
 remove the agent (DEV-021).
 
+## Native credentials vs an external directory
+
+A deployment can hand its account directory to an external IdP
+(`AGENTRY_AUTH_EXTERNAL_ONLY=true`, DEV-057 — the shipped compose stack
+runs authentik this way). The five native credential endpoints —
+`POST /auth/register`, `POST /auth/login`, `POST /auth/verify-email`, and
+the TOTP setup/verify pair — then answer **`410 Gone`**: the surface is
+switched off, not missing. Sign-in happens through
+`GET /auth/oidc/{provider}/start`, and sessions, PATs, and every
+authorization decision stay the registry's own either way.
+
 ## Downloads and version states
 
 - `410 Gone`: the agent or version is **blocked** by trust & safety.

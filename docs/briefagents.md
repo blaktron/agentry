@@ -290,9 +290,14 @@ prove.
 
 ## Publishing
 
-`agentry publish` submits the version to the mandatory pipeline: manifest
-validation, content scanning against the declared capabilities, and DSSE
-signing. Published releases are immutable and content-addressed. The
+Three doors, one pipeline. `agentry publish` submits a workspace from the
+command line; the registry's **BriefAgent Builder** (`/build`) authors and
+submits one from the browser; and the **desktop app**'s Build tab does the
+same from a form. Repos hosted on the registry can also publish by pushing
+a release tag (the agent's auto-publish-tags setting). Whichever door,
+the submission is identical server-side: manifest validation, content
+scanning against the declared capabilities, human review where findings
+demand it, and DSSE signing. Published releases are immutable and content-addressed. The
 language rule applies to BriefAgents as it does to everything here: a
 release is *scanned, with N findings, signed*, never "safe". Declare the
 least you need and the whole chain stays reviewable.

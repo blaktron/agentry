@@ -30,7 +30,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create an individual account (email+password, §12.1). */
+        /**
+         * Create an individual account (email+password, §12.1).
+         * @description When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+         */
         post: operations["register"];
         delete?: never;
         options?: never;
@@ -47,7 +50,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Confirm an email address with the mailed token. */
+        /**
+         * Confirm an email address with the mailed token.
+         * @description When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+         */
         post: operations["verifyEmail"];
         delete?: never;
         options?: never;
@@ -64,7 +70,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Password (+TOTP when enabled) login; sets the session cookie. */
+        /**
+         * Password (+TOTP when enabled) login; sets the session cookie.
+         * @description When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+         */
         post: operations["login"];
         delete?: never;
         options?: never;
@@ -98,7 +107,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Begin TOTP enrollment; returns the provisioning secret. */
+        /**
+         * Begin TOTP enrollment; returns the provisioning secret.
+         * @description When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+         */
         post: operations["totpSetup"];
         delete?: never;
         options?: never;
@@ -115,7 +127,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Confirm TOTP enrollment with a current code. */
+        /**
+         * Confirm TOTP enrollment with a current code.
+         * @description When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+         */
         post: operations["totpVerify"];
         delete?: never;
         options?: never;

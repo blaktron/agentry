@@ -2,8 +2,9 @@
 
 ## Prerequisites
 
-- Go 1.24+ (`brew install go`)
-- Node 20+ for the web layer (`brew install node`)
+- Go 1.27+ (`brew install go`)
+- Node 22.15+ for the web layer (`brew install node`) — the Builder's
+  archive packer uses `node:zlib`'s zstd, which arrived in 22.15
 - Docker (preferred) **or** PostgreSQL 16 locally (`brew install postgresql@16`); see DEV-001 in the agentry-notes deviations register
 - `sqlc` for query codegen (`brew install sqlc` or `go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest`)
 
