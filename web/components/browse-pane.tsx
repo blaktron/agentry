@@ -125,7 +125,7 @@ export async function BrowsePane({
             Install
           </div>
           <div className="mt-1">
-            <CodeBlock>{`agentry install ${agent.namespace}/${agent.name}@${latest.version}`}</CodeBlock>
+            <CodeBlock wrap>{`agentry install ${agent.namespace}/${agent.name}@${latest.version}`}</CodeBlock>
           </div>
         </div>
       )}
