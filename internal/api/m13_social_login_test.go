@@ -379,6 +379,78 @@ func TestSocialLoginStillRequiresTOTP(t *testing.T) {
 	}
 }
 
+// DEV-061: a login begun from the web app carries `next`; the callback then
+// sets the session cookie and 303s into the app instead of answering JSON.
+// The open-redirect shapes fall back to API mode rather than being followed.
+func TestSocialLoginBrowserModeRedirectsToNext(t *testing.T) {
+	gh := newFakeGitHub(t)
+	gh.email = "next-" + randSuffix() + "@github.test"
+	env := newTestEnvCfg(t, gh.configure)
+
+	startWith := func(next string) (state string, cookie *http.Cookie) {
+		t.Helper()
+		client := *env.srv.Client()
+		client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+		res, err := client.Get(env.srv.URL + "/api/v1/auth/oidc/github/start?next=" + url.QueryEscape(next))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = res.Body.Close() }()
+		if res.StatusCode != http.StatusFound {
+			t.Fatalf("start: got %d want 302", res.StatusCode)
+		}
+		authURL, err := url.Parse(res.Header.Get("Location"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, c := range res.Cookies() {
+			if c.Name == "agentry_social_state" {
+				cookie = c
+			}
+		}
+		if cookie == nil {
+			t.Fatal("no sealed state cookie")
+		}
+		return authURL.Query().Get("state"), cookie
+	}
+
+	state, cookie := startWith("/dashboard?tab=agents")
+	res := env.socialCallback(t, "github", state, cookie)
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusSeeOther {
+		t.Fatalf("browser-mode callback: got %d want 303", res.StatusCode)
+	}
+	if loc := res.Header.Get("Location"); loc != "/dashboard?tab=agents" {
+		t.Fatalf("browser-mode callback: Location %q want /dashboard?tab=agents", loc)
+	}
+	var sess *http.Cookie
+	for _, c := range res.Cookies() {
+		if c.Name == "agentry_session" && c.Value != "" {
+			sess = c
+		}
+	}
+	if sess == nil {
+		t.Fatal("browser-mode callback set no session cookie")
+	}
+	who := env.do(caller{name: "browser", session: sess.Value}, http.MethodGet, "/api/v1/user", nil)
+	defer func() { _ = who.Body.Close() }()
+	if who.StatusCode != http.StatusOK {
+		t.Fatalf("session from browser-mode login: /user got %d", who.StatusCode)
+	}
+
+	for _, bad := range []string{"//evil.example/x", "/\\evil.example", "https://evil.example", "/dash\nboard", ""} {
+		state, cookie := startWith(bad)
+		res := env.socialCallback(t, "github", state, cookie)
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("next=%q: got %d; an unsafe next must fall back to API mode (200 JSON), never redirect", bad, res.StatusCode)
+		}
+		if loc := res.Header.Get("Location"); loc != "" {
+			t.Fatalf("next=%q: redirected to %q", bad, loc)
+		}
+	}
+}
+
 func TestSocialLoginUnconfiguredProviderIs404(t *testing.T) {
 	gh := newFakeGitHub(t)
 	env := newTestEnvCfg(t, gh.configure) // github only

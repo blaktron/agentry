@@ -35,8 +35,11 @@ export default async function LoginPage({
   // flash, e.g. from a failed callback: bouncing that back to the IdP would
   // loop without ever showing the message) or when the deployment offers a
   // choice of providers.
+  // DEV-061: `next` rides into the API's browser mode, so the callback
+  // lands the browser back in the app (303) instead of on its JSON result.
+  const startHref = (id: string) => `/api/v1/auth/oidc/${id}/start?next=${encodeURIComponent(next)}`;
   if (!params.error && !params.ok && providers.length === 1 && providers[0].id === "authentik") {
-    redirect("/api/v1/auth/oidc/authentik/start");
+    redirect(startHref("authentik"));
   }
 
   return (
@@ -74,7 +77,7 @@ export default async function LoginPage({
             {providers.map((p) => (
               <a
                 key={p.id}
-                href={`/api/v1/auth/oidc/${p.id}/start`}
+                href={startHref(p.id)}
                 rel="nofollow"
                 className="rounded-md border px-3 py-2 text-center text-sm font-medium"
                 style={
@@ -118,7 +121,7 @@ export default async function LoginPage({
         <h2 className="mb-2 text-sm font-semibold">{heading}</h2>
         <div className="flex flex-wrap gap-2">
           {providers.map((p) => (
-            <a key={p.id} href={`/api/v1/auth/oidc/${p.id}/start`} rel="nofollow"
+            <a key={p.id} href={startHref(p.id)} rel="nofollow"
               className="rounded-md border px-3 py-1.5 text-sm font-medium"
               style={{ borderColor: "var(--color-border)" }}>
               Continue with {p.label}
