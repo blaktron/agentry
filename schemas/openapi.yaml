@@ -1058,6 +1058,11 @@ paths:
                   enum: [public, private]
                 autoPublishTags:
                   type: boolean
+                allowForcePush:
+                  description: >
+                    Allow non-fast-forward pushes to the default branch
+                    (§6.3). Off by default; maintain only.
+                  type: boolean
       responses:
         "200":
           description: Updated agent.
@@ -3243,6 +3248,9 @@ components:
         autoPublishTags:
           type: boolean
           description: Present for callers with maintain (§6.3 toggle).
+        allowForcePush:
+          type: boolean
+          description: Present for callers with maintain; whether force-push to the default branch is allowed (§6.3).
         createdAt:
           type: string
           format: date-time

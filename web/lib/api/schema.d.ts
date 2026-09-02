@@ -1845,6 +1845,8 @@ export interface components {
             quarantineState: "none" | "quarantined" | "blocked";
             /** @description Present for callers with maintain (§6.3 toggle). */
             autoPublishTags?: boolean;
+            /** @description Present for callers with maintain; whether force-push to the default branch is allowed (§6.3). */
+            allowForcePush?: boolean;
             /** Format: date-time */
             createdAt: string;
         };
@@ -3252,6 +3254,8 @@ export interface operations {
                     /** @enum {string} */
                     visibility?: "public" | "private";
                     autoPublishTags?: boolean;
+                    /** @description Allow non-fast-forward pushes to the default branch (§6.3). Off by default; maintain only. */
+                    allowForcePush?: boolean;
                 };
             };
         };

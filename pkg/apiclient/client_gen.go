@@ -925,6 +925,9 @@ type Advisory struct {
 
 // Agent defines model for Agent.
 type Agent struct {
+	// AllowForcePush Present for callers with maintain; whether force-push to the default branch is allowed (§6.3).
+	AllowForcePush *bool `json:"allowForcePush,omitempty"`
+
 	// AutoPublishTags Present for callers with maintain (§6.3 toggle).
 	AutoPublishTags *bool     `json:"autoPublishTags,omitempty"`
 	CreatedAt       time.Time `json:"createdAt"`
@@ -1615,6 +1618,8 @@ type ListAgentsParams struct {
 
 // UpdateAgentJSONBody defines parameters for UpdateAgent.
 type UpdateAgentJSONBody struct {
+	// AllowForcePush Allow non-fast-forward pushes to the default branch (§6.3). Off by default; maintain only.
+	AllowForcePush  *bool                          `json:"allowForcePush,omitempty"`
 	AutoPublishTags *bool                          `json:"autoPublishTags,omitempty"`
 	Summary         *string                        `json:"summary,omitempty"`
 	Visibility      *UpdateAgentJSONBodyVisibility `json:"visibility,omitempty"`
