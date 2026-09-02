@@ -32,4 +32,9 @@ func TestIPClusterHash(t *testing.T) {
 	if strings.Contains(a, "203") {
 		t.Fatal("the address leaks into the hash")
 	}
+	for _, local := range []string{"127.0.0.1", "::1", "0.0.0.0", "not-an-ip"} {
+		if IPClusterHash(secret, local, jan) != "" {
+			t.Fatalf("%s must record nothing (operator's own host / unparseable)", local)
+		}
+	}
 }

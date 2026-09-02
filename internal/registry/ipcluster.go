@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"net/netip"
 	"time"
 )
 
@@ -16,8 +17,15 @@ import (
 // stored, and a leaked hash set cannot be reversed without the secret.
 // The "YYYY-MM:" prefix makes the rotation visible and keeps comparisons
 // within one key.
+//
+// Loopback and unspecified addresses record nothing: a submission from the
+// server's own host is the operator (or a test suite), and a "cluster" of
+// everything published from localhost is noise, not a signal.
 func IPClusterHash(secret []byte, ip string, now time.Time) string {
 	if ip == "" || len(secret) == 0 {
+		return ""
+	}
+	if addr, err := netip.ParseAddr(ip); err != nil || addr.IsLoopback() || addr.IsUnspecified() {
 		return ""
 	}
 	month := now.UTC().Format("2006-01")
