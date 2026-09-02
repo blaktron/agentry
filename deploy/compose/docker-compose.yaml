@@ -120,6 +120,10 @@ services:
       AUTHENTIK_POSTGRESQL__NAME: authentik
       AUTHENTIK_REDIS__HOST: redis
       AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+      # Per-IP budget for the enrollment/recovery flows (emails sent +
+      # accounts created per hour, agentry#53); formatted into the
+      # account-flows blueprint's rate-limit policy at apply time.
+      AUTHENTIK_ACCOUNT_FLOW_MAX_PER_HOUR: ${AUTHENTIK_ACCOUNT_FLOW_MAX_PER_HOUR:-10}
       # First boot creates akadmin with this password, and an API token
       # (intent api) with this value — what the bootstrap script uses.
       AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD:-}
