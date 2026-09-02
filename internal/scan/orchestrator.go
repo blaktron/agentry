@@ -283,6 +283,16 @@ func (o *Orchestrator) runStage(sc stageContext, st Stage, in *Input) (res Stage
 	start := time.Now()
 	defer func() {
 		o.mx.RecordScanStage(sc.ctx, st.ID(), time.Since(start), len(res.Findings), res.Err)
+		// S7's "we did not check" outcomes are fail-open by design
+		// (DEV-026.3); count them where a dashboard can see them (agentry#33).
+		for _, f := range res.Findings {
+			switch f.Scanner {
+			case "S7/osv-not-checked":
+				o.mx.RecordFailOpen(sc.ctx, metrics.FailOpenOSVNotChecked)
+			case "S7/osv-error":
+				o.mx.RecordFailOpen(sc.ctx, metrics.FailOpenOSVError)
+			}
+		}
 	}()
 
 	done := make(chan StageResult, 1)

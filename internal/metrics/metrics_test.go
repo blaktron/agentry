@@ -50,6 +50,7 @@ func TestInstrumentNamesMatchTerraform(t *testing.T) {
 	m.RecordGitConcurrency(ctx, "upload-pack", 2)
 	m.RecordGitCloneFirstByte(ctx, 300*time.Millisecond)
 	m.RecordWebhookDelivery(ctx, "ok")
+	m.RecordFailOpen(ctx, FailOpenOSVNotChecked)
 
 	out := gather(t, m)
 	// Exactly the names referenced by deploy/terraform/modules/observability.
@@ -60,6 +61,7 @@ func TestInstrumentNamesMatchTerraform(t *testing.T) {
 		"PublishSubmitted", "PublishVerdictClean", "PublishVerdictReview", "PublishVerdictBlocked",
 		"JudgeCostCents",
 		"HttpRequests", "HttpRequestDurationSeconds", "WebhookDeliveries",
+		"FailOpenEvents",
 	} {
 		if !strings.Contains(out, "\n"+name) && !strings.HasPrefix(out, name) {
 			t.Errorf("exposition is missing metric %q", name)
