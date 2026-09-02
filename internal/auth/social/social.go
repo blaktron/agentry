@@ -81,6 +81,8 @@ type Identity struct {
 	// providers only; the GitHub shim has no ID token). See oidc.Claims.
 	AMR []string
 	ACR string
+	// Groups is the ID token's `groups` claim (directory group names).
+	Groups []string
 }
 
 // MFAAsserted reports whether AMR names a second factor: the RFC 8176
@@ -212,6 +214,7 @@ func (p *oidcProvider) Exchange(ctx context.Context, code, verifier, nonce strin
 		EmailVerified:     claims.EmailVerified,
 		AMR:               claims.AMR,
 		ACR:               claims.ACR,
+		Groups:            claims.Groups,
 	}, nil
 }
 

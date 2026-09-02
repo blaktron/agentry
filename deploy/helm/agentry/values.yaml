@@ -45,6 +45,25 @@ config:
     cookieSecure: true
     sessionTTL: 24h
     patMaxTTL: 8760h
+    # Directory service (DEV-057, agentry#51). externalOnly hands passwords,
+    # MFA, recovery and sign-up to the IdP configured under social.authentik;
+    # idpAdminURL (+ secret.idpAdminToken) lets account erasure reach it;
+    # idpStaffGroup names the directory group whose members are platform
+    # staff (granted and revoked at sign-in from the `groups` claim).
+    externalOnly: false
+    idpAdminURL: ""
+    idpStaffGroup: ""
+  social:
+    # The deployment's own directory as an OIDC provider. clientSecret is a
+    # secret: secret.authentikClientSecret / existingSecret key
+    # AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET.
+    authentik:
+      clientId: ""
+      issuer: "" # https://auth.example.com/application/o/agentry/
+  idp:
+    # End-session URL the web tier sends the browser through on sign-out;
+    # also allowed in the page CSP's form-action (DEV-082).
+    logoutUrl: "" # https://auth.example.com/application/o/agentry/end-session/
   storage:
     kind: s3 # s3 | local
     s3Bucket: ""
@@ -105,7 +124,9 @@ config:
 # external-secrets / sealed-secrets) over inlining here.
 secret:
   create: true
-  existingSecret: "" # if set, must provide keys: AGENTRY_DATABASE_URL, AGENTRY_AUTH_SEALING_KEY, and optionally AGENTRY_REDIS_URL / AGENTRY_SMTP_PASS
+  existingSecret: "" # if set, must provide keys: AGENTRY_DATABASE_URL, AGENTRY_AUTH_SEALING_KEY, and optionally AGENTRY_REDIS_URL / AGENTRY_SMTP_PASS / AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET / AGENTRY_IDP_ADMIN_TOKEN
+  authentikClientSecret: "" # OIDC client secret for config.social.authentik
+  idpAdminToken: "" # directory API token for account erasure (config.auth.idpAdminURL)
   databaseUrl: "" # postgres://user:pass@host:5432/agentry?sslmode=require
   redisUrl: "" # rediss://:pass@host:6379/0 (optional)
   sealingKey: "" # base64 32 bytes; required outside dev (§ config Validate)

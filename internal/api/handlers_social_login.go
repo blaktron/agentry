@@ -301,6 +301,11 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 			s.log.Warn("social login: record idp mfa", "err", err)
 		}
 	}
+	// Platform staff follows directory group membership (agentry#51):
+	// only the deployment's own directory may say who staff is.
+	if name == "authentik" && s.cfg.Auth.IdPStaffGroup != "" {
+		s.syncPlatformStaff(r, userID, id.Groups)
+	}
 
 	user, err := s.q().GetUserByID(r.Context(), userID)
 	if err != nil {
@@ -597,4 +602,36 @@ func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user
 	writeJSON(w, http.StatusOK, SocialLoginResult{
 		TotpRequired: false, User: &apiUser, CsrfToken: &csrfToken,
 	})
+}
+
+// syncPlatformStaff sets users.platform_staff to "member of the configured
+// directory group" and audits a change. Both directions are deliberate:
+// removing someone from the group in the directory revokes staff at their
+// next sign-in, and nothing else grants it.
+func (s *Server) syncPlatformStaff(r *http.Request, userID uuid.UUID, groups []string) {
+	want := false
+	for _, g := range groups {
+		if g == s.cfg.Auth.IdPStaffGroup {
+			want = true
+			break
+		}
+	}
+	row, err := s.q().GetUserByID(r.Context(), userID)
+	if err != nil || row.PlatformStaff == want {
+		return
+	}
+	err = s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
+		if err := q.SetUserPlatformStaff(r.Context(), storegen.SetUserPlatformStaffParams{ID: userID, PlatformStaff: want}); err != nil {
+			return err
+		}
+		e := auditEvent(r, audit.ActionUserStaffSync)
+		e.Actor, e.ActorKind = userID, audit.ActorUser
+		e.TargetKind, e.TargetID = "user", userID
+		e.Detail = map[string]any{"platformStaff": want}
+		e.Detail["group"] = s.cfg.Auth.IdPStaffGroup
+		return s.auditW.Write(r.Context(), q, e)
+	})
+	if err != nil {
+		s.log.Error("social login: platform staff sync", "err", err, "user", userID)
+	}
 }

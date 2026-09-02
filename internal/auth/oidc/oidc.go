@@ -44,6 +44,10 @@ type Claims struct {
 	// AMR as evidence that a second factor was used (agentry#23).
 	AMR []string
 	ACR string
+	// Groups is the token's `groups` claim (authentik's profile scope puts
+	// the user's group names there); nil when absent. The registry maps
+	// one configured group onto platform staff (agentry#51).
+	Groups []string
 }
 
 // New builds the RP. coreoidc.NewProvider performs discovery and pins the
@@ -118,6 +122,7 @@ func (rp *RP) Exchange(ctx context.Context, code, verifier, expectedNonce string
 		EmailVerified any    `json:"email_verified"`
 		AMR           any    `json:"amr"`
 		ACR           string `json:"acr"`
+		Groups        any    `json:"groups"`
 	}
 	if err := idToken.Claims(&raw); err != nil {
 		return nil, fmt.Errorf("oidc: decode claims: %w", err)
@@ -129,6 +134,7 @@ func (rp *RP) Exchange(ctx context.Context, code, verifier, expectedNonce string
 		Issuer:        idToken.Issuer,
 		AMR:           asStrings(raw.AMR),
 		ACR:           raw.ACR,
+		Groups:        asStrings(raw.Groups),
 	}
 	if c.Subject == "" {
 		c.Subject = raw.Sub

@@ -20,7 +20,10 @@ const (
 	ActionPATCreate          Action = "pat.create"
 	ActionPATRevoke          Action = "pat.revoke"
 	ActionUserDirectoryErase Action = "user.directory_erase"
-	ActionUserDelete         Action = "user.delete"
+	// ActionUserStaffSync records a platform_staff change driven by
+	// directory group membership (agentry#51).
+	ActionUserStaffSync Action = "user.staff_sync"
+	ActionUserDelete    Action = "user.delete"
 
 	// Orgs & teams.
 	ActionOrgCreate        Action = "org.create"
