@@ -26,14 +26,14 @@ jobs:
           POSTGRES_USER: agentry
           POSTGRES_PASSWORD: agentry
           POSTGRES_DB: agentry_test
-        ports: ["5432:5432"]
+        ports: ["5432"]  # ephemeral host port: several runners per host (agentry#125)
         options: >-
           --health-cmd "pg_isready -U agentry" --health-interval 5s
           --health-timeout 3s --health-retries 10
-    env:
-      AGENTRY_TEST_DATABASE_URL: postgres://agentry:agentry@localhost:5432/agentry_test?sslmode=disable
     steps:
       - uses: actions/checkout@v4
+      - name: Point the tests at the service's mapped port
+        run: echo "AGENTRY_TEST_DATABASE_URL=postgres://agentry:agentry@localhost:${{ job.services.postgres.ports['5432'] }}/agentry_test?sslmode=disable" >> "$GITHUB_ENV"
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -76,14 +76,14 @@ jobs:
           POSTGRES_USER: agentry
           POSTGRES_PASSWORD: agentry
           POSTGRES_DB: agentry_test
-        ports: ["5432:5432"]
+        ports: ["5432"]  # ephemeral host port: several runners per host (agentry#125)
         options: >-
           --health-cmd "pg_isready -U agentry" --health-interval 5s
           --health-timeout 3s --health-retries 10
-    env:
-      AGENTRY_TEST_DATABASE_URL: postgres://agentry:agentry@localhost:5432/agentry_test?sslmode=disable
     steps:
       - uses: actions/checkout@v4
+      - name: Point the tests at the service's mapped port
+        run: echo "AGENTRY_TEST_DATABASE_URL=postgres://agentry:agentry@localhost:${{ job.services.postgres.ports['5432'] }}/agentry_test?sslmode=disable" >> "$GITHUB_ENV"
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
