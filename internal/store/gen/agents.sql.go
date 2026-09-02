@@ -58,7 +58,7 @@ func (q *Queries) CountAgentsInNamespace(ctx context.Context, namespaceID uuid.U
 const createAgent = `-- name: CreateAgent :one
 INSERT INTO agents (id, namespace_id, name, kind, visibility, repo_id, summary)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, namespace_id, name, kind, visibility, repo_id, summary, latest_published_version_id, quarantine_state, auto_publish_tags, search_tsv, created_at, updated_at, readme_text
+RETURNING id, namespace_id, name, kind, visibility, repo_id, summary, latest_published_version_id, quarantine_state, auto_publish_tags, search_tsv, created_at, updated_at, readme_text, allow_force_push
 `
 
 type CreateAgentParams struct {
@@ -97,6 +97,7 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ReadmeText,
+		&i.AllowForcePush,
 	)
 	return i, err
 }
@@ -176,7 +177,7 @@ func (q *Queries) DeleteRepoByID(ctx context.Context, id uuid.UUID) error {
 }
 
 const getAgentByID = `-- name: GetAgentByID :one
-SELECT a.id, a.namespace_id, a.name, a.kind, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, h.handle AS namespace, h.kind AS namespace_kind
+SELECT a.id, a.namespace_id, a.name, a.kind, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, h.handle AS namespace, h.kind AS namespace_kind
 FROM agents a JOIN handles h ON h.id = a.namespace_id
 WHERE a.id = $1
 `
@@ -196,6 +197,7 @@ type GetAgentByIDRow struct {
 	CreatedAt                time.Time   `json:"created_at"`
 	UpdatedAt                time.Time   `json:"updated_at"`
 	ReadmeText               string      `json:"readme_text"`
+	AllowForcePush           bool        `json:"allow_force_push"`
 	Namespace                string      `json:"namespace"`
 	NamespaceKind            string      `json:"namespace_kind"`
 }
@@ -218,6 +220,7 @@ func (q *Queries) GetAgentByID(ctx context.Context, id uuid.UUID) (GetAgentByIDR
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ReadmeText,
+		&i.AllowForcePush,
 		&i.Namespace,
 		&i.NamespaceKind,
 	)
@@ -225,7 +228,7 @@ func (q *Queries) GetAgentByID(ctx context.Context, id uuid.UUID) (GetAgentByIDR
 }
 
 const getAgentByPath = `-- name: GetAgentByPath :one
-SELECT a.id, a.namespace_id, a.name, a.kind, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, h.handle AS namespace, h.kind AS namespace_kind, r.default_branch, r.size_bytes
+SELECT a.id, a.namespace_id, a.name, a.kind, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, h.handle AS namespace, h.kind AS namespace_kind, r.default_branch, r.size_bytes
 FROM agents a
 JOIN handles h ON h.id = a.namespace_id
 JOIN repos r ON r.id = a.repo_id
@@ -252,6 +255,7 @@ type GetAgentByPathRow struct {
 	CreatedAt                time.Time   `json:"created_at"`
 	UpdatedAt                time.Time   `json:"updated_at"`
 	ReadmeText               string      `json:"readme_text"`
+	AllowForcePush           bool        `json:"allow_force_push"`
 	Namespace                string      `json:"namespace"`
 	NamespaceKind            string      `json:"namespace_kind"`
 	DefaultBranch            string      `json:"default_branch"`
@@ -276,6 +280,7 @@ func (q *Queries) GetAgentByPath(ctx context.Context, arg GetAgentByPathParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ReadmeText,
+		&i.AllowForcePush,
 		&i.Namespace,
 		&i.NamespaceKind,
 		&i.DefaultBranch,
@@ -387,7 +392,7 @@ func (q *Queries) ListAgentTeamGrantsForUser(ctx context.Context, arg ListAgentT
 }
 
 const listAgentsByNamespace = `-- name: ListAgentsByNamespace :many
-SELECT a.id, a.namespace_id, a.name, a.kind, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, h.handle AS namespace
+SELECT a.id, a.namespace_id, a.name, a.kind, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, h.handle AS namespace
 FROM agents a JOIN handles h ON h.id = a.namespace_id
 WHERE h.handle = $1
   AND (a.visibility = 'public' OR $2::boolean)
@@ -414,6 +419,7 @@ type ListAgentsByNamespaceRow struct {
 	CreatedAt                time.Time   `json:"created_at"`
 	UpdatedAt                time.Time   `json:"updated_at"`
 	ReadmeText               string      `json:"readme_text"`
+	AllowForcePush           bool        `json:"allow_force_push"`
 	Namespace                string      `json:"namespace"`
 }
 
@@ -441,6 +447,7 @@ func (q *Queries) ListAgentsByNamespace(ctx context.Context, arg ListAgentsByNam
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.ReadmeText,
+			&i.AllowForcePush,
 			&i.Namespace,
 		); err != nil {
 			return nil, err
@@ -816,6 +823,7 @@ UPDATE agents SET
   summary = coalesce($2, summary),
   visibility = coalesce($3, visibility),
   auto_publish_tags = coalesce($4, auto_publish_tags),
+  allow_force_push = coalesce($5, allow_force_push),
   updated_at = now()
 WHERE id = $1
 `
@@ -825,6 +833,7 @@ type UpdateAgentSettingsParams struct {
 	Summary         *string   `json:"summary"`
 	Visibility      *string   `json:"visibility"`
 	AutoPublishTags *bool     `json:"auto_publish_tags"`
+	AllowForcePush  *bool     `json:"allow_force_push"`
 }
 
 func (q *Queries) UpdateAgentSettings(ctx context.Context, arg UpdateAgentSettingsParams) error {
@@ -833,6 +842,7 @@ func (q *Queries) UpdateAgentSettings(ctx context.Context, arg UpdateAgentSettin
 		arg.Summary,
 		arg.Visibility,
 		arg.AutoPublishTags,
+		arg.AllowForcePush,
 	)
 	return err
 }

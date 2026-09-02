@@ -109,6 +109,7 @@ export interface Agent {
   // agent?", which is why the pages test for it rather than re-deriving the
   // role from the session.
   autoPublishTags?: boolean;
+  allowForcePush?: boolean;
   createdAt: string;
 }
 
