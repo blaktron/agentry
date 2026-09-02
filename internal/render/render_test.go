@@ -245,3 +245,23 @@ func TestImagesBecomeVisiblePlaceholders(t *testing.T) {
 		t.Fatalf("data image: %s", out)
 	}
 }
+
+// External links carry rel="nofollow noreferrer noopener ugc" (§10.3;
+// DEV-039 recorded the missing ugc, agentry#34).
+func TestLinksCarryUGCRel(t *testing.T) {
+	out, err := New().Markdown([]byte("See [the docs](https://docs.example/x) and [home](/relative)."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"nofollow", "noreferrer", "ugc"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("rel lacks %q: %s", want, out)
+		}
+	}
+	if strings.Count(out, "ugc") != strings.Count(out, "<a ") {
+		t.Errorf("not every link carries ugc: %s", out)
+	}
+	if strings.Contains(out, "ugc ugc") {
+		t.Errorf("ugc duplicated: %s", out)
+	}
+}
