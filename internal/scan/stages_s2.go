@@ -87,7 +87,9 @@ func (s S2Secrets) Run(sc stageContext, in *Input) StageResult {
 	if s.Gitleaks != nil && in.Dir != "" {
 		findings = append(findings, runGitleaks(sc.Context(), s.Gitleaks, in.Dir, lineSeen)...)
 	}
-	return StageResult{Scanner: "S2", Findings: findings}
+	hist, ran := s2History(sc.Context(), in)
+	findings = append(findings, hist...)
+	return StageResult{Scanner: "S2", Findings: findings, NoCache: ran}
 }
 
 // redact keeps a secret out of the report body: show only the match's shape.

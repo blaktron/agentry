@@ -4,7 +4,9 @@
 package scan
 
 import (
+	"context"
 	"github.com/blaktron/agentry/pkg/rules"
+	"io"
 )
 
 // Severity is a finding severity (§8, ordered).
@@ -96,6 +98,9 @@ type StageResult struct {
 	// stage of an interrupted run, or a §8.7 results-cache hit. Skipped
 	// stages are not re-persisted and not re-cached.
 	Skipped bool
+	// NoCache marks a result that depends on more than the archive bytes
+	// (S2 with a git-history scan) and so must not be reused by digest.
+	NoCache bool
 	// PromptHash is set by S5: the hash of the rubric/prompt version the
 	// judge adjudicated with (§8.4.4, recorded on the scan run).
 	PromptHash string
@@ -134,6 +139,12 @@ type Input struct {
 	// submission.
 	IPClusterAccounts int
 	IPClusterVersions int
+	// Source is the version's publish source ("git-tag" | "cli-upload").
+	Source string
+	// History streams the git history reachable from the tagged commit as a
+	// patch (see gitsrv.HistoryPatch); nil when the scanning role has no
+	// repository access. Only meaningful for Source == "git-tag".
+	History func(ctx context.Context) (io.ReadCloser, error)
 }
 
 // FileEntry is one inventoried file (S1 output).

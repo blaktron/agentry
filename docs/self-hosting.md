@@ -131,6 +131,13 @@ scan:
   # toolTimeout: 2m                   # AGENTRY_SCAN_TOOL_TIMEOUT per invocation
 ```
 
+Git-tag publishes also have their **git history** scanned for secrets (§8.3):
+S2 walks the added lines of every commit reachable from the tag, so a key
+committed and later removed still surfaces as `S2/history-<rule>`. That needs
+the scanning role to see the repository data directory — the compose stack's
+single `all` role does; a separate worker without shared git storage reports
+`S2/history-not-scanned` instead of implying a clean history.
+
 A configured tool that cannot be found is a startup error, never a silent
 fallback. A tool that fails mid-scan leaves an `S2/tool-error` or
 `S6/tool-error` finding on the report, so "gitleaks did not run" is

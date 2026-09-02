@@ -306,6 +306,8 @@ func (o *Orchestrator) runStage(sc stageContext, st Stage, in *Input) (res Stage
 				o.mx.RecordFailOpen(sc.ctx, metrics.FailOpenOSVNotChecked)
 			case "S7/osv-error":
 				o.mx.RecordFailOpen(sc.ctx, metrics.FailOpenOSVError)
+			case "S2/history-not-scanned", "S2/history-error", "S2/history-truncated":
+				o.mx.RecordFailOpen(sc.ctx, metrics.FailOpenHistoryNotScanned)
 			}
 		}
 	}()

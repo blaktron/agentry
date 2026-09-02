@@ -340,6 +340,9 @@ const (
 	FailOpenAuditStreamDrop = "audit_stream_drop"
 	FailOpenOSVNotChecked   = "osv_not_checked"
 	FailOpenOSVError        = "osv_error"
+	// FailOpenHistoryNotScanned counts git-tag publishes whose history S2
+	// could not (fully) scan for secrets (agentry#54).
+	FailOpenHistoryNotScanned = "history_not_scanned"
 )
 
 // RecordFailOpen counts one fail-open event on the named path.
