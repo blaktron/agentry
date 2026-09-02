@@ -10,9 +10,15 @@ on:
 permissions:
   contents: read
 
+# One run per ref: a new push to a PR cancels the superseded run (self-hosted
+# capacity is a handful of runners, not a cloud).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     services:
       postgres:
         image: postgres:16
@@ -62,7 +68,7 @@ jobs:
   # browser-only outage — every form post 403'd under real browser semantics
   # (Referrer-Policy ⇒ Origin: null) while every scripted check stayed green.
   e2e-browser:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     services:
       postgres:
         image: postgres:16
@@ -92,7 +98,7 @@ jobs:
         run: ./scripts/acceptance/e2e-browser.sh
 
   govulncheck:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -104,7 +110,7 @@ jobs:
   # gates other people's supply chains and does not audit its own is making a
   # claim it has not earned.
   deps:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -141,7 +147,7 @@ jobs:
   # must verify both the publish and the ruleset envelope over a fixture
   # blob. "Format-compatible" is a claim on the trust page; this is its test.
   attest-interop:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -155,7 +161,7 @@ jobs:
   # Non-blocking on purpose: a fresh base-image CVE with no fix available must
   # not stop unrelated work, and §13 is where the deployment gate lives.
   image-scan:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -172,7 +178,7 @@ jobs:
   oasdiff:
     # Breaking-change gate on the OpenAPI contract (D-09). Additive-only in v1.
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v4
         with:
