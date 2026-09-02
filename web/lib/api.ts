@@ -172,6 +172,8 @@ export interface Advisory {
   summary: string;
   detail?: string;
   publishedAt?: string;
+  /** `ns/name` of the affected agent (feed and permalink responses). */
+  agent?: string;
 }
 
 // --- Types taken straight from the generated OpenAPI schema. `import type`

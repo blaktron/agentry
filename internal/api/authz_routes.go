@@ -63,6 +63,7 @@ var routeAuthz = map[string]RouteDecl{
 	"createAgent":       {Action: auth.ActAgentCreate, AgentScoped: false},
 	"getAgent":          {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
 	"listAgents":        {Action: auth.ActPublicRead, Anonymous: true},
+	"getAdvisory":       {Action: auth.ActPublicRead, Anonymous: true},
 	"updateAgent":       {Action: auth.ActAgentMaintain, AgentScoped: true},
 	"deleteAgent":       {Action: auth.ActAgentMaintain, AgentScoped: true},
 	"listAgentActivity": {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
