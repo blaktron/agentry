@@ -697,6 +697,10 @@ func (c Config) Validate() error {
 		if c.Judge.BaseURL == "" || c.Judge.APIKey == "" {
 			return fmt.Errorf("config: judge.baseUrl and judge.apiKey are required when judge.provider is %q", c.Judge.Provider)
 		}
+	case "classifier":
+		if c.Judge.BaseURL == "" {
+			return fmt.Errorf("config: judge.baseUrl (the classify endpoint) is required when judge.provider is %q", c.Judge.Provider)
+		}
 	}
 	switch c.Audit.StreamKind {
 	case "", "none", "file", "s3":

@@ -196,8 +196,7 @@ func TestNewJudgeProviderSelection(t *testing.T) {
 		{"static", "static", false},
 		{"openai", "openai", false},
 		{"anthropic", "anthropic", false},
-		{"bedrock", "bedrock", true},
-		{"classifier", "classifier", true},
+		{"classifier", "classifier", true}, // one axis: always review
 		{"unknown", "none", true},
 	}
 	for _, c := range cases {
@@ -209,5 +208,25 @@ func TestNewJudgeProviderSelection(t *testing.T) {
 		if p.RequiresHumanReview() != c.review {
 			t.Fatalf("provider %q: review flag %v want %v", c.provider, p.RequiresHumanReview(), c.review)
 		}
+	}
+	// bedrock builds from the AWS default chain: with an explicit region it
+	// is a live judge; without one it is a startup error (BuildJudgeProvider)
+	// that NewJudgeProvider degrades to fail-closed.
+	t.Setenv("AWS_REGION", "")
+	t.Setenv("AWS_DEFAULT_REGION", "")
+	t.Setenv("AWS_CONFIG_FILE", "/nonexistent")
+	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", "/nonexistent")
+	t.Setenv("AWS_EC2_METADATA_DISABLED", "true")
+	if p, err := BuildJudgeProvider(context.Background(), JudgeConfig{Provider: "bedrock", Region: "us-east-1"}); err != nil || p.Name() != "bedrock" || p.RequiresHumanReview() {
+		t.Fatalf("bedrock with region: %v %v", p, err)
+	}
+	if _, err := BuildJudgeProvider(context.Background(), JudgeConfig{Provider: "bedrock"}); err == nil {
+		t.Fatal("bedrock without a region must be a build error")
+	}
+	if p := NewJudgeProvider(JudgeConfig{Provider: "bedrock"}); p.Name() != "bedrock" || !p.RequiresHumanReview() {
+		t.Fatalf("degraded bedrock must fail closed: %v", p)
+	}
+	if _, err := BuildJudgeProvider(context.Background(), JudgeConfig{Provider: "classifier"}); err == nil {
+		t.Fatal("classifier without a base url must be a build error")
 	}
 }
