@@ -441,6 +441,27 @@ func (s *Server) SetFindingVerdict(w http.ResponseWriter, r *http.Request, id op
 			problemForbidden(w, r, "accepted-risk dismissal is limited to severity medium and below")
 			return
 		}
+		// The actor half of §8.5 (DEV-034): on an org-namespace agent the
+		// waiver is the org's call. reviewItemAccess admits any platform
+		// staff member to a platform-queue item — right for the protective
+		// actions (quarantine, block, false-positive) but not for accepting
+		// risk on someone else's behalf — so this re-checks the org role
+		// regardless of the staff flag. Personal-namespace agents have no org
+		// to defer to and keep the platform-queue rule.
+		v, err := s.q().GetVersionByID(r.Context(), run.VersionID)
+		if err != nil {
+			problemInternal(w, r)
+			return
+		}
+		agent, err := s.q().GetAgentByID(r.Context(), v.AgentID)
+		if err != nil {
+			problemInternal(w, r)
+			return
+		}
+		if agent.NamespaceKind == "org" && !s.isOrgReviewer(p, agent.NamespaceID) {
+			problemForbidden(w, r, "accepted-risk dismissal on an org-namespace agent is reserved to that org's security reviewers")
+			return
+		}
 	}
 	e := auditEvent(r, audit.ActionFindingVerdict)
 	if ri.OrgID != nil {
