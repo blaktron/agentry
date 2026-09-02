@@ -22,8 +22,8 @@ go test ./internal/api -run 'TestReviewBundleCarriesDetail|TestReviewFilesEndpoi
   && echo "review bundle + file viewer + abuse triage API tests: OK"
 
 # 1. Boot API + web.
-PORT="${AGENTRY_ACCEPT_PORT:-$(python3 -c "import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()")}"  # free unless pinned (agentry#133)
-WEBPORT="${AGENTRY_ACCEPT_WEBPORT:-$(python3 -c "import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()")}"
+PORT="${AGENTRY_ACCEPT_PORT:-$(python3 -c "import socket; s=socket.socket(); s.bind(('127.0.0.1',0)); print(s.getsockname()[1]); s.close()")}"  # free unless pinned (agentry#133)
+WEBPORT="${AGENTRY_ACCEPT_WEBPORT:-$(python3 -c "import socket; s=socket.socket(); s.bind(('127.0.0.1',0)); print(s.getsockname()[1]); s.close()")}"
 WORK=$(mktemp -d)
 DB="$(./scripts/dev/pg.sh url)"
 PSQL="${PGBIN:-/opt/homebrew/opt/postgresql@16/bin}/psql"

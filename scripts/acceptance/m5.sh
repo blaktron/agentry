@@ -58,8 +58,8 @@ PY
 
 # 4. Live SSR smoke: boot the API + web, publish an agent, assert the agent
 #    page server-renders its capability contract and report card.
-PORT="${AGENTRY_ACCEPT_PORT:-$(python3 -c "import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()")}"  # free unless pinned (agentry#133)
-WEBPORT="${AGENTRY_ACCEPT_WEBPORT:-$(python3 -c "import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()")}"
+PORT="${AGENTRY_ACCEPT_PORT:-$(python3 -c "import socket; s=socket.socket(); s.bind(('127.0.0.1',0)); print(s.getsockname()[1]); s.close()")}"  # free unless pinned (agentry#133)
+WEBPORT="${AGENTRY_ACCEPT_WEBPORT:-$(python3 -c "import socket; s=socket.socket(); s.bind(('127.0.0.1',0)); print(s.getsockname()[1]); s.close()")}"
 WORK=$(mktemp -d)
 DB="$(./scripts/dev/pg.sh url)"
 make build >/dev/null
