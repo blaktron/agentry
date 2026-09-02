@@ -42,6 +42,10 @@ locals {
     AGENTRY_JUDGE_PROVIDER      = "bedrock"
     AGENTRY_JUDGE_MODEL         = var.judge_model
     AGENTRY_JUDGE_REGION        = var.aws_region
+    # External scanner tools (§8.3, agentry#40). gitleaks ships in the
+    # image; OSV lookups are the scanner's one egress and stay opt-in.
+    AGENTRY_SCAN_GITLEAKS_BIN = "/usr/bin/gitleaks"
+    AGENTRY_SCAN_OSV_URL      = var.osv_url
 
     # OTLP to the ADOT sidecar on loopback (§16.2, D-25). Every agentryd
     # service in this file runs the sidecar, so this is set once here. Without
