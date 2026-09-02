@@ -159,12 +159,16 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		if rerr != nil {
 			panic(rerr)
 		}
-		judge := scan.NewJudgeProvider(scan.JudgeConfig{
+		judge, jerr := scan.BuildJudgeProvider(context.Background(), scan.JudgeConfig{
 			Provider: judgeProviderName(cfg),
 			Model:    cfg.Judge.Model,
 			BaseURL:  cfg.Judge.BaseURL,
 			APIKey:   cfg.Judge.APIKey,
+			Region:   cfg.Judge.Region,
 		})
+		if jerr != nil {
+			panic(jerr)
+		}
 		signer, serr := scan.NewSigner(context.Background(), scan.SignerOptions{
 			Kind:      cfg.Signing.Kind,
 			KeyFile:   cfg.Signing.KeyFile,
