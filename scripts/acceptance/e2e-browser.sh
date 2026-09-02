@@ -56,4 +56,6 @@ curl -fsS -X POST "http://localhost:$PORT/api/v1/auth/register" -H 'Content-Type
 echo "== browser smoke (chromium) =="
 (cd web && E2E_BASE_URL="http://localhost:$WEBPORT" E2E_API_URL="http://localhost:$PORT" \
   E2E_USER="$H" E2E_PASS="$PW" npx playwright test)
+echo "== lighthouse a11y ≥ 90 on public pages (agentry#42) =="
+./scripts/acceptance/lighthouse-a11y.sh "http://localhost:$WEBPORT"
 echo "BROWSER SMOKE PASSED"
