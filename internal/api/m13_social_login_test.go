@@ -603,6 +603,8 @@ type fakeOIDC struct {
 	sub      string
 	email    string
 	nonce    string
+	// amr, when set, rides the ID token (agentry#23).
+	amr []string
 }
 
 func newFakeOIDC(t *testing.T) *fakeOIDC {
@@ -643,12 +645,16 @@ func newFakeOIDC(t *testing.T) *fakeOIDC {
 			http.Error(w, "missing PKCE verifier", http.StatusBadRequest)
 			return
 		}
-		claims, _ := json.Marshal(map[string]any{
+		claimMap := map[string]any{
 			"iss": p.srv.URL, "aud": p.clientID, "sub": p.sub,
 			"iat": time.Now().Unix(), "exp": time.Now().Add(time.Hour).Unix(),
 			"email": p.email, "email_verified": true,
 			"nonce": p.nonce,
-		})
+		}
+		if p.amr != nil {
+			claimMap["amr"] = p.amr
+		}
+		claims, _ := json.Marshal(claimMap)
 		writeTestJSON(w, map[string]any{
 			"access_token": "at", "token_type": "Bearer", "expires_in": 3600,
 			"id_token": oidctest.SignIDToken(p.key, "k1", "RS256", string(claims)),

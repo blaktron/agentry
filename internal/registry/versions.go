@@ -431,8 +431,10 @@ func (s *Service) checkPublicPublish2FA(ctx context.Context, p *auth.Principal, 
 		// Fail closed: we could not establish that 2FA is on.
 		return fmt.Errorf("registry: verify two-factor enrollment: %w", err)
 	}
-	if !u.TotpEnabled {
-		return fmt.Errorf("%w: two-factor authentication must be enabled before publishing to a public namespace (§12.1, §19)", ErrTwoFactorRequired)
+	// Native TOTP, or a second factor the directory service asserted at
+	// sign-in (users.idp_mfa_at, agentry#23): either is evidence.
+	if !u.TotpEnabled && u.IdpMfaAt == nil {
+		return fmt.Errorf("%w: two-factor authentication must be enabled before publishing to a public namespace (§12.1, §19) — enable it in Settings, or at your sign-in provider and sign in again", ErrTwoFactorRequired)
 	}
 	return nil
 }

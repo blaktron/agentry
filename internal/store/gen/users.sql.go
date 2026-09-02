@@ -77,7 +77,7 @@ func (q *Queries) CreateHandle(ctx context.Context, arg CreateHandleParams) erro
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (id, email, display_name, password_hash)
 VALUES ($1, $2, $3, $4)
-RETURNING id, email, email_verified_at, display_name, password_hash, totp_secret_enc, totp_enabled, state, deleted_tombstone, created_at, updated_at, platform_staff, cookie_ack_at
+RETURNING id, email, email_verified_at, display_name, password_hash, totp_secret_enc, totp_enabled, state, deleted_tombstone, created_at, updated_at, platform_staff, cookie_ack_at, idp_mfa_at
 `
 
 type CreateUserParams struct {
@@ -109,6 +109,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.UpdatedAt,
 		&i.PlatformStaff,
 		&i.CookieAckAt,
+		&i.IdpMfaAt,
 	)
 	return i, err
 }
@@ -140,7 +141,7 @@ func (q *Queries) GetHandle(ctx context.Context, handle string) (Handle, error) 
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT u.id, u.email, u.email_verified_at, u.display_name, u.password_hash, u.totp_secret_enc, u.totp_enabled, u.state, u.deleted_tombstone, u.created_at, u.updated_at, u.platform_staff, u.cookie_ack_at, h.handle FROM users u JOIN handles h ON h.id = u.id WHERE u.email = $1
+SELECT u.id, u.email, u.email_verified_at, u.display_name, u.password_hash, u.totp_secret_enc, u.totp_enabled, u.state, u.deleted_tombstone, u.created_at, u.updated_at, u.platform_staff, u.cookie_ack_at, u.idp_mfa_at, h.handle FROM users u JOIN handles h ON h.id = u.id WHERE u.email = $1
 `
 
 type GetUserByEmailRow struct {
@@ -157,6 +158,7 @@ type GetUserByEmailRow struct {
 	UpdatedAt        time.Time  `json:"updated_at"`
 	PlatformStaff    bool       `json:"platform_staff"`
 	CookieAckAt      *time.Time `json:"cookie_ack_at"`
+	IdpMfaAt         *time.Time `json:"idp_mfa_at"`
 	Handle           string     `json:"handle"`
 }
 
@@ -177,13 +179,14 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 		&i.UpdatedAt,
 		&i.PlatformStaff,
 		&i.CookieAckAt,
+		&i.IdpMfaAt,
 		&i.Handle,
 	)
 	return i, err
 }
 
 const getUserByHandle = `-- name: GetUserByHandle :one
-SELECT u.id, u.email, u.email_verified_at, u.display_name, u.password_hash, u.totp_secret_enc, u.totp_enabled, u.state, u.deleted_tombstone, u.created_at, u.updated_at, u.platform_staff, u.cookie_ack_at, h.handle FROM users u JOIN handles h ON h.id = u.id WHERE h.handle = $1 AND h.kind = 'user'
+SELECT u.id, u.email, u.email_verified_at, u.display_name, u.password_hash, u.totp_secret_enc, u.totp_enabled, u.state, u.deleted_tombstone, u.created_at, u.updated_at, u.platform_staff, u.cookie_ack_at, u.idp_mfa_at, h.handle FROM users u JOIN handles h ON h.id = u.id WHERE h.handle = $1 AND h.kind = 'user'
 `
 
 type GetUserByHandleRow struct {
@@ -200,6 +203,7 @@ type GetUserByHandleRow struct {
 	UpdatedAt        time.Time  `json:"updated_at"`
 	PlatformStaff    bool       `json:"platform_staff"`
 	CookieAckAt      *time.Time `json:"cookie_ack_at"`
+	IdpMfaAt         *time.Time `json:"idp_mfa_at"`
 	Handle           string     `json:"handle"`
 }
 
@@ -220,13 +224,14 @@ func (q *Queries) GetUserByHandle(ctx context.Context, handle string) (GetUserBy
 		&i.UpdatedAt,
 		&i.PlatformStaff,
 		&i.CookieAckAt,
+		&i.IdpMfaAt,
 		&i.Handle,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT u.id, u.email, u.email_verified_at, u.display_name, u.password_hash, u.totp_secret_enc, u.totp_enabled, u.state, u.deleted_tombstone, u.created_at, u.updated_at, u.platform_staff, u.cookie_ack_at, h.handle FROM users u JOIN handles h ON h.id = u.id WHERE u.id = $1
+SELECT u.id, u.email, u.email_verified_at, u.display_name, u.password_hash, u.totp_secret_enc, u.totp_enabled, u.state, u.deleted_tombstone, u.created_at, u.updated_at, u.platform_staff, u.cookie_ack_at, u.idp_mfa_at, h.handle FROM users u JOIN handles h ON h.id = u.id WHERE u.id = $1
 `
 
 type GetUserByIDRow struct {
@@ -243,6 +248,7 @@ type GetUserByIDRow struct {
 	UpdatedAt        time.Time  `json:"updated_at"`
 	PlatformStaff    bool       `json:"platform_staff"`
 	CookieAckAt      *time.Time `json:"cookie_ack_at"`
+	IdpMfaAt         *time.Time `json:"idp_mfa_at"`
 	Handle           string     `json:"handle"`
 }
 
@@ -263,6 +269,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow
 		&i.UpdatedAt,
 		&i.PlatformStaff,
 		&i.CookieAckAt,
+		&i.IdpMfaAt,
 		&i.Handle,
 	)
 	return i, err
@@ -367,6 +374,16 @@ UPDATE users SET cookie_ack_at = now(), updated_at = now() WHERE id = $1
 // Write-once by intent: re-acknowledging just refreshes the timestamp.
 func (q *Queries) SetUserCookieAck(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, setUserCookieAck, id)
+	return err
+}
+
+const setUserIdPMFA = `-- name: SetUserIdPMFA :exec
+UPDATE users SET idp_mfa_at = now(), updated_at = now() WHERE id = $1
+`
+
+// The directory asserted a second factor at this sign-in (agentry#23).
+func (q *Queries) SetUserIdPMFA(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, setUserIdPMFA, id)
 	return err
 }
 

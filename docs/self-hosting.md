@@ -542,9 +542,16 @@ answering 410 — so that gate is **off under `externalOnly`** and the
 requirement is yours to enforce in authentik: bind an MFA policy (or an
 authenticator-validation stage) to the authentication flow or to the
 `agentry` application, which also covers sign-in itself rather than only
-publishing. The registry does not yet read an `amr`/`acr` claim to check
-that the policy is in place, so an unenforced directory means unenforced
-MFA for publishers.
+publishing.
+
+To turn trust back into evidence, set `AGENTRY_AUTH_REQUIRE_IDP_MFA=true`:
+the gate is then on under `externalOnly` and is satisfied when the account
+has signed in at least once with an ID token whose `amr` claim (RFC 8176)
+names a second factor — `mfa`, `otp`, `hwk`, `webauthn` and the like, never
+`pwd` alone — which the registry records as `users.idp_mfa_at`. authentik
+emits `amr` on its ID tokens; check one sign-in's token (or the
+`user.login` audit row) before enabling the flag, because with it on and a
+directory that never asserts a factor, nobody can publish publicly.
 
 To make the directory service wear the product's visual scheme (the
 tokens in `web/app/globals.css`; assets under `web/public/brand/`), run
