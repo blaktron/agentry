@@ -217,16 +217,18 @@ Get-FileHash .\\agentry-*.exe                 # Windows, compare by eye`}</CodeB
         </p>
       </section>
 
+      {/* No Homebrew tap exists yet (DEV-066 records the gap). The page's
+          own rule is that nothing on it points at something that is not
+          there, so the card says so instead of documenting a command that
+          fails. Restore the install snippet when the tap is published. */}
       <section className="max-w-3xl">
         <h2 className="text-xl font-semibold">Install with a package manager</h2>
         <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
-          Homebrew is the supported path on macOS and Linux; the tap tracks the same releases as the
-          binaries above.
+          A Homebrew tap for macOS and Linux is planned but not published yet, so there is no{" "}
+          <code>brew install</code> command to run today. Until it exists, download the binary for
+          your platform above and verify its checksum; the tap will track the same releases when it
+          ships.
         </p>
-        <div className="mt-3">
-          <CodeBlock>{`brew install secureagentry/tap/agentry
-agentry --version`}</CodeBlock>
-        </div>
       </section>
 
       {/* Per-provider installs (RUNNER-PLAN-2 §P5, req 6): BriefAgents that
