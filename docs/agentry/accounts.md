@@ -40,11 +40,14 @@ managed under **Settings → Tokens**. Tokens are scoped (publishing, repo
 access, profile) and revocable individually; treat them like the
 credentials they are.
 
-The **desktop app** never asks you to paste one. It opens your browser,
-you sign in as usual, and one explicit approval page hands the app a
-one-time code on a local listener; the app exchanges that code for a scoped
-token from its own process, so the token itself never appears in your
-browser. Revoking it later is the same Settings → Tokens list.
+Neither the **desktop app** nor the **CLI** asks you to paste one.
+`agentry login` (on a terminal) and the desktop's "Sign in via browser"
+open your browser, you sign in as usual, and one explicit approval page
+hands the app a one-time code on a local listener; the app exchanges that
+code for a scoped token from its own process, so the token itself never
+appears in your browser. `agentry login --paste` still accepts a token from
+Settings → Tokens for machines without a browser, and revoking either kind
+later is the same Settings → Tokens list.
 
 ## Organizations
 
