@@ -49,19 +49,11 @@ const (
 	ProviderAuthentik = "authentik"
 )
 
-// Providers lists the supported provider ids.
+// Providers lists the supported provider ids, in the order the sign-in
+// page offers them. The API layer validates provider names against its
+// generated enum, so this is a listing for tooling and tests, not a gate.
 func Providers() []string {
 	return []string{ProviderGoogle, ProviderGitHub, ProviderMicrosoft, ProviderOpenAI, ProviderClaude, ProviderAuthentik}
-}
-
-// Known reports whether name is a supported provider id.
-func Known(name string) bool {
-	for _, p := range Providers() {
-		if p == name {
-			return true
-		}
-	}
-	return false
 }
 
 // Identity is what a completed social login asserts about the caller.

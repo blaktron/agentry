@@ -77,6 +77,11 @@ func LooksText(head []byte) bool {
 }
 
 // Head returns the first 512 bytes of data, the window the sniffers use.
+// Nothing in this repo calls it directly — the sniffers take the whole
+// buffer — but it is part of pkg/archive's shared surface: agentry-cli
+// (cmd/agentry/localscan.go) and agentry-desktop (internal/validate) feed
+// it to LooksText so their offline scans classify files exactly as S1 does
+// (D-12). Keep it.
 func Head(data []byte) []byte {
 	if len(data) > 512 {
 		return data[:512]
