@@ -160,7 +160,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 		},
 		"createDesktopGrant": {
 			method: "POST", path: sPath("/api/v1/user/tokens/desktop-grant"),
-			body:   func(*matrixSeed, string) any { return map[string]any{"state": "matrix-state-" + nextUniq()} },
+			body: func(*matrixSeed, string) any { return map[string]any{"state": "matrix-state-" + nextUniq()} },
 		},
 		"revokeToken": {
 			method: "DELETE",
