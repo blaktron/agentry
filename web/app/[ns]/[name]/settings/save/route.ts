@@ -19,7 +19,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ ns: string
 
   let body: Record<string, unknown>;
   let ok: string;
-  if (action === "autopublish") {
+  if (action === "forcepush") {
+    const enable = String(form.get("allowForcePush") ?? "") === "true";
+    body = { allowForcePush: enable };
+    ok = enable
+      ? "force-push to the default branch is now allowed."
+      : "force-push to the default branch is refused again.";
+  } else if (action === "autopublish") {
     const enable = String(form.get("autoPublishTags") ?? "") === "true";
     body = { autoPublishTags: enable };
     ok = enable
