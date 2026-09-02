@@ -66,7 +66,7 @@ func ParsePolicy(doc []byte) (Policy, error) {
 	for _, b := range p.BlockedMcpServers {
 		b = strings.TrimSpace(b)
 		if !strings.HasPrefix(b, "npm:") && !strings.HasPrefix(b, "pypi:") {
-			return Policy{}, fmt.Errorf("scan: policy: blockedMcpServers entry %q must start with npm: or pypi:", b)
+			return Policy{}, fmt.Errorf("scan: policy: blockedMcpServers entry %q must be prefixed with npm or pypi", b)
 		}
 		if _, err := path.Match(b, ""); err != nil {
 			return Policy{}, fmt.Errorf("scan: policy: blockedMcpServers entry %q: %w", b, err)
