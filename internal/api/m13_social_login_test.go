@@ -424,19 +424,38 @@ func TestSocialLoginBrowserModeRedirectsToNext(t *testing.T) {
 	if loc := res.Header.Get("Location"); loc != "/dashboard?tab=agents" {
 		t.Fatalf("browser-mode callback: Location %q want /dashboard?tab=agents", loc)
 	}
-	var sess *http.Cookie
+	var sess, csrf *http.Cookie
 	for _, c := range res.Cookies() {
 		if c.Name == "agentry_session" && c.Value != "" {
 			sess = c
+		}
+		if c.Name == "agentry_csrf" && c.Value != "" {
+			csrf = c
 		}
 	}
 	if sess == nil {
 		t.Fatal("browser-mode callback set no session cookie")
 	}
+	if csrf == nil {
+		t.Fatal("browser-mode callback set no CSRF cookie — the web tier cannot echo a token it never received (agentry#77)")
+	}
 	who := env.do(caller{name: "browser", session: sess.Value}, http.MethodGet, "/api/v1/user", nil)
 	defer func() { _ = who.Body.Close() }()
 	if who.StatusCode != http.StatusOK {
 		t.Fatalf("session from browser-mode login: /user got %d", who.StatusCode)
+	}
+	// The token the cookie carries is the one the session enforces: a
+	// mutation that echoes it succeeds, one without it is refused.
+	browser := caller{name: "browser", session: sess.Value, csrf: csrf.Value}
+	ok := env.do(browser, http.MethodPatch, "/api/v1/user", map[string]any{"displayName": "Browser Mode"})
+	_ = ok.Body.Close()
+	if ok.StatusCode != http.StatusOK {
+		t.Fatalf("mutation with the browser-mode CSRF cookie: got %d want 200", ok.StatusCode)
+	}
+	bare := env.do(caller{name: "browser-no-csrf", session: sess.Value}, http.MethodPatch, "/api/v1/user", map[string]any{"displayName": "x"})
+	_ = bare.Body.Close()
+	if bare.StatusCode != http.StatusForbidden {
+		t.Fatalf("mutation without the CSRF header: got %d want 403", bare.StatusCode)
 	}
 
 	for _, bad := range []string{"//evil.example/x", "/\\evil.example", "https://evil.example", "/dash\nboard", ""} {
