@@ -20,6 +20,11 @@ import { NextResponse, type NextRequest } from "next/server";
 // from the original policy: `style-src 'unsafe-inline'` remains the §10.3
 // compromise (Tailwind + inline style attributes; no inline SCRIPT, which is
 // the XSS vector that matters).
+// form-action governs where a form may be SUBMITTED, and browsers apply it
+// to the redirect chain too: a same-origin POST /logout that answers with a
+// 303 to the directory service's end-session URL is blocked by
+// `form-action 'self'` and the Sign out button appears dead (agentry#81).
+// The IdP origin is therefore allowed when one is configured (DEV-057).
 const BASE_DIRECTIVES = [
   "default-src 'self'",
   "style-src 'self' 'unsafe-inline'",
@@ -28,8 +33,20 @@ const BASE_DIRECTIVES = [
   "connect-src 'self'",
   "frame-ancestors 'none'",
   "base-uri 'self'",
-  "form-action 'self'",
+  `form-action 'self'${formActionExtras()}`,
 ];
+
+function formActionExtras(): string {
+  const raw = process.env.AGENTRY_IDP_LOGOUT_URL;
+  if (!raw) return "";
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "https:" && u.protocol !== "http:") return "";
+    return ` ${u.origin}`;
+  } catch {
+    return "";
+  }
+}
 
 function newNonce(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
