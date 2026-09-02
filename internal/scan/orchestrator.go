@@ -32,10 +32,25 @@ type Orchestrator struct {
 	// ScanStageErrors pair the §16.3 error-rate page alarm divides. nil is a
 	// working no-op.
 	mx *metrics.Metrics
+	// tools are the optional external scanners behind the §8.3 seams
+	// (agentry#40). Zero value = native scanners only, offline OSV.
+	tools ExternalTools
 }
 
 // SetMetrics wires the §16.2 instrument set.
 func (o *Orchestrator) SetMetrics(m *metrics.Metrics) { o.mx = m }
+
+// ExternalTools are the production upgrades DEV-006 left behind interfaces:
+// an OSV API client for S7, gitleaks for S2, opengrep for S6. Each is
+// optional and independent.
+type ExternalTools struct {
+	OSV      OSVClient
+	Gitleaks *ExecTool
+	Opengrep *ExecTool
+}
+
+// SetExternalTools wires the external scanners.
+func (o *Orchestrator) SetExternalTools(t ExternalTools) { o.tools = t }
 
 // NewOrchestrator builds the orchestrator with the loaded ruleset and judge.
 func NewOrchestrator(bundle *rules.Bundle, judge JudgeProvider, log *slog.Logger) *Orchestrator {
@@ -185,11 +200,11 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 
 	// S2–S8 in parallel (S9 needs the others' findings; run it after).
 	parallel := []Stage{
-		S2Secrets{},
+		S2Secrets{Gitleaks: o.tools.Gitleaks},
 		S3S4Content{},
 		S5Judge{},
-		S6Capabilities{},
-		S7Dependencies{},
+		S6Capabilities{Opengrep: o.tools.Opengrep},
+		S7Dependencies{OSV: o.tools.OSV},
 		S8Metadata{PopularAgentNames: p.PopularAgentNames, AgentName: p.AgentName},
 	}
 	results := make([]StageResult, len(parallel))

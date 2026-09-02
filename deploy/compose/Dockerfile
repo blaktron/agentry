@@ -25,6 +25,11 @@ RUN CGO_ENABLED=0 go build -trimpath \
       -ldflags "-s -w -X github.com/blaktron/agentry/internal/version.Version=${VERSION}" \
       -o /out/agentryd ./cmd/agentryd
 
+# gitleaks (§8.3 S2 external tool, agentry#40): a static binary lifted from
+# the upstream image, pinned by digest. The server execs it only when
+# AGENTRY_SCAN_GITLEAKS_BIN points at it (compose does; see docker-compose).
+FROM ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f AS gitleaks
+
 FROM debian:trixie-slim
 # git: required by the git and all roles (§6.2 bare-repo hosting).
 # ca-certificates: outbound TLS — OIDC discovery, webhook delivery, S3, KMS.
@@ -40,6 +45,7 @@ RUN apt-get update \
  && install -d -o 65532 -g 65532 /data/git /data/storage
 
 COPY --from=build /out/agentryd /usr/bin/agentryd
+COPY --from=gitleaks /usr/bin/gitleaks /usr/bin/gitleaks
 
 # uid 65532 matches the helm chart's podSecurityContext.runAsUser and the
 # distroless "nonroot" convention the rest of the deployment assumes.

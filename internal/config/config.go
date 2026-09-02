@@ -31,6 +31,7 @@ type Config struct {
 	Limits    Limits    `yaml:"limits"`
 	Signing   Signing   `yaml:"signing"`
 	Judge     Judge     `yaml:"judge"`
+	Scan      Scan      `yaml:"scan"`
 	Social    Social    `yaml:"social"`
 	Audit     Audit     `yaml:"audit"`
 	Telemetry Telemetry `yaml:"telemetry"`
@@ -267,6 +268,27 @@ type Judge struct {
 	APIKey   string `yaml:"apiKey"`
 }
 
+// Scan configures the external scanner tools behind the §8.3 seams
+// (DEV-006, agentry#40). Every field is optional: unset, the native Go
+// scanners run alone and S7 reports "not checked" for vulnerabilities.
+type Scan struct {
+	// OSVURL is the base URL of an OSV API (https://api.osv.dev, or a
+	// VPC-endpoint mirror). Empty keeps the offline client.
+	OSVURL string `yaml:"osvUrl"`
+	// GitleaksBin is the path of a gitleaks binary S2 execs in addition to
+	// its native ruleset. "auto" resolves it from PATH; empty disables.
+	GitleaksBin string `yaml:"gitleaksBin"`
+	// OpengrepBin is the path of an opengrep (semgrep-compatible) binary S6
+	// execs against OpengrepRules. "auto" resolves it from PATH; empty
+	// disables.
+	OpengrepBin string `yaml:"opengrepBin"`
+	// OpengrepRules is the rules file or directory handed to opengrep
+	// (--config). Required when OpengrepBin is set.
+	OpengrepRules string `yaml:"opengrepRules"`
+	// ToolTimeout bounds one external tool invocation; 0 means two minutes.
+	ToolTimeout time.Duration `yaml:"toolTimeout"`
+}
+
 // Social configures social login for individual accounts (§12.1). A provider
 // with no client id is simply not offered: the start endpoint 404s, so an
 // unconfigured deployment advertises nothing it cannot complete. Google and
@@ -481,6 +503,16 @@ func applyEnv(c *Config) error {
 	// AGENTRY_JUDGE_TYPE is the plain spelling for "which wire protocol";
 	// when set it wins over AGENTRY_JUDGE_PROVIDER.
 	str("AGENTRY_JUDGE_TYPE", &c.Judge.Provider)
+	// External scanner tools (§8.3 seams, agentry#40).
+	str("AGENTRY_SCAN_OSV_URL", &c.Scan.OSVURL)
+	str("AGENTRY_SCAN_GITLEAKS_BIN", &c.Scan.GitleaksBin)
+	str("AGENTRY_SCAN_OPENGREP_BIN", &c.Scan.OpengrepBin)
+	str("AGENTRY_SCAN_OPENGREP_RULES", &c.Scan.OpengrepRules)
+	if v := os.Getenv("AGENTRY_SCAN_TOOL_TIMEOUT"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			c.Scan.ToolTimeout = d
+		}
+	}
 
 	// Social login (§12.1). Listed one variable per field on purpose: the
 	// same "boring and greppable" rule the rest of this function follows.

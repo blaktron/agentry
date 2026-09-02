@@ -160,3 +160,11 @@ variable "ticket_subscriptions" {
   }))
   default = []
 }
+
+# --- Scanner external tools (§8.3, agentry#40) ------------------------------
+
+variable "osv_url" {
+  description = "OSV API base URL for S7 vulnerability lookups (e.g. https://api.osv.dev). Empty keeps S7 offline: the report says \"not checked\" instead of \"no vulnerabilities\"."
+  type        = string
+  default     = ""
+}
