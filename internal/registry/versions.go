@@ -30,6 +30,12 @@ const (
 	StatusSubmitted   Status = "submitted"
 	StatusScanning    Status = "scanning"
 	StatusNeedsReview Status = "needs_review"
+	// StatusApproved is RESERVED and never written (DEV-046, agentry#32):
+	// review collapses approval and publication into one
+	// needs_review → published transition so the §7 "no path to published
+	// skips the gate" property is one edge, and no version can be stranded
+	// between the two. It stays in the enum because narrowing it is a
+	// breaking API change; readers must tolerate it and will not see it.
 	StatusApproved    Status = "approved"
 	StatusPublished   Status = "published"
 	StatusRejected    Status = "rejected"
