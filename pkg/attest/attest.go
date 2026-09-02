@@ -22,6 +22,19 @@ const PredicateType = "https://agentry.dev/attestation/publish/v1"
 // PayloadType is the DSSE payload type for in-toto statements.
 const PayloadType = "application/vnd.in-toto+json"
 
+// RulesetPredicateType is the rule-bundle attestation predicate (agentry#25,
+// DEV-024): the registry signs the bundle `validate --rules-update` serves,
+// with the same key that signs releases, so a client pins by signature and
+// not only by the digest the same server advertised.
+const RulesetPredicateType = "https://agentry.dev/attestation/ruleset/v1"
+
+// RulesetPredicate describes the signed bundle.
+type RulesetPredicate struct {
+	Registry string `json:"registry"`
+	Semver   string `json:"semver"`
+	SignedAt string `json:"signedAt"`
+}
+
 // InTotoStatement is the signed subject (in-toto v1).
 type InTotoStatement struct {
 	Type          string      `json:"_type"`
@@ -140,6 +153,22 @@ func BuildStatement(registry, agentPath, version, archiveDigest, commitSHA, sour
 			Registry: registry, Agent: agentPath, Version: version,
 			CommitSHA: commitSHA, Source: source, ScanRun: run,
 			PolicyVer: policyVersion, PublishedAt: time.Now().UTC().Format(time.RFC3339),
+		},
+	}
+}
+
+// BuildRulesetStatement assembles the in-toto statement for a rule bundle:
+// subject "ruleset" with the bundle's content digest.
+func BuildRulesetStatement(registry, semver, bundleDigest string) InTotoStatement {
+	return InTotoStatement{
+		Type: "https://in-toto.io/Statement/v1",
+		Subject: []Subject{{
+			Name:   "ruleset",
+			Digest: map[string]string{"sha256": trimSHA(bundleDigest)},
+		}},
+		PredicateType: RulesetPredicateType,
+		Predicate: RulesetPredicate{
+			Registry: registry, Semver: semver, SignedAt: time.Now().UTC().Format(time.RFC3339),
 		},
 	}
 }

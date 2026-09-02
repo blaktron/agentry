@@ -14,18 +14,22 @@ package api
 // a bundle it does not have, and a ruleset_releases row is a record of a
 // bundle's identity, not a copy of it.
 //
-// Trust: the digest is the pin. A client recomputes it over what it received
-// and refuses a mismatch. There is no signature over a bundle yet — see
-// DEVIATIONS DEV-024, which records that deferral rather than inventing a
-// scheme the server cannot honour.
+// Trust: the digest is the pin, and — when this deployment signs releases —
+// GET /ruleset-releases/latest/attestation is a DSSE envelope over that
+// digest, signed with the same key, so a client can verify the bundle by
+// signature and not only by a digest the same server advertised (agentry#25;
+// DEV-024 recorded the earlier deferral).
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/blaktron/agentry/pkg/attest"
 	"github.com/blaktron/agentry/pkg/ruleset"
 )
 
@@ -97,4 +101,54 @@ func normalizeDigest(d string) string {
 		return ""
 	}
 	return "sha256:" + strings.TrimPrefix(d, "sha256:")
+}
+
+// rulesetAttestationCache holds the one envelope a process ever needs: the
+// bundle is fixed per binary and the key per deployment, so signing once and
+// serving the bytes is both cheaper (KMS charges per Sign) and stabler than
+// re-signing per request.
+var rulesetAttestationCache struct {
+	mu     sync.Mutex
+	digest string
+	keyID  string
+	body   []byte
+}
+
+// GetLatestRulesetAttestation implements GET /ruleset-releases/latest/attestation.
+func (s *Server) GetLatestRulesetAttestation(w http.ResponseWriter, r *http.Request) {
+	if s.signer == nil {
+		problemNotFound(w, r)
+		return
+	}
+	bundle, err := ruleset.Load()
+	if err != nil {
+		s.log.Error("ruleset load", "err", err)
+		problemInternal(w, r)
+		return
+	}
+	digest := normalizeDigest(bundle.Digest())
+
+	rulesetAttestationCache.mu.Lock()
+	defer rulesetAttestationCache.mu.Unlock()
+	if rulesetAttestationCache.body == nil || rulesetAttestationCache.digest != digest || rulesetAttestationCache.keyID != s.signer.KeyID() {
+		env, err := s.signer.Sign(attest.BuildRulesetStatement(s.cfg.BaseURL, bundle.Version(), digest))
+		if err != nil {
+			s.log.Error("ruleset attestation sign", "err", err)
+			problemInternal(w, r)
+			return
+		}
+		body, err := json.Marshal(env)
+		if err != nil {
+			problemInternal(w, r)
+			return
+		}
+		rulesetAttestationCache.digest, rulesetAttestationCache.keyID, rulesetAttestationCache.body = digest, s.signer.KeyID(), body
+	}
+	h := w.Header()
+	h.Set("Content-Type", "application/json")
+	h.Set("X-Agentry-Bundle-Semver", bundle.Version())
+	h.Set("X-Agentry-Bundle-Digest", digest)
+	h.Set("Cache-Control", "public, max-age=300")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(rulesetAttestationCache.body)
 }
