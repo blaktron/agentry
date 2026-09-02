@@ -50,7 +50,7 @@ Each published release is content-addressed. On the transition to
 `published` (once, and never re-issued), the registry signs an in-toto
 statement binding the archive digest to the scan report that produced the
 decision, the ruleset version, the judge model, and the policy in force.
-It is wrapped in a DSSE envelope and served alongside the archive.
+It is wrapped in a DSSE envelope and served alongside the archive. The envelope is standard DSSE over a standard in-toto v1 statement, and that is tested rather than asserted: CI verifies one of our envelopes with `cosign verify-blob-attestation`, a verifier that shares no code with ours (`make attest-interop`).
 
 ```bash
 agentry verify acme/incident-summarizer@1.4.2
