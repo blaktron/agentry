@@ -67,14 +67,15 @@ async function AccountNav({ stacked = false }: { stacked?: boolean }) {
           Staff
         </Link>
       )}
+      {/* Same slot and styling as the anonymous "Sign in" button (agentry#81). */}
       <form method="post" action="/logout">
         <button
           type="submit"
-          className="rounded-md border px-2 py-1 text-xs"
-          style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}
+          className="rounded-md px-3 py-1.5 text-sm font-medium"
+          style={{ background: "var(--color-accent)", color: "var(--color-accent-fg)" }}
           title={`Signed in as ${user.handle}`}
         >
-          Sign out ({user.handle})
+          Sign out
         </button>
       </form>
     </div>
