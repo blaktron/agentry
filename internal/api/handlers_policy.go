@@ -2,9 +2,11 @@ package api
 
 import (
 	"encoding/json"
+	"github.com/blaktron/agentry/internal/webhook"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -108,6 +110,21 @@ func (s *Server) SetOrgPolicy(w http.ResponseWriter, r *http.Request, org OrgHan
 		return
 	}
 	merged := scan.Merge(baseline, orgPolicy)
+	// §9.3 catalog (agentry#56): the org's policy changed; the payload names
+	// the knobs present, never the whole document (it may be large).
+	if s.webhooks != nil {
+		keys := []string{}
+		var doc map[string]any
+		if json.Unmarshal(body, &doc) == nil {
+			for k := range doc {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+		}
+		if err := s.webhooks.Emit(r.Context(), orgRow.ID, webhook.EventPolicyUpdated, map[string]any{"org": orgRow.Handle, "keys": keys}); err != nil {
+			s.log.Error("webhook emit", "event", webhook.EventPolicyUpdated, "err", err)
+		}
+	}
 	writeJSON(w, http.StatusOK, merged)
 }
 
