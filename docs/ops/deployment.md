@@ -214,6 +214,7 @@ series.
 | `GitOpDurationSeconds` | histogram | op | git dashboard |
 | `GitOpConcurrency` | gauge | op | git dashboard, git autoscaling signal |
 | `GitCloneFirstByteSeconds` | histogram | none | §16.1 SLI: p95 < 2 s |
+| `FailOpenEvents` | counter | path (`audit_stream_drop`, `osv_not_checked`, `osv_error`) | **TICKET**: any fail-open event in an hour (agentry#33) |
 | `WebhookDeliveries` | counter | outcome (`ok`/`error`/`throttled`) | delivery health |
 
 `route` is the **matched route pattern** (`/agents/{ns}/{name}`), never the

@@ -94,6 +94,12 @@ type Metrics struct {
 	gitCloneFirstByte metric.Float64Histogram
 
 	webhookDeliveries metric.Int64Counter
+
+	// failOpen counts the deliberate fail-open paths (agentry#33): places
+	// that log and continue so a broken control never becomes an outage.
+	// "We did not check" has to be visible on a dashboard, not only in a
+	// log line.
+	failOpen metric.Int64Counter
 }
 
 // New builds the meter provider and instruments. It returns an error only for
@@ -206,6 +212,7 @@ func (m *Metrics) instrument(meter metric.Meter) error {
 	// denominator of the §16.3 scan-error-rate page alarm.
 	m.scanStageRuns = i64c("ScanStageRuns", "Scan stage executions.")
 	m.scanStageErrors = i64c("ScanStageErrors", "Scan stage executions that failed.")
+	m.failOpen = i64c("FailOpenEvents", "Deliberate fail-open events by path (audit_stream_drop, osv_not_checked, osv_error).")
 	m.scanStageHits = i64c("ScanStageHits", "Findings produced by a scan stage.")
 	m.scanStageDuration = f64h("ScanStageDurationSeconds", "Scan stage duration.")
 
@@ -323,6 +330,24 @@ func (m *Metrics) RecordScanStage(ctx context.Context, stage string, d time.Dura
 	if findings > 0 {
 		m.scanStageHits.Add(ctx, int64(findings), attrs)
 	}
+}
+
+// FailOpen paths, the attribute values RecordFailOpen accepts. Each is a
+// place the code chooses to continue rather than stop when a control is
+// unavailable (DEV-020, DEV-026.3), so its count is the honest measure of
+// how often that control did not run.
+const (
+	FailOpenAuditStreamDrop = "audit_stream_drop"
+	FailOpenOSVNotChecked   = "osv_not_checked"
+	FailOpenOSVError        = "osv_error"
+)
+
+// RecordFailOpen counts one fail-open event on the named path.
+func (m *Metrics) RecordFailOpen(ctx context.Context, path string) {
+	if m == nil {
+		return
+	}
+	m.failOpen.Add(ctx, 1, metric.WithAttributes(attribute.String("path", path)))
 }
 
 // RecordPublishSubmitted counts a version entering the pipeline.

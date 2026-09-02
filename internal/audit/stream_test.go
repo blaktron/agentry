@@ -103,7 +103,10 @@ func TestFileStreamDropsWhenBufferFull(t *testing.T) {
 	t.Cleanup(func() { _ = st.Close() })
 
 	// Archival must never block the request path: past the cap, records are
-	// dropped and logged rather than queued without bound.
+	// dropped and logged rather than queued without bound — and every drop
+	// is reported to the hook that counts fail-open events (agentry#33).
+	drops := 0
+	st.OnDrop = func() { drops++ }
 	for i := 0; i < fileStreamBufferMax+50; i++ {
 		st.Append(Record{ID: uuid.New(), OccurredAt: time.Now().UTC(), ActorKind: string(ActorSystem), Action: string(ActionUserLogin)})
 	}
@@ -112,6 +115,9 @@ func TestFileStreamDropsWhenBufferFull(t *testing.T) {
 	st.mu.Unlock()
 	if n != fileStreamBufferMax {
 		t.Fatalf("buffer grew to %d, want it capped at %d", n, fileStreamBufferMax)
+	}
+	if drops != 50 {
+		t.Fatalf("OnDrop fired %d times, want 50", drops)
 	}
 }
 

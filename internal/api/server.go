@@ -87,8 +87,9 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 	}
 	aud := audit.NewWriter(log)
 	// §12.6 continuous NDJSON archive (see internal/audit/stream.go).
-	aud.SetStream(audit.NewStream(cfg.Audit.StreamKind, cfg.Audit.StreamDir,
-		cfg.Audit.StreamS3Bucket, cfg.Audit.StreamFlush, log))
+	auditStream := audit.NewStream(cfg.Audit.StreamKind, cfg.Audit.StreamDir,
+		cfg.Audit.StreamS3Bucket, cfg.Audit.StreamFlush, log)
+	aud.SetStream(auditStream)
 	notifier, nerr := notify.New(notify.Options{
 		Kind:     cfg.Notify.Kind,
 		BaseURL:  cfg.BaseURL,
@@ -110,6 +111,12 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		limits:   ratelimit.New(ratelimit.DefaultIdleTTL),
 		classes:  classesFromConfig(cfg.Limits),
 		ents:     entitlements.NewConfigResolver(cfg.Limits),
+	}
+	if fs, ok := auditStream.(*audit.FileStream); ok {
+		// A dropped archive record is a deliberate fail-open (DEV-020);
+		// count it so the choice stays visible (agentry#33). Metrics are
+		// attached later via SetMetrics; RecordFailOpen is nil-safe.
+		fs.OnDrop = func() { srv.mx.RecordFailOpen(context.Background(), metrics.FailOpenAuditStreamDrop) }
 	}
 	// Enterprise defaults, set regardless of database presence (§12.4, §9.3).
 	srv.resolver = dnsx.NewSystemResolver()
