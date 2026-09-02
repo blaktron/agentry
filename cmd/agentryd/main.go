@@ -185,6 +185,14 @@ func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st 
 	if pipeline == nil {
 		return nil, fmt.Errorf("the worker role requires archive storage (storage.kind=%q has none wired)", cfg.Storage.Kind)
 	}
+	// A worker that shares the git data directory (compose `all`, EFS in
+	// ECS) can scan git history for secrets; one that does not simply
+	// reports S2/history-not-scanned (agentry#54).
+	if repos, err := gitsrv.NewRepoStore(cfg); err == nil {
+		pipeline.SetGitHistory(repos)
+	} else {
+		log.Warn("worker: git history scan unavailable", "err", err)
+	}
 	q := queue.NewPGClient(st, log)
 	q.SetMetrics(mx, cfg.Telemetry.QueueSampleInterval)
 	pipeline.RegisterHandlers(q)
@@ -293,6 +301,9 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		s.SetMetrics(mx)
 		reg := s.Reg()
 		reg.SetGitArchiver(repos)
+		if pl := s.Pipeline(); pl != nil {
+			pl.SetGitHistory(repos) // S2 history scan on git-tag publishes (agentry#54)
+		}
 		aud := audit.NewWriter(log)
 		git := gitsrv.NewHandler(cfg, st, repos, reg, aud, log)
 		git.SetMetrics(mx)
