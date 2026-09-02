@@ -126,7 +126,14 @@ version**, the resolved artifact digests are recorded into the release's
 profile (`servers/`), the dependency closure is installed inside the
 pinned runtime image with egress restricted to the registry hosts, and
 the consent gate shows every server, source, version, and digest before
-anything is fetched. At run time the per-run gateway loads exactly those
+anything is fetched. PyPI servers install **wheel-only**: the builder
+downloads the pinned package on its own, checks the file pip chose against
+every digest the registry's metadata advertised for that release, refuses
+an unlisted or mismatching file, and only then installs it plus wheels for
+its dependencies — a source distribution would run the package's own build
+code in the builder, so it is refused unless the policy's
+`mcpRegistries.pypiAllowSourceDists: true` says otherwise. npm installs
+run with `--ignore-scripts`. At run time the per-run gateway loads exactly those
 servers — each with its declared tool filter, its own egress allowlist,
 and only its own secret values — alongside the agentry tools server.
 
