@@ -161,7 +161,7 @@ export default async function SettingsPage({
         <h2 className="mb-2 font-semibold">Personal access tokens</h2>
         {tokens.length === 0 ? (
           <p className="mb-3 text-sm" style={{ color: "var(--color-muted)" }}>
-            No tokens. The CLI signs in with one (<code>agentry login</code>).
+            No tokens. <code>agentry login</code> signs in through the browser and mints its own; create one here only for scripts (<code>agentry login --paste</code>).
           </p>
         ) : (
           <ul className="mb-3 flex flex-col gap-2 text-sm">
