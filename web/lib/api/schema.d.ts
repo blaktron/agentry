@@ -158,6 +158,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/desktop/exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange a desktop sign-in code for the PAT it granted.
+         * @description Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class (§19).
+         */
+        post: operations["exchangeDesktopCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/oidc/{provider}/start": {
         parameters: {
             query?: never;
@@ -283,6 +303,26 @@ export interface paths {
         put?: never;
         /** Mint a PAT. The secret is returned exactly once (D-22). */
         post: operations["createToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/user/tokens/desktop-grant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a one-time grant for the desktop app's browser sign-in.
+         * @description Session-only. The web tier's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+         */
+        post: operations["createDesktopGrant"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1553,6 +1593,20 @@ export interface components {
             /** @description Bind the token to this org (§12.4). Requires the current session to be SSO-fresh for the org; org-bound tokens are capped at 90 days and are the only tokens accepted against an enforced-SSO org's resources. */
             orgHandle?: string;
         };
+        DesktopGrantRequest: {
+            /** @description The desktop app's nonce; the exchange must present the same value. */
+            state: string;
+        };
+        DesktopGrant: {
+            /** @description Single-use exchange code. Appears only in this response. */
+            code: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        DesktopExchangeRequest: {
+            code: string;
+            state: string;
+        };
         /**
          * @description PAT scopes (§12.3).
          * @enum {string}
@@ -2219,6 +2273,31 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    exchangeDesktopCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopExchangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Token minted; `token` appears only in this response. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatCreated"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     socialOidcStart: {
         parameters: {
             query?: {
@@ -2467,6 +2546,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PatCreated"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createDesktopGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopGrantRequest"];
+            };
+        };
+        responses: {
+            /** @description Grant recorded. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopGrant"];
                 };
             };
             default: components["responses"]["Problem"];

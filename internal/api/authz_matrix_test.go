@@ -158,6 +158,10 @@ func requestFactories(env *testEnv) map[string]opRequest {
 				return map[string]any{"name": "t-" + nextUniq(), "scopes": []string{"user:profile"}}
 			},
 		},
+		"createDesktopGrant": {
+			method: "POST", path: sPath("/api/v1/user/tokens/desktop-grant"),
+			body:   func(*matrixSeed, string) any { return map[string]any{"state": "matrix-state-" + nextUniq()} },
+		},
 		"revokeToken": {
 			method: "DELETE",
 			// Each session caller revokes a token they mint in prep; PAT and
