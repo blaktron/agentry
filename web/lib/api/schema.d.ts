@@ -1496,7 +1496,7 @@ export interface components {
              * @example v1
              */
             apiVersion: string;
-            /** @description Self-host feature flags (judge provider, signing, redis). */
+            /** @description Self-host feature flags: `judge`, `signing`, `redis`, `s3`, and `externalOnly` (accounts live in an external directory service; the native register/password/TOTP surface answers 410 — clients should not offer those forms). */
             features: {
                 [key: string]: boolean;
             };

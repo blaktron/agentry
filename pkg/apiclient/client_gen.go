@@ -1140,7 +1140,7 @@ type Meta struct {
 	// Example: v1
 	ApiVersion string `json:"apiVersion"`
 
-	// Features Self-host feature flags (judge provider, signing, redis).
+	// Features Self-host feature flags: `judge`, `signing`, `redis`, `s3`, and `externalOnly` (accounts live in an external directory service; the native register/password/TOTP surface answers 410 — clients should not offer those forms).
 	Features map[string]bool `json:"features"`
 
 	// MinCLIVersion Oldest supported agentry CLI version (§11 distribution note).
