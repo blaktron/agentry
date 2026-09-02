@@ -613,4 +613,47 @@ func TestKnownSPDXID(t *testing.T) {
 	if _, ok := KnownSPDXID("Proprietary-EULA"); ok {
 		t.Errorf("unknown id must not be accepted")
 	}
+	// The full list (agentry#28): ids the 60-entry allowlist lacked, and a
+	// deprecated id kept as an identifier.
+	for _, id := range []string{"EUPL-1.2", "CECILL-2.1", "OFL-1.1", "LGPL-2.1-only", "GPL-3.0", "Beerware"} {
+		if _, ok := KnownSPDXID(id); !ok {
+			t.Errorf("%s missing from the embedded SPDX list", id)
+		}
+	}
+	if len(spdxIDs) < 600 || len(spdxExceptions) < 50 {
+		t.Errorf("embedded lists look truncated: %d licenses, %d exceptions", len(spdxIDs), len(spdxExceptions))
+	}
+}
+
+func TestParseSPDXExpression(t *testing.T) {
+	good := map[string]string{
+		"MIT":                             "MIT",
+		"mit":                             "MIT",
+		"MIT OR Apache-2.0":               "MIT OR Apache-2.0",
+		"(MIT OR apache-2.0) AND CC0-1.0": "(MIT OR Apache-2.0) AND CC0-1.0",
+		"GPL-2.0-or-later WITH Classpath-exception-2.0": "GPL-2.0-or-later WITH Classpath-exception-2.0",
+		"GPL-2.0+":             "GPL-2.0+",
+		"  Apache-2.0  ":       "Apache-2.0",
+		"MIT and BSD-3-Clause": "MIT AND BSD-3-Clause",
+	}
+	for in, want := range good {
+		got, ids, err := ParseSPDXExpression(in)
+		if err != nil || got != want {
+			t.Errorf("%q: got %q, %v; want %q", in, got, err, want)
+		}
+		if len(ids) == 0 {
+			t.Errorf("%q: no ids extracted", in)
+		}
+	}
+	if _, ids, _ := ParseSPDXExpression("(MIT OR Apache-2.0) AND MIT"); len(ids) != 2 {
+		t.Errorf("ids not deduplicated: %v", ids)
+	}
+	for _, bad := range []string{
+		"", "Apache 2.0", "MIT OR", "OR MIT", "(MIT", "MIT)", "MIT WITH", "MIT WITH Nonexistent-exception",
+		"LicenseRef-internal", "Proprietary-EULA", "MIT AND AND Apache-2.0", "MIT Apache-2.0",
+	} {
+		if _, _, err := ParseSPDXExpression(bad); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
+	}
 }

@@ -761,8 +761,8 @@ func validatePublicPublish(s *issues, m *Manifest, ctx Context) {
 	}
 	if m.License == "" {
 		s.errf("V7", "license", "public publish requires an SPDX license id")
-	} else if _, ok := KnownSPDXID(m.License); !ok {
-		s.errf("V7", "license", "%q is not a recognized SPDX license id", m.License)
+	} else if _, _, err := ParseSPDXExpression(m.License); err != nil {
+		s.errf("V7", "license", "%q is not a valid SPDX license expression: %v", m.License, err)
 	}
 	byPath := make(map[string]bool, len(ctx.Files))
 	for _, f := range ctx.Files {
