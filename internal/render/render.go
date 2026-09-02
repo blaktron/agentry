@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"fmt"
 	htmlpkg "html"
+	"regexp"
 	"strings"
 	"unicode"
 
@@ -107,8 +108,33 @@ func (r *Renderer) Markdown(src []byte) (string, error) {
 	if err := r.md.Convert(src, &buf); err != nil {
 		return "", fmt.Errorf("render: markdown: %w", err)
 	}
-	safe := r.policy.SanitizeBytes(buf.Bytes())
-	return RevealInvisible(string(safe)), nil
+	return r.sanitize(buf.String()), nil
+}
+
+// sanitize is the full post-render pass: the bluemonday policy, the
+// rel="ugc" stamp, and invisible-character revealing. It is the composition
+// FuzzSanitize round-trips, so it must be idempotent on its own output.
+func (r *Renderer) sanitize(html string) string {
+	return RevealInvisible(addUGC(r.policy.Sanitize(html)))
+}
+
+// relRe finds the rel attribute bluemonday emits on links. The sanitizer
+// sets nofollow/noreferrer/noopener itself but has no switch for "ugc",
+// the §10.3 hint that a link is user-generated content (DEV-039,
+// agentry#34); this post-pass adds it. Attribute values in sanitized output
+// are double-quoted and contain no quotes, so the pattern is exact.
+var relRe = regexp.MustCompile(`(<a\b[^>]*\brel=")([^"]*)(")`)
+
+func addUGC(html string) string {
+	return relRe.ReplaceAllStringFunc(html, func(tag string) string {
+		m := relRe.FindStringSubmatch(tag)
+		for _, tok := range strings.Fields(m[2]) {
+			if tok == "ugc" {
+				return tag
+			}
+		}
+		return m[1] + strings.TrimSpace(m[2]+" ugc") + m[3]
+	})
 }
 
 // demoteHeadings shifts every author heading down one level (h1→h2 … h5→h6),
