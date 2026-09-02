@@ -331,7 +331,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 		return
 	}
 
-	s.issueSocialSession(w, r, user, name, st.Next)
+	s.issueSocialSession(w, r, user, name, st.Next, id.AMR)
 }
 
 // readSocialState opens and clears the single-use state cookie.
@@ -514,7 +514,7 @@ func (s *Server) TotpChallenge(w http.ResponseWriter, r *http.Request) {
 		problemUnauthorized(w, r, "invalid code")
 		return
 	}
-	s.issueSocialSession(w, r, user, blob.Provider, "")
+	s.issueSocialSession(w, r, user, blob.Provider, "", nil)
 }
 
 // issueSocialSession opens an ordinary session (no org SSO tag) and writes
@@ -522,7 +522,7 @@ func (s *Server) TotpChallenge(w http.ResponseWriter, r *http.Request) {
 // issueSocialSession creates the session and answers: a 303 to next in
 // browser mode (next non-empty, already validated by safeNextPath), else the
 // JSON result.
-func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user storegen.GetUserByIDRow, provider, next string) {
+func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user storegen.GetUserByIDRow, provider, next string, amr []string) {
 	ctx := r.Context()
 	sessToken, err := auth.NewToken(auth.SessionPrefix)
 	if err != nil {
@@ -551,6 +551,14 @@ func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user
 		e.Actor, e.ActorKind = user.ID, audit.ActorUser
 		e.TargetKind, e.TargetID = "user", user.ID
 		e.Detail = map[string]any{"method": "social", "provider": provider}
+		// What the directory said about the sign-in's factors (agentry#23):
+		// the operator reads this row before turning on
+		// auth.requireIdpMFA, and an empty value is itself the finding.
+		if amr != nil {
+			e.Detail["amr"] = amr
+		} else {
+			e.Detail["amr"] = []string{}
+		}
 		return s.auditW.Write(ctx, q, e)
 	})
 	if err != nil {
