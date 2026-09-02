@@ -93,7 +93,7 @@ func init() {
 	for _, a := range []Action{
 		ActionUserRegister, ActionUserLogin, ActionUserLoginFailed,
 		ActionUserLogout, ActionUserEmailVerified, ActionUserUpdate,
-		ActionUserTOTPEnabled, ActionPATCreate, ActionPATRevoke, ActionUserDelete, ActionUserDirectoryErase,
+		ActionUserTOTPEnabled, ActionPATCreate, ActionPATRevoke, ActionUserDelete, ActionUserDirectoryErase, ActionUserStaffSync,
 		ActionOrgCreate, ActionOrgUpdate, ActionOrgMemberSet,
 		ActionOrgMemberRemove, ActionTeamCreate, ActionTeamDelete,
 		ActionTeamMemberAdd, ActionTeamMemberRemove,
