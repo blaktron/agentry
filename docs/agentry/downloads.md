@@ -20,8 +20,9 @@ shasum -a 256 -c --ignore-missing SHA256SUMS  # macOS
 Get-FileHash .\agentry-*.exe                  # Windows, compare by eye
 ```
 
-Homebrew (`brew install secureagentry/tap/agentry`) tracks the same
-releases. After installing: `agentry --version`, then `agentry setup` once —
+A Homebrew tap is planned but not published yet, so there is no `brew
+install` command to run today; download the binary above until it ships.
+After installing: `agentry --version`, then `agentry setup` once —
 the [runner reference](../runner.md) takes it from there, including
 installing BriefAgents into Claude Code, Codex, or OpenClaw instead of the
 container path.
