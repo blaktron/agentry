@@ -47,6 +47,15 @@ locals {
     AGENTRY_SCAN_GITLEAKS_BIN = "/usr/bin/gitleaks"
     AGENTRY_SCAN_OSV_URL      = var.osv_url
 
+    # Directory service (DEV-057, agentry#51). Empty idp_client_id keeps the
+    # native credential flows; set the four idp_* variables to hand sign-in
+    # to the IdP and let a directory group grant platform staff.
+    AGENTRY_AUTH_EXTERNAL_ONLY         = var.idp_client_id != "" ? "true" : "false"
+    AGENTRY_SOCIAL_AUTHENTIK_CLIENT_ID = var.idp_client_id
+    AGENTRY_SOCIAL_AUTHENTIK_ISSUER    = var.idp_issuer
+    AGENTRY_IDP_LOGOUT_URL             = var.idp_logout_url
+    AGENTRY_IDP_STAFF_GROUP            = var.idp_staff_group
+
     # OTLP to the ADOT sidecar on loopback (§16.2, D-25). Every agentryd
     # service in this file runs the sidecar, so this is set once here. Without
     # it the sidecar receives nothing and the §16.3 alarms below read metrics
@@ -63,11 +72,17 @@ locals {
   }
 
   # Secrets injected from Secrets Manager (execution role reads; app sees value).
-  core_secrets = {
+  core_secrets = merge({
     AGENTRY_DATABASE_URL     = module.rds.database_url_secret_arn
     AGENTRY_REDIS_URL        = module.elasticache.redis_url_secret_arn
     AGENTRY_AUTH_SEALING_KEY = aws_secretsmanager_secret.sealing.arn
-  }
+  }, local.idp_secrets)
+  # The IdP client secret lives in Secrets Manager under a name the operator
+  # fills after `apply` (placeholder value until then); only injected when
+  # an IdP is configured so an unset placeholder never reaches a task.
+  idp_secrets = var.idp_client_id != "" ? {
+    AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET = aws_secretsmanager_secret.idp_client.arn
+  } : {}
   # sandbox/judge don't use Redis (and can't reach it — no egress rule).
   no_redis_secrets = {
     AGENTRY_DATABASE_URL     = module.rds.database_url_secret_arn
@@ -96,6 +111,21 @@ resource "aws_secretsmanager_secret" "sealing" {
 resource "aws_secretsmanager_secret_version" "sealing" {
   secret_id     = aws_secretsmanager_secret.sealing.id
   secret_string = random_bytes.sealing.base64
+}
+
+# --- IdP client secret (agentry#51): operator-managed value ------------------
+
+resource "aws_secretsmanager_secret" "idp_client" {
+  name       = "agentry/${var.environment}/idp-client-secret"
+  kms_key_id = module.kms.data_key_arn
+}
+
+resource "aws_secretsmanager_secret_version" "idp_client" {
+  secret_id     = aws_secretsmanager_secret.idp_client.id
+  secret_string = "unset"
+  lifecycle {
+    ignore_changes = [secret_string] # set the real value out of band; terraform never overwrites it
+  }
 }
 
 # --- Cluster ---------------------------------------------------------------
@@ -470,6 +500,9 @@ module "web" {
     NODE_ENV             = "production"
     PORT                 = "3000"
     AGENTRY_API_BASE_URL = local.base_url
+    # Sign-out goes through the IdP's end-session URL when one is set
+    # (DEV-057/DEV-082); empty means sign-out ends at the registry.
+    AGENTRY_IDP_LOGOUT_URL = var.idp_logout_url
   }
   readonly_root_filesystem = true
   enable_adot              = false

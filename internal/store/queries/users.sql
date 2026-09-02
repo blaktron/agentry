@@ -32,6 +32,10 @@ UPDATE users SET totp_secret_enc = $2, totp_enabled = false, updated_at = now() 
 -- name: EnableUserTOTP :exec
 UPDATE users SET totp_enabled = true, updated_at = now() WHERE id = $1;
 
+-- name: SetUserPlatformStaff :exec
+-- Directory group membership decides platform staff (agentry#51).
+UPDATE users SET platform_staff = $2, updated_at = now() WHERE id = $1;
+
 -- name: SetUserIdPMFA :exec
 -- The directory asserted a second factor at this sign-in (agentry#23).
 UPDATE users SET idp_mfa_at = now(), updated_at = now() WHERE id = $1;

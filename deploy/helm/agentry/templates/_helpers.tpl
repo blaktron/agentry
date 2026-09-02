@@ -100,6 +100,22 @@ app.kubernetes.io/instance: {{ .Release.Name }}
       key: AGENTRY_SMTP_PASS
       optional: true
 {{- end }}
+{{- if or .Values.secret.authentikClientSecret .Values.secret.existingSecret }}
+- name: AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "agentry.secretName" . }}
+      key: AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET
+      optional: true
+{{- end }}
+{{- if or .Values.secret.idpAdminToken .Values.secret.existingSecret }}
+- name: AGENTRY_IDP_ADMIN_TOKEN
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "agentry.secretName" . }}
+      key: AGENTRY_IDP_ADMIN_TOKEN
+      optional: true
+{{- end }}
 {{- with .Values.extraEnv }}
 {{ toYaml . }}
 {{- end }}

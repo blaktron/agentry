@@ -1,0 +1,20 @@
+# Directory groups the registry gives meaning to (agentry#51).
+#
+# agentry-platform-staff: members are the registry's platform staff (trust &
+# safety operators — review queue, advisories, rulesets). The registry reads
+# the OIDC `groups` claim at every authentik sign-in and sets users.platform_staff
+# to "is a member" (AGENTRY_IDP_STAFF_GROUP names the group; compose defaults it
+# to this one). Add and remove people HERE, in the directory, never in SQL.
+version: 1
+metadata:
+  name: Agentry - Directory groups
+  labels:
+    blueprints.goauthentik.io/description: Groups the Agentry registry maps onto platform roles.
+entries:
+  - model: authentik_core.group
+    identifiers:
+      name: agentry-platform-staff
+    attrs:
+      is_superuser: false
+      attributes:
+        agentry.role: platform_staff
