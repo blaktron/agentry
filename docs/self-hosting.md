@@ -520,6 +520,20 @@ login, email-verify, and TOTP endpoints answer 410 Gone, and the web
 login page offers the directory service only. Turning the flag off (the
 default) restores the native flows — nothing was removed.
 
+**Account erasure spans both systems.** `DELETE /user` pseudonymizes the
+registry account (§12.7); the sign-in account — email, display name,
+password hash — lives in authentik. Set `AGENTRY_IDP_ADMIN_URL` (the API
+origin as the server reaches it: `http://authentik-server:9000` on the
+compose stack) and `AGENTRY_IDP_ADMIN_TOKEN` (an authentik API token with
+rights over users; the bootstrap token works) and erasure also deletes the
+directory account with the same email — never a superuser or a service
+account. The outcome is recorded on the `user.delete` audit event
+(`directoryErasure`: `deleted`, `not-found`, `failed`, or `not-configured`);
+a failure does not undo the registry erasure and is logged for the
+operator to finish by hand. Leave the variables unset and the privacy
+policy's promise that deletion removes personal information is one you
+have to keep manually.
+
 **Two-factor authentication and public publishing.** Outside dev mode the
 registry normally refuses to publish to a public namespace until the
 account has a TOTP factor (§12.1, §19). With the directory service in

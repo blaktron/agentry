@@ -247,7 +247,7 @@ export interface paths {
         put?: never;
         /**
          * Erase the caller's account (GDPR flow, §12.7).
-         * @description Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank.
+         * @description Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase`.
          */
         post: operations["deleteCurrentUser"];
         delete?: never;
