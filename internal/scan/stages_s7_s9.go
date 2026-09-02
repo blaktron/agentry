@@ -342,7 +342,7 @@ func s7Vulnerabilities(sc stageContext, client OSVClient, locks []*lockfile) []F
 			Title: fmt.Sprintf("%d dependencies resolved; no vulnerability database consulted", len(pkgs)),
 			Detail: map[string]any{
 				"dependencies": len(pkgs),
-				"reason":       "the scanner task profile has no egress; the OSV client seam is offline by default (DEV-006)",
+				"reason":       "no OSV API configured (AGENTRY_SCAN_OSV_URL); the OSV client seam is offline by default (DEV-006)",
 			},
 			Taxonomy: []string{"LLM03", "ASI04"},
 		}}

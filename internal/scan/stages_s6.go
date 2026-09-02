@@ -14,7 +14,12 @@ import (
 // vocabulary, and diff against the manifest's declared capabilities.
 // Undeclared network/exec/fs-write is high (§8.3). Native regex detectors
 // stand in for opengrep rulepacks (DEV-006) behind the same stage.
-type S6Capabilities struct{}
+type S6Capabilities struct {
+	// Opengrep, when set, execs the real tool against its rules and merges
+	// the detections into the declared-vs-detected compare (DEV-006
+	// production upgrade, agentry#40).
+	Opengrep *ExecTool
+}
 
 func (S6Capabilities) ID() string { return "S6" }
 
@@ -82,6 +87,13 @@ func (s S6Capabilities) Run(sc stageContext, in *Input) StageResult {
 	}
 
 	var findings []Finding
+	if s.Opengrep != nil && in.Dir != "" {
+		extra, dets := runOpengrep(sc.Context(), s.Opengrep, in.Dir)
+		findings = append(findings, extra...)
+		for capToken, hits := range dets {
+			detected[capToken] = append(detected[capToken], hits...)
+		}
+	}
 	// Undeclared capabilities are the security event (§8.3). Iterated in a
 	// fixed order because the report is hashed and signed (§8.8).
 	detectedTokens := make([]string, 0, len(detected))
