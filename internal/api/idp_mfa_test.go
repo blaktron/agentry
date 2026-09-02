@@ -65,6 +65,16 @@ func TestSocialLoginRecordsIdPMFA(t *testing.T) {
 			if stamped != tc.want {
 				t.Fatalf("amr=%v: idp_mfa_at set = %v, want %v", tc.amr, stamped, tc.want)
 			}
+			// The login audit row shows what the directory sent, so an
+			// operator can check before enabling requireIdpMFA.
+			var got []string
+			if err := env.st.Pool().QueryRow(context.Background(),
+				`SELECT COALESCE(detail->'amr', '[]'::jsonb) FROM audit_events WHERE action = 'user.login' AND actor_id = $1::uuid ORDER BY occurred_at DESC LIMIT 1`, userID).Scan(&got); err != nil {
+				t.Fatal(err)
+			}
+			if len(got) != len(tc.amr) {
+				t.Fatalf("audit amr = %v, want %v", got, tc.amr)
+			}
 		})
 	}
 }
