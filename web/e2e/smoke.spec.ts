@@ -31,6 +31,19 @@ test("search renders (empty results are fine)", async ({ page }) => {
   await expect(page.locator("body")).not.toContainText("Internal server error");
 });
 
+test("cookie notice OK dismisses it and returns to the same page", async ({ page }) => {
+  await page.goto("/trust");
+  const notice = page.getByRole("region", { name: "Cookie notice" });
+  await expect(notice).toBeVisible();
+  await notice.getByRole("button", { name: "OK" }).click();
+  // The ack route must 303 back to the PUBLIC page (agentry#80: it once
+  // redirected to the server's own bind address behind the edge).
+  await expect(page).toHaveURL(/\/trust$/);
+  await expect(page.getByRole("region", { name: "Cookie notice" })).toHaveCount(0);
+  await page.goto("/");
+  await expect(page.getByRole("region", { name: "Cookie notice" })).toHaveCount(0);
+});
+
 test.describe("authed flows", () => {
   test.skip(!USER || !PASS, "E2E_USER / E2E_PASS not provided by the boot script");
 
