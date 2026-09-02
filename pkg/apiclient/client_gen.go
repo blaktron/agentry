@@ -993,7 +993,7 @@ type AgentVersion struct {
 	PublishedAt  *time.Time              `json:"publishedAt,omitempty"`
 	Source       AgentVersionSource      `json:"source"`
 
-	// Status Publication state machine states (§7).
+	// Status Publication state machine states (§7). `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change (DEV-046).
 	Status       VersionStatus `json:"status"`
 	StatusReason *string       `json:"statusReason,omitempty"`
 	Version      string        `json:"version"`
@@ -1355,7 +1355,7 @@ type ScanReport struct {
 	ScanRunId      *openapi_types.UUID `json:"scanRunId,omitempty"`
 	ScanStatus     *string             `json:"scanStatus,omitempty"`
 
-	// VersionStatus Publication state machine states (§7).
+	// VersionStatus Publication state machine states (§7). `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change (DEV-046).
 	VersionStatus VersionStatus `json:"versionStatus"`
 }
 
@@ -1493,7 +1493,7 @@ type User struct {
 	TotpEnabled   bool  `json:"totpEnabled"`
 }
 
-// VersionStatus Publication state machine states (§7).
+// VersionStatus Publication state machine states (§7). `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change (DEV-046).
 type VersionStatus string
 
 // WebhookDelivery defines model for WebhookDelivery.

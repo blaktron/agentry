@@ -9,3 +9,13 @@ burns an afternoon hunting for a dropped migration (workspace ANALYSIS.md
 M3, in blaktron/agentry-notes).
 
 Goose only loads `*.sql` from this directory; this file is inert.
+
+# The `approved` status
+
+`00004_versions.sql` lists `approved` in the `agent_versions.status` CHECK
+constraint. It is **reserved and never written** (DEV-046): review
+publishes directly (`needs_review → published`), so the invariant "no path
+to published skips the gate" is a property of one edge. Narrowing an
+applied CHECK constraint is a migration for no behavioural gain, so the
+value stays; the same note sits on `registry.StatusApproved` and the
+OpenAPI `VersionStatus` description.
