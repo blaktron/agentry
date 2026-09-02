@@ -1,7 +1,9 @@
 package scan
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/blaktron/agentry/pkg/manifest"
 	"os"
 	"path/filepath"
 	"sort"
@@ -123,6 +125,7 @@ func (S1Inventory) Run(sc stageContext, in *Input) StageResult {
 		return StageResult{Scanner: "S1", Err: err}
 	}
 	in.Files = inv
+	findings = append(findings, s1Frontmatter(in)...)
 	return StageResult{Scanner: "S1", Findings: findings}
 }
 
@@ -259,6 +262,60 @@ func imageMetadataFindings(sc stageContext, in *Input) []Finding {
 				})
 			}
 		}
+	}
+	return out
+}
+
+// s1Frontmatter is the scan-side half of agentry#47 (DEV-044): the skill
+// entrypoint's YAML frontmatter is what the installed skill shows the
+// consuming runtime, so a `name`/`description` that contradicts the signed
+// manifest is a hygiene finding on the report. V9 rejects a contradicting
+// name at submission; this catches every path (rescans, uploads that
+// predate V9) and records the description divergence for the reviewer.
+func s1Frontmatter(in *Input) []Finding {
+	var m struct {
+		Name        string `json:"name"`
+		Summary     string `json:"summary"`
+		Entrypoints struct {
+			Skill string `json:"skill"`
+		} `json:"entrypoints"`
+	}
+	if err := json.Unmarshal(in.ManifestJSON, &m); err != nil || m.Entrypoints.Skill == "" {
+		return nil
+	}
+	var file *FileEntry
+	for i := range in.Files {
+		if in.Files[i].Path == m.Entrypoints.Skill {
+			file = &in.Files[i]
+			break
+		}
+	}
+	if file == nil || !file.IsText || file.Content == nil {
+		return nil
+	}
+	fm, ok, perr := manifest.ParseFrontmatter(file.Content)
+	if !ok || perr != nil {
+		return nil // V9 reports a malformed block; nothing to compare here
+	}
+	var out []Finding
+	if fm.Name != "" && fm.Name != m.Name {
+		out = append(out, Finding{
+			Scanner: "S1/frontmatter-name-mismatch", Severity: SevMedium, Confidence: ConfHigh,
+			Title:    "Skill frontmatter name contradicts the manifest",
+			FilePath: file.Path, LineStart: 1, LineEnd: 1,
+			Detail:   map[string]any{"frontmatter": fm.Name, "manifest": m.Name},
+			Taxonomy: []string{"LLM09"},
+		})
+	}
+	if fm.Description != "" && manifest.NormalizeProse(fm.Description) != manifest.NormalizeProse(m.Summary) {
+		out = append(out, Finding{
+			Scanner: "S1/frontmatter-description-differs", Severity: SevLow, Confidence: ConfHigh,
+			Title:    "Skill frontmatter description differs from the manifest summary",
+			FilePath: file.Path, LineStart: 1, LineEnd: 1,
+			Excerpt:  fm.Description,
+			Detail:   map[string]any{"summary": m.Summary, "reason": "the installed skill shows the frontmatter; the registry shows the summary (DEV-044)"},
+			Taxonomy: []string{"LLM09"},
+		})
 	}
 	return out
 }
