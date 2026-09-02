@@ -211,6 +211,9 @@ services:
       AGENTRY_JUDGE_BASE_URL: ${AGENTRY_JUDGE_BASE_URL:-}
       AGENTRY_JUDGE_API_KEY: ${AGENTRY_JUDGE_API_KEY:-}
       AGENTRY_JUDGE_MODEL: ${AGENTRY_JUDGE_MODEL:-}
+      # bedrock needs a region (and AWS credentials on the host/task);
+      # classifier needs AGENTRY_JUDGE_BASE_URL = the classify endpoint.
+      AGENTRY_JUDGE_REGION: ${AGENTRY_JUDGE_REGION:-}
       # External scanner tools (§8.3, agentry#40). gitleaks ships in the
       # image; opengrep is opt-in (mount a binary + rules and point at them);
       # OSV lookups are opt-in because they are the scanner's one egress —

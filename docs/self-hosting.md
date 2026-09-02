@@ -106,11 +106,20 @@ signing:
   keyFile: /etc/agentry/signing-key.pem
 
 judge:
-  provider: none        # none | static | openai | anthropic
+  provider: none        # none | static | openai | anthropic | bedrock | classifier
   # For openai/anthropic, point at any endpoint speaking that protocol:
   # baseUrl: https://api.openai.com   # AGENTRY_JUDGE_BASE_URL
   # apiKey: sk-...                    # AGENTRY_JUDGE_API_KEY
   # model: gpt-4o                     # AGENTRY_JUDGE_MODEL (optional)
+  # bedrock uses the AWS default credential chain (task role, profile, env):
+  # region: us-east-1                 # AGENTRY_JUDGE_REGION (or AWS_REGION)
+  # model: anthropic.claude-3-5-sonnet-20241022-v2:0   # Bedrock model id
+  # classifier is a PromptGuard-class text classifier (Hugging Face
+  # text-classification wire shape: {"inputs": text} → [[{label, score}]]).
+  # It scores ONLY the injection axis, so it always routes to human review —
+  # a cheap pre-screen that adds evidence, not a substitute for the rubric.
+  # baseUrl: http://prompt-guard:8080/classify   # AGENTRY_JUDGE_BASE_URL
+  # apiKey: ...                       # optional bearer token
 
 scan:
   # External scanner tools behind the §8.3 seams. All optional: unset, the
