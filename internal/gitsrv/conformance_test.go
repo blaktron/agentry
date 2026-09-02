@@ -430,6 +430,20 @@ func TestGitConformance(t *testing.T) {
 		}
 	})
 
+	t.Run("force-push allowed once the agent setting is on (agentry#48)", func(t *testing.T) {
+		if _, err := env.st.Pool().Exec(context.Background(),
+			`UPDATE agents SET allow_force_push = true WHERE name = 'pub-agent'`); err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			_, _ = env.st.Pool().Exec(context.Background(), `UPDATE agents SET allow_force_push = false WHERE name = 'pub-agent'`)
+		}()
+		mustGit(t, work, "commit", "--amend", "--allow-empty", "-m", "rewritten while allowed")
+		if out, err := gitRun(t, work, "push", "--force", env.cloneURL("pub-agent", env.owner.patRW), "main"); err != nil {
+			t.Fatalf("force-push must succeed when allowed: %v\n%s", err, out)
+		}
+	})
+
 	t.Run("force-push to default branch rejected", func(t *testing.T) {
 		mustGit(t, work, "commit", "--amend", "--allow-empty", "-m", "rewritten")
 		out, err := gitRun(t, work, "push", "--force", env.cloneURL("pub-agent", env.owner.patRW), "main")
