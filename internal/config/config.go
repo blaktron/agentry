@@ -129,6 +129,14 @@ type Auth struct {
 	// can enrol a native TOTP factor while this is set (see
 	// internal/api/publish_gate.go).
 	ExternalOnly bool `yaml:"externalOnly"`
+	// IdPAdminURL / IdPAdminToken let account erasure (§12.7) reach into the
+	// directory service and delete the sign-in account there too — authentik's
+	// API, as a bearer token with rights over users (agentry#20). Empty means
+	// erasure stops at the registry, which docs/self-hosting.md and the
+	// privacy policy then have to say. The URL is the API origin as the
+	// server reaches it (compose: http://authentik-server:9000).
+	IdPAdminURL   string `yaml:"idpAdminURL"`
+	IdPAdminToken string `yaml:"idpAdminToken"`
 }
 
 // Limits tunes the §19 quotas. These are the values internal/entitlements'
@@ -489,6 +497,8 @@ func applyEnv(c *Config) error {
 	str("AGENTRY_SOCIAL_AUTHENTIK_CLIENT_ID", &c.Social.Authentik.ClientID)
 	str("AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET", &c.Social.Authentik.ClientSecret)
 	str("AGENTRY_SOCIAL_AUTHENTIK_ISSUER", &c.Social.Authentik.Issuer)
+	str("AGENTRY_IDP_ADMIN_URL", &c.Auth.IdPAdminURL)
+	str("AGENTRY_IDP_ADMIN_TOKEN", &c.Auth.IdPAdminToken)
 
 	// Audit stream + retention (§12.6, §4.3).
 	str("AGENTRY_AUDIT_STREAM_KIND", &c.Audit.StreamKind)
