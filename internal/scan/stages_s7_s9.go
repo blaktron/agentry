@@ -422,8 +422,30 @@ func (s S8Metadata) Run(sc stageContext, in *Input) StageResult {
 			Taxonomy: []string{"LLM03"},
 		})
 	}
+	// The cluster axis (§8.3, agentry#27): several accounts publishing
+	// from one address in a day is the ClawHavoc shape (12 accounts, one
+	// operator) that per-account velocity cannot see. Routes to platform
+	// review like the other publisher signals; the hash is keyed and
+	// month-rotated, so the finding names counts, never an address.
+	if in.IPClusterAccounts >= ipClusterMinAccounts && in.IPClusterVersions >= ipClusterMinVersions {
+		findings = append(findings, Finding{
+			Scanner: "S8/ip-cluster", Severity: SevMedium, Confidence: ConfMedium,
+			Title:    "Several accounts publishing from one address",
+			Detail:   map[string]any{"accounts24h": in.IPClusterAccounts, "versions24h": in.IPClusterVersions},
+			Taxonomy: []string{"LLM03", "ASI04"},
+		})
+	}
 	return StageResult{Scanner: "S8", Findings: findings}
 }
+
+// ClawHavoc-shaped thresholds for S8/ip-cluster: distinct accounts and
+// versions sharing one submitting-address hash within 24 hours. A shared
+// office or CI runner publishing a few versions from two accounts stays
+// clear; a burst from a handful of fresh accounts does not.
+const (
+	ipClusterMinAccounts = 3
+	ipClusterMinVersions = 10
+)
 
 // s8NameSimilarity implements both halves of §8.3's anti-typosquat compare:
 // the UTS #39 confusable skeleton (catches Cyrillic-а for Latin-a, which is

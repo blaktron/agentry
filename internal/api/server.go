@@ -180,6 +180,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		// git-tag auto-publish path is covered as well as the API.
 		srv.reg.SetPolicyGate(srv.pipeline)
 		srv.reg.SetPublicPublish2FA(publicPublish2FAEnabled(cfg))
+		srv.reg.SetIPClusterSecret(ipClusterSecret(cfg))
 		if cfg.Auth.IdPAdminURL != "" && cfg.Auth.IdPAdminToken != "" {
 			srv.dirEraser = newAuthentikEraser(cfg.Auth.IdPAdminURL, cfg.Auth.IdPAdminToken)
 		}
@@ -595,6 +596,20 @@ func readJSONOptional(r *http.Request, dst any) error {
 			return nil
 		}
 		return err
+	}
+	return nil
+}
+
+// ipClusterSecret derives the S8 IP-cluster hash key (agentry#27) from the
+// sealing key — the one secret every deployment already has. Dev mode with
+// no key uses a fixed value, like the sealer: the signal still works on a
+// dev stack and the docs say it is not a secret there.
+func ipClusterSecret(cfg config.Config) []byte {
+	if cfg.Auth.SealingKey != "" {
+		return []byte("ip-cluster:" + cfg.Auth.SealingKey)
+	}
+	if cfg.DevMode {
+		return []byte("ip-cluster:dev-insecure")
 	}
 	return nil
 }

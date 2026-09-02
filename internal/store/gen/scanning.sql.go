@@ -12,6 +12,26 @@ import (
 	"github.com/google/uuid"
 )
 
+const countIPClusterSubmissions = `-- name: CountIPClusterSubmissions :one
+SELECT count(DISTINCT submitted_by)::bigint AS accounts, count(*)::bigint AS versions
+FROM agent_versions
+WHERE submitter_ip_hash = $1 AND created_at >= now() - interval '24 hours'
+`
+
+type CountIPClusterSubmissionsRow struct {
+	Accounts int64 `json:"accounts"`
+	Versions int64 `json:"versions"`
+}
+
+// S8's cluster axis (agentry#27): how many distinct accounts and how many
+// versions share this submitting-address hash in the last 24 hours.
+func (q *Queries) CountIPClusterSubmissions(ctx context.Context, submitterIpHash *string) (CountIPClusterSubmissionsRow, error) {
+	row := q.db.QueryRow(ctx, countIPClusterSubmissions, submitterIpHash)
+	var i CountIPClusterSubmissionsRow
+	err := row.Scan(&i.Accounts, &i.Versions)
+	return i, err
+}
+
 const countRecentAbuseReportsByReporter = `-- name: CountRecentAbuseReportsByReporter :one
 SELECT count(*) FROM abuse_reports
 WHERE reporter_id = $1 AND created_at >= now() - interval '1 hour'
@@ -505,7 +525,7 @@ func (q *Queries) GetPolicyForOrg(ctx context.Context, orgID *uuid.UUID) (Policy
 }
 
 const getPreviousPublishedVersion = `-- name: GetPreviousPublishedVersion :one
-SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at FROM agent_versions
+SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash FROM agent_versions
 WHERE agent_id = $1 AND status = 'published' AND id <> $2
 ORDER BY published_at DESC LIMIT 1
 `
@@ -538,6 +558,7 @@ func (q *Queries) GetPreviousPublishedVersion(ctx context.Context, arg GetPrevio
 		&i.Source,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SubmitterIpHash,
 	)
 	return i, err
 }
@@ -1186,7 +1207,7 @@ func (q *Queries) ListStageResults(ctx context.Context, scanRunID uuid.UUID) ([]
 }
 
 const listStuckScanningVersions = `-- name: ListStuckScanningVersions :many
-SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at FROM agent_versions
+SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash FROM agent_versions
 WHERE status = 'scanning' AND updated_at < $1
 ORDER BY updated_at
 LIMIT $2
@@ -1229,6 +1250,7 @@ func (q *Queries) ListStuckScanningVersions(ctx context.Context, arg ListStuckSc
 			&i.Source,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.SubmitterIpHash,
 		); err != nil {
 			return nil, err
 		}

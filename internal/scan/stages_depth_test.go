@@ -293,6 +293,24 @@ func TestS7OSVSeam(t *testing.T) {
 
 // --- S8 -----------------------------------------------------------------
 
+func TestS8IPCluster(t *testing.T) {
+	sc := testStageContext(t)
+	base := files("readme.md", "# Tool\n\nA small utility.\n")
+	fires := S8Metadata{}.Run(sc, &Input{Files: base, AccountAgeDays: 400, IPClusterAccounts: 4, IPClusterVersions: 30})
+	if _, ok := scannerSet(fires.Findings)["S8/ip-cluster"]; !ok {
+		t.Error("4 accounts / 30 versions from one address in a day did not fire the cluster signal")
+	}
+	for _, in := range []Input{
+		{Files: base, AccountAgeDays: 400},                                              // signal off
+		{Files: base, AccountAgeDays: 400, IPClusterAccounts: 2, IPClusterVersions: 30}, // a shared office
+		{Files: base, AccountAgeDays: 400, IPClusterAccounts: 5, IPClusterVersions: 5},  // a few people, few versions
+	} {
+		if _, ok := scannerSet(S8Metadata{}.Run(sc, &in).Findings)["S8/ip-cluster"]; ok {
+			t.Errorf("FALSE POSITIVE ip-cluster for %+v", in)
+		}
+	}
+}
+
 func TestS8PublisherVelocity(t *testing.T) {
 	sc := testStageContext(t)
 	base := files("readme.md", "# Tool\n\nA small utility.\n")

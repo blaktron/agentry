@@ -50,7 +50,10 @@ export default function PrivacyPage() {
         <p>
           Like any web service, our servers keep short-lived <strong>operational logs</strong>{" "}
           (including IP addresses) for security, abuse prevention, and rate limiting. They are used
-          for nothing else and age out on a fixed schedule.
+          for nothing else and age out on a fixed schedule. Each version you publish also records a
+          keyed hash of the address it was submitted from — the key rotates monthly and the address
+          cannot be recovered from the value — so the scanner can notice many accounts publishing
+          from one place, which is how supply-chain floods are staged.
         </p>
       </Section>
 
