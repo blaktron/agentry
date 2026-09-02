@@ -147,6 +147,25 @@ export default async function AgentSettingsPage({
       </Card>
 
       <Card>
+        <h2 className="mb-2 font-semibold">Force-push to the default branch</h2>
+        <p className="mb-3 text-sm" style={{ color: "var(--color-muted)" }}>
+          Off by default: a non-fast-forward push to the default branch is refused, which keeps
+          the history behind every published tag linear (§6.3). Enable it only while rewriting
+          history on purpose; deleting the default branch stays refused either way.
+        </p>
+        <form method="post" action={`/${n}/${a}/settings/save`} className="flex items-center gap-3 text-sm">
+          <input type="hidden" name="action" value="forcepush" />
+          <input type="hidden" name="allowForcePush" value={agent.allowForcePush ? "false" : "true"} />
+          <Badge tone={agent.allowForcePush ? "warn" : "neutral"}>
+            {agent.allowForcePush ? "allowed" : "refused"}
+          </Badge>
+          <button type="submit" className="rounded-md border px-3 py-1.5" style={{ borderColor: "var(--color-border)" }}>
+            {agent.allowForcePush ? "Refuse again" : "Allow"}
+          </button>
+        </form>
+      </Card>
+
+      <Card>
         <h2 className="mb-2 font-semibold">Access ({grants.length} explicit grant{grants.length === 1 ? "" : "s"})</h2>
         <p className="mb-3 text-sm" style={{ color: "var(--color-muted)" }}>
           Grants are additive on top of namespace-derived access (§12.2): read &lt; write &lt;
