@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -300,6 +301,11 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 		Public:           a.Visibility == "public",
 		Files:            files,
 		Quotas:           &quotas,
+		// V9 reads the skill entrypoint out of the server-created
+		// workspace; the path was validated repo-relative by V4.
+		ReadFile: func(p string) ([]byte, error) {
+			return os.ReadFile(filepath.Join(in.Workspace, filepath.FromSlash(p))) //nolint:gosec // validated repo-relative path in a server-created workspace
+		},
 	})
 	if blocking := manifest.Blocking(issues); len(blocking) > 0 {
 		return Version{}, &ErrValidation{Issues: blocking}
