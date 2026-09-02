@@ -14,7 +14,11 @@ import (
 
 const (
 	sessionCookieName = "agentry_session"
-	csrfHeader        = "X-Agentry-CSRF"
+	// csrfCookieName is the web tier's CSRF cookie (web/lib/session.ts
+	// CSRF_COOKIE); the API sets it only in browser-mode sign-in, where no
+	// JSON body carries the token (agentry#77).
+	csrfCookieName = "agentry_csrf"
+	csrfHeader     = "X-Agentry-CSRF"
 )
 
 type principalKeyType struct{}

@@ -557,6 +557,18 @@ func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user
 		MaxAge: int(s.cfg.Auth.SessionTTL.Seconds()),
 	})
 	if next != "" {
+		// Browser mode has no JSON body to carry the CSRF token, and the web
+		// tier can only echo what it holds: set it as the cookie the web
+		// tier's apiSend reads (the same double-submit shape the native
+		// login route produces). httpOnly: page script never needs it, and
+		// a cross-site page can neither read the cookie nor set the header.
+		// Without this every cookie-authenticated mutation from a
+		// directory-signed-in browser 403'd (agentry#77).
+		http.SetCookie(w, &http.Cookie{
+			Name: csrfCookieName, Value: csrfToken, Path: "/", HttpOnly: true,
+			Secure: s.cfg.Auth.CookieSecure, SameSite: http.SameSiteLaxMode,
+			MaxAge: int(s.cfg.Auth.SessionTTL.Seconds()),
+		})
 		http.Redirect(w, r, next, http.StatusSeeOther)
 		return
 	}
