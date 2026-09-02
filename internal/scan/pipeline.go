@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"sync"
@@ -41,6 +42,8 @@ type Pipeline struct {
 	rulesetVer  string
 	// rescanBatch is the sweep page size (tests shrink it to force paging).
 	rescanBatch int32
+	// gitHistory is the S2 history seam; nil = history not scanned.
+	gitHistory GitHistory
 	// mx records the §16.2 publish funnel. nil is a working no-op.
 	mx *metrics.Metrics
 }
@@ -62,6 +65,16 @@ func (p *Pipeline) SetNotifier(n notify.Notifier) {
 }
 
 // PipelineDeps bundles the pipeline's collaborators.
+// GitHistory is the repository seam S2's history scan reads through
+// (agentry#54); the git and all roles provide gitsrv.RepoStore, a worker
+// without repo storage leaves it nil and S2 reports "not scanned".
+type GitHistory interface {
+	HistoryPatch(ctx context.Context, repoID uuid.UUID, commit string) (io.ReadCloser, error)
+}
+
+// SetGitHistory wires the history seam.
+func (p *Pipeline) SetGitHistory(h GitHistory) { p.gitHistory = h }
+
 type PipelineDeps struct {
 	Store        *store.Store
 	Registry     *registry.Service
@@ -334,7 +347,7 @@ func (p *Pipeline) runOrchestrator(
 		if err := p.persistStage(ctx, runID, res); err != nil {
 			sinkErrs = append(sinkErrs, err)
 		}
-		if digest != "" && res.Err == nil && cacheable(res.Scanner) {
+		if digest != "" && res.Err == nil && !res.NoCache && cacheable(res.Scanner) {
 			p.storeCachedStage(ctx, digest, res)
 		}
 	}
@@ -347,6 +360,8 @@ func (p *Pipeline) runOrchestrator(
 			PrevArchiveDir: prevDir, AccountAgeDays: accountAge,
 			RecentPublishCount: int(recent),
 			IPClusterAccounts:  clusterAccounts, IPClusterVersions: clusterVersions,
+			Source:  v.Source,
+			History: p.historyReader(agent.RepoID, v.CommitSha),
 		},
 		Policy: pol, Public: agent.Visibility == "public", AgentName: agent.Name,
 		PopularAgentNames: popular,
@@ -943,3 +958,14 @@ func (p *Pipeline) SetOrchestratorForTest(o *Orchestrator) { p.orch = o }
 // SetRescanBatchForTest shrinks the sweep page size so paging behaviour is
 // exercisable without publishing hundreds of versions. Not for production use.
 func (p *Pipeline) SetRescanBatchForTest(n int32) { p.rescanBatch = n }
+
+// historyReader returns the S2 history stream for a git-tag version, or nil
+// when this role has no repository access.
+func (p *Pipeline) historyReader(repoID uuid.UUID, commit string) func(ctx context.Context) (io.ReadCloser, error) {
+	if p.gitHistory == nil || commit == "" {
+		return nil
+	}
+	return func(ctx context.Context) (io.ReadCloser, error) {
+		return p.gitHistory.HistoryPatch(ctx, repoID, commit)
+	}
+}
