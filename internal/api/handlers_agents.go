@@ -11,6 +11,7 @@ import (
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/registry"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/internal/webhook"
 )
 
 // agentToAPI maps a resolved agent row to the wire shape. maintain toggles
@@ -119,6 +120,11 @@ func (s *Server) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	// §9.3 catalog (agentry#56); org namespaces only — personal namespaces
+	// have no webhook endpoints.
+	s.emitAgentEvent(r.Context(), a.ID, webhook.EventAgentCreated, map[string]any{
+		"namespace": a.Namespace, "name": a.Name, "kind": a.Kind, "visibility": a.Visibility,
+	})
 	writeJSON(w, http.StatusCreated, s.agentToAPI(a, true))
 }
 
