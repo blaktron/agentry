@@ -276,20 +276,41 @@ export default async function OrgAdminPage({
         ) : (
           <>
             <p className="mb-2 text-sm" style={{ color: "var(--color-muted)" }}>
-              Org policy may only tighten the platform baseline (§8.6). Baseline:{" "}
-              <code className="text-xs">{baseline && baseline !== "forbidden" ? JSON.stringify(baseline) : "…"}</code>
+              Org policy may only tighten the platform baseline (§8.6): every knob you set must be at
+              least as strict as the baseline shown beside the editor. Knobs:{" "}
+              <code className="text-xs">requireHumanReview</code>, <code className="text-xs">blockedCapabilities</code>,{" "}
+              <code className="text-xs">allowedLicenses</code>, <code className="text-xs">maxAutoPublishSeverity</code>,{" "}
+              <code className="text-xs">requireEvals</code>, <code className="text-xs">wildcardEgress</code>. The server
+              validates the document and refuses anything that loosens the baseline.
             </p>
+            {/* The editor is a JSON textarea by design (DEV-040: the schema is
+                still moving and a plain-form editor cannot express its lists
+                without client JS). Its minimum worthwhile shape — tall enough
+                to read, with the baseline it must tighten alongside — is
+                agentry#35. */}
             <form method="post" action={`/orgs/${o}/admin/policy`} className="flex flex-col gap-2">
-              <label className="text-sm">
-                Policy document (JSON)
-                <textarea
-                  name="policy"
-                  rows={4}
-                  className="mt-1 w-full rounded-md border px-3 py-2 font-mono text-xs"
-                  style={inputStyle()}
-                  defaultValue={JSON.stringify(policy ?? {}, null, 2)}
-                />
-              </label>
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="text-sm">
+                  Policy document (JSON)
+                  <textarea
+                    name="policy"
+                    rows={18}
+                    spellCheck={false}
+                    className="mt-1 w-full rounded-md border px-3 py-2 font-mono text-xs"
+                    style={inputStyle()}
+                    defaultValue={JSON.stringify(policy ?? {}, null, 2)}
+                  />
+                </label>
+                <div className="text-sm">
+                  Platform baseline (read-only)
+                  <pre
+                    className="mt-1 w-full overflow-x-auto rounded-md border px-3 py-2 font-mono text-xs"
+                    style={{ ...inputStyle(), color: "var(--color-muted)" }}
+                  >
+                    {baseline && baseline !== "forbidden" ? JSON.stringify(baseline, null, 2) : "…"}
+                  </pre>
+                </div>
+              </div>
               <div>
                 <button type="submit" className="rounded-md border px-3 py-1.5 text-sm" style={{ borderColor: "var(--color-border)" }}>
                   Save policy
