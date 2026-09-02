@@ -1,6 +1,6 @@
 // Package manifest implements the agent.yaml package manifest defined in
 // PLAN §5: strict parsing (closed schema, rule V1), the validation rules
-// V1–V8 (§5.3), the closed capability vocabulary (§5.4), and the canonical
+// V1–V9 (§5.3), the closed capability vocabulary (§5.4), and the canonical
 // JSON form stored as agent_versions.manifest (§4.2).
 //
 // The API splits validation by what it needs:
@@ -9,7 +9,7 @@
 //     everywhere and the schemaVersion major checked.
 //   - Validate applies every rule that needs only the manifest itself.
 //   - ValidateInContext applies Validate plus the rules that need
-//     server-supplied context (V2, V3, V4, V6, V7, V8): repo identity, git
+//     server-supplied context (V2, V3, V4, V6, V7, V8, V9): repo identity, git
 //     tag, existing versions, visibility, and the candidate file listing.
 //
 // Validation results are []error whose elements are *Issue values carrying
