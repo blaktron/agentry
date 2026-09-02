@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { zstdDecompressSync } from "node:zlib";
 import {
-  BuilderInput, packArchive, parseServerLines, renderManifest, validateInput, workspaceFiles,
+  BuilderInput, MAX_INSTRUCTIONS_BYTES, packArchive, parseServerLines, renderManifest, validateInput,
+  workspaceFiles,
 } from "../briefagent";
 
 function input(): BuilderInput {
@@ -30,6 +31,16 @@ function input(): BuilderInput {
 describe("validateInput", () => {
   it("accepts the fixture", () => {
     expect(validateInput(input())).toBeNull();
+  });
+  it("caps instructions at the §19 quota (agentry#18)", () => {
+    const i = input();
+    i.instructions = "x".repeat(MAX_INSTRUCTIONS_BYTES);
+    expect(validateInput(i)).toBeNull();
+    i.instructions = "x".repeat(MAX_INSTRUCTIONS_BYTES + 1);
+    expect(validateInput(i)).toMatch(/1 MiB/);
+    // Byte length, not character count: a multi-byte character counts fully.
+    i.instructions = "é".repeat(MAX_INSTRUCTIONS_BYTES / 2 + 1);
+    expect(validateInput(i)).toMatch(/1 MiB/);
   });
   it("refuses hosts mode without hosts", () => {
     const i = input();

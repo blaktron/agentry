@@ -109,6 +109,12 @@ function validateServers(servers: BuilderMCPServer[]): string | null {
   return null;
 }
 
+// MAX_INSTRUCTIONS_BYTES caps the entrypoint file the Builder packs at the
+// §19 "instruction-file total ≤ 1 MB" quota. The download route needs no
+// account, so without a cap the only bound on the bytes it zstd-packs was
+// the edge's request-body limit (agentry#18).
+export const MAX_INSTRUCTIONS_BYTES = 1 << 20;
+
 // validateInput applies the form-level rules; the API's V-rules are the
 // real gate and re-check everything.
 export function validateInput(i: BuilderInput): string | null {
@@ -118,6 +124,9 @@ export function validateInput(i: BuilderInput): string | null {
   if (!i.summary.trim()) return "summary is required";
   if (i.summary.length > 140) return "summary must be at most 140 characters";
   if (!i.instructions.trim()) return "instructions are required";
+  if (Buffer.byteLength(i.instructions, "utf8") > MAX_INSTRUCTIONS_BYTES) {
+    return "instructions must be at most 1 MiB (the §19 instruction-file quota)";
+  }
   if (i.egressMode === "hosts" && i.egressHosts.length === 0) return "egress is set to hosts but no hosts are listed";
   if (i.fsRead === "paths" && i.fsReadPaths.length === 0) return "fs read is set to paths but no paths are listed";
   if (i.fsWrite === "paths" && i.fsWritePaths.length === 0) return "fs write is set to paths but no paths are listed";
