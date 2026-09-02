@@ -641,11 +641,12 @@ Two notes on the knobs:
   it is a gate on the manifest, not a runtime restriction. Combine it with
   `requireHumanReview: {"whenCapabilities": [...]}` if you want a look rather
   than a refusal.
-- `allowedLicenses` intersects with the platform's SPDX allowlist, which is a
-  curated set of 60 common identifiers rather than the full SPDX list. A
-  valid but uncommon identifier will be refused for public publish even if
-  you list it (DEV-042). Check `pkg/manifest/spdx.go` before standardising
-  your org on something unusual.
+- `allowedLicenses` lists SPDX identifiers; the registry validates against
+  the full SPDX license list (embedded, refreshed with
+  `scripts/dev/spdx-sync.sh`) and accepts expressions — `MIT OR Apache-2.0`,
+  `GPL-2.0-or-later WITH Classpath-exception-2.0`. An expression passes the
+  policy only when every identifier in it is allowed. Custom `LicenseRef-`
+  identifiers are refused for public publish.
 
 ## Operating it
 
