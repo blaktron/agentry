@@ -176,7 +176,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		// 2FA-before-public-publish gate. Both sit on the registry so the
 		// git-tag auto-publish path is covered as well as the API.
 		srv.reg.SetPolicyGate(srv.pipeline)
-		srv.reg.SetPublicPublish2FA(!cfg.DevMode)
+		srv.reg.SetPublicPublish2FA(publicPublish2FAEnabled(cfg))
 		srv.reg.SetLogger(log)
 		// A ruleset semver we have never seen means the catalogue was judged
 		// by older rules (§8.7).
