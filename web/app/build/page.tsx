@@ -179,9 +179,12 @@ export default async function BuildPage({
             The entrypoint file (SKILL.md for a skill, AGENT.md for a prompt-agent). Task in,
             result out, report via write_report.
           </p>
-          <textarea name="instructions" required rows={14}
-            className={`${inputClass} font-mono text-xs`} style={inputStyle}
-            defaultValue={"# my-briefagent\n\nDescribe the one job this agent does.\n"} />
+          <label className={`${label} block`}>
+            Entrypoint file contents
+            <textarea name="instructions" required rows={14}
+              className={`${inputClass} font-mono text-xs`} style={inputStyle}
+              defaultValue={"# my-briefagent\n\nDescribe the one job this agent does.\n"} />
+          </label>
         </Card>
 
         <div className="flex flex-wrap items-center justify-end gap-3">
