@@ -556,6 +556,15 @@ production values:
   is the thing to alert on — the registry's `FailOpenEvents` metric covers
   the registry's own fail-open paths, not this one.
 
+The same flows are rate-limited per client IP — emails sent plus accounts
+created per hour — by `AUTHENTIK_ACCOUNT_FLOW_MAX_PER_HOUR` (default 10;
+compose passes it through, the blueprint formats it into the policy at
+apply time). Enrollment ends with authenticator (TOTP) setup, and recovery
+verifies the authenticator before the password may change — a user who has
+none is sent through the same setup stage. Lost-authenticator recovery is an
+operator action in the Authentik admin UI; email alone never resets both
+factors.
+
 Sign-in from the web app runs in the API's browser mode: `/login`
 forwards to `/api/v1/auth/oidc/authentik/start?next=<in-app path>` and
 the callback answers a 303 back into the app (or to `/login?error=…`)
