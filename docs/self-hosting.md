@@ -333,6 +333,15 @@ a machine that should *not* reach it should fail. If a public address ever
 served these ports, treat the compose defaults (`agentry` / `agentry`,
 `agentry-dev-secret`) as disclosed and change them.
 
+The Postgres and MinIO passwords come from `.env` — `AGENTRY_PG_PASSWORD`
+and `AGENTRY_MINIO_SECRET`, defaulting to the development values — and
+reach every place they are used (the services, agentryd's DSN, authentik's
+database, the bucket bootstrap). Set both before the first `up` on any
+stack that is not a throwaway; on a stack that already has data, change
+the stored password first (`ALTER USER agentry PASSWORD …` in Postgres,
+`mc admin user` for MinIO) and then `.env`, since the volumes keep what
+they were initialised with.
+
 ### Rate limits at the edge
 
 agentryd applies the §19 per-IP limits to the API; the web tier has none of
