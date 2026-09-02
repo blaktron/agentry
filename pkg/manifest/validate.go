@@ -44,7 +44,7 @@ func (s Severity) String() string {
 // Issue is one validation finding. All errors returned by Validate and
 // ValidateInContext are *Issue values.
 type Issue struct {
-	// Rule is the §5.3 rule id, "V1" through "V8".
+	// Rule is the §5.3 rule id, "V1" through "V9".
 	Rule string
 	// Severity distinguishes blocking errors from flags such as the
 	// policy-gated "*" egress.
@@ -175,6 +175,10 @@ type Context struct {
 	// Quotas overrides the §19 defaults (org entitlements); nil uses
 	// DefaultQuotas.
 	Quotas *Quotas
+	// ReadFile returns the content of a repo-relative file at the
+	// submitted commit. It feeds V9 (skill frontmatter vs manifest); nil
+	// skips that rule, so callers without content access are unaffected.
+	ReadFile func(path string) ([]byte, error)
 }
 
 // issues collects validation findings.
@@ -585,8 +589,41 @@ func ValidateInContext(m *Manifest, ctx Context) []error {
 	validateLockfile(&s, m, ctx.Files, resolved)
 	validatePublicPublish(&s, m, ctx)
 	validateQuotas(&s, ctx, resolved)
+	validateFrontmatter(&s, m, ctx)
 
 	return s.list
+}
+
+// validateFrontmatter is V9 (agentry#47, DEV-044): a skill file's YAML
+// frontmatter is what the consuming runtime shows and the claude-skill
+// export keeps it verbatim, so it must not contradict the signed manifest.
+// A `name` that differs from the manifest name is an error; a
+// `description` that differs from the summary (after whitespace/case
+// folding) is a warning — summaries are short and descriptions may say
+// more, but the reviewer should see that they diverge. A block that does
+// not parse is a warning too: the runtime will not read it either.
+func validateFrontmatter(s *issues, m *Manifest, ctx Context) {
+	if ctx.ReadFile == nil || m.Entrypoints.Skill == "" || checkRelFilePath(m.Entrypoints.Skill) != nil {
+		return
+	}
+	content, err := ctx.ReadFile(m.Entrypoints.Skill)
+	if err != nil {
+		return // V4 already reports a missing entrypoint
+	}
+	fm, ok, perr := ParseFrontmatter(content)
+	if !ok {
+		return
+	}
+	if perr != nil {
+		s.warnf("V9", "entrypoints.skill", "%s: frontmatter does not parse as YAML (%v); consuming runtimes will ignore it", m.Entrypoints.Skill, perr)
+		return
+	}
+	if fm.Name != "" && fm.Name != m.Name {
+		s.errf("V9", "entrypoints.skill", "%s: frontmatter name %q contradicts the manifest name %q", m.Entrypoints.Skill, fm.Name, m.Name)
+	}
+	if fm.Description != "" && NormalizeProse(fm.Description) != NormalizeProse(m.Summary) {
+		s.warnf("V9", "entrypoints.skill", "%s: frontmatter description differs from the manifest summary; consumers of the installed skill see the frontmatter, the registry shows the summary", m.Entrypoints.Skill)
+	}
 }
 
 // validateVersionInContext is V3's context half: tag equality, global
