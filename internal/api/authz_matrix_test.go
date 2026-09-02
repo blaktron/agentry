@@ -144,6 +144,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 
 	return map[string]opRequest{
 		"getMeta":        {method: "GET", path: sPath("/api/v1/meta")},
+		"getAdvisory":    {method: "GET", path: sPath("/api/v1/advisories/00000000-0000-0000-0000-000000000000")},
 		"getOrg":         {method: "GET", path: orgPath("")},
 		"getUserProfile": {method: "GET", path: func(s *matrixSeed, _ string) string { return "/api/v1/users/" + s.pawnH }},
 		"getCurrentUser": {method: "GET", path: sPath("/api/v1/user")},

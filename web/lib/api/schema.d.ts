@@ -1414,8 +1414,28 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Published advisories affecting an agent (§8.7). */
+        /**
+         * Published advisories — for one agent, or the global feed (§8.7).
+         * @description With `affecting`, the advisories against that agent (newest first). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
+         */
         get: operations["listAdvisories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/advisories/{advisoryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One published advisory (permalink); public agents only. */
+        get: operations["getAdvisory"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1925,6 +1945,8 @@ export interface components {
             detail?: string;
             /** Format: date-time */
             publishedAt?: string;
+            /** @description The affected agent as `ns/name`. Present on feed and permalink responses. */
+            agent?: string;
         };
         SearchResults: {
             results: components["schemas"]["SearchHit"][];
@@ -4629,9 +4651,13 @@ export interface operations {
     };
     listAdvisories: {
         parameters: {
-            query: {
-                /** @description ns/name. */
-                affecting: string;
+            query?: {
+                /** @description ns/name. Omit for the global feed. */
+                affecting?: string;
+                /** @description Opaque keyset cursor from the previous page's Link header (feed mode). */
+                cursor?: string;
+                /** @description Page size (feed mode; clamped). */
+                limit?: number;
             };
             header?: never;
             path?: never;
@@ -4646,6 +4672,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Advisory"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getAdvisory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                advisoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The advisory. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Advisory"];
                 };
             };
             default: components["responses"]["Problem"];

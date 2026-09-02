@@ -2,9 +2,11 @@ package api
 
 import (
 	"encoding/json"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -220,7 +222,11 @@ func (s *Server) ListAdvisories(w http.ResponseWriter, r *http.Request, params L
 	if !s.requireDB(w, r) {
 		return
 	}
-	ref, err := registry.ParseRef(params.Affecting)
+	if params.Affecting == nil || *params.Affecting == "" {
+		s.listAdvisoryFeed(w, r, params)
+		return
+	}
+	ref, err := registry.ParseRef(*params.Affecting)
 	if err != nil {
 		problemValidation(w, r, err.Error())
 		return
@@ -250,4 +256,69 @@ func (s *Server) ListAdvisories(w http.ResponseWriter, r *http.Request, params L
 		out = append(out, item)
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+const (
+	advisoryFeedDefaultLimit = 25
+	advisoryFeedMaxLimit     = 100
+)
+
+// listAdvisoryFeed is GET /advisories without `affecting` (agentry#24,
+// DEV-038): the global feed over public agents, newest first, keyset-paged
+// with a Link: rel="next" header. During a quarantine wave this is the page
+// that shows the wave as a wave.
+func (s *Server) listAdvisoryFeed(w http.ResponseWriter, r *http.Request, params ListAdvisoriesParams) {
+	limit := clampLimit(params.Limit, advisoryFeedDefaultLimit, advisoryFeedMaxLimit)
+	before, beforeID, ok := cursorParams(w, r, params.Cursor)
+	if !ok {
+		return
+	}
+	rows, err := s.q().ListAdvisoriesFeed(r.Context(), storegen.ListAdvisoriesFeedParams{
+		Limit: int32(limit), BeforeTime: before, BeforeID: beforeID,
+	})
+	if err != nil {
+		s.log.Error("advisory feed", "err", err)
+		problemInternal(w, r)
+		return
+	}
+	out := make([]Advisory, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, advisoryWithAgent(row.ID, row.AffectedVersions, row.Severity, row.Summary, row.Detail, row.PublishedAt, row.Namespace, row.AgentName))
+	}
+	if len(rows) == limit {
+		last := rows[len(rows)-1]
+		setNextLink(w, r, encodeCursor(*last.PublishedAt, last.ID))
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// GetAdvisory implements GET /advisories/{advisoryId}: the permalink. Only
+// advisories against public agents resolve; anything else is a 404 so the
+// existence of a private agent's advisory is not discoverable by id.
+func (s *Server) GetAdvisory(w http.ResponseWriter, r *http.Request, advisoryID openapi_types.UUID) {
+	if !s.authorize(w, r, auth.ActPublicRead, uuid.Nil) {
+		return
+	}
+	if !s.requireDB(w, r) {
+		return
+	}
+	row, err := s.q().GetAdvisoryPublic(r.Context(), advisoryID)
+	if err != nil {
+		problemNotFound(w, r)
+		return
+	}
+	writeJSON(w, http.StatusOK, advisoryWithAgent(row.ID, row.AffectedVersions, row.Severity, row.Summary, row.Detail, row.PublishedAt, row.Namespace, row.AgentName))
+}
+
+func advisoryWithAgent(id uuid.UUID, affected, severity, summary string, detail *string, publishedAt *time.Time, namespace, name string) Advisory {
+	item := Advisory{Id: id, AffectedVersions: affected, Severity: severity, Summary: summary}
+	if detail != nil {
+		item.Detail = detail
+	}
+	if publishedAt != nil {
+		item.PublishedAt = publishedAt
+	}
+	ref := namespace + "/" + name
+	item.Agent = &ref
+	return item
 }
