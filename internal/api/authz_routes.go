@@ -105,6 +105,7 @@ var routeAuthz = map[string]RouteDecl{
 	// Platform-staff surfaces: the staff flag is not an org role, so the
 	// generic chokepoint cannot express them (requireStaff does).
 	"createRulesetRelease": {Action: auth.ActPublicRead, SelfAuthorized: true},
+	"listRulesetReleases":  {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"listPlatformAudit":    {Action: auth.ActPublicRead, SelfAuthorized: true},
 	// Social login establishes a credential (like login/register), so it sits
 	// outside the chokepoint and is rate-limited instead (§12.1).

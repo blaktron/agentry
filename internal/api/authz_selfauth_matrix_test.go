@@ -161,6 +161,10 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 		{"createRulesetRelease", "POST", "/api/v1/platform/ruleset-releases", "not-an-object", anonymous, deny1},
 		{"createRulesetRelease", "POST", "/api/v1/platform/ruleset-releases", "not-an-object", plain, deny3},
 		{"createRulesetRelease", "POST", "/api/v1/platform/ruleset-releases", "not-an-object", staffSess, pass},
+		// listRulesetReleases — the staff console's history (agentry#63).
+		{"listRulesetReleases", "GET", "/api/v1/platform/ruleset-releases", nil, anonymous, deny1},
+		{"listRulesetReleases", "GET", "/api/v1/platform/ruleset-releases", nil, plain, deny3},
+		{"listRulesetReleases", "GET", "/api/v1/platform/ruleset-releases", nil, staffSess, pass},
 
 		// reportAbuse — any signed-in caller may report a visible agent;
 		// anonymous may not (follow-up needs an account).
