@@ -188,14 +188,20 @@ func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st 
 	// A worker that shares the git data directory (compose `all`, EFS in
 	// ECS) can scan git history for secrets; one that does not simply
 	// reports S2/history-not-scanned (agentry#54).
-	if repos, err := gitsrv.NewRepoStore(cfg); err == nil {
+	repos, rerr := gitsrv.NewRepoStore(cfg)
+	if rerr == nil {
 		pipeline.SetGitHistory(repos)
 	} else {
-		log.Warn("worker: git history scan unavailable", "err", err)
+		log.Warn("worker: git history scan unavailable", "err", rerr)
+		repos = nil
 	}
+
 	q := queue.NewPGClient(st, log)
 	q.SetMetrics(mx, cfg.Telemetry.QueueSampleInterval)
 	pipeline.RegisterHandlers(q)
+	// repo.pushed bookkeeping (§6.3, agentry#43): size when this role can
+	// see the repositories, last_push_at + audit either way.
+	gitsrv.NewPushBookkeeper(st, repos, audit.NewWriter(log), log).Register(q)
 	// Enterprise async handlers (M6/WG-J): webhook delivery (§9.3) and audit
 	// export (§12.6).
 	srv.RegisterQueueHandlers(q)
@@ -307,6 +313,9 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		aud := audit.NewWriter(log)
 		git := gitsrv.NewHandler(cfg, st, repos, reg, aud, log)
 		git.SetMetrics(mx)
+		// Push bookkeeping rides the queue as repo.pushed (§6.3, agentry#43);
+		// the worker (in-process for `all`) runs it.
+		git.SetQueue(queue.NewPGClient(st, log))
 		closeAll := func() error { return errors.Join(git.Close(), s.Close()) }
 		if role == "git" {
 			mux := http.NewServeMux()
