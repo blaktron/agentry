@@ -333,6 +333,17 @@ a machine that should *not* reach it should fail. If a public address ever
 served these ports, treat the compose defaults (`agentry` / `agentry`,
 `agentry-dev-secret`) as disclosed and change them.
 
+### Rate limits at the edge
+
+agentryd applies the §19 per-IP limits to the API; the web tier has none of
+its own, so the edge adds `limit_req` zones (keyed on the resolved visitor
+address) for the routes that do work for strangers: the Builder's download
+and submit routes (10/min, burst 10), the login and sign-up forms and
+`/api/v1/auth/*` (30/min, burst 30), and the git endpoints (120/min, burst
+60). Over the limit is `429` with `Retry-After`. Tune the zones in
+`edge/nginx.conf`; behind Cloudflare, mirror the same paths with a
+rate-limiting rule so the edge is the second line, not the first.
+
 ### Running behind a proxy
 
 Rate limiting (§19) buckets anonymous traffic per client IP. Behind a load
