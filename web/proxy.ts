@@ -27,7 +27,17 @@ import { NextResponse, type NextRequest } from "next/server";
 // The IdP origin is therefore allowed when one is configured (DEV-057).
 const BASE_DIRECTIVES = [
   "default-src 'self'",
+  // Styles (DEV-041 → agentry#46): the rendered pages carry NO inline
+  // <style> elements — Tailwind ships as one linked stylesheet — but ~150
+  // inline style="" attributes (theme tokens on server components). CSP3
+  // splits the two: style-src-elem is strict, style-src-attr keeps
+  // 'unsafe-inline' for the attributes, and the plain style-src stays as
+  // the fallback for browsers without the split (they see what they saw
+  // before). An injected <style> element is therefore blocked in every
+  // current browser while nothing visible changes.
   "style-src 'self' 'unsafe-inline'",
+  "style-src-elem 'self'",
+  "style-src-attr 'unsafe-inline'",
   "img-src 'self' data:",
   "font-src 'self'",
   "connect-src 'self'",
