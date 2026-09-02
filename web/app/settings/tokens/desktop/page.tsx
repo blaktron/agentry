@@ -9,11 +9,13 @@ export const metadata: Metadata = { title: "Authorize Agentry Desktop" };
 // browser sign-in (DEV-058). The app starts a one-shot listener on
 // 127.0.0.1:<port>, opens this page in the system browser, and waits.
 // Signing in happens through the normal login path (the directory service
-// under DEV-057); this page then asks ONE explicit question — mint a PAT
-// for the desktop app? — and the approve route delivers the token to the
-// loopback listener. `state` is the app's CSRF nonce: the app rejects a
-// callback whose state it did not itself generate, so a drive-by open of
-// this page cannot plant a foreign token in someone's desktop app.
+// under DEV-057); this page then asks ONE explicit question — authorize the
+// desktop app? — and the approve route hands the loopback listener a
+// single-use CODE, which the app exchanges for its PAT from its own process
+// (agentry#19: the token never rides a URL). `state` is the app's CSRF
+// nonce, bound to the grant server-side: the app rejects a callback whose
+// state it did not itself generate, so a drive-by open of this page cannot
+// plant a foreign grant in someone's desktop app.
 const PORT_MIN = 1024;
 const PORT_MAX = 65535;
 const STATE_RE = /^[A-Za-z0-9_-]{8,128}$/;
@@ -56,9 +58,10 @@ export default async function DesktopAuthorizePage({
       <Card>
         <p className="text-sm">
           The Agentry Desktop app on <strong>this computer</strong> is asking
-          for access as <strong>{user!.handle}</strong>. Approving creates a
-          personal access token and hands it to the app listening on{" "}
-          <code>127.0.0.1:{port}</code> — nothing leaves this machine.
+          for access as <strong>{user!.handle}</strong>. Approving hands the app
+          listening on <code>127.0.0.1:{port}</code> a one-time code, which it
+          exchanges for a personal access token within a minute — the token
+          itself never appears in your browser, and nothing leaves this machine.
         </p>
         <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>
           Scopes: agent read/publish, repo read/write, profile. The token

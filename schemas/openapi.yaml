@@ -257,6 +257,33 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /auth/desktop/exchange:
+    post:
+      operationId: exchangeDesktopCode
+      tags: [auth]
+      summary: Exchange a desktop sign-in code for the PAT it granted.
+      description: >
+        Unauthenticated; the code is the credential. Single use, bound to the
+        `state` nonce the desktop app generated, and valid for 60 seconds from
+        the grant. The PAT is minted at this moment and returned exactly once,
+        like `createToken`. Rate-limited with the login class (§19).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DesktopExchangeRequest"
+      responses:
+        "201":
+          description: Token minted; `token` appears only in this response.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PatCreated"
+        default:
+          $ref: "#/components/responses/Problem"
+
   /auth/oidc/{provider}/start:
     get:
       operationId: socialOidcStart
@@ -485,6 +512,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PatCreated"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /user/tokens/desktop-grant:
+    post:
+      operationId: createDesktopGrant
+      tags: [users]
+      summary: Record a one-time grant for the desktop app's browser sign-in.
+      description: >
+        Session-only. The web tier's authorize page calls this after the user
+        consents; the response is a short-lived, single-use `code` bound to the
+        app's `state` nonce. No token is minted here — the desktop app
+        exchanges the code at `POST /auth/desktop/exchange` from its own
+        process, so the PAT never travels in a URL (DEV-058 hardening,
+        agentry#19). The grant's scopes are fixed to the desktop set
+        (agent:read, agent:publish, repo:read, repo:write, user:profile).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DesktopGrantRequest"
+      responses:
+        "201":
+          description: Grant recorded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DesktopGrant"
         default:
           $ref: "#/components/responses/Problem"
 
@@ -2740,6 +2796,36 @@ components:
             Bind the token to this org (§12.4). Requires the current session to
             be SSO-fresh for the org; org-bound tokens are capped at 90 days and
             are the only tokens accepted against an enforced-SSO org's resources.
+
+    DesktopGrantRequest:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          pattern: "^[A-Za-z0-9_-]{8,128}$"
+          description: The desktop app's nonce; the exchange must present the same value.
+
+    DesktopGrant:
+      type: object
+      required: [code, expiresAt]
+      properties:
+        code:
+          type: string
+          description: Single-use exchange code. Appears only in this response.
+        expiresAt:
+          type: string
+          format: date-time
+
+    DesktopExchangeRequest:
+      type: object
+      required: [code, state]
+      properties:
+        code:
+          type: string
+        state:
+          type: string
+          pattern: "^[A-Za-z0-9_-]{8,128}$"
 
     Scope:
       type: string
