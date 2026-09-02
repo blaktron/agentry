@@ -69,6 +69,7 @@ func (b *PushBookkeeper) Register(q queue.Client) {
 		}
 		return b.Run(ctx, args)
 	})
+	b.registerGC(q)
 }
 
 // Run does the bookkeeping for one push: size + last_push_at, then the
