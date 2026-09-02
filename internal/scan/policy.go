@@ -3,6 +3,8 @@ package scan
 import (
 	"encoding/json"
 	"fmt"
+	"path"
+	"strings"
 )
 
 // Policy is the §8.6 policy document. The platform baseline is the floor;
@@ -15,6 +17,12 @@ type Policy struct {
 	BlockedCapabilities []string `json:"blockedCapabilities,omitempty"`
 	// AllowedLicenses: public publishes outside this list are rejected.
 	AllowedLicenses []string `json:"allowedLicenses,omitempty"`
+	// BlockedMcpServers: submissions whose manifest declares one of these
+	// MCP servers are rejected at submission (RUNNER-PLAN-3 §P1 org
+	// blocklist, agentry#52). Entries are "npm:<package>" / "pypi:<package>";
+	// path.Match globs are allowed ("npm:@evil/*", "pypi:*-fetch"). Unions
+	// toward strict like blockedCapabilities.
+	BlockedMcpServers []string `json:"blockedMcpServers,omitempty"`
 	// MaxAutoPublishSeverity tightens the §8.5 table: worst auto-publishable
 	// severity. "" means the baseline default (low).
 	MaxAutoPublishSeverity string `json:"maxAutoPublishSeverity,omitempty"`
@@ -53,6 +61,15 @@ func ParsePolicy(doc []byte) (Policy, error) {
 	if len(p.RequireHumanReview) > 0 {
 		if _, err := parseReviewMode(p.RequireHumanReview); err != nil {
 			return Policy{}, err
+		}
+	}
+	for _, b := range p.BlockedMcpServers {
+		b = strings.TrimSpace(b)
+		if !strings.HasPrefix(b, "npm:") && !strings.HasPrefix(b, "pypi:") {
+			return Policy{}, fmt.Errorf("scan: policy: blockedMcpServers entry %q must start with npm: or pypi:", b)
+		}
+		if _, err := path.Match(b, ""); err != nil {
+			return Policy{}, fmt.Errorf("scan: policy: blockedMcpServers entry %q: %w", b, err)
 		}
 	}
 	return p, nil
@@ -115,6 +132,7 @@ func Merge(baseline, org Policy) Policy {
 
 	// blockedCapabilities / allowedLicenses: union / intersection toward strict.
 	out.BlockedCapabilities = union(baseline.BlockedCapabilities, org.BlockedCapabilities)
+	out.BlockedMcpServers = union(baseline.BlockedMcpServers, org.BlockedMcpServers)
 	if len(org.AllowedLicenses) > 0 {
 		if len(baseline.AllowedLicenses) == 0 {
 			out.AllowedLicenses = org.AllowedLicenses
