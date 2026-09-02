@@ -384,6 +384,14 @@ CLOUDFLARE_TUNNEL_TOKEN=…          # Zero Trust → Networks → Tunnels → y
 COMPOSE_PROFILES=server,tunnel     # so a plain `docker compose up -d` includes it
 ```
 
+Visitors' addresses survive the tunnel: cloudflared forwards Cloudflare's
+`CF-Connecting-IP`, the edge trusts that header only when the peer is a
+container of this stack (docker's `172.16.0.0/12` pools), and it writes
+the resolved address as the single `X-Forwarded-For` entry agentryd and
+authentik read. Keep `AGENTRY_TRUSTED_PROXIES=1`; a direct connection to
+the edge cannot forge the header because the edge replaces it rather than
+appending to it.
+
 The `cloudflared` service is behind the `tunnel` profile so a stack without
 a token still starts. The token reaches the connector only as the
 `TUNNEL_TOKEN` environment variable — not as a command-line argument, so it
