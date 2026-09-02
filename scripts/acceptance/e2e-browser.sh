@@ -18,8 +18,9 @@ PSQL="${PGBIN:-}/psql"
 [ -x "$PSQL" ] || PSQL="$(command -v psql || true)"
 [ -n "$PSQL" ] || { echo "psql not found — set PGBIN"; exit 1; }
 
-PORT=8199
-WEBPORT=3099
+# Free ports unless pinned: several runners share one CI host (agentry#133).
+PORT="${AGENTRY_ACCEPT_PORT:-$(python3 -c "import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()")}"
+WEBPORT="${AGENTRY_ACCEPT_WEBPORT:-$(python3 -c "import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()")}"
 WORK=$(mktemp -d)
 make build >/dev/null
 if [ ! -d web/node_modules ]; then (cd web && npm ci --silent); fi
