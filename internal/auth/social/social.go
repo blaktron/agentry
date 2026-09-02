@@ -77,6 +77,23 @@ type Identity struct {
 	Email             string
 	EmailVerified     bool
 	DisplayName       string
+	// AMR/ACR carry the ID token's authentication-method claims (OIDC
+	// providers only; the GitHub shim has no ID token). See oidc.Claims.
+	AMR []string
+	ACR string
+}
+
+// MFAAsserted reports whether AMR names a second factor: the RFC 8176
+// values for possession/biometric/OTP factors, "mfa" itself, and the
+// provider-specific spellings seen in practice. "pwd" alone is not one.
+func (id *Identity) MFAAsserted() bool {
+	for _, m := range id.AMR {
+		switch strings.ToLower(m) {
+		case "mfa", "otp", "hwk", "swk", "sms", "tel", "face", "fpt", "iris", "retina", "vbm", "pin", "totp", "webauthn", "u2f", "hotp":
+			return true
+		}
+	}
+	return false
 }
 
 // Config configures one provider. The URL overrides exist so tests can point
@@ -193,6 +210,8 @@ func (p *oidcProvider) Exchange(ctx context.Context, code, verifier, nonce strin
 		NamespacedSubject: p.name + ":" + claims.Subject,
 		Email:             claims.Email,
 		EmailVerified:     claims.EmailVerified,
+		AMR:               claims.AMR,
+		ACR:               claims.ACR,
 	}, nil
 }
 

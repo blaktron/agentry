@@ -38,6 +38,12 @@ type Claims struct {
 	Email         string
 	EmailVerified bool
 	Issuer        string
+	// AMR is the token's Authentication Methods References (RFC 8176) as
+	// the IdP sent them, e.g. ["pwd","mfa"]; nil when absent. ACR is the
+	// Authentication Context Class Reference, if any. The registry uses
+	// AMR as evidence that a second factor was used (agentry#23).
+	AMR []string
+	ACR string
 }
 
 // New builds the RP. coreoidc.NewProvider performs discovery and pins the
@@ -110,6 +116,8 @@ func (rp *RP) Exchange(ctx context.Context, code, verifier, expectedNonce string
 		Sub           string `json:"sub"`
 		Email         string `json:"email"`
 		EmailVerified any    `json:"email_verified"`
+		AMR           any    `json:"amr"`
+		ACR           string `json:"acr"`
 	}
 	if err := idToken.Claims(&raw); err != nil {
 		return nil, fmt.Errorf("oidc: decode claims: %w", err)
@@ -119,6 +127,8 @@ func (rp *RP) Exchange(ctx context.Context, code, verifier, expectedNonce string
 		Email:         strings.ToLower(strings.TrimSpace(raw.Email)),
 		EmailVerified: asBool(raw.EmailVerified),
 		Issuer:        idToken.Issuer,
+		AMR:           asStrings(raw.AMR),
+		ACR:           raw.ACR,
 	}
 	if c.Subject == "" {
 		c.Subject = raw.Sub
@@ -127,6 +137,27 @@ func (rp *RP) Exchange(ctx context.Context, code, verifier, expectedNonce string
 		return nil, fmt.Errorf("oidc: id_token has no subject")
 	}
 	return c, nil
+}
+
+// asStrings reads amr as the JSON array RFC 8176 specifies, tolerating a
+// single string (seen in the wild) and dropping anything else.
+func asStrings(v any) []string {
+	switch x := v.(type) {
+	case []any:
+		out := make([]string, 0, len(x))
+		for _, e := range x {
+			if s, ok := e.(string); ok && s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	case string:
+		if x == "" {
+			return nil
+		}
+		return []string{x}
+	}
+	return nil
 }
 
 // asBool tolerates providers that encode email_verified as a JSON bool or a

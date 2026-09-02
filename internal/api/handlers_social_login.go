@@ -294,6 +294,13 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 		problemInternal(w, r)
 		return
 	}
+	// Evidence for the public-publish gate (agentry#23): the ID token's
+	// `amr` named a second factor, so record it on the account.
+	if id.MFAAsserted() {
+		if err := s.q().SetUserIdPMFA(r.Context(), userID); err != nil {
+			s.log.Warn("social login: record idp mfa", "err", err)
+		}
+	}
 
 	user, err := s.q().GetUserByID(r.Context(), userID)
 	if err != nil {
