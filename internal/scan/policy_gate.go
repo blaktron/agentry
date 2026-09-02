@@ -72,18 +72,32 @@ func CheckSubmissionPolicy(pol Policy, in registry.PolicySubmission) []error {
 
 // licenseAllowed compares SPDX ids case-insensitively: SPDX ids are
 // case-sensitive by spec, but rejecting a publish over "apache-2.0" vs
-// "Apache-2.0" would be a policy engine failing on punctuation.
+// "Apache-2.0" would be a policy engine failing on punctuation. A license
+// EXPRESSION (agentry#28) is allowed only when every identifier in it is —
+// the strict reading: an org that allows MIT has not allowed
+// "MIT AND Proprietary-EULA", and for a disjunction the consumer may end
+// up under whichever side, so both must be acceptable.
 func licenseAllowed(allowed []string, license string) bool {
-	got := strings.ToLower(strings.TrimSpace(license))
-	if got == "" {
+	if strings.TrimSpace(license) == "" {
 		return false
 	}
-	for _, a := range allowed {
-		if strings.ToLower(strings.TrimSpace(a)) == got {
-			return true
+	_, ids, err := manifest.ParseSPDXExpression(license)
+	if err != nil || len(ids) == 0 {
+		return false
+	}
+	for _, id := range ids {
+		ok := false
+		for _, a := range allowed {
+			if strings.EqualFold(strings.TrimSpace(a), id) {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 // hasEvals reports whether the workspace carries a non-empty evals/ tree.

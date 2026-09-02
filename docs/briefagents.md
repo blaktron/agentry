@@ -95,7 +95,7 @@ are rejected, so a typo cannot silently disable a control.
 | `kind` | yes | `skill` \| `prompt-agent` \| `mcp-server` (table below) |
 | `version` | yes | strict semver without a leading `v`; equals the git tag when publishing from a tag; must exceed every existing version on its channel |
 | `summary` | yes | one plain-text line, ≤140 characters |
-| `license` | public publish | SPDX identifier matching the LICENSE file |
+| `license` | public publish | SPDX identifier or expression (`MIT OR Apache-2.0`) matching the LICENSE file |
 | `authors` | no | `[{name, email?}, …]` |
 | `homepage` | no | informational URL |
 | `tags` | no | lowercase `[a-z0-9-]` search facets |
