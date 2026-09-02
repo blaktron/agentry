@@ -1,7 +1,10 @@
-// POST /settings/tokens/desktop/approve — mint a PAT for the desktop app
-// and deliver it to the app's loopback listener (DEV-058). The redirect
-// target is pinned to 127.0.0.1 with a validated port: this route can hand
-// a token to a process on the user's own machine and nowhere else.
+// POST /settings/tokens/desktop/approve — record a one-time grant for the
+// desktop app and hand its loopback listener the exchange CODE (DEV-058,
+// hardened per agentry#19). No PAT is minted here: the app exchanges the
+// code at POST /api/v1/auth/desktop/exchange from its own process, so the
+// token never rides a URL or lands in browser history. The redirect target
+// is pinned to 127.0.0.1 with a validated port: this route can hand a code
+// to a process on the user's own machine and nowhere else.
 import { NextRequest, NextResponse } from "next/server";
 import { redirectBack, sameOrigin, readForm } from "@/lib/forms";
 import { apiSend, problemDetail } from "@/lib/session";
@@ -9,11 +12,6 @@ import { apiSend, problemDetail } from "@/lib/session";
 const PORT_MIN = 1024;
 const PORT_MAX = 65535;
 const STATE_RE = /^[A-Za-z0-9_-]{8,128}$/;
-
-// The scope set the desktop app's surfaces use: browse/install (agent:read,
-// repo:read), Build → publish (agent:publish, repo:write), identity
-// (user:profile). Deliberately no review:act or org scopes.
-const SCOPES = ["agent:read", "agent:publish", "repo:read", "repo:write", "user:profile"];
 
 export async function POST(req: NextRequest) {
   if (!sameOrigin(req)) return new NextResponse("cross-origin form post rejected", { status: 403 });
@@ -24,13 +22,14 @@ export async function POST(req: NextRequest) {
     return new NextResponse("invalid desktop callback parameters", { status: 400 });
   }
 
-  const name = `Agentry Desktop (${new Date().toISOString().slice(0, 10)})`;
-  const res = await apiSend("POST", "/user/tokens", { name, scopes: SCOPES });
+  // The scope set is fixed server-side (the desktop set; no review:act, no
+  // org scopes) — see internal/api/handlers_desktop_grant.go.
+  const res = await apiSend("POST", "/user/tokens/desktop-grant", { state });
   if (!res.ok) return redirectBack(req, "/settings", { error: await problemDetail(res) });
-  const created = (await res.json()) as { token: string };
+  const grant = (await res.json()) as { code: string };
 
   const cb = new URL(`http://127.0.0.1:${port}/callback`);
   cb.searchParams.set("state", state);
-  cb.searchParams.set("token", created.token);
+  cb.searchParams.set("code", grant.code);
   return NextResponse.redirect(cb, 303);
 }
