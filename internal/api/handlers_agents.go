@@ -32,6 +32,8 @@ func (s *Server) agentToAPI(a registry.Agent, maintain bool) Agent {
 	if maintain {
 		ap := a.AutoPublishTags
 		out.AutoPublishTags = &ap
+		fp := a.AllowForcePush
+		out.AllowForcePush = &fp
 	}
 	return out
 }
@@ -212,6 +214,10 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	if req.AutoPublishTags != nil {
 		params.AutoPublishTags = req.AutoPublishTags
 		detail["autoPublishTags"] = *req.AutoPublishTags
+	}
+	if req.AllowForcePush != nil {
+		params.AllowForcePush = req.AllowForcePush
+		detail["allowForcePush"] = *req.AllowForcePush
 	}
 	if len(detail) == 0 {
 		problemValidation(w, r, "nothing to update")
