@@ -44,14 +44,17 @@ type Server struct {
 	log      *slog.Logger
 	auditW   *audit.Writer
 	notifier notify.Notifier
-	sealer   *auth.Sealer
-	signer   scan.Signer
-	limits   *ratelimit.Buckets
-	classes  limitClasses
-	reg      *registry.Service
-	blobs    registry.BlobStore
-	pipeline *scan.Pipeline
-	renderer *render.Renderer
+	// dirEraser deletes the sign-in account in the directory service on
+	// erasure (agentry#20); nil when auth.idpAdminURL is unset.
+	dirEraser directoryEraser
+	sealer    *auth.Sealer
+	signer    scan.Signer
+	limits    *ratelimit.Buckets
+	classes   limitClasses
+	reg       *registry.Service
+	blobs     registry.BlobStore
+	pipeline  *scan.Pipeline
+	renderer  *render.Renderer
 	// Enterprise (M6/WG-J): webhook fan-out, DNS resolver for domain
 	// verification, and the shared SAML assertion replay cache.
 	webhooks   *webhook.Dispatcher
@@ -177,6 +180,9 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		// git-tag auto-publish path is covered as well as the API.
 		srv.reg.SetPolicyGate(srv.pipeline)
 		srv.reg.SetPublicPublish2FA(publicPublish2FAEnabled(cfg))
+		if cfg.Auth.IdPAdminURL != "" && cfg.Auth.IdPAdminToken != "" {
+			srv.dirEraser = newAuthentikEraser(cfg.Auth.IdPAdminURL, cfg.Auth.IdPAdminToken)
+		}
 		srv.reg.SetLogger(log)
 		// A ruleset semver we have never seen means the catalogue was judged
 		// by older rules (§8.7).

@@ -203,11 +203,50 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		return
 	}
 
+	// The other half (agentry#20): with credentials in the directory service
+	// the person's sign-in account — email, display name, password hash —
+	// outlives the registry erasure and can sign in again to JIT-create a
+	// fresh account. Delete it there too. Deliberately AFTER the registry
+	// transaction: a directory deletion that succeeded before a failed
+	// registry erasure would lock the person out of an account whose data
+	// still exists. A failure here is audited and logged, never hidden, and
+	// does not undo the erasure that already happened.
+	s.eraseDirectoryAccount(r, p.UserID, user.Email)
+
 	http.SetCookie(w, &http.Cookie{
 		Name: sessionCookieName, Value: "", Path: "/", HttpOnly: true,
 		Secure: s.cfg.Auth.CookieSecure, SameSite: http.SameSiteLaxMode, MaxAge: -1,
 	})
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// eraseDirectoryAccount runs the directory half of erasure and records the
+// outcome as a user.directory_erase audit event: deleted, not-found,
+// not-configured, or failed (with the error).
+func (s *Server) eraseDirectoryAccount(r *http.Request, userID uuid.UUID, email string) {
+	outcome := "not-configured"
+	detail := map[string]any{}
+	if s.dirEraser != nil {
+		deleted, err := s.dirEraser.EraseByEmail(r.Context(), email)
+		switch {
+		case err != nil:
+			outcome = "failed"
+			detail["error"] = err.Error()
+			s.log.Error("gdpr: directory erasure failed — finish by hand", "user", userID, "err", err)
+		case deleted:
+			outcome = "deleted"
+		default:
+			outcome = "not-found"
+		}
+	}
+	detail["directoryErasure"] = outcome
+	e := auditEvent(r, audit.ActionUserDirectoryErase)
+	e.Actor, e.ActorKind = userID, audit.ActorUser
+	e.TargetKind, e.TargetID = "user", userID
+	e.Detail = detail
+	if err := s.auditW.Write(r.Context(), s.q(), e); err != nil {
+		s.log.Error("gdpr: audit directory erasure", "err", err)
+	}
 }
 
 // transferAgents moves every agent in a personal namespace to an org, in one

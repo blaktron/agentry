@@ -91,7 +91,8 @@ export default function PrivacyPage() {
       <Section title="Your rights">
         <p>
           You can access and correct your account details in Settings, and delete your account at
-          any time. Deletion removes your personal information; if you published public BriefAgents,
+          any time. Deletion removes your personal information from the registry and deletes your
+          sign-in account in our directory service in the same step; if you published public BriefAgents,
           you choose whether they are withdrawn or transferred, and the published records are
           pseudonymized rather than erased — installed copies depend on their integrity. Depending
           on where you live you may have additional rights (access, portability, erasure,

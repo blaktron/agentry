@@ -234,6 +234,13 @@ services:
       AGENTRY_SOCIAL_AUTHENTIK_CLIENT_ID: ${AGENTRY_SOCIAL_AUTHENTIK_CLIENT_ID:-}
       AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET: ${AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET:-}
       AGENTRY_SOCIAL_AUTHENTIK_ISSUER: ${AGENTRY_SOCIAL_AUTHENTIK_ISSUER:-}
+      # Account erasure reaches into the directory too (agentry#20): the
+      # server deletes the sign-in account through authentik's API. The
+      # bootstrap token works; a dedicated token with rights over users is
+      # better. Empty leaves erasure registry-only (the privacy policy then
+      # has to say so).
+      AGENTRY_IDP_ADMIN_URL: ${AGENTRY_IDP_ADMIN_URL:-}
+      AGENTRY_IDP_ADMIN_TOKEN: ${AGENTRY_IDP_ADMIN_TOKEN:-}
       # Archive store against minio (S3-compatible), exercising the same code
       # path SaaS uses rather than the local-FS one.
       AGENTRY_STORAGE_KIND: s3

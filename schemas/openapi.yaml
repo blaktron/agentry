@@ -412,6 +412,10 @@ paths:
         agents are transferred to an organization the caller administers.
         When the account has published public versions the choice is
         explicit: omitting `publishedContent` is a 400, never a silent yank.
+        When the deployment holds credentials in a directory service and is
+        configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account
+        there is deleted in the same step; the outcome is audited as
+        `user.directory_erase`.
       parameters:
         - name: publishedContent
           in: query
