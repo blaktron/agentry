@@ -218,3 +218,30 @@ func TestAuthorHeadingsAreDemoted(t *testing.T) {
 		}
 	}
 }
+
+// Images render as a visible placeholder, never as an <img> the CSP would
+// refuse silently (agentry#29). The alt text and source are shown, escaped.
+func TestImagesBecomeVisiblePlaceholders(t *testing.T) {
+	r := New()
+	out, err := r.Markdown([]byte("Before\n\n![Architecture <diagram>](https://cdn.example/arch.png \"t\")\n\nAfter"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "<img") {
+		t.Fatalf("an <img> reached the output: %s", out)
+	}
+	for _, want := range []string{"img-placeholder", "Image not shown", "Architecture &lt;diagram&gt;", "https://cdn.example/arch.png"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("placeholder lacks %q: %s", want, out)
+		}
+	}
+	if strings.Contains(out, "<diagram>") {
+		t.Fatalf("alt text was not escaped: %s", out)
+	}
+	// A data: image is no different: nothing but our own origin is ever
+	// loaded, and the note says so.
+	out, _ = r.Markdown([]byte("![](data:image/png;base64,AAAA)"))
+	if strings.Contains(out, "<img") || !strings.Contains(out, "img-placeholder") {
+		t.Fatalf("data image: %s", out)
+	}
+}

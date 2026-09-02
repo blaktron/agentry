@@ -17,6 +17,7 @@ import (
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/renderer"
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
@@ -51,6 +52,11 @@ func New() *Renderer {
 			// Raw HTML never passes through (§10.3: "no raw HTML pass-through
 			// ever"). Unsafe mode is simply not enabled; goldmark escapes it.
 			goldmarkhtml.WithXHTML(),
+			// Images become a visible placeholder (agentry#29, DEV-049):
+			// the web app's CSP refuses every image source but its own, so
+			// an <img> would render as nothing and the reader would not
+			// know an image was there.
+			renderer.WithNodeRenderers(util.Prioritized(imagePlaceholder{}, 100)),
 		),
 	)
 
@@ -72,14 +78,13 @@ func New() *Renderer {
 	p.RequireNoReferrerOnLinks(true)
 	p.AddTargetBlankToFullyQualifiedLinks(true)
 	p.AllowElements("a")
-	// Images: no SVG (raster only). §10.3's camo-style image proxy is NOT
-	// built (DEV-049) — there is no rewriting step here, so an author's
-	// absolute image URL survives sanitization and is then refused by the
-	// web app's `img-src 'self' data:` CSP. That closes the tracking-pixel
-	// and third-party-request hole §10.3 is about, at the cost of external
-	// images not rendering at all.
-	p.AllowAttrs("src", "alt", "title").OnElements("img")
-	p.AllowElements("img")
+	// Images: none. §10.3's camo-style image proxy is NOT built (DEV-049),
+	// and the web app's `img-src 'self' data:` CSP would refuse an
+	// author's image anyway, which closes the tracking-pixel and
+	// third-party-request hole §10.3 is about. Rather than an <img> that
+	// renders as nothing, the markdown renderer above emits a visible
+	// placeholder naming the alt text and the source (agentry#29); no
+	// <img> element reaches the output at all.
 	// Footnote/heading anchors emitted by goldmark itself.
 	p.AllowAttrs("id").Matching(bluemonday.SpaceSeparatedTokens).OnElements("li", "section", "sup", "h1", "h2", "h3", "h4", "h5", "h6")
 	p.AllowAttrs("class").Matching(bluemonday.SpaceSeparatedTokens).OnElements("span", "section", "sup", "li")
@@ -194,3 +199,60 @@ func (r *Renderer) PlainText(src []byte) string {
 }
 
 func htmlUnescape(s string) string { return htmlpkg.UnescapeString(s) }
+
+// imagePlaceholder renders markdown images as a visible note instead of an
+// <img> the browser would refuse (agentry#29). The alt text and the source
+// are shown, HTML-escaped, so the reader can tell what was there and where
+// it lives; the placeholder is a <span class="img-placeholder">, which the
+// sanitizer's allowlist admits and the web app styles.
+type imagePlaceholder struct{}
+
+func (imagePlaceholder) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
+	reg.Register(ast.KindImage, renderImagePlaceholder)
+}
+
+func renderImagePlaceholder(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
+	if !entering {
+		return ast.WalkContinue, nil
+	}
+	img, ok := node.(*ast.Image)
+	if !ok {
+		return ast.WalkContinue, nil
+	}
+	alt := strings.TrimSpace(string(imageAltText(source, img)))
+	dest := strings.TrimSpace(string(img.Destination))
+	_, _ = w.WriteString(`<span class="img-placeholder" role="note">Image not shown — this page does not load images`)
+	if alt != "" {
+		_, _ = w.WriteString(": " + htmlpkg.EscapeString(alt))
+	}
+	if dest != "" {
+		if len(dest) > 200 {
+			dest = dest[:200] + "…"
+		}
+		_, _ = w.WriteString(" (" + htmlpkg.EscapeString(dest) + ")")
+	}
+	_, _ = w.WriteString("</span>")
+	return ast.WalkSkipChildren, nil
+}
+
+// imageAltText concatenates the text segments under an image node — its
+// alt text in markdown — without rendering child markup.
+func imageAltText(source []byte, n ast.Node) []byte {
+	var out []byte
+	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
+		switch t := c.(type) {
+		case *ast.Text:
+			out = append(out, t.Segment.Value(source)...)
+		case *ast.RawHTML:
+			// Angle-bracketed alt text parses as raw HTML; it is still just
+			// the author's words here and is escaped on output.
+			for i := 0; i < t.Segments.Len(); i++ {
+				seg := t.Segments.At(i)
+				out = append(out, seg.Value(source)...)
+			}
+		default:
+			out = append(out, imageAltText(source, c)...)
+		}
+	}
+	return out
+}
