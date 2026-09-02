@@ -25,8 +25,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -161,17 +166,52 @@ func (ik *idempotency) abandon(r *http.Request) {
 	}
 }
 
+// idempotencyMaxBody bounds what a guarded request may carry. The largest
+// guarded body is a cli-upload archive (§19: 10 MB post-filter, and the
+// handler's own 12 MiB cap), so this sits above that; the old 1 MiB cap
+// turned every real upload with an Idempotency-Key into a 400 (agentry#22).
+const idempotencyMaxBody = 16 << 20
+
 // hashRequestBody buffers and hashes the body, leaving r.Body re-readable.
+//
+// A multipart body is hashed by its PARTS — each part's field name, file
+// name and bytes, in order — not by its raw bytes: every multipart encoder
+// picks a fresh random boundary, so a byte-for-byte hash would make a
+// client's honest retry of the same upload a 409 "different request body"
+// (agentry#22). JSON and other bodies hash as sent.
 func hashRequestBody(w http.ResponseWriter, r *http.Request) (string, error) {
 	if r.Body == nil {
 		return hex.EncodeToString(sha256.New().Sum(nil)), nil
 	}
-	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, idempotencyMaxBody))
 	if err != nil {
 		return "", err
 	}
 	_ = r.Body.Close()
 	r.Body = io.NopCloser(bytes.NewReader(raw))
+
+	if mt, params, perr := mime.ParseMediaType(r.Header.Get("Content-Type")); perr == nil && strings.HasPrefix(mt, "multipart/") && params["boundary"] != "" {
+		h := sha256.New()
+		mr := multipart.NewReader(bytes.NewReader(raw), params["boundary"])
+		for {
+			part, err := mr.NextPart()
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			if err != nil {
+				// Not parseable as multipart after all: fall back to the
+				// raw bytes, which is never wrong, only stricter.
+				sum := sha256.Sum256(raw)
+				return hex.EncodeToString(sum[:]), nil
+			}
+			_, _ = fmt.Fprintf(h, "%s\x00%s\x00", part.FormName(), part.FileName())
+			if _, err := io.Copy(h, part); err != nil {
+				return "", err
+			}
+			_, _ = h.Write([]byte{0})
+		}
+		return hex.EncodeToString(h.Sum(nil)), nil
+	}
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:]), nil
 }

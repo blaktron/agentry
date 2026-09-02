@@ -17,6 +17,13 @@ import (
 // and submits the cli-upload multipart to the running server with a PAT.
 func (env *testEnv) uploadVersionCLI(ns, name, pat string, files map[string]string) (int, string) {
 	env.t.Helper()
+	return env.uploadVersionCLIWithHeaders(ns, name, pat, files, nil)
+}
+
+// uploadVersionCLIWithHeaders is uploadVersionCLI with extra request headers
+// (Idempotency-Key in the replay tests).
+func (env *testEnv) uploadVersionCLIWithHeaders(ns, name, pat string, files map[string]string, headers map[string]string) (int, string) {
+	env.t.Helper()
 	ws := env.t.TempDir()
 	for path, content := range files {
 		full := filepath.Join(ws, path)
@@ -56,6 +63,9 @@ func (env *testEnv) uploadVersionCLI(ns, name, pat string, files map[string]stri
 	req, _ := http.NewRequest(http.MethodPost, env.srv.URL+"/api/v1/agents/"+ns+"/"+name+"/versions", &body)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	req.Header.Set("Authorization", "Bearer "+pat)
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
 	res, err := env.srv.Client().Do(req)
 	if err != nil {
 		env.t.Fatal(err)
