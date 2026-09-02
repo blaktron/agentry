@@ -77,7 +77,7 @@ export default async function SettingsPage({
   const externalOnly = meta?.features?.externalOnly === true;
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">Settings</h1>
 
       {q.ok && (
@@ -91,6 +91,10 @@ export default async function SettingsPage({
         </p>
       )}
 
+      {/* Same responsive shell as the other authed pages: one column on
+          phones, profile and security side by side from lg up, tokens and
+          sessions full width (agentry#111). */}
+      <div className="grid gap-6 lg:grid-cols-2">
       <Card>
         <h2 className="mb-2 font-semibold">Profile</h2>
         <p className="mb-3 text-sm" style={{ color: "var(--color-muted)" }}>
@@ -157,7 +161,7 @@ export default async function SettingsPage({
         )}
       </Card>
 
-      <Card>
+      <Card className="lg:col-span-2">
         <h2 className="mb-2 font-semibold">Personal access tokens</h2>
         {tokens.length === 0 ? (
           <p className="mb-3 text-sm" style={{ color: "var(--color-muted)" }}>
@@ -218,7 +222,7 @@ export default async function SettingsPage({
         </form>
       </Card>
 
-      <Card>
+      <Card className="lg:col-span-2">
         <h2 className="mb-2 font-semibold">Sessions</h2>
         {sessions === undefined ? (
           <p className="text-sm" style={{ color: "var(--color-muted)" }}>
@@ -273,6 +277,7 @@ export default async function SettingsPage({
           </>
         )}
       </Card>
+      </div>
     </div>
   );
 }
