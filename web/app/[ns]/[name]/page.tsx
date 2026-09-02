@@ -111,7 +111,7 @@ export default async function AgentPage({
   const agent = await apiGet<Agent>(base, { revalidate: 30 });
   if (!agent) notFound();
 
-  const [versions, readmeHtml, advisories, stats, org] = await Promise.all([
+  const [versions, readmeHtmlPublished, advisories, stats, org] = await Promise.all([
     apiGet<AgentVersion[]>(`${base}/versions`, { revalidate: 30 }).catch(() => null),
     apiGetText(`${base}/readme`, { revalidate: 60 }).catch(() => null),
     apiGet<Advisory[]>(`/advisories?affecting=${n}/${a}`, { revalidate: 60 }).catch(() => null),
@@ -124,8 +124,17 @@ export default async function AgentPage({
   ]);
 
   const published = (versions ?? []).filter((v) => v.status === "published");
-  const latest = published[0];
+  // With nothing published yet, show the newest version's contract, report
+  // and README anyway — its owner and its reviewer are the readers — under
+  // an "awaiting review" banner and with installs hidden (agentry#119).
+  const latestPublished = Boolean(published[0]);
+  const latest = published[0] ?? (versions ?? [])[0];
   const lv = latest ? encodeURIComponent(latest.version) : null;
+  const readmeHtml = latestPublished
+    ? readmeHtmlPublished
+    : lv
+      ? await apiGetText(`${base}/readme?version=${lv}`, { revalidate: 60 }).catch(() => null)
+      : null;
 
   const [report, manifest] = await Promise.all([
     lv ? apiGet<ScanReport>(`${base}/versions/${lv}/report`, { revalidate: 60 }).catch(() => null) : null,
@@ -178,6 +187,24 @@ export default async function AgentPage({
 
   return (
     <div className="space-y-8">
+      {!quarantined && latest && !latestPublished && (
+        <div
+          className="rounded-lg border p-4"
+          style={{
+            borderColor: "var(--color-sev-medium)",
+            background: "color-mix(in srgb, var(--color-sev-medium) 10%, transparent)",
+          }}
+        >
+          <p className="font-medium" style={{ color: "var(--color-sev-medium)" }}>
+            No version of this BriefAgent is published yet.
+          </p>
+          <p className="mt-1 text-sm">
+            Showing v{latest.version} ({latest.status.replace("_", " ")}). Nothing here is
+            installable until a version is published; the declared contract, report and README
+            below are for its owner and reviewers.
+          </p>
+        </div>
+      )}
       {quarantined && (
         <div
           className="rounded-lg border p-4"
@@ -361,46 +388,57 @@ export default async function AgentPage({
             </p>
           </Card>
 
-          <Card>
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
+          {latestPublished ? (
+            <Card>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
+                  Install
+                </h2>
+                {/* Static target selector: three links, no client JS. The
+                    selected one is a plain span so the current state is not
+                    also a link to itself. */}
+                <nav className="flex gap-2 text-xs" aria-label="Install target">
+                  {TARGETS.map((t) =>
+                    t === target ? (
+                      <span key={t} className="rounded border px-2 py-0.5 font-medium" style={{ borderColor: "var(--color-accent)", color: "var(--color-accent)" }}>
+                        {t}
+                      </span>
+                    ) : (
+                      <Link
+                        key={t}
+                        href={`/${n}/${a}?target=${t}`}
+                        className="rounded border px-2 py-0.5"
+                        style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}
+                      >
+                        {t}
+                      </Link>
+                    ),
+                  )}
+                </nav>
+              </div>
+              <div className="mt-3 space-y-2">
+                <CodeBlock>
+                  {`agentry install ${agent.namespace}/${agent.name}${latest ? `@${latest.version}` : ""}` +
+                    (isDefaultTarget ? "" : ` --target=${target}`)}
+                </CodeBlock>
+                <CodeBlock>{`git clone ${agent.gitHttpUrl}`}</CodeBlock>
+              </div>
+              <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>
+                {isDefaultTarget
+                  ? `${target} is the default target for a ${agent.kind}, so the flag is not needed.`
+                  : `${target} is not the default for a ${agent.kind}; the flag is required.`}
+              </p>
+            </Card>
+          ) : (
+            <Card>
               <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
                 Install
               </h2>
-              {/* Static target selector: three links, no client JS. The
-                  selected one is a plain span so the current state is not
-                  also a link to itself. */}
-              <nav className="flex gap-2 text-xs" aria-label="Install target">
-                {TARGETS.map((t) =>
-                  t === target ? (
-                    <span key={t} className="rounded border px-2 py-0.5 font-medium" style={{ borderColor: "var(--color-accent)", color: "var(--color-accent)" }}>
-                      {t}
-                    </span>
-                  ) : (
-                    <Link
-                      key={t}
-                      href={`/${n}/${a}?target=${t}`}
-                      className="rounded border px-2 py-0.5"
-                      style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}
-                    >
-                      {t}
-                    </Link>
-                  ),
-                )}
-              </nav>
-            </div>
-            <div className="mt-3 space-y-2">
-              <CodeBlock>
-                {`agentry install ${agent.namespace}/${agent.name}${latest ? `@${latest.version}` : ""}` +
-                  (isDefaultTarget ? "" : ` --target=${target}`)}
-              </CodeBlock>
-              <CodeBlock>{`git clone ${agent.gitHttpUrl}`}</CodeBlock>
-            </div>
-            <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>
-              {isDefaultTarget
-                ? `${target} is the default target for a ${agent.kind}, so the flag is not needed.`
-                : `${target} is not the default for a ${agent.kind}; the flag is required.`}
-            </p>
-          </Card>
+              <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
+                Not installable: no published version. Install commands appear here once one is.
+              </p>
+            </Card>
+          )}
 
           {deps.length > 0 && (
             <Card>
