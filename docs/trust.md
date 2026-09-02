@@ -109,9 +109,12 @@ notification path, which is why pinning versions in a lockfile you actually
 review is worth the trouble.
 
 Advisories are shown on the affected agent's page, and the registry's
-`/advisories` page explains the model and the notification paths. There is
-still no global advisory *feed* — no listing of everything quarantined
-lately — which is recorded as DEV-038 rather than papered over.
+`/advisories` page is the global feed — every advisory published against a
+public BriefAgent, newest first, each with a permalink — followed by the
+explainer of the model and the notification paths. The API serves the same
+feed at `GET /api/v1/advisories` (keyset-paged) and one advisory at
+`GET /api/v1/advisories/{id}`; `?affecting=namespace/name` narrows the feed
+to one BriefAgent.
 
 ## Everything here is auditable
 

@@ -912,12 +912,15 @@ type ActivityPage struct {
 
 // Advisory defines model for Advisory.
 type Advisory struct {
-	AffectedVersions string             `json:"affectedVersions"`
-	Detail           *string            `json:"detail,omitempty"`
-	Id               openapi_types.UUID `json:"id"`
-	PublishedAt      *time.Time         `json:"publishedAt,omitempty"`
-	Severity         string             `json:"severity"`
-	Summary          string             `json:"summary"`
+	AffectedVersions string `json:"affectedVersions"`
+
+	// Agent The affected agent as `ns/name`. Present on feed and permalink responses.
+	Agent       *string            `json:"agent,omitempty"`
+	Detail      *string            `json:"detail,omitempty"`
+	Id          openapi_types.UUID `json:"id"`
+	PublishedAt *time.Time         `json:"publishedAt,omitempty"`
+	Severity    string             `json:"severity"`
+	Summary     string             `json:"summary"`
 }
 
 // Agent defines model for Agent.
@@ -1571,8 +1574,14 @@ type WebhookID = openapi_types.UUID
 
 // ListAdvisoriesParams defines parameters for ListAdvisories.
 type ListAdvisoriesParams struct {
-	// Affecting ns/name.
-	Affecting string `form:"affecting" json:"affecting"`
+	// Affecting ns/name. Omit for the global feed.
+	Affecting *string `form:"affecting,omitempty" json:"affecting,omitempty"`
+
+	// Cursor Opaque keyset cursor from the previous page's Link header (feed mode).
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit Page size (feed mode; clamped).
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListAgentsParams defines parameters for ListAgents.
@@ -2081,10 +2090,17 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 // The interface specification for the client above.
 type ClientInterface interface {
 
-	// ListAdvisories Published advisories affecting an agent (§8.7).
+	// ListAdvisories Published advisories — for one agent, or the global feed (§8.7).
+	//
+	// With `affecting`, the advisories against that agent (newest first). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
 	//
 	// Corresponds with GET /advisories (the `ListAdvisories` operationId).
 	ListAdvisories(ctx context.Context, params *ListAdvisoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAdvisory One published advisory (permalink); public agents only.
+	//
+	// Corresponds with GET /advisories/{advisoryId} (the `GetAdvisory` operationId).
+	GetAdvisory(ctx context.Context, advisoryId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListAgents List agents in a namespace (public ones for everyone).
 	//
@@ -2961,11 +2977,28 @@ type ClientInterface interface {
 	GetUserProfile(ctx context.Context, handle Handle, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
-// ListAdvisories Published advisories affecting an agent (§8.7).
+// ListAdvisories Published advisories — for one agent, or the global feed (§8.7).
+//
+// With `affecting`, the advisories against that agent (newest first). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
 //
 // Corresponds with GET /advisories (the `ListAdvisories` operationId).
 func (c *Client) ListAdvisories(ctx context.Context, params *ListAdvisoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListAdvisoriesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetAdvisory One published advisory (permalink); public agents only.
+//
+// Corresponds with GET /advisories/{advisoryId} (the `GetAdvisory` operationId).
+func (c *Client) GetAdvisory(ctx context.Context, advisoryId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAdvisoryRequest(c.Server, advisoryId)
 	if err != nil {
 		return nil, err
 	}
@@ -5218,18 +5251,80 @@ func NewListAdvisoriesRequest(server string, params *ListAdvisoriesParams) (*htt
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
-		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "affecting", params.Affecting, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-			return nil, err
-		} else {
-			for _, qp := range strings.Split(queryFrag, "&") {
-				rawQueryFragments = append(rawQueryFragments, qp)
+		if params.Affecting != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "affecting", *params.Affecting, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
 			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
 		}
 
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
 		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetAdvisoryRequest constructs an http.Request for the GetAdvisory method
+func NewGetAdvisoryRequest(server string, advisoryId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "advisoryId", advisoryId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/advisories/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -10039,12 +10134,21 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
-	// ListAdvisoriesWithResponse Published advisories affecting an agent (§8.7).
+	// ListAdvisoriesWithResponse Published advisories — for one agent, or the global feed (§8.7).
+	//
+	// With `affecting`, the advisories against that agent (newest first). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /advisories (the `ListAdvisories` operationId).
 	ListAdvisoriesWithResponse(ctx context.Context, params *ListAdvisoriesParams, reqEditors ...RequestEditorFn) (*ListAdvisoriesResponse, error)
+
+	// GetAdvisoryWithResponse One published advisory (permalink); public agents only.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /advisories/{advisoryId} (the `GetAdvisory` operationId).
+	GetAdvisoryWithResponse(ctx context.Context, advisoryId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetAdvisoryResponse, error)
 
 	// ListAgentsWithResponse List agents in a namespace (public ones for everyone).
 	//
@@ -11099,6 +11203,54 @@ func (r ListAdvisoriesResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListAdvisoriesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetAdvisoryResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Advisory
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetAdvisoryResponse) GetJSON200() *Advisory {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetAdvisoryResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetAdvisoryResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAdvisoryResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAdvisoryResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetAdvisoryResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -15738,7 +15890,9 @@ func (r GetUserProfileResponse) ContentType() string {
 	return ""
 }
 
-// ListAdvisoriesWithResponse Published advisories affecting an agent (§8.7).
+// ListAdvisoriesWithResponse Published advisories — for one agent, or the global feed (§8.7).
+//
+// With `affecting`, the advisories against that agent (newest first). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -15749,6 +15903,19 @@ func (c *ClientWithResponses) ListAdvisoriesWithResponse(ctx context.Context, pa
 		return nil, err
 	}
 	return ParseListAdvisoriesResponse(rsp)
+}
+
+// GetAdvisoryWithResponse One published advisory (permalink); public agents only.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /advisories/{advisoryId} (the `GetAdvisory` operationId).
+func (c *ClientWithResponses) GetAdvisoryWithResponse(ctx context.Context, advisoryId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetAdvisoryResponse, error) {
+	rsp, err := c.GetAdvisory(ctx, advisoryId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAdvisoryResponse(rsp)
 }
 
 // ListAgentsWithResponse List agents in a namespace (public ones for everyone).
@@ -17581,6 +17748,39 @@ func ParseListAdvisoriesResponse(rsp *http.Response) (*ListAdvisoriesResponse, e
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest []Advisory
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAdvisoryResponse parses an HTTP response from a GetAdvisoryWithResponse call
+func ParseGetAdvisoryResponse(rsp *http.Response) (*GetAdvisoryResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAdvisoryResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Advisory
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
