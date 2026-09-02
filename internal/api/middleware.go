@@ -22,7 +22,6 @@ type ctxKey int
 const (
 	requestIDKey ctxKey = iota
 	actorKey
-	clientIPKey
 )
 
 // actorHolder carries the resolved caller back OUT to the access log.
@@ -120,7 +119,7 @@ func withMiddleware(next http.Handler, log *slog.Logger, mx func() *metrics.Metr
 		// audit log can never disagree about who made the request — and so
 		// there is exactly one place where the X-Forwarded-For trust decision
 		// is made.
-		ctx = context.WithValue(ctx, clientIPKey, clientIPWithProxies(r, trustedProxies))
+		ctx = auth.WithClientIP(ctx, clientIPWithProxies(r, trustedProxies))
 		r = r.WithContext(ctx)
 		w.Header().Set("X-Request-Id", reqID)
 

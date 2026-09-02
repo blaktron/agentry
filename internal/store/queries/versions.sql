@@ -1,8 +1,8 @@
 -- Agent versions + state machine (M3/WG-E).
 
 -- name: CreateAgentVersion :one
-INSERT INTO agent_versions (id, agent_id, version, commit_sha, manifest, capabilities, channel, submitted_by, source)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO agent_versions (id, agent_id, version, commit_sha, manifest, capabilities, channel, submitted_by, source, submitter_ip_hash)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 RETURNING *;
 
 -- name: SetVersionArchive :exec

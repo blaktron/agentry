@@ -306,6 +306,14 @@ func (p *Pipeline) runOrchestrator(
 	if err != nil {
 		return RunResult{}, fmt.Errorf("scan: submitter publish velocity: %w", err)
 	}
+	clusterAccounts, clusterVersions := 0, 0
+	if v.SubmitterIpHash != nil && *v.SubmitterIpHash != "" {
+		cl, err := q.CountIPClusterSubmissions(ctx, v.SubmitterIpHash)
+		if err != nil {
+			return RunResult{}, fmt.Errorf("scan: ip cluster: %w", err)
+		}
+		clusterAccounts, clusterVersions = int(cl.Accounts), int(cl.Versions)
+	}
 
 	digest := ""
 	if v.ArchiveDigest != nil {
@@ -338,6 +346,7 @@ func (p *Pipeline) runOrchestrator(
 			PrevManifestJSON: prevManifest, PrevVersion: prevVersion,
 			PrevArchiveDir: prevDir, AccountAgeDays: accountAge,
 			RecentPublishCount: int(recent),
+			IPClusterAccounts:  clusterAccounts, IPClusterVersions: clusterVersions,
 		},
 		Policy: pol, Public: agent.Visibility == "public", AgentName: agent.Name,
 		PopularAgentNames: popular,
