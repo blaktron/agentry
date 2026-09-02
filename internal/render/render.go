@@ -108,8 +108,14 @@ func (r *Renderer) Markdown(src []byte) (string, error) {
 	if err := r.md.Convert(src, &buf); err != nil {
 		return "", fmt.Errorf("render: markdown: %w", err)
 	}
-	safe := r.policy.SanitizeBytes(buf.Bytes())
-	return RevealInvisible(addUGC(string(safe))), nil
+	return r.sanitize(buf.String()), nil
+}
+
+// sanitize is the full post-render pass: the bluemonday policy, the
+// rel="ugc" stamp, and invisible-character revealing. It is the composition
+// FuzzSanitize round-trips, so it must be idempotent on its own output.
+func (r *Renderer) sanitize(html string) string {
+	return RevealInvisible(addUGC(r.policy.Sanitize(html)))
 }
 
 // relRe finds the rel attribute bluemonday emits on links. The sanitizer
