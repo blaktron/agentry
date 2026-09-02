@@ -2,8 +2,11 @@
 
 How Agentry is deployed in its three shapes, and the operational targets.
 Infra-as-code lives in `deploy/terraform/` (SaaS reference + reusable
-modules) and `deploy/helm/agentry/` (self-host HA). Authoritative design:
-[PLAN.md](https://github.com/blaktron/agentry-notes/blob/main/agentry/PLAN.md) §2.4, §13, §16.
+modules) and `deploy/helm/agentry/` (self-host HA). As built:
+[ARCHITECTURE.md](https://github.com/blaktron/agentry-notes/blob/main/ARCHITECTURE.md)
+§3 in agentry-notes; the original plan is archived there
+([PLAN.md](https://github.com/blaktron/agentry-notes/blob/main/archive/agentry/PLAN.md)
+§2.4, §13, §16) and departures are logged in the deviations register.
 
 !!! note "Compose is ahead of the IaC"
     The dev compose stack carries three pieces the Terraform and Helm

@@ -3,9 +3,11 @@
 The complete operator reference for running BriefAgents: every command,
 flag, file, and enforcement mechanism. The [BriefAgents](briefagents.md)
 page explains the package format; this page is the runtime side. The
-as-built architecture and the immutable design record
-(`ARCHITECTURE.md`, `RUNNER-PLAN.md`, `RUNNER-PLAN-2.md`) live in
-[agentry-notes](https://github.com/blaktron/agentry-notes/tree/main/agentry-cli).
+as-built architecture is
+[ARCHITECTURE.md](https://github.com/blaktron/agentry-notes/blob/main/ARCHITECTURE.md)
+§6 in agentry-notes; the original runner design records are archived there
+under `archive/agentry-cli/`, and departures from them are logged in
+[RUNNER-DEVIATIONS.md](https://github.com/blaktron/agentry-notes/blob/main/agentry-cli/RUNNER-DEVIATIONS.md).
 
 ## Commands
 
