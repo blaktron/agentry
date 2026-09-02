@@ -137,6 +137,13 @@ type Auth struct {
 	// server reaches it (compose: http://authentik-server:9000).
 	IdPAdminURL   string `yaml:"idpAdminURL"`
 	IdPAdminToken string `yaml:"idpAdminToken"`
+	// RequireIdPMFA re-enables the §12.1 "2FA before public publish" gate
+	// under externalOnly, satisfied by evidence rather than trust: the
+	// account must have signed in at least once with an ID token whose
+	// `amr` names a second factor (users.idp_mfa_at). Off by default because
+	// it is only honest once the directory actually enforces MFA
+	// (agentry#23, DEV-076).
+	RequireIdPMFA bool `yaml:"requireIdpMFA"`
 }
 
 // Limits tunes the §19 quotas. These are the values internal/entitlements'
@@ -499,6 +506,9 @@ func applyEnv(c *Config) error {
 	str("AGENTRY_SOCIAL_AUTHENTIK_ISSUER", &c.Social.Authentik.Issuer)
 	str("AGENTRY_IDP_ADMIN_URL", &c.Auth.IdPAdminURL)
 	str("AGENTRY_IDP_ADMIN_TOKEN", &c.Auth.IdPAdminToken)
+	if err := boolean("AGENTRY_AUTH_REQUIRE_IDP_MFA", &c.Auth.RequireIdPMFA); err != nil {
+		return err
+	}
 
 	// Audit stream + retention (§12.6, §4.3).
 	str("AGENTRY_AUDIT_STREAM_KIND", &c.Audit.StreamKind)

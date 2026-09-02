@@ -405,6 +405,7 @@ type User struct {
 	UpdatedAt        time.Time  `json:"updated_at"`
 	PlatformStaff    bool       `json:"platform_staff"`
 	CookieAckAt      *time.Time `json:"cookie_ack_at"`
+	IdpMfaAt         *time.Time `json:"idp_mfa_at"`
 }
 
 type WebhookDelivery struct {

@@ -16,6 +16,13 @@ import "github.com/blaktron/agentry/internal/config"
 // authentication flow or the registry application, where it also covers
 // sign-in itself. The registry does not currently read an `amr`/`acr` claim
 // to verify that policy; docs/self-hosting.md says so.
+//
+// With auth.requireIdpMFA the gate is on under externalOnly too, satisfied by
+// evidence: users.idp_mfa_at, stamped when a sign-in's ID token carried an
+// `amr` naming a second factor (agentry#23).
 func publicPublish2FAEnabled(cfg config.Config) bool {
-	return !cfg.DevMode && !cfg.Auth.ExternalOnly
+	if cfg.DevMode {
+		return false
+	}
+	return !cfg.Auth.ExternalOnly || cfg.Auth.RequireIdPMFA
 }
