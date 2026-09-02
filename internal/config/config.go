@@ -138,6 +138,12 @@ type Auth struct {
 	// server reaches it (compose: http://authentik-server:9000).
 	IdPAdminURL   string `yaml:"idpAdminURL"`
 	IdPAdminToken string `yaml:"idpAdminToken"`
+	// IdPStaffGroup names the directory group whose members are platform
+	// staff (agentry#51). At every `authentik` sign-in the account's
+	// platform_staff flag is set to "is a member of this group" — so staff
+	// is granted AND revoked in the directory, never by hand in SQL. Empty
+	// disables the sync and leaves the flag as it is.
+	IdPStaffGroup string `yaml:"idpStaffGroup"`
 	// RequireIdPMFA re-enables the §12.1 "2FA before public publish" gate
 	// under externalOnly, satisfied by evidence rather than trust: the
 	// account must have signed in at least once with an ID token whose
@@ -538,6 +544,7 @@ func applyEnv(c *Config) error {
 	str("AGENTRY_SOCIAL_AUTHENTIK_ISSUER", &c.Social.Authentik.Issuer)
 	str("AGENTRY_IDP_ADMIN_URL", &c.Auth.IdPAdminURL)
 	str("AGENTRY_IDP_ADMIN_TOKEN", &c.Auth.IdPAdminToken)
+	str("AGENTRY_IDP_STAFF_GROUP", &c.Auth.IdPStaffGroup)
 	if err := boolean("AGENTRY_AUTH_REQUIRE_IDP_MFA", &c.Auth.RequireIdPMFA); err != nil {
 		return err
 	}

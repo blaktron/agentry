@@ -168,3 +168,29 @@ variable "osv_url" {
   type        = string
   default     = ""
 }
+
+# --- Directory service (DEV-057, agentry#51) --------------------------------
+
+variable "idp_client_id" {
+  description = "OIDC client id of the registry in the directory service (Authentik). Empty keeps native credential flows."
+  type        = string
+  default     = ""
+}
+
+variable "idp_issuer" {
+  description = "OIDC issuer of the directory's Agentry application, e.g. https://auth.example.com/application/o/agentry/."
+  type        = string
+  default     = ""
+}
+
+variable "idp_logout_url" {
+  description = "End-session URL the web tier redirects to on sign-out, e.g. https://auth.example.com/application/o/agentry/end-session/."
+  type        = string
+  default     = ""
+}
+
+variable "idp_staff_group" {
+  description = "Directory group whose members are platform staff (granted/revoked at sign-in from the groups claim). Empty disables the sync."
+  type        = string
+  default     = "agentry-platform-staff"
+}

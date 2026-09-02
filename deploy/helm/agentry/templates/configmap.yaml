@@ -22,6 +22,19 @@ data:
       cookieSecure: {{ .Values.config.auth.cookieSecure }}
       sessionTTL: {{ .Values.config.auth.sessionTTL }}
       patMaxTTL: {{ .Values.config.auth.patMaxTTL }}
+      externalOnly: {{ .Values.config.auth.externalOnly }}
+      {{- with .Values.config.auth.idpAdminURL }}
+      idpAdminURL: {{ . | quote }}
+      {{- end }}
+      {{- with .Values.config.auth.idpStaffGroup }}
+      idpStaffGroup: {{ . | quote }}
+      {{- end }}
+    {{- if .Values.config.social.authentik.clientId }}
+    social:
+      authentik:
+        clientId: {{ .Values.config.social.authentik.clientId | quote }}
+        issuer: {{ .Values.config.social.authentik.issuer | quote }}
+    {{- end }}
     storage:
       kind: {{ .Values.config.storage.kind }}
       s3Bucket: {{ .Values.config.storage.s3Bucket | quote }}

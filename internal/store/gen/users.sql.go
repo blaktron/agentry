@@ -401,6 +401,21 @@ func (q *Queries) SetUserPasswordHash(ctx context.Context, arg SetUserPasswordHa
 	return err
 }
 
+const setUserPlatformStaff = `-- name: SetUserPlatformStaff :exec
+UPDATE users SET platform_staff = $2, updated_at = now() WHERE id = $1
+`
+
+type SetUserPlatformStaffParams struct {
+	ID            uuid.UUID `json:"id"`
+	PlatformStaff bool      `json:"platform_staff"`
+}
+
+// Directory group membership decides platform staff (agentry#51).
+func (q *Queries) SetUserPlatformStaff(ctx context.Context, arg SetUserPlatformStaffParams) error {
+	_, err := q.db.Exec(ctx, setUserPlatformStaff, arg.ID, arg.PlatformStaff)
+	return err
+}
+
 const setUserTOTPSecret = `-- name: SetUserTOTPSecret :exec
 UPDATE users SET totp_secret_enc = $2, totp_enabled = false, updated_at = now() WHERE id = $1
 `

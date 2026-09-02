@@ -498,6 +498,35 @@ existing account when *both* sides' addresses are verified. That
 assertion is sound exactly when authentik is your directory of record —
 accounts are created by operators, provisioned from an upstream
 directory, or enrolled through a flow with an email-verification stage.
+
+**Platform staff comes from a directory group.** The groups blueprint
+creates `agentry-platform-staff`; the registry reads the ID token's
+`groups` claim at every `authentik` sign-in and sets the account's
+`platform_staff` flag to "is a member" (`AGENTRY_IDP_STAFF_GROUP`, compose
+defaults it to that group; empty disables the sync). Add and remove staff
+in the directory, never in SQL: leaving the group revokes staff at the
+person's next sign-in, and the change is audited as `user.staff_sync`.
+Only the `authentik` provider's claim counts — a Google or GitHub token
+carrying the same group name is ignored.
+
+**Provisioning org members from Authentik (SCIM).** The registry's SCIM
+endpoint is per organisation and authenticated by a token the org owner
+mints (`POST /api/v1/orgs/{org}/scim/tokens`, or the org admin console).
+In Authentik create a *SCIM provider* with URL
+`https://<host>/scim/v2` and that token, attach it to the `agentry`
+application as a backchannel provider, and scope it to the group(s) that
+should become org members. Users then arrive as members and Authentik
+groups as teams; the registry keeps ownership of roles. A single Authentik
+instance can provision several orgs — one SCIM provider per org, each
+with its own token. This is deliberately not a blueprint: the token is
+org-scoped and minted by the org, not by the platform.
+
+The Helm chart carries the same knobs (`config.auth.externalOnly`,
+`config.social.authentik`, `config.auth.idpStaffGroup`,
+`config.idp.logoutUrl`, `secret.authentikClientSecret`,
+`secret.idpAdminToken`) and so do the Terraform environments
+(`idp_client_id`, `idp_issuer`, `idp_logout_url`, `idp_staff_group`, with
+the client secret in Secrets Manager under `agentry/<env>/idp-client-secret`).
 If you allow self-enrollment without one, drop that mapping and accept
 that such accounts start as new registry users.
 

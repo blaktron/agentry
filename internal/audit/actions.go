@@ -20,7 +20,10 @@ const (
 	ActionPATCreate          Action = "pat.create"
 	ActionPATRevoke          Action = "pat.revoke"
 	ActionUserDirectoryErase Action = "user.directory_erase"
-	ActionUserDelete         Action = "user.delete"
+	// ActionUserStaffSync records a platform_staff change driven by
+	// directory group membership (agentry#51).
+	ActionUserStaffSync Action = "user.staff_sync"
+	ActionUserDelete    Action = "user.delete"
 
 	// Orgs & teams.
 	ActionOrgCreate        Action = "org.create"
@@ -90,7 +93,7 @@ func init() {
 	for _, a := range []Action{
 		ActionUserRegister, ActionUserLogin, ActionUserLoginFailed,
 		ActionUserLogout, ActionUserEmailVerified, ActionUserUpdate,
-		ActionUserTOTPEnabled, ActionPATCreate, ActionPATRevoke, ActionUserDelete, ActionUserDirectoryErase,
+		ActionUserTOTPEnabled, ActionPATCreate, ActionPATRevoke, ActionUserDelete, ActionUserDirectoryErase, ActionUserStaffSync,
 		ActionOrgCreate, ActionOrgUpdate, ActionOrgMemberSet,
 		ActionOrgMemberRemove, ActionTeamCreate, ActionTeamDelete,
 		ActionTeamMemberAdd, ActionTeamMemberRemove,

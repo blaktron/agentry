@@ -605,6 +605,8 @@ type fakeOIDC struct {
 	nonce    string
 	// amr, when set, rides the ID token (agentry#23).
 	amr []string
+	// groups, when set, rides the ID token as the `groups` claim (agentry#51).
+	groups []string
 }
 
 func newFakeOIDC(t *testing.T) *fakeOIDC {
@@ -653,6 +655,9 @@ func newFakeOIDC(t *testing.T) *fakeOIDC {
 		}
 		if p.amr != nil {
 			claimMap["amr"] = p.amr
+		}
+		if p.groups != nil {
+			claimMap["groups"] = p.groups
 		}
 		claims, _ := json.Marshal(claimMap)
 		writeTestJSON(w, map[string]any{

@@ -265,6 +265,9 @@ services:
       # has to say so).
       AGENTRY_IDP_ADMIN_URL: ${AGENTRY_IDP_ADMIN_URL:-}
       AGENTRY_IDP_ADMIN_TOKEN: ${AGENTRY_IDP_ADMIN_TOKEN:-}
+      # Directory group whose members are platform staff (agentry#51); the
+      # groups blueprint creates it. Empty disables the sync.
+      AGENTRY_IDP_STAFF_GROUP: ${AGENTRY_IDP_STAFF_GROUP:-agentry-platform-staff}
       # Archive store against minio (S3-compatible), exercising the same code
       # path SaaS uses rather than the local-FS one.
       AGENTRY_STORAGE_KIND: s3
