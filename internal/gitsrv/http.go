@@ -21,10 +21,10 @@ import (
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/metrics"
+	"github.com/blaktron/agentry/internal/queue"
 	"github.com/blaktron/agentry/internal/ratelimit"
 	"github.com/blaktron/agentry/internal/registry"
 	"github.com/blaktron/agentry/internal/store"
-	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 // Handler serves the git smart-HTTP surface (§6.1): info/refs,
@@ -47,6 +47,10 @@ type Handler struct {
 	postReceiveTimeout time.Duration
 	// diskUsage measures a repo; a field so tests can force its failure path.
 	diskUsage func(uuid.UUID) (int64, error)
+	// queue, when set, receives one repo.pushed job per accepted push and
+	// the bookkeeping runs from the queue (agentry#43). nil keeps the
+	// inline path.
+	queue queue.Client
 	// PostReceive is invoked after a successful push with the updated refs
 	// (M3 wires tag→submission here).
 	PostReceive func(ctx context.Context, agent registry.Agent, refs []RefUpdate, pusher *auth.Principal)
@@ -73,6 +77,9 @@ func (h *Handler) Close() error {
 }
 
 // NewHandler assembles the git HTTP layer.
+// SetQueue makes push bookkeeping a durable repo.pushed job (agentry#43).
+func (h *Handler) SetQueue(q queue.Client) { h.queue = q }
+
 func NewHandler(cfg config.Config, st *store.Store, repos *RepoStore, reg *registry.Service, aud *audit.Writer, log *slog.Logger) *Handler {
 	if log == nil {
 		log = slog.Default()
@@ -448,31 +455,30 @@ func (h *Handler) afterReceive(ctx context.Context, agent registry.Agent, princi
 		return
 	}
 
-	q := h.st.Queries()
-	if size, err := h.diskUsage(agent.RepoID); err != nil {
-		// Never write a fabricated 0 on a measurement failure: keep the last
-		// known size and only record that a push landed.
-		h.log.Warn("post-receive du", "err", err)
-		if err := q.TouchRepoOnPush(ctx, agent.RepoID); err != nil {
-			h.log.Error("post-receive touch", "err", err)
-		}
-	} else if err := q.UpdateRepoOnPush(ctx, storegen.UpdateRepoOnPushParams{ID: agent.RepoID, SizeBytes: size}); err != nil {
-		h.log.Error("post-receive size", "err", err)
-	}
 	refNames := make([]string, 0, len(refs))
 	for _, ru := range refs {
 		refNames = append(refNames, ru.Ref)
 	}
-	e := audit.Event{
-		Actor: principal.UserID, ActorKind: audit.ActorPAT,
-		Action: audit.ActionRepoPush, TargetKind: "agent", TargetID: agent.ID,
-		Detail: map[string]any{"refs": refNames},
-	}
+	args := RepoPushedArgs{AgentID: agent.ID, RepoID: agent.RepoID, ActorID: principal.UserID, Refs: refNames}
 	if agent.NamespaceKind == "org" {
-		e.OrgID = agent.NamespaceID
+		args.OrgID = agent.NamespaceID
 	}
-	if err := h.aud.Write(ctx, q, e); err != nil {
-		h.log.Error("post-receive audit", "err", err)
+	// Durable first (§6.3 repo.pushed, agentry#43): one INSERT, and the
+	// size/audit bookkeeping survives a crash of this process. Without a
+	// queue — or if the INSERT itself fails — do it inline as before.
+	enqueued := false
+	if h.queue != nil {
+		if _, err := h.queue.Enqueue(ctx, KindRepoPushed, "core", args); err != nil {
+			h.log.Error("post-receive enqueue", "err", err)
+		} else {
+			enqueued = true
+		}
+	}
+	if !enqueued {
+		bk := &PushBookkeeper{st: h.st, repos: h.repos, aud: h.aud, log: h.log, diskUsage: h.diskUsage}
+		if err := bk.Run(ctx, args); err != nil {
+			h.log.Error("post-receive bookkeeping", "err", err)
+		}
 	}
 	if h.PostReceive != nil {
 		h.PostReceive(ctx, agent, refs, principal)
