@@ -72,7 +72,7 @@ test.describe("authed flows", () => {
   test("dashboard server-renders for a signed-in browser", async ({ page, baseURL }) => {
     await signIn(page, baseURL!);
     await page.goto("/dashboard");
-    await expect(page.getByRole("button", { name: `Sign out (${USER})` })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sign out", exact: true })).toBeVisible();
   });
 
   test("the Builder page renders its form", async ({ page, baseURL }) => {
@@ -85,7 +85,7 @@ test.describe("authed flows", () => {
   test("a plain HTML form posts same-origin from a real browser (sign-out)", async ({ page, baseURL }) => {
     await signIn(page, baseURL!);
     await page.goto("/dashboard");
-    await page.getByRole("button", { name: `Sign out (${USER})` }).click();
+    await page.getByRole("button", { name: "Sign out", exact: true }).click();
     // The regression: this used to answer 403 "cross-origin form post
     // rejected" for every real browser while curl sailed through.
     await expect(page.locator("body")).not.toContainText("cross-origin form post rejected");
