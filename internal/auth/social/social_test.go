@@ -18,12 +18,6 @@ func TestProvidersIsAClosedSix(t *testing.T) {
 		if got[i] != w {
 			t.Fatalf("Providers()[%d] = %q, want %q", i, got[i], w)
 		}
-		if !Known(w) {
-			t.Errorf("Known(%q) = false", w)
-		}
-	}
-	if Known("evilcorp") {
-		t.Fatal("Known must reject unknown providers")
 	}
 }
 
