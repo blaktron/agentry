@@ -111,7 +111,24 @@ judge:
   # baseUrl: https://api.openai.com   # AGENTRY_JUDGE_BASE_URL
   # apiKey: sk-...                    # AGENTRY_JUDGE_API_KEY
   # model: gpt-4o                     # AGENTRY_JUDGE_MODEL (optional)
+
+scan:
+  # External scanner tools behind the §8.3 seams. All optional: unset, the
+  # native Go detectors run alone and S7 reports "not checked".
+  gitleaksBin: /usr/bin/gitleaks      # AGENTRY_SCAN_GITLEAKS_BIN ("auto" = PATH lookup); shipped in the image
+  # opengrepBin: /usr/local/bin/opengrep   # AGENTRY_SCAN_OPENGREP_BIN
+  # opengrepRules: /etc/agentry/opengrep   # AGENTRY_SCAN_OPENGREP_RULES (required with opengrepBin)
+  # osvUrl: https://api.osv.dev       # AGENTRY_SCAN_OSV_URL — the scanner's one egress; opt in deliberately
+  # toolTimeout: 2m                   # AGENTRY_SCAN_TOOL_TIMEOUT per invocation
 ```
+
+A configured tool that cannot be found is a startup error, never a silent
+fallback. A tool that fails mid-scan leaves an `S2/tool-error` or
+`S6/tool-error` finding on the report, so "gitleaks did not run" is
+distinguishable from "no secrets". Opengrep rules whose `metadata.capability`
+is `network`, `exec`, `fs-write`, `fs-read`, `env` or `eval` feed the
+declared-vs-detected capability compare; other rules surface as
+`S6/opengrep-<rule>` with their own severity.
 
 Generate a signing key:
 

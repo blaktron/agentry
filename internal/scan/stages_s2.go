@@ -12,7 +12,11 @@ import (
 // (git-history scanning is the git-tag add-on, deferred per DEV-006). The
 // mandatory `agy_` PAT rule (D-22) is included. A gitleaks/trufflehog
 // external adapter can replace this behind the same Stage interface.
-type S2Secrets struct{}
+type S2Secrets struct {
+	// Gitleaks, when set, execs the real tool after the native ruleset and
+	// folds its report in (DEV-006 production upgrade, agentry#40).
+	Gitleaks *ExecTool
+}
 
 func (S2Secrets) ID() string { return "S2" }
 
@@ -39,9 +43,10 @@ var secretRules = []secretRule{
 	{id: "generic-assignment", re: regexp.MustCompile(`(?i)(?:api[_-]?key|secret|passwd|password|token)\s*[:=]\s*['"]([^'"\s]{16,})['"]`), severity: SevMedium, entropyMin: 3.6, group: 1},
 }
 
-func (S2Secrets) Run(sc stageContext, in *Input) StageResult {
+func (s S2Secrets) Run(sc stageContext, in *Input) StageResult {
 	var findings []Finding
 	seen := map[string]bool{}
+	lineSeen := map[string]bool{}
 	for _, f := range in.Files {
 		if !f.IsText || f.Content == nil {
 			continue
@@ -67,6 +72,7 @@ func (S2Secrets) Run(sc stageContext, in *Input) StageResult {
 					continue
 				}
 				seen[key] = true
+				lineSeen[f.Path+"|"+strconv.Itoa(i+1)] = true
 				findings = append(findings, Finding{
 					Scanner: "S2/" + rule.id, Severity: rule.severity, Confidence: ConfHigh,
 					Title: "Possible secret: " + rule.id, FilePath: f.Path,
@@ -77,6 +83,9 @@ func (S2Secrets) Run(sc stageContext, in *Input) StageResult {
 				})
 			}
 		}
+	}
+	if s.Gitleaks != nil && in.Dir != "" {
+		findings = append(findings, runGitleaks(sc.Context(), s.Gitleaks, in.Dir, lineSeen)...)
 	}
 	return StageResult{Scanner: "S2", Findings: findings}
 }
