@@ -365,6 +365,44 @@ func (q *Queries) GetAbuseReport(ctx context.Context, id uuid.UUID) (AbuseReport
 	return i, err
 }
 
+const getAdvisoryPublic = `-- name: GetAdvisoryPublic :one
+SELECT adv.id, adv.agent_id, adv.affected_versions, adv.severity, adv.summary, adv.detail, adv.published_at, h.handle AS namespace, a.name AS agent_name
+FROM advisories adv
+JOIN agents a ON a.id = adv.agent_id
+JOIN handles h ON h.id = a.namespace_id
+WHERE adv.id = $1 AND a.visibility = 'public' AND adv.published_at IS NOT NULL
+`
+
+type GetAdvisoryPublicRow struct {
+	ID               uuid.UUID  `json:"id"`
+	AgentID          uuid.UUID  `json:"agent_id"`
+	AffectedVersions string     `json:"affected_versions"`
+	Severity         string     `json:"severity"`
+	Summary          string     `json:"summary"`
+	Detail           *string    `json:"detail"`
+	PublishedAt      *time.Time `json:"published_at"`
+	Namespace        string     `json:"namespace"`
+	AgentName        string     `json:"agent_name"`
+}
+
+// Permalink (agentry#24): only advisories against public agents resolve.
+func (q *Queries) GetAdvisoryPublic(ctx context.Context, id uuid.UUID) (GetAdvisoryPublicRow, error) {
+	row := q.db.QueryRow(ctx, getAdvisoryPublic, id)
+	var i GetAdvisoryPublicRow
+	err := row.Scan(
+		&i.ID,
+		&i.AgentID,
+		&i.AffectedVersions,
+		&i.Severity,
+		&i.Summary,
+		&i.Detail,
+		&i.PublishedAt,
+		&i.Namespace,
+		&i.AgentName,
+	)
+	return i, err
+}
+
 const getAttestation = `-- name: GetAttestation :one
 SELECT id, version_id, predicate_type, dsse_envelope, key_id, created_at FROM attestations WHERE version_id = $1
 `
@@ -803,6 +841,69 @@ func (q *Queries) ListAbuseReports(ctx context.Context, arg ListAbuseReportsPara
 			&i.AgentName,
 			&i.Namespace,
 			&i.Version,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAdvisoriesFeed = `-- name: ListAdvisoriesFeed :many
+SELECT adv.id, adv.agent_id, adv.affected_versions, adv.severity, adv.summary, adv.detail, adv.published_at, h.handle AS namespace, a.name AS agent_name
+FROM advisories adv
+JOIN agents a ON a.id = adv.agent_id
+JOIN handles h ON h.id = a.namespace_id
+WHERE a.visibility = 'public' AND adv.published_at IS NOT NULL
+  AND ($2::timestamptz IS NULL
+       OR (adv.published_at, adv.id) < ($2::timestamptz, $3::uuid))
+ORDER BY adv.published_at DESC, adv.id DESC
+LIMIT $1
+`
+
+type ListAdvisoriesFeedParams struct {
+	Limit      int32      `json:"limit"`
+	BeforeTime *time.Time `json:"before_time"`
+	BeforeID   *uuid.UUID `json:"before_id"`
+}
+
+type ListAdvisoriesFeedRow struct {
+	ID               uuid.UUID  `json:"id"`
+	AgentID          uuid.UUID  `json:"agent_id"`
+	AffectedVersions string     `json:"affected_versions"`
+	Severity         string     `json:"severity"`
+	Summary          string     `json:"summary"`
+	Detail           *string    `json:"detail"`
+	PublishedAt      *time.Time `json:"published_at"`
+	Namespace        string     `json:"namespace"`
+	AgentName        string     `json:"agent_name"`
+}
+
+// The global feed (agentry#24): published advisories against PUBLIC agents,
+// newest first, keyset-paged on (published_at, id) so the cursor is stable
+// while new advisories arrive at the head.
+func (q *Queries) ListAdvisoriesFeed(ctx context.Context, arg ListAdvisoriesFeedParams) ([]ListAdvisoriesFeedRow, error) {
+	rows, err := q.db.Query(ctx, listAdvisoriesFeed, arg.Limit, arg.BeforeTime, arg.BeforeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAdvisoriesFeedRow
+	for rows.Next() {
+		var i ListAdvisoriesFeedRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AgentID,
+			&i.AffectedVersions,
+			&i.Severity,
+			&i.Summary,
+			&i.Detail,
+			&i.PublishedAt,
+			&i.Namespace,
+			&i.AgentName,
 		); err != nil {
 			return nil, err
 		}

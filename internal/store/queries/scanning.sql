@@ -120,6 +120,28 @@ RETURNING *;
 -- name: ListAdvisoriesForAgent :many
 SELECT * FROM advisories WHERE agent_id = $1 ORDER BY published_at DESC;
 
+-- name: ListAdvisoriesFeed :many
+-- The global feed (agentry#24): published advisories against PUBLIC agents,
+-- newest first, keyset-paged on (published_at, id) so the cursor is stable
+-- while new advisories arrive at the head.
+SELECT adv.*, h.handle AS namespace, a.name AS agent_name
+FROM advisories adv
+JOIN agents a ON a.id = adv.agent_id
+JOIN handles h ON h.id = a.namespace_id
+WHERE a.visibility = 'public' AND adv.published_at IS NOT NULL
+  AND (sqlc.narg('before_time')::timestamptz IS NULL
+       OR (adv.published_at, adv.id) < (sqlc.narg('before_time')::timestamptz, sqlc.narg('before_id')::uuid))
+ORDER BY adv.published_at DESC, adv.id DESC
+LIMIT $1;
+
+-- name: GetAdvisoryPublic :one
+-- Permalink (agentry#24): only advisories against public agents resolve.
+SELECT adv.*, h.handle AS namespace, a.name AS agent_name
+FROM advisories adv
+JOIN agents a ON a.id = adv.agent_id
+JOIN handles h ON h.id = a.namespace_id
+WHERE adv.id = $1 AND a.visibility = 'public' AND adv.published_at IS NOT NULL;
+
 -- Keyset, not LIMIT/OFFSET: the sweep quarantines rows out of `published` as
 -- it goes, so an offset-paged sweep skips one unscanned version per row it
 -- acted on. The cursor is the primary key, which no sweep action changes.
