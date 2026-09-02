@@ -2849,6 +2849,13 @@ type ClientInterface interface {
 	// Corresponds with GET /review-queue (the `ListReviewQueue` operationId).
 	ListReviewQueue(ctx context.Context, params *ListReviewQueueParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetLatestRulesetAttestation DSSE attestation over the bundle `…/latest/bundle` serves.
+	//
+	// An in-toto statement (predicate `https://agentry.dev/attestation/ruleset/v1`) whose subject digest is the bundle's content digest, signed with the registry's release-signing key (`/.well-known/agentry/signing-keys.json`). Lets `agentry validate --rules-update` verify a fetched bundle by signature rather than only by the digest the same server advertised (agentry#25). 404 when the registry does not sign (`signing.kind: none`).
+	//
+	// Corresponds with GET /ruleset-releases/latest/attestation (the `GetLatestRulesetAttestation` operationId).
+	GetLatestRulesetAttestation(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetLatestRulesetBundle The newest published S3/S4 rule bundle, for `agentry validate --rules-update`.
 	//
 	// Returns the deployment's rule bundle as an uncompressed tar of the bundle directory (`bundle.yaml` plus the family YAML files), exactly the bytes `pkg/rules.LoadBundle` reads. The advertised identity travels in headers so a client can check what it got without unpacking first:
@@ -4896,6 +4903,23 @@ func (c *Client) ListReviewFiles(ctx context.Context, id openapi_types.UUID, req
 // Corresponds with GET /review-queue (the `ListReviewQueue` operationId).
 func (c *Client) ListReviewQueue(ctx context.Context, params *ListReviewQueueParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListReviewQueueRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetLatestRulesetAttestation DSSE attestation over the bundle `…/latest/bundle` serves.
+//
+// An in-toto statement (predicate `https://agentry.dev/attestation/ruleset/v1`) whose subject digest is the bundle's content digest, signed with the registry's release-signing key (`/.well-known/agentry/signing-keys.json`). Lets `agentry validate --rules-update` verify a fetched bundle by signature rather than only by the digest the same server advertised (agentry#25). 404 when the registry does not sign (`signing.kind: none`).
+//
+// Corresponds with GET /ruleset-releases/latest/attestation (the `GetLatestRulesetAttestation` operationId).
+func (c *Client) GetLatestRulesetAttestation(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetLatestRulesetAttestationRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -9374,6 +9398,33 @@ func NewListReviewQueueRequest(server string, params *ListReviewQueueParams) (*h
 	return req, nil
 }
 
+// NewGetLatestRulesetAttestationRequest constructs an http.Request for the GetLatestRulesetAttestation method
+func NewGetLatestRulesetAttestationRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/ruleset-releases/latest/attestation")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetLatestRulesetBundleRequest constructs an http.Request for the GetLatestRulesetBundle method
 func NewGetLatestRulesetBundleRequest(server string) (*http.Request, error) {
 	var err error
@@ -11006,6 +11057,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /review-queue (the `ListReviewQueue` operationId).
 	ListReviewQueueWithResponse(ctx context.Context, params *ListReviewQueueParams, reqEditors ...RequestEditorFn) (*ListReviewQueueResponse, error)
+
+	// GetLatestRulesetAttestationWithResponse DSSE attestation over the bundle `…/latest/bundle` serves.
+	//
+	// An in-toto statement (predicate `https://agentry.dev/attestation/ruleset/v1`) whose subject digest is the bundle's content digest, signed with the registry's release-signing key (`/.well-known/agentry/signing-keys.json`). Lets `agentry validate --rules-update` verify a fetched bundle by signature rather than only by the digest the same server advertised (agentry#25). 404 when the registry does not sign (`signing.kind: none`).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /ruleset-releases/latest/attestation (the `GetLatestRulesetAttestation` operationId).
+	GetLatestRulesetAttestationWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetLatestRulesetAttestationResponse, error)
 
 	// GetLatestRulesetBundleWithResponse The newest published S3/S4 rule bundle, for `agentry validate --rules-update`.
 	//
@@ -15162,6 +15222,54 @@ func (r ListReviewQueueResponse) ContentType() string {
 	return ""
 }
 
+type GetLatestRulesetAttestationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *map[string]interface{}
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetLatestRulesetAttestationResponse) GetJSON200() *map[string]interface{} {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetLatestRulesetAttestationResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetLatestRulesetAttestationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetLatestRulesetAttestationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetLatestRulesetAttestationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetLatestRulesetAttestationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // GetLatestRulesetBundleResponse200Headers the declared response headers of an HTTP 200 response for GetLatestRulesetBundle
 type GetLatestRulesetBundleResponse200Headers struct {
 	ETag                 *string
@@ -17463,6 +17571,21 @@ func (c *ClientWithResponses) ListReviewQueueWithResponse(ctx context.Context, p
 		return nil, err
 	}
 	return ParseListReviewQueueResponse(rsp)
+}
+
+// GetLatestRulesetAttestationWithResponse DSSE attestation over the bundle `…/latest/bundle` serves.
+//
+// An in-toto statement (predicate `https://agentry.dev/attestation/ruleset/v1`) whose subject digest is the bundle's content digest, signed with the registry's release-signing key (`/.well-known/agentry/signing-keys.json`). Lets `agentry validate --rules-update` verify a fetched bundle by signature rather than only by the digest the same server advertised (agentry#25). 404 when the registry does not sign (`signing.kind: none`).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /ruleset-releases/latest/attestation (the `GetLatestRulesetAttestation` operationId).
+func (c *ClientWithResponses) GetLatestRulesetAttestationWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetLatestRulesetAttestationResponse, error) {
+	rsp, err := c.GetLatestRulesetAttestation(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetLatestRulesetAttestationResponse(rsp)
 }
 
 // GetLatestRulesetBundleWithResponse The newest published S3/S4 rule bundle, for `agentry validate --rules-update`.
@@ -20504,6 +20627,39 @@ func ParseListReviewQueueResponse(rsp *http.Response) (*ListReviewQueueResponse,
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest []ReviewItem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetLatestRulesetAttestationResponse parses an HTTP response from a GetLatestRulesetAttestationWithResponse call
+func ParseGetLatestRulesetAttestationResponse(rsp *http.Response) (*GetLatestRulesetAttestationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetLatestRulesetAttestationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

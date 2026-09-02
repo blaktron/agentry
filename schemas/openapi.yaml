@@ -666,6 +666,30 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /ruleset-releases/latest/attestation:
+    get:
+      operationId: getLatestRulesetAttestation
+      tags: [platform]
+      summary: DSSE attestation over the bundle `…/latest/bundle` serves.
+      description: >
+        An in-toto statement (predicate `https://agentry.dev/attestation/ruleset/v1`)
+        whose subject digest is the bundle's content digest, signed with the
+        registry's release-signing key (`/.well-known/agentry/signing-keys.json`).
+        Lets `agentry validate --rules-update` verify a fetched bundle by
+        signature rather than only by the digest the same server advertised
+        (agentry#25). 404 when the registry does not sign (`signing.kind: none`).
+      security: []
+      responses:
+        "200":
+          description: The DSSE envelope (application/json).
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        default:
+          $ref: "#/components/responses/Problem"
+
   /orgs:
     post:
       operationId: createOrg
