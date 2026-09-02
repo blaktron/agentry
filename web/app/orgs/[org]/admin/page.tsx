@@ -335,6 +335,13 @@ export default async function OrgAdminPage({
                   <span style={{ color: "var(--color-muted)" }}>{c.enabled ? "enabled" : "configured, disabled"}</span>
                   <form method="post" action={`/orgs/${o}/admin/sso`}>
                     <input type="hidden" name="kind" value={c.kind} />
+                    {/* Probe without a sign-in: OIDC discovery / SAML metadata (agentry#50). */}
+                    <button type="submit" name="action" value="test" className="rounded-md border px-2 py-0.5 text-xs" style={{ borderColor: "var(--color-border)" }}>
+                      Test connection
+                    </button>
+                  </form>
+                  <form method="post" action={`/orgs/${o}/admin/sso`}>
+                    <input type="hidden" name="kind" value={c.kind} />
                     <button type="submit" name="action" value="delete" className="rounded-md border px-2 py-0.5 text-xs" style={{ borderColor: "var(--color-sev-high)", color: "var(--color-sev-high)" }}>
                       Delete
                     </button>

@@ -125,6 +125,7 @@ var routeAuthz = map[string]RouteDecl{
 	"listSsoConnections":    {Action: auth.ActOrgSettingsManage, OrgScoped: true},
 	"putSsoConnection":      {Action: auth.ActOrgSettingsManage, OrgScoped: true},
 	"deleteSsoConnection":   {Action: auth.ActOrgSettingsManage, OrgScoped: true},
+	"testSsoConnection":     {Action: auth.ActOrgSettingsManage, OrgScoped: true},
 	"getSamlMetadata":       {NoAuthz: true, Anonymous: true},
 	"samlAcs":               {NoAuthz: true, Anonymous: true},
 	"oidcStart":             {NoAuthz: true, Anonymous: true},
