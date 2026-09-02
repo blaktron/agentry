@@ -221,7 +221,12 @@ export default async function AgentPage({
       <header className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">
-            <Link href={`/${agent.namespace}`} className="hover:underline" style={{ color: "var(--color-muted)" }}>
+            {/* Underlined, not colour-only: Lighthouse link-in-text-block (agentry#42). */}
+            <Link
+              href={`/${agent.namespace}`}
+              className="underline decoration-dotted underline-offset-4 hover:decoration-solid"
+              style={{ color: "var(--color-muted)" }}
+            >
               {agent.namespace}
             </Link>
             <span style={{ color: "var(--color-muted)" }}>/</span>
