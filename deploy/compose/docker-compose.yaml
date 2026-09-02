@@ -4,6 +4,15 @@
 # agentryd itself runs on the host in dev (`make dev`) or as the `server`
 # service below for a full self-host trial.
 #
+# Credentials. The Postgres and MinIO passwords default to development
+# values and are read from .env (AGENTRY_PG_PASSWORD, AGENTRY_MINIO_SECRET)
+# everywhere they appear — the services, the DSN agentryd uses, authentik's
+# database, the bucket bootstrap — so a self-hoster sets them once without
+# editing this tracked file, and rotating after an exposure is a .env edit
+# (agentry#30). Changing them on a stack that already has data: postgres
+# and minio keep the OLD value in their volumes; run ALTER USER / `mc admin
+# user` first, or start from fresh volumes.
+#
 # Port publishing. Docker inserts its own ACCEPT rules ahead of the host
 # firewall (firewalld/ufw zones do not apply to published ports), so a
 # `"5432:5432"` line on a host with a public address is Postgres on the
@@ -23,7 +32,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: agentry
-      POSTGRES_PASSWORD: agentry
+      POSTGRES_PASSWORD: ${AGENTRY_PG_PASSWORD:-agentry}
       POSTGRES_DB: agentry_dev
     ports:
       - "${AGENTRY_BIND:-127.0.0.1}:5432:5432"
@@ -41,7 +50,7 @@ services:
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: agentry
-      MINIO_ROOT_PASSWORD: agentry-dev-secret
+      MINIO_ROOT_PASSWORD: ${AGENTRY_MINIO_SECRET:-agentry-dev-secret}
     ports:
       - "${AGENTRY_BIND:-127.0.0.1}:9000:9000"
       - "${AGENTRY_BIND:-127.0.0.1}:9001:9001"
@@ -87,7 +96,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      PGPASSWORD: agentry
+      PGPASSWORD: ${AGENTRY_PG_PASSWORD:-agentry}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - psql -h postgres -U agentry -d agentry_dev -tc "SELECT 1 FROM pg_database WHERE datname='authentik'" | grep -q 1 ||
@@ -107,7 +116,7 @@ services:
       AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?generate once (openssl rand -base64 48) and set in .env}
       AUTHENTIK_POSTGRESQL__HOST: postgres
       AUTHENTIK_POSTGRESQL__USER: agentry
-      AUTHENTIK_POSTGRESQL__PASSWORD: agentry
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${AGENTRY_PG_PASSWORD:-agentry}
       AUTHENTIK_POSTGRESQL__NAME: authentik
       AUTHENTIK_REDIS__HOST: redis
       AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
@@ -181,7 +190,7 @@ services:
         condition: service_healthy
     entrypoint: ["/bin/sh", "-c"]
     command:
-      - mc alias set local http://minio:9000 agentry agentry-dev-secret &&
+      - mc alias set local http://minio:9000 agentry "${AGENTRY_MINIO_SECRET:-agentry-dev-secret}" &&
         mc mb --ignore-existing local/agentry-dev
 
   # Optional: containerized agentryd (self-host trial). Build locally:
@@ -193,7 +202,7 @@ services:
       context: ../..
       dockerfile: deploy/compose/Dockerfile
     environment:
-      AGENTRY_DATABASE_URL: postgres://agentry:agentry@postgres:5432/agentry_dev?sslmode=disable
+      AGENTRY_DATABASE_URL: postgres://agentry:${AGENTRY_PG_PASSWORD:-agentry}@postgres:5432/agentry_dev?sslmode=disable
       AGENTRY_HTTP_ADDR: ":8080"
       # Optional LLM judge (S5): point at any OpenAI- or Anthropic-compatible
       # endpoint. Leave unset and dev falls back to the static heuristic
@@ -249,7 +258,7 @@ services:
       AGENTRY_STORAGE_S3_ENDPOINT: http://minio:9000
       AGENTRY_STORAGE_S3_USE_PATH_STYLE: "true"
       AWS_ACCESS_KEY_ID: agentry
-      AWS_SECRET_ACCESS_KEY: agentry-dev-secret
+      AWS_SECRET_ACCESS_KEY: ${AGENTRY_MINIO_SECRET:-agentry-dev-secret}
       # Bare repos live on a named volume at a path the image pre-owns for
       # uid 65532 (see Dockerfile); the default .devdata/git would resolve
       # to an unwritable / in-container.
