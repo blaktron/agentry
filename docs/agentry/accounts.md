@@ -41,9 +41,10 @@ access, profile) and revocable individually; treat them like the
 credentials they are.
 
 The **desktop app** never asks you to paste one. It opens your browser,
-you sign in as usual, and one explicit approval page hands the app a scoped
-token on a local listener. Revoking it later is the same Settings → Tokens
-list.
+you sign in as usual, and one explicit approval page hands the app a
+one-time code on a local listener; the app exchanges that code for a scoped
+token from its own process, so the token itself never appears in your
+browser. Revoking it later is the same Settings → Tokens list.
 
 ## Organizations
 

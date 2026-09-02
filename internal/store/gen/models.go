@@ -141,6 +141,18 @@ type AuditExport struct {
 	FinishedAt   *time.Time `json:"finished_at"`
 }
 
+type DesktopGrant struct {
+	ID          uuid.UUID  `json:"id"`
+	UserID      uuid.UUID  `json:"user_id"`
+	CodeSha256  []byte     `json:"code_sha256"`
+	StateSha256 []byte     `json:"state_sha256"`
+	Scopes      []string   `json:"scopes"`
+	Name        string     `json:"name"`
+	ExpiresAt   time.Time  `json:"expires_at"`
+	ConsumedAt  *time.Time `json:"consumed_at"`
+	CreatedAt   time.Time  `json:"created_at"`
+}
+
 type DomainClaim struct {
 	ID                uuid.UUID  `json:"id"`
 	OrgID             uuid.UUID  `json:"org_id"`

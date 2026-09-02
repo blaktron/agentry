@@ -1075,6 +1075,25 @@ type CreateTokenRequest struct {
 	Scopes    []Scope `json:"scopes"`
 }
 
+// DesktopExchangeRequest defines model for DesktopExchangeRequest.
+type DesktopExchangeRequest struct {
+	Code  string `json:"code"`
+	State string `json:"state"`
+}
+
+// DesktopGrant defines model for DesktopGrant.
+type DesktopGrant struct {
+	// Code Single-use exchange code. Appears only in this response.
+	Code      string    `json:"code"`
+	ExpiresAt time.Time `json:"expiresAt"`
+}
+
+// DesktopGrantRequest defines model for DesktopGrantRequest.
+type DesktopGrantRequest struct {
+	// State The desktop app's nonce; the exchange must present the same value.
+	State string `json:"state"`
+}
+
 // DomainClaim defines model for DomainClaim.
 type DomainClaim struct {
 	Domain string `json:"domain"`
@@ -1916,6 +1935,9 @@ type TotpChallengeJSONRequestBody TotpChallengeJSONBody
 // TotpVerifyJSONRequestBody defines body for TotpVerify for application/json ContentType.
 type TotpVerifyJSONRequestBody TotpVerifyJSONBody
 
+// ExchangeDesktopCodeJSONRequestBody defines body for ExchangeDesktopCode for application/json ContentType.
+type ExchangeDesktopCodeJSONRequestBody = DesktopExchangeRequest
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
@@ -1981,6 +2003,9 @@ type UpdateCurrentUserJSONRequestBody UpdateCurrentUserJSONBody
 
 // CreateTokenJSONRequestBody defines body for CreateToken for application/json ContentType.
 type CreateTokenJSONRequestBody = CreateTokenRequest
+
+// CreateDesktopGrantJSONRequestBody defines body for CreateDesktopGrant for application/json ContentType.
+type CreateDesktopGrantJSONRequestBody = DesktopGrantRequest
 
 // RequestEditorFn is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -2300,6 +2325,24 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /auth/2fa/totp/verify (the `TotpVerify` operationId).
 	TotpVerify(ctx context.Context, body TotpVerifyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ExchangeDesktopCodeWithBody Exchange a desktop sign-in code for the PAT it granted.
+	//
+	// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class (§19).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /auth/desktop/exchange (the `ExchangeDesktopCode` operationId).
+	ExchangeDesktopCodeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ExchangeDesktopCode Exchange a desktop sign-in code for the PAT it granted.
+	//
+	// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class (§19).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /auth/desktop/exchange (the `ExchangeDesktopCode` operationId).
+	ExchangeDesktopCode(ctx context.Context, body ExchangeDesktopCodeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// LoginWithBody Password (+TOTP when enabled) login; sets the session cookie.
 	//
@@ -2888,6 +2931,24 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /user/tokens (the `CreateToken` operationId).
 	CreateToken(ctx context.Context, body CreateTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateDesktopGrantWithBody Record a one-time grant for the desktop app's browser sign-in.
+	//
+	// Session-only. The web tier's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /user/tokens/desktop-grant (the `CreateDesktopGrant` operationId).
+	CreateDesktopGrantWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateDesktopGrant Record a one-time grant for the desktop app's browser sign-in.
+	//
+	// Session-only. The web tier's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /user/tokens/desktop-grant (the `CreateDesktopGrant` operationId).
+	CreateDesktopGrant(ctx context.Context, body CreateDesktopGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RevokeToken Revoke a PAT immediately (§12.3).
 	//
@@ -3505,6 +3566,44 @@ func (c *Client) TotpVerifyWithBody(ctx context.Context, contentType string, bod
 // Corresponds with POST /auth/2fa/totp/verify (the `TotpVerify` operationId).
 func (c *Client) TotpVerify(ctx context.Context, body TotpVerifyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewTotpVerifyRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ExchangeDesktopCodeWithBody Exchange a desktop sign-in code for the PAT it granted.
+//
+// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class (§19).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /auth/desktop/exchange (the `ExchangeDesktopCode` operationId).
+func (c *Client) ExchangeDesktopCodeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewExchangeDesktopCodeRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ExchangeDesktopCode Exchange a desktop sign-in code for the PAT it granted.
+//
+// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class (§19).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /auth/desktop/exchange (the `ExchangeDesktopCode` operationId).
+func (c *Client) ExchangeDesktopCode(ctx context.Context, body ExchangeDesktopCodeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewExchangeDesktopCodeRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5023,6 +5122,44 @@ func (c *Client) CreateToken(ctx context.Context, body CreateTokenJSONRequestBod
 	return c.Client.Do(req)
 }
 
+// CreateDesktopGrantWithBody Record a one-time grant for the desktop app's browser sign-in.
+//
+// Session-only. The web tier's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /user/tokens/desktop-grant (the `CreateDesktopGrant` operationId).
+func (c *Client) CreateDesktopGrantWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateDesktopGrantRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateDesktopGrant Record a one-time grant for the desktop app's browser sign-in.
+//
+// Session-only. The web tier's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /user/tokens/desktop-grant (the `CreateDesktopGrant` operationId).
+func (c *Client) CreateDesktopGrant(ctx context.Context, body CreateDesktopGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateDesktopGrantRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // RevokeToken Revoke a PAT immediately (§12.3).
 //
 // Corresponds with DELETE /user/tokens/{tokenId} (the `RevokeToken` operationId).
@@ -6434,6 +6571,46 @@ func NewTotpVerifyRequestWithBody(server string, contentType string, body io.Rea
 	}
 
 	operationPath := fmt.Sprintf("/auth/2fa/totp/verify")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewExchangeDesktopCodeRequest calls the generic ExchangeDesktopCode builder with application/json body
+func NewExchangeDesktopCodeRequest(server string, body ExchangeDesktopCodeJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewExchangeDesktopCodeRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewExchangeDesktopCodeRequestWithBody constructs an http.Request for the ExchangeDesktopCode method, with any body, and a specified content type
+func NewExchangeDesktopCodeRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/auth/desktop/exchange")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -9710,6 +9887,46 @@ func NewCreateTokenRequestWithBody(server string, contentType string, body io.Re
 	return req, nil
 }
 
+// NewCreateDesktopGrantRequest calls the generic CreateDesktopGrant builder with application/json body
+func NewCreateDesktopGrantRequest(server string, body CreateDesktopGrantJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateDesktopGrantRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateDesktopGrantRequestWithBody constructs an http.Request for the CreateDesktopGrant method, with any body, and a specified content type
+func NewCreateDesktopGrantRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/tokens/desktop-grant")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewRevokeTokenRequest constructs an http.Request for the RevokeToken method
 func NewRevokeTokenRequest(server string, tokenId openapi_types.UUID) (*http.Request, error) {
 	var err error
@@ -10104,6 +10321,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /auth/2fa/totp/verify (the `TotpVerify` operationId).
 	TotpVerifyWithResponse(ctx context.Context, body TotpVerifyJSONRequestBody, reqEditors ...RequestEditorFn) (*TotpVerifyResponse, error)
+
+	// ExchangeDesktopCodeWithBodyWithResponse Exchange a desktop sign-in code for the PAT it granted.
+	//
+	// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class (§19).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /auth/desktop/exchange (the `ExchangeDesktopCode` operationId).
+	ExchangeDesktopCodeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ExchangeDesktopCodeResponse, error)
+
+	// ExchangeDesktopCodeWithResponse Exchange a desktop sign-in code for the PAT it granted.
+	//
+	// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class (§19).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /auth/desktop/exchange (the `ExchangeDesktopCode` operationId).
+	ExchangeDesktopCodeWithResponse(ctx context.Context, body ExchangeDesktopCodeJSONRequestBody, reqEditors ...RequestEditorFn) (*ExchangeDesktopCodeResponse, error)
 
 	// LoginWithBodyWithResponse Password (+TOTP when enabled) login; sets the session cookie.
 	//
@@ -10788,6 +11023,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /user/tokens (the `CreateToken` operationId).
 	CreateTokenWithResponse(ctx context.Context, body CreateTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateTokenResponse, error)
+
+	// CreateDesktopGrantWithBodyWithResponse Record a one-time grant for the desktop app's browser sign-in.
+	//
+	// Session-only. The web tier's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /user/tokens/desktop-grant (the `CreateDesktopGrant` operationId).
+	CreateDesktopGrantWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateDesktopGrantResponse, error)
+
+	// CreateDesktopGrantWithResponse Record a one-time grant for the desktop app's browser sign-in.
+	//
+	// Session-only. The web tier's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /user/tokens/desktop-grant (the `CreateDesktopGrant` operationId).
+	CreateDesktopGrantWithResponse(ctx context.Context, body CreateDesktopGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateDesktopGrantResponse, error)
 
 	// RevokeTokenWithResponse Revoke a PAT immediately (§12.3).
 	//
@@ -12072,6 +12325,54 @@ func (r TotpVerifyResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r TotpVerifyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ExchangeDesktopCodeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *PatCreated
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r ExchangeDesktopCodeResponse) GetJSON201() *PatCreated {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ExchangeDesktopCodeResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ExchangeDesktopCodeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ExchangeDesktopCodeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ExchangeDesktopCodeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ExchangeDesktopCodeResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -15300,6 +15601,54 @@ func (r CreateTokenResponse) ContentType() string {
 	return ""
 }
 
+type CreateDesktopGrantResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *DesktopGrant
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateDesktopGrantResponse) GetJSON201() *DesktopGrant {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r CreateDesktopGrantResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateDesktopGrantResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateDesktopGrantResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateDesktopGrantResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateDesktopGrantResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type RevokeTokenResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -15892,6 +16241,36 @@ func (c *ClientWithResponses) TotpVerifyWithResponse(ctx context.Context, body T
 		return nil, err
 	}
 	return ParseTotpVerifyResponse(rsp)
+}
+
+// ExchangeDesktopCodeWithBodyWithResponse Exchange a desktop sign-in code for the PAT it granted.
+//
+// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class (§19).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /auth/desktop/exchange (the `ExchangeDesktopCode` operationId).
+func (c *ClientWithResponses) ExchangeDesktopCodeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ExchangeDesktopCodeResponse, error) {
+	rsp, err := c.ExchangeDesktopCodeWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseExchangeDesktopCodeResponse(rsp)
+}
+
+// ExchangeDesktopCodeWithResponse Exchange a desktop sign-in code for the PAT it granted.
+//
+// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class (§19).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /auth/desktop/exchange (the `ExchangeDesktopCode` operationId).
+func (c *ClientWithResponses) ExchangeDesktopCodeWithResponse(ctx context.Context, body ExchangeDesktopCodeJSONRequestBody, reqEditors ...RequestEditorFn) (*ExchangeDesktopCodeResponse, error) {
+	rsp, err := c.ExchangeDesktopCode(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseExchangeDesktopCodeResponse(rsp)
 }
 
 // LoginWithBodyWithResponse Password (+TOTP when enabled) login; sets the session cookie.
@@ -17130,6 +17509,36 @@ func (c *ClientWithResponses) CreateTokenWithResponse(ctx context.Context, body 
 	return ParseCreateTokenResponse(rsp)
 }
 
+// CreateDesktopGrantWithBodyWithResponse Record a one-time grant for the desktop app's browser sign-in.
+//
+// Session-only. The web tier's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /user/tokens/desktop-grant (the `CreateDesktopGrant` operationId).
+func (c *ClientWithResponses) CreateDesktopGrantWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateDesktopGrantResponse, error) {
+	rsp, err := c.CreateDesktopGrantWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateDesktopGrantResponse(rsp)
+}
+
+// CreateDesktopGrantWithResponse Record a one-time grant for the desktop app's browser sign-in.
+//
+// Session-only. The web tier's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /user/tokens/desktop-grant (the `CreateDesktopGrant` operationId).
+func (c *ClientWithResponses) CreateDesktopGrantWithResponse(ctx context.Context, body CreateDesktopGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateDesktopGrantResponse, error) {
+	rsp, err := c.CreateDesktopGrant(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateDesktopGrantResponse(rsp)
+}
+
 // RevokeTokenWithResponse Revoke a PAT immediately (§12.3).
 //
 // Returns a wrapper object for the known response body format(s).
@@ -18039,6 +18448,39 @@ func ParseTotpVerifyResponse(rsp *http.Response) (*TotpVerifyResponse, error) {
 	switch {
 	case rsp.StatusCode == 204:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseExchangeDesktopCodeResponse parses an HTTP response from a ExchangeDesktopCodeWithResponse call
+func ParseExchangeDesktopCodeResponse(rsp *http.Response) (*ExchangeDesktopCodeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ExchangeDesktopCodeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest PatCreated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
@@ -20291,6 +20733,39 @@ func ParseCreateTokenResponse(rsp *http.Response) (*CreateTokenResponse, error) 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
 		var dest PatCreated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateDesktopGrantResponse parses an HTTP response from a CreateDesktopGrantWithResponse call
+func ParseCreateDesktopGrantResponse(rsp *http.Response) (*CreateDesktopGrantResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateDesktopGrantResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest DesktopGrant
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

@@ -146,6 +146,7 @@ var routeAuthz = map[string]RouteDecl{
 	"createOrg":             {Action: auth.ActOrgCreate},
 	"createTeam":            {Action: auth.ActOrgTeamsManage, OrgScoped: true},
 	"createToken":           {Action: auth.ActUserTokensManage, SessionOnly: true},
+	"createDesktopGrant":    {Action: auth.ActUserTokensManage, SessionOnly: true},
 	"deleteTeam":            {Action: auth.ActOrgTeamsManage, OrgScoped: true},
 	"getCurrentUser":        {Action: auth.ActUserSelfRead},
 	"getMeta":               {Action: auth.ActPublicRead, Anonymous: true, NoAuthz: true},
@@ -167,6 +168,7 @@ var routeAuthz = map[string]RouteDecl{
 	// discloses nothing that shipping the binary did not.
 	"getLatestRulesetBundle": {Action: auth.ActPublicRead, Anonymous: true, NoAuthz: true},
 	"login":                  {NoAuthz: true, Anonymous: true},
+	"exchangeDesktopCode":    {NoAuthz: true, Anonymous: true},
 	"logout":                 {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	"register":               {NoAuthz: true, Anonymous: true},
 	"removeOrgMember":        {Action: auth.ActOrgMembersManage, OrgScoped: true}, // elevates to ActOrgMembersElevate for owner/admin targets
