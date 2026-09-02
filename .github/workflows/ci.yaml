@@ -136,6 +136,20 @@ jobs:
       - name: osv-scanner (go.mod + web/package-lock.json)
         run: go run github.com/google/osv-scanner/v2/cmd/osv-scanner@latest scan --lockfile=go.mod --lockfile=web/package-lock.json
 
+  # Third-party verification of the attestations this code signs
+  # (agentry#26, DEV-035): cosign — which shares no code with pkg/attest —
+  # must verify both the publish and the ruleset envelope over a fixture
+  # blob. "Format-compatible" is a claim on the trust page; this is its test.
+  attest-interop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: sigstore/cosign-installer@v3
+      - run: make attest-interop
+
   # Container image scan. The ECR-side scan (§13) covers what is deployed;
   # this catches a base-image CVE at PR time instead of at push time.
   # Non-blocking on purpose: a fresh base-image CVE with no fix available must
