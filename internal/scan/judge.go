@@ -188,8 +188,12 @@ func (StaticProvider) Judge(_ context.Context, content JudgeContent) (JudgeVerdi
 	return v, nil
 }
 
-// UnconfiguredProvider stands in for bedrock/classifier until wired.
-type UnconfiguredProvider struct{ ProviderName string }
+// UnconfiguredProvider stands in for a provider that could not be built
+// (see NewJudgeProvider); every verdict is an error, so S5 fails closed.
+type UnconfiguredProvider struct {
+	ProviderName string
+	Reason       string
+}
 
 // Name implements JudgeProvider.
 func (u UnconfiguredProvider) Name() string { return u.ProviderName }
@@ -200,7 +204,11 @@ func (UnconfiguredProvider) RequiresHumanReview() bool { return true }
 // Judge implements JudgeProvider: returns an error so the orchestrator
 // records an S5 stage error and fails closed to review.
 func (u UnconfiguredProvider) Judge(_ context.Context, _ JudgeContent) (JudgeVerdict, error) {
-	return JudgeVerdict{}, errors.New("scan: judge provider " + u.ProviderName + " is not configured")
+	msg := "scan: judge provider " + u.ProviderName + " is not configured"
+	if u.Reason != "" {
+		msg += ": " + u.Reason
+	}
+	return JudgeVerdict{}, errors.New(msg)
 }
 
 // JudgeConfig is everything NewJudgeProvider needs from the deployment
@@ -210,21 +218,42 @@ type JudgeConfig struct {
 	Model    string
 	BaseURL  string
 	APIKey   string
+	// Region is the AWS region for the bedrock provider (AGENTRY_JUDGE_REGION).
+	Region string
 }
 
-// NewJudgeProvider builds the configured provider.
+// NewJudgeProvider builds the configured provider. A provider whose
+// construction fails (bedrock without an AWS region) degrades to
+// UnconfiguredProvider, which fails closed toward review; use
+// BuildJudgeProvider at startup to surface that error instead.
 func NewJudgeProvider(cfg JudgeConfig) JudgeProvider {
+	p, err := BuildJudgeProvider(context.Background(), cfg)
+	if err != nil {
+		return UnconfiguredProvider{ProviderName: cfg.Provider, Reason: err.Error()}
+	}
+	return p
+}
+
+// BuildJudgeProvider builds the configured provider, returning the
+// construction error for the caller to refuse startup on (§8.4.6: a judge
+// the operator asked for must not silently become "review everything").
+func BuildJudgeProvider(ctx context.Context, cfg JudgeConfig) (JudgeProvider, error) {
 	switch cfg.Provider {
 	case "", "none":
-		return NoneProvider{}
+		return NoneProvider{}, nil
 	case "static":
-		return StaticProvider{}
+		return StaticProvider{}, nil
 	case "openai", "anthropic":
-		return NewHTTPJudge(cfg)
-	case "bedrock", "classifier":
-		return UnconfiguredProvider{ProviderName: cfg.Provider}
+		return NewHTTPJudge(cfg), nil
+	case "bedrock":
+		return NewBedrockJudge(ctx, cfg)
+	case "classifier":
+		if strings.TrimSpace(cfg.BaseURL) == "" {
+			return nil, errors.New("scan: classifier judge needs a base url (AGENTRY_JUDGE_BASE_URL)")
+		}
+		return NewClassifierJudge(cfg), nil
 	default:
-		return NoneProvider{}
+		return NoneProvider{}, nil
 	}
 }
 
@@ -320,11 +349,7 @@ FILES:
 // (transport, non-200, unparseable verdict) returns an error: S5 fails
 // closed toward review (§8.4.6).
 func (j *HTTPJudge) Judge(ctx context.Context, content JudgeContent) (JudgeVerdict, error) {
-	var files strings.Builder
-	for _, f := range content.Files {
-		fmt.Fprintf(&files, "<<<FILE %s\n%s\nFILE>>>\n\n", f.Path, f.Content)
-	}
-	prompt := fmt.Sprintf(judgePromptTemplate, string(content.ManifestJSON), files.String())
+	prompt := judgePrompt(content)
 
 	payload, err := json.Marshal(map[string]any{
 		"model":       j.model,
@@ -380,6 +405,16 @@ func (j *HTTPJudge) Judge(ctx context.Context, content JudgeContent) (JudgeVerdi
 	verdict.Model = j.model
 	verdict.PromptHash = j.promptHash
 	return verdict, nil
+}
+
+// judgePrompt renders the shared rubric template with the content as data.
+// Every chat-style provider (HTTP, Bedrock) sends exactly this text.
+func judgePrompt(content JudgeContent) string {
+	var files strings.Builder
+	for _, f := range content.Files {
+		fmt.Fprintf(&files, "<<<FILE %s\n%s\nFILE>>>\n\n", f.Path, f.Content)
+	}
+	return fmt.Sprintf(judgePromptTemplate, string(content.ManifestJSON), files.String())
 }
 
 // judgeResponseText extracts the assistant text from either wire protocol's
