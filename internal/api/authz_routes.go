@@ -163,6 +163,7 @@ var routeAuthz = map[string]RouteDecl{
 	// own); revoking is session-only, like logout — a token must not be able
 	// to sign its holder's browsers out.
 	"listUserSessions":        {Action: auth.ActUserSelfRead},
+	"getUserDirectory":        {Action: auth.ActUserSelfRead},
 	"revokeUserSession":       {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	"revokeOtherUserSessions": {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	// The rule bundle is the same artifact the CLI already embeds; serving it
