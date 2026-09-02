@@ -109,9 +109,12 @@ func NewS3Stream(bucket string, _ time.Duration, _ *slog.Logger) (Stream, error)
 
 // FileStream appends NDJSON to one file per UTC day in a directory.
 type FileStream struct {
-	dir   string
-	log   *slog.Logger
-	flush time.Duration
+	// OnDrop, when set, is called for every record dropped on a full buffer
+	// (agentry#33: the metrics layer counts it as a fail-open event).
+	OnDrop func()
+	dir    string
+	log    *slog.Logger
+	flush  time.Duration
 
 	// mu guards buf and the file/day pair; wmu serializes whole flushes so two
 	// concurrent flushers cannot interleave half-written JSON lines.
@@ -154,6 +157,9 @@ func (fs *FileStream) Append(rec Record) {
 	defer fs.mu.Unlock()
 	if len(fs.buf) >= fileStreamBufferMax {
 		fs.log.Error("audit stream: buffer full, dropping record", "action", rec.Action, "id", rec.ID)
+		if fs.OnDrop != nil {
+			fs.OnDrop()
+		}
 		return
 	}
 	fs.buf = append(fs.buf, rec)

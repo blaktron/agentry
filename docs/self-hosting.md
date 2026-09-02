@@ -517,6 +517,11 @@ production values:
   keeps authentik's own per-user control on the email stage
   (`recovery_max_attempts`, `recovery_cache_timeout`); the per-IP limit is
   what stops one source mailing a thousand different victims.
+  The policy **fails open** on an unexpected error (a broken counter must
+  not become an outage on the only route into the product); the failure
+  shows up in authentik's event log as a `policy_exception` event, which
+  is the thing to alert on — the registry's `FailOpenEvents` metric covers
+  the registry's own fail-open paths, not this one.
 
 Sign-in from the web app runs in the API's browser mode: `/login`
 forwards to `/api/v1/auth/oidc/authentik/start?next=<in-app path>` and

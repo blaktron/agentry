@@ -217,6 +217,24 @@ resource "aws_cloudwatch_log_metric_filter" "kms_sign" {
   }
 }
 
+# Fail-open events (agentry#33): the audit archive dropping a record, or
+# S7 publishing a version without an OSV lookup. Each is a deliberate
+# choice to continue rather than stop; the alarm makes the choice visible
+# as a ticket rather than a log line. Any occurrence in an hour tickets.
+resource "aws_cloudwatch_metric_alarm" "fail_open_events" {
+  alarm_name          = "${var.name}-fail-open-events"
+  alarm_description   = "A fail-open path ran: audit archive drop or OSV not checked (§16.3 ticket, agentry#33)."
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  threshold           = 0
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.ticket.arn]
+  namespace           = var.metrics_namespace
+  metric_name         = "FailOpenEvents"
+  period              = 3600
+  statistic           = "Sum"
+}
+
 resource "aws_cloudwatch_metric_alarm" "kms_sign_anomaly" {
   count               = var.cloudtrail_log_group_name == null ? 0 : 1
   alarm_name          = "${var.name}-kms-sign-anomaly"
