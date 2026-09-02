@@ -30,7 +30,6 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U agentry" --health-interval 5s
           --health-timeout 3s --health-retries 10
-    env:
     steps:
       - uses: actions/checkout@v4
       - name: Point the tests at the service's mapped port
@@ -81,7 +80,6 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U agentry" --health-interval 5s
           --health-timeout 3s --health-retries 10
-    env:
     steps:
       - uses: actions/checkout@v4
       - name: Point the tests at the service's mapped port
