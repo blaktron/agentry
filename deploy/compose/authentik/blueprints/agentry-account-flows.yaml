@@ -140,41 +140,50 @@ entries:
       name: agentry-account-flow-rate-limit
     attrs:
       execution_logging: true
-      expression: |
-        MAX_PER_HOUR = 10
-        try:
-            from datetime import timedelta
+      # The per-IP budget is AUTHENTIK_ACCOUNT_FLOW_MAX_PER_HOUR (default 10),
+      # formatted into the expression at apply time (agentry#53). A value
+      # that is not an integer falls back to 10 rather than breaking the
+      # policy — the except branch below fails open on purpose (DEV-063).
+      expression: !Format
+        - |
+          try:
+              MAX_PER_HOUR = int("%s")
+          except ValueError:
+              MAX_PER_HOUR = 10
+          try:
+              from datetime import timedelta
 
-            from django.db.models import Q
-            from django.utils.timezone import now
+              from django.db.models import Q
+              from django.utils.timezone import now
 
-            from authentik.events.models import Event, EventAction
-            from authentik.root.middleware import ClientIPMiddleware
+              from authentik.events.models import Event, EventAction
+              from authentik.root.middleware import ClientIPMiddleware
 
-            http = request.http_request
-            if http is None:
-                return True
-            client_ip = ClientIPMiddleware.get_client_ip(http)
-            recent = (
-                Event.objects.filter(
-                    client_ip=client_ip,
-                    created__gte=now() - timedelta(hours=1),
-                )
-                .filter(
-                    Q(action=EventAction.EMAIL_SENT)
-                    | Q(action=EventAction.MODEL_CREATED, context__model__model_name="user")
-                )
-                .count()
-            )
-            if recent >= MAX_PER_HOUR:
-                ak_logger.info(
-                    "agentry: account flow rate limit hit", ip=client_ip, recent=recent
-                )
-                ak_message("Too many attempts from this network. Please try again later.")
-                return False
-        except Exception as exc:
-            ak_logger.warning("agentry: rate limit check failed, allowing", exc=str(exc))
-        return True
+              http = request.http_request
+              if http is None:
+                  return True
+              client_ip = ClientIPMiddleware.get_client_ip(http)
+              recent = (
+                  Event.objects.filter(
+                      client_ip=client_ip,
+                      created__gte=now() - timedelta(hours=1),
+                  )
+                  .filter(
+                      Q(action=EventAction.EMAIL_SENT)
+                      | Q(action=EventAction.MODEL_CREATED, context__model__model_name="user")
+                  )
+                  .count()
+              )
+              if recent >= MAX_PER_HOUR:
+                  ak_logger.info(
+                      "agentry: account flow rate limit hit", ip=client_ip, recent=recent
+                  )
+                  ak_message("Too many attempts from this network. Please try again later.")
+                  return False
+          except Exception as exc:
+              ak_logger.warning("agentry: rate limit check failed, allowing", exc=str(exc))
+          return True
+        - !Env [AUTHENTIK_ACCOUNT_FLOW_MAX_PER_HOUR, "10"]
 
   # ==========================================================================
   # Enrollment
@@ -268,6 +277,19 @@ entries:
     identifiers:
       name: agentry-enrollment-login
 
+  # Authenticator (TOTP) setup inside enrollment (agentry#53, DEV-062):
+  # every new account leaves the flow with an authenticator, which is what
+  # the registry's public-publish gate reads back through the amr claim
+  # (DEV-080). Binding order 40: after the address is confirmed, before
+  # the session is created.
+  - model: authentik_stages_authenticator_totp.authenticatortotpstage
+    id: stage-totp-setup
+    identifiers:
+      name: agentry-authenticator-totp-setup
+    attrs:
+      friendly_name: Agentry authenticator
+      digits: 6
+
   - model: authentik_flows.flowstagebinding
     identifiers:
       target: !KeyOf flow-enrollment
@@ -288,6 +310,11 @@ entries:
       target: !KeyOf flow-enrollment
       stage: !KeyOf stage-enrollment-email
       order: 30
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow-enrollment
+      stage: !KeyOf stage-totp-setup
+      order: 40
   - model: authentik_flows.flowstagebinding
     identifiers:
       target: !KeyOf flow-enrollment
@@ -407,6 +434,27 @@ entries:
       re_evaluate_policies: true
       policy_engine_mode: any
       invalid_response_action: retry
+  # Recovery proves the authenticator before the password may change
+  # (agentry#53): a user with one presents it; a user without one is sent
+  # through the same TOTP setup stage enrollment uses (not_configured_action:
+  # configure), so nobody leaves recovery without an authenticator either.
+  # Lost-authenticator recovery is an operator action in authentik's admin
+  # UI by design — email alone must not reset both factors.
+  - model: authentik_stages_authenticator_validate.authenticatorvalidatestage
+    id: stage-recovery-mfa
+    identifiers:
+      name: agentry-recovery-authenticator-validate
+    attrs:
+      device_classes: [totp, webauthn, static]
+      not_configured_action: configure
+      configuration_stages:
+        - !KeyOf stage-totp-setup
+      last_auth_threshold: seconds=0
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow-recovery
+      stage: !KeyOf stage-recovery-mfa
+      order: 25
   - model: authentik_flows.flowstagebinding
     identifiers:
       target: !KeyOf flow-recovery
