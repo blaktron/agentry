@@ -70,25 +70,26 @@ type AgentUserGrant struct {
 }
 
 type AgentVersion struct {
-	ID            uuid.UUID  `json:"id"`
-	AgentID       uuid.UUID  `json:"agent_id"`
-	Version       string     `json:"version"`
-	CommitSha     string     `json:"commit_sha"`
-	Manifest      []byte     `json:"manifest"`
-	Capabilities  []byte     `json:"capabilities"`
-	ArchiveDigest *string    `json:"archive_digest"`
-	ArchiveKey    *string    `json:"archive_key"`
-	ArchiveSize   *int64     `json:"archive_size"`
-	Status        string     `json:"status"`
-	StatusReason  *string    `json:"status_reason"`
-	PublishedAt   *time.Time `json:"published_at"`
-	YankedAt      *time.Time `json:"yanked_at"`
-	YankReason    *string    `json:"yank_reason"`
-	Channel       string     `json:"channel"`
-	SubmittedBy   uuid.UUID  `json:"submitted_by"`
-	Source        string     `json:"source"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+	ID              uuid.UUID  `json:"id"`
+	AgentID         uuid.UUID  `json:"agent_id"`
+	Version         string     `json:"version"`
+	CommitSha       string     `json:"commit_sha"`
+	Manifest        []byte     `json:"manifest"`
+	Capabilities    []byte     `json:"capabilities"`
+	ArchiveDigest   *string    `json:"archive_digest"`
+	ArchiveKey      *string    `json:"archive_key"`
+	ArchiveSize     *int64     `json:"archive_size"`
+	Status          string     `json:"status"`
+	StatusReason    *string    `json:"status_reason"`
+	PublishedAt     *time.Time `json:"published_at"`
+	YankedAt        *time.Time `json:"yanked_at"`
+	YankReason      *string    `json:"yank_reason"`
+	Channel         string     `json:"channel"`
+	SubmittedBy     uuid.UUID  `json:"submitted_by"`
+	Source          string     `json:"source"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+	SubmitterIpHash *string    `json:"submitter_ip_hash"`
 }
 
 type Attestation struct {
