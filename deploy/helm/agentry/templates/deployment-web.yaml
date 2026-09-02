@@ -39,6 +39,10 @@ spec:
               value: {{ .Values.web.port | quote }}
             - name: AGENTRY_API_BASE_URL
               value: {{ .Values.config.baseURL | quote }}
+            {{- with .Values.config.idp.logoutUrl }}
+            - name: AGENTRY_IDP_LOGOUT_URL
+              value: {{ . | quote }}
+            {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
