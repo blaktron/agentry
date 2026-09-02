@@ -1817,7 +1817,7 @@ export interface components {
             role: components["schemas"]["AgentRole"];
         };
         /**
-         * @description Publication state machine states (§7).
+         * @description Publication state machine states (§7). `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change (DEV-046).
          * @enum {string}
          */
         VersionStatus: "submitted" | "scanning" | "needs_review" | "approved" | "published" | "rejected" | "yanked" | "quarantined" | "blocked";
