@@ -1493,6 +1493,30 @@ type User struct {
 	TotpEnabled   bool  `json:"totpEnabled"`
 }
 
+// UserDirectory defines model for UserDirectory.
+type UserDirectory struct {
+	// AccountUrl The directory's own account page (name, email, sessions, consents).
+	AccountUrl *string `json:"accountUrl,omitempty"`
+
+	// Devices The caller's enrolled authenticators as the directory reports them; absent when the server has no directory admin access.
+	Devices *[]struct {
+		CreatedAt *time.Time `json:"createdAt,omitempty"`
+
+		// Kind totp | webauthn | static | duo | sms | email | other
+		Kind string `json:"kind"`
+		Name string `json:"name"`
+	} `json:"devices,omitempty"`
+
+	// DevicesError Set when the device lookup was attempted and failed; the links still work.
+	DevicesError *string `json:"devicesError,omitempty"`
+
+	// Managed True when a directory service owns credentials for this deployment.
+	Managed           bool    `json:"managed"`
+	PasswordChangeUrl *string `json:"passwordChangeUrl,omitempty"`
+	TotpSetupUrl      *string `json:"totpSetupUrl,omitempty"`
+	WebauthnSetupUrl  *string `json:"webauthnSetupUrl,omitempty"`
+}
+
 // VersionStatus Publication state machine states (§7). `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change (DEV-046).
 type VersionStatus string
 
@@ -2904,6 +2928,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
 	DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetUserDirectory Where the caller manages password, MFA and profile when a directory service owns the account (DEV-057).
+	//
+	// With auth.externalOnly, credentials live in the directory service (Authentik). This answers the settings page's question "where do I change my password or add an authenticator?" with the directory's flow URLs, and lists the caller's enrolled authenticator devices when the server has directory admin access (auth.idpAdminURL). Without a directory, `managed` is false and the rest is absent.
+	//
+	// Corresponds with GET /user/directory (the `GetUserDirectory` operationId).
+	GetUserDirectory(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RevokeOtherUserSessions Revoke every session except the calling one ("sign out everywhere else").
 	//
@@ -5039,6 +5070,23 @@ func (c *Client) UpdateCurrentUser(ctx context.Context, body UpdateCurrentUserJS
 // Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
 func (c *Client) DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteCurrentUserRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetUserDirectory Where the caller manages password, MFA and profile when a directory service owns the account (DEV-057).
+//
+// With auth.externalOnly, credentials live in the directory service (Authentik). This answers the settings page's question "where do I change my password or add an authenticator?" with the directory's flow URLs, and lists the caller's enrolled authenticator devices when the server has directory admin access (auth.idpAdminURL). Without a directory, `managed` is false and the rest is absent.
+//
+// Corresponds with GET /user/directory (the `GetUserDirectory` operationId).
+func (c *Client) GetUserDirectory(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetUserDirectoryRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -9796,6 +9844,33 @@ func NewDeleteCurrentUserRequest(server string, params *DeleteCurrentUserParams)
 	return req, nil
 }
 
+// NewGetUserDirectoryRequest constructs an http.Request for the GetUserDirectory method
+func NewGetUserDirectoryRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/directory")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewRevokeOtherUserSessionsRequest constructs an http.Request for the RevokeOtherUserSessions method
 func NewRevokeOtherUserSessionsRequest(server string) (*http.Request, error) {
 	var err error
@@ -11125,6 +11200,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
 	DeleteCurrentUserWithResponse(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*DeleteCurrentUserResponse, error)
+
+	// GetUserDirectoryWithResponse Where the caller manages password, MFA and profile when a directory service owns the account (DEV-057).
+	//
+	// With auth.externalOnly, credentials live in the directory service (Authentik). This answers the settings page's question "where do I change my password or add an authenticator?" with the directory's flow URLs, and lists the caller's enrolled authenticator devices when the server has directory admin access (auth.idpAdminURL). Without a directory, `managed` is false and the rest is absent.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /user/directory (the `GetUserDirectory` operationId).
+	GetUserDirectoryWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserDirectoryResponse, error)
 
 	// RevokeOtherUserSessionsWithResponse Revoke every session except the calling one ("sign out everywhere else").
 	//
@@ -15553,6 +15637,54 @@ func (r DeleteCurrentUserResponse) ContentType() string {
 	return ""
 }
 
+type GetUserDirectoryResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *UserDirectory
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetUserDirectoryResponse) GetJSON200() *UserDirectory {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetUserDirectoryResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetUserDirectoryResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetUserDirectoryResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetUserDirectoryResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetUserDirectoryResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type RevokeOtherUserSessionsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -17687,6 +17819,21 @@ func (c *ClientWithResponses) DeleteCurrentUserWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseDeleteCurrentUserResponse(rsp)
+}
+
+// GetUserDirectoryWithResponse Where the caller manages password, MFA and profile when a directory service owns the account (DEV-057).
+//
+// With auth.externalOnly, credentials live in the directory service (Authentik). This answers the settings page's question "where do I change my password or add an authenticator?" with the directory's flow URLs, and lists the caller's enrolled authenticator devices when the server has directory admin access (auth.idpAdminURL). Without a directory, `managed` is false and the rest is absent.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /user/directory (the `GetUserDirectory` operationId).
+func (c *ClientWithResponses) GetUserDirectoryWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserDirectoryResponse, error) {
+	rsp, err := c.GetUserDirectory(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetUserDirectoryResponse(rsp)
 }
 
 // RevokeOtherUserSessionsWithResponse Revoke every session except the calling one ("sign out everywhere else").
@@ -20878,6 +21025,39 @@ func ParseDeleteCurrentUserResponse(rsp *http.Response) (*DeleteCurrentUserRespo
 	switch {
 	case rsp.StatusCode == 204:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetUserDirectoryResponse parses an HTTP response from a GetUserDirectoryWithResponse call
+func ParseGetUserDirectoryResponse(rsp *http.Response) (*GetUserDirectoryResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetUserDirectoryResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest UserDirectory
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
