@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Badge, Card, RefusalCard } from "@/components/ui";
 import { fmtUTC, fmtUTCDate } from "@/lib/format";
+import { apiGet } from "@/lib/api";
 import { AccessError, authedGet, currentUser } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -69,6 +70,12 @@ export default async function SettingsPage({
     .then((r) => r?.sessions)
     .catch(() => undefined);
 
+  // With accounts in a directory service (DEV-057) the native TOTP endpoints
+  // answer 410; offering the form would be a dead end (agentry#21). /meta
+  // says which world this is.
+  const meta = await apiGet<{ features?: Record<string, boolean> }>("/meta", { revalidate: 60 }).catch(() => null);
+  const externalOnly = meta?.features?.externalOnly === true;
+
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
       <h1 className="text-xl font-semibold">Settings</h1>
@@ -108,7 +115,13 @@ export default async function SettingsPage({
 
       <Card>
         <h2 className="mb-2 font-semibold">Two-factor authentication</h2>
-        {user.totpEnabled ? (
+        {externalOnly ? (
+          <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+            Your password and two-factor authentication are managed by the directory service you
+            sign in through, not here. Use its account page (the sign-in provider&apos;s settings)
+            to change your password or enrol an authenticator.
+          </p>
+        ) : user.totpEnabled ? (
           <p className="text-sm">
             <Badge tone="ok">enabled</Badge>{" "}
             <span style={{ color: "var(--color-muted)" }}>TOTP is active on this account.</span>

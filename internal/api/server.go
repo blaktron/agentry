@@ -366,6 +366,10 @@ func (s *Server) GetMeta(w http.ResponseWriter, r *http.Request) {
 		"signing": s.cfg.Signing.Kind != "none",
 		"judge":   s.cfg.Judge.Provider != "none",
 		"s3":      s.cfg.Storage.Kind == "s3",
+		// externalOnly tells the web tier and clients that accounts live in
+		// a directory service (DEV-057): the native credential surface is
+		// gone, so do not offer password or TOTP forms (agentry#21).
+		"externalOnly": s.cfg.Auth.ExternalOnly,
 	}
 	meta := Meta{
 		Version:    version.Version,
