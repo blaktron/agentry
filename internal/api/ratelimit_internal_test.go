@@ -99,6 +99,14 @@ func TestClientIPHonorsTrustedProxyDepth(t *testing.T) {
 		{"no header at all falls back to the peer", "", 2, "10.0.0.9"},
 		{"non-IP entries are dropped", "junk, 203.0.113.7, 198.51.100.2", 2, "203.0.113.7"},
 		{"ip:port form is tolerated", "203.0.113.7:9999, 198.51.100.2", 2, "203.0.113.7"},
+		// The compose edge behind a Cloudflare Tunnel (agentry#14): nginx
+		// resolves the visitor from CF-Connecting-IP and REPLACES the
+		// header with that one address, so one trusted hop sees the
+		// visitor. The appended shape it used to send — visitor, then
+		// cloudflared — resolved to cloudflared for everyone; kept here as
+		// the regression the edge config must not reintroduce.
+		{"tunnel: edge replaces the header", "203.0.113.7", 1, "203.0.113.7"},
+		{"tunnel: an appended header hides the visitor", "203.0.113.7, 172.18.0.5", 1, "172.18.0.5"},
 	}
 	for _, c := range cases {
 		if got := clientIPWithProxies(req(c.xff), c.trusted); got != c.want {
