@@ -167,18 +167,19 @@ var routeAuthz = map[string]RouteDecl{
 	"revokeOtherUserSessions": {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	// The rule bundle is the same artifact the CLI already embeds; serving it
 	// discloses nothing that shipping the binary did not.
-	"getLatestRulesetBundle": {Action: auth.ActPublicRead, Anonymous: true, NoAuthz: true},
-	"login":                  {NoAuthz: true, Anonymous: true},
-	"exchangeDesktopCode":    {NoAuthz: true, Anonymous: true},
-	"logout":                 {Action: auth.ActUserSecurityManage, SessionOnly: true},
-	"register":               {NoAuthz: true, Anonymous: true},
-	"removeOrgMember":        {Action: auth.ActOrgMembersManage, OrgScoped: true}, // elevates to ActOrgMembersElevate for owner/admin targets
-	"removeTeamMember":       {Action: auth.ActOrgTeamsManage, OrgScoped: true},
-	"revokeToken":            {Action: auth.ActUserTokensManage, SessionOnly: true},
-	"setOrgMember":           {Action: auth.ActOrgMembersManage, OrgScoped: true}, // elevates to ActOrgMembersElevate for owner/admin roles
-	"totpSetup":              {Action: auth.ActUserSecurityManage, SessionOnly: true},
-	"totpVerify":             {Action: auth.ActUserSecurityManage, SessionOnly: true},
-	"updateCurrentUser":      {Action: auth.ActUserSelfUpdate},
-	"updateOrg":              {Action: auth.ActOrgUpdate, OrgScoped: true},
-	"verifyEmail":            {NoAuthz: true, Anonymous: true},
+	"getLatestRulesetBundle":      {Action: auth.ActPublicRead, Anonymous: true, NoAuthz: true},
+	"getLatestRulesetAttestation": {Action: auth.ActPublicRead, Anonymous: true, NoAuthz: true},
+	"login":                       {NoAuthz: true, Anonymous: true},
+	"exchangeDesktopCode":         {NoAuthz: true, Anonymous: true},
+	"logout":                      {Action: auth.ActUserSecurityManage, SessionOnly: true},
+	"register":                    {NoAuthz: true, Anonymous: true},
+	"removeOrgMember":             {Action: auth.ActOrgMembersManage, OrgScoped: true}, // elevates to ActOrgMembersElevate for owner/admin targets
+	"removeTeamMember":            {Action: auth.ActOrgTeamsManage, OrgScoped: true},
+	"revokeToken":                 {Action: auth.ActUserTokensManage, SessionOnly: true},
+	"setOrgMember":                {Action: auth.ActOrgMembersManage, OrgScoped: true}, // elevates to ActOrgMembersElevate for owner/admin roles
+	"totpSetup":                   {Action: auth.ActUserSecurityManage, SessionOnly: true},
+	"totpVerify":                  {Action: auth.ActUserSecurityManage, SessionOnly: true},
+	"updateCurrentUser":           {Action: auth.ActUserSelfUpdate},
+	"updateOrg":                   {Action: auth.ActOrgUpdate, OrgScoped: true},
+	"verifyEmail":                 {NoAuthz: true, Anonymous: true},
 }

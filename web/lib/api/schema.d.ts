@@ -414,6 +414,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ruleset-releases/latest/attestation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * DSSE attestation over the bundle `…/latest/bundle` serves.
+         * @description An in-toto statement (predicate `https://agentry.dev/attestation/ruleset/v1`) whose subject digest is the bundle's content digest, signed with the registry's release-signing key (`/.well-known/agentry/signing-keys.json`). Lets `agentry validate --rules-update` verify a fetched bundle by signature rather than only by the digest the same server advertised (agentry#25). 404 when the registry does not sign (`signing.kind: none`).
+         */
+        get: operations["getLatestRulesetAttestation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs": {
         parameters: {
             query?: never;
@@ -2701,6 +2721,29 @@ export interface operations {
                 };
                 content: {
                     "application/x-tar": string;
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getLatestRulesetAttestation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The DSSE envelope (application/json). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             default: components["responses"]["Problem"];
