@@ -67,9 +67,9 @@ func FuzzSanitize(f *testing.F) {
 		}
 		// Round trip: the sanitizer applied to its own output is a no-op.
 		// Markdown() renders markdown, so feed the output back through the
-		// policy + reveal pass directly — that is the composition an attacker
-		// would try to exploit.
-		again := RevealInvisible(r.policy.Sanitize(out))
+		// policy + rel stamp + reveal pass directly — that is the composition
+		// an attacker would try to exploit.
+		again := r.sanitize(out)
 		if again != out {
 			t.Fatalf("sanitize is not idempotent\ninput:  %q\nfirst:  %q\nsecond: %q", src, out, again)
 		}
