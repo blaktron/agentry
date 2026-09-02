@@ -10,16 +10,17 @@ type Action string
 // The v1 action catalog. Append-only: never rename or reuse an id.
 const (
 	// Auth & account.
-	ActionUserRegister      Action = "user.register"
-	ActionUserLogin         Action = "user.login"
-	ActionUserLoginFailed   Action = "user.login_failed"
-	ActionUserLogout        Action = "user.logout"
-	ActionUserEmailVerified Action = "user.email_verified"
-	ActionUserUpdate        Action = "user.update"
-	ActionUserTOTPEnabled   Action = "user.totp_enabled"
-	ActionPATCreate         Action = "pat.create"
-	ActionPATRevoke         Action = "pat.revoke"
-	ActionUserDelete        Action = "user.delete"
+	ActionUserRegister       Action = "user.register"
+	ActionUserLogin          Action = "user.login"
+	ActionUserLoginFailed    Action = "user.login_failed"
+	ActionUserLogout         Action = "user.logout"
+	ActionUserEmailVerified  Action = "user.email_verified"
+	ActionUserUpdate         Action = "user.update"
+	ActionUserTOTPEnabled    Action = "user.totp_enabled"
+	ActionPATCreate          Action = "pat.create"
+	ActionPATRevoke          Action = "pat.revoke"
+	ActionUserDirectoryErase Action = "user.directory_erase"
+	ActionUserDelete         Action = "user.delete"
 
 	// Orgs & teams.
 	ActionOrgCreate        Action = "org.create"
@@ -89,7 +90,7 @@ func init() {
 	for _, a := range []Action{
 		ActionUserRegister, ActionUserLogin, ActionUserLoginFailed,
 		ActionUserLogout, ActionUserEmailVerified, ActionUserUpdate,
-		ActionUserTOTPEnabled, ActionPATCreate, ActionPATRevoke, ActionUserDelete,
+		ActionUserTOTPEnabled, ActionPATCreate, ActionPATRevoke, ActionUserDelete, ActionUserDirectoryErase,
 		ActionOrgCreate, ActionOrgUpdate, ActionOrgMemberSet,
 		ActionOrgMemberRemove, ActionTeamCreate, ActionTeamDelete,
 		ActionTeamMemberAdd, ActionTeamMemberRemove,
