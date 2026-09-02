@@ -206,6 +206,13 @@ ORDER BY published_at DESC LIMIT 1;
 SELECT count(*) FROM agent_versions
 WHERE submitted_by = $1 AND created_at >= now() - interval '7 days';
 
+-- name: CountIPClusterSubmissions :one
+-- S8's cluster axis (agentry#27): how many distinct accounts and how many
+-- versions share this submitting-address hash in the last 24 hours.
+SELECT count(DISTINCT submitted_by)::bigint AS accounts, count(*)::bigint AS versions
+FROM agent_versions
+WHERE submitter_ip_hash = $1 AND created_at >= now() - interval '24 hours';
+
 -- name: CreateAbuseReport :one
 INSERT INTO abuse_reports (id, agent_id, version_id, reporter_id, category, detail)
 VALUES ($1, $2, $3, $4, $5, $6)

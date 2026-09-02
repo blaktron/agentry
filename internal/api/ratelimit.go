@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/blaktron/agentry/internal/auth"
 	"net"
 	"net/http"
 	"strconv"
@@ -76,7 +77,7 @@ func writeRateLimitHeaders(w http.ResponseWriter, res limitResult) {
 // middleware stack (a handler mounted directly on a bare mux) it falls back to
 // the peer address rather than guessing at a header nobody validated.
 func clientIP(r *http.Request) string {
-	if ip, ok := r.Context().Value(clientIPKey).(string); ok && ip != "" {
+	if ip := auth.ClientIPFrom(r.Context()); ip != "" {
 		return ip
 	}
 	return peerIP(r)

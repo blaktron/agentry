@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -362,10 +363,18 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 
 	versionID := newUUID()
 	err = s.st.WithTx(ctx, func(q *storegen.Queries) error {
+		// The submitting address, keyed and month-rotated (agentry#27):
+		// the middleware resolved it once onto the context, for the API
+		// upload and the git push alike.
+		var ipHash *string
+		if h := IPClusterHash(s.ipClusterSecret, auth.ClientIPFrom(ctx), time.Now()); h != "" {
+			ipHash = &h
+		}
 		v, err := q.CreateAgentVersion(ctx, storegen.CreateAgentVersionParams{
 			ID: versionID, AgentID: a.ID, Version: m.Version,
 			CommitSha: in.CommitSHA, Manifest: canonical, Capabilities: caps,
 			Channel: string(m.EffectiveChannel()), SubmittedBy: p.UserID, Source: in.Source,
+			SubmitterIpHash: ipHash,
 		})
 		if err != nil {
 			return err

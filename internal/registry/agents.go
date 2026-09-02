@@ -48,6 +48,8 @@ type Service struct {
 	policyGate PolicyGate
 	// require2FAPublic turns on the §12.1/§19 gate for public publishes.
 	require2FAPublic bool
+	// ipClusterSecret keys the S8 IP-cluster hash (agentry#27); empty = off.
+	ipClusterSecret []byte
 	// entitlements resolves the §19 quotas (§14.2). nil = shipped defaults.
 	entitlements entitlements.Resolver
 	log          *slog.Logger

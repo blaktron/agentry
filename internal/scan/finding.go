@@ -128,6 +128,12 @@ type Input struct {
 	// AccountAgeDays and RecentPublishCount feed S8 publisher signals.
 	AccountAgeDays     int
 	RecentPublishCount int
+	// IPClusterAccounts / IPClusterVersions: distinct submitting accounts and
+	// versions that share this version's submitting-address hash in the last
+	// 24 hours (agentry#27; 0 when the signal is off). Counts include this
+	// submission.
+	IPClusterAccounts int
+	IPClusterVersions int
 }
 
 // FileEntry is one inventoried file (S1 output).
