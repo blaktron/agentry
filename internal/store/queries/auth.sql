@@ -42,3 +42,19 @@ UPDATE sessions SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL;
 
 -- name: RevokeUserSessions :execrows
 UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL;
+
+-- SAML Single Logout (§12.4, agentry#62).
+
+-- name: CreateSAMLSession :one
+INSERT INTO sessions (id, token_sha256, user_id, csrf_token, ip, user_agent, expires_at,
+                      sso_connection_id, saml_name_id, saml_session_index)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, sqlc.narg('saml_session_index'))
+RETURNING *;
+
+-- name: GetSessionByID :one
+SELECT * FROM sessions WHERE id = $1;
+
+-- name: RevokeSAMLSessions :execrows
+UPDATE sessions SET revoked_at = now()
+WHERE sso_connection_id = $1 AND saml_name_id = $2 AND revoked_at IS NULL
+  AND (sqlc.narg('saml_session_index')::text IS NULL OR saml_session_index = sqlc.narg('saml_session_index')::text);

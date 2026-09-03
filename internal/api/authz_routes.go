@@ -131,6 +131,8 @@ var routeAuthz = map[string]RouteDecl{
 	"testSsoConnection":     {Action: auth.ActOrgSettingsManage, OrgScoped: true},
 	"getSamlMetadata":       {NoAuthz: true, Anonymous: true},
 	"samlAcs":               {NoAuthz: true, Anonymous: true},
+	"samlSloRedirect":       {NoAuthz: true, Anonymous: true},
+	"samlSloPost":           {NoAuthz: true, Anonymous: true},
 	"oidcStart":             {NoAuthz: true, Anonymous: true},
 	"oidcCallback":          {NoAuthz: true, Anonymous: true},
 	"listScimTokens":        {Action: auth.ActOrgSettingsManage, OrgScoped: true},
