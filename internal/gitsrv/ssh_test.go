@@ -55,19 +55,17 @@ func (c *sshClient) gitSSHCommand() string {
 }
 
 // seedSSHKey registers a client key for a user directly through the store.
-func (e *gitEnv) seedSSHKey(userID uuid.UUID, c *sshClient) uuid.UUID {
+func (e *gitEnv) seedSSHKey(userID uuid.UUID, c *sshClient) {
 	e.t.Helper()
 	keyType, canonical, fp, err := auth.ParseSSHPublicKey(c.pubLine)
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	id := newUUID(e.t)
 	if _, err := e.st.Queries().CreateSSHKey(context.Background(), storegen.CreateSSHKeyParams{
-		ID: id, UserID: userID, Title: "test", KeyType: keyType, PublicKey: canonical, Fingerprint: fp,
+		ID: newUUID(e.t), UserID: userID, Title: "test", KeyType: keyType, PublicKey: canonical, Fingerprint: fp,
 	}); err != nil {
 		e.t.Fatal(err)
 	}
-	return id
 }
 
 // TestSSHTransportCloneAndPush (§6.1 Q7, agentry#70): a registered key
