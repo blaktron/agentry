@@ -456,6 +456,24 @@ func (e SsoConnectionKind) Valid() bool {
 	}
 }
 
+// Defines values for SsoConnectionTestKind.
+const (
+	SsoConnectionTestKindOidc SsoConnectionTestKind = "oidc"
+	SsoConnectionTestKindSaml SsoConnectionTestKind = "saml"
+)
+
+// Valid indicates whether the value is a known member of the SsoConnectionTestKind enum.
+func (e SsoConnectionTestKind) Valid() bool {
+	switch e {
+	case SsoConnectionTestKindOidc:
+		return true
+	case SsoConnectionTestKindSaml:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for VersionStatus.
 const (
 	VersionStatusApproved    VersionStatus = "approved"
@@ -705,6 +723,24 @@ func (e PutSsoConnectionParamsKind) Valid() bool {
 	case PutSsoConnectionParamsKindOidc:
 		return true
 	case PutSsoConnectionParamsKindSaml:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TestSsoConnectionParamsKind.
+const (
+	TestSsoConnectionParamsKindOidc TestSsoConnectionParamsKind = "oidc"
+	TestSsoConnectionParamsKindSaml TestSsoConnectionParamsKind = "saml"
+)
+
+// Valid indicates whether the value is a known member of the TestSsoConnectionParamsKind enum.
+func (e TestSsoConnectionParamsKind) Valid() bool {
+	switch e {
+	case TestSsoConnectionParamsKindOidc:
+		return true
+	case TestSsoConnectionParamsKindSaml:
 		return true
 	default:
 		return false
@@ -1474,6 +1510,23 @@ type SsoConnectionInput struct {
 	Enabled bool                   `json:"enabled"`
 }
 
+// SsoConnectionTest defines model for SsoConnectionTest.
+type SsoConnectionTest struct {
+	CheckedAt time.Time `json:"checkedAt"`
+
+	// Details Discovered endpoints / metadata facts (strings only).
+	Details *map[string]string    `json:"details,omitempty"`
+	Kind    SsoConnectionTestKind `json:"kind"`
+	Ok      bool                  `json:"ok"`
+
+	// Summary One line for the admin page.
+	Summary  string    `json:"summary"`
+	Warnings *[]string `json:"warnings,omitempty"`
+}
+
+// SsoConnectionTestKind defines model for SsoConnectionTest.Kind.
+type SsoConnectionTestKind string
+
 // TagPage defines model for TagPage.
 type TagPage struct {
 	// NextCursor Opaque; absent on the last page.
@@ -1779,6 +1832,9 @@ type DeleteSsoConnectionParamsKind string
 
 // PutSsoConnectionParamsKind defines parameters for PutSsoConnection.
 type PutSsoConnectionParamsKind string
+
+// TestSsoConnectionParamsKind defines parameters for TestSsoConnection.
+type TestSsoConnectionParamsKind string
 
 // OidcCallbackParams defines parameters for OidcCallback.
 type OidcCallbackParams struct {
@@ -2670,6 +2726,13 @@ type ClientInterface interface {
 	// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
 	PutSsoConnection(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, body PutSsoConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// TestSsoConnection Probe a stored connection without signing in (owner, §12.4; agentry#50).
+	//
+	// OIDC: runs discovery against the stored issuer and reports the endpoints it advertises. SAML: parses the stored IdP metadata and reports entity id, sign-on URLs and signing-certificate expiry. Neither contacts the IdP's sign-in flow or uses the client secret. A failed probe is a 200 with ok=false and the reason, so the admin page can show it inline.
+	//
+	// Corresponds with POST /orgs/{org}/sso/connections/{kind}/test (the `TestSsoConnection` operationId).
+	TestSsoConnection(ctx context.Context, org OrgHandle, kind TestSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// OidcCallback OIDC redirect URI: exchange the code and establish a session (§12.4).
 	//
 	// Corresponds with GET /orgs/{org}/sso/oidc/callback (the `OidcCallback` operationId).
@@ -2835,6 +2898,11 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /platform/redteam/reports (the `ListRedTeamReports` operationId).
 	ListRedTeamReports(ctx context.Context, params *ListRedTeamReportsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListRulesetReleases Ruleset releases, newest first (platform staff, §10.1 console).
+	//
+	// Corresponds with GET /platform/ruleset-releases (the `ListRulesetReleases` operationId).
+	ListRulesetReleases(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateRulesetReleaseWithBody Register a ruleset release (platform staff, §9.2).
 	//
@@ -4398,6 +4466,23 @@ func (c *Client) PutSsoConnection(ctx context.Context, org OrgHandle, kind PutSs
 	return c.Client.Do(req)
 }
 
+// TestSsoConnection Probe a stored connection without signing in (owner, §12.4; agentry#50).
+//
+// OIDC: runs discovery against the stored issuer and reports the endpoints it advertises. SAML: parses the stored IdP metadata and reports entity id, sign-on URLs and signing-certificate expiry. Neither contacts the IdP's sign-in flow or uses the client secret. A failed probe is a 200 with ok=false and the reason, so the admin page can show it inline.
+//
+// Corresponds with POST /orgs/{org}/sso/connections/{kind}/test (the `TestSsoConnection` operationId).
+func (c *Client) TestSsoConnection(ctx context.Context, org OrgHandle, kind TestSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTestSsoConnectionRequest(c.Server, org, kind)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // OidcCallback OIDC redirect URI: exchange the code and establish a session (§12.4).
 //
 // Corresponds with GET /orgs/{org}/sso/oidc/callback (the `OidcCallback` operationId).
@@ -4834,6 +4919,21 @@ func (c *Client) GetPlatformPolicy(ctx context.Context, reqEditors ...RequestEdi
 // Corresponds with GET /platform/redteam/reports (the `ListRedTeamReports` operationId).
 func (c *Client) ListRedTeamReports(ctx context.Context, params *ListRedTeamReportsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListRedTeamReportsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListRulesetReleases Ruleset releases, newest first (platform staff, §10.1 console).
+//
+// Corresponds with GET /platform/ruleset-releases (the `ListRulesetReleases` operationId).
+func (c *Client) ListRulesetReleases(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRulesetReleasesRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -8113,6 +8213,47 @@ func NewPutSsoConnectionRequestWithBody(server string, org OrgHandle, kind PutSs
 	return req, nil
 }
 
+// NewTestSsoConnectionRequest constructs an http.Request for the TestSsoConnection method
+func NewTestSsoConnectionRequest(server string, org OrgHandle, kind TestSsoConnectionParamsKind) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "kind", kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/sso/connections/%s/test", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewOidcCallbackRequest constructs an http.Request for the OidcCallback method
 func NewOidcCallbackRequest(server string, org OrgHandle, params *OidcCallbackParams) (*http.Request, error) {
 	var err error
@@ -9220,6 +9361,33 @@ func NewListRedTeamReportsRequest(server string, params *ListRedTeamReportsParam
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
 		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListRulesetReleasesRequest constructs an http.Request for the ListRulesetReleases method
+func NewListRulesetReleasesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/platform/ruleset-releases")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -10987,6 +11155,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
 	PutSsoConnectionWithResponse(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, body PutSsoConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*PutSsoConnectionResponse, error)
 
+	// TestSsoConnectionWithResponse Probe a stored connection without signing in (owner, §12.4; agentry#50).
+	//
+	// OIDC: runs discovery against the stored issuer and reports the endpoints it advertises. SAML: parses the stored IdP metadata and reports entity id, sign-on URLs and signing-certificate expiry. Neither contacts the IdP's sign-in flow or uses the client secret. A failed probe is a 200 with ok=false and the reason, so the admin page can show it inline.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/sso/connections/{kind}/test (the `TestSsoConnection` operationId).
+	TestSsoConnectionWithResponse(ctx context.Context, org OrgHandle, kind TestSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*TestSsoConnectionResponse, error)
+
 	// OidcCallbackWithResponse OIDC redirect URI: exchange the code and establish a session (§12.4).
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -11188,6 +11365,13 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /platform/redteam/reports (the `ListRedTeamReports` operationId).
 	ListRedTeamReportsWithResponse(ctx context.Context, params *ListRedTeamReportsParams, reqEditors ...RequestEditorFn) (*ListRedTeamReportsResponse, error)
+
+	// ListRulesetReleasesWithResponse Ruleset releases, newest first (platform staff, §10.1 console).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /platform/ruleset-releases (the `ListRulesetReleases` operationId).
+	ListRulesetReleasesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListRulesetReleasesResponse, error)
 
 	// CreateRulesetReleaseWithBodyWithResponse Register a ruleset release (platform staff, §9.2).
 	//
@@ -14125,6 +14309,54 @@ func (r PutSsoConnectionResponse) ContentType() string {
 	return ""
 }
 
+type TestSsoConnectionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *SsoConnectionTest
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r TestSsoConnectionResponse) GetJSON200() *SsoConnectionTest {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r TestSsoConnectionResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r TestSsoConnectionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r TestSsoConnectionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r TestSsoConnectionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r TestSsoConnectionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type OidcCallbackResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -15167,6 +15399,54 @@ func (r ListRedTeamReportsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListRedTeamReportsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListRulesetReleasesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]RulesetRelease
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListRulesetReleasesResponse) GetJSON200() *[]RulesetRelease {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListRulesetReleasesResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListRulesetReleasesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListRulesetReleasesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListRulesetReleasesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListRulesetReleasesResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -17399,6 +17679,21 @@ func (c *ClientWithResponses) PutSsoConnectionWithResponse(ctx context.Context, 
 	return ParsePutSsoConnectionResponse(rsp)
 }
 
+// TestSsoConnectionWithResponse Probe a stored connection without signing in (owner, §12.4; agentry#50).
+//
+// OIDC: runs discovery against the stored issuer and reports the endpoints it advertises. SAML: parses the stored IdP metadata and reports entity id, sign-on URLs and signing-certificate expiry. Neither contacts the IdP's sign-in flow or uses the client secret. A failed probe is a 200 with ok=false and the reason, so the admin page can show it inline.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/sso/connections/{kind}/test (the `TestSsoConnection` operationId).
+func (c *ClientWithResponses) TestSsoConnectionWithResponse(ctx context.Context, org OrgHandle, kind TestSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*TestSsoConnectionResponse, error) {
+	rsp, err := c.TestSsoConnection(ctx, org, kind, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTestSsoConnectionResponse(rsp)
+}
+
 // OidcCallbackWithResponse OIDC redirect URI: exchange the code and establish a session (§12.4).
 //
 // Returns a wrapper object for the known response body format(s).
@@ -17767,6 +18062,19 @@ func (c *ClientWithResponses) ListRedTeamReportsWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParseListRedTeamReportsResponse(rsp)
+}
+
+// ListRulesetReleasesWithResponse Ruleset releases, newest first (platform staff, §10.1 console).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /platform/ruleset-releases (the `ListRulesetReleases` operationId).
+func (c *ClientWithResponses) ListRulesetReleasesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListRulesetReleasesResponse, error) {
+	rsp, err := c.ListRulesetReleases(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListRulesetReleasesResponse(rsp)
 }
 
 // CreateRulesetReleaseWithBodyWithResponse Register a ruleset release (platform staff, §9.2).
@@ -20062,6 +20370,39 @@ func ParsePutSsoConnectionResponse(rsp *http.Response) (*PutSsoConnectionRespons
 	return response, nil
 }
 
+// ParseTestSsoConnectionResponse parses an HTTP response from a TestSsoConnectionWithResponse call
+func ParseTestSsoConnectionResponse(rsp *http.Response) (*TestSsoConnectionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &TestSsoConnectionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SsoConnectionTest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseOidcCallbackResponse parses an HTTP response from a OidcCallbackWithResponse call
 func ParseOidcCallbackResponse(rsp *http.Response) (*OidcCallbackResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -20769,6 +21110,39 @@ func ParseListRedTeamReportsResponse(rsp *http.Response) (*ListRedTeamReportsRes
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest []RedTeamReport
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListRulesetReleasesResponse parses an HTTP response from a ListRulesetReleasesWithResponse call
+func ParseListRulesetReleasesResponse(rsp *http.Response) (*ListRulesetReleasesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListRulesetReleasesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []RulesetRelease
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

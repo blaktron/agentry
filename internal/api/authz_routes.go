@@ -106,6 +106,7 @@ var routeAuthz = map[string]RouteDecl{
 	// Platform-staff surfaces: the staff flag is not an org role, so the
 	// generic chokepoint cannot express them (requireStaff does).
 	"createRulesetRelease": {Action: auth.ActPublicRead, SelfAuthorized: true},
+	"listRulesetReleases":  {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"listPlatformAudit":    {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"listRedTeamReports":   {Action: auth.ActPublicRead, SelfAuthorized: true},
 	// Social login establishes a credential (like login/register), so it sits
@@ -127,6 +128,7 @@ var routeAuthz = map[string]RouteDecl{
 	"listSsoConnections":    {Action: auth.ActOrgSettingsManage, OrgScoped: true},
 	"putSsoConnection":      {Action: auth.ActOrgSettingsManage, OrgScoped: true},
 	"deleteSsoConnection":   {Action: auth.ActOrgSettingsManage, OrgScoped: true},
+	"testSsoConnection":     {Action: auth.ActOrgSettingsManage, OrgScoped: true},
 	"getSamlMetadata":       {NoAuthz: true, Anonymous: true},
 	"samlAcs":               {NoAuthz: true, Anonymous: true},
 	"oidcStart":             {NoAuthz: true, Anonymous: true},

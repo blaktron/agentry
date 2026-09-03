@@ -178,3 +178,26 @@ func asBool(v any) bool {
 		return false
 	}
 }
+
+// Description is what discovery established for a connection test
+// (agentry#50): the issuer that answered and its endpoints.
+type Description struct {
+	Issuer      string
+	AuthURL     string
+	TokenURL    string
+	UserInfoURL string
+	JWKSURL     string
+}
+
+// Describe reports the discovered endpoints. Constructing the RP already
+// performed discovery against the configured issuer, so this is the
+// evidence that the issuer is reachable and self-consistent.
+func (rp *RP) Describe() Description {
+	ep := rp.provider.Endpoint()
+	var claims struct {
+		UserInfo string `json:"userinfo_endpoint"`
+		JWKS     string `json:"jwks_uri"`
+	}
+	_ = rp.provider.Claims(&claims)
+	return Description{Issuer: rp.cfg.Issuer, AuthURL: ep.AuthURL, TokenURL: ep.TokenURL, UserInfoURL: claims.UserInfo, JWKSURL: claims.JWKS}
+}
