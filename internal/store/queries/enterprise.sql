@@ -234,3 +234,8 @@ WHERE a.org_id = $1
        OR (a.occurred_at = sqlc.narg('after_time') AND a.id > sqlc.narg('after_id')))
 ORDER BY a.occurred_at ASC, a.id ASC
 LIMIT $2;
+
+-- name: GetSSOConnectionWithOrg :one
+-- SAML Single Logout (agentry#62): a session remembers its connection id;
+-- the logout path needs the org handle to rebuild the SP.
+SELECT c.*, h.handle AS org_handle FROM sso_connections c JOIN handles h ON h.id = c.org_id WHERE c.id = $1;
