@@ -1269,6 +1269,26 @@ type PublicUser struct {
 	Handle      string `json:"handle"`
 }
 
+// RedTeamReport One run of the §17.5 red-team job (agentry#67).
+type RedTeamReport struct {
+	BundleDigest string `json:"bundleDigest"`
+
+	// Cases Fixtures × applicable mutators.
+	Cases     int       `json:"cases"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Evaded Cases where at least one expected rule stopped firing.
+	Evaded int `json:"evaded"`
+
+	// Fixtures Attack fixtures with S3/S4 expectations that fired unmutated.
+	Fixtures int                `json:"fixtures"`
+	Id       openapi_types.UUID `json:"id"`
+
+	// Report The full report (byMutator tallies and every evasion).
+	Report        map[string]interface{} `json:"report"`
+	RulesetSemver string                 `json:"rulesetSemver"`
+}
+
 // RegisterRequest defines model for RegisterRequest.
 type RegisterRequest struct {
 	DisplayName *string             `json:"displayName,omitempty"`
@@ -1881,6 +1901,11 @@ type ListPlatformAuditParams struct {
 
 	// Org Restrict to one org handle.
 	Org *string `form:"org,omitempty" json:"org,omitempty"`
+}
+
+// ListRedTeamReportsParams defines parameters for ListRedTeamReports.
+type ListRedTeamReportsParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // CreateRulesetReleaseJSONBody defines parameters for CreateRulesetRelease.
@@ -2859,6 +2884,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /platform/policy (the `GetPlatformPolicy` operationId).
 	GetPlatformPolicy(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListRedTeamReports Reports of the scheduled red-team job against the S3/S4 gate (§17.5; platform staff).
+	//
+	// Newest first. Each report is one run of the attack corpus's rewrites (paraphrase, encoding, unicode and obfuscation mutators) scanned with the rule bundle in service, and lists the rewrites an expected rule no longer caught. Report-only: nothing on the publish path reads these.
+	//
+	// Corresponds with GET /platform/redteam/reports (the `ListRedTeamReports` operationId).
+	ListRedTeamReports(ctx context.Context, params *ListRedTeamReportsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateRulesetReleaseWithBody Register a ruleset release (platform staff, §9.2).
 	//
@@ -4841,6 +4873,23 @@ func (c *Client) ListPlatformAudit(ctx context.Context, params *ListPlatformAudi
 // Corresponds with GET /platform/policy (the `GetPlatformPolicy` operationId).
 func (c *Client) GetPlatformPolicy(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetPlatformPolicyRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListRedTeamReports Reports of the scheduled red-team job against the S3/S4 gate (§17.5; platform staff).
+//
+// Newest first. Each report is one run of the attack corpus's rewrites (paraphrase, encoding, unicode and obfuscation mutators) scanned with the rule bundle in service, and lists the rewrites an expected rule no longer caught. Report-only: nothing on the publish path reads these.
+//
+// Corresponds with GET /platform/redteam/reports (the `ListRedTeamReports` operationId).
+func (c *Client) ListRedTeamReports(ctx context.Context, params *ListRedTeamReportsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRedTeamReportsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -9176,6 +9225,60 @@ func NewGetPlatformPolicyRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewListRedTeamReportsRequest constructs an http.Request for the ListRedTeamReports method
+func NewListRedTeamReportsRequest(server string, params *ListRedTeamReportsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/platform/redteam/reports")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewCreateRulesetReleaseRequest calls the generic CreateRulesetRelease builder with application/json body
 func NewCreateRulesetReleaseRequest(server string, body CreateRulesetReleaseJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -11125,6 +11228,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /platform/policy (the `GetPlatformPolicy` operationId).
 	GetPlatformPolicyWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetPlatformPolicyResponse, error)
+
+	// ListRedTeamReportsWithResponse Reports of the scheduled red-team job against the S3/S4 gate (§17.5; platform staff).
+	//
+	// Newest first. Each report is one run of the attack corpus's rewrites (paraphrase, encoding, unicode and obfuscation mutators) scanned with the rule bundle in service, and lists the rewrites an expected rule no longer caught. Report-only: nothing on the publish path reads these.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /platform/redteam/reports (the `ListRedTeamReports` operationId).
+	ListRedTeamReportsWithResponse(ctx context.Context, params *ListRedTeamReportsParams, reqEditors ...RequestEditorFn) (*ListRedTeamReportsResponse, error)
 
 	// CreateRulesetReleaseWithBodyWithResponse Register a ruleset release (platform staff, §9.2).
 	//
@@ -15069,6 +15181,54 @@ func (r GetPlatformPolicyResponse) ContentType() string {
 	return ""
 }
 
+type ListRedTeamReportsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]RedTeamReport
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListRedTeamReportsResponse) GetJSON200() *[]RedTeamReport {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListRedTeamReportsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListRedTeamReportsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListRedTeamReportsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListRedTeamReportsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListRedTeamReportsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type CreateRulesetReleaseResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -17648,6 +17808,21 @@ func (c *ClientWithResponses) GetPlatformPolicyWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseGetPlatformPolicyResponse(rsp)
+}
+
+// ListRedTeamReportsWithResponse Reports of the scheduled red-team job against the S3/S4 gate (§17.5; platform staff).
+//
+// Newest first. Each report is one run of the attack corpus's rewrites (paraphrase, encoding, unicode and obfuscation mutators) scanned with the rule bundle in service, and lists the rewrites an expected rule no longer caught. Report-only: nothing on the publish path reads these.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /platform/redteam/reports (the `ListRedTeamReports` operationId).
+func (c *ClientWithResponses) ListRedTeamReportsWithResponse(ctx context.Context, params *ListRedTeamReportsParams, reqEditors ...RequestEditorFn) (*ListRedTeamReportsResponse, error) {
+	rsp, err := c.ListRedTeamReports(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListRedTeamReportsResponse(rsp)
 }
 
 // CreateRulesetReleaseWithBodyWithResponse Register a ruleset release (platform staff, §9.2).
@@ -20624,6 +20799,39 @@ func ParseGetPlatformPolicyResponse(rsp *http.Response) (*GetPlatformPolicyRespo
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListRedTeamReportsResponse parses an HTTP response from a ListRedTeamReportsWithResponse call
+func ParseListRedTeamReportsResponse(rsp *http.Response) (*ListRedTeamReportsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListRedTeamReportsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []RedTeamReport
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

@@ -1020,6 +1020,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/platform/redteam/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Reports of the scheduled red-team job against the S3/S4 gate (§17.5; platform staff).
+         * @description Newest first. Each report is one run of the attack corpus's rewrites (paraphrase, encoding, unicode and obfuscation mutators) scanned with the rule bundle in service, and lists the rewrites an expected rule no longer caught. Report-only: nothing on the publish path reads these.
+         */
+        get: operations["listRedTeamReports"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/policy": {
         parameters: {
             query?: never;
@@ -1787,6 +1807,25 @@ export interface components {
             notes?: string;
             /** Format: date-time */
             publishedAt: string;
+        };
+        /** @description One run of the §17.5 red-team job (agentry#67). */
+        RedTeamReport: {
+            /** Format: uuid */
+            id: string;
+            rulesetSemver: string;
+            bundleDigest: string;
+            /** @description Attack fixtures with S3/S4 expectations that fired unmutated. */
+            fixtures: number;
+            /** @description Fixtures × applicable mutators. */
+            cases: number;
+            /** @description Cases where at least one expected rule stopped firing. */
+            evaded: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** @description The full report (byMutator tallies and every evasion). */
+            report: {
+                [key: string]: unknown;
+            };
         };
         /**
          * @description Supported agent kinds (§1.4).
@@ -3931,6 +3970,29 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listRedTeamReports: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reports, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RedTeamReport"][];
                 };
             };
             default: components["responses"]["Problem"];

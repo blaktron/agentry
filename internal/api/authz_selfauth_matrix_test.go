@@ -162,6 +162,11 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 		{"createRulesetRelease", "POST", "/api/v1/platform/ruleset-releases", "not-an-object", plain, deny3},
 		{"createRulesetRelease", "POST", "/api/v1/platform/ruleset-releases", "not-an-object", staffSess, pass},
 
+		// listRedTeamReports — §17.5 red-team reports, staff-only (agentry#67).
+		{"listRedTeamReports", "GET", "/api/v1/platform/redteam/reports", nil, anonymous, deny1},
+		{"listRedTeamReports", "GET", "/api/v1/platform/redteam/reports", nil, plain, deny3},
+		{"listRedTeamReports", "GET", "/api/v1/platform/redteam/reports", nil, staffSess, pass},
+
 		// reportAbuse — any signed-in caller may report a visible agent;
 		// anonymous may not (follow-up needs an account).
 		{"reportAbuse", "POST", "/api/v1/agents/" + author + "/risky/abuse-reports",
