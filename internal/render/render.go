@@ -8,6 +8,8 @@ package render
 import (
 	"bytes"
 	"fmt"
+	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
+	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	htmlpkg "html"
 	"regexp"
 	"strings"
@@ -52,6 +54,19 @@ func NewWithOptions(opts Options) *Renderer {
 		goldmark.WithExtensions(
 			extension.GFM, // tables, strikethrough, task lists, autolinks
 			extension.Footnote,
+			// Server-side syntax highlighting (§10.3, DEV-049.2 → agentry#49):
+			// chroma lexes fenced code and emits <span class="…"> tokens with
+			// CLASSES, never inline styles, so the output stays inside the
+			// page's style-src-elem/attr policy and the sanitizer below can
+			// pin exactly which attributes survive. An unknown language
+			// falls back to plain text; there is no HTML pass-through.
+			highlighting.NewHighlighting(
+				highlighting.WithFormatOptions(
+					chromahtml.WithClasses(true),
+					chromahtml.ClassPrefix("hl-"),
+				),
+				highlighting.WithGuessLanguage(false),
+			),
 		),
 		goldmark.WithParserOptions(
 			// Author headings are demoted one level so a README's "# Title"
@@ -101,6 +116,11 @@ func NewWithOptions(opts Options) *Renderer {
 	// Footnote/heading anchors emitted by goldmark itself.
 	p.AllowAttrs("id").Matching(bluemonday.SpaceSeparatedTokens).OnElements("li", "section", "sup", "h1", "h2", "h3", "h4", "h5", "h6")
 	p.AllowAttrs("class").Matching(bluemonday.SpaceSeparatedTokens).OnElements("span", "section", "sup", "li")
+	// Highlighter output only: <pre class="hl-chroma"> and <code class="language-x">
+	// (goldmark's fence info string), and chroma's short token classes on
+	// spans are already covered by the span rule above.
+	p.AllowAttrs("class").Matching(regexp.MustCompile(`^hl-chroma$`)).OnElements("pre")
+	p.AllowAttrs("class").Matching(regexp.MustCompile(`^language-[A-Za-z0-9+#._-]{1,32}$`)).OnElements("code")
 	// Tables' alignment attribute is the one layout hint we keep.
 	p.AllowAttrs("align").Matching(bluemonday.Paragraph).OnElements("th", "td")
 	// Proxied images only (agentry#64): an absolute same-origin
