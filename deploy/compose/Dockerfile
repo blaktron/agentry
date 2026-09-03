@@ -45,6 +45,9 @@ RUN apt-get update \
  && install -d -o 65532 -g 65532 /data/git /data/storage
 
 COPY --from=build /out/agentryd /usr/bin/agentryd
+# The golden attack corpus rides along for the §17.5 red-team job
+# (agentry#67); report-only, read by a worker, never by the publish path.
+COPY --from=build /src/testdata/attack-corpus /srv/agentry/attack-corpus
 COPY --from=gitleaks /usr/bin/gitleaks /usr/bin/gitleaks
 
 # uid 65532 matches the helm chart's podSecurityContext.runAsUser and the
