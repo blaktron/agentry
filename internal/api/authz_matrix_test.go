@@ -192,6 +192,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			},
 		},
 		"listUserSessions": {method: "GET", path: sPath("/api/v1/user/sessions")},
+		"getUserDirectory": {method: "GET", path: sPath("/api/v1/user/directory")},
 		// Non-destructive by construction: the query spares the calling
 		// session, and every matrix caller holds exactly one.
 		"revokeOtherUserSessions": {method: "DELETE", path: sPath("/api/v1/user/sessions")},
