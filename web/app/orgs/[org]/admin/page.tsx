@@ -279,6 +279,7 @@ export default async function OrgAdminPage({
               Org policy may only tighten the platform baseline (§8.6): every knob you set must be at
               least as strict as the baseline shown beside the editor. Knobs:{" "}
               <code className="text-xs">requireHumanReview</code>, <code className="text-xs">blockedCapabilities</code>,{" "}
+              <code className="text-xs">blockedMcpServers</code> (<code className="text-xs">npm:pkg</code> / <code className="text-xs">pypi:pkg</code>, globs allowed),{" "}
               <code className="text-xs">allowedLicenses</code>, <code className="text-xs">maxAutoPublishSeverity</code>,{" "}
               <code className="text-xs">requireEvals</code>, <code className="text-xs">wildcardEgress</code>. The server
               validates the document and refuses anything that loosens the baseline.
@@ -333,6 +334,13 @@ export default async function OrgAdminPage({
                 <li key={c.kind} className="flex items-center gap-2">
                   <Badge tone={c.enabled ? "ok" : "neutral"}>{c.kind}</Badge>
                   <span style={{ color: "var(--color-muted)" }}>{c.enabled ? "enabled" : "configured, disabled"}</span>
+                  <form method="post" action={`/orgs/${o}/admin/sso`}>
+                    <input type="hidden" name="kind" value={c.kind} />
+                    {/* Probe without a sign-in: OIDC discovery / SAML metadata (agentry#50). */}
+                    <button type="submit" name="action" value="test" className="rounded-md border px-2 py-0.5 text-xs" style={{ borderColor: "var(--color-border)" }}>
+                      Test connection
+                    </button>
+                  </form>
                   <form method="post" action={`/orgs/${o}/admin/sso`}>
                     <input type="hidden" name="kind" value={c.kind} />
                     <button type="submit" name="action" value="delete" className="rounded-md border px-2 py-0.5 text-xs" style={{ borderColor: "var(--color-sev-high)", color: "var(--color-sev-high)" }}>
