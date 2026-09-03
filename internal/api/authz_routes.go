@@ -106,6 +106,7 @@ var routeAuthz = map[string]RouteDecl{
 	// generic chokepoint cannot express them (requireStaff does).
 	"createRulesetRelease": {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"listPlatformAudit":    {Action: auth.ActPublicRead, SelfAuthorized: true},
+	"listRedTeamReports":   {Action: auth.ActPublicRead, SelfAuthorized: true},
 	// Social login establishes a credential (like login/register), so it sits
 	// outside the chokepoint and is rate-limited instead (§12.1).
 	"socialOidcStart":    {NoAuthz: true, Anonymous: true},
