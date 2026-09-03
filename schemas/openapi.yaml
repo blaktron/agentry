@@ -519,6 +519,60 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /user/ssh-keys:
+    get:
+      operationId: listSshKeys
+      tags: [users]
+      summary: List the caller's SSH public keys for the git transport (§6.1 Q7).
+      responses:
+        "200":
+          description: Keys.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SshKey"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: addSshKey
+      tags: [users]
+      summary: Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddSshKeyRequest"
+      responses:
+        "201":
+          description: Key registered.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SshKey"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /user/ssh-keys/{keyId}:
+    delete:
+      operationId: removeSshKey
+      tags: [users]
+      summary: Remove an SSH public key (session-only).
+      parameters:
+        - name: keyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Key removed.
+        default:
+          $ref: "#/components/responses/Problem"
+
   /user/tokens/desktop-grant:
     post:
       operationId: createDesktopGrant
@@ -3187,6 +3241,39 @@ components:
           additionalProperties: true
           description: The full report (byMutator tallies and every evasion).
 
+    SshKey:
+      type: object
+      required: [id, title, keyType, fingerprint, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        keyType:
+          type: string
+          description: ssh-ed25519, ecdsa-sha2-nistp256, ssh-rsa, …
+        fingerprint:
+          type: string
+          description: SHA256 fingerprint as OpenSSH prints it.
+        createdAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: string
+          format: date-time
+
+    AddSshKeyRequest:
+      type: object
+      required: [title, publicKey]
+      properties:
+        title:
+          type: string
+          maxLength: 120
+        publicKey:
+          type: string
+          description: One authorized_keys line ("ssh-ed25519 AAAA… comment").
+
     AgentKind:
       type: string
       description: Supported agent kinds (§1.4).
@@ -3240,6 +3327,9 @@ components:
         gitHttpUrl:
           type: string
           description: Clone URL for the hosted repository (§6.1).
+        gitSshUrl:
+          type: string
+          description: SSH clone URL (§6.1 Q7), present when the deployment serves the SSH transport.
         quarantineState:
           type: string
           enum: [none, quarantined, blocked]

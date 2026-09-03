@@ -125,14 +125,6 @@ func (h *Handler) resolve(w http.ResponseWriter, r *http.Request, act auth.Actio
 		return registry.Agent{}, nil, auth.AgentRoleNone, false
 	}
 
-	agent, err := h.reg.Resolve(r.Context(), ns, name)
-	if err != nil {
-		// 404 before auth probing for truly unknown paths is fine for
-		// public repos; for private ones we must not reveal existence:
-		// fall through to auth so anonymous gets 401 either way below.
-		agent = registry.Agent{}
-	}
-
 	principal := &auth.Principal{Anonymous: true}
 	if _, pass, okBasic := r.BasicAuth(); okBasic && pass != "" {
 		if !auth.IsPAT(pass) {
@@ -147,62 +139,87 @@ func (h *Handler) resolve(w http.ResponseWriter, r *http.Request, act auth.Actio
 		principal = p
 	}
 
+	agent, role, denial := h.authorizeGit(r.Context(), ns, name, principal, act)
+	if denial != nil {
+		switch denial.status {
+		case http.StatusUnauthorized:
+			h.unauthorized(w)
+		case http.StatusNotFound:
+			http.NotFound(w, r)
+		default:
+			http.Error(w, denial.message, denial.status)
+		}
+		return registry.Agent{}, nil, auth.AgentRoleNone, false
+	}
+	return agent, principal, role, true
+}
+
+// gitDenial is why a git operation is refused, in HTTP terms so the two
+// transports (smart HTTP, SSH — agentry#70) report the same decision.
+type gitDenial struct {
+	status  int
+	message string
+}
+
+// authorizeGit resolves ns/name, lazily initializes the bare repo, and
+// applies §6.4 (agent permission by effective role, existence privacy for
+// private repos) and §12.4 (enforced SSO needs an org-bound token for
+// mutations). Transport-independent: HTTP and SSH both call it.
+func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *auth.Principal, act auth.Action) (registry.Agent, auth.AgentRole, *gitDenial) {
+	agent, err := h.reg.Resolve(ctx, ns, name)
+	if err != nil {
+		// 404 before auth probing for truly unknown paths is fine for
+		// public repos; for private ones we must not reveal existence:
+		// fall through to auth so anonymous gets 401 either way below.
+		agent = registry.Agent{}
+	}
 	if agent.ID == [16]byte{} {
 		// Unknown path: 404 for anonymous+public probing parity, 404 for
 		// authed too (nothing to leak — path simply doesn't exist).
 		if principal.Anonymous && act != auth.ActAgentRepoRead {
-			h.unauthorized(w)
-			return registry.Agent{}, nil, auth.AgentRoleNone, false
+			return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusUnauthorized, "unauthorized"}
 		}
-		http.NotFound(w, r)
-		return registry.Agent{}, nil, auth.AgentRoleNone, false
+		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusNotFound, "not found"}
 	}
 
 	// Lazy bare-repo init (§13.3: only the git role mounts repo storage).
 	if _, statErr := os.Stat(h.repos.Path(agent.RepoID)); statErr != nil {
-		if err := h.repos.InitBare(r.Context(), agent.RepoID, agent.DefaultBranch); err != nil {
+		if err := h.repos.InitBare(ctx, agent.RepoID, agent.DefaultBranch); err != nil {
 			h.log.Error("lazy repo init", "err", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return registry.Agent{}, nil, auth.AgentRoleNone, false
+			return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusInternalServerError, "internal error"}
 		}
 	}
 
-	role, err := h.reg.EffectiveRole(r.Context(), principal, agent)
+	role, err := h.reg.EffectiveRole(ctx, principal, agent)
 	if err != nil {
 		h.log.Error("git effective role", "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return registry.Agent{}, nil, auth.AgentRoleNone, false
+		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusInternalServerError, "internal error"}
 	}
 	res := auth.AgentResource{Public: agent.Visibility == "public", EffectiveRole: role}
 	if err := auth.CheckAgent(principal, res, act); err != nil {
 		if principal.Anonymous {
-			h.unauthorized(w)
-		} else {
-			// Hide private repos from unauthorized principals (§6.4 table
-			// implies existence-privacy for read; write denial on a repo
-			// you can read is a plain 403).
-			if act == auth.ActAgentRepoRead {
-				http.NotFound(w, r)
-			} else {
-				http.Error(w, "forbidden", http.StatusForbidden)
-			}
+			return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusUnauthorized, "unauthorized"}
 		}
-		return registry.Agent{}, nil, auth.AgentRoleNone, false
+		// Hide private repos from unauthorized principals (§6.4 table
+		// implies existence-privacy for read; write denial on a repo
+		// you can read is a plain 403).
+		if act == auth.ActAgentRepoRead {
+			return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusNotFound, "not found"}
+		}
+		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusForbidden, "forbidden"}
 	}
 
 	// §6.4 + §12.4: in an org that enforces SSO, mutating git operations
 	// additionally require an org-bound PAT.
-	allowed, err := h.ssoAllows(r.Context(), principal, agent, act)
+	allowed, err := h.ssoAllows(ctx, principal, agent, act)
 	if err != nil {
 		h.log.Error("git sso gate", "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return registry.Agent{}, nil, auth.AgentRoleNone, false
+		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusInternalServerError, "internal error"}
 	}
 	if !allowed {
-		http.Error(w, "forbidden: this organization requires an org-bound token", http.StatusForbidden)
-		return registry.Agent{}, nil, auth.AgentRoleNone, false
+		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusForbidden, "forbidden: this organization requires an org-bound token"}
 	}
-	return agent, principal, role, true
+	return agent, role, nil
 }
 
 // ssoAllows applies an org's enforced-SSO policy to a git operation (§12.4).
@@ -540,20 +557,26 @@ func (h *Handler) acceptedRefs(ctx context.Context, agent registry.Agent, want [
 // CAN_PUBLISH goes through the chokepoint so PAT scope limits apply: a
 // repo:write-only PAT cannot create v* tags even for an owner (§6.4).
 func (h *Handler) gitEnv(r *http.Request, agent registry.Agent, principal *auth.Principal, role auth.AgentRole) []string {
+	return h.gitEnvFor(r.Context(), r.Header.Get("Git-Protocol"), agent, principal, role)
+}
+
+// gitEnvFor is gitEnv for any transport (agentry#70): gitProtocol is the
+// client's Git-Protocol header / GIT_PROTOCOL env request.
+func (h *Handler) gitEnvFor(ctx context.Context, gitProtocol string, agent registry.Agent, principal *auth.Principal, role auth.AgentRole) []string {
 	canPublish := auth.CheckAgent(principal,
 		auth.AgentResource{Public: agent.Visibility == "public", EffectiveRole: role},
 		auth.ActAgentPublish) == nil
 	if canPublish && agent.NamespaceKind == "org" {
 		// Enforced SSO gates release just as it gates push (§6.4, §12.4);
 		// a lookup failure denies the stricter permission, never grants it.
-		allowed, err := h.ssoAllows(r.Context(), principal, agent, auth.ActAgentPublish)
+		allowed, err := h.ssoAllows(ctx, principal, agent, auth.ActAgentPublish)
 		if err != nil {
 			h.log.Error("git sso gate (publish)", "err", err)
 		}
 		canPublish = allowed && err == nil
 	}
 	env := append(os.Environ(),
-		"GIT_PROTOCOL="+r.Header.Get("Git-Protocol"),
+		"GIT_PROTOCOL="+gitProtocol,
 		"AGENTRY_HOOK_BIN="+h.repos.hookBin,
 		"AGENTRY_HOOK_DEFAULT_BRANCH="+agent.DefaultBranch,
 		fmt.Sprintf("AGENTRY_HOOK_CAN_PUBLISH=%t", canPublish),

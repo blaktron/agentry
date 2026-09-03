@@ -309,6 +309,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/user/ssh-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the caller's SSH public keys for the git transport (§6.1 Q7). */
+        get: operations["listSshKeys"];
+        put?: never;
+        /** Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only). */
+        post: operations["addSshKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/user/ssh-keys/{keyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove an SSH public key (session-only). */
+        delete: operations["removeSshKey"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/user/tokens/desktop-grant": {
         parameters: {
             query?: never;
@@ -1807,6 +1842,24 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        SshKey: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** @description ssh-ed25519, ecdsa-sha2-nistp256, ssh-rsa, … */
+            keyType: string;
+            /** @description SHA256 fingerprint as OpenSSH prints it. */
+            fingerprint: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            lastUsedAt?: string;
+        };
+        AddSshKeyRequest: {
+            title: string;
+            /** @description One authorized_keys line ("ssh-ed25519 AAAA… comment"). */
+            publicKey: string;
+        };
         /**
          * @description Supported agent kinds (§1.4).
          * @enum {string}
@@ -1841,6 +1894,8 @@ export interface components {
             defaultBranch: string;
             /** @description Clone URL for the hosted repository (§6.1). */
             gitHttpUrl: string;
+            /** @description SSH clone URL (§6.1 Q7), present when the deployment serves the SSH transport. */
+            gitSshUrl?: string;
             /** @enum {string} */
             quarantineState: "none" | "quarantined" | "blocked";
             /** @description Present for callers with maintain (§6.3 toggle). */
@@ -2630,6 +2685,73 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PatCreated"];
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listSshKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Keys. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SshKey"][];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    addSshKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddSshKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description Key registered. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SshKey"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    removeSshKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                keyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Key removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };
