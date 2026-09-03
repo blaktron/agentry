@@ -128,7 +128,7 @@ func TestSLO_PostBindingAcceptsSignedRefusesTamperedUnsignedForeignReplayed(t *t
 		t.Fatal("unsigned request must be refused")
 	}
 	other := newTestIdP(t)
-	foreign, _ := other.mintLogoutRequest(t, "user@acme.example", "", idp.entityID, true, time.Now())
+	foreign, _ := other.mintLogoutRequest(t, "victim@acme.example", "", idp.entityID, true, time.Now())
 	if _, err := sp.ParseLogoutRequestPost(docB64(t, foreign)); err == nil {
 		t.Fatal("request signed by another key must be refused")
 	}
