@@ -566,6 +566,27 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /user/directory:
+    get:
+      operationId: getUserDirectory
+      tags: [users]
+      summary: Where the caller manages password, MFA and profile when a directory service owns the account (DEV-057).
+      description: >
+        With auth.externalOnly, credentials live in the directory service
+        (Authentik). This answers the settings page's question "where do I
+        change my password or add an authenticator?" with the directory's
+        flow URLs, and lists the caller's enrolled authenticator devices
+        when the server has directory admin access (auth.idpAdminURL).
+        Without a directory, `managed` is false and the rest is absent.
+      responses:
+        "200":
+          description: Directory account links and devices.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDirectory"
+        default:
+          $ref: "#/components/responses/Problem"
   /user/sessions:
     get:
       operationId: listUserSessions
@@ -2858,6 +2879,42 @@ components:
         otpauthUrl:
           type: string
 
+    UserDirectory:
+      type: object
+      required: [managed]
+      properties:
+        managed:
+          description: True when a directory service owns credentials for this deployment.
+          type: boolean
+        accountUrl:
+          description: The directory's own account page (name, email, sessions, consents).
+          type: string
+        passwordChangeUrl:
+          type: string
+        totpSetupUrl:
+          type: string
+        webauthnSetupUrl:
+          type: string
+        devices:
+          description: >
+            The caller's enrolled authenticators as the directory reports
+            them; absent when the server has no directory admin access.
+          type: array
+          items:
+            type: object
+            required: [kind, name]
+            properties:
+              kind:
+                description: totp | webauthn | static | duo | sms | email | other
+                type: string
+              name:
+                type: string
+              createdAt:
+                type: string
+                format: date-time
+        devicesError:
+          description: Set when the device lookup was attempted and failed; the links still work.
+          type: string
     User:
       type: object
       required: [id, handle, email, displayName, emailVerified, totpEnabled, createdAt]
