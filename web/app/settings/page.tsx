@@ -34,6 +34,26 @@ interface UserSession {
   userAgent?: string;
 }
 
+interface UserDirectory {
+  managed: boolean;
+  accountUrl?: string;
+  passwordChangeUrl?: string;
+  totpSetupUrl?: string;
+  webauthnSetupUrl?: string;
+  devices?: { kind: string; name: string; createdAt?: string }[];
+  devicesError?: string;
+}
+
+const DEVICE_LABEL: Record<string, string> = {
+  totp: "Authenticator app (TOTP)",
+  webauthn: "Security key / passkey (WebAuthn)",
+  static: "Recovery codes",
+  duo: "Duo push",
+  sms: "SMS",
+  email: "Email code",
+  other: "Authenticator",
+};
+
 const SCOPES = [
   "repo:read",
   "repo:write",
@@ -75,6 +95,12 @@ export default async function SettingsPage({
   // says which world this is.
   const meta = await apiGet<{ features?: Record<string, boolean> }>("/meta", { revalidate: 60 }).catch(() => null);
   const externalOnly = meta?.features?.externalOnly === true;
+  // Where password, MFA and profile live when the directory owns them
+  // (agentry#113): the API derives the directory's flow URLs and lists the
+  // enrolled authenticators through its admin access.
+  const directory = externalOnly
+    ? await authedGet<UserDirectory>("/user/directory").catch(() => null)
+    : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -118,8 +144,68 @@ export default async function SettingsPage({
       </Card>
 
       <Card>
-        <h2 className="mb-2 font-semibold">Two-factor authentication</h2>
-        {externalOnly ? (
+        <h2 className="mb-2 font-semibold">{externalOnly ? "Password and two-factor authentication" : "Two-factor authentication"}</h2>
+        {externalOnly && directory?.managed ? (
+          <div className="flex flex-col gap-3 text-sm">
+            <p style={{ color: "var(--color-muted)" }}>
+              Your password and authenticators live in the directory service you sign in through.
+              These links open its own pages; you may be asked to sign in again there.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {directory.passwordChangeUrl && (
+                <a href={directory.passwordChangeUrl} className="rounded-md border px-3 py-1.5" style={{ borderColor: "var(--color-border)" }}>
+                  Change password
+                </a>
+              )}
+              {directory.totpSetupUrl && (
+                <a href={directory.totpSetupUrl} className="rounded-md border px-3 py-1.5" style={{ borderColor: "var(--color-border)" }}>
+                  Add authenticator app
+                </a>
+              )}
+              {directory.webauthnSetupUrl && (
+                <a href={directory.webauthnSetupUrl} className="rounded-md border px-3 py-1.5" style={{ borderColor: "var(--color-border)" }}>
+                  Add security key / passkey
+                </a>
+              )}
+              {directory.accountUrl && (
+                <a href={directory.accountUrl} className="rounded-md border px-3 py-1.5" style={{ borderColor: "var(--color-border)" }}>
+                  All directory settings
+                </a>
+              )}
+            </div>
+            <div>
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
+                Enrolled authenticators
+              </h3>
+              {directory.devicesError ? (
+                <p style={{ color: "var(--color-muted)" }}>{directory.devicesError}</p>
+              ) : directory.devices === undefined ? (
+                <p style={{ color: "var(--color-muted)" }}>
+                  Not shown: this server has no directory admin access (AGENTRY_IDP_ADMIN_URL).
+                </p>
+              ) : directory.devices.length === 0 ? (
+                <p>
+                  <Badge tone="warn">none</Badge>{" "}
+                  <span style={{ color: "var(--color-muted)" }}>
+                    No second factor is enrolled. Publishing publicly requires one (§12.1).
+                  </span>
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-1">
+                  {directory.devices.map((d, i) => (
+                    <li key={i} className="flex flex-wrap items-center gap-2">
+                      <Badge tone="ok">{DEVICE_LABEL[d.kind] ?? DEVICE_LABEL.other}</Badge>
+                      <span>{d.name}</span>
+                      {d.createdAt && (
+                        <span className="text-xs" style={{ color: "var(--color-muted)" }}>added {fmtUTCDate(d.createdAt)}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        ) : externalOnly ? (
           <p className="text-sm" style={{ color: "var(--color-muted)" }}>
             Your password and two-factor authentication are managed by the directory service you
             sign in through, not here. Use its account page (the sign-in provider&apos;s settings)

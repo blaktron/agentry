@@ -87,3 +87,102 @@ func (a *authentikEraser) EraseByEmail(ctx context.Context, email string) (bool,
 	}
 	return deleted, nil
 }
+
+// directoryDevices is the read side of the same admin access: the
+// authenticators a user has enrolled, for the settings page (agentry#113).
+type directoryDevices interface {
+	DevicesByEmail(ctx context.Context, email string) ([]DirectoryDevice, error)
+}
+
+// DirectoryDevice is one enrolled authenticator as the directory reports it.
+type DirectoryDevice struct {
+	Kind      string
+	Name      string
+	CreatedAt *time.Time
+}
+
+// DevicesByEmail lists the authenticators of the directory account with
+// this email (authentik: /authenticators/admin/all/?user=<pk>). No account
+// or no devices is an empty list, not an error.
+func (a *authentikEraser) DevicesByEmail(ctx context.Context, email string) ([]DirectoryDevice, error) {
+	res, err := a.do(ctx, http.MethodGet, "/api/v3/core/users/?page_size=10&email="+url.QueryEscape(email))
+	if err != nil {
+		return nil, fmt.Errorf("directory lookup: %w", err)
+	}
+	body, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("directory lookup: %d", res.StatusCode)
+	}
+	var page struct {
+		Results []struct {
+			PK    int    `json:"pk"`
+			Email string `json:"email"`
+			Type  string `json:"type"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal(body, &page); err != nil {
+		return nil, fmt.Errorf("directory lookup: %w", err)
+	}
+	pk := 0
+	for _, u := range page.Results {
+		if strings.EqualFold(u.Email, email) && !strings.Contains(u.Type, "service") {
+			pk = u.PK
+			break
+		}
+	}
+	if pk == 0 {
+		return []DirectoryDevice{}, nil
+	}
+	res, err = a.do(ctx, http.MethodGet, fmt.Sprintf("/api/v3/authenticators/admin/all/?user=%d", pk))
+	if err != nil {
+		return nil, fmt.Errorf("directory devices: %w", err)
+	}
+	body, _ = io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("directory devices: %d", res.StatusCode)
+	}
+	var raw []struct {
+		Name        string `json:"name"`
+		Type        string `json:"type"`
+		VerboseName string `json:"verbose_name"`
+		Created     string `json:"created"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return nil, fmt.Errorf("directory devices: %w", err)
+	}
+	out := make([]DirectoryDevice, 0, len(raw))
+	for _, d := range raw {
+		dev := DirectoryDevice{Kind: deviceKind(d.Type, d.VerboseName), Name: d.Name}
+		if dev.Name == "" {
+			dev.Name = d.VerboseName
+		}
+		if t, err := time.Parse(time.RFC3339Nano, d.Created); err == nil {
+			dev.CreatedAt = &t
+		}
+		out = append(out, dev)
+	}
+	return out, nil
+}
+
+// deviceKind folds authentik's device class names onto the settings page's
+// vocabulary.
+func deviceKind(typ, verbose string) string {
+	s := strings.ToLower(typ + " " + verbose)
+	switch {
+	case strings.Contains(s, "totp"):
+		return "totp"
+	case strings.Contains(s, "webauthn"):
+		return "webauthn"
+	case strings.Contains(s, "static"):
+		return "static"
+	case strings.Contains(s, "duo"):
+		return "duo"
+	case strings.Contains(s, "sms"):
+		return "sms"
+	case strings.Contains(s, "email"):
+		return "email"
+	}
+	return "other"
+}

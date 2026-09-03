@@ -346,6 +346,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/user/directory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where the caller manages password, MFA and profile when a directory service owns the account (DEV-057).
+         * @description With auth.externalOnly, credentials live in the directory service (Authentik). This answers the settings page's question "where do I change my password or add an authenticator?" with the directory's flow URLs, and lists the caller's enrolled authenticator devices when the server has directory admin access (auth.idpAdminURL). Without a directory, `managed` is false and the rest is absent.
+         */
+        get: operations["getUserDirectory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/user/sessions": {
         parameters: {
             query?: never;
@@ -1637,6 +1657,25 @@ export interface components {
             secret: string;
             otpauthUrl: string;
         };
+        UserDirectory: {
+            /** @description True when a directory service owns credentials for this deployment. */
+            managed: boolean;
+            /** @description The directory's own account page (name, email, sessions, consents). */
+            accountUrl?: string;
+            passwordChangeUrl?: string;
+            totpSetupUrl?: string;
+            webauthnSetupUrl?: string;
+            /** @description The caller's enrolled authenticators as the directory reports them; absent when the server has no directory admin access. */
+            devices?: {
+                /** @description totp | webauthn | static | duo | sms | email | other */
+                kind: string;
+                name: string;
+                /** Format: date-time */
+                createdAt?: string;
+            }[];
+            /** @description Set when the device lookup was attempted and failed; the links still work. */
+            devicesError?: string;
+        };
         User: {
             /** Format: uuid */
             id: string;
@@ -2731,6 +2770,27 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getUserDirectory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Directory account links and devices. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDirectory"];
+                };
             };
             default: components["responses"]["Problem"];
         };
