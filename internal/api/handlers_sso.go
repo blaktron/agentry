@@ -38,6 +38,12 @@ func (s *Server) ssoURLs(r *http.Request, handle string) (metadataURL, acsURL, o
 	return prefix + "/saml/metadata", prefix + "/saml/acs", prefix + "/oidc/callback"
 }
 
+// samlSloURL is the SP's Single Logout endpoint for an org (§12.4, agentry#62).
+func (s *Server) samlSloURL(r *http.Request, handle string) string {
+	metadataURL, _, _ := s.ssoURLs(r, handle)
+	return strings.TrimSuffix(metadataURL, "/metadata") + "/slo"
+}
+
 // ---- SSO connection config CRUD (owner only, §12.4) ----
 
 // ListSsoConnections implements GET /orgs/{org}/sso/connections.
@@ -217,16 +223,26 @@ func (s *Server) samlSPForOrg(r *http.Request, orgRow storegen.GetOrgByHandleRow
 	if err != nil {
 		return nil, uuid.Nil, fmt.Errorf("no enabled saml connection")
 	}
-	var c samlsp.Config
-	if err := json.Unmarshal(conn.Config, &c); err != nil {
-		return nil, uuid.Nil, err
-	}
-	metadataURL, acsURL, _ := s.ssoURLs(r, orgRow.Handle)
-	sp, err := samlsp.New(c, metadataURL, acsURL, s.samlReplay)
+	sp, err := s.samlSPFromConfig(r, orgRow.Handle, conn.Config)
 	if err != nil {
 		return nil, uuid.Nil, err
 	}
-	return sp.WithRequestTracker(samlRequests), conn.ID, nil
+	return sp, conn.ID, nil
+}
+
+// samlSPFromConfig builds the SP for an org handle from a stored connection
+// config (the ACS/metadata path and the SLO path share it).
+func (s *Server) samlSPFromConfig(r *http.Request, orgHandle string, raw []byte) (*samlsp.SP, error) {
+	var c samlsp.Config
+	if err := json.Unmarshal(raw, &c); err != nil {
+		return nil, err
+	}
+	metadataURL, acsURL, _ := s.ssoURLs(r, orgHandle)
+	sp, err := samlsp.New(c, metadataURL, acsURL, s.samlReplay)
+	if err != nil {
+		return nil, err
+	}
+	return sp.WithRequestTracker(samlRequests).WithSLO(s.samlSloURL(r, orgHandle)), nil
 }
 
 // oidcRPForOrg builds the OIDC RP for an org's enabled connection. ctx should
@@ -260,7 +276,15 @@ func (s *Server) oidcRPForOrg(ctx context.Context, r *http.Request, orgRow store
 // establishSSOSession is the shared JIT + session step for SAML and OIDC
 // (§12.4). It links or creates the user, ensures org membership, opens an
 // SSO-tagged session, and writes the LoginResult.
-func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, orgRow storegen.GetOrgByHandleRow, connID uuid.UUID, providerKind, subject, email, displayName string) {
+// samlSessionLink is what a SAML-established session remembers for Single
+// Logout (§12.4, agentry#62): the asserted NameID and the IdP's
+// SessionIndex, keyed by the connection.
+type samlSessionLink struct {
+	NameID       string
+	SessionIndex string
+}
+
+func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, orgRow storegen.GetOrgByHandleRow, connID uuid.UUID, providerKind, subject, email, displayName string, samlLink *samlSessionLink) {
 	ctx := r.Context()
 	q := s.q()
 
@@ -294,7 +318,21 @@ func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, org
 	ua := r.UserAgent()
 	sessID := newUUID()
 	err = s.st.WithTx(ctx, func(q *storegen.Queries) error {
-		if _, err := q.CreateSession(ctx, storegen.CreateSessionParams{
+		if samlLink != nil && samlLink.NameID != "" {
+			var idx *string
+			if samlLink.SessionIndex != "" {
+				idx = &samlLink.SessionIndex
+			}
+			cid := connID
+			if _, err := q.CreateSAMLSession(ctx, storegen.CreateSAMLSessionParams{
+				ID: sessID, TokenSha256: auth.HashToken(sessToken), UserID: userID,
+				CsrfToken: csrfToken, Ip: ipPtr, UserAgent: &ua,
+				ExpiresAt:       time.Now().Add(s.cfg.Auth.SessionTTL),
+				SsoConnectionID: &cid, SamlNameID: &samlLink.NameID, SamlSessionIndex: idx,
+			}); err != nil {
+				return err
+			}
+		} else if _, err := q.CreateSession(ctx, storegen.CreateSessionParams{
 			ID: sessID, TokenSha256: auth.HashToken(sessToken), UserID: userID,
 			CsrfToken: csrfToken, Ip: ipPtr, UserAgent: &ua,
 			ExpiresAt: time.Now().Add(s.cfg.Auth.SessionTTL),

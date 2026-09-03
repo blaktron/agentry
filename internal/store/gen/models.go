@@ -351,17 +351,20 @@ type ScimToken struct {
 }
 
 type Session struct {
-	ID          uuid.UUID   `json:"id"`
-	TokenSha256 []byte      `json:"token_sha256"`
-	UserID      uuid.UUID   `json:"user_id"`
-	CsrfToken   string      `json:"csrf_token"`
-	SsoTags     []byte      `json:"sso_tags"`
-	Ip          *netip.Addr `json:"ip"`
-	UserAgent   *string     `json:"user_agent"`
-	CreatedAt   time.Time   `json:"created_at"`
-	LastSeenAt  time.Time   `json:"last_seen_at"`
-	ExpiresAt   time.Time   `json:"expires_at"`
-	RevokedAt   *time.Time  `json:"revoked_at"`
+	ID               uuid.UUID   `json:"id"`
+	TokenSha256      []byte      `json:"token_sha256"`
+	UserID           uuid.UUID   `json:"user_id"`
+	CsrfToken        string      `json:"csrf_token"`
+	SsoTags          []byte      `json:"sso_tags"`
+	Ip               *netip.Addr `json:"ip"`
+	UserAgent        *string     `json:"user_agent"`
+	CreatedAt        time.Time   `json:"created_at"`
+	LastSeenAt       time.Time   `json:"last_seen_at"`
+	ExpiresAt        time.Time   `json:"expires_at"`
+	RevokedAt        *time.Time  `json:"revoked_at"`
+	SsoConnectionID  *uuid.UUID  `json:"sso_connection_id"`
+	SamlNameID       *string     `json:"saml_name_id"`
+	SamlSessionIndex *string     `json:"saml_session_index"`
 }
 
 type SsoConnection struct {
