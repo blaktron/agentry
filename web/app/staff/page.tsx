@@ -28,6 +28,14 @@ type RedTeamDetail = {
 // queue, abuse-report triage, the quarantine console, and the cross-org
 // audit view (§12.6). Staff-only: the API enforces it; this page just
 // renders the refusal honestly.
+interface RulesetRelease {
+  id: string;
+  semver: string;
+  bundleDigest: string;
+  publishedAt: string;
+  notes?: string;
+}
+
 export default async function StaffPage({
   searchParams,
 }: {
@@ -49,10 +57,13 @@ export default async function StaffPage({
 
   let queue: ReviewItem[] = [];
   let reports: AbuseReport[] = [];
+
+  let rulesets: RulesetRelease[] | null = null;
   try {
-    [queue, reports] = await Promise.all([
+    [queue, reports, rulesets] = await Promise.all([
       authedGet<ReviewItem[]>("/review-queue?queue=platform&limit=100").then((r) => r ?? []),
       authedGet<AbuseReport[]>(`/platform/abuse-reports?state=${state}&limit=100`).then((r) => r ?? []),
+      authedGet<RulesetRelease[]>("/platform/ruleset-releases").catch(() => null),
     ]);
   } catch (e) {
     if (e instanceof AccessError) {
@@ -402,6 +413,60 @@ export default async function StaffPage({
               Triage records the outcome. Enforcement (quarantine/block) is a separate action below so
               its audit trail names the BriefAgent (§8.7).
             </p>
+          </Card>
+
+          <Card>
+            <h2 className="mb-2 font-semibold">Ruleset releases</h2>
+            <p className="mb-2 text-xs" style={{ color: "var(--color-muted)" }}>
+              The scanner bundle every new scan is judged under (§8.7). Registering a new semver
+              triggers the rescan sweep; re-registering an existing one returns it unchanged.
+            </p>
+            {rulesets === null ? (
+              <p className="text-sm" style={{ color: "var(--color-muted)" }}>Release history unavailable.</p>
+            ) : (
+              <table className="mb-3 w-full text-xs">
+                <thead>
+                  <tr className="border-b text-left" style={{ borderColor: "var(--color-border)" }}>
+                    <th className="py-1 pr-3 font-medium">Semver</th>
+                    <th className="py-1 pr-3 font-medium">Digest</th>
+                    <th className="py-1 pr-3 font-medium">Published</th>
+                    <th className="py-1 font-medium">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rulesets.slice(0, 10).map((rs, i) => (
+                    <tr key={rs.id} className="border-b" style={{ borderColor: "var(--color-border)" }}>
+                      <td className="py-1 pr-3 font-mono">
+                        {rs.semver} {i === 0 && <Badge tone="ok">current</Badge>}
+                      </td>
+                      <td className="py-1 pr-3 font-mono" title={rs.bundleDigest}>{rs.bundleDigest.slice(0, 19)}…</td>
+                      <td className="py-1 pr-3">{fmtUTC(rs.publishedAt)}</td>
+                      <td className="py-1">{rs.notes ?? ""}</td>
+                    </tr>
+                  ))}
+                  {rulesets.length === 0 && (
+                    <tr><td colSpan={4} className="py-1" style={{ color: "var(--color-muted)" }}>No releases registered.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+            <form method="post" action="/staff/ruleset-release" className="flex flex-wrap items-end gap-2 text-sm">
+              <label>
+                Semver
+                <input name="semver" required pattern="[0-9]+\.[0-9]+\.[0-9]+([-+].*)?" placeholder="0.3.0" className="mt-1 rounded-md border px-2 py-1 font-mono text-xs" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }} />
+              </label>
+              <label className="grow">
+                Bundle digest (sha256:…)
+                <input name="bundleDigest" required pattern="sha256:[0-9a-f]{64}" className="mt-1 w-full rounded-md border px-2 py-1 font-mono text-xs" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }} />
+              </label>
+              <label className="grow">
+                Notes
+                <input name="notes" maxLength={2000} className="mt-1 w-full rounded-md border px-2 py-1 text-xs" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }} />
+              </label>
+              <button type="submit" className="rounded-md border px-3 py-1.5" style={{ borderColor: "var(--color-border)" }}>
+                Register release
+              </button>
+            </form>
           </Card>
 
           <Card>
