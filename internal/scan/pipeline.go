@@ -527,6 +527,16 @@ func (p *Pipeline) finishRun(ctx context.Context, runID uuid.UUID, result RunRes
 // applyDecision maps the gate outcome onto §7 transitions and, on publish,
 // signs the attestation.
 func (p *Pipeline) applyDecision(ctx context.Context, agent storegen.GetAgentByIDRow, v storegen.AgentVersion, runID uuid.UUID, result RunResult, policyVer int) error {
+	// §9.3 catalog (agentry#56): the scan finished, whatever the gate says
+	// next; subscribers that want the outcome also get the version.* event.
+	counts := map[string]int{}
+	for _, f := range result.Findings {
+		counts[string(f.Severity)]++
+	}
+	p.reg.EmitAgentEvent(ctx, agent.ID, webhook.EventScanCompleted, map[string]any{
+		"version": v.Version, "runId": runID.String(), "reportDigest": result.ReportDigest,
+		"findings": counts, "reason": result.Decision.Reason,
+	})
 	sysEvent := audit.Event{ActorKind: audit.ActorSystem}
 	// §16.2 publish funnel: one verdict per version, recorded where the
 	// decision is acted on rather than where it is computed (the orchestrator

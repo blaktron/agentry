@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Badge, Card, RefusalCard } from "@/components/ui";
-import type { AbuseReport, AuditPage, ReviewItem } from "@/lib/api";
+import type { AbuseReport, AuditPage, RedTeamReport, ReviewItem } from "@/lib/api";
 import { fmtUTC } from "@/lib/format";
 import { RevealText } from "@/lib/reveal";
 import { AccessError, authedGet, currentUser } from "@/lib/session";
@@ -13,7 +13,16 @@ const STATES = ["open", "triaged", "actioned", "dismissed"] as const;
 const VIEWS = [
   { id: "triage", label: "Triage" },
   { id: "audit", label: "Cross-org audit" },
+  { id: "redteam", label: "Red team" },
 ] as const;
+
+// The §17.5 report shape the job stores (internal/redteam.Report); typed
+// here only as far as the view reads it.
+type RedTeamDetail = {
+  byMutator?: { mutator: string; family: string; cases: number; evaded: number }[];
+  evasions?: { fixture: string; technique?: string; mutator: string; missing: string[] }[];
+  durationMs?: number;
+};
 
 // Platform T&S console (§10.1 Platform staff row): the platform review
 // queue, abuse-report triage, the quarantine console, and the cross-org
@@ -77,6 +86,11 @@ export default async function StaffPage({
       ? await authedGet<AuditPage>(`/platform/audit?${auditFilter.toString()}`).catch(() => null)
       : null;
 
+  // §17.5 red-team reports (agentry#67): report-only, read on demand.
+  const redteam =
+    view === "redteam"
+      ? await authedGet<RedTeamReport[]>("/platform/redteam/reports?limit=10").catch(() => null)
+      : null;
   const viewHref = (id: string) => (id === "triage" ? "/staff" : `/staff?view=${id}`);
 
   return (
@@ -109,7 +123,115 @@ export default async function StaffPage({
         </p>
       )}
 
-      {view === "audit" ? (
+      {view === "redteam" ? (
+        <Card>
+          <h2 className="mb-2 font-semibold">Red team against the S3/S4 gate</h2>
+          <p className="mb-3 text-sm" style={{ color: "var(--color-muted)" }}>
+            A worker periodically rewrites the golden attack corpus (paraphrase, encoding, unicode
+            and obfuscation mutators) and scans the rewrites with the rule bundle in service. An{" "}
+            <em>evasion</em> is a rewrite the expected rule no longer catches. Report-only (§17.5):
+            nothing here gates a publish — it says where the next rules are needed.
+          </p>
+          {redteam === null ? (
+            <p className="text-sm" style={{ color: "var(--color-sev-medium)" }}>
+              The red-team reports could not be read.
+            </p>
+          ) : redteam.length === 0 ? (
+            <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+              No run has completed yet. A worker runs the job on its interval (24 hours by default).
+            </p>
+          ) : (
+            <>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left" style={{ borderColor: "var(--color-border)" }}>
+                    <th className="py-1 pr-4 font-medium">When</th>
+                    <th className="py-1 pr-4 font-medium">Ruleset</th>
+                    <th className="py-1 pr-4 font-medium">Fixtures</th>
+                    <th className="py-1 pr-4 font-medium">Cases</th>
+                    <th className="py-1 font-medium">Evaded</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {redteam.map((r) => (
+                    <tr key={r.id} className="border-b last:border-0" style={{ borderColor: "var(--color-border)" }}>
+                      <td className="py-1 pr-4 whitespace-nowrap" style={{ color: "var(--color-muted)" }}>
+                        {fmtUTC(r.createdAt)}
+                      </td>
+                      <td className="py-1 pr-4 font-mono text-xs">{r.rulesetSemver}</td>
+                      <td className="py-1 pr-4">{r.fixtures}</td>
+                      <td className="py-1 pr-4">{r.cases}</td>
+                      <td className="py-1">
+                        {r.evaded} ({r.cases > 0 ? Math.round((100 * r.evaded) / r.cases) : 0}%)
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {(() => {
+                const latest = redteam[0];
+                const detail = (latest.report ?? {}) as RedTeamDetail;
+                const byMutator = detail.byMutator ?? [];
+                const evasions = detail.evasions ?? [];
+                return (
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div>
+                      <h3 className="mb-1 text-sm font-semibold">Latest run, by mutator</h3>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b text-left" style={{ borderColor: "var(--color-border)" }}>
+                            <th className="py-1 pr-3 font-medium">Mutator</th>
+                            <th className="py-1 pr-3 font-medium">Family</th>
+                            <th className="py-1 font-medium">Evaded / cases</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {byMutator.map((m) => (
+                            <tr key={m.mutator} className="border-b last:border-0" style={{ borderColor: "var(--color-border)" }}>
+                              <td className="py-1 pr-3 font-mono text-xs">{m.mutator}</td>
+                              <td className="py-1 pr-3" style={{ color: "var(--color-muted)" }}>{m.family}</td>
+                              <td className="py-1">
+                                {m.evaded} / {m.cases}
+                                {m.cases > 0 && m.evaded === m.cases && (
+                                  <span className="ml-2">
+                                    <Badge tone="danger">all evade</Badge>
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div>
+                      <h3 className="mb-1 text-sm font-semibold">
+                        Evasions ({evasions.length})
+                      </h3>
+                      {evasions.length === 0 ? (
+                        <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+                          Every rewrite was still caught.
+                        </p>
+                      ) : (
+                        <ul className="max-h-96 overflow-auto text-xs">
+                          {evasions.map((e, i) => (
+                            <li key={i} className="border-b py-1 last:border-0" style={{ borderColor: "var(--color-border)" }}>
+                              <span className="font-mono">{e.fixture}</span>
+                              {" · "}
+                              <span className="font-mono">{e.mutator}</span>
+                              {" → missing "}
+                              <span className="font-mono">{e.missing.join(", ")}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </>
+          )}
+        </Card>
+      ) : view === "audit" ? (
         <Card>
           <h2 className="mb-2 font-semibold">Audit events across every organization</h2>
           <p className="mb-3 text-sm" style={{ color: "var(--color-muted)" }}>
