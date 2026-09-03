@@ -283,6 +283,17 @@ type Policy struct {
 	UpdatedAt time.Time  `json:"updated_at"`
 }
 
+type RedteamReport struct {
+	ID            uuid.UUID `json:"id"`
+	RulesetSemver string    `json:"ruleset_semver"`
+	BundleDigest  string    `json:"bundle_digest"`
+	Fixtures      int32     `json:"fixtures"`
+	Cases         int32     `json:"cases"`
+	Evaded        int32     `json:"evaded"`
+	Report        []byte    `json:"report"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
 type Repo struct {
 	ID            uuid.UUID  `json:"id"`
 	DefaultBranch string     `json:"default_branch"`

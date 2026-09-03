@@ -870,6 +870,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{ns}/{name}/versions/{version}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Server-sent events for a version's pipeline progress (§11 "SSE/poll"; agentry#65).
+         * @description Streams `event: status` messages (JSON: status, statusReason, the scan stages completed so far, done) whenever something changes, about once a second while a scan runs, and closes after the terminal state — published, rejected, needs_review, quarantined — or after five minutes, whichever comes first. Same visibility rules as the version itself. Clients that cannot consume SSE poll the version resource instead.
+         */
+        get: operations["streamVersionEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{ns}/{name}/versions/{version}/report": {
         parameters: {
             query?: never;
@@ -1015,6 +1035,26 @@ export interface paths {
         };
         /** The read-only platform baseline policy (§8.6). */
         get: operations["getPlatformPolicy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/redteam/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Reports of the scheduled red-team job against the S3/S4 gate (§17.5; platform staff).
+         * @description Newest first. Each report is one run of the attack corpus's rewrites (paraphrase, encoding, unicode and obfuscation mutators) scanned with the rule bundle in service, and lists the rewrites an expected rule no longer caught. Report-only: nothing on the publish path reads these.
+         */
+        get: operations["listRedTeamReports"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1798,6 +1838,25 @@ export interface components {
              * @description Send the browser here to end the IdP session too (SAML SLO).
              */
             idpLogoutUrl: string;
+        };
+        /** @description One run of the §17.5 red-team job (agentry#67). */
+        RedTeamReport: {
+            /** Format: uuid */
+            id: string;
+            rulesetSemver: string;
+            bundleDigest: string;
+            /** @description Attack fixtures with S3/S4 expectations that fired unmutated. */
+            fixtures: number;
+            /** @description Fixtures × applicable mutators. */
+            cases: number;
+            /** @description Cases where at least one expected rule stopped firing. */
+            evaded: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** @description The full report (byMutator tallies and every evasion). */
+            report: {
+                [key: string]: unknown;
+            };
         };
         /**
          * @description Supported agent kinds (§1.4).
@@ -3706,6 +3765,31 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    streamVersionEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+                version: components["parameters"]["VersionString"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description An event stream. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     getVersionReport: {
         parameters: {
             query?: never;
@@ -3937,6 +4021,29 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listRedTeamReports: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reports, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RedTeamReport"][];
                 };
             };
             default: components["responses"]["Problem"];
