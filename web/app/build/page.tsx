@@ -155,13 +155,33 @@ export default async function BuildPage({
             <span className="font-mono text-xs">email calendar files tickets code messages payments other</span>)
             <input name="dataAccess" className={inputClass} style={inputStyle} />
           </label>
+          <fieldset className="mt-3">
+            <legend className={label}>
+              MCP servers (exact versions — pinned to this release and installed per-signature by
+              the runner)
+            </legend>
+            {/* Structured rows, plain form controls (DEV-012: no client JS);
+                more than three servers go in the advanced field below (agentry#52). */}
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="mt-2 grid gap-2 md:grid-cols-6">
+                <select name={`mcp${i}Source`} className={inputClass} style={inputStyle} aria-label={`Server ${i + 1} registry`}>
+                  <option value="npm">npm</option>
+                  <option value="pypi">PyPI</option>
+                </select>
+                <input name={`mcp${i}Pkg`} placeholder="package" className={`${inputClass} md:col-span-2`} style={inputStyle} aria-label={`Server ${i + 1} package`} />
+                <input name={`mcp${i}Version`} placeholder="exact version" className={inputClass} style={inputStyle} aria-label={`Server ${i + 1} version`} />
+                <input name={`mcp${i}Tools`} placeholder="tools (optional)" className={inputClass} style={inputStyle} aria-label={`Server ${i + 1} tool allowlist`} />
+                <input name={`mcp${i}Secrets`} placeholder="SECRET_NAMES" className={inputClass} style={inputStyle} aria-label={`Server ${i + 1} secret names`} />
+                <input name={`mcp${i}Egress`} placeholder="egress hosts" className={`${inputClass} md:col-span-6`} style={inputStyle} aria-label={`Server ${i + 1} egress hosts`} />
+              </div>
+            ))}
+          </fieldset>
           <label className={`${label} mt-3 block`}>
-            MCP servers (one per line, exact versions — pinned to this release and installed
-            per-signature by the runner; format:{" "}
+            More servers (advanced, one per line:{" "}
             <span className="font-mono text-xs">npm:pkg@1.2.3 tools=a,b secrets=X egress=host</span>)
             <textarea
               name="mcpServers"
-              rows={3}
+              rows={2}
               className={`${inputClass} font-mono text-xs`}
               style={inputStyle}
               placeholder={"npm:@modelcontextprotocol/server-github@2026.1.2 tools=list_issues secrets=GITHUB_PAT egress=api.github.com\npypi:mcp-server-fetch@0.6.2 egress=*"}
