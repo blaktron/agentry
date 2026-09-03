@@ -276,9 +276,10 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			method: "POST", path: agentPath("/versions"),
 			body: func(*matrixSeed, string) any { return map[string]any{"tag": "v9.9.9"} },
 		},
-		"listVersions":       {method: "GET", path: agentPath("/versions")},
-		"getVersionInfo":     {method: "GET", path: agentPath("/versions/9.9.9")},
-		"getVersionManifest": {method: "GET", path: agentPath("/versions/9.9.9/manifest")},
+		"listVersions":        {method: "GET", path: agentPath("/versions")},
+		"getVersionInfo":      {method: "GET", path: agentPath("/versions/9.9.9")},
+		"streamVersionEvents": {method: "GET", path: agentPath("/versions/9.9.9/events")},
+		"getVersionManifest":  {method: "GET", path: agentPath("/versions/9.9.9/manifest")},
 		"yankVersion": {
 			method: "POST", path: agentPath("/versions/9.9.9/yank"),
 			body: func(*matrixSeed, string) any { return map[string]any{"reason": "matrix"} },
