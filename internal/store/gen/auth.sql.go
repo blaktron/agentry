@@ -60,10 +60,65 @@ func (q *Queries) CreatePAT(ctx context.Context, arg CreatePATParams) (Pat, erro
 	return i, err
 }
 
+const createSAMLSession = `-- name: CreateSAMLSession :one
+
+INSERT INTO sessions (id, token_sha256, user_id, csrf_token, ip, user_agent, expires_at,
+                      sso_connection_id, saml_name_id, saml_session_index)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id, token_sha256, user_id, csrf_token, sso_tags, ip, user_agent, created_at, last_seen_at, expires_at, revoked_at, sso_connection_id, saml_name_id, saml_session_index
+`
+
+type CreateSAMLSessionParams struct {
+	ID               uuid.UUID   `json:"id"`
+	TokenSha256      []byte      `json:"token_sha256"`
+	UserID           uuid.UUID   `json:"user_id"`
+	CsrfToken        string      `json:"csrf_token"`
+	Ip               *netip.Addr `json:"ip"`
+	UserAgent        *string     `json:"user_agent"`
+	ExpiresAt        time.Time   `json:"expires_at"`
+	SsoConnectionID  *uuid.UUID  `json:"sso_connection_id"`
+	SamlNameID       *string     `json:"saml_name_id"`
+	SamlSessionIndex *string     `json:"saml_session_index"`
+}
+
+// SAML Single Logout (§12.4, agentry#62).
+func (q *Queries) CreateSAMLSession(ctx context.Context, arg CreateSAMLSessionParams) (Session, error) {
+	row := q.db.QueryRow(ctx, createSAMLSession,
+		arg.ID,
+		arg.TokenSha256,
+		arg.UserID,
+		arg.CsrfToken,
+		arg.Ip,
+		arg.UserAgent,
+		arg.ExpiresAt,
+		arg.SsoConnectionID,
+		arg.SamlNameID,
+		arg.SamlSessionIndex,
+	)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.TokenSha256,
+		&i.UserID,
+		&i.CsrfToken,
+		&i.SsoTags,
+		&i.Ip,
+		&i.UserAgent,
+		&i.CreatedAt,
+		&i.LastSeenAt,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+		&i.SsoConnectionID,
+		&i.SamlNameID,
+		&i.SamlSessionIndex,
+	)
+	return i, err
+}
+
 const createSession = `-- name: CreateSession :one
 INSERT INTO sessions (id, token_sha256, user_id, csrf_token, ip, user_agent, expires_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, token_sha256, user_id, csrf_token, sso_tags, ip, user_agent, created_at, last_seen_at, expires_at, revoked_at
+RETURNING id, token_sha256, user_id, csrf_token, sso_tags, ip, user_agent, created_at, last_seen_at, expires_at, revoked_at, sso_connection_id, saml_name_id, saml_session_index
 `
 
 type CreateSessionParams struct {
@@ -99,6 +154,9 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		&i.LastSeenAt,
 		&i.ExpiresAt,
 		&i.RevokedAt,
+		&i.SsoConnectionID,
+		&i.SamlNameID,
+		&i.SamlSessionIndex,
 	)
 	return i, err
 }
@@ -128,7 +186,7 @@ func (q *Queries) GetPATByHash(ctx context.Context, tokenSha256 []byte) (Pat, er
 }
 
 const getSessionByHash = `-- name: GetSessionByHash :one
-SELECT s.id, s.token_sha256, s.user_id, s.csrf_token, s.sso_tags, s.ip, s.user_agent, s.created_at, s.last_seen_at, s.expires_at, s.revoked_at FROM sessions s
+SELECT s.id, s.token_sha256, s.user_id, s.csrf_token, s.sso_tags, s.ip, s.user_agent, s.created_at, s.last_seen_at, s.expires_at, s.revoked_at, s.sso_connection_id, s.saml_name_id, s.saml_session_index FROM sessions s
 WHERE s.token_sha256 = $1 AND s.revoked_at IS NULL AND s.expires_at > now()
 `
 
@@ -147,6 +205,35 @@ func (q *Queries) GetSessionByHash(ctx context.Context, tokenSha256 []byte) (Ses
 		&i.LastSeenAt,
 		&i.ExpiresAt,
 		&i.RevokedAt,
+		&i.SsoConnectionID,
+		&i.SamlNameID,
+		&i.SamlSessionIndex,
+	)
+	return i, err
+}
+
+const getSessionByID = `-- name: GetSessionByID :one
+SELECT id, token_sha256, user_id, csrf_token, sso_tags, ip, user_agent, created_at, last_seen_at, expires_at, revoked_at, sso_connection_id, saml_name_id, saml_session_index FROM sessions WHERE id = $1
+`
+
+func (q *Queries) GetSessionByID(ctx context.Context, id uuid.UUID) (Session, error) {
+	row := q.db.QueryRow(ctx, getSessionByID, id)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.TokenSha256,
+		&i.UserID,
+		&i.CsrfToken,
+		&i.SsoTags,
+		&i.Ip,
+		&i.UserAgent,
+		&i.CreatedAt,
+		&i.LastSeenAt,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+		&i.SsoConnectionID,
+		&i.SamlNameID,
+		&i.SamlSessionIndex,
 	)
 	return i, err
 }
@@ -235,6 +322,26 @@ type RevokePATParams struct {
 
 func (q *Queries) RevokePAT(ctx context.Context, arg RevokePATParams) (int64, error) {
 	result, err := q.db.Exec(ctx, revokePAT, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const revokeSAMLSessions = `-- name: RevokeSAMLSessions :execrows
+UPDATE sessions SET revoked_at = now()
+WHERE sso_connection_id = $1 AND saml_name_id = $2 AND revoked_at IS NULL
+  AND ($3::text IS NULL OR saml_session_index = $3::text)
+`
+
+type RevokeSAMLSessionsParams struct {
+	SsoConnectionID  *uuid.UUID `json:"sso_connection_id"`
+	SamlNameID       *string    `json:"saml_name_id"`
+	SamlSessionIndex *string    `json:"saml_session_index"`
+}
+
+func (q *Queries) RevokeSAMLSessions(ctx context.Context, arg RevokeSAMLSessionsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeSAMLSessions, arg.SsoConnectionID, arg.SamlNameID, arg.SamlSessionIndex)
 	if err != nil {
 		return 0, err
 	}

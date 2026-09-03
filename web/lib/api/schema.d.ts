@@ -90,7 +90,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Revoke the current session. */
+        /**
+         * Revoke the current session.
+         * @description Answers 204 for a native or OIDC session. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO, §12.4); the registry session is revoked either way.
+         */
         post: operations["logout"];
         delete?: never;
         options?: never;
@@ -1222,6 +1225,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/sso/saml/slo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * SAML Single Logout endpoint, HTTP-Redirect binding (§12.4).
+         * @description Accepts a signed IdP-initiated LogoutRequest (revokes the sessions it names and answers the IdP with a LogoutResponse) or the IdP's LogoutResponse to an SP-initiated logout (validated, then the browser is sent home).
+         */
+        get: operations["samlSloRedirect"];
+        put?: never;
+        /** SAML Single Logout endpoint, HTTP-POST binding (§12.4). */
+        post: operations["samlSloPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/sso/oidc/start": {
         parameters: {
             query?: never;
@@ -1903,6 +1927,13 @@ export interface components {
             /** Format: date-time */
             publishedAt: string;
         };
+        LogoutResult: {
+            /**
+             * Format: uri
+             * @description Send the browser here to end the IdP session too (SAML SLO).
+             */
+            idpLogoutUrl: string;
+        };
         /** @description One run of the §17.5 red-team job (agentry#67). */
         RedTeamReport: {
             /** Format: uuid */
@@ -2421,6 +2452,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Session revoked; continue the logout at the IdP. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogoutResult"];
+                };
+            };
             /** @description Session revoked. */
             204: {
                 headers: {
@@ -4421,6 +4461,62 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LoginResult"];
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    samlSloRedirect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Logged out; the IdP publishes no endpoint to answer to. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Redirect to the IdP's SLO endpoint (LogoutResponse) or home. */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    samlSloPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Logged out; the IdP publishes no endpoint to answer to. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Redirect to the IdP's SLO endpoint (LogoutResponse) or home. */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };

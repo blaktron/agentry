@@ -173,9 +173,21 @@ paths:
       operationId: logout
       tags: [auth]
       summary: Revoke the current session.
+      description: >-
+        Answers 204 for a native or OIDC session. For a session established
+        through an organization's SAML connection whose IdP publishes a
+        Single Logout endpoint, answers 200 with the IdP logout URL the
+        browser should be sent to next (SP-initiated SLO, §12.4); the
+        registry session is revoked either way.
       responses:
         "204":
           description: Session revoked.
+        "200":
+          description: Session revoked; continue the logout at the IdP.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogoutResult"
         default:
           $ref: "#/components/responses/Problem"
 
@@ -1972,6 +1984,41 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /orgs/{org}/sso/saml/slo:
+    get:
+      operationId: samlSloRedirect
+      tags: [sso]
+      summary: "SAML Single Logout endpoint, HTTP-Redirect binding (§12.4)."
+      description: >-
+        Accepts a signed IdP-initiated LogoutRequest (revokes the sessions it
+        names and answers the IdP with a LogoutResponse) or the IdP's
+        LogoutResponse to an SP-initiated logout (validated, then the browser
+        is sent home).
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      responses:
+        "303":
+          description: Redirect to the IdP's SLO endpoint (LogoutResponse) or home.
+        "200":
+          description: Logged out; the IdP publishes no endpoint to answer to.
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: samlSloPost
+      tags: [sso]
+      summary: "SAML Single Logout endpoint, HTTP-POST binding (§12.4)."
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      responses:
+        "303":
+          description: Redirect to the IdP's SLO endpoint (LogoutResponse) or home.
+        "200":
+          description: Logged out; the IdP publishes no endpoint to answer to.
+        default:
+          $ref: "#/components/responses/Problem"
+
   /orgs/{org}/sso/oidc/start:
     get:
       operationId: oidcStart
@@ -3333,6 +3380,15 @@ components:
         publishedAt:
           type: string
           format: date-time
+
+    LogoutResult:
+      type: object
+      required: [idpLogoutUrl]
+      properties:
+        idpLogoutUrl:
+          type: string
+          format: uri
+          description: Send the browser here to end the IdP session too (SAML SLO).
 
     RedTeamReport:
       type: object
