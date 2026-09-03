@@ -192,6 +192,7 @@ export type AgentGrant = components["schemas"]["AgentGrant"];
 export type AgentRole = components["schemas"]["AgentRole"];
 export type AuditEvent = components["schemas"]["AuditEvent"];
 export type AuditPage = components["schemas"]["AuditPage"];
+export type RedTeamReport = components["schemas"]["RedTeamReport"];
 export type Org = components["schemas"]["Org"];
 export type WebhookDelivery = components["schemas"]["WebhookDelivery"];
 
