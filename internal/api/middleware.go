@@ -171,6 +171,10 @@ type statusWriter struct {
 	wrote  bool
 }
 
+// Unwrap lets http.NewResponseController reach the underlying writer's
+// Flush (server-sent events, agentry#65) and Hijack through this wrapper.
+func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
 func (w *statusWriter) WriteHeader(code int) {
 	w.status = code
 	w.wrote = true
