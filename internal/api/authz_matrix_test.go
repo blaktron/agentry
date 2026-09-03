@@ -381,6 +381,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			},
 		},
 		"deleteSsoConnection": {method: "DELETE", path: orgPath("/sso/connections/oidc")},
+		"testSsoConnection":   {method: "POST", path: orgPath("/sso/connections/oidc/test")},
 		"listScimTokens":      {method: "GET", path: orgPath("/scim/tokens")},
 		"createScimToken": {
 			method: "POST", path: orgPath("/scim/tokens"),

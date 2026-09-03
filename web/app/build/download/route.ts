@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { redirectBack, sameOrigin, readForm } from "@/lib/forms";
 import {
-  BuilderInput, packArchive, parseServerLines, validateInput, workspaceFiles,
+  BuilderInput, packArchive, parseServerLines, serverLinesFromForm, validateInput, workspaceFiles,
 } from "@/lib/briefagent";
 
 function list(v: FormDataEntryValue | null): string[] {
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   const form = await readForm(req);
 
   const kind = String(form.get("kind") ?? "skill");
-  const { servers, error: serverErr } = parseServerLines(String(form.get("mcpServers") ?? ""));
+  const { servers, error: serverErr } = parseServerLines([serverLinesFromForm(form), String(form.get("mcpServers") ?? "")].join("\n"));
   if (serverErr) return redirectBack(req, "/build", { error: serverErr });
   const input: BuilderInput = {
     mcpServers: servers,
