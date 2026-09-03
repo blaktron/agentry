@@ -72,6 +72,8 @@ type Server struct {
 	// oidcHTTPClient, when set, is the HTTP client OIDC discovery/JWKS/token
 	// calls use (tests point it at an httptest IdP). nil = default client.
 	oidcHTTPClient *http.Client
+	// imgHTTPClient overrides the image proxy's guarded client (tests).
+	imgHTTPClient *http.Client
 }
 
 // New creates the API server. st may be nil in database-less dev mode; any
@@ -199,6 +201,9 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		srv.reg.SetPolicyGate(srv.pipeline)
 		srv.reg.SetPublicPublish2FA(publicPublish2FAEnabled(cfg))
 		srv.reg.SetIPClusterSecret(ipClusterSecret(cfg))
+		// README images route through the same-origin proxy (agentry#64);
+		// the renderer needs the server's signing key, so it is built here.
+		srv.renderer = render.NewWithOptions(render.Options{ImageProxy: srv.imageProxyURL})
 		if cfg.Auth.IdPAdminURL != "" && cfg.Auth.IdPAdminToken != "" {
 			srv.dirEraser = newAuthentikEraser(cfg.Auth.IdPAdminURL, cfg.Auth.IdPAdminToken)
 		}
@@ -333,6 +338,10 @@ func (s *Server) SetWebhookDispatcher(d *webhook.Dispatcher) { s.webhooks = d }
 // token calls (tests point it at an in-process IdP).
 func (s *Server) SetOIDCHTTPClient(c *http.Client) { s.oidcHTTPClient = c }
 
+// SetImageProxyClient overrides the guarded client the README image proxy
+// fetches with (tests point it at an in-process server).
+func (s *Server) SetImageProxyClient(c *http.Client) { s.imgHTTPClient = c }
+
 // RegisterQueueHandlers wires this server's async job handlers onto a queue
 // worker (the worker role, and tests): webhook delivery (§9.3) and audit
 // export (§12.6).
@@ -342,6 +351,7 @@ func (s *Server) RegisterQueueHandlers(q queue.Client) {
 	}
 	q.Register(jobAuditExport, s.runAuditExport)
 	s.registerAuditRetention(q) // §4.3 hot-table retention (audit_retention.go)
+	s.registerRedTeam(q)        // §17.5 report-only red-team job (handlers_redteam.go)
 }
 
 // emitAgentEvent is the registry event sink (§9.3): it resolves the agent's
@@ -527,6 +537,7 @@ func NewHandlerWithGit(s *Server, mountGit func(*http.ServeMux)) http.Handler {
 		mountGit(mux)
 	}
 
+	mux.HandleFunc("GET /api/v1/img/{sig}/{ref}", s.serveImageProxy) // agentry#64
 	mux.HandleFunc("GET /healthz", s.healthz)
 	mux.HandleFunc("GET /readyz", s.readyz)
 	mux.HandleFunc("GET /.well-known/agentry/registry.json", s.wellKnownRegistry)
