@@ -34,6 +34,7 @@ type Config struct {
 	Scan      Scan      `yaml:"scan"`
 	Social    Social    `yaml:"social"`
 	Audit     Audit     `yaml:"audit"`
+	RedTeam   RedTeam   `yaml:"redTeam"`
 	Telemetry Telemetry `yaml:"telemetry"`
 	Notify    Notify    `yaml:"notify"`
 	SMTP      SMTP      `yaml:"smtp"`
@@ -327,6 +328,16 @@ type SocialProvider struct {
 // Configured reports whether the provider can be offered.
 func (p SocialProvider) Configured() bool { return p.ClientID != "" && p.ClientSecret != "" }
 
+// RedTeam configures the §17.5 scheduled red-team job (agentry#67): corpus
+// rewrites scanned against the S3/S4 bundle, report-only.
+type RedTeam struct {
+	// Interval is how often a worker runs the job; 0 disables it.
+	Interval time.Duration `yaml:"interval"`
+	// CorpusDir overrides where the attack corpus is read from (default:
+	// the image's /srv/agentry/attack-corpus, else testdata/attack-corpus).
+	CorpusDir string `yaml:"corpusDir"`
+}
+
 // Audit configures the §12.6 continuous audit stream and §4.3 retention.
 type Audit struct {
 	// StreamKind selects the NDJSON sink: none | file | s3.
@@ -389,6 +400,7 @@ func Default() Config {
 			StreamFlush:   30 * time.Second,
 			RetentionDays: 400,
 		},
+		RedTeam: RedTeam{Interval: 24 * time.Hour},
 		Telemetry: Telemetry{
 			ExportInterval: 30 * time.Second,
 			// Well under the §16.3 15-minute queue-age threshold, so the
@@ -559,6 +571,11 @@ func applyEnv(c *Config) error {
 	if err := integer("AGENTRY_AUDIT_RETENTION_DAYS", &c.Audit.RetentionDays); err != nil {
 		return err
 	}
+	// §17.5 red-team job (agentry#67).
+	if err := dur("AGENTRY_REDTEAM_INTERVAL", &c.RedTeam.Interval); err != nil {
+		return err
+	}
+	str("AGENTRY_REDTEAM_CORPUS_DIR", &c.RedTeam.CorpusDir)
 
 	if err := boolean("AGENTRY_DEV_MODE", &c.DevMode); err != nil {
 		return err

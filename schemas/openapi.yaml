@@ -1715,6 +1715,32 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /platform/redteam/reports:
+    get:
+      operationId: listRedTeamReports
+      tags: [platform]
+      summary: Reports of the scheduled red-team job against the S3/S4 gate (§17.5; platform staff).
+      description: >-
+        Newest first. Each report is one run of the attack corpus's rewrites
+        (paraphrase, encoding, unicode and obfuscation mutators) scanned with
+        the rule bundle in service, and lists the rewrites an expected rule no
+        longer caught. Report-only: nothing on the publish path reads these.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
+      responses:
+        "200":
+          description: Reports, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RedTeamReport"
+        default:
+          $ref: "#/components/responses/Problem"
+
   /orgs/{org}/policy:
     get:
       operationId: getOrgPolicy
@@ -3157,6 +3183,35 @@ components:
         publishedAt:
           type: string
           format: date-time
+
+    RedTeamReport:
+      type: object
+      description: One run of the §17.5 red-team job (agentry#67).
+      required: [id, rulesetSemver, bundleDigest, fixtures, cases, evaded, createdAt, report]
+      properties:
+        id:
+          type: string
+          format: uuid
+        rulesetSemver:
+          type: string
+        bundleDigest:
+          type: string
+        fixtures:
+          type: integer
+          description: Attack fixtures with S3/S4 expectations that fired unmutated.
+        cases:
+          type: integer
+          description: Fixtures × applicable mutators.
+        evaded:
+          type: integer
+          description: Cases where at least one expected rule stopped firing.
+        createdAt:
+          type: string
+          format: date-time
+        report:
+          type: object
+          additionalProperties: true
+          description: The full report (byMutator tallies and every evasion).
 
     AgentKind:
       type: string
