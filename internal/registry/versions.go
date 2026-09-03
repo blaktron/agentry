@@ -420,6 +420,11 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 	if err := s.Transition(ctx, versionID, StatusScanning, "archive built", sysEvent); err != nil {
 		return Version{}, err
 	}
+	// §9.3 catalog (agentry#56): the submission itself is an event, before
+	// any scan outcome.
+	s.EmitAgentEvent(ctx, a.ID, "version.submitted", map[string]any{
+		"version": m.Version, "source": in.Source, "channel": string(m.EffectiveChannel()),
+	})
 	if s.pipeline != nil {
 		if perr := s.pipeline.VersionSubmitted(ctx, versionID); perr != nil {
 			// The version row is committed and sitting in `scanning`; there is
