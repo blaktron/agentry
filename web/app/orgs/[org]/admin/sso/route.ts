@@ -15,6 +15,20 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ org: strin
   const action = String(form.get("action") ?? "put");
   if (kind !== "saml" && kind !== "oidc") return redirectBack(req, back, { error: "unknown SSO kind" });
 
+  if (action === "test") {
+    const res = await apiSend("POST", `/orgs/${o}/sso/connections/${kind}/test`);
+    if (!res.ok) return redirectBack(req, back, { error: await problemDetail(res) });
+    const out = (await res.json()) as { ok: boolean; summary: string; warnings?: string[]; details?: Record<string, string> };
+    const detail = out.details
+      ? Object.entries(out.details)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(" · ")
+      : "";
+    const warn = out.warnings?.length ? ` Warnings: ${out.warnings.join("; ")}` : "";
+    const text = `${out.summary}${detail ? ` — ${detail}` : ""}${warn}`;
+    return out.ok ? redirectBack(req, back, { ok: text }) : redirectBack(req, back, { error: text });
+  }
+
   if (action === "delete") {
     const res = await apiSend("DELETE", `/orgs/${o}/sso/connections/${kind}`);
     if (!res.ok) return redirectBack(req, back, { error: await problemDetail(res) });

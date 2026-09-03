@@ -1113,6 +1113,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/sso/connections/{kind}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Probe a stored connection without signing in (owner, §12.4; agentry#50).
+         * @description OIDC: runs discovery against the stored issuer and reports the endpoints it advertises. SAML: parses the stored IdP metadata and reports entity id, sign-on URLs and signing-certificate expiry. Neither contacts the IdP's sign-in flow or uses the client secret. A failed probe is a 200 with ok=false and the reason, so the admin page can show it inline.
+         */
+        post: operations["testSsoConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/sso/saml/metadata": {
         parameters: {
             query?: never;
@@ -1386,7 +1406,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Ruleset releases, newest first (platform staff, §10.1 console). */
+        get: operations["listRulesetReleases"];
         put?: never;
         /**
          * Register a ruleset release (platform staff, §9.2).
@@ -2065,6 +2086,20 @@ export interface components {
                 field: string;
                 message: string;
             }[];
+        };
+        SsoConnectionTest: {
+            ok: boolean;
+            /** @enum {string} */
+            kind: "saml" | "oidc";
+            /** @description One line for the admin page. */
+            summary: string;
+            /** @description Discovered endpoints / metadata facts (strings only). */
+            details?: {
+                [key: string]: string;
+            };
+            warnings?: string[];
+            /** Format: date-time */
+            checkedAt: string;
         };
         SsoConnection: {
             /** @enum {string} */
@@ -4138,6 +4173,30 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    testSsoConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: components["parameters"]["OrgHandle"];
+                kind: components["parameters"]["SsoKind"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Probe outcome. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SsoConnectionTest"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     getSamlMetadata: {
         parameters: {
             query?: never;
@@ -4645,6 +4704,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listRulesetReleases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Registered releases; the first is what new scans run under. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesetRelease"][];
                 };
             };
             default: components["responses"]["Problem"];
