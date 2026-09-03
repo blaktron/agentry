@@ -1421,7 +1421,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Ruleset releases, newest first (platform staff, §10.1 console). */
+        get: operations["listRulesetReleases"];
         put?: never;
         /**
          * Register a ruleset release (platform staff, §9.2).
@@ -4767,6 +4768,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listRulesetReleases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Registered releases; the first is what new scans run under. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesetRelease"][];
                 };
             };
             default: components["responses"]["Problem"];
