@@ -14,11 +14,13 @@ import (
 
 // captureQueue records Enqueue calls; Register/Work are unused here.
 type captureQueue struct {
-	kind  string
-	queue string
-	args  []byte
-	fail  bool
-	calls int
+	kind     string
+	queue    string
+	args     []byte
+	fail     bool
+	calls    int
+	kinds    map[string]int
+	handlers map[string]queue.Handler
 }
 
 func (c *captureQueue) Enqueue(_ context.Context, kind, queueName string, args any, _ ...queue.EnqueueOption) (uuid.UUID, error) {
@@ -26,11 +28,21 @@ func (c *captureQueue) Enqueue(_ context.Context, kind, queueName string, args a
 	if c.fail {
 		return uuid.Nil, errors.New("queue down")
 	}
-	c.kind, c.queue = kind, queueName
-	c.args, _ = json.Marshal(args)
+	if c.kinds == nil {
+		c.kinds = map[string]int{}
+	}
+	c.kinds[kind]++
+	if kind == KindRepoPushed {
+		c.kind, c.queue = kind, queueName
+		c.args, _ = json.Marshal(args)
+	}
 	return uuid.New(), nil
 }
-func (c *captureQueue) Register(string, queue.Handler)        {}
+func (c *captureQueue) Register(kind string, h queue.Handler) {
+	if c.handlers != nil {
+		c.handlers[kind] = h
+	}
+}
 func (c *captureQueue) Work(context.Context, ...string) error { return nil }
 
 // TestPushBookkeepingRidesTheQueue: with a queue wired, afterReceive
@@ -46,8 +58,8 @@ func TestPushBookkeepingRidesTheQueue(t *testing.T) {
 	env.h.queue = q
 
 	env.h.afterReceive(context.Background(), agent, principal, pktCommands(zeroOID+" "+commit+" refs/heads/main"))
-	if q.calls != 1 || q.kind != KindRepoPushed || q.queue != "core" {
-		t.Fatalf("enqueue: calls=%d kind=%q queue=%q", q.calls, q.kind, q.queue)
+	if q.kinds[KindRepoPushed] != 1 || q.kind != KindRepoPushed || q.queue != "core" {
+		t.Fatalf("enqueue: kinds=%v kind=%q queue=%q", q.kinds, q.kind, q.queue)
 	}
 	if r := env.repo(agent.RepoID); r.LastPushAt != nil {
 		t.Fatalf("bookkeeping must not run inline when enqueued: %+v", r)
@@ -94,5 +106,31 @@ func TestPushBookkeepingRidesTheQueue(t *testing.T) {
 	}
 	if r := env.repo(agent3.RepoID); r.LastPushAt == nil || r.SizeBytes != 0 {
 		t.Fatalf("no-repos bookkeeping: %+v", r)
+	}
+}
+
+// TestRepoGCJob: the push handler enqueues a delayed repo.gc beside
+// repo.pushed, and the job runs git's auto housekeeping on the bare repo
+// (agentry#55). A role without repositories completes the job quietly.
+func TestRepoGCJob(t *testing.T) {
+	env := newBookkeepingEnv(t)
+	principal := &auth.Principal{UserID: env.owner, Via: "pat"}
+	agent, commit := env.seedAgent("gc")
+	q := &captureQueue{}
+	env.h.queue = q
+	env.h.afterReceive(context.Background(), agent, principal, pktCommands(zeroOID+" "+commit+" refs/heads/main"))
+	if q.kinds["repo.gc"] != 1 || q.kinds["repo.pushed"] != 1 {
+		t.Fatalf("expected one repo.pushed and one repo.gc job, got %v", q.kinds)
+	}
+	if err := env.repos.GC(context.Background(), agent.RepoID); err != nil {
+		t.Fatalf("gc: %v", err)
+	}
+	if err := env.repos.GC(context.Background(), uuid.New()); err == nil {
+		t.Fatal("gc on a missing repo must fail loudly")
+	}
+	reg := &captureQueue{handlers: map[string]queue.Handler{}}
+	NewPushBookkeeper(env.st, nil, env.h.aud, nil).Register(reg)
+	if err := reg.handlers["repo.gc"](context.Background(), queue.Job{Kind: "repo.gc", Args: []byte(`{"repoId":"` + agent.RepoID.String() + `"}`)}); err != nil {
+		t.Fatalf("no-repos role must complete the job: %v", err)
 	}
 }
