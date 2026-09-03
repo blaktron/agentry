@@ -1176,6 +1176,37 @@ func (q *Queries) ListReviewQueue(ctx context.Context, arg ListReviewQueueParams
 	return items, nil
 }
 
+const listRulesetReleases = `-- name: ListRulesetReleases :many
+SELECT id, semver, bundle_digest, notes, published_at FROM ruleset_releases ORDER BY published_at DESC LIMIT 100
+`
+
+// The staff console's release history (agentry#63), newest first.
+func (q *Queries) ListRulesetReleases(ctx context.Context) ([]RulesetRelease, error) {
+	rows, err := q.db.Query(ctx, listRulesetReleases)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RulesetRelease
+	for rows.Next() {
+		var i RulesetRelease
+		if err := rows.Scan(
+			&i.ID,
+			&i.Semver,
+			&i.BundleDigest,
+			&i.Notes,
+			&i.PublishedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStageResults = `-- name: ListStageResults :many
 SELECT scan_run_id, scanner, status, detail, finished_at FROM scan_stage_results WHERE scan_run_id = $1
 `
