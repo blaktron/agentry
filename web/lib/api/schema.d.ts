@@ -867,6 +867,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{ns}/{name}/versions/{version}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Server-sent events for a version's pipeline progress (§11 "SSE/poll"; agentry#65).
+         * @description Streams `event: status` messages (JSON: status, statusReason, the scan stages completed so far, done) whenever something changes, about once a second while a scan runs, and closes after the terminal state — published, rejected, needs_review, quarantined — or after five minutes, whichever comes first. Same visibility rules as the version itself. Clients that cannot consume SSE poll the version resource instead.
+         */
+        get: operations["streamVersionEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{ns}/{name}/versions/{version}/report": {
         parameters: {
             query?: never;
@@ -3701,6 +3721,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResolveResult"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    streamVersionEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["Namespace"];
+                name: components["parameters"]["AgentName"];
+                version: components["parameters"]["VersionString"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description An event stream. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
                 };
             };
             default: components["responses"]["Problem"];
