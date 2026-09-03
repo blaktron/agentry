@@ -1459,6 +1459,32 @@ paths:
           $ref: "#/components/responses/Problem"
 
 
+  /agents/{ns}/{name}/versions/{version}/events:
+    get:
+      operationId: streamVersionEvents
+      tags: [versions]
+      summary: Server-sent events for a version's pipeline progress (§11 "SSE/poll"; agentry#65).
+      description: >
+        Streams `event: status` messages (JSON: status, statusReason, the
+        scan stages completed so far, done) whenever something changes,
+        about once a second while a scan runs, and closes after the
+        terminal state — published, rejected, needs_review, quarantined —
+        or after five minutes, whichever comes first. Same visibility rules
+        as the version itself. Clients that cannot consume SSE poll the
+        version resource instead.
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+        - $ref: "#/components/parameters/VersionString"
+      responses:
+        "200":
+          description: An event stream.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        default:
+          $ref: "#/components/responses/Problem"
   /agents/{ns}/{name}/versions/{version}/report:
     get:
       operationId: getVersionReport

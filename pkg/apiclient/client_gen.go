@@ -2347,6 +2347,13 @@ type ClientInterface interface {
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/download (the `DownloadVersion` operationId).
 	DownloadVersion(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// StreamVersionEvents Server-sent events for a version's pipeline progress (§11 "SSE/poll"; agentry#65).
+	//
+	// Streams `event: status` messages (JSON: status, statusReason, the scan stages completed so far, done) whenever something changes, about once a second while a scan runs, and closes after the terminal state — published, rejected, needs_review, quarantined — or after five minutes, whichever comes first. Same visibility rules as the version itself. Clients that cannot consume SSE poll the version resource instead.
+	//
+	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/events (the `StreamVersionEvents` operationId).
+	StreamVersionEvents(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetVersionFile Read one file from the version's release archive (§10.2).
 	//
 	// Text files return UTF-8 content up to the display cap with a truncation flag; binary files return metadata only (binary true), never raw bytes (§10.3). Same access gate as listVersionFiles.
@@ -3515,6 +3522,23 @@ func (c *Client) GetVersionAttestation(ctx context.Context, ns Namespace, name A
 // Corresponds with GET /agents/{ns}/{name}/versions/{version}/download (the `DownloadVersion` operationId).
 func (c *Client) DownloadVersion(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDownloadVersionRequest(c.Server, ns, name, version)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// StreamVersionEvents Server-sent events for a version's pipeline progress (§11 "SSE/poll"; agentry#65).
+//
+// Streams `event: status` messages (JSON: status, statusReason, the scan stages completed so far, done) whenever something changes, about once a second while a scan runs, and closes after the terminal state — published, rejected, needs_review, quarantined — or after five minutes, whichever comes first. Same visibility rules as the version itself. Clients that cannot consume SSE poll the version resource instead.
+//
+// Corresponds with GET /agents/{ns}/{name}/versions/{version}/events (the `StreamVersionEvents` operationId).
+func (c *Client) StreamVersionEvents(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStreamVersionEventsRequest(c.Server, ns, name, version)
 	if err != nil {
 		return nil, err
 	}
@@ -6443,6 +6467,54 @@ func NewDownloadVersionRequest(server string, ns Namespace, name AgentName, vers
 	}
 
 	operationPath := fmt.Sprintf("/agents/%s/%s/versions/%s/download", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewStreamVersionEventsRequest constructs an http.Request for the StreamVersionEvents method
+func NewStreamVersionEventsRequest(server string, ns Namespace, name AgentName, version VersionString) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "version", version, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/versions/%s/events", pathParam0, pathParam1, pathParam2)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -10615,6 +10687,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/download (the `DownloadVersion` operationId).
 	DownloadVersionWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*DownloadVersionResponse, error)
 
+	// StreamVersionEventsWithResponse Server-sent events for a version's pipeline progress (§11 "SSE/poll"; agentry#65).
+	//
+	// Streams `event: status` messages (JSON: status, statusReason, the scan stages completed so far, done) whenever something changes, about once a second while a scan runs, and closes after the terminal state — published, rejected, needs_review, quarantined — or after five minutes, whichever comes first. Same visibility rules as the version itself. Clients that cannot consume SSE poll the version resource instead.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/events (the `StreamVersionEvents` operationId).
+	StreamVersionEventsWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*StreamVersionEventsResponse, error)
+
 	// GetVersionFileWithResponse Read one file from the version's release archive (§10.2).
 	//
 	// Text files return UTF-8 content up to the display cap with a truncation flag; binary files return metadata only (binary true), never raw bytes (§10.3). Same access gate as listVersionFiles.
@@ -12414,6 +12495,47 @@ func (r DownloadVersionResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r DownloadVersionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type StreamVersionEventsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r StreamVersionEventsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r StreamVersionEventsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r StreamVersionEventsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StreamVersionEventsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r StreamVersionEventsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -16704,6 +16826,21 @@ func (c *ClientWithResponses) DownloadVersionWithResponse(ctx context.Context, n
 	return ParseDownloadVersionResponse(rsp)
 }
 
+// StreamVersionEventsWithResponse Server-sent events for a version's pipeline progress (§11 "SSE/poll"; agentry#65).
+//
+// Streams `event: status` messages (JSON: status, statusReason, the scan stages completed so far, done) whenever something changes, about once a second while a scan runs, and closes after the terminal state — published, rejected, needs_review, quarantined — or after five minutes, whichever comes first. Same visibility rules as the version itself. Clients that cannot consume SSE poll the version resource instead.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /agents/{ns}/{name}/versions/{version}/events (the `StreamVersionEvents` operationId).
+func (c *ClientWithResponses) StreamVersionEventsWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*StreamVersionEventsResponse, error) {
+	rsp, err := c.StreamVersionEvents(ctx, ns, name, version, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStreamVersionEventsResponse(rsp)
+}
+
 // GetVersionFileWithResponse Read one file from the version's release archive (§10.2).
 //
 // Text files return UTF-8 content up to the display cap with a truncation flag; binary files return metadata only (binary true), never raw bytes (§10.3). Same access gate as listVersionFiles.
@@ -18883,6 +19020,32 @@ func ParseDownloadVersionResponse(rsp *http.Response) (*DownloadVersionResponse,
 	case rsp.StatusCode == 410:
 		break // No content-type
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseStreamVersionEventsResponse parses an HTTP response from a StreamVersionEventsWithResponse call
+func ParseStreamVersionEventsResponse(rsp *http.Response) (*StreamVersionEventsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StreamVersionEventsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
