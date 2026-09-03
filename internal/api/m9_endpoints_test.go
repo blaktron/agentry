@@ -688,3 +688,31 @@ func TestReviewSurfaceRequiresReviewActScope(t *testing.T) {
 		t.Fatalf("session review queue: got %d want 200", res.StatusCode)
 	}
 }
+
+// GET /platform/ruleset-releases lists the release history for staff and
+// refuses everyone else (agentry#63).
+func TestRulesetReleaseList(t *testing.T) {
+	env := newTestEnv(t)
+	user := env.register("rl-user")
+	env.verifyEmail(user)
+	plain := env.login(user)
+	res := env.do(plain, http.MethodGet, "/api/v1/platform/ruleset-releases", nil)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("non-staff list: got %d want 403", res.StatusCode)
+	}
+	staffH := env.register("rl-staff")
+	env.verifyEmail(staffH)
+	env.makePlatformStaff(t, staffH)
+	staff := env.login(staffH)
+	env.doJSON(staff, http.MethodPost, "/api/v1/platform/ruleset-releases",
+		map[string]any{"semver": "9.9.1", "bundleDigest": "sha256:" + strings.Repeat("ab", 32), "notes": "console test"}, nil, http.StatusCreated)
+	var list []struct {
+		Semver string `json:"semver"`
+		Notes  string `json:"notes"`
+	}
+	env.doJSON(staff, http.MethodGet, "/api/v1/platform/ruleset-releases", nil, &list, http.StatusOK)
+	if len(list) == 0 || list[0].Semver != "9.9.1" || list[0].Notes != "console test" {
+		t.Fatalf("list: %+v", list)
+	}
+}
