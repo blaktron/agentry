@@ -151,3 +151,25 @@ func rulesetReleaseToAPI(row storegen.RulesetRelease) RulesetRelease {
 	out.Notes = row.Notes
 	return out
 }
+
+// ListRulesetReleases implements GET /platform/ruleset-releases (agentry#63):
+// the staff console's history, newest first — the head is the bundle new
+// scans are judged under.
+func (s *Server) ListRulesetReleases(w http.ResponseWriter, r *http.Request) {
+	if !s.requireDB(w, r) {
+		return
+	}
+	if !s.requireStaff(w, r) {
+		return
+	}
+	rows, err := s.q().ListRulesetReleases(r.Context())
+	if err != nil {
+		problemInternal(w, r)
+		return
+	}
+	out := make([]RulesetRelease, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, rulesetReleaseToAPI(row))
+	}
+	writeJSON(w, http.StatusOK, out)
+}
