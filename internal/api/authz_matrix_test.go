@@ -5,8 +5,12 @@ package api_test
 // requests. This is the tenant-isolation control (D-24, T-11).
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
 	"fmt"
+	"golang.org/x/crypto/ssh"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -157,6 +161,19 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			method: "POST", path: sPath("/api/v1/user/tokens"),
 			body: func(*matrixSeed, string) any {
 				return map[string]any{"name": "t-" + nextUniq(), "scopes": []string{"user:profile"}}
+			},
+		},
+		"listSshKeys": {method: "GET", path: sPath("/api/v1/user/ssh-keys")},
+		"addSshKey": {
+			method: "POST", path: sPath("/api/v1/user/ssh-keys"),
+			body: func(*matrixSeed, string) any {
+				return map[string]any{"title": "k-" + nextUniq(), "publicKey": matrixSSHKey()}
+			},
+		},
+		"removeSshKey": {
+			method: "DELETE",
+			path: func(s *matrixSeed, caseID string) string {
+				return "/api/v1/user/ssh-keys/" + uuid.NewString()
 			},
 		},
 		"createDesktopGrant": {
@@ -589,4 +606,18 @@ func expectAllowed(decl api.RouteDecl, p *auth.Principal, orgID uuid.UUID) bool 
 		res.OrgID = orgID
 	}
 	return auth.Check(p, res, decl.Action) == nil
+}
+
+// matrixSSHKey mints a fresh ed25519 public key line per call, so addSshKey
+// never collides on the fingerprint uniqueness index across matrix cases.
+func matrixSSHKey() string {
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		panic(err)
+	}
+	sshPub, err := ssh.NewPublicKey(pub)
+	if err != nil {
+		panic(err)
+	}
+	return strings.TrimSpace(string(ssh.MarshalAuthorizedKey(sshPub))) + " matrix"
 }

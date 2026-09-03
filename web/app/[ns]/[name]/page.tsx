@@ -422,6 +422,7 @@ export default async function AgentPage({
                     (isDefaultTarget ? "" : ` --target=${target}`)}
                 </CodeBlock>
                 <CodeBlock>{`git clone ${agent.gitHttpUrl}`}</CodeBlock>
+                {agent.gitSshUrl && <CodeBlock>{`git clone ${agent.gitSshUrl}`}</CodeBlock>}
               </div>
               <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>
                 {isDefaultTarget

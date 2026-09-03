@@ -159,6 +159,9 @@ var routeAuthz = map[string]RouteDecl{
 	"listTeamMembers":       {Action: auth.ActOrgTeamsRead, OrgScoped: true},
 	"listTeams":             {Action: auth.ActOrgTeamsRead, OrgScoped: true},
 	"listTokens":            {Action: auth.ActUserTokensRead},
+	"listSshKeys":           {Action: auth.ActUserTokensRead},
+	"addSshKey":             {Action: auth.ActUserTokensManage, SessionOnly: true},
+	"removeSshKey":          {Action: auth.ActUserTokensManage, SessionOnly: true},
 	// Sessions: listing rides the self-read action so a `user:profile` PAT is
 	// admitted and answered with an empty list (a PAT has no sessions of its
 	// own); revoking is session-only, like logout — a token must not be able

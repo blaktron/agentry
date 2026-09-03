@@ -48,6 +48,7 @@ type gitEnv struct {
 	st    *store.Store
 	reg   *registry.Service
 	repos *gitsrv.RepoStore
+	git   *gitsrv.Handler
 	sfx   string
 	owner struct {
 		handle string
@@ -107,7 +108,7 @@ func newGitEnvCfg(t *testing.T, cfgFn func(*config.Config)) *gitEnv {
 	srv := httptest.NewServer(api.NewHandlerWithGit(apiSrv, git.Mount))
 	t.Cleanup(srv.Close)
 
-	env := &gitEnv{t: t, srv: srv, st: st, reg: reg, repos: repos, sfx: fmt.Sprintf("%06x", rand.Int63n(1<<24))} //nolint:gosec
+	env := &gitEnv{t: t, srv: srv, st: st, reg: reg, repos: repos, git: git, sfx: fmt.Sprintf("%06x", rand.Int63n(1<<24))} //nolint:gosec
 
 	// Seed the owner directly through the store (API flows are covered by
 	// internal/api tests; here git transport is the subject).
