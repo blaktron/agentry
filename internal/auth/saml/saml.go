@@ -395,3 +395,57 @@ type acsEndpoint struct {
 	Location string `xml:"Location,attr"`
 	Index    string `xml:"index,attr"`
 }
+
+// IDPDescription is what a connection test can say about an IdP from its
+// metadata alone (agentry#50): identity, where sign-in goes, and whether
+// the signing certificate is about to expire.
+type IDPDescription struct {
+	EntityID     string
+	SSOURLs      []string
+	Certificates int
+	// EarliestCertExpiry is the soonest NotAfter across the IdP's signing
+	// certificates; nil when none parsed.
+	EarliestCertExpiry *time.Time
+	// ValidUntil is the metadata document's own validity, if declared.
+	ValidUntil *time.Time
+}
+
+// DescribeIDP parses the configured IdP metadata and summarises it. It
+// performs no network access: the metadata is what the operator stored.
+func DescribeIDP(cfg Config) (*IDPDescription, error) {
+	ed, err := idpMetadata(cfg)
+	if err != nil {
+		return nil, err
+	}
+	d := &IDPDescription{EntityID: ed.EntityID}
+	if !ed.ValidUntil.IsZero() {
+		v := ed.ValidUntil
+		d.ValidUntil = &v
+	}
+	for _, idp := range ed.IDPSSODescriptors {
+		for _, sso := range idp.SingleSignOnServices {
+			d.SSOURLs = append(d.SSOURLs, sso.Location)
+		}
+		for _, kd := range idp.KeyDescriptors {
+			for _, c := range kd.KeyInfo.X509Data.X509Certificates {
+				der, err := base64.StdEncoding.DecodeString(strings.Join(strings.Fields(c.Data), ""))
+				if err != nil {
+					continue
+				}
+				cert, err := x509.ParseCertificate(der)
+				if err != nil {
+					continue
+				}
+				d.Certificates++
+				if d.EarliestCertExpiry == nil || cert.NotAfter.Before(*d.EarliestCertExpiry) {
+					na := cert.NotAfter
+					d.EarliestCertExpiry = &na
+				}
+			}
+		}
+	}
+	if len(d.SSOURLs) == 0 {
+		return d, errors.New("saml: idp metadata declares no SingleSignOnService")
+	}
+	return d, nil
+}

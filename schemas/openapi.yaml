@@ -1891,6 +1891,30 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /orgs/{org}/sso/connections/{kind}/test:
+    post:
+      operationId: testSsoConnection
+      tags: [sso]
+      summary: Probe a stored connection without signing in (owner, §12.4; agentry#50).
+      description: >
+        OIDC: runs discovery against the stored issuer and reports the
+        endpoints it advertises. SAML: parses the stored IdP metadata and
+        reports entity id, sign-on URLs and signing-certificate expiry.
+        Neither contacts the IdP's sign-in flow or uses the client secret.
+        A failed probe is a 200 with ok=false and the reason, so the admin
+        page can show it inline.
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+        - $ref: "#/components/parameters/SsoKind"
+      responses:
+        "200":
+          description: Probe outcome.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SsoConnectionTest"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/sso/saml/metadata:
     get:
       operationId: getSamlMetadata
@@ -3743,6 +3767,30 @@ components:
               message:
                 type: string
 
+    SsoConnectionTest:
+      type: object
+      required: [ok, kind, summary, checkedAt]
+      properties:
+        ok:
+          type: boolean
+        kind:
+          type: string
+          enum: [saml, oidc]
+        summary:
+          description: One line for the admin page.
+          type: string
+        details:
+          description: Discovered endpoints / metadata facts (strings only).
+          type: object
+          additionalProperties:
+            type: string
+        warnings:
+          type: array
+          items:
+            type: string
+        checkedAt:
+          type: string
+          format: date-time
     SsoConnection:
       type: object
       required: [kind, enabled]
