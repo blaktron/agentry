@@ -25,7 +25,11 @@ func testDatabaseURL(t *testing.T) string {
 
 func TestMigrateAndConnect(t *testing.T) {
 	url := testDatabaseURL(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// Two minutes, not thirty seconds: the shared test database's advisory
+	// lock is held by whichever package migrates first, and with three core
+	// CI jobs on one host a full migration under load can take longer than
+	// this test's own budget (agentry#137).
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
 	if err := Migrate(ctx, url); err != nil {
