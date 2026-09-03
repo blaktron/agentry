@@ -36,6 +36,21 @@ Prepares a machine for BriefAgent runs — re-runnable, idempotent:
 convenience, not a gate. Note: setup rewrites `policy.yaml` as generated
 YAML — hand-written comments there are not preserved.
 
+### `agentry doctor [ns/name[@range] | --local DIR]`
+
+Reports, without changing anything, whether `agentry run` would get past
+its preflight on this machine: the operator policy and model (provider,
+model, the `apiKeyEnv` variable present in the environment), the secret
+source, the docker engine, the pinned gateway/harness/runner images (and the
+node/python runtime images when the agent declares MCP servers of that
+ecosystem), and the registry's `/healthz`. With a ref or `--local DIR` it
+also checks that BriefAgent: resolution, the verified install (a warning
+until the first `run --prepare`), the declared MCP servers' store, the
+compiled plan, the MCP profile, and that **every declared secret resolves** —
+the exit-11 refusal a scheduled run would otherwise meet at 03:00. Exit 0
+when every check passes (warnings allowed), 1 otherwise; `--json` for
+machines. No secret *value* is ever printed.
+
 ### `agentry run <ns/name[@range]>`
 
 One BriefAgent, one job, one container tree, then gone.
@@ -184,6 +199,15 @@ plans, which recompile on next use.
 Every claim above appears, mechanism named, in the run's
 `capabilities_enforced` — the receipts stay honest about what is enforced
 versus declared.
+
+When a BriefAgent declares `exec: {commands: […]}`, its tools server runs in a
+per-BriefAgent **exec image** — the runner image with every executable deleted
+except the declared commands (and the runner binary that serves the tools),
+built once at install time from a one-line generated Dockerfile
+(`agentry-runner-exec:<version>-<hash>`). `run_command` is still gated by the
+argv0 allowlist and shim `PATH`; the image simply no longer contains anything
+else to run. A declared command the runner image never had is reported absent,
+as before.
 
 ## The output folder
 
