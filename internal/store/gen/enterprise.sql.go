@@ -595,6 +595,37 @@ func (q *Queries) GetSSOConnection(ctx context.Context, arg GetSSOConnectionPara
 	return i, err
 }
 
+const getSSOConnectionWithOrg = `-- name: GetSSOConnectionWithOrg :one
+SELECT c.id, c.org_id, c.kind, c.config, c.enabled, c.created_at, h.handle AS org_handle FROM sso_connections c JOIN handles h ON h.id = c.org_id WHERE c.id = $1
+`
+
+type GetSSOConnectionWithOrgRow struct {
+	ID        uuid.UUID `json:"id"`
+	OrgID     uuid.UUID `json:"org_id"`
+	Kind      string    `json:"kind"`
+	Config    []byte    `json:"config"`
+	Enabled   bool      `json:"enabled"`
+	CreatedAt time.Time `json:"created_at"`
+	OrgHandle string    `json:"org_handle"`
+}
+
+// SAML Single Logout (agentry#62): a session remembers its connection id;
+// the logout path needs the org handle to rebuild the SP.
+func (q *Queries) GetSSOConnectionWithOrg(ctx context.Context, id uuid.UUID) (GetSSOConnectionWithOrgRow, error) {
+	row := q.db.QueryRow(ctx, getSSOConnectionWithOrg, id)
+	var i GetSSOConnectionWithOrgRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.Kind,
+		&i.Config,
+		&i.Enabled,
+		&i.CreatedAt,
+		&i.OrgHandle,
+	)
+	return i, err
+}
+
 const getScimUser = `-- name: GetScimUser :one
 SELECT u.id, u.email, u.display_name, u.state, h.handle, m.role, m.via_scim
 FROM memberships m

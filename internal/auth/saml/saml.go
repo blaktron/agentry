@@ -76,6 +76,9 @@ type Result struct {
 	NameID      string
 	AssertionID string
 	Attributes  map[string][]string
+	// SessionIndex is the IdP's session handle from the AuthnStatement, the
+	// key a Single Logout request may name (§12.4, agentry#62).
+	SessionIndex string
 }
 
 // New builds an SP from config and the SP's own metadata/ACS URLs. replay may
@@ -180,6 +183,11 @@ func (sp *SP) SPMetadataXML() ([]byte, error) {
 	ed.SPSSODescriptor.AuthnRequestsSigned = "false"
 	ed.SPSSODescriptor.WantAssertionsSigned = "true"
 	ed.SPSSODescriptor.NameIDFormat = "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"
+	if slo := sp.inner.SloURL.String(); slo != "" {
+		for _, b := range sp.inner.LogoutBindings {
+			ed.SPSSODescriptor.SLO = append(ed.SPSSODescriptor.SLO, sloEndpoint{Binding: b, Location: slo})
+		}
+	}
 	ed.SPSSODescriptor.ACS = acsEndpoint{
 		Binding:  "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
 		Location: sp.acsURL.String(),
@@ -232,6 +240,12 @@ func (sp *SP) ParseAndValidate(_ context.Context, samlResponseB64 string) (*Resu
 	res := &Result{AssertionID: assertion.ID, Attributes: map[string][]string{}}
 	if assertion.Subject != nil && assertion.Subject.NameID != nil {
 		res.NameID = strings.TrimSpace(assertion.Subject.NameID.Value)
+	}
+	for _, st := range assertion.AuthnStatements {
+		if st.SessionIndex != "" {
+			res.SessionIndex = st.SessionIndex
+			break
+		}
 	}
 	for _, st := range assertion.AttributeStatements {
 		for _, a := range st.Attributes {
@@ -318,6 +332,12 @@ func firstAttr(attrs map[string][]string, key string) string {
 // explicit fields rather than a full metadata document. Exported so tests
 // (an in-process IdP) can produce metadata for a generated keypair.
 func BuildIDPMetadataXML(entityID, ssoURL, certPEM string) (string, error) {
+	return BuildIDPMetadataXMLWithSLO(entityID, ssoURL, "", certPEM)
+}
+
+// BuildIDPMetadataXMLWithSLO is BuildIDPMetadataXML with an optional
+// HTTP-Redirect Single Logout endpoint (§12.4, agentry#62).
+func BuildIDPMetadataXMLWithSLO(entityID, ssoURL, sloURL, certPEM string) (string, error) {
 	block, _ := pem.Decode([]byte(certPEM))
 	if block == nil {
 		return "", fmt.Errorf("saml: idp certificate is not valid PEM")
@@ -335,7 +355,13 @@ func BuildIDPMetadataXML(entityID, ssoURL, certPEM string) (string, error) {
 	b.WriteString(`</X509Certificate></X509Data></KeyInfo></KeyDescriptor>`)
 	b.WriteString(`<SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="`)
 	xmlEsc(&b, ssoURL)
-	b.WriteString(`"/></IDPSSODescriptor></EntityDescriptor>`)
+	b.WriteString(`"/>`)
+	if sloURL != "" {
+		b.WriteString(`<SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="`)
+		xmlEsc(&b, sloURL)
+		b.WriteString(`"/>`)
+	}
+	b.WriteString(`</IDPSSODescriptor></EntityDescriptor>`)
 	return b.String(), nil
 }
 
@@ -381,13 +407,20 @@ type spMetadata struct {
 	EntityID        string   `xml:"entityID,attr"`
 	ValidUntil      string   `xml:"validUntil,attr"`
 	SPSSODescriptor struct {
-		XMLNS                string      `xml:"xmlns,attr"`
-		Protocol             string      `xml:"protocolSupportEnumeration,attr"`
-		AuthnRequestsSigned  string      `xml:"AuthnRequestsSigned,attr"`
-		WantAssertionsSigned string      `xml:"WantAssertionsSigned,attr"`
-		NameIDFormat         string      `xml:"NameIDFormat"`
-		ACS                  acsEndpoint `xml:"AssertionConsumerService"`
+		XMLNS                string        `xml:"xmlns,attr"`
+		Protocol             string        `xml:"protocolSupportEnumeration,attr"`
+		AuthnRequestsSigned  string        `xml:"AuthnRequestsSigned,attr"`
+		WantAssertionsSigned string        `xml:"WantAssertionsSigned,attr"`
+		SLO                  []sloEndpoint `xml:"SingleLogoutService,omitempty"`
+		NameIDFormat         string        `xml:"NameIDFormat"`
+		ACS                  acsEndpoint   `xml:"AssertionConsumerService"`
 	} `xml:"SPSSODescriptor"`
+}
+
+// sloEndpoint advertises the Single Logout endpoint (§12.4, agentry#62).
+type sloEndpoint struct {
+	Binding  string `xml:"Binding,attr"`
+	Location string `xml:"Location,attr"`
 }
 
 type acsEndpoint struct {

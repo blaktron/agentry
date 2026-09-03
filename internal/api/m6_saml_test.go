@@ -6,8 +6,10 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -18,6 +20,7 @@ import (
 	"github.com/beevik/etree"
 	dsig "github.com/russellhaering/goxmldsig"
 
+	"github.com/blaktron/agentry/internal/api"
 	samlsp "github.com/blaktron/agentry/internal/auth/saml"
 )
 
@@ -203,4 +206,143 @@ func (env *testEnv) postForm(t *testing.T, u string, form url.Values) *http.Resp
 		t.Fatal(err)
 	}
 	return resp
+}
+
+// signedLogoutRequest mints an IdP-initiated LogoutRequest (POST binding
+// shape: enveloped XML signature) for nameID.
+func (k *samlTestIdP) signedLogoutRequest(t *testing.T, destination, nameID string) string {
+	t.Helper()
+	doc := etree.NewDocument()
+	req := doc.CreateElement("samlp:LogoutRequest")
+	req.CreateAttr("xmlns:samlp", "urn:oasis:names:tc:SAML:2.0:protocol")
+	req.CreateAttr("xmlns:saml", "urn:oasis:names:tc:SAML:2.0:assertion")
+	req.CreateAttr("ID", "_lr"+randHex())
+	req.CreateAttr("Version", "2.0")
+	req.CreateAttr("IssueInstant", time.Now().UTC().Format(time.RFC3339))
+	req.CreateAttr("Destination", destination)
+	req.CreateElement("saml:Issuer").SetText(k.entityID)
+	req.CreateElement("saml:NameID").SetText(nameID)
+	ctx := dsig.NewDefaultSigningContext(k)
+	ctx.Canonicalizer = dsig.MakeC14N10ExclusiveCanonicalizerWithPrefixList("")
+	signed, err := ctx.SignEnveloped(req)
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	out := etree.NewDocument()
+	out.SetRoot(signed)
+	s, _ := out.WriteToString()
+	return base64.StdEncoding.EncodeToString([]byte(s))
+}
+
+// TestSAMLSingleLogout covers §12.4 SLO (agentry#62): a SAML session
+// remembers its NameID; the IdP's signed LogoutRequest revokes it and is
+// answered with a LogoutResponse redirect; a registry logout of such a
+// session hands the browser the IdP's SLO URL; an unsigned request changes
+// nothing.
+func TestSAMLSingleLogout(t *testing.T) {
+	env := newTestEnv(t)
+	owner := env.register("slo-owner")
+	env.verifyEmail(owner)
+	sess := env.login(owner)
+	orgH := "sloorg" + env.sfx
+	env.createOrg(sess, orgH)
+
+	idp := newSAMLTestIdP(t)
+	metadataXML, err := samlsp.BuildIDPMetadataXMLWithSLO(idp.entityID, "https://slo-idp.test/sso", "https://slo-idp.test/slo", idp.certPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env.doJSON(sess, http.MethodPut, "/api/v1/orgs/"+orgH+"/sso/connections/saml", map[string]any{
+		"enabled": true,
+		"config":  map[string]any{"idpMetadataXml": metadataXML, "emailAttribute": "email"},
+	}, nil, http.StatusOK)
+	metadataURL := env.srv.URL + "/api/v1/orgs/" + orgH + "/sso/saml/metadata"
+	acsURL := env.srv.URL + "/api/v1/orgs/" + orgH + "/sso/saml/acs"
+	sloURL := env.srv.URL + "/api/v1/orgs/" + orgH + "/sso/saml/slo"
+
+	// SP metadata advertises the SLO endpoint.
+	mres, _ := env.srv.Client().Get(metadataURL)
+	mb, _ := io.ReadAll(mres.Body)
+	_ = mres.Body.Close()
+	if !strings.Contains(string(mb), "SingleLogoutService") || !strings.Contains(string(mb), sloURL) {
+		t.Fatalf("SP metadata lacks SLO endpoint:\n%s", mb)
+	}
+
+	loginSAML := func(name string) caller {
+		nameID := "slo-user-" + env.sfx + "@acme.example"
+		res := env.postForm(t, acsURL, url.Values{"SAMLResponse": {idp.signedResponse(t, metadataURL, acsURL, nameID, false)}})
+		defer func() { _ = res.Body.Close() }()
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("ACS: got %d", res.StatusCode)
+		}
+		var body struct {
+			CsrfToken string `json:"csrfToken"`
+		}
+		_ = json.NewDecoder(res.Body).Decode(&body)
+		c := caller{name: name, csrf: body.CsrfToken}
+		for _, ck := range res.Cookies() {
+			if ck.Name == "agentry_session" {
+				c.session = ck.Value
+			}
+		}
+		if c.session == "" {
+			t.Fatal("no session cookie")
+		}
+		return c
+	}
+	nameID := "slo-user-" + env.sfx + "@acme.example"
+	ssoCaller := loginSAML("sso")
+	if res := env.do(ssoCaller, http.MethodGet, "/api/v1/user", nil); res.StatusCode != http.StatusOK {
+		t.Fatalf("SSO session: %d", res.StatusCode)
+	}
+
+	// Unsigned LogoutRequest: refused, session intact.
+	unsignedDoc := etree.NewDocument()
+	u := unsignedDoc.CreateElement("samlp:LogoutRequest")
+	u.CreateAttr("xmlns:samlp", "urn:oasis:names:tc:SAML:2.0:protocol")
+	u.CreateAttr("xmlns:saml", "urn:oasis:names:tc:SAML:2.0:assertion")
+	u.CreateAttr("ID", "_x")
+	u.CreateAttr("Version", "2.0")
+	u.CreateAttr("IssueInstant", time.Now().UTC().Format(time.RFC3339))
+	u.CreateElement("saml:Issuer").SetText(idp.entityID)
+	u.CreateElement("saml:NameID").SetText(nameID)
+	us, _ := unsignedDoc.WriteToString()
+	bad := env.postForm(t, sloURL, url.Values{"SAMLRequest": {base64.StdEncoding.EncodeToString([]byte(us))}})
+	_ = bad.Body.Close()
+	if bad.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("unsigned LogoutRequest: got %d want 401", bad.StatusCode)
+	}
+	if res := env.do(ssoCaller, http.MethodGet, "/api/v1/user", nil); res.StatusCode != http.StatusOK {
+		t.Fatalf("session must survive a refused LogoutRequest: %d", res.StatusCode)
+	}
+
+	// Signed IdP-initiated LogoutRequest: session revoked, LogoutResponse redirect.
+	noRedirect := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	form := url.Values{"SAMLRequest": {idp.signedLogoutRequest(t, sloURL, nameID)}, "RelayState": {"back"}}
+	res, err := noRedirect.Post(sloURL, "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusSeeOther || !strings.HasPrefix(res.Header.Get("Location"), "https://slo-idp.test/slo?") || !strings.Contains(res.Header.Get("Location"), "SAMLResponse=") {
+		t.Fatalf("SLO: got %d %q", res.StatusCode, res.Header.Get("Location"))
+	}
+	if r := env.do(ssoCaller, http.MethodGet, "/api/v1/user", nil); r.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("session must be revoked by SLO: got %d want 401", r.StatusCode)
+	}
+
+	// SP-initiated: logging out a SAML session returns the IdP's SLO URL.
+	sso2 := loginSAML("sso2")
+	var out api.LogoutResult
+	env.doJSON(sso2, http.MethodPost, "/api/v1/auth/logout", nil, &out, http.StatusOK)
+	if !strings.HasPrefix(out.IdpLogoutUrl, "https://slo-idp.test/slo?") || !strings.Contains(out.IdpLogoutUrl, "SAMLRequest=") {
+		t.Fatalf("idpLogoutUrl = %q", out.IdpLogoutUrl)
+	}
+	if r := env.do(sso2, http.MethodGet, "/api/v1/user", nil); r.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("session must be revoked on logout: %d", r.StatusCode)
+	}
+	// A native session still logs out with 204.
+	if r := env.do(sess, http.MethodPost, "/api/v1/auth/logout", nil); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("native logout: got %d want 204", r.StatusCode)
+	}
 }
