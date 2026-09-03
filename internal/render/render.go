@@ -35,7 +35,19 @@ type Renderer struct {
 }
 
 // New builds the renderer with the §10.3 policy.
-func New() *Renderer {
+// Options tunes a Renderer. The zero value is the strict default: images
+// become placeholders.
+type Options struct {
+	// ImageProxy maps an absolute http(s) image URL to a same-origin proxy
+	// URL (agentry#64, §10.3 "images proxied"). nil keeps the placeholder;
+	// a returned false keeps the placeholder for that URL.
+	ImageProxy func(dest string) (string, bool)
+}
+
+func New() *Renderer { return NewWithOptions(Options{}) }
+
+// NewWithOptions builds a Renderer with the given options.
+func NewWithOptions(opts Options) *Renderer {
 	md := goldmark.New(
 		goldmark.WithExtensions(
 			extension.GFM, // tables, strikethrough, task lists, autolinks
@@ -57,7 +69,7 @@ func New() *Renderer {
 			// the web app's CSP refuses every image source but its own, so
 			// an <img> would render as nothing and the reader would not
 			// know an image was there.
-			renderer.WithNodeRenderers(util.Prioritized(imagePlaceholder{}, 100)),
+			renderer.WithNodeRenderers(util.Prioritized(imagePlaceholder{proxy: opts.ImageProxy}, 100)),
 		),
 	)
 
@@ -91,6 +103,15 @@ func New() *Renderer {
 	p.AllowAttrs("class").Matching(bluemonday.SpaceSeparatedTokens).OnElements("span", "section", "sup", "li")
 	// Tables' alignment attribute is the one layout hint we keep.
 	p.AllowAttrs("align").Matching(bluemonday.Paragraph).OnElements("th", "td")
+	// Proxied images only (agentry#64): an absolute same-origin
+	// <origin>/api/v1/img/<sig>/<ref> source (bluemonday admits URL
+	// attributes by scheme, so the renderer signs absolute URLs), plain alt
+	// text, lazy loading. Any other <img> is dropped by
+	// the policy, so an author cannot smuggle a third-party request.
+	p.AllowElements("img")
+	p.AllowAttrs("src").Matching(regexp.MustCompile(`^https?://[^/\s"'<>]+/api/v1/img/[A-Za-z0-9_-]{16,64}/[A-Za-z0-9_-]+$`)).OnElements("img")
+	p.AllowAttrs("alt").Matching(bluemonday.Paragraph).OnElements("img")
+	p.AllowAttrs("loading").Matching(regexp.MustCompile(`^lazy$`)).OnElements("img")
 	// NO style/class from users (§10.3) beyond the internal classes above;
 	// bluemonday drops everything not explicitly allowed.
 
@@ -231,13 +252,15 @@ func htmlUnescape(s string) string { return htmlpkg.UnescapeString(s) }
 // are shown, HTML-escaped, so the reader can tell what was there and where
 // it lives; the placeholder is a <span class="img-placeholder">, which the
 // sanitizer's allowlist admits and the web app styles.
-type imagePlaceholder struct{}
-
-func (imagePlaceholder) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
-	reg.Register(ast.KindImage, renderImagePlaceholder)
+type imagePlaceholder struct {
+	proxy func(dest string) (string, bool)
 }
 
-func renderImagePlaceholder(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
+func (p imagePlaceholder) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
+	reg.Register(ast.KindImage, p.render)
+}
+
+func (p imagePlaceholder) render(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	if !entering {
 		return ast.WalkContinue, nil
 	}
@@ -247,6 +270,14 @@ func renderImagePlaceholder(w util.BufWriter, source []byte, node ast.Node, ente
 	}
 	alt := strings.TrimSpace(string(imageAltText(source, img)))
 	dest := strings.TrimSpace(string(img.Destination))
+	// Absolute http(s) images go through the same-origin proxy when one is
+	// configured (agentry#64); everything else stays a visible placeholder.
+	if p.proxy != nil && (strings.HasPrefix(dest, "https://") || strings.HasPrefix(dest, "http://")) {
+		if src, ok := p.proxy(dest); ok {
+			_, _ = w.WriteString(`<img src="` + htmlpkg.EscapeString(src) + `" alt="` + htmlpkg.EscapeString(alt) + `" loading="lazy">`)
+			return ast.WalkSkipChildren, nil
+		}
+	}
 	_, _ = w.WriteString(`<span class="img-placeholder" role="note">Image not shown — this page does not load images`)
 	if alt != "" {
 		_, _ = w.WriteString(": " + htmlpkg.EscapeString(alt))
