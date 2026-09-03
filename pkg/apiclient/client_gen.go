@@ -946,6 +946,13 @@ type ActivityPage struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
+// AddSshKeyRequest defines model for AddSshKeyRequest.
+type AddSshKeyRequest struct {
+	// PublicKey One authorized_keys line ("ssh-ed25519 AAAA… comment").
+	PublicKey string `json:"publicKey"`
+	Title     string `json:"title"`
+}
+
 // Advisory defines model for Advisory.
 type Advisory struct {
 	AffectedVersions string `json:"affectedVersions"`
@@ -970,8 +977,11 @@ type Agent struct {
 	DefaultBranch   string    `json:"defaultBranch"`
 
 	// GitHttpUrl Clone URL for the hosted repository (§6.1).
-	GitHttpUrl string             `json:"gitHttpUrl"`
-	Id         openapi_types.UUID `json:"id"`
+	GitHttpUrl string `json:"gitHttpUrl"`
+
+	// GitSshUrl SSH clone URL (§6.1 Q7), present when the deployment serves the SSH transport.
+	GitSshUrl *string            `json:"gitSshUrl,omitempty"`
+	Id        openapi_types.UUID `json:"id"`
 
 	// Kind Supported agent kinds (§1.4).
 	Kind            AgentKind            `json:"kind"`
@@ -1496,6 +1506,20 @@ type SocialLoginResult struct {
 	CsrfToken    *string `json:"csrfToken,omitempty"`
 	TotpRequired bool    `json:"totpRequired"`
 	User         *User   `json:"user,omitempty"`
+}
+
+// SshKey defines model for SshKey.
+type SshKey struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Fingerprint SHA256 fingerprint as OpenSSH prints it.
+	Fingerprint string             `json:"fingerprint"`
+	Id          openapi_types.UUID `json:"id"`
+
+	// KeyType ssh-ed25519, ecdsa-sha2-nistp256, ssh-rsa, …
+	KeyType    string     `json:"keyType"`
+	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
+	Title      string     `json:"title"`
 }
 
 // SsoConnection defines model for SsoConnection.
@@ -2125,6 +2149,9 @@ type DecideReviewItemJSONRequestBody DecideReviewItemJSONBody
 
 // UpdateCurrentUserJSONRequestBody defines body for UpdateCurrentUser for application/json ContentType.
 type UpdateCurrentUserJSONRequestBody UpdateCurrentUserJSONBody
+
+// AddSshKeyJSONRequestBody defines body for AddSshKey for application/json ContentType.
+type AddSshKeyJSONRequestBody = AddSshKeyRequest
 
 // CreateTokenJSONRequestBody defines body for CreateToken for application/json ContentType.
 type CreateTokenJSONRequestBody = CreateTokenRequest
@@ -3088,6 +3115,30 @@ type ClientInterface interface {
 	//
 	// Corresponds with DELETE /user/sessions/{sessionId} (the `RevokeUserSession` operationId).
 	RevokeUserSession(ctx context.Context, sessionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListSshKeys List the caller's SSH public keys for the git transport (§6.1 Q7).
+	//
+	// Corresponds with GET /user/ssh-keys (the `ListSshKeys` operationId).
+	ListSshKeys(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AddSshKeyWithBody Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /user/ssh-keys (the `AddSshKey` operationId).
+	AddSshKeyWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AddSshKey Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /user/ssh-keys (the `AddSshKey` operationId).
+	AddSshKey(ctx context.Context, body AddSshKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RemoveSshKey Remove an SSH public key (session-only).
+	//
+	// Corresponds with DELETE /user/ssh-keys/{keyId} (the `RemoveSshKey` operationId).
+	RemoveSshKey(ctx context.Context, keyId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UnstarAgent Remove a star (idempotent, §9.2).
 	//
@@ -5370,6 +5421,70 @@ func (c *Client) ListUserSessions(ctx context.Context, reqEditors ...RequestEdit
 // Corresponds with DELETE /user/sessions/{sessionId} (the `RevokeUserSession` operationId).
 func (c *Client) RevokeUserSession(ctx context.Context, sessionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRevokeUserSessionRequest(c.Server, sessionId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListSshKeys List the caller's SSH public keys for the git transport (§6.1 Q7).
+//
+// Corresponds with GET /user/ssh-keys (the `ListSshKeys` operationId).
+func (c *Client) ListSshKeys(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListSshKeysRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AddSshKeyWithBody Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /user/ssh-keys (the `AddSshKey` operationId).
+func (c *Client) AddSshKeyWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAddSshKeyRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AddSshKey Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /user/ssh-keys (the `AddSshKey` operationId).
+func (c *Client) AddSshKey(ctx context.Context, body AddSshKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAddSshKeyRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RemoveSshKey Remove an SSH public key (session-only).
+//
+// Corresponds with DELETE /user/ssh-keys/{keyId} (the `RemoveSshKey` operationId).
+func (c *Client) RemoveSshKey(ctx context.Context, keyId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRemoveSshKeyRequest(c.Server, keyId)
 	if err != nil {
 		return nil, err
 	}
@@ -10429,6 +10544,107 @@ func NewRevokeUserSessionRequest(server string, sessionId openapi_types.UUID) (*
 	return req, nil
 }
 
+// NewListSshKeysRequest constructs an http.Request for the ListSshKeys method
+func NewListSshKeysRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/ssh-keys")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAddSshKeyRequest calls the generic AddSshKey builder with application/json body
+func NewAddSshKeyRequest(server string, body AddSshKeyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAddSshKeyRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewAddSshKeyRequestWithBody constructs an http.Request for the AddSshKey method, with any body, and a specified content type
+func NewAddSshKeyRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/ssh-keys")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewRemoveSshKeyRequest constructs an http.Request for the RemoveSshKey method
+func NewRemoveSshKeyRequest(server string, keyId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "keyId", keyId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/ssh-keys/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewUnstarAgentRequest constructs an http.Request for the UnstarAgent method
 func NewUnstarAgentRequest(server string, ns Namespace, name AgentName) (*http.Request, error) {
 	var err error
@@ -11758,6 +11974,34 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with DELETE /user/sessions/{sessionId} (the `RevokeUserSession` operationId).
 	RevokeUserSessionWithResponse(ctx context.Context, sessionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokeUserSessionResponse, error)
+
+	// ListSshKeysWithResponse List the caller's SSH public keys for the git transport (§6.1 Q7).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /user/ssh-keys (the `ListSshKeys` operationId).
+	ListSshKeysWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListSshKeysResponse, error)
+
+	// AddSshKeyWithBodyWithResponse Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /user/ssh-keys (the `AddSshKey` operationId).
+	AddSshKeyWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddSshKeyResponse, error)
+
+	// AddSshKeyWithResponse Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /user/ssh-keys (the `AddSshKey` operationId).
+	AddSshKeyWithResponse(ctx context.Context, body AddSshKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*AddSshKeyResponse, error)
+
+	// RemoveSshKeyWithResponse Remove an SSH public key (session-only).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /user/ssh-keys/{keyId} (the `RemoveSshKey` operationId).
+	RemoveSshKeyWithResponse(ctx context.Context, keyId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RemoveSshKeyResponse, error)
 
 	// UnstarAgentWithResponse Remove a star (idempotent, §9.2).
 	//
@@ -16611,6 +16855,143 @@ func (r RevokeUserSessionResponse) ContentType() string {
 	return ""
 }
 
+type ListSshKeysResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]SshKey
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListSshKeysResponse) GetJSON200() *[]SshKey {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListSshKeysResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListSshKeysResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListSshKeysResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListSshKeysResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListSshKeysResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AddSshKeyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *SshKey
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r AddSshKeyResponse) GetJSON201() *SshKey {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r AddSshKeyResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r AddSshKeyResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AddSshKeyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AddSshKeyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AddSshKeyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RemoveSshKeyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r RemoveSshKeyResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r RemoveSshKeyResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RemoveSshKeyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RemoveSshKeyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RemoveSshKeyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type UnstarAgentResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -18763,6 +19144,58 @@ func (c *ClientWithResponses) RevokeUserSessionWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseRevokeUserSessionResponse(rsp)
+}
+
+// ListSshKeysWithResponse List the caller's SSH public keys for the git transport (§6.1 Q7).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /user/ssh-keys (the `ListSshKeys` operationId).
+func (c *ClientWithResponses) ListSshKeysWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListSshKeysResponse, error) {
+	rsp, err := c.ListSshKeys(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListSshKeysResponse(rsp)
+}
+
+// AddSshKeyWithBodyWithResponse Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /user/ssh-keys (the `AddSshKey` operationId).
+func (c *ClientWithResponses) AddSshKeyWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddSshKeyResponse, error) {
+	rsp, err := c.AddSshKeyWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAddSshKeyResponse(rsp)
+}
+
+// AddSshKeyWithResponse Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /user/ssh-keys (the `AddSshKey` operationId).
+func (c *ClientWithResponses) AddSshKeyWithResponse(ctx context.Context, body AddSshKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*AddSshKeyResponse, error) {
+	rsp, err := c.AddSshKey(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAddSshKeyResponse(rsp)
+}
+
+// RemoveSshKeyWithResponse Remove an SSH public key (session-only).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /user/ssh-keys/{keyId} (the `RemoveSshKey` operationId).
+func (c *ClientWithResponses) RemoveSshKeyWithResponse(ctx context.Context, keyId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RemoveSshKeyResponse, error) {
+	rsp, err := c.RemoveSshKey(ctx, keyId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRemoveSshKeyResponse(rsp)
 }
 
 // UnstarAgentWithResponse Remove a star (idempotent, §9.2).
@@ -22222,6 +22655,101 @@ func ParseRevokeUserSessionResponse(rsp *http.Response) (*RevokeUserSessionRespo
 	}
 
 	response := &RevokeUserSessionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListSshKeysResponse parses an HTTP response from a ListSshKeysWithResponse call
+func ParseListSshKeysResponse(rsp *http.Response) (*ListSshKeysResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListSshKeysResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []SshKey
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAddSshKeyResponse parses an HTTP response from a AddSshKeyWithResponse call
+func ParseAddSshKeyResponse(rsp *http.Response) (*AddSshKeyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AddSshKeyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest SshKey
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRemoveSshKeyResponse parses an HTTP response from a RemoveSshKeyWithResponse call
+func ParseRemoveSshKeyResponse(rsp *http.Response) (*RemoveSshKeyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RemoveSshKeyResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}

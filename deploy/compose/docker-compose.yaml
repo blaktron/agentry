@@ -281,8 +281,16 @@ services:
       # uid 65532 (see Dockerfile); the default .devdata/git would resolve
       # to an unwritable / in-container.
       AGENTRY_GIT_DATA_DIR: /data/git
+      # SSH git transport (§6.1 Q7, agentry#70): listens in-container on
+      # 2222; the host key is generated under /data/git on first start.
+      # AGENTRY_GIT_SSH_PUBLIC_URL is what agent pages print as the clone
+      # URL (e.g. ssh://git@dev.secureagentry.net:2222); leave it empty to
+      # keep the transport reachable but unadvertised.
+      AGENTRY_GIT_SSH_ADDR: ${AGENTRY_GIT_SSH_ADDR:-:2222}
+      AGENTRY_GIT_SSH_PUBLIC_URL: ${AGENTRY_GIT_SSH_PUBLIC_URL:-}
     ports:
       - "${AGENTRY_BIND:-127.0.0.1}:8080:8080"
+      - "${AGENTRY_SSH_BIND:-0.0.0.0}:${AGENTRY_SSH_PORT:-2222}:2222"
     volumes:
       - gitdata:/data/git
     depends_on:

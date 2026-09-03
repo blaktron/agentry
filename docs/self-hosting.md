@@ -763,3 +763,23 @@ Running your own registry means you own the trust decisions:
   has not seen this year's techniques.
 
 None of that is different from the hosted service; it is just visible.
+
+## SSH git transport
+
+Besides smart HTTP, the `git` and `all` roles serve `ssh://git@<host>:<port>/<ns>/<name>.git`
+when `AGENTRY_GIT_SSH_ADDR` is set (the compose stack sets `:2222` and publishes it on the
+host as `${AGENTRY_SSH_PORT:-2222}`; unset it to switch the transport off). Only
+`git-upload-pack` and `git-receive-pack` are served — no shell, no forwarding — through the
+same authorization, hooks and quotas as HTTPS.
+
+- **Credential:** a user's SSH public key, registered on the settings page (or
+  `POST /user/ssh-keys`). A key is worth repository read/write and the release tag the
+  user's role allows; it never reaches the API. There is no anonymous mode over SSH.
+- **Host key:** generated under the git data directory on first start
+  (`ssh_host_ed25519_key`; `AGENTRY_GIT_SSH_HOST_KEY` points elsewhere). The SHA256
+  fingerprint is logged at startup (`git ssh listening … hostkey=…`) — publish it so users
+  can pin it in `known_hosts`.
+- **Advertising:** set `AGENTRY_GIT_SSH_PUBLIC_URL` (for example
+  `ssh://git@git.example.com:2222`) and agent pages show the SSH clone URL next to HTTPS.
+- **Enforced SSO:** an organization that requires SSO takes pushes only over HTTPS with an
+  org-bound token; over SSH the push is refused with that message.

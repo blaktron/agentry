@@ -10,15 +10,18 @@ type Action string
 // The v1 action catalog. Append-only: never rename or reuse an id.
 const (
 	// Auth & account.
-	ActionUserRegister       Action = "user.register"
-	ActionUserLogin          Action = "user.login"
-	ActionUserLoginFailed    Action = "user.login_failed"
-	ActionUserLogout         Action = "user.logout"
-	ActionUserEmailVerified  Action = "user.email_verified"
-	ActionUserUpdate         Action = "user.update"
-	ActionUserTOTPEnabled    Action = "user.totp_enabled"
-	ActionPATCreate          Action = "pat.create"
-	ActionPATRevoke          Action = "pat.revoke"
+	ActionUserRegister      Action = "user.register"
+	ActionUserLogin         Action = "user.login"
+	ActionUserLoginFailed   Action = "user.login_failed"
+	ActionUserLogout        Action = "user.logout"
+	ActionUserEmailVerified Action = "user.email_verified"
+	ActionUserUpdate        Action = "user.update"
+	ActionUserTOTPEnabled   Action = "user.totp_enabled"
+	ActionPATCreate         Action = "pat.create"
+	ActionPATRevoke         Action = "pat.revoke"
+	// SSH keys for the git transport (agentry#70).
+	ActionSSHKeyAdd          Action = "ssh_key.add"
+	ActionSSHKeyRemove       Action = "ssh_key.remove"
 	ActionUserDirectoryErase Action = "user.directory_erase"
 	// ActionUserStaffSync records a platform_staff change driven by
 	// directory group membership (agentry#51).
@@ -93,7 +96,7 @@ func init() {
 	for _, a := range []Action{
 		ActionUserRegister, ActionUserLogin, ActionUserLoginFailed,
 		ActionUserLogout, ActionUserEmailVerified, ActionUserUpdate,
-		ActionUserTOTPEnabled, ActionPATCreate, ActionPATRevoke, ActionUserDelete, ActionUserDirectoryErase, ActionUserStaffSync,
+		ActionUserTOTPEnabled, ActionPATCreate, ActionPATRevoke, ActionSSHKeyAdd, ActionSSHKeyRemove, ActionUserDelete, ActionUserDirectoryErase, ActionUserStaffSync,
 		ActionOrgCreate, ActionOrgUpdate, ActionOrgMemberSet,
 		ActionOrgMemberRemove, ActionTeamCreate, ActionTeamDelete,
 		ActionTeamMemberAdd, ActionTeamMemberRemove,

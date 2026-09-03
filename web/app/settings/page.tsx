@@ -19,6 +19,15 @@ interface Pat {
   lastUsedAt?: string;
 }
 
+interface SshKey {
+  id: string;
+  title: string;
+  keyType: string;
+  fingerprint: string;
+  createdAt: string;
+  lastUsedAt?: string;
+}
+
 // Session listing contract, agreed with the API workstream this wave:
 //   GET    /user/sessions       -> { sessions: [...] }
 //   DELETE /user/sessions/{id}  -> 204
@@ -75,8 +84,10 @@ export default async function SettingsPage({
   const q = await searchParams;
 
   let tokens: Pat[] = [];
+  let sshKeys: SshKey[] = [];
   try {
     tokens = (await authedGet<Pat[]>("/user/tokens")) ?? [];
+    sshKeys = (await authedGet<SshKey[]>("/user/ssh-keys")) ?? [];
   } catch (e) {
     if (e instanceof AccessError) {
       return <RefusalCard>Your session is no longer accepted. Sign in again to manage this account.</RefusalCard>;
@@ -303,6 +314,71 @@ export default async function SettingsPage({
           <div>
             <button type="submit" className="rounded-md border px-3 py-1.5" style={{ borderColor: "var(--color-border)" }}>
               Create token
+            </button>
+          </div>
+        </form>
+      </Card>
+
+      <Card className="lg:col-span-2">
+        <h2 className="mb-2 font-semibold">SSH keys</h2>
+        <p className="mb-3 text-sm" style={{ color: "var(--color-muted)" }}>
+          For <code>git clone ssh://git@…/ns/name.git</code> and pushes over SSH (§6.1). A key is worth
+          repository read/write and the release tag your role allows — never the API. Organizations
+          that enforce SSO still take pushes only over HTTPS with an org-bound token.
+        </p>
+        {sshKeys.length === 0 ? (
+          <p className="mb-3 text-sm" style={{ color: "var(--color-muted)" }}>No SSH keys.</p>
+        ) : (
+          <ul className="mb-3 flex flex-col gap-2 text-sm">
+            {sshKeys.map((k) => (
+              <li key={k.id} className="flex flex-wrap items-center gap-2">
+                <span className="font-medium">{k.title}</span>
+                <span className="font-mono text-xs" style={{ color: "var(--color-muted)" }}>
+                  {k.keyType} {k.fingerprint}
+                </span>
+                {k.lastUsedAt && (
+                  <span className="text-xs" style={{ color: "var(--color-muted)" }}>
+                    last used {fmtUTCDate(k.lastUsedAt)}
+                  </span>
+                )}
+                <form method="post" action="/settings/ssh-keys">
+                  <input type="hidden" name="action" value="remove" />
+                  <input type="hidden" name="keyId" value={k.id} />
+                  <button type="submit" className="rounded-md border px-2 py-0.5 text-xs" style={{ borderColor: "var(--color-sev-high)", color: "var(--color-sev-high)" }}>
+                    Remove
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+        <form method="post" action="/settings/ssh-keys" className="flex flex-col gap-2 text-sm">
+          <input type="hidden" name="action" value="add" />
+          <label>
+            Title
+            <input
+              name="title"
+              required
+              maxLength={120}
+              placeholder="laptop"
+              className="mt-1 w-full rounded-md border px-2 py-1"
+              style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+            />
+          </label>
+          <label>
+            Public key
+            <textarea
+              name="publicKey"
+              required
+              rows={3}
+              placeholder="ssh-ed25519 AAAA… comment"
+              className="mt-1 w-full rounded-md border px-2 py-1 font-mono text-xs"
+              style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+            />
+          </label>
+          <div>
+            <button type="submit" className="rounded-md border px-3 py-1.5" style={{ borderColor: "var(--color-border)" }}>
+              Add key
             </button>
           </div>
         </form>

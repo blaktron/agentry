@@ -16,6 +16,16 @@ import (
 
 // agentToAPI maps a resolved agent row to the wire shape. maintain toggles
 // maintainer-only fields.
+// gitSSHURL is the SSH clone URL when the deployment serves the SSH
+// transport (§6.1 Q7, agentry#70); "" otherwise.
+func (s *Server) gitSSHURL(ns, name string) string {
+	base := strings.TrimSuffix(s.cfg.Git.SSHPublicURL, "/")
+	if base == "" {
+		return ""
+	}
+	return base + "/" + ns + "/" + name + ".git"
+}
+
 func (s *Server) agentToAPI(a registry.Agent, maintain bool) Agent {
 	base := strings.TrimSuffix(s.cfg.BaseURL, "/")
 	out := Agent{
@@ -29,6 +39,9 @@ func (s *Server) agentToAPI(a registry.Agent, maintain bool) Agent {
 		GitHttpUrl:      base + "/" + a.Namespace + "/" + a.Name + ".git",
 		QuarantineState: AgentQuarantineState(a.QuarantineState),
 		CreatedAt:       a.CreatedAt,
+	}
+	if u := s.gitSSHURL(a.Namespace, a.Name); u != "" {
+		out.GitSshUrl = &u
 	}
 	if maintain {
 		ap := a.AutoPublishTags
