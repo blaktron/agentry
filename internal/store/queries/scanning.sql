@@ -18,6 +18,10 @@ SELECT * FROM ruleset_releases WHERE id = $1;
 -- name: LatestRuleset :one
 SELECT * FROM ruleset_releases ORDER BY published_at DESC LIMIT 1;
 
+-- name: ListRulesetReleases :many
+-- The staff console's release history (agentry#63), newest first.
+SELECT * FROM ruleset_releases ORDER BY published_at DESC LIMIT 100;
+
 -- name: CreateScanRun :one
 INSERT INTO scan_runs (id, version_id, trigger, ruleset_release_id, policy_snapshot, judge_model, judge_prompt_hash, status)
 VALUES ($1, $2, $3, $4, $5, $6, $7, 'running')

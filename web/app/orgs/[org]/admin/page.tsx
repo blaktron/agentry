@@ -279,6 +279,7 @@ export default async function OrgAdminPage({
               Org policy may only tighten the platform baseline (§8.6): every knob you set must be at
               least as strict as the baseline shown beside the editor. Knobs:{" "}
               <code className="text-xs">requireHumanReview</code>, <code className="text-xs">blockedCapabilities</code>,{" "}
+              <code className="text-xs">blockedMcpServers</code> (<code className="text-xs">npm:pkg</code> / <code className="text-xs">pypi:pkg</code>, globs allowed),{" "}
               <code className="text-xs">allowedLicenses</code>, <code className="text-xs">maxAutoPublishSeverity</code>,{" "}
               <code className="text-xs">requireEvals</code>, <code className="text-xs">wildcardEgress</code>. The server
               validates the document and refuses anything that loosens the baseline.

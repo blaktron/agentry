@@ -2,7 +2,9 @@ package scan
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"path"
 	"sort"
 	"strings"
 
@@ -56,6 +58,18 @@ func CheckSubmissionPolicy(pol Policy, in registry.PolicySubmission) []error {
 	// allowedLicenses: "public publishes outside list are rejected" (§8.6).
 	// Private agents are out of scope by the same wording — the list governs
 	// what the namespace puts into the world.
+	if len(pol.BlockedMcpServers) > 0 {
+		for _, srv := range declaredMcpServers(in.ManifestJSON) {
+			for _, pat := range pol.BlockedMcpServers {
+				if ok, _ := path.Match(strings.TrimSpace(pat), srv); ok {
+					issues = append(issues, fmt.Errorf(
+						"MCP server %q is blocked by policy for this namespace (§8.6 blockedMcpServers: %s)", srv, pat))
+					break
+				}
+			}
+		}
+	}
+
 	if in.Public && len(pol.AllowedLicenses) > 0 && !licenseAllowed(pol.AllowedLicenses, in.License) {
 		issues = append(issues, fmt.Errorf(
 			"license %q is not in the allowed set for public publishes (%s) (§8.6 allowedLicenses)",
@@ -114,4 +128,31 @@ func hasEvals(files []manifest.FileInfo) bool {
 		}
 	}
 	return false
+}
+
+// declaredMcpServers lists a manifest's capabilities.mcpServers as
+// "npm:<package>" / "pypi:<package>", sorted, for the blocklist compare.
+func declaredMcpServers(manifestJSON []byte) []string {
+	var m struct {
+		Capabilities struct {
+			McpServers []struct {
+				Npm  string `json:"npm"`
+				Pypi string `json:"pypi"`
+			} `json:"mcpServers"`
+		} `json:"capabilities"`
+	}
+	if err := json.Unmarshal(manifestJSON, &m); err != nil {
+		return nil
+	}
+	var out []string
+	for _, s := range m.Capabilities.McpServers {
+		switch {
+		case s.Npm != "":
+			out = append(out, "npm:"+s.Npm)
+		case s.Pypi != "":
+			out = append(out, "pypi:"+s.Pypi)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
