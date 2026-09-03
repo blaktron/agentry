@@ -60,6 +60,33 @@ const ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 //
 // Blank lines and #-comments are skipped. Returns a message naming the
 // first bad line, or null.
+// serverLinesFromForm turns the Builder's structured MCP-server rows
+// (mcp<i>Source/Pkg/Version/Tools/Secrets/Egress, i = 0..BUILDER_SERVER_ROWS-1)
+// into the line syntax parseServerLines accepts, so both the rows and the
+// advanced textarea feed one parser (agentry#52). Rows with no package are
+// skipped.
+export const BUILDER_SERVER_ROWS = 3;
+export function serverLinesFromForm(form: { get(name: string): FormDataEntryValue | null }): string {
+  const lines: string[] = [];
+  for (let i = 0; i < BUILDER_SERVER_ROWS; i++) {
+    const pkg = String(form.get(`mcp${i}Pkg`) ?? "").trim();
+    if (!pkg) continue;
+    const source = String(form.get(`mcp${i}Source`) ?? "npm") === "pypi" ? "pypi" : "npm";
+    const version = String(form.get(`mcp${i}Version`) ?? "").trim();
+    let line = `${source}:${pkg}@${version || "?"}`;
+    for (const opt of ["tools", "secrets", "egress"] as const) {
+      const v = String(form.get(`mcp${i}${opt[0].toUpperCase()}${opt.slice(1)}`) ?? "")
+        .split(/[\s,]+/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .join(",");
+      if (v) line += ` ${opt}=${v}`;
+    }
+    lines.push(line);
+  }
+  return lines.join("\n");
+}
+
 export function parseServerLines(text: string): { servers: BuilderMCPServer[]; error: string | null } {
   const servers: BuilderMCPServer[] = [];
   for (const rawLine of text.split("\n")) {
