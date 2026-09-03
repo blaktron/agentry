@@ -185,5 +185,9 @@ jobs:
           fetch-depth: 0
       - name: oasdiff breaking
         run: |
-          git show origin/${{ github.base_ref }}:schemas/openapi.yaml > /tmp/base-openapi.yaml || cp schemas/openapi.yaml /tmp/base-openapi.yaml
+          # Diff against the PR's merge-base, not the tip of main: a path that
+          # main gained after this branch was cut is not a removal by this PR
+          # (agentry#138).
+          base=$(git merge-base "origin/${{ github.base_ref }}" "${{ github.event.pull_request.head.sha }}" 2>/dev/null || echo "origin/${{ github.base_ref }}")
+          git show "$base:schemas/openapi.yaml" > /tmp/base-openapi.yaml || cp schemas/openapi.yaml /tmp/base-openapi.yaml
           go run github.com/oasdiff/oasdiff@latest breaking /tmp/base-openapi.yaml schemas/openapi.yaml --fail-on ERR
