@@ -17,6 +17,19 @@ Start from the **[BriefAgent template](https://github.com/blaktron/agentry-templ
 option below shown in a commented `agent.yaml`. Or scaffold one with
 `agentry init`.
 
+`agentry init --from PATH` imports an existing source instead of
+scaffolding: an Agent Skills `SKILL.md` (frontmatter name, description,
+license and `metadata.version` are mapped; sibling files are copied and
+listed in `publish.include`) or an MCP registry `server.json`, which
+becomes a skill that declares the published package under
+`capabilities.mcpServers` with its exact pin and the secret-flagged
+environment variable names. The capability contract is never guessed from
+the source: on a terminal the wizard asks for egress, secrets, exec and
+filesystem with hints found in the source as defaults you confirm;
+non-interactively pass `--egress` and `--secrets` (`none` allowed;
+`--exec`, `--fs-read`, `--fs-write` optional) or the import refuses and
+prints the hints.
+
 ```bash
 agentry setup                                        # one-time: LLM provider + the docker MCP gateway
 agentry validate .                                   # the registry's checks, offline

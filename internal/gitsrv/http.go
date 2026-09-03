@@ -489,6 +489,10 @@ func (h *Handler) afterReceive(ctx context.Context, agent registry.Agent, princi
 			h.log.Error("post-receive enqueue", "err", err)
 		} else {
 			enqueued = true
+			// Housekeeping later, when the burst is over (agentry#55).
+			if _, err := h.queue.Enqueue(ctx, KindRepoGC, "core", RepoGCArgs{RepoID: agent.RepoID}, queue.WithDelay(gcDelay)); err != nil {
+				h.log.Warn("post-receive gc enqueue", "err", err)
+			}
 		}
 	}
 	if !enqueued {

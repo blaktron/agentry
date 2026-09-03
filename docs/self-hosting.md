@@ -722,6 +722,10 @@ thresholds only move down.
 
 Two notes on the knobs:
 
+- `blockedMcpServers` rejects a submission whose manifest declares one of the
+  listed MCP servers (`npm:<package>` / `pypi:<package>`, `path.Match` globs
+  such as `npm:@evil/*`); it unions across baseline and org like
+  `blockedCapabilities`.
 - `blockedCapabilities` rejects a submission that *declares* the capability;
   it is a gate on the manifest, not a runtime restriction. Combine it with
   `requireHumanReview: {"whenCapabilities": [...]}` if you want a look rather
