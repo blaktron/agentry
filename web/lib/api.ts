@@ -103,6 +103,7 @@ export interface Agent {
   summary: string;
   defaultBranch: string;
   gitHttpUrl: string;
+  gitSshUrl?: string;
   quarantineState: "none" | "quarantined" | "blocked";
   // Serialized only for callers with maintain (§6.3 toggle) — so its mere
   // presence is the API's own answer to "may this caller administer the

@@ -317,6 +317,22 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		// the worker (in-process for `all`) runs it.
 		git.SetQueue(queue.NewPGClient(st, log))
 		closeAll := func() error { return errors.Join(git.Close(), s.Close()) }
+		// The SSH transport (§6.1 Q7, agentry#70) rides beside smart HTTP
+		// when configured; same handler, same authorization and hooks.
+		if cfg.Git.SSHAddr != "" {
+			sshSrv, err := git.NewSSHServer(cfg.Git.SSHAddr, cfg.Git.SSHHostKeyFile)
+			if err != nil {
+				return nil, nil, err
+			}
+			log.Info("git ssh listening", "addr", sshSrv.Addr().String(), "hostkey", sshSrv.HostKeyFingerprint())
+			go func() {
+				if err := sshSrv.Serve(ctx); err != nil {
+					log.Error("git ssh server", "err", err)
+				}
+			}()
+			httpClose := closeAll
+			closeAll = func() error { return errors.Join(sshSrv.Close(), httpClose()) }
+		}
 		if role == "git" {
 			mux := http.NewServeMux()
 			mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

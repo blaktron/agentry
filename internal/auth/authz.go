@@ -75,7 +75,7 @@ type Principal struct {
 	Anonymous bool
 	UserID    uuid.UUID
 	Handle    string
-	// Via is "session" or "pat".
+	// Via is "session", "pat" or "ssh" (git over SSH, agentry#70).
 	Via string
 	// Scopes holds PAT scopes; nil for sessions.
 	Scopes []string
@@ -87,9 +87,10 @@ type Principal struct {
 	// self-host: the instance admin). Gates the platform review queue and
 	// quarantine/block actions (§12.2 last row).
 	PlatformStaff bool
-	// SessionID / PATID identify the credential for audit.
+	// SessionID / PATID / SSHKeyID identify the credential for audit.
 	SessionID uuid.UUID
 	PATID     uuid.UUID
+	SSHKeyID  uuid.UUID
 	// SSOFresh maps org id → the moment SSO was last asserted for this
 	// session (§12.4 enforced SSO; from sessions.sso_tags). Sessions only.
 	SSOFresh map[uuid.UUID]time.Time

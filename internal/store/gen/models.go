@@ -424,6 +424,18 @@ type User struct {
 	IdpMfaAt         *time.Time `json:"idp_mfa_at"`
 }
 
+type UserSshKey struct {
+	ID          uuid.UUID  `json:"id"`
+	UserID      uuid.UUID  `json:"user_id"`
+	Title       string     `json:"title"`
+	KeyType     string     `json:"key_type"`
+	PublicKey   string     `json:"public_key"`
+	Fingerprint string     `json:"fingerprint"`
+	CreatedAt   time.Time  `json:"created_at"`
+	LastUsedAt  *time.Time `json:"last_used_at"`
+	RevokedAt   *time.Time `json:"revoked_at"`
+}
+
 type WebhookDelivery struct {
 	ID          uuid.UUID  `json:"id"`
 	EndpointID  uuid.UUID  `json:"endpoint_id"`

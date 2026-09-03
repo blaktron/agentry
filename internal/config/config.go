@@ -97,6 +97,15 @@ type Storage struct {
 type Git struct {
 	DataDir string `yaml:"dataDir"` // bare repos under {dataDir}/{uuid[0:2]}/{uuid}.git
 	BinPath string `yaml:"binPath"` // git binary; defaults to $PATH lookup
+	// SSHAddr, when set, is where the git and all roles listen for the SSH
+	// transport (§6.1 Q7, agentry#70), e.g. ":2222". Empty disables it.
+	SSHAddr string `yaml:"sshAddr"`
+	// SSHHostKeyFile is the PEM host key; empty means {dataDir}/ssh_host_ed25519_key,
+	// generated on first start.
+	SSHHostKeyFile string `yaml:"sshHostKeyFile"`
+	// SSHPublicURL is the base clients use, e.g. "ssh://git@git.example.com:2222";
+	// when set, agent documents carry gitSshUrl.
+	SSHPublicURL string `yaml:"sshPublicUrl"`
 }
 
 // Log configures structured logging.
@@ -504,6 +513,9 @@ func applyEnv(c *Config) error {
 	str("AGENTRY_STORAGE_S3_ENDPOINT", &c.Storage.S3Endpoint)
 	str("AGENTRY_GIT_DATA_DIR", &c.Git.DataDir)
 	str("AGENTRY_GIT_BIN", &c.Git.BinPath)
+	str("AGENTRY_GIT_SSH_ADDR", &c.Git.SSHAddr)
+	str("AGENTRY_GIT_SSH_HOST_KEY", &c.Git.SSHHostKeyFile)
+	str("AGENTRY_GIT_SSH_PUBLIC_URL", &c.Git.SSHPublicURL)
 	str("AGENTRY_LOG_LEVEL", &c.Log.Level)
 	str("AGENTRY_BASE_URL", &c.BaseURL)
 	str("AGENTRY_SIGNING_KIND", &c.Signing.Kind)

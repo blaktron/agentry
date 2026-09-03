@@ -22,6 +22,11 @@ func TestRedTeamJobStoresReportStaffReads(t *testing.T) {
 	}, func(s *api.Server) { srvObj = s })
 
 	ctx := context.Background()
+	// The test database is shared across runs: a report left by an earlier
+	// run would satisfy the per-bundle dedupe and skew the count below.
+	if _, err := env.st.Pool().Exec(ctx, "DELETE FROM redteam_reports"); err != nil {
+		t.Fatal(err)
+	}
 	if err := srvObj.RunRedTeamNow(ctx); err != nil {
 		t.Fatalf("run: %v", err)
 	}
