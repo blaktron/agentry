@@ -2863,6 +2863,11 @@ type ClientInterface interface {
 	// Corresponds with GET /platform/redteam/reports (the `ListRedTeamReports` operationId).
 	ListRedTeamReports(ctx context.Context, params *ListRedTeamReportsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListRulesetReleases Ruleset releases, newest first (platform staff, §10.1 console).
+	//
+	// Corresponds with GET /platform/ruleset-releases (the `ListRulesetReleases` operationId).
+	ListRulesetReleases(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// CreateRulesetReleaseWithBody Register a ruleset release (platform staff, §9.2).
 	//
 	// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle (§8.3). Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
@@ -4885,6 +4890,21 @@ func (c *Client) GetPlatformPolicy(ctx context.Context, reqEditors ...RequestEdi
 // Corresponds with GET /platform/redteam/reports (the `ListRedTeamReports` operationId).
 func (c *Client) ListRedTeamReports(ctx context.Context, params *ListRedTeamReportsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListRedTeamReportsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListRulesetReleases Ruleset releases, newest first (platform staff, §10.1 console).
+//
+// Corresponds with GET /platform/ruleset-releases (the `ListRulesetReleases` operationId).
+func (c *Client) ListRulesetReleases(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRulesetReleasesRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -9345,6 +9365,33 @@ func NewListRedTeamReportsRequest(server string, params *ListRedTeamReportsParam
 	return req, nil
 }
 
+// NewListRulesetReleasesRequest constructs an http.Request for the ListRulesetReleases method
+func NewListRulesetReleasesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/platform/ruleset-releases")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewCreateRulesetReleaseRequest calls the generic CreateRulesetRelease builder with application/json body
 func NewCreateRulesetReleaseRequest(server string, body CreateRulesetReleaseJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -11404,6 +11451,13 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /platform/redteam/reports (the `ListRedTeamReports` operationId).
 	ListRedTeamReportsWithResponse(ctx context.Context, params *ListRedTeamReportsParams, reqEditors ...RequestEditorFn) (*ListRedTeamReportsResponse, error)
+
+	// ListRulesetReleasesWithResponse Ruleset releases, newest first (platform staff, §10.1 console).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /platform/ruleset-releases (the `ListRulesetReleases` operationId).
+	ListRulesetReleasesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListRulesetReleasesResponse, error)
 
 	// CreateRulesetReleaseWithBodyWithResponse Register a ruleset release (platform staff, §9.2).
 	//
@@ -15417,6 +15471,54 @@ func (r ListRedTeamReportsResponse) ContentType() string {
 	return ""
 }
 
+type ListRulesetReleasesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]RulesetRelease
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListRulesetReleasesResponse) GetJSON200() *[]RulesetRelease {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListRulesetReleasesResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListRulesetReleasesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListRulesetReleasesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListRulesetReleasesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListRulesetReleasesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type CreateRulesetReleaseResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -18148,6 +18250,19 @@ func (c *ClientWithResponses) ListRedTeamReportsWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParseListRedTeamReportsResponse(rsp)
+}
+
+// ListRulesetReleasesWithResponse Ruleset releases, newest first (platform staff, §10.1 console).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /platform/ruleset-releases (the `ListRulesetReleases` operationId).
+func (c *ClientWithResponses) ListRulesetReleasesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListRulesetReleasesResponse, error) {
+	rsp, err := c.ListRulesetReleases(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListRulesetReleasesResponse(rsp)
 }
 
 // CreateRulesetReleaseWithBodyWithResponse Register a ruleset release (platform staff, §9.2).
@@ -21202,6 +21317,39 @@ func ParseListRedTeamReportsResponse(rsp *http.Response) (*ListRedTeamReportsRes
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest []RedTeamReport
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListRulesetReleasesResponse parses an HTTP response from a ListRulesetReleasesWithResponse call
+func ParseListRulesetReleasesResponse(rsp *http.Response) (*ListRulesetReleasesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListRulesetReleasesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []RulesetRelease
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
