@@ -1167,6 +1167,12 @@ type LoginResult struct {
 	User      User   `json:"user"`
 }
 
+// LogoutResult defines model for LogoutResult.
+type LogoutResult struct {
+	// IdpLogoutUrl Send the browser here to end the IdP session too (SAML SLO).
+	IdpLogoutUrl string `json:"idpLogoutUrl"`
+}
+
 // Membership defines model for Membership.
 type Membership struct {
 	// Role Org roles, ordered owner > admin > security_reviewer | member (§12.2).
@@ -2497,6 +2503,8 @@ type ClientInterface interface {
 
 	// Logout Revoke the current session.
 	//
+	// Answers 204 for a native or OIDC session. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO, §12.4); the registry session is revoked either way.
+	//
 	// Corresponds with POST /auth/logout (the `Logout` operationId).
 	Logout(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -2776,6 +2784,18 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /orgs/{org}/sso/saml/metadata (the `GetSamlMetadata` operationId).
 	GetSamlMetadata(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SamlSloRedirect SAML Single Logout endpoint, HTTP-Redirect binding (§12.4).
+	//
+	// Accepts a signed IdP-initiated LogoutRequest (revokes the sessions it names and answers the IdP with a LogoutResponse) or the IdP's LogoutResponse to an SP-initiated logout (validated, then the browser is sent home).
+	//
+	// Corresponds with GET /orgs/{org}/sso/saml/slo (the `SamlSloRedirect` operationId).
+	SamlSloRedirect(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SamlSloPost SAML Single Logout endpoint, HTTP-POST binding (§12.4).
+	//
+	// Corresponds with POST /orgs/{org}/sso/saml/slo (the `SamlSloPost` operationId).
+	SamlSloPost(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListTeams List teams (members can view).
 	//
@@ -3854,6 +3874,8 @@ func (c *Client) Login(ctx context.Context, body LoginJSONRequestBody, reqEditor
 
 // Logout Revoke the current session.
 //
+// Answers 204 for a native or OIDC session. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO, §12.4); the registry session is revoked either way.
+//
 // Corresponds with POST /auth/logout (the `Logout` operationId).
 func (c *Client) Logout(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewLogoutRequest(c.Server)
@@ -4564,6 +4586,38 @@ func (c *Client) SamlAcs(ctx context.Context, org OrgHandle, reqEditors ...Reque
 // Corresponds with GET /orgs/{org}/sso/saml/metadata (the `GetSamlMetadata` operationId).
 func (c *Client) GetSamlMetadata(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetSamlMetadataRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SamlSloRedirect SAML Single Logout endpoint, HTTP-Redirect binding (§12.4).
+//
+// Accepts a signed IdP-initiated LogoutRequest (revokes the sessions it names and answers the IdP with a LogoutResponse) or the IdP's LogoutResponse to an SP-initiated logout (validated, then the browser is sent home).
+//
+// Corresponds with GET /orgs/{org}/sso/saml/slo (the `SamlSloRedirect` operationId).
+func (c *Client) SamlSloRedirect(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSamlSloRedirectRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SamlSloPost SAML Single Logout endpoint, HTTP-POST binding (§12.4).
+//
+// Corresponds with POST /orgs/{org}/sso/saml/slo (the `SamlSloPost` operationId).
+func (c *Client) SamlSloPost(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSamlSloPostRequest(c.Server, org)
 	if err != nil {
 		return nil, err
 	}
@@ -8477,6 +8531,74 @@ func NewGetSamlMetadataRequest(server string, org OrgHandle) (*http.Request, err
 	return req, nil
 }
 
+// NewSamlSloRedirectRequest constructs an http.Request for the SamlSloRedirect method
+func NewSamlSloRedirectRequest(server string, org OrgHandle) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/sso/saml/slo", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSamlSloPostRequest constructs an http.Request for the SamlSloPost method
+func NewSamlSloPostRequest(server string, org OrgHandle) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/sso/saml/slo", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListTeamsRequest constructs an http.Request for the ListTeams method
 func NewListTeamsRequest(server string, org OrgHandle) (*http.Request, error) {
 	var err error
@@ -10947,6 +11069,8 @@ type ClientWithResponsesInterface interface {
 
 	// LogoutWithResponse Revoke the current session.
 	//
+	// Answers 204 for a native or OIDC session. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO, §12.4); the registry session is revoked either way.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /auth/logout (the `Logout` operationId).
@@ -11266,6 +11390,22 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /orgs/{org}/sso/saml/metadata (the `GetSamlMetadata` operationId).
 	GetSamlMetadataWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*GetSamlMetadataResponse, error)
+
+	// SamlSloRedirectWithResponse SAML Single Logout endpoint, HTTP-Redirect binding (§12.4).
+	//
+	// Accepts a signed IdP-initiated LogoutRequest (revokes the sessions it names and answers the IdP with a LogoutResponse) or the IdP's LogoutResponse to an SP-initiated logout (validated, then the browser is sent home).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/sso/saml/slo (the `SamlSloRedirect` operationId).
+	SamlSloRedirectWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*SamlSloRedirectResponse, error)
+
+	// SamlSloPostWithResponse SAML Single Logout endpoint, HTTP-POST binding (§12.4).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/sso/saml/slo (the `SamlSloPost` operationId).
+	SamlSloPostWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*SamlSloPostResponse, error)
 
 	// ListTeamsWithResponse List teams (members can view).
 	//
@@ -13149,8 +13289,15 @@ func (r LoginResponse) ContentType() string {
 type LogoutResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *LogoutResult
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
 	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r LogoutResponse) GetJSON200() *LogoutResult {
+	return r.JSON200
 }
 
 // GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
@@ -14613,6 +14760,88 @@ func (r GetSamlMetadataResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetSamlMetadataResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SamlSloRedirectResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r SamlSloRedirectResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SamlSloRedirectResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SamlSloRedirectResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SamlSloRedirectResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SamlSloRedirectResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SamlSloPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r SamlSloPostResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SamlSloPostResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SamlSloPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SamlSloPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SamlSloPostResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -17294,6 +17523,8 @@ func (c *ClientWithResponses) LoginWithResponse(ctx context.Context, body LoginJ
 
 // LogoutWithResponse Revoke the current session.
 //
+// Answers 204 for a native or OIDC session. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO, §12.4); the registry session is revoked either way.
+//
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /auth/logout (the `Logout` operationId).
@@ -17876,6 +18107,34 @@ func (c *ClientWithResponses) GetSamlMetadataWithResponse(ctx context.Context, o
 		return nil, err
 	}
 	return ParseGetSamlMetadataResponse(rsp)
+}
+
+// SamlSloRedirectWithResponse SAML Single Logout endpoint, HTTP-Redirect binding (§12.4).
+//
+// Accepts a signed IdP-initiated LogoutRequest (revokes the sessions it names and answers the IdP with a LogoutResponse) or the IdP's LogoutResponse to an SP-initiated logout (validated, then the browser is sent home).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/sso/saml/slo (the `SamlSloRedirect` operationId).
+func (c *ClientWithResponses) SamlSloRedirectWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*SamlSloRedirectResponse, error) {
+	rsp, err := c.SamlSloRedirect(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSamlSloRedirectResponse(rsp)
+}
+
+// SamlSloPostWithResponse SAML Single Logout endpoint, HTTP-POST binding (§12.4).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/sso/saml/slo (the `SamlSloPost` operationId).
+func (c *ClientWithResponses) SamlSloPostWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*SamlSloPostResponse, error) {
+	rsp, err := c.SamlSloPost(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSamlSloPostResponse(rsp)
 }
 
 // ListTeamsWithResponse List teams (members can view).
@@ -19662,6 +19921,13 @@ func ParseLogoutResponse(rsp *http.Response) (*LogoutResponse, error) {
 	}
 
 	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest LogoutResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
 	case rsp.StatusCode == 204:
 		break // No content-type
 
@@ -20659,6 +20925,70 @@ func ParseGetSamlMetadataResponse(rsp *http.Response) (*GetSamlMetadataResponse,
 	}
 
 	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSamlSloRedirectResponse parses an HTTP response from a SamlSloRedirectWithResponse call
+func ParseSamlSloRedirectResponse(rsp *http.Response) (*SamlSloRedirectResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SamlSloRedirectResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		break // No content-type
+
+	case rsp.StatusCode == 303:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSamlSloPostResponse parses an HTTP response from a SamlSloPostWithResponse call
+func ParseSamlSloPostResponse(rsp *http.Response) (*SamlSloPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SamlSloPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		break // No content-type
+
+	case rsp.StatusCode == 303:
+		break // No content-type
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {

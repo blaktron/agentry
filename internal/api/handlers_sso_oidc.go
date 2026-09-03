@@ -129,5 +129,5 @@ func (s *Server) OidcCallback(w http.ResponseWriter, r *http.Request, org OrgHan
 		problemUnauthorized(w, r, "IdP has not verified this email address")
 		return
 	}
-	s.establishSSOSession(w, r, orgRow, connID, "oidc", claims.Subject, claims.Email, "")
+	s.establishSSOSession(w, r, orgRow, connID, "oidc", claims.Subject, claims.Email, "", nil)
 }
