@@ -1,15 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { zstdDecompressSync } from "node:zlib";
 import {
-  BuilderInput, MAX_INSTRUCTIONS_BYTES, packArchive, parseServerLines, renderManifest, validateInput,
-  workspaceFiles,
+  BuilderInput, MAX_INSTRUCTIONS_BYTES, packArchive, parseIntakeLines, parseServerLines, renderManifest,
+  validateInput, workspaceFiles,
 } from "../briefagent";
 
 function input(): BuilderInput {
   return {
     name: "hello-web-build",
     namespace: "acme",
-    kind: "skill",
+    modes: ["autonomous"],
+    intake: [],
+    opening: "",
     version: "0.1.0",
     summary: "Builder round-trip fixture",
     license: "MIT",
@@ -57,18 +59,70 @@ describe("validateInput", () => {
 describe("renderManifest", () => {
   it("renders the closed-schema shapes", () => {
     const y = renderManifest(input());
-    expect(y).toContain('schemaVersion: "1"');
+    expect(y).toContain('schemaVersion: "2"');
+    expect(y).toContain("modes: [autonomous]");
+    expect(y).not.toContain("kind:");
     expect(y).toContain("egress: [api.example.com]");
     expect(y).toContain("write: { paths: [out] }");
     expect(y).toContain("exec: { commands: [jq] }");
     expect(y).toContain("secrets: [EXAMPLE_TOKEN]");
-    expect(y).toContain("skill: SKILL.md");
-    expect(y).toContain("include: [agent.yaml, SKILL.md, README.md, LICENSE]");
+    expect(y).toContain("instruction: AGENT.md");
+    expect(y).toContain("include: [agent.yaml, AGENT.md, README.md, LICENSE]");
   });
   it("quotes the summary safely", () => {
     const i = input();
     i.summary = 'has "quotes": and #comment chars';
     expect(renderManifest(i)).toContain('summary: "has \\"quotes\\": and #comment chars"');
+  });
+});
+
+describe("modes, intake and the opening", () => {
+  it("refuses an empty mode set and an opening without interactive", () => {
+    const i = input();
+    i.modes = [];
+    expect(validateInput(i)).toMatch(/run mode/);
+    i.modes = ["autonomous"];
+    i.opening = "Hello";
+    expect(validateInput(i)).toMatch(/interactive/);
+    i.modes = ["interactive", "autonomous"];
+    expect(validateInput(i)).toBeNull();
+  });
+  it("renders both modes in a fixed order with the intake and opening blocks", () => {
+    const i = input();
+    i.modes = ["interactive", "autonomous"];
+    i.opening = "What should I look at?";
+    i.intake = [
+      { id: "topic", prompt: "What should I look at?", type: "text", required: true, choices: [] },
+      { id: "region", prompt: "Which region?", type: "choice", required: false, choices: ["emea", "apac"] },
+    ];
+    const y = renderManifest(i);
+    expect(y).toContain("modes: [autonomous, interactive]");
+    expect(y).toContain('intake:\n  - id: topic\n    prompt: "What should I look at?"\n    required: true\n  - id: region\n    prompt: "Which region?"\n    type: choice\n    choices: ["emea", "apac"]');
+    expect(y).toContain('interactive:\n  opening: "What should I look at?"');
+  });
+  it("parses the intake line syntax and names a bad line", () => {
+    const ok = parseIntakeLines("topic: What should I look at? type=text required\n# comment\nregion: Which region? type=choice choices=emea,apac");
+    expect(ok.error).toBeNull();
+    expect(ok.intake).toEqual([
+      { id: "topic", prompt: "What should I look at?", type: "text", required: true, choices: [] },
+      { id: "region", prompt: "Which region?", type: "choice", required: false, choices: ["emea", "apac"] },
+    ]);
+    expect(parseIntakeLines("no colon here").error).toMatch(/expected <id>: <prompt>/);
+    expect(parseIntakeLines("x: prompt type=date").error).toMatch(/unknown type/);
+  });
+  it("applies the V10 intake rules", () => {
+    const i = input();
+    i.intake = [{ id: "Bad Id", prompt: "p", type: "text", required: false, choices: [] }];
+    expect(validateInput(i)).toMatch(/intake id/);
+    i.intake = [{ id: "a", prompt: "p", type: "choice", required: false, choices: [] }];
+    expect(validateInput(i)).toMatch(/needs choices/);
+    i.intake = [{ id: "a", prompt: "p", type: "text", required: false, choices: ["x"] }];
+    expect(validateInput(i)).toMatch(/only applies to type choice/);
+    i.intake = [
+      { id: "a", prompt: "p", type: "text", required: false, choices: [] },
+      { id: "a", prompt: "q", type: "text", required: false, choices: [] },
+    ];
+    expect(validateInput(i)).toMatch(/duplicate/);
   });
 });
 
@@ -88,7 +142,7 @@ describe("packArchive", () => {
       names.push(name);
       off += 512 + Math.ceil(size / 512) * 512;
     }
-    expect(names).toEqual(["LICENSE", "README.md", "SKILL.md", "agent.yaml"]);
+    expect(names).toEqual(["AGENT.md", "LICENSE", "README.md", "agent.yaml"]);
   });
 
   it("is deterministic for identical input", () => {
