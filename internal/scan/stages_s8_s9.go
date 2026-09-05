@@ -438,17 +438,6 @@ func egressSet(manifestJSON []byte) map[string]bool {
 	return out
 }
 
-func merged(a, b map[string]string) map[string]string {
-	out := map[string]string{}
-	for k, v := range a {
-		out[k] = v
-	}
-	for k, v := range b {
-		out[k] = v
-	}
-	return out
-}
-
 func truncateStr(s string, n int) string {
 	if len(s) <= n {
 		return s
@@ -456,42 +445,10 @@ func truncateStr(s string, n int) string {
 	return s[:n]
 }
 
-// detailListCap bounds a list embedded in a finding detail so one hostile
-// package cannot inflate the report — and the signed report digest — without
-// bound.
-const detailListCap = 20
-
-// truncateList applies detailListCap.
-func truncateList(items []string) []string {
-	if len(items) <= detailListCap {
-		return items
-	}
-	return append(append([]string{}, items[:detailListCap]...),
-		fmt.Sprintf("… and %d more", len(items)-detailListCap))
-}
-
 // Deterministic iteration helpers: findings must be reproducible because the
 // canonical report is hashed and signed (§8.8).
 
-func sortedKeys(m map[string]string) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
-}
-
 func sortedSet(m map[string]bool) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func sortedFileKeys(m map[string]FileEntry) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)

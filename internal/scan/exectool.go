@@ -147,7 +147,10 @@ func (l *limitedWriter) Write(p []byte) (int, error) {
 	return l.w.Write(p)
 }
 
-func toolErrorFinding(stage, tool string, err error) Finding {
+// gitleaksErrorFinding records that the one external tool left, gitleaks
+// (S2), did not complete; the native detectors still ran.
+func gitleaksErrorFinding(err error) Finding {
+	const stage, tool = "S2", "gitleaks"
 	return Finding{
 		Scanner: stage + "/tool-error", Severity: SevMedium, Confidence: ConfHigh,
 		Title:    tool + " did not complete",
@@ -186,7 +189,7 @@ type gitleaksFinding struct {
 func runGitleaks(ctx context.Context, t *ExecTool, dir string, seen map[string]bool) []Finding {
 	report, err := os.CreateTemp("", "gitleaks-*.json")
 	if err != nil {
-		return []Finding{toolErrorFinding("S2", "gitleaks", err)}
+		return []Finding{gitleaksErrorFinding(err)}
 	}
 	_ = report.Close()
 	defer func() { _ = os.Remove(report.Name()) }()
@@ -196,18 +199,18 @@ func runGitleaks(ctx context.Context, t *ExecTool, dir string, seen map[string]b
 	_, err = t.run(ctx, dir, "detect", "--no-git", "--source", ".", "--no-banner",
 		"--exit-code", "0", "--report-format", "json", "--report-path", report.Name())
 	if err != nil {
-		return []Finding{toolErrorFinding("S2", "gitleaks", err)}
+		return []Finding{gitleaksErrorFinding(err)}
 	}
 	raw, err := os.ReadFile(report.Name())
 	if err != nil {
-		return []Finding{toolErrorFinding("S2", "gitleaks", err)}
+		return []Finding{gitleaksErrorFinding(err)}
 	}
 	if len(bytes.TrimSpace(raw)) == 0 {
 		return nil
 	}
 	var hits []gitleaksFinding
 	if err := json.Unmarshal(raw, &hits); err != nil {
-		return []Finding{toolErrorFinding("S2", "gitleaks", fmt.Errorf("report: %w", err))}
+		return []Finding{gitleaksErrorFinding(fmt.Errorf("report: %w", err))}
 	}
 	sort.SliceStable(hits, func(i, j int) bool {
 		if hits[i].File != hits[j].File {
