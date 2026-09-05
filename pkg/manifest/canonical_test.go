@@ -77,7 +77,7 @@ func TestCanonicalJSONPrunesUndeclared(t *testing.T) {
 		SchemaVersion: "1",
 		Name:          "tiny",
 		Namespace:     "acme",
-		Kind:          KindPromptAgent,
+		Kind:          "prompt-agent",
 		Version:       "0.1.0",
 		Summary:       "Tiny prompt agent",
 		Publish:       Publish{Include: []string{"agent.yaml", "prompts/**"}},
