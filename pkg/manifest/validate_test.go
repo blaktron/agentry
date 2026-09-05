@@ -12,7 +12,7 @@ func validSkillManifest() *Manifest {
 		SchemaVersion: "1",
 		Name:          "incident-summarizer",
 		Namespace:     "acme",
-		Kind:          KindSkill,
+		Kind:          "skill",
 		Version:       "1.4.2",
 		Summary:       "Summarizes PagerDuty incidents into postmortem drafts",
 		License:       "Apache-2.0",
@@ -41,7 +41,7 @@ func validMCPManifest() *Manifest {
 		SchemaVersion: "1",
 		Name:          "pd-mcp",
 		Namespace:     "acme",
-		Kind:          KindMCPServer,
+		Kind:          "mcp-server",
 		Version:       "0.1.0",
 		Summary:       "PagerDuty MCP server",
 		License:       "MIT",
@@ -70,24 +70,6 @@ func skillContext() Context {
 			{Path: "prompts/system.md", Size: 900},
 			{Path: "LICENSE", Size: 11000},
 			{Path: ".gitignore", Size: 30}, // present but never included
-		},
-	}
-}
-
-// mcpContext returns a Context under which validMCPManifest validates
-// with zero issues.
-func mcpContext() Context {
-	return Context{
-		Namespace:  "acme",
-		Name:       "pd-mcp",
-		TagVersion: "v0.1.0",
-		Public:     true,
-		Files: []FileInfo{
-			{Path: "agent.yaml", Size: 300},
-			{Path: "README.md", Size: 800},
-			{Path: "src/server.js", Size: 4000},
-			{Path: "package-lock.json", Size: 20000},
-			{Path: "LICENSE", Size: 1100},
 		},
 	}
 }
@@ -132,13 +114,22 @@ func TestNormativeExampleValidatesClean(t *testing.T) {
 	wantClean(t, ValidateInContext(m, skillContext()))
 }
 
-func TestValidMCPManifestValidatesClean(t *testing.T) {
-	wantClean(t, ValidateInContext(validMCPManifest(), mcpContext()))
+// TestV1MCPServerKindIsWithdrawn: the archives published under kind
+// mcp-server still parse, but the kind is refused for publish (DEV-088).
+func TestV1MCPServerKindIsWithdrawn(t *testing.T) {
+	errs := Validate(validMCPManifest())
+	wantIssue(t, errs, "V1", SeverityError, "kind")
+	if got := Blocking(errs); len(got) == 0 {
+		t.Fatalf("withdrawn kind must block publish")
+	}
+	// The mcp entrypoint is refused in its own right, so a v1 document that
+	// merely carries one (whatever its kind) is caught too.
+	wantIssue(t, errs, "V1", SeverityError, "entrypoints.mcp")
 }
 
 // TestValidateStatic covers the manifest-only rules: V1 field grammar,
-// V3 semver syntax, V4 pattern shape, V5 vocabulary, V6 entrypoint shape,
-// V8 summary/tag quotas.
+// V3 semver syntax, V4 pattern shape, V5 vocabulary, V8 summary/tag
+// quotas. The v2 classification rules live in v2_test.go.
 func TestValidateStatic(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -148,7 +139,7 @@ func TestValidateStatic(t *testing.T) {
 		pathSub string
 	}{
 		{"V1 nil schemaVersion", func(m *Manifest) { m.SchemaVersion = "" }, "V1", SeverityError, "schemaVersion"},
-		{"V1 wrong major", func(m *Manifest) { m.SchemaVersion = "2" }, "V1", SeverityError, "schemaVersion"},
+		{"V1 wrong major", func(m *Manifest) { m.SchemaVersion = "3" }, "V1", SeverityError, "schemaVersion"},
 		{"V1 empty name", func(m *Manifest) { m.Name = "" }, "V1", SeverityError, "name"},
 		{"V1 bad name uppercase", func(m *Manifest) { m.Name = "Incident" }, "V1", SeverityError, "name"},
 		{"V1 bad name trailing hyphen", func(m *Manifest) { m.Name = "agent-" }, "V1", SeverityError, "name"},
@@ -164,13 +155,13 @@ func TestValidateStatic(t *testing.T) {
 		}, "V1", SeverityError, "entrypoints.mcp"},
 		{"V1 skill kind missing skill entrypoint", func(m *Manifest) { m.Entrypoints.Skill = "" }, "V1", SeverityError, "entrypoints.skill"},
 		{"V1 prompt-agent with mcp entrypoint", func(m *Manifest) {
-			m.Kind = KindPromptAgent
+			m.Kind = "prompt-agent"
 			m.Entrypoints = Entrypoints{MCP: &MCPEntrypoint{Command: "node", Transport: TransportStdio}}
 		}, "V1", SeverityError, "entrypoints.mcp"},
-		{"V1 mcp-server with skill entrypoint", func(m *Manifest) {
-			m.Kind = KindMCPServer
-			m.Entrypoints = Entrypoints{Skill: "SKILL.md", MCP: &MCPEntrypoint{Command: "node", Transport: TransportStdio}}
-		}, "V1", SeverityError, "entrypoints.skill"},
+		{"V1 withdrawn mcp-server kind", func(m *Manifest) {
+			m.Kind = "mcp-server"
+			m.Entrypoints = Entrypoints{MCP: &MCPEntrypoint{Command: "node", Transport: TransportStdio}}
+		}, "V1", SeverityError, "kind"},
 		{"V1 absolute skill entrypoint", func(m *Manifest) { m.Entrypoints.Skill = "/etc/passwd" }, "V1", SeverityError, "entrypoints.skill"},
 		{"V1 unknown interface", func(m *Manifest) { m.Runtime.Interfaces = []string{"vscode"} }, "V1", SeverityError, "runtime.interfaces[0]"},
 		{"V1 bad dependency ref", func(m *Manifest) {
@@ -239,27 +230,6 @@ func TestValidateStatic(t *testing.T) {
 			m.Capabilities.DataAccess = []DataAccess{"browsing"}
 		}, "V5", SeverityError, "dataAccess[0]"},
 
-		{"V6 mcp missing entrypoint", func(m *Manifest) {
-			m.Kind = KindMCPServer
-			m.Entrypoints = Entrypoints{}
-		}, "V6", SeverityError, "entrypoints.mcp"},
-		{"V6 mcp missing command", func(m *Manifest) {
-			m.Kind = KindMCPServer
-			m.Entrypoints = Entrypoints{MCP: &MCPEntrypoint{Transport: TransportStdio}}
-		}, "V6", SeverityError, "entrypoints.mcp.command"},
-		{"V6 mcp missing transport", func(m *Manifest) {
-			m.Kind = KindMCPServer
-			m.Entrypoints = Entrypoints{MCP: &MCPEntrypoint{Command: "node"}}
-		}, "V6", SeverityError, "entrypoints.mcp.transport"},
-		{"V6 mcp unknown transport", func(m *Manifest) {
-			m.Kind = KindMCPServer
-			m.Entrypoints = Entrypoints{MCP: &MCPEntrypoint{Command: "node", Transport: "websocket"}}
-		}, "V6", SeverityError, "entrypoints.mcp.transport"},
-		{"V6 mcp empty arg", func(m *Manifest) {
-			m.Kind = KindMCPServer
-			m.Entrypoints = Entrypoints{MCP: &MCPEntrypoint{Command: "node", Args: []string{""}, Transport: TransportStdio}}
-		}, "V6", SeverityError, "entrypoints.mcp.args[0]"},
-
 		{"V8 summary too long", func(m *Manifest) { m.Summary = strings.Repeat("x", 141) }, "V8", SeverityError, "summary"},
 		{"V8 summary control chars", func(m *Manifest) { m.Summary = "line one\nline two" }, "V8", SeverityError, "summary"},
 		{"V8 too many tags", func(m *Manifest) {
@@ -293,10 +263,10 @@ func TestValidateStaticPasses(t *testing.T) {
 		{"namespace at max length", func(m *Manifest) { m.Namespace = strings.Repeat("a", 39) }},
 		{"prerelease version", func(m *Manifest) { m.Version = "2.0.0-beta.1" }},
 		{"prompt-agent without entrypoints", func(m *Manifest) {
-			m.Kind = KindPromptAgent
+			m.Kind = "prompt-agent"
 			m.Entrypoints = Entrypoints{}
 		}},
-		{"prompt-agent with skill entrypoint", func(m *Manifest) { m.Kind = KindPromptAgent }},
+		{"prompt-agent with skill entrypoint", func(m *Manifest) { m.Kind = "prompt-agent" }},
 		{"empty channel means stable", func(m *Manifest) { m.Publish.Channel = "" }},
 		{"dependency with constraint", func(m *Manifest) {
 			m.Dependencies.Agents = []AgentDependency{{Ref: "acme/other-agent", Version: "^1.2"}}
@@ -319,7 +289,7 @@ func TestValidateStaticPasses(t *testing.T) {
 	}
 }
 
-// TestValidateInContext covers the context rules V2, V3, V4, V6, V7, V8.
+// TestValidateInContext covers the context rules V2, V3, V4, V7, V8.
 func TestValidateInContext(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -496,44 +466,6 @@ func TestChannelMonotonicity(t *testing.T) {
 	t.Run("build metadata does not evade immutability", func(t *testing.T) {
 		m, ctx := newBeta("1.5.0-beta.1+build.7")
 		wantIssue(t, ValidateInContext(m, ctx), "V3", SeverityError, "version")
-	})
-}
-
-// TestLockfileRule covers V6's context half.
-func TestLockfileRule(t *testing.T) {
-	t.Run("missing lockfile", func(t *testing.T) {
-		ctx := mcpContext()
-		ctx.Files = deleteFile(ctx.Files, "package-lock.json")
-		wantIssue(t, ValidateInContext(validMCPManifest(), ctx), "V6", SeverityError, "")
-	})
-	t.Run("uv.lock accepted", func(t *testing.T) {
-		m := validMCPManifest()
-		m.Publish.Include = []string{"agent.yaml", "README.md", "src/**", "uv.lock", "LICENSE"}
-		ctx := mcpContext()
-		ctx.Files = deleteFile(ctx.Files, "package-lock.json")
-		ctx.Files = append(ctx.Files, FileInfo{Path: "uv.lock", Size: 900})
-		wantClean(t, ValidateInContext(m, ctx))
-	})
-	t.Run("requirements.txt flagged for hashes", func(t *testing.T) {
-		m := validMCPManifest()
-		m.Publish.Include = []string{"agent.yaml", "README.md", "src/**", "requirements.txt", "LICENSE"}
-		ctx := mcpContext()
-		ctx.Files = deleteFile(ctx.Files, "package-lock.json")
-		ctx.Files = append(ctx.Files, FileInfo{Path: "requirements.txt", Size: 300})
-		errs := ValidateInContext(m, ctx)
-		wantIssue(t, errs, "V6", SeverityWarning, "")
-		if got := Blocking(errs); len(got) != 0 {
-			t.Fatalf("hash note must be a warning, got blocking:%s", issueStrings(got))
-		}
-	})
-	t.Run("lockfile excluded from archive warns", func(t *testing.T) {
-		m := validMCPManifest()
-		m.Publish.Include = []string{"agent.yaml", "README.md", "src/**", "LICENSE"}
-		errs := ValidateInContext(m, mcpContext())
-		wantIssue(t, errs, "V6", SeverityWarning, "publish.include")
-	})
-	t.Run("lockfile rule only applies to mcp-server", func(t *testing.T) {
-		wantClean(t, ValidateInContext(validSkillManifest(), skillContext())) // no lockfile in files
 	})
 }
 

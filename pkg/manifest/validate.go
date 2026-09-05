@@ -218,13 +218,7 @@ func Validate(m *Manifest) []error {
 	} else if !ValidNamespace(m.Namespace) {
 		s.errf("V1", "namespace", "%q must match %s", m.Namespace, namespaceRE)
 	}
-	switch m.Kind {
-	case KindSkill, KindPromptAgent, KindMCPServer:
-	case "":
-		s.errf("V1", "kind", "kind is required")
-	default:
-		s.errf("V1", "kind", "unknown kind %q (skill | prompt-agent | mcp-server)", m.Kind)
-	}
+	validateClassification(&s, m)
 
 	if m.Version == "" {
 		s.errf("V3", "version", "version is required")
@@ -242,13 +236,62 @@ func Validate(m *Manifest) []error {
 	}
 
 	validateEntrypoints(&s, m)
-	validateRuntime(&s, m.Runtime)
+	validateRuntime(&s, m)
 	validateCapabilities(&s, m.Capabilities)
 	validateMCPServers(&s, m)
 	validateDependencies(&s, m.Dependencies)
 	validatePublish(&s, m.Publish)
+	validateIntake(&s, m)
+	validateInteractive(&s, m)
 
 	return s.list
+}
+
+// validateClassification is V1's classification half. A v2 manifest
+// declares modes and nothing kind-shaped; a v1 manifest declares a kind and
+// nothing mode-shaped. The v1 mcp-server kind is withdrawn (DEV-088): such
+// a document still parses, for the archives published under it, but is
+// never valid for publish again.
+func validateClassification(s *issues, m *Manifest) {
+	switch m.Major() {
+	case 2:
+		if m.Kind != "" {
+			s.errf("V1", "kind", "kind is not a v2 field: declare modes (autonomous | interactive) instead")
+		}
+		if len(m.Modes) == 0 {
+			s.errf("V1", "modes", "modes is required: at least one of autonomous | interactive")
+		}
+		seen := make(map[Mode]bool, len(m.Modes))
+		for i, mode := range m.Modes {
+			p := fmt.Sprintf("modes[%d]", i)
+			if !mode.Valid() {
+				s.errf("V1", p, "unknown mode %q (autonomous | interactive)", mode)
+			}
+			if seen[mode] {
+				s.errf("V1", p, "duplicate mode %q", mode)
+			}
+			seen[mode] = true
+		}
+	default:
+		switch m.Kind {
+		case v1KindSkill, v1KindPromptAgent:
+		case v1KindMCPServer:
+			s.errf("V1", "kind", "kind mcp-server is withdrawn (DEV-088): MCP server codebases are no longer BriefAgents; declare the servers an agent uses under capabilities.mcpServers instead")
+		case "":
+			s.errf("V1", "kind", "kind is required (skill | prompt-agent), or move to schemaVersion 2 and declare modes")
+		default:
+			s.errf("V1", "kind", "unknown kind %q (skill | prompt-agent)", m.Kind)
+		}
+		if len(m.Modes) > 0 {
+			s.errf("V1", "modes", "modes is a v2 field; set schemaVersion: 2 and drop kind")
+		}
+		if len(m.Intake) > 0 {
+			s.errf("V1", "intake", "intake is a v2 field; set schemaVersion: 2")
+		}
+		if m.Interactive != nil {
+			s.errf("V1", "interactive", "interactive is a v2 field; set schemaVersion: 2")
+		}
+	}
 }
 
 func validateSummary(s *issues, summary string) {
@@ -283,60 +326,138 @@ func validateTags(s *issues, tags []string) {
 	}
 }
 
+// validateEntrypoints is V1's entrypoint half. v2 has one optional
+// instruction path; v1 keeps its skill rule, and an mcp entrypoint is
+// refused outright now that the kind it served is withdrawn.
 func validateEntrypoints(s *issues, m *Manifest) {
 	ep := m.Entrypoints
-	switch m.Kind {
-	case KindSkill:
-		if ep.Skill == "" {
-			s.errf("V1", "entrypoints.skill", "kind skill requires entrypoints.skill")
-		}
-		if ep.MCP != nil {
-			s.errf("V1", "entrypoints.mcp", "kind skill must not declare an mcp entrypoint")
-		}
-	case KindPromptAgent:
-		if ep.MCP != nil {
-			s.errf("V1", "entrypoints.mcp", "kind prompt-agent must not declare an mcp entrypoint")
-		}
-	case KindMCPServer:
+	if m.Major() == 2 {
 		if ep.Skill != "" {
-			s.errf("V1", "entrypoints.skill", "kind mcp-server must not declare a skill entrypoint")
+			s.errf("V1", "entrypoints.skill", "entrypoints.skill is a v1 field: name the file as entrypoints.instruction")
 		}
-		if ep.MCP == nil {
-			s.errf("V6", "entrypoints.mcp", "kind mcp-server requires entrypoints.mcp with command, args, and transport")
+		if ep.MCP != nil {
+			s.errf("V1", "entrypoints.mcp", "entrypoints.mcp belongs to the withdrawn mcp-server kind (DEV-088)")
 		}
+		if ep.Instruction != "" {
+			if err := checkRelFilePath(ep.Instruction); err != nil {
+				s.errf("V1", "entrypoints.instruction", "%v", err)
+			}
+		}
+		return
+	}
+	if ep.Instruction != "" {
+		s.errf("V1", "entrypoints.instruction", "entrypoints.instruction is a v2 field; set schemaVersion: 2")
+	}
+	if m.Kind == v1KindSkill && ep.Skill == "" {
+		s.errf("V1", "entrypoints.skill", "kind skill requires entrypoints.skill")
+	}
+	if ep.MCP != nil {
+		s.errf("V1", "entrypoints.mcp", "entrypoints.mcp belongs to the withdrawn mcp-server kind (DEV-088)")
 	}
 	if ep.Skill != "" {
 		if err := checkRelFilePath(ep.Skill); err != nil {
 			s.errf("V1", "entrypoints.skill", "%v", err)
 		}
 	}
-	if ep.MCP != nil {
-		if ep.MCP.Command == "" {
-			s.errf("V6", "entrypoints.mcp.command", "command is required")
-		}
-		for i, arg := range ep.MCP.Args {
-			if arg == "" {
-				s.errf("V6", fmt.Sprintf("entrypoints.mcp.args[%d]", i), "argument must not be empty")
+}
+
+// validateRuntime checks runtime.interfaces against the export formats:
+// claude-skill and agents-md for either major, mcp for v1 only (it exported
+// the withdrawn kind).
+func validateRuntime(s *issues, m *Manifest) {
+	for i, iface := range m.Runtime.Interfaces {
+		switch iface {
+		case InterfaceClaudeSkill, InterfaceAgentsMD:
+		case InterfaceMCP:
+			if m.Major() == 2 {
+				s.errf("V1", fmt.Sprintf("runtime.interfaces[%d]", i),
+					"interface mcp exported the withdrawn mcp-server kind; v2 accepts claude-skill | agents-md")
 			}
-		}
-		switch ep.MCP.Transport {
-		case TransportStdio, TransportHTTP:
-		case "":
-			s.errf("V6", "entrypoints.mcp.transport", "transport is required (stdio | http)")
 		default:
-			s.errf("V6", "entrypoints.mcp.transport", "unknown transport %q (stdio | http)", ep.MCP.Transport)
+			if m.Major() == 2 {
+				s.errf("V1", fmt.Sprintf("runtime.interfaces[%d]", i),
+					"unknown interface %q (claude-skill | agents-md)", iface)
+			} else {
+				s.errf("V1", fmt.Sprintf("runtime.interfaces[%d]", i),
+					"unknown interface %q (claude-skill | mcp | agents-md)", iface)
+			}
 		}
 	}
 }
 
-func validateRuntime(s *issues, r Runtime) {
-	for i, iface := range r.Interfaces {
-		switch iface {
-		case InterfaceClaudeSkill, InterfaceMCP, InterfaceAgentsMD:
-		default:
-			s.errf("V1", fmt.Sprintf("runtime.interfaces[%d]", i),
-				"unknown interface %q (claude-skill | mcp | agents-md)", iface)
+// MaxIntakeQuestions bounds intake so a run's up-front form stays a form.
+const MaxIntakeQuestions = 20
+
+// MaxOpeningChars bounds interactive.opening: it is a first message, not a
+// second instruction file.
+const MaxOpeningChars = 500
+
+var intakeIDRE = regexp.MustCompile(`^[a-z0-9_]{1,64}$`)
+
+// validateIntake is V10's intake half (plan §3.5): ids unique and
+// answer-key shaped, prompts present, types from the closed set, choices
+// exactly where the type wants them.
+func validateIntake(s *issues, m *Manifest) {
+	if m.Major() != 2 {
+		return // reported as a v1 field mismatch by validateClassification
+	}
+	if len(m.Intake) > MaxIntakeQuestions {
+		s.errf("V10", "intake", "%d intake questions; the maximum is %d", len(m.Intake), MaxIntakeQuestions)
+	}
+	seen := make(map[string]bool, len(m.Intake))
+	for i, q := range m.Intake {
+		p := fmt.Sprintf("intake[%d]", i)
+		switch {
+		case q.ID == "":
+			s.errf("V10", p+".id", "id is required")
+		case !intakeIDRE.MatchString(q.ID):
+			s.errf("V10", p+".id", "id %q must match %s", q.ID, intakeIDRE)
+		case seen[q.ID]:
+			s.errf("V10", p+".id", "duplicate intake id %q", q.ID)
 		}
+		seen[q.ID] = true
+		if strings.TrimSpace(q.Prompt) == "" {
+			s.errf("V10", p+".prompt", "prompt is required")
+		}
+		switch q.Type {
+		case "", IntakeText, IntakeSecret, IntakeFile:
+			if len(q.Choices) > 0 {
+				s.errf("V10", p+".choices", "choices are only valid for type choice")
+			}
+		case IntakeChoice:
+			if len(q.Choices) == 0 {
+				s.errf("V10", p+".choices", "type choice requires at least one choice")
+			}
+			dup := make(map[string]bool, len(q.Choices))
+			for j, c := range q.Choices {
+				if c == "" {
+					s.errf("V10", fmt.Sprintf("%s.choices[%d]", p, j), "choice must not be empty")
+				}
+				if dup[c] {
+					s.errf("V10", fmt.Sprintf("%s.choices[%d]", p, j), "duplicate choice %q", c)
+				}
+				dup[c] = true
+			}
+		default:
+			s.errf("V10", p+".type", "unknown intake type %q (text | secret | choice | file)", q.Type)
+		}
+	}
+}
+
+// validateInteractive is V10's session-hints half (plan §3.6).
+func validateInteractive(s *issues, m *Manifest) {
+	if m.Major() != 2 || m.Interactive == nil {
+		return
+	}
+	h := m.Interactive
+	if n := utf8.RuneCountInString(h.Opening); n > MaxOpeningChars {
+		s.errf("V10", "interactive.opening", "opening is %d characters; the maximum is %d", n, MaxOpeningChars)
+	}
+	if h.IdleTimeoutSeconds < 0 {
+		s.errf("V10", "interactive.idleTimeoutSeconds", "idleTimeoutSeconds must be positive")
+	}
+	if !m.Supports(ModeInteractive) {
+		s.warnf("V10", "interactive", "interactive hints are declared but modes does not include interactive; they will never apply")
 	}
 }
 
@@ -432,10 +553,6 @@ func validateMCPServers(s *issues, m *Manifest) {
 	servers := m.Capabilities.MCPServers
 	if len(servers) == 0 {
 		return
-	}
-	if m.Kind == KindMCPServer {
-		s.errf("V5", "capabilities.mcpServers",
-			"an mcp-server package cannot itself require MCP servers (server composition is not in v1)")
 	}
 	if len(servers) > MaxMCPServers {
 		s.errf("V5", "capabilities.mcpServers", "at most %d MCP servers may be declared (got %d)", MaxMCPServers, len(servers))
@@ -586,7 +703,6 @@ func ValidateInContext(m *Manifest, ctx Context) []error {
 
 	resolved := resolveInclude(&s, m, ctx.Files)
 	validateEntrypointInclusion(&s, m, ctx.Files, resolved)
-	validateLockfile(&s, m, ctx.Files, resolved)
 	validatePublicPublish(&s, m, ctx)
 	validateQuotas(&s, ctx, resolved)
 	validateFrontmatter(&s, m, ctx)
@@ -603,26 +719,42 @@ func ValidateInContext(m *Manifest, ctx Context) []error {
 // more, but the reviewer should see that they diverge. A block that does
 // not parse is a warning too: the runtime will not read it either.
 func validateFrontmatter(s *issues, m *Manifest, ctx Context) {
-	if ctx.ReadFile == nil || m.Entrypoints.Skill == "" || checkRelFilePath(m.Entrypoints.Skill) != nil {
+	if ctx.ReadFile == nil {
 		return
 	}
-	content, err := ctx.ReadFile(m.Entrypoints.Skill)
-	if err != nil {
-		return // V4 already reports a missing entrypoint
+	field := "entrypoints.instruction"
+	if m.Major() != 2 {
+		field = "entrypoints.skill"
+	}
+	// The first candidate that reads is the instruction file; V4 already
+	// reports a missing entrypoint, so unreadable ones are skipped here.
+	var path string
+	var content []byte
+	for _, cand := range m.InstructionCandidates() {
+		if checkRelFilePath(cand) != nil {
+			continue
+		}
+		if c, err := ctx.ReadFile(cand); err == nil {
+			path, content = cand, c
+			break
+		}
+	}
+	if path == "" {
+		return
 	}
 	fm, ok, perr := ParseFrontmatter(content)
 	if !ok {
 		return
 	}
 	if perr != nil {
-		s.warnf("V9", "entrypoints.skill", "%s: frontmatter does not parse as YAML (%v); consuming runtimes will ignore it", m.Entrypoints.Skill, perr)
+		s.warnf("V9", field, "%s: frontmatter does not parse as YAML (%v); consuming runtimes will ignore it", path, perr)
 		return
 	}
 	if fm.Name != "" && fm.Name != m.Name {
-		s.errf("V9", "entrypoints.skill", "%s: frontmatter name %q contradicts the manifest name %q", m.Entrypoints.Skill, fm.Name, m.Name)
+		s.errf("V9", field, "%s: frontmatter name %q contradicts the manifest name %q", path, fm.Name, m.Name)
 	}
 	if fm.Description != "" && NormalizeProse(fm.Description) != NormalizeProse(m.Summary) {
-		s.warnf("V9", "entrypoints.skill", "%s: frontmatter description differs from the manifest summary; consumers of the installed skill see the frontmatter, the registry shows the summary", m.Entrypoints.Skill)
+		s.warnf("V9", field, "%s: frontmatter description differs from the manifest summary; consumers of the installed skill see the frontmatter, the registry shows the summary", path)
 	}
 }
 
@@ -732,61 +864,17 @@ func validateEntrypointInclusion(s *issues, m *Manifest, files []FileInfo, resol
 		}
 	}
 
+	if m.Major() == 2 {
+		// An instruction package without its instruction file is nothing;
+		// the default name is required to exist exactly like a named one.
+		cands := m.InstructionCandidates()
+		if len(cands) == 1 && checkRelFilePath(cands[0]) == nil {
+			requireIncluded(cands[0], "instruction entrypoint")
+		}
+		return
+	}
 	if m.Entrypoints.Skill != "" && checkRelFilePath(m.Entrypoints.Skill) == nil {
 		requireIncluded(m.Entrypoints.Skill, "skill entrypoint")
-	}
-	if mcp := m.Entrypoints.MCP; mcp != nil {
-		// Args (and the command) that name repo files must ship in the
-		// archive; non-file args (flags, module names) are skipped.
-		for _, cand := range append([]string{mcp.Command}, mcp.Args...) {
-			p := strings.TrimPrefix(cand, "./")
-			if p != "" && byPath[p] && !included[p] {
-				s.errf("V4", "publish.include", "mcp entrypoint file %q is not matched by publish.include", p)
-			}
-		}
-	}
-}
-
-// lockfileNames are the D-14 lockfiles accepted by V6, in preference
-// order.
-var lockfileNames = []string{"package-lock.json", "uv.lock", "requirements.txt"}
-
-// validateLockfile is V6's context half: kind=mcp-server needs a lockfile
-// at the repo root.
-func validateLockfile(s *issues, m *Manifest, files []FileInfo, resolved []FileInfo) {
-	if m.Kind != KindMCPServer {
-		return
-	}
-	byPath := make(map[string]bool, len(files))
-	for _, f := range files {
-		byPath[f.Path] = true
-	}
-	var found []string
-	for _, name := range lockfileNames {
-		if byPath[name] {
-			found = append(found, name)
-		}
-	}
-	if len(found) == 0 {
-		s.errf("V6", "", "kind mcp-server requires a lockfile at the repo root (package-lock.json | uv.lock | requirements.txt)")
-		return
-	}
-	if len(found) == 1 && found[0] == "requirements.txt" {
-		s.warnf("V6", "", "requirements.txt must pin all dependencies with --hash entries; the S6/S7 scanners verify coverage")
-	}
-	included := make(map[string]bool, len(resolved))
-	for _, f := range resolved {
-		included[f.Path] = true
-	}
-	anyIncluded := false
-	for _, name := range found {
-		if included[name] {
-			anyIncluded = true
-			break
-		}
-	}
-	if !anyIncluded {
-		s.warnf("V6", "publish.include", "lockfile %q is not included in the release archive; consumers cannot reproduce the dependency set", found[0])
 	}
 }
 

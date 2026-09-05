@@ -1,7 +1,16 @@
 // Package manifest implements the agent.yaml package manifest defined in
 // PLAN §5: strict parsing (closed schema, rule V1), the validation rules
-// V1–V9 (§5.3), the closed capability vocabulary (§5.4), and the canonical
+// V1–V10 (§5.3), the closed capability vocabulary (§5.4), and the canonical
 // JSON form stored as agent_versions.manifest (§4.2).
+//
+// Two schema majors are read. Major 2 (DEV-088) classifies a BriefAgent by
+// the run modes it supports — autonomous, interactive — and names one
+// instruction entrypoint. Major 1 classified by kind (skill, prompt-agent,
+// mcp-server) and is kept readable for the archives already published under
+// it: SupportedModes and InstructionCandidates answer the v2 questions for
+// either major, so callers need not branch on the version. A v1 document
+// can still be validated for publish, except that kind mcp-server is
+// withdrawn and refused.
 //
 // The API splits validation by what it needs:
 //
@@ -29,18 +38,45 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Kind enumerates the agent kinds of PLAN §2/§5.2.
-type Kind string
+// Mode is a run mode a release supports (DEV-088, plan §2). A release
+// declares the non-empty set it supports; a run happens in exactly one.
+type Mode string
 
-// Agent kinds (closed set).
+// Run modes (closed set).
 const (
-	// KindSkill is a prompt-package skill whose entrypoint is a skill file.
-	KindSkill Kind = "skill"
-	// KindPromptAgent is a prompt-only agent (no code, no MCP entrypoint).
-	KindPromptAgent Kind = "prompt-agent"
-	// KindMCPServer is a small MCP server codebase (JS/TS or Python, D-14).
-	KindMCPServer Kind = "mcp-server"
+	// ModeAutonomous runs from the source files (optionally after intake
+	// questions and MCP profile authentication), writes its output and
+	// receipts, and ends.
+	ModeAutonomous Mode = "autonomous"
+	// ModeInteractive starts from the same plan and controls, but the run is
+	// a conversation with the user in the CLI TUI or the desktop.
+	ModeInteractive Mode = "interactive"
 )
+
+// Valid reports whether m is a known mode.
+func (m Mode) Valid() bool {
+	switch m {
+	case ModeAutonomous, ModeInteractive:
+		return true
+	}
+	return false
+}
+
+// The v1 kinds (PLAN §1.4). Read for schema major 1 only; SupportedModes
+// maps them. Not exported: no new code should classify by kind.
+const (
+	v1KindSkill       = "skill"
+	v1KindPromptAgent = "prompt-agent"
+	v1KindMCPServer   = "mcp-server"
+)
+
+// DefaultInstructionFile is the v2 instruction entrypoint when the manifest
+// names none.
+const DefaultInstructionFile = "AGENT.md"
+
+// v1PromptAgentInstructionFiles is the closed search order the runner used
+// for a v1 prompt-agent (RUNNER-PLAN §R2); kept for v1 archives only.
+var v1PromptAgentInstructionFiles = []string{"AGENT.md", "PROMPT.md"}
 
 // Channel is a release channel per §5.5.
 type Channel string
@@ -94,8 +130,8 @@ const (
 // Manifest is the full agent.yaml document per PLAN §5.2. Field comments
 // note the owning validation rules; zero values mean "not declared".
 type Manifest struct {
-	// SchemaVersion is the manifest schema major ("1"); unknown majors are
-	// rejected at Parse time (V1).
+	// SchemaVersion is the manifest schema major ("1" or "2"); unknown
+	// majors are rejected at Parse time (V1). Major() reads it.
 	SchemaVersion string `yaml:"schemaVersion" json:"schemaVersion"`
 	// Name must match the target repo's agent name (V2) and the agents.name
 	// DDL pattern (§4.2).
@@ -103,8 +139,13 @@ type Manifest struct {
 	// Namespace must match the target repo's namespace handle (V2) and the
 	// handles.handle DDL pattern (§4.2).
 	Namespace string `yaml:"namespace" json:"namespace"`
-	// Kind selects the agent kind and its entrypoint rules.
-	Kind Kind `yaml:"kind" json:"kind"`
+	// Kind is the v1 classification (skill | prompt-agent | mcp-server),
+	// read for schema major 1 only; a v2 manifest must not carry it (V1).
+	// Use SupportedModes rather than reading this.
+	Kind string `yaml:"kind,omitempty" json:"kind,omitempty"`
+	// Modes is the v2 set of run modes the release supports: required,
+	// non-empty, from the closed set, no duplicates (V1). Absent in v1.
+	Modes []Mode `yaml:"modes,omitempty" json:"modes,omitempty"`
 	// Version is strict semver without a leading "v"; it must equal the git
 	// tag and exceed every existing version on its channel (V3).
 	Version string `yaml:"version" json:"version"`
@@ -118,8 +159,15 @@ type Manifest struct {
 	Homepage string `yaml:"homepage,omitempty" json:"homepage,omitempty"`
 	// Tags carries at most MaxTags lowercase [a-z0-9-]+ tags (V8).
 	Tags []string `yaml:"tags,omitempty" json:"tags,omitempty"`
-	// Entrypoints holds exactly the entrypoints valid for Kind (§5.2).
+	// Entrypoints names the instruction file (v2) or the v1 per-kind
+	// entrypoints (§5.2).
 	Entrypoints Entrypoints `yaml:"entrypoints,omitempty" json:"entrypoints,omitempty"`
+	// Intake lists the questions asked before a run starts, in either mode
+	// (v2, V10). Answers are staged read-only for the agent by the runner.
+	Intake []IntakeQuestion `yaml:"intake,omitempty" json:"intake,omitempty"`
+	// Interactive carries hints for interactive sessions (v2, V10).
+	// Everything else about a session is runner policy, not manifest.
+	Interactive *InteractiveHints `yaml:"interactive,omitempty" json:"interactive,omitempty"`
 	// Runtime carries informational runtime hints and install targets.
 	Runtime Runtime `yaml:"runtime,omitempty" json:"runtime,omitempty"`
 	// Capabilities is the security contract (closed vocabulary, V5).
@@ -141,6 +189,69 @@ func (m *Manifest) EffectiveChannel() Channel {
 	return m.Publish.Channel
 }
 
+// Major returns the schema major (1 or 2); 0 when the version is not one
+// Parse would accept.
+func (m *Manifest) Major() int {
+	switch strings.SplitN(m.SchemaVersion, ".", 2)[0] {
+	case "1":
+		return 1
+	case "2":
+		return 2
+	}
+	return 0
+}
+
+// SupportedModes returns the run modes the release supports, for either
+// schema major: v2 returns Modes; v1 maps skill and prompt-agent to
+// autonomous and the withdrawn mcp-server kind to nothing.
+func (m *Manifest) SupportedModes() []Mode {
+	if m.Major() == 2 {
+		return append([]Mode(nil), m.Modes...)
+	}
+	switch m.Kind {
+	case v1KindSkill, v1KindPromptAgent:
+		return []Mode{ModeAutonomous}
+	}
+	return nil
+}
+
+// Supports reports whether the release can run in mode.
+func (m *Manifest) Supports(mode Mode) bool {
+	for _, have := range m.SupportedModes() {
+		if have == mode {
+			return true
+		}
+	}
+	return false
+}
+
+// InstructionCandidates returns the repo-relative files that may hold the
+// harness instruction, in the order a caller should try them: exactly one
+// for v2 (entrypoints.instruction, else DefaultInstructionFile) and for a
+// v1 skill (entrypoints.skill); the closed AGENT.md-then-PROMPT.md order for
+// a v1 prompt-agent; nothing for the withdrawn v1 mcp-server kind.
+func (m *Manifest) InstructionCandidates() []string {
+	if m.Major() == 2 {
+		if m.Entrypoints.Instruction != "" {
+			return []string{m.Entrypoints.Instruction}
+		}
+		return []string{DefaultInstructionFile}
+	}
+	switch m.Kind {
+	case v1KindSkill:
+		if m.Entrypoints.Skill != "" {
+			return []string{m.Entrypoints.Skill}
+		}
+		return nil
+	case v1KindPromptAgent:
+		if m.Entrypoints.Skill != "" {
+			return []string{m.Entrypoints.Skill}
+		}
+		return append([]string(nil), v1PromptAgentInstructionFiles...)
+	}
+	return nil
+}
+
 // Author credits one manifest author.
 type Author struct {
 	// Name is required for each listed author.
@@ -149,14 +260,59 @@ type Author struct {
 	Email string `yaml:"email,omitempty" json:"email,omitempty"`
 }
 
-// Entrypoints holds the per-kind entrypoints. Exactly the keys valid for
-// the manifest kind may be set: skill for kind=skill (and optionally
-// prompt-agent), mcp for kind=mcp-server.
+// Entrypoints names where the instruction lives. A v2 manifest sets only
+// Instruction; the other two keys are v1's per-kind entrypoints and are
+// refused in v2 (V1).
 type Entrypoints struct {
-	// Skill is the repo-relative skill file (e.g. SKILL.md).
+	// Instruction is the repo-relative instruction file (v2); empty means
+	// DefaultInstructionFile. A leading YAML frontmatter block is stripped
+	// by consumers, so a SKILL.md-shaped file works unchanged.
+	Instruction string `yaml:"instruction,omitempty" json:"instruction,omitempty"`
+	// Skill is the v1 repo-relative skill file (e.g. SKILL.md).
 	Skill string `yaml:"skill,omitempty" json:"skill,omitempty"`
-	// MCP describes how to launch an MCP server.
+	// MCP is the v1 mcp-server launch spec. Parsed for archives published
+	// under the withdrawn kind; never valid for publish.
 	MCP *MCPEntrypoint `yaml:"mcp,omitempty" json:"mcp,omitempty"`
+}
+
+// IntakeType is the answer shape of an intake question (closed set).
+type IntakeType string
+
+// Intake answer types.
+const (
+	// IntakeText is a free-text answer.
+	IntakeText IntakeType = "text"
+	// IntakeSecret is a value that must not be echoed or recorded; the
+	// runner injects it as a run-scoped secret rather than as text.
+	IntakeSecret IntakeType = "secret"
+	// IntakeChoice is one of Choices.
+	IntakeChoice IntakeType = "choice"
+	// IntakeFile is a host path the runner stages into the inputs folder.
+	IntakeFile IntakeType = "file"
+)
+
+// IntakeQuestion is one question asked before a run starts (plan §3.5).
+type IntakeQuestion struct {
+	// ID names the answer: [a-z0-9_]+, unique within the manifest (V10).
+	ID string `yaml:"id" json:"id"`
+	// Prompt is what the user is asked.
+	Prompt string `yaml:"prompt" json:"prompt"`
+	// Type is the answer shape; text when empty.
+	Type IntakeType `yaml:"type,omitempty" json:"type,omitempty"`
+	// Required refuses to start the run without an answer.
+	Required bool `yaml:"required,omitempty" json:"required,omitempty"`
+	// Choices lists the allowed answers for IntakeChoice; forbidden otherwise.
+	Choices []string `yaml:"choices,omitempty" json:"choices,omitempty"`
+}
+
+// InteractiveHints are the manifest's hints for interactive sessions
+// (plan §3.6). Limits here can only tighten what runner policy allows.
+type InteractiveHints struct {
+	// Opening is the assistant's first message when no task text was given.
+	Opening string `yaml:"opening,omitempty" json:"opening,omitempty"`
+	// IdleTimeoutSeconds ends the session after this much silence; policy
+	// caps it.
+	IdleTimeoutSeconds int `yaml:"idleTimeoutSeconds,omitempty" json:"idleTimeoutSeconds,omitempty"`
 }
 
 // MCPEntrypoint launches an MCP server (kind=mcp-server, V6).
@@ -527,7 +683,8 @@ type Publish struct {
 
 // Parse decodes exactly one agent.yaml document (YAML 1.2 via yaml.v3).
 // Unknown keys anywhere are errors (closed schema, V1), trailing YAML
-// documents are rejected, and only schemaVersion major "1" is accepted.
+// documents are rejected, and only schemaVersion majors "1" and "2" are
+// accepted.
 // Field-level rules live in Validate and ValidateInContext.
 func Parse(data []byte) (*Manifest, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
@@ -549,15 +706,15 @@ func Parse(data []byte) (*Manifest, error) {
 	return &m, nil
 }
 
-// checkSchemaVersion accepts major "1" with an optional dotted numeric
-// suffix (e.g. "1", "1.0").
+// checkSchemaVersion accepts majors "1" and "2" with an optional dotted
+// numeric suffix (e.g. "2", "1.0").
 func checkSchemaVersion(v string) error {
 	if v == "" {
 		return errors.New("schemaVersion is required")
 	}
 	parts := strings.Split(v, ".")
-	if parts[0] != "1" {
-		return fmt.Errorf("unsupported schemaVersion %q: only major \"1\" is supported", v)
+	if parts[0] != "1" && parts[0] != "2" {
+		return fmt.Errorf("unsupported schemaVersion %q: majors \"1\" and \"2\" are supported", v)
 	}
 	for _, p := range parts[1:] {
 		if p == "" || strings.TrimLeft(p, "0123456789") != "" {
