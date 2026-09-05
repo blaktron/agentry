@@ -89,6 +89,15 @@ func (s *Server) SearchAgents(w http.ResponseWriter, r *http.Request, params Sea
 		}
 		facets["kind"] = kinds
 	}
+	// The run-mode facet (DEV-088) rides beside kind until agentry#145
+	// retires kind from the contract; the facets map is open-keyed.
+	if mrows, err := s.q().SearchFacetModes(r.Context(), query); err == nil && len(mrows) > 0 {
+		modes := map[string]int{}
+		for _, f := range mrows {
+			modes[f.Mode] = int(f.N)
+		}
+		facets["mode"] = modes
+	}
 	if lrows, err := s.q().SearchFacetLicenses(r.Context(), query); err == nil && len(lrows) > 0 {
 		licenses := map[string]int{}
 		for _, f := range lrows {

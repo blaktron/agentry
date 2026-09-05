@@ -191,11 +191,42 @@ func (s *Service) EffectiveRole(ctx context.Context, p *auth.Principal, a Agent)
 
 // CreateAgentInput is the validated input for CreateAgent.
 type CreateAgentInput struct {
-	Namespace  string
-	Name       string
+	Namespace string
+	Name      string
+	// Kind is the v1 classification the API still speaks (agentry#145
+	// retires it). skill and prompt-agent are accepted; mcp-server is
+	// withdrawn (DEV-088).
 	Kind       string
 	Visibility string
 	Summary    string
+	// Modes are the run modes the agent supports; empty derives
+	// [autonomous] from Kind, which is what every v1 kind maps to.
+	Modes []string
+}
+
+// Run modes an agent row may carry (DEV-088). The manifest package owns the
+// vocabulary; this mirror keeps the store free of a pkg/manifest import.
+var validModes = map[string]bool{"autonomous": true, "interactive": true}
+
+// normalizeModes validates a caller-supplied mode set, deriving the v1
+// default when none was given.
+func normalizeModes(modes []string) ([]string, error) {
+	if len(modes) == 0 {
+		return []string{"autonomous"}, nil
+	}
+	seen := make(map[string]bool, len(modes))
+	out := make([]string, 0, len(modes))
+	for _, m := range modes {
+		if !validModes[m] {
+			return nil, fmt.Errorf("%w: unknown mode %q (autonomous | interactive)", ErrDenied, m)
+		}
+		if seen[m] {
+			continue
+		}
+		seen[m] = true
+		out = append(out, m)
+	}
+	return out, nil
 }
 
 // CreateAgent creates the agent row and its bare repository. The caller is
@@ -210,9 +241,15 @@ func (s *Service) CreateAgent(ctx context.Context, p *auth.Principal, in CreateA
 		return Agent{}, fmt.Errorf("%w: invalid agent name", ErrDenied)
 	}
 	switch in.Kind {
-	case "skill", "prompt-agent", "mcp-server":
+	case "skill", "prompt-agent":
+	case "mcp-server":
+		return Agent{}, fmt.Errorf("%w: kind mcp-server is withdrawn (DEV-088): MCP server codebases are no longer BriefAgents", ErrDenied)
 	default:
 		return Agent{}, fmt.Errorf("%w: invalid kind", ErrDenied)
+	}
+	modes, err := normalizeModes(in.Modes)
+	if err != nil {
+		return Agent{}, err
 	}
 	switch in.Visibility {
 	case "public", "private":
@@ -269,7 +306,7 @@ func (s *Service) CreateAgent(ctx context.Context, p *auth.Principal, in CreateA
 		}
 		if _, err := q.CreateAgent(ctx, storegen.CreateAgentParams{
 			ID: agentID, NamespaceID: ns.ID, Name: in.Name, Kind: in.Kind,
-			Visibility: in.Visibility, RepoID: repoID, Summary: in.Summary,
+			Visibility: in.Visibility, RepoID: repoID, Summary: in.Summary, Modes: modes,
 		}); err != nil {
 			return err
 		}
@@ -279,7 +316,7 @@ func (s *Service) CreateAgent(ctx context.Context, p *auth.Principal, in CreateA
 			e.OrgID = ns.ID
 		}
 		e.TargetKind, e.TargetID = "agent", agentID
-		e.Detail = map[string]any{"path": in.Namespace + "/" + in.Name, "kind": in.Kind, "visibility": in.Visibility}
+		e.Detail = map[string]any{"path": in.Namespace + "/" + in.Name, "kind": in.Kind, "modes": modes, "visibility": in.Visibility}
 		return s.aud.Write(ctx, q, e)
 	})
 	if err != nil {
