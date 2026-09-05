@@ -219,13 +219,7 @@ services:
       # classifier needs AGENTRY_JUDGE_BASE_URL = the classify endpoint.
       AGENTRY_JUDGE_REGION: ${AGENTRY_JUDGE_REGION:-}
       # External scanner tools (§8.3, agentry#40). gitleaks ships in the
-      # image; opengrep is opt-in (mount a binary + rules and point at them);
-      # OSV lookups are opt-in because they are the scanner's one egress —
-      # set AGENTRY_SCAN_OSV_URL=https://api.osv.dev (or a mirror) in .env.
       AGENTRY_SCAN_GITLEAKS_BIN: ${AGENTRY_SCAN_GITLEAKS_BIN:-/usr/bin/gitleaks}
-      AGENTRY_SCAN_OPENGREP_BIN: ${AGENTRY_SCAN_OPENGREP_BIN:-}
-      AGENTRY_SCAN_OPENGREP_RULES: ${AGENTRY_SCAN_OPENGREP_RULES:-}
-      AGENTRY_SCAN_OSV_URL: ${AGENTRY_SCAN_OSV_URL:-}
       # Real SMTP against mailpit: every message the server sends lands in the
       # web UI on :8025 instead of the log, so the notification paths (§8.7)
       # can actually be read end to end in dev. No TLS, no auth — mailpit
