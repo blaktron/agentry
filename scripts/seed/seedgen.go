@@ -203,7 +203,7 @@ func (g *generator) seedAgents(ctx context.Context, st *store.Store, owners []ow
 }
 
 var (
-	kinds    = []string{"skill", "prompt-agent", "mcp-server"}
+	kinds    = []string{"skill", "prompt-agent"} // mcp-server is withdrawn (DEV-088)
 	licenses = []string{"Apache-2.0", "MIT", "BSD-3-Clause", "MPL-2.0"}
 	// Vocabulary for names and summaries. Kept small and domain-flavoured so
 	// full-text search has realistic term frequencies rather than uniform
