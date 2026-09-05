@@ -9,6 +9,17 @@ Base path is `/api/v1`. Two surfaces sit deliberately outside it: `/scim/v2`
 (the SCIM 2.0 spec fixes that path) and `/sso/{org}` (a browser destination
 people paste into address bars and IdP consoles, not a JSON operation).
 
+## Versioning
+
+`/api/v1` is additive: a CI gate (`oasdiff`) refuses a pull request that
+removes or narrows anything in the contract. It was broken deliberately
+once, before the beta and with no external consumers — spec 0.2.0 → 0.3.0
+replaced the `kind` classification with `modes` (`?kind=` → `?mode=`, the
+`kind` facet → `mode`; DEV-088) — and has been additive again since. A
+version's `manifestSchemaVersion` says which manifest major its snapshot
+follows, so a client reading a v1 snapshot applies the v1 mapping
+(`skill`, `prompt-agent` → `[autonomous]`).
+
 ## Errors are problem+json
 
 Every error response is `application/problem+json` (RFC 9457) with `type`,

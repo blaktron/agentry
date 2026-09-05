@@ -6,7 +6,7 @@ your machine. Everything on the browse and agent pages exists for that.
 ## Browse
 
 **Browse** (`/search`) searches names, summaries, and READMEs, with filters
-for kind, declared capability, license (faceted from what has actually been
+for run mode, declared capability, license (faceted from what has actually been
 published), verified organizations, and sort order (best match, most
 installed, newest).
 

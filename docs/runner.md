@@ -82,6 +82,20 @@ operator policy recompiles the plan.
 
 Runs compose like processes: `agentry run a … | agentry run b …`.
 
+### Run modes
+
+A release declares the run modes it supports (`modes` in the manifest).
+`agentry run` today performs an **autonomous** run: the files in, the
+output and receipts out, the sandbox gone. An **interactive** session —
+the same plan, gateway and enforcement, driven as a conversation in the
+terminal, with `/add` for dropping a file into the read-only inputs
+folder and the transcript written into the receipts — arrives with the
+runner's session work ([agentry-cli#35](https://github.com/blaktron/agentry-cli/issues/35),
+[#36](https://github.com/blaktron/agentry-cli/issues/36)); a release that
+declares only `interactive` cannot be run until then, and the runner says
+so rather than running it the other way. In neither mode can a user
+widen what the manifest declared.
+
 ### `agentry uninstall <ns/name[@version]>`
 
 Removes this machine's runner state for a BriefAgent: the verified
