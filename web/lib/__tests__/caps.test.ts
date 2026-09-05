@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diffCaps } from "../caps";
+import { diffCaps, egressHosts } from "../caps";
 
 // The capability diff is what a reviewer reads to answer "what new power is
 // this version asking for" (§8.4). The failure that matters is an added or
@@ -75,5 +75,17 @@ describe("diffCaps", () => {
     // up as a difference from a real value on the other.
     const rows = diffCaps({ exec: null }, { exec: { commands: ["sh"] } });
     expect(row(rows, "exec.commands").change).toBe("added");
+  });
+});
+
+describe("egressHosts", () => {
+  it("treats none and an absent block as no hosts", () => {
+    expect(egressHosts("none")).toEqual([]);
+    expect(egressHosts(undefined)).toEqual([]);
+    expect(egressHosts([])).toEqual([]);
+  });
+  it("keeps the wildcard and host lists", () => {
+    expect(egressHosts("*")).toEqual(["*"]);
+    expect(egressHosts(["api.example.com", "none", ""])).toEqual(["api.example.com"]);
   });
 });

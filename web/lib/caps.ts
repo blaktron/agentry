@@ -45,3 +45,12 @@ export function diffCaps(
     change: !a.has(k) ? "added" : !b.has(k) ? "removed" : a.get(k) !== b.get(k) ? "changed" : "same",
   }));
 }
+
+// egressHosts flattens the manifest's egress union — `none`, `"*"`, or a
+// list of hosts — into the host list a badge can show: `none` and an
+// absent block are no hosts; `"*"` is the single wildcard entry.
+export function egressHosts(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((h): h is string => typeof h === "string" && h !== "" && h !== "none");
+  if (typeof value === "string" && value !== "" && value !== "none") return [value];
+  return [];
+}
