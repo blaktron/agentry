@@ -68,13 +68,17 @@ export default async function BuildPage({
                 placeholder={user ? undefined : "your-handle"}
                 pattern="[a-z0-9][a-z0-9-]*" className={inputClass} style={inputStyle} />
             </label>
-            <label className={label}>
-              Kind
-              <select name="kind" className={inputClass} style={inputStyle} defaultValue="skill">
-                <option value="skill">skill</option>
-                <option value="prompt-agent">prompt-agent</option>
-              </select>
-            </label>
+            <fieldset>
+              <legend className={label}>Run modes (one or both)</legend>
+              <label className={`${label} mt-1 flex items-center gap-2`}>
+                <input type="checkbox" name="modes" value="autonomous" defaultChecked />
+                autonomous <span style={{ color: "var(--color-muted)" }}>— runs from its files and ends</span>
+              </label>
+              <label className={`${label} mt-1 flex items-center gap-2`}>
+                <input type="checkbox" name="modes" value="interactive" />
+                interactive <span style={{ color: "var(--color-muted)" }}>— a chat session under the same controls</span>
+              </label>
+            </fieldset>
             <label className={label}>
               Version
               <input name="version" required defaultValue="0.1.0" className={inputClass} style={inputStyle} />
@@ -194,13 +198,50 @@ export default async function BuildPage({
         </Card>
 
         <Card>
+          <h2 className="mb-2 text-sm font-semibold">Up-front questions (intake)</h2>
+          <p className="mb-2 text-xs" style={{ color: "var(--color-muted)" }}>
+            Asked before a run starts, in either mode; the answers are staged read-only for the agent at
+            /inputs/intake.json. A secret answer is carried by a declared secret of the same upper-cased name.
+          </p>
+          <fieldset>
+            <legend className={label}>Questions (up to three here; more in the advanced field below)</legend>
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="mt-2 grid gap-2 md:grid-cols-6">
+                <input name={`intake${i}Id`} placeholder="id (a-z0-9_)" pattern="[a-z0-9_]*" className={inputClass} style={inputStyle} aria-label={`Question ${i + 1} id`} />
+                <input name={`intake${i}Prompt`} placeholder="prompt" className={`${inputClass} md:col-span-2`} style={inputStyle} aria-label={`Question ${i + 1} prompt`} />
+                <select name={`intake${i}Type`} className={inputClass} style={inputStyle} aria-label={`Question ${i + 1} type`} defaultValue="text">
+                  <option value="text">text</option>
+                  <option value="choice">choice</option>
+                  <option value="file">file</option>
+                  <option value="secret">secret</option>
+                </select>
+                <input name={`intake${i}Choices`} placeholder="choices (a, b)" className={inputClass} style={inputStyle} aria-label={`Question ${i + 1} choices`} />
+                <label className={`${label} flex items-center gap-2`}>
+                  <input type="checkbox" name={`intake${i}Required`} value="1" /> required
+                </label>
+              </div>
+            ))}
+          </fieldset>
+          <label className={`${label} mt-3 block`}>
+            More questions (advanced, one per line:{" "}
+            <span className="font-mono text-xs">id: prompt type=choice choices=a,b required</span>)
+            <textarea name="intake" rows={2} className={`${inputClass} font-mono text-xs`} style={inputStyle}
+              placeholder={"region: Which region? type=choice choices=emea,apac required"} />
+          </label>
+          <label className={`${label} mt-3 block`}>
+            Opening line for interactive sessions (the agent&apos;s first message when no task is given; only with interactive checked)
+            <input name="opening" maxLength={500} placeholder="What should I look at?" className={inputClass} style={inputStyle} />
+          </label>
+        </Card>
+
+        <Card>
           <h2 className="mb-2 text-sm font-semibold">Instructions</h2>
           <p className="mb-2 text-xs" style={{ color: "var(--color-muted)" }}>
-            The entrypoint file (SKILL.md for a skill, AGENT.md for a prompt-agent). Task in,
-            result out, report via write_report.
+            The instruction file (AGENT.md). Task in, result out, report via write_report; in an
+            interactive session the agent can ask for what it needs.
           </p>
           <label className={`${label} block`}>
-            Entrypoint file contents
+            AGENT.md contents
             <textarea name="instructions" required rows={14}
               className={`${inputClass} font-mono text-xs`} style={inputStyle}
               defaultValue={"# my-briefagent\n\nDescribe the one job this agent does.\n"} />
