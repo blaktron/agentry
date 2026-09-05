@@ -10,8 +10,8 @@ SELECT * FROM repos WHERE id = $1;
 UPDATE repos SET size_bytes = $2, last_push_at = now() WHERE id = $1;
 
 -- name: CreateAgent :one
-INSERT INTO agents (id, namespace_id, name, kind, visibility, repo_id, summary)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO agents (id, namespace_id, name, kind, visibility, repo_id, summary, modes)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 RETURNING *;
 
 -- name: GetAgentByPath :one
@@ -27,6 +27,7 @@ UPDATE agents SET
   visibility = coalesce(sqlc.narg('visibility'), visibility),
   auto_publish_tags = coalesce(sqlc.narg('auto_publish_tags'), auto_publish_tags),
   allow_force_push = coalesce(sqlc.narg('allow_force_push'), allow_force_push),
+  modes = coalesce(sqlc.narg('modes')::text[], modes),
   updated_at = now()
 WHERE id = $1;
 
@@ -160,6 +161,8 @@ WHERE a.visibility = 'public'
     OR h.handle::text % sqlc.arg(query)::text
   )
   AND (sqlc.narg('kind')::text IS NULL OR a.kind = sqlc.narg('kind'))
+  -- mode= means "supports this run mode" (DEV-088): one of the array's values.
+  AND (sqlc.narg('mode')::text IS NULL OR sqlc.narg('mode')::text = ANY(a.modes))
   -- capability= means "this agent actually asks for it", not merely "the key
   -- is present": a manifest that says `network: {egress: none}` serializes
   -- with the network key set, so key existence alone would match every agent
@@ -192,6 +195,15 @@ FROM agents a
 WHERE a.visibility = 'public' AND a.quarantine_state <> 'blocked'
   AND (sqlc.arg(query)::text = '' OR a.search_tsv @@ websearch_to_tsquery('english', sqlc.arg(query)::text))
 GROUP BY a.kind ORDER BY a.kind;
+
+-- name: SearchFacetModes :many
+-- One row per run mode with the number of public, unblocked agents that
+-- support it; an agent supporting both counts under each.
+SELECT m.mode::text AS mode, count(*)::bigint AS n
+FROM agents a, unnest(a.modes) AS m(mode)
+WHERE a.visibility = 'public' AND a.quarantine_state <> 'blocked'
+  AND (sqlc.arg(query)::text = '' OR a.search_tsv @@ websearch_to_tsquery('english', sqlc.arg(query)::text))
+GROUP BY m.mode ORDER BY m.mode;
 
 -- name: SearchFacetLicenses :many
 -- License facet over the same public corpus, read from the latest published

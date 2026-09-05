@@ -56,9 +56,9 @@ func (q *Queries) CountAgentsInNamespace(ctx context.Context, namespaceID uuid.U
 }
 
 const createAgent = `-- name: CreateAgent :one
-INSERT INTO agents (id, namespace_id, name, kind, visibility, repo_id, summary)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, namespace_id, name, kind, visibility, repo_id, summary, latest_published_version_id, quarantine_state, auto_publish_tags, search_tsv, created_at, updated_at, readme_text, allow_force_push
+INSERT INTO agents (id, namespace_id, name, kind, visibility, repo_id, summary, modes)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, namespace_id, name, kind, visibility, repo_id, summary, latest_published_version_id, quarantine_state, auto_publish_tags, search_tsv, created_at, updated_at, readme_text, allow_force_push, modes
 `
 
 type CreateAgentParams struct {
@@ -69,6 +69,7 @@ type CreateAgentParams struct {
 	Visibility  string    `json:"visibility"`
 	RepoID      uuid.UUID `json:"repo_id"`
 	Summary     string    `json:"summary"`
+	Modes       []string  `json:"modes"`
 }
 
 func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent, error) {
@@ -80,6 +81,7 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent
 		arg.Visibility,
 		arg.RepoID,
 		arg.Summary,
+		arg.Modes,
 	)
 	var i Agent
 	err := row.Scan(
@@ -98,6 +100,7 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent
 		&i.UpdatedAt,
 		&i.ReadmeText,
 		&i.AllowForcePush,
+		&i.Modes,
 	)
 	return i, err
 }
@@ -177,7 +180,7 @@ func (q *Queries) DeleteRepoByID(ctx context.Context, id uuid.UUID) error {
 }
 
 const getAgentByID = `-- name: GetAgentByID :one
-SELECT a.id, a.namespace_id, a.name, a.kind, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, h.handle AS namespace, h.kind AS namespace_kind
+SELECT a.id, a.namespace_id, a.name, a.kind, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, h.handle AS namespace, h.kind AS namespace_kind
 FROM agents a JOIN handles h ON h.id = a.namespace_id
 WHERE a.id = $1
 `
@@ -198,6 +201,7 @@ type GetAgentByIDRow struct {
 	UpdatedAt                time.Time   `json:"updated_at"`
 	ReadmeText               string      `json:"readme_text"`
 	AllowForcePush           bool        `json:"allow_force_push"`
+	Modes                    []string    `json:"modes"`
 	Namespace                string      `json:"namespace"`
 	NamespaceKind            string      `json:"namespace_kind"`
 }
@@ -221,6 +225,7 @@ func (q *Queries) GetAgentByID(ctx context.Context, id uuid.UUID) (GetAgentByIDR
 		&i.UpdatedAt,
 		&i.ReadmeText,
 		&i.AllowForcePush,
+		&i.Modes,
 		&i.Namespace,
 		&i.NamespaceKind,
 	)
@@ -228,7 +233,7 @@ func (q *Queries) GetAgentByID(ctx context.Context, id uuid.UUID) (GetAgentByIDR
 }
 
 const getAgentByPath = `-- name: GetAgentByPath :one
-SELECT a.id, a.namespace_id, a.name, a.kind, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, h.handle AS namespace, h.kind AS namespace_kind, r.default_branch, r.size_bytes
+SELECT a.id, a.namespace_id, a.name, a.kind, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, h.handle AS namespace, h.kind AS namespace_kind, r.default_branch, r.size_bytes
 FROM agents a
 JOIN handles h ON h.id = a.namespace_id
 JOIN repos r ON r.id = a.repo_id
@@ -256,6 +261,7 @@ type GetAgentByPathRow struct {
 	UpdatedAt                time.Time   `json:"updated_at"`
 	ReadmeText               string      `json:"readme_text"`
 	AllowForcePush           bool        `json:"allow_force_push"`
+	Modes                    []string    `json:"modes"`
 	Namespace                string      `json:"namespace"`
 	NamespaceKind            string      `json:"namespace_kind"`
 	DefaultBranch            string      `json:"default_branch"`
@@ -281,6 +287,7 @@ func (q *Queries) GetAgentByPath(ctx context.Context, arg GetAgentByPathParams) 
 		&i.UpdatedAt,
 		&i.ReadmeText,
 		&i.AllowForcePush,
+		&i.Modes,
 		&i.Namespace,
 		&i.NamespaceKind,
 		&i.DefaultBranch,
@@ -392,7 +399,7 @@ func (q *Queries) ListAgentTeamGrantsForUser(ctx context.Context, arg ListAgentT
 }
 
 const listAgentsByNamespace = `-- name: ListAgentsByNamespace :many
-SELECT a.id, a.namespace_id, a.name, a.kind, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, h.handle AS namespace
+SELECT a.id, a.namespace_id, a.name, a.kind, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, h.handle AS namespace
 FROM agents a JOIN handles h ON h.id = a.namespace_id
 WHERE h.handle = $1
   AND (a.visibility = 'public' OR $2::boolean)
@@ -420,6 +427,7 @@ type ListAgentsByNamespaceRow struct {
 	UpdatedAt                time.Time   `json:"updated_at"`
 	ReadmeText               string      `json:"readme_text"`
 	AllowForcePush           bool        `json:"allow_force_push"`
+	Modes                    []string    `json:"modes"`
 	Namespace                string      `json:"namespace"`
 }
 
@@ -448,6 +456,7 @@ func (q *Queries) ListAgentsByNamespace(ctx context.Context, arg ListAgentsByNam
 			&i.UpdatedAt,
 			&i.ReadmeText,
 			&i.AllowForcePush,
+			&i.Modes,
 			&i.Namespace,
 		); err != nil {
 			return nil, err
@@ -600,27 +609,29 @@ WHERE a.visibility = 'public'
     OR h.handle::text % $3::text
   )
   AND ($4::text IS NULL OR a.kind = $4)
+  -- mode= means "supports this run mode" (DEV-088): one of the array's values.
+  AND ($5::text IS NULL OR $5::text = ANY(a.modes))
   -- capability= means "this agent actually asks for it", not merely "the key
   -- is present": a manifest that says ` + "`" + `network: {egress: none}` + "`" + ` serializes
   -- with the network key set, so key existence alone would match every agent
   -- ever published. A capability counts when its value is not null/none/empty
   -- and, for object-valued ones, when at least one member is not.
-  AND ($5::text IS NULL OR (
+  AND ($6::text IS NULL OR (
         lv.capabilities IS NOT NULL
-        AND jsonb_exists(lv.capabilities, $5::text)
-        AND lv.capabilities -> $5::text
+        AND jsonb_exists(lv.capabilities, $6::text)
+        AND lv.capabilities -> $6::text
             NOT IN ('"none"'::jsonb, 'null'::jsonb, '[]'::jsonb, '{}'::jsonb)
-        AND (jsonb_typeof(lv.capabilities -> $5::text) <> 'object'
+        AND (jsonb_typeof(lv.capabilities -> $6::text) <> 'object'
              OR EXISTS (
-               SELECT 1 FROM jsonb_each(lv.capabilities -> $5::text) AS cap_member(k, v)
+               SELECT 1 FROM jsonb_each(lv.capabilities -> $6::text) AS cap_member(k, v)
                WHERE cap_member.v NOT IN ('"none"'::jsonb, 'null'::jsonb, '[]'::jsonb, '{}'::jsonb)))))
-  AND ($6::text IS NULL
-       OR lower(lv.manifest ->> 'license') = lower($6::text))
-  AND ($7::boolean = false
+  AND ($7::text IS NULL
+       OR lower(lv.manifest ->> 'license') = lower($7::text))
+  AND ($8::boolean = false
        OR (h.kind = 'org' AND o.verified_domain IS NOT NULL))
 ORDER BY
-  CASE WHEN $8::text = 'installs' THEN coalesce(d.installs, 0) END DESC NULLS LAST,
-  CASE WHEN $8::text = 'newest' THEN a.created_at END DESC NULLS LAST,
+  CASE WHEN $9::text = 'installs' THEN coalesce(d.installs, 0) END DESC NULLS LAST,
+  CASE WHEN $9::text = 'newest' THEN a.created_at END DESC NULLS LAST,
   score DESC,
   a.created_at DESC,
   a.id DESC
@@ -632,6 +643,7 @@ type SearchAgentsParams struct {
 	Offset       int32   `json:"offset"`
 	Query        string  `json:"query"`
 	Kind         *string `json:"kind"`
+	Mode         *string `json:"mode"`
 	Capability   *string `json:"capability"`
 	License      *string `json:"license"`
 	VerifiedOnly bool    `json:"verified_only"`
@@ -664,6 +676,7 @@ func (q *Queries) SearchAgents(ctx context.Context, arg SearchAgentsParams) ([]S
 		arg.Offset,
 		arg.Query,
 		arg.Kind,
+		arg.Mode,
 		arg.Capability,
 		arg.License,
 		arg.VerifiedOnly,
@@ -769,6 +782,41 @@ func (q *Queries) SearchFacetLicenses(ctx context.Context, query string) ([]Sear
 	return items, nil
 }
 
+const searchFacetModes = `-- name: SearchFacetModes :many
+SELECT m.mode::text AS mode, count(*)::bigint AS n
+FROM agents a, unnest(a.modes) AS m(mode)
+WHERE a.visibility = 'public' AND a.quarantine_state <> 'blocked'
+  AND ($1::text = '' OR a.search_tsv @@ websearch_to_tsquery('english', $1::text))
+GROUP BY m.mode ORDER BY m.mode
+`
+
+type SearchFacetModesRow struct {
+	Mode string `json:"mode"`
+	N    int64  `json:"n"`
+}
+
+// One row per run mode with the number of public, unblocked agents that
+// support it; an agent supporting both counts under each.
+func (q *Queries) SearchFacetModes(ctx context.Context, query string) ([]SearchFacetModesRow, error) {
+	rows, err := q.db.Query(ctx, searchFacetModes, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchFacetModesRow
+	for rows.Next() {
+		var i SearchFacetModesRow
+		if err := rows.Scan(&i.Mode, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setAgentNamespace = `-- name: SetAgentNamespace :exec
 UPDATE agents SET namespace_id = $2, updated_at = now() WHERE id = $1
 `
@@ -824,6 +872,7 @@ UPDATE agents SET
   visibility = coalesce($3, visibility),
   auto_publish_tags = coalesce($4, auto_publish_tags),
   allow_force_push = coalesce($5, allow_force_push),
+  modes = coalesce($6::text[], modes),
   updated_at = now()
 WHERE id = $1
 `
@@ -834,6 +883,7 @@ type UpdateAgentSettingsParams struct {
 	Visibility      *string   `json:"visibility"`
 	AutoPublishTags *bool     `json:"auto_publish_tags"`
 	AllowForcePush  *bool     `json:"allow_force_push"`
+	Modes           []string  `json:"modes"`
 }
 
 func (q *Queries) UpdateAgentSettings(ctx context.Context, arg UpdateAgentSettingsParams) error {
@@ -843,6 +893,7 @@ func (q *Queries) UpdateAgentSettings(ctx context.Context, arg UpdateAgentSettin
 		arg.Visibility,
 		arg.AutoPublishTags,
 		arg.AllowForcePush,
+		arg.Modes,
 	)
 	return err
 }

@@ -52,6 +52,7 @@ type Agent struct {
 	UpdatedAt                time.Time   `json:"updated_at"`
 	ReadmeText               string      `json:"readme_text"`
 	AllowForcePush           bool        `json:"allow_force_push"`
+	Modes                    []string    `json:"modes"`
 }
 
 type AgentTeamGrant struct {
