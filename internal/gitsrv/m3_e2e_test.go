@@ -129,40 +129,6 @@ func (e *gitEnv) waitPublished(agent, version string) {
 	}
 }
 
-// waitRejected polls until the version is rejected and asserts the
-// reason names why; a version that publishes instead is the failure.
-func (e *gitEnv) waitRejected(agent, version, reasonSub string) {
-	e.t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		res, err := http.Get(fmt.Sprintf("%s/api/v1/agents/%s/%s/versions/%s", e.srv.URL, e.owner.handle, agent, version))
-		if err != nil {
-			e.t.Fatal(err)
-		}
-		body, _ := io.ReadAll(res.Body)
-		_ = res.Body.Close()
-		if res.StatusCode == 200 {
-			var v map[string]any
-			if err := json.Unmarshal(body, &v); err != nil {
-				e.t.Fatal(err)
-			}
-			switch v["status"] {
-			case "rejected":
-				if reason, _ := v["statusReason"].(string); !strings.Contains(reason, reasonSub) {
-					e.t.Fatalf("version %s rejected for %q, want a reason containing %q", version, reason, reasonSub)
-				}
-				return
-			case "published", "needs_review":
-				e.t.Fatalf("version %s ended in %v; it must be rejected", version, v["status"])
-			}
-		}
-		if time.Now().After(deadline) {
-			e.t.Fatalf("version %s not rejected in time (last: %d %s)", version, res.StatusCode, body)
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-}
-
 // installRoundTrip resolves, downloads, verifies the digest, and extracts.
 func (e *gitEnv) installRoundTrip(agent, rangeStr, wantVersion string, wantFiles ...string) {
 	e.t.Helper()
@@ -273,9 +239,11 @@ func TestM3PublishInstallRoundTrip(t *testing.T) {
 }
 
 // TestM3WithdrawnKindIsRefused: kind mcp-server is withdrawn (DEV-088). A
-// manifest under it is refused on both sources — the git-tag submission
-// ends rejected with the reason, the CLI upload gets 422 — and nothing
-// resolves.
+// manifest under it is refused on both sources and nothing resolves. The
+// tag submission runs inline in post-receive and a refused manifest leaves
+// no version row at all (http.go: failures surface as the version's
+// absence), so once the push has returned the absence is the assertion;
+// the CLI upload is refused with 422 naming the withdrawal.
 func TestM3WithdrawnKindIsRefused(t *testing.T) {
 	env := newGitEnv(t)
 
@@ -286,14 +254,19 @@ func TestM3WithdrawnKindIsRefused(t *testing.T) {
 		mustGit(t, work, "push", env.cloneURL(name, env.owner.patRW), "main")
 		mustGit(t, work, "tag", "v1.0.0")
 		mustGit(t, work, "push", env.cloneURL(name, env.owner.patRW), "v1.0.0")
-		env.waitRejected(name, "1.0.0", "withdrawn")
-		res, err := http.Get(env.srv.URL + "/api/v1/resolve?ref=" + env.owner.handle + "/" + name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		_ = res.Body.Close()
-		if res.StatusCode == 200 {
-			t.Fatalf("a rejected version must not resolve")
+		for _, path := range []string{
+			"/api/v1/agents/" + env.owner.handle + "/" + name + "/versions/1.0.0",
+			"/api/v1/resolve?ref=" + env.owner.handle + "/" + name,
+		} {
+			res, err := http.Get(env.srv.URL + path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, _ := io.ReadAll(res.Body)
+			_ = res.Body.Close()
+			if res.StatusCode != http.StatusNotFound {
+				t.Fatalf("GET %s after a refused tag push: %d %s (want 404: no version may exist)", path, res.StatusCode, body)
+			}
 		}
 	})
 
