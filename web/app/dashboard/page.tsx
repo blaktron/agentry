@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Badge, Card, KindBadge } from "@/components/ui";
+import { Badge, Card, ModeBadges } from "@/components/ui";
 import type { ActivityPage, Agent, ReviewItem } from "@/lib/api";
 import { fmtUTC } from "@/lib/format";
 import { adminOrgs, authedGet, currentUser, reviewerOrgs } from "@/lib/session";
@@ -215,7 +215,7 @@ export default async function DashboardPage({
                   <Link href={`/${a.namespace}/${a.name}`} className="font-medium hover:underline">
                     {a.namespace}/{a.name}
                   </Link>
-                  <KindBadge kind={a.kind} />
+                  <ModeBadges modes={a.modes} />
                   {a.visibility === "private" && <Badge>private</Badge>}
                   {a.quarantineState !== "none" && <Badge tone="danger">{a.quarantineState}</Badge>}
                   <Link href={`/${a.namespace}/${a.name}/publish`} className="text-xs underline">

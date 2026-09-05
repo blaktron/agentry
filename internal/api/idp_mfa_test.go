@@ -85,7 +85,7 @@ func TestPublicPublishGateAcceptsIdPMFA(t *testing.T) {
 	env.verifyEmail(user)
 	sess := env.login(user)
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents",
-		map[string]any{"namespace": user, "name": "gated", "kind": "skill", "visibility": "public"}, nil, http.StatusCreated)
+		map[string]any{"namespace": user, "name": "gated", "modes": []string{"autonomous"}, "visibility": "public"}, nil, http.StatusCreated)
 	_, pat := env.mintPAT(sess, "pub", "agent:publish", "agent:read")
 	files := map[string]string{
 		"agent.yaml": skillYAML(user, "gated", "1.0.0"),

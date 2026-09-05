@@ -6,7 +6,6 @@ import {
   apiGetText,
   type Advisory,
   type Agent,
-  type AgentKind,
   type AgentStats,
   type AgentVersion,
   type Org,
@@ -20,7 +19,7 @@ import {
   CapabilityBadges,
   Card,
   CodeBlock,
-  KindBadge,
+  ModeBadges,
   StatTile,
   StatusBadge,
 } from "@/components/ui";
@@ -28,19 +27,19 @@ import { ReportCard } from "@/components/report";
 
 type Params = { ns: string; name: string };
 
-// §5.6 install targets. The default follows the agent kind, exactly as the
-// CLI does (cmd/agentry/caps.go defaultTarget). The page must not suggest a
-// command that differs from what `agentry install` would do on its own.
-const TARGETS = ["claude-skill", "mcp", "agents-md"] as const;
+// §5.6 install targets. With kinds gone (DEV-088) the default follows the
+// manifest's own export preference — agents-md when it lists that interface
+// first, claude-skill otherwise — exactly as the CLI does. The page must not
+// suggest a command that differs from what `agentry install` would do.
+const TARGETS = ["claude-skill", "agents-md"] as const;
 type Target = (typeof TARGETS)[number];
 
-function defaultTarget(kind: AgentKind): Target {
-  if (kind === "mcp-server") return "mcp";
-  if (kind === "prompt-agent") return "agents-md";
-  return "claude-skill";
+function defaultTarget(interfaces: string[] | undefined): Target {
+  return interfaces?.[0] === "agents-md" ? "agents-md" : "claude-skill";
 }
 
 interface AgentManifest {
+  runtime?: { interfaces?: string[] };
   tags?: string[];
   license?: string;
   dependencies?: { agents?: { ref: string; version?: string }[] };
@@ -87,7 +86,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   if (!agent) return { title: `${ns}/${name}` };
   return {
     title: `${agent.namespace}/${agent.name}`,
-    description: agent.summary || `A ${agent.kind} BriefAgent on Agentry, scanned and signed.`,
+    description: agent.summary || `A ${agent.modes.join(" and ")} BriefAgent on Agentry, scanned and signed.`,
   };
 }
 
@@ -153,8 +152,8 @@ export default async function AgentPage({
   const quarantined = agent.quarantineState !== "none";
   const target: Target = TARGETS.includes(sp.target as Target)
     ? (sp.target as Target)
-    : defaultTarget(agent.kind);
-  const isDefaultTarget = target === defaultTarget(agent.kind);
+    : defaultTarget(manifest?.runtime?.interfaces);
+  const isDefaultTarget = target === defaultTarget(manifest?.runtime?.interfaces);
   const deps = manifest?.dependencies?.agents ?? [];
   const tags = manifest?.tags ?? [];
 
@@ -259,7 +258,7 @@ export default async function AgentPage({
             <span style={{ color: "var(--color-muted)" }}>/</span>
             {agent.name}
           </h1>
-          <KindBadge kind={agent.kind} />
+          <ModeBadges modes={agent.modes} />
           {latest && <Badge tone="neutral">v{latest.version}</Badge>}
           {latest?.channel === "beta" && <Badge tone="warn">beta channel</Badge>}
           {org?.verifiedDomain && (
@@ -426,8 +425,8 @@ export default async function AgentPage({
               </div>
               <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>
                 {isDefaultTarget
-                  ? `${target} is the default target for a ${agent.kind}, so the flag is not needed.`
-                  : `${target} is not the default for a ${agent.kind}; the flag is required.`}
+                  ? `${target} is this agent's default target, so the flag is not needed.`
+                  : `${target} is not this agent's default; the flag is required.`}
               </p>
             </Card>
           ) : (

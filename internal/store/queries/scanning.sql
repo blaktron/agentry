@@ -150,7 +150,7 @@ WHERE adv.id = $1 AND a.visibility = 'public' AND adv.published_at IS NOT NULL;
 -- it goes, so an offset-paged sweep skips one unscanned version per row it
 -- acted on. The cursor is the primary key, which no sweep action changes.
 -- name: ListPublishedVersionsForRescan :many
-SELECT av.id, av.agent_id, av.archive_digest, av.archive_key, av.archive_size, av.manifest, av.capabilities, a.kind, a.visibility
+SELECT av.id, av.agent_id, av.archive_digest, av.archive_key, av.archive_size, av.manifest, av.capabilities, a.modes, a.visibility
 FROM agent_versions av JOIN agents a ON a.id = av.agent_id
 WHERE av.status = 'published'
   AND (sqlc.narg('after')::uuid IS NULL OR av.id < sqlc.narg('after'))

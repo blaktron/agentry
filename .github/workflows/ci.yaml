@@ -190,4 +190,10 @@ jobs:
           # (agentry#138).
           base=$(git merge-base "origin/${{ github.base_ref }}" "${{ github.event.pull_request.head.sha }}" 2>/dev/null || echo "origin/${{ github.base_ref }}")
           git show "$base:schemas/openapi.yaml" > /tmp/base-openapi.yaml || cp schemas/openapi.yaml /tmp/base-openapi.yaml
-          go run github.com/oasdiff/oasdiff@latest breaking /tmp/base-openapi.yaml schemas/openapi.yaml --fail-on ERR
+          # A committed schemas/oasdiff-allow.txt names deliberate breaking
+          # changes to ignore — the one-time DEV-088 exception. The file is
+          # deleted by the PR after the one that lands them, so the gate is
+          # fully additive again; its presence on main is itself a finding.
+          ignore=""
+          if [ -f schemas/oasdiff-allow.txt ]; then ignore="--err-ignore schemas/oasdiff-allow.txt"; echo "::warning::oasdiff allow file present (DEV-088 one-time exception)"; fi
+          go run github.com/oasdiff/oasdiff@latest breaking /tmp/base-openapi.yaml schemas/openapi.yaml --fail-on ERR $ignore

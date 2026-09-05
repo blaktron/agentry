@@ -113,7 +113,7 @@ func TestPlatformActionRequiresStaff(t *testing.T) {
 	sess := env.login(owner)
 	// Create a public agent to act on.
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents",
-		map[string]any{"namespace": owner, "name": "pa-agent", "kind": "skill", "visibility": "public"}, nil, http.StatusCreated)
+		map[string]any{"namespace": owner, "name": "pa-agent", "modes": []string{"autonomous"}, "visibility": "public"}, nil, http.StatusCreated)
 
 	// Non-staff cannot quarantine.
 	res := env.do(sess, http.MethodPost, "/api/v1/platform/agents/"+owner+"/pa-agent/quarantine",

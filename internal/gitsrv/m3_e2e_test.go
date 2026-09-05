@@ -187,26 +187,25 @@ func (e *gitEnv) installRoundTrip(agent, rangeStr, wantVersion string, wantFiles
 
 // TestM3PublishInstallRoundTrip covers the manifest shapes that publish ×
 // 2 sources: the two v1 kinds still accepted, and a v2 manifest (modes,
-// DEV-088) published to an agent row that still carries a v1 kind — the
-// column goes with agentry#144.
+// DEV-088).
 func TestM3PublishInstallRoundTrip(t *testing.T) {
 	env := newGitEnv(t)
 
 	kinds := []struct {
-		kind      string // fixture shape
-		seedKind  string // the agent row's kind column
+		kind      string   // fixture shape
+		seedModes []string // the agent row's modes
 		entryFile string
 	}{
-		{"skill", "skill", "SKILL.md"},
-		{"prompt-agent", "prompt-agent", "prompts/main.md"},
-		{"v2", "prompt-agent", "AGENT.md"},
+		{"skill", []string{"autonomous"}, "SKILL.md"},
+		{"prompt-agent", []string{"autonomous"}, "prompts/main.md"},
+		{"v2", []string{"autonomous", "interactive"}, "AGENT.md"},
 	}
 
 	for _, k := range kinds {
 		k := k
 		t.Run(k.kind+"/git-tag", func(t *testing.T) {
 			name := strings.ReplaceAll(k.kind, "-", "") + "gt"
-			env.seedAgentKind(name, k.seedKind, "public")
+			env.seedAgentModes(name, k.seedModes, "public")
 			work := seedWorkdir(t, kindFixture(k.kind, env.owner.handle, name, "1.0.0"))
 			mustGit(t, work, "push", env.cloneURL(name, env.owner.patRW), "main")
 			mustGit(t, work, "tag", "v1.0.0")
@@ -217,7 +216,7 @@ func TestM3PublishInstallRoundTrip(t *testing.T) {
 
 		t.Run(k.kind+"/cli-upload", func(t *testing.T) {
 			name := strings.ReplaceAll(k.kind, "-", "") + "up"
-			env.seedAgentKind(name, k.seedKind, "public")
+			env.seedAgentModes(name, k.seedModes, "public")
 			ws := t.TempDir()
 			for path, content := range kindFixture(k.kind, env.owner.handle, name, "1.0.0") {
 				full := filepath.Join(ws, path)
@@ -252,7 +251,7 @@ func TestM3WithdrawnKindIsRefused(t *testing.T) {
 
 	t.Run("git-tag", func(t *testing.T) {
 		name := "mcpservergt"
-		env.seedAgentKind(name, "skill", "public")
+		env.seedAgentModes(name, []string{"autonomous"}, "public")
 		work := seedWorkdir(t, kindFixture("mcp-server", env.owner.handle, name, "1.0.0"))
 		mustGit(t, work, "push", env.cloneURL(name, env.owner.patRW), "main")
 		mustGit(t, work, "tag", "v1.0.0")
@@ -275,7 +274,7 @@ func TestM3WithdrawnKindIsRefused(t *testing.T) {
 
 	t.Run("cli-upload", func(t *testing.T) {
 		name := "mcpserverup"
-		env.seedAgentKind(name, "skill", "public")
+		env.seedAgentModes(name, []string{"autonomous"}, "public")
 		ws := t.TempDir()
 		for path, content := range kindFixture("mcp-server", env.owner.handle, name, "1.0.0") {
 			full := filepath.Join(ws, path)

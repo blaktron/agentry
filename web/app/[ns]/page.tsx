@@ -29,7 +29,7 @@ export default async function NamespacePage({ params }: { params: Promise<Params
       ) : (
         <ul>
           {agents.map((a) => (
-            <AgentRow key={a.id} namespace={a.namespace} name={a.name} summary={a.summary} kind={a.kind} />
+            <AgentRow key={a.id} namespace={a.namespace} name={a.name} summary={a.summary} modes={a.modes} />
           ))}
         </ul>
       )}

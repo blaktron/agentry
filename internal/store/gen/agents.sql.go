@@ -56,16 +56,15 @@ func (q *Queries) CountAgentsInNamespace(ctx context.Context, namespaceID uuid.U
 }
 
 const createAgent = `-- name: CreateAgent :one
-INSERT INTO agents (id, namespace_id, name, kind, visibility, repo_id, summary, modes)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, namespace_id, name, kind, visibility, repo_id, summary, latest_published_version_id, quarantine_state, auto_publish_tags, search_tsv, created_at, updated_at, readme_text, allow_force_push, modes
+INSERT INTO agents (id, namespace_id, name, visibility, repo_id, summary, modes)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, namespace_id, name, visibility, repo_id, summary, latest_published_version_id, quarantine_state, auto_publish_tags, search_tsv, created_at, updated_at, readme_text, allow_force_push, modes
 `
 
 type CreateAgentParams struct {
 	ID          uuid.UUID `json:"id"`
 	NamespaceID uuid.UUID `json:"namespace_id"`
 	Name        string    `json:"name"`
-	Kind        string    `json:"kind"`
 	Visibility  string    `json:"visibility"`
 	RepoID      uuid.UUID `json:"repo_id"`
 	Summary     string    `json:"summary"`
@@ -77,7 +76,6 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent
 		arg.ID,
 		arg.NamespaceID,
 		arg.Name,
-		arg.Kind,
 		arg.Visibility,
 		arg.RepoID,
 		arg.Summary,
@@ -88,7 +86,6 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent
 		&i.ID,
 		&i.NamespaceID,
 		&i.Name,
-		&i.Kind,
 		&i.Visibility,
 		&i.RepoID,
 		&i.Summary,
@@ -180,7 +177,7 @@ func (q *Queries) DeleteRepoByID(ctx context.Context, id uuid.UUID) error {
 }
 
 const getAgentByID = `-- name: GetAgentByID :one
-SELECT a.id, a.namespace_id, a.name, a.kind, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, h.handle AS namespace, h.kind AS namespace_kind
+SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, h.handle AS namespace, h.kind AS namespace_kind
 FROM agents a JOIN handles h ON h.id = a.namespace_id
 WHERE a.id = $1
 `
@@ -189,7 +186,6 @@ type GetAgentByIDRow struct {
 	ID                       uuid.UUID   `json:"id"`
 	NamespaceID              uuid.UUID   `json:"namespace_id"`
 	Name                     string      `json:"name"`
-	Kind                     string      `json:"kind"`
 	Visibility               string      `json:"visibility"`
 	RepoID                   uuid.UUID   `json:"repo_id"`
 	Summary                  string      `json:"summary"`
@@ -213,7 +209,6 @@ func (q *Queries) GetAgentByID(ctx context.Context, id uuid.UUID) (GetAgentByIDR
 		&i.ID,
 		&i.NamespaceID,
 		&i.Name,
-		&i.Kind,
 		&i.Visibility,
 		&i.RepoID,
 		&i.Summary,
@@ -233,7 +228,7 @@ func (q *Queries) GetAgentByID(ctx context.Context, id uuid.UUID) (GetAgentByIDR
 }
 
 const getAgentByPath = `-- name: GetAgentByPath :one
-SELECT a.id, a.namespace_id, a.name, a.kind, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, h.handle AS namespace, h.kind AS namespace_kind, r.default_branch, r.size_bytes
+SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, h.handle AS namespace, h.kind AS namespace_kind, r.default_branch, r.size_bytes
 FROM agents a
 JOIN handles h ON h.id = a.namespace_id
 JOIN repos r ON r.id = a.repo_id
@@ -249,7 +244,6 @@ type GetAgentByPathRow struct {
 	ID                       uuid.UUID   `json:"id"`
 	NamespaceID              uuid.UUID   `json:"namespace_id"`
 	Name                     string      `json:"name"`
-	Kind                     string      `json:"kind"`
 	Visibility               string      `json:"visibility"`
 	RepoID                   uuid.UUID   `json:"repo_id"`
 	Summary                  string      `json:"summary"`
@@ -275,7 +269,6 @@ func (q *Queries) GetAgentByPath(ctx context.Context, arg GetAgentByPathParams) 
 		&i.ID,
 		&i.NamespaceID,
 		&i.Name,
-		&i.Kind,
 		&i.Visibility,
 		&i.RepoID,
 		&i.Summary,
@@ -399,7 +392,7 @@ func (q *Queries) ListAgentTeamGrantsForUser(ctx context.Context, arg ListAgentT
 }
 
 const listAgentsByNamespace = `-- name: ListAgentsByNamespace :many
-SELECT a.id, a.namespace_id, a.name, a.kind, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, h.handle AS namespace
+SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, h.handle AS namespace
 FROM agents a JOIN handles h ON h.id = a.namespace_id
 WHERE h.handle = $1
   AND (a.visibility = 'public' OR $2::boolean)
@@ -415,7 +408,6 @@ type ListAgentsByNamespaceRow struct {
 	ID                       uuid.UUID   `json:"id"`
 	NamespaceID              uuid.UUID   `json:"namespace_id"`
 	Name                     string      `json:"name"`
-	Kind                     string      `json:"kind"`
 	Visibility               string      `json:"visibility"`
 	RepoID                   uuid.UUID   `json:"repo_id"`
 	Summary                  string      `json:"summary"`
@@ -444,7 +436,6 @@ func (q *Queries) ListAgentsByNamespace(ctx context.Context, arg ListAgentsByNam
 			&i.ID,
 			&i.NamespaceID,
 			&i.Name,
-			&i.Kind,
 			&i.Visibility,
 			&i.RepoID,
 			&i.Summary,
@@ -470,7 +461,7 @@ func (q *Queries) ListAgentsByNamespace(ctx context.Context, arg ListAgentsByNam
 }
 
 const listAgentsByTag = `-- name: ListAgentsByTag :many
-SELECT a.id, a.name, a.kind, a.summary, a.quarantine_state, a.created_at,
+SELECT a.id, a.name, a.modes, a.summary, a.quarantine_state, a.created_at,
        h.handle AS namespace,
        coalesce(d.installs, 0)::bigint AS installs
 FROM agents a
@@ -500,7 +491,7 @@ type ListAgentsByTagParams struct {
 type ListAgentsByTagRow struct {
 	ID              uuid.UUID `json:"id"`
 	Name            string    `json:"name"`
-	Kind            string    `json:"kind"`
+	Modes           []string  `json:"modes"`
 	Summary         string    `json:"summary"`
 	QuarantineState string    `json:"quarantine_state"`
 	CreatedAt       time.Time `json:"created_at"`
@@ -528,7 +519,7 @@ func (q *Queries) ListAgentsByTag(ctx context.Context, arg ListAgentsByTagParams
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
-			&i.Kind,
+			&i.Modes,
 			&i.Summary,
 			&i.QuarantineState,
 			&i.CreatedAt,
@@ -546,7 +537,7 @@ func (q *Queries) ListAgentsByTag(ctx context.Context, arg ListAgentsByTagParams
 }
 
 const searchAgents = `-- name: SearchAgents :many
-SELECT a.id, a.name, a.kind, a.visibility, a.summary, a.quarantine_state,
+SELECT a.id, a.name, a.modes, a.visibility, a.summary, a.quarantine_state,
        a.created_at, h.handle AS namespace,
        coalesce(d.installs, 0)::bigint AS installs,
        ts_rank_cd(a.search_tsv, websearch_to_tsquery('english', $3::text)) AS rank,
@@ -608,30 +599,29 @@ WHERE a.visibility = 'public'
     OR h.handle = lower($3::text)::citext
     OR h.handle::text % $3::text
   )
-  AND ($4::text IS NULL OR a.kind = $4)
   -- mode= means "supports this run mode" (DEV-088): one of the array's values.
-  AND ($5::text IS NULL OR $5::text = ANY(a.modes))
+  AND ($4::text IS NULL OR $4::text = ANY(a.modes))
   -- capability= means "this agent actually asks for it", not merely "the key
   -- is present": a manifest that says ` + "`" + `network: {egress: none}` + "`" + ` serializes
   -- with the network key set, so key existence alone would match every agent
   -- ever published. A capability counts when its value is not null/none/empty
   -- and, for object-valued ones, when at least one member is not.
-  AND ($6::text IS NULL OR (
+  AND ($5::text IS NULL OR (
         lv.capabilities IS NOT NULL
-        AND jsonb_exists(lv.capabilities, $6::text)
-        AND lv.capabilities -> $6::text
+        AND jsonb_exists(lv.capabilities, $5::text)
+        AND lv.capabilities -> $5::text
             NOT IN ('"none"'::jsonb, 'null'::jsonb, '[]'::jsonb, '{}'::jsonb)
-        AND (jsonb_typeof(lv.capabilities -> $6::text) <> 'object'
+        AND (jsonb_typeof(lv.capabilities -> $5::text) <> 'object'
              OR EXISTS (
-               SELECT 1 FROM jsonb_each(lv.capabilities -> $6::text) AS cap_member(k, v)
+               SELECT 1 FROM jsonb_each(lv.capabilities -> $5::text) AS cap_member(k, v)
                WHERE cap_member.v NOT IN ('"none"'::jsonb, 'null'::jsonb, '[]'::jsonb, '{}'::jsonb)))))
-  AND ($7::text IS NULL
-       OR lower(lv.manifest ->> 'license') = lower($7::text))
-  AND ($8::boolean = false
+  AND ($6::text IS NULL
+       OR lower(lv.manifest ->> 'license') = lower($6::text))
+  AND ($7::boolean = false
        OR (h.kind = 'org' AND o.verified_domain IS NOT NULL))
 ORDER BY
-  CASE WHEN $9::text = 'installs' THEN coalesce(d.installs, 0) END DESC NULLS LAST,
-  CASE WHEN $9::text = 'newest' THEN a.created_at END DESC NULLS LAST,
+  CASE WHEN $8::text = 'installs' THEN coalesce(d.installs, 0) END DESC NULLS LAST,
+  CASE WHEN $8::text = 'newest' THEN a.created_at END DESC NULLS LAST,
   score DESC,
   a.created_at DESC,
   a.id DESC
@@ -642,7 +632,6 @@ type SearchAgentsParams struct {
 	Limit        int32   `json:"limit"`
 	Offset       int32   `json:"offset"`
 	Query        string  `json:"query"`
-	Kind         *string `json:"kind"`
 	Mode         *string `json:"mode"`
 	Capability   *string `json:"capability"`
 	License      *string `json:"license"`
@@ -653,7 +642,7 @@ type SearchAgentsParams struct {
 type SearchAgentsRow struct {
 	ID              uuid.UUID `json:"id"`
 	Name            string    `json:"name"`
-	Kind            string    `json:"kind"`
+	Modes           []string  `json:"modes"`
 	Visibility      string    `json:"visibility"`
 	Summary         string    `json:"summary"`
 	QuarantineState string    `json:"quarantine_state"`
@@ -675,7 +664,6 @@ func (q *Queries) SearchAgents(ctx context.Context, arg SearchAgentsParams) ([]S
 		arg.Limit,
 		arg.Offset,
 		arg.Query,
-		arg.Kind,
 		arg.Mode,
 		arg.Capability,
 		arg.License,
@@ -692,7 +680,7 @@ func (q *Queries) SearchAgents(ctx context.Context, arg SearchAgentsParams) ([]S
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
-			&i.Kind,
+			&i.Modes,
 			&i.Visibility,
 			&i.Summary,
 			&i.QuarantineState,
@@ -702,39 +690,6 @@ func (q *Queries) SearchAgents(ctx context.Context, arg SearchAgentsParams) ([]S
 			&i.Rank,
 			&i.Score,
 		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const searchFacetKinds = `-- name: SearchFacetKinds :many
-SELECT a.kind, count(*)::bigint AS n
-FROM agents a
-WHERE a.visibility = 'public' AND a.quarantine_state <> 'blocked'
-  AND ($1::text = '' OR a.search_tsv @@ websearch_to_tsquery('english', $1::text))
-GROUP BY a.kind ORDER BY a.kind
-`
-
-type SearchFacetKindsRow struct {
-	Kind string `json:"kind"`
-	N    int64  `json:"n"`
-}
-
-func (q *Queries) SearchFacetKinds(ctx context.Context, query string) ([]SearchFacetKindsRow, error) {
-	rows, err := q.db.Query(ctx, searchFacetKinds, query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []SearchFacetKindsRow
-	for rows.Next() {
-		var i SearchFacetKindsRow
-		if err := rows.Scan(&i.Kind, &i.N); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

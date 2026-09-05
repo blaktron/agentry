@@ -143,7 +143,7 @@ func (g *generator) seedAgents(ctx context.Context, st *store.Store, owners []ow
 			}
 			agent, err := q.CreateAgent(ctx, storegen.CreateAgentParams{
 				ID: uuid.Must(uuid.NewV7()), NamespaceID: own.handleID,
-				Name: name, Kind: kind, Visibility: "public",
+				Name: name, Visibility: "public",
 				RepoID: repo.ID, Summary: g.summary(),
 				Modes: []string{"autonomous"},
 			})

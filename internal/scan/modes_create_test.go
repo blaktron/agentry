@@ -1,6 +1,6 @@
-// Agent creation under DEV-088: the withdrawn kind is refused, run modes
-// are derived from a v1 kind when none are given, and the mode facet
-// counts what was created. DB-backed, like the rest of this package.
+// Agent creation under DEV-088: run modes default to autonomous, explicit
+// ones are validated and deduplicated, and the mode facet counts what was
+// created. (The withdrawn kind is the manifest validator's business.) DB-backed, like the rest of this package.
 package scan_test
 
 import (
@@ -32,18 +32,9 @@ func TestCreateAgentModes(t *testing.T) {
 	p, ns := e.ownerPrincipal(ctx)
 	ev := audit.Event{Actor: e.owner, ActorKind: audit.ActorUser}
 
-	t.Run("withdrawn kind refused", func(t *testing.T) {
-		_, err := e.reg.CreateAgent(ctx, p, registry.CreateAgentInput{
-			Namespace: ns, Name: "withdrawn-mcp", Kind: "mcp-server", Visibility: "private",
-		}, ev)
-		if err == nil || !strings.Contains(err.Error(), "withdrawn") {
-			t.Fatalf("kind mcp-server must be refused as withdrawn, got %v", err)
-		}
-	})
-
-	t.Run("v1 kind derives autonomous", func(t *testing.T) {
+	t.Run("defaults to autonomous when none given", func(t *testing.T) {
 		a, err := e.reg.CreateAgent(ctx, p, registry.CreateAgentInput{
-			Namespace: ns, Name: "modes-derived", Kind: "skill", Visibility: "public",
+			Namespace: ns, Name: "modes-derived", Visibility: "public",
 		}, ev)
 		if err != nil {
 			t.Fatal(err)
@@ -55,7 +46,7 @@ func TestCreateAgentModes(t *testing.T) {
 
 	t.Run("explicit modes kept, deduplicated", func(t *testing.T) {
 		a, err := e.reg.CreateAgent(ctx, p, registry.CreateAgentInput{
-			Namespace: ns, Name: "modes-both", Kind: "prompt-agent", Visibility: "public",
+			Namespace: ns, Name: "modes-both", Visibility: "public",
 			Modes: []string{"interactive", "autonomous", "interactive"},
 		}, ev)
 		if err != nil {
@@ -68,7 +59,7 @@ func TestCreateAgentModes(t *testing.T) {
 
 	t.Run("unknown mode refused", func(t *testing.T) {
 		_, err := e.reg.CreateAgent(ctx, p, registry.CreateAgentInput{
-			Namespace: ns, Name: "modes-bad", Kind: "skill", Visibility: "private",
+			Namespace: ns, Name: "modes-bad", Visibility: "private",
 			Modes: []string{"batch"},
 		}, ev)
 		if err == nil || !strings.Contains(err.Error(), "unknown mode") {

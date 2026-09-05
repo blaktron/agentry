@@ -20,7 +20,7 @@ func TestAdvisoryFeedAndPermalink(t *testing.T) {
 	sess := env.login(user)
 	for _, spec := range []struct{ name, vis string }{{"pub-a", "public"}, {"pub-b", "public"}, {"priv", "private"}} {
 		env.doJSON(sess, http.MethodPost, "/api/v1/agents",
-			map[string]any{"namespace": user, "name": spec.name, "kind": "skill", "visibility": spec.vis}, nil, http.StatusCreated)
+			map[string]any{"namespace": user, "name": spec.name, "modes": []string{"autonomous"}, "visibility": spec.vis}, nil, http.StatusCreated)
 	}
 	ids := map[string]uuid.UUID{}
 	for i, name := range []string{"pub-a", "pub-b", "priv"} {

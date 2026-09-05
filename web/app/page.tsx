@@ -304,7 +304,7 @@ export default async function HomePage() {
                     ? `${hit.summary} · ${fmtCount(hit.installs30d)} installs in 30 days`
                     : hit.summary
                 }
-                kind={hit.kind}
+                modes={hit.modes}
               />
             ))}
           </ul>

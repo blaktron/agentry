@@ -22,6 +22,14 @@ info:
     (plus `Retry-After` on 429).
 
 
+    Compatibility: 0.3.0 broke the additive-only rule once, deliberately
+    (DEV-088, 2026-09-05): the `kind` classification (skill | prompt-agent |
+    mcp-server) was replaced by `modes`, the set of run modes a release
+    supports (autonomous | interactive); `?kind=` became `?mode=` and the
+    `kind` facet became `mode`. There were no external consumers before the
+    beta. The rule is additive again from 0.3.0.
+
+
     Idempotency (§9.1): mutating POSTs accept an `Idempotency-Key` request
     header (≤255 chars). The first request under a key executes and its
     response is recorded. A retry with the same key, user, endpoint, and
@@ -31,7 +39,7 @@ info:
     `POST /orgs/{org}/webhooks`, `POST /orgs/{org}/webhooks/{id}/ping`,
     `POST /platform/ruleset-releases`,
     `POST /agents/{ns}/{name}/versions`.
-  version: 0.2.0
+  version: 0.3.0
   license:
     name: MIT
     url: https://github.com/blaktron/agentry/blob/main/LICENSE
@@ -1129,6 +1137,12 @@ paths:
                     Allow non-fast-forward pushes to the default branch
                     (§6.3). Off by default; maintain only.
                   type: boolean
+                modes:
+                  description: >
+                    Replace the run modes the agent advertises (maintain
+                    only). Published versions keep the modes their own
+                    manifests declare.
+                  $ref: "#/components/schemas/AgentModes"
       responses:
         "200":
           description: Updated agent.
@@ -2681,10 +2695,11 @@ paths:
           schema:
             type: string
           description: Free-text query; empty lists by popularity.
-        - name: kind
+        - name: mode
           in: query
+          description: Only agents that support this run mode.
           schema:
-            $ref: "#/components/schemas/AgentKind"
+            $ref: "#/components/schemas/AgentMode"
         - name: capability
           in: query
           description: >
@@ -3452,10 +3467,22 @@ components:
           type: string
           description: One authorized_keys line ("ssh-ed25519 AAAA… comment").
 
-    AgentKind:
+    AgentMode:
       type: string
-      description: Supported agent kinds (§1.4).
-      enum: [skill, prompt-agent, mcp-server]
+      description: >
+        A run mode a release supports (DEV-088). `autonomous` runs from its
+        source files, writes its output and receipts, and ends; `interactive`
+        starts from the same plan and controls but the run is a conversation
+        with the user in the CLI or the desktop. A release declares one or both.
+      enum: [autonomous, interactive]
+    AgentModes:
+      type: array
+      description: The run modes a release supports; at least one.
+      minItems: 1
+      maxItems: 2
+      uniqueItems: true
+      items:
+        $ref: "#/components/schemas/AgentMode"
 
     AgentRole:
       type: string
@@ -3464,7 +3491,7 @@ components:
 
     CreateAgentRequest:
       type: object
-      required: [namespace, name, kind]
+      required: [namespace, name, modes]
       properties:
         namespace:
           type: string
@@ -3472,8 +3499,8 @@ components:
         name:
           type: string
           pattern: "^[a-z0-9](?:[a-z0-9-]{0,63}[a-z0-9])?$"
-        kind:
-          $ref: "#/components/schemas/AgentKind"
+        modes:
+          $ref: "#/components/schemas/AgentModes"
         visibility:
           type: string
           enum: [public, private]
@@ -3484,7 +3511,7 @@ components:
 
     Agent:
       type: object
-      required: [id, namespace, name, kind, visibility, summary, defaultBranch, gitHttpUrl, quarantineState, createdAt]
+      required: [id, namespace, name, modes, visibility, summary, defaultBranch, gitHttpUrl, quarantineState, createdAt]
       properties:
         id:
           type: string
@@ -3493,8 +3520,8 @@ components:
           type: string
         name:
           type: string
-        kind:
-          $ref: "#/components/schemas/AgentKind"
+        modes:
+          $ref: "#/components/schemas/AgentModes"
         visibility:
           type: string
           enum: [public, private]
@@ -3562,6 +3589,13 @@ components:
         source:
           type: string
           enum: [git-tag, cli-upload]
+        manifestSchemaVersion:
+          type: integer
+          description: >
+            Schema major of the manifest snapshot this version carries: 1
+            (kind-classified, read through the v1 mapping) or 2 (modes).
+            Clients that show a version's manifest read it accordingly.
+          enum: [1, 2]
         commitSha:
           type: string
         archiveDigest:
@@ -3834,14 +3868,14 @@ components:
 
     SearchHit:
       type: object
-      required: [namespace, name, kind, summary]
+      required: [namespace, name, modes, summary]
       properties:
         namespace:
           type: string
         name:
           type: string
-        kind:
-          $ref: "#/components/schemas/AgentKind"
+        modes:
+          $ref: "#/components/schemas/AgentModes"
         summary:
           type: string
         installs30d:

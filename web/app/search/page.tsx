@@ -1,12 +1,12 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { apiGet, type AgentKind, type SearchResults } from "@/lib/api";
+import { apiGet, type AgentMode, type SearchResults } from "@/lib/api";
 import { AgentRow, Card } from "@/components/ui";
 import { BrowsePane } from "@/components/browse-pane";
 
 export const metadata: Metadata = { title: "Browse BriefAgents" };
 
-const KINDS: AgentKind[] = ["skill", "prompt-agent", "mcp-server"];
+const MODES: AgentMode[] = ["autonomous", "interactive"];
 
 // §5.4 capability groups, which is what `capability=` filters on. A
 // capability declared as `none`/null/empty does not match (DEV-021): the
@@ -30,7 +30,7 @@ export default async function SearchPage({
 }: {
   searchParams: Promise<{
     q?: string;
-    kind?: string;
+    mode?: string;
     capability?: string;
     license?: string;
     verified?: string;
@@ -44,7 +44,7 @@ export default async function SearchPage({
   const selMatch = /^([a-z0-9][a-z0-9-]*)\/([a-z0-9][a-z0-9-]*)$/.exec((sp.selected ?? "").trim());
   const selected = selMatch ? { namespace: selMatch[1], name: selMatch[2] } : null;
   const q = (sp.q ?? "").trim();
-  const kind = KINDS.includes(sp.kind as AgentKind) ? (sp.kind as AgentKind) : undefined;
+  const mode = MODES.includes(sp.mode as AgentMode) ? (sp.mode as AgentMode) : undefined;
   const capability = CAPABILITIES.includes(sp.capability ?? "") ? sp.capability : undefined;
   const license = (sp.license ?? "").trim().slice(0, 64);
   const verified = sp.verified === "1";
@@ -52,7 +52,7 @@ export default async function SearchPage({
 
   const params = new URLSearchParams();
   if (q) params.set("q", q);
-  if (kind) params.set("kind", kind);
+  if (mode) params.set("mode", mode);
   if (capability) params.set("capability", capability);
   if (license) params.set("license", license);
   if (verified) params.set("verified", "true");
@@ -68,18 +68,18 @@ export default async function SearchPage({
   }
 
   const results = data?.results ?? [];
-  const kindFacets = data?.facets?.kind ?? {};
+  const modeFacets = data?.facets?.mode ?? {};
   // License facet counts come back from the same query; they are the honest
   // way to offer the filter, since the set of licences in a registry is
   // whatever has actually been published to it.
   const licenseFacets = Object.entries(data?.facets?.license ?? {}).sort((a, b) => b[1] - a[1]);
-  const filtered = Boolean(q || kind || capability || license || verified);
+  const filtered = Boolean(q || mode || capability || license || verified);
 
   // Row links point back at this page with the same filters plus
   // `selected`; the close link is the same URL without it.
   const listParams = new URLSearchParams();
   if (q) listParams.set("q", q);
-  if (kind) listParams.set("kind", kind);
+  if (mode) listParams.set("mode", mode);
   if (capability) listParams.set("capability", capability);
   if (license) listParams.set("license", license);
   if (verified) listParams.set("verified", "1");
@@ -122,13 +122,13 @@ export default async function SearchPage({
         </div>
         <div className="flex flex-wrap items-center gap-4 text-sm" style={{ color: "var(--color-muted)" }}>
           <label>
-            <span className="mr-2">Kind</span>
-            <select name="kind" defaultValue={kind ?? ""} className="rounded-md border px-2 py-1.5 text-sm" style={inputStyle()}>
+            <span className="mr-2">Mode</span>
+            <select name="mode" defaultValue={mode ?? ""} className="rounded-md border px-2 py-1.5 text-sm" style={inputStyle()}>
               <option value="">any</option>
-              {KINDS.map((k) => (
+              {MODES.map((k) => (
                 <option key={k} value={k}>
                   {k}
-                  {kindFacets[k] !== undefined ? ` (${kindFacets[k]})` : ""}
+                  {modeFacets[k] !== undefined ? ` (${modeFacets[k]})` : ""}
                 </option>
               ))}
             </select>
@@ -227,7 +227,7 @@ export default async function SearchPage({
                   namespace={hit.namespace}
                   name={hit.name}
                   summary={hit.summary}
-                  kind={hit.kind}
+                  modes={hit.modes}
                   detailHref={hrefFor(`${hit.namespace}/${hit.name}`)}
                   selected={selected?.namespace === hit.namespace && selected?.name === hit.name}
                 />
