@@ -33,7 +33,7 @@ func TestAcceptedRiskOnOrgAgentReservedToOrgReviewers(t *testing.T) {
 	orgH := "arorg" + env.sfx
 	env.createOrg(owner, orgH)
 	env.doJSON(owner, http.MethodPost, "/api/v1/agents",
-		map[string]any{"namespace": orgH, "name": "risky", "kind": "skill", "visibility": "public"}, nil, http.StatusCreated)
+		map[string]any{"namespace": orgH, "name": "risky", "modes": []string{"autonomous"}, "visibility": "public"}, nil, http.StatusCreated)
 	_, pat := env.mintPAT(owner, "ar-pub", "agent:publish", "agent:read", "repo:read")
 
 	// One high finding (S4 instruction override) routes the version to the

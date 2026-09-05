@@ -1051,7 +1051,7 @@ func (q *Queries) ListOpenFindings(ctx context.Context, scanRunID uuid.UUID) ([]
 }
 
 const listPublishedVersionsForRescan = `-- name: ListPublishedVersionsForRescan :many
-SELECT av.id, av.agent_id, av.archive_digest, av.archive_key, av.archive_size, av.manifest, av.capabilities, a.kind, a.visibility
+SELECT av.id, av.agent_id, av.archive_digest, av.archive_key, av.archive_size, av.manifest, av.capabilities, a.modes, a.visibility
 FROM agent_versions av JOIN agents a ON a.id = av.agent_id
 WHERE av.status = 'published'
   AND ($2::uuid IS NULL OR av.id < $2)
@@ -1072,7 +1072,7 @@ type ListPublishedVersionsForRescanRow struct {
 	ArchiveSize   *int64    `json:"archive_size"`
 	Manifest      []byte    `json:"manifest"`
 	Capabilities  []byte    `json:"capabilities"`
-	Kind          string    `json:"kind"`
+	Modes         []string  `json:"modes"`
 	Visibility    string    `json:"visibility"`
 }
 
@@ -1096,7 +1096,7 @@ func (q *Queries) ListPublishedVersionsForRescan(ctx context.Context, arg ListPu
 			&i.ArchiveSize,
 			&i.Manifest,
 			&i.Capabilities,
-			&i.Kind,
+			&i.Modes,
 			&i.Visibility,
 		); err != nil {
 			return nil, err

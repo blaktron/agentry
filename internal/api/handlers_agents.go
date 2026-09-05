@@ -32,7 +32,7 @@ func (s *Server) agentToAPI(a registry.Agent, maintain bool) Agent {
 		Id:              a.ID,
 		Namespace:       a.Namespace,
 		Name:            a.Name,
-		Kind:            AgentKind(a.Kind),
+		Modes:           apiModes(a.Modes),
 		Visibility:      AgentVisibility(a.Visibility),
 		Summary:         a.Summary,
 		DefaultBranch:   a.DefaultBranch,
@@ -110,12 +110,16 @@ func (s *Server) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		summary = strings.TrimSpace(*req.Summary)
 	}
 	p := principalFrom(r.Context())
+	modes := make([]string, 0, len(req.Modes))
+	for _, m := range req.Modes {
+		modes = append(modes, string(m))
+	}
 	a, err := s.reg.CreateAgent(r.Context(), p, registry.CreateAgentInput{
 		Namespace:  req.Namespace,
 		Name:       req.Name,
-		Kind:       string(req.Kind),
 		Visibility: visibility,
 		Summary:    summary,
+		Modes:      modes,
 	}, auditEvent(r, audit.ActionAgentCreate))
 	if err != nil {
 		switch {
@@ -138,7 +142,7 @@ func (s *Server) CreateAgent(w http.ResponseWriter, r *http.Request) {
 	// §9.3 catalog (agentry#56); org namespaces only — personal namespaces
 	// have no webhook endpoints.
 	s.emitAgentEvent(r.Context(), a.ID, webhook.EventAgentCreated, map[string]any{
-		"namespace": a.Namespace, "name": a.Name, "kind": a.Kind, "visibility": a.Visibility,
+		"namespace": a.Namespace, "name": a.Name, "modes": a.Modes, "visibility": a.Visibility,
 	})
 	writeJSON(w, http.StatusCreated, s.agentToAPI(a, true))
 }
@@ -178,7 +182,7 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, params ListA
 	for _, row := range rows {
 		out = append(out, Agent{
 			Id: row.ID, Namespace: row.Namespace, Name: row.Name,
-			Kind: AgentKind(row.Kind), Visibility: AgentVisibility(row.Visibility),
+			Modes: apiModes(row.Modes), Visibility: AgentVisibility(row.Visibility),
 			Summary: row.Summary, DefaultBranch: "main",
 			GitHttpUrl:      base + "/" + row.Namespace + "/" + row.Name + ".git",
 			QuarantineState: AgentQuarantineState(row.QuarantineState),
@@ -467,4 +471,13 @@ func (s *Server) RemoveAgentTeamGrant(w http.ResponseWriter, r *http.Request, ns
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// apiModes converts a row's modes to the contract's enum values.
+func apiModes(modes []string) []AgentMode {
+	out := make([]AgentMode, 0, len(modes))
+	for _, m := range modes {
+		out = append(out, AgentMode(m))
+	}
+	return out
 }

@@ -9,7 +9,7 @@
 import Link from "next/link";
 import { apiGet, type Agent, type AgentStats, type AgentVersion, type ScanReport } from "@/lib/api";
 import { fmtCount, fmtUTCDate } from "@/lib/format";
-import { Badge, CapabilityBadges, Card, CodeBlock, KindBadge, SeverityBadge, StatTile } from "./ui";
+import { Badge, CapabilityBadges, Card, CodeBlock, ModeBadges, SeverityBadge, StatTile } from "./ui";
 
 const SEVERITY_ORDER = ["critical", "high", "medium", "low", "info"] as const;
 
@@ -82,7 +82,7 @@ export async function BrowsePane({
             {agent.name}
           </h2>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <KindBadge kind={agent.kind} />
+            <ModeBadges modes={agent.modes} />
             {latest ? <Badge>v{latest.version}</Badge> : <Badge tone="warn">no published version</Badge>}
             {agent.quarantineState !== "none" && <Badge tone="danger">{agent.quarantineState}</Badge>}
           </div>

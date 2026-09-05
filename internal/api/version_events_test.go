@@ -17,7 +17,7 @@ func TestVersionEventsStream(t *testing.T) {
 	env.verifyEmail(user)
 	sess := env.login(user)
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents",
-		map[string]any{"namespace": user, "name": "streamed", "kind": "skill", "visibility": "public"}, nil, http.StatusCreated)
+		map[string]any{"namespace": user, "name": "streamed", "modes": []string{"autonomous"}, "visibility": "public"}, nil, http.StatusCreated)
 	_, pat := env.mintPAT(sess, "pub", "agent:publish", "agent:read")
 	files := map[string]string{
 		"agent.yaml": skillYAML(user, "streamed", "1.0.0"),

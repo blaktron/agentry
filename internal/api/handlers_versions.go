@@ -39,6 +39,21 @@ func versionToAPI(v registry.Version) AgentVersion {
 	if v.StatusReason != nil {
 		out.StatusReason = v.StatusReason
 	}
+	// Which manifest schema the snapshot follows (DEV-088): clients read a
+	// v1 snapshot through the kind mapping and a v2 one by its modes.
+	var snap struct {
+		SchemaVersion string `json:"schemaVersion"`
+	}
+	if json.Unmarshal(v.Manifest, &snap) == nil {
+		switch strings.SplitN(snap.SchemaVersion, ".", 2)[0] {
+		case "1":
+			major := N1
+			out.ManifestSchemaVersion = &major
+		case "2":
+			major := N2
+			out.ManifestSchemaVersion = &major
+		}
+	}
 	if v.CommitSha != "" {
 		out.CommitSha = &v.CommitSha
 	}

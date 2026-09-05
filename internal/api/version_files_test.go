@@ -21,7 +21,7 @@ func TestVersionFilesBrowsing(t *testing.T) {
 		`UPDATE users SET created_at = now() - interval '30 days' WHERE id = (SELECT id FROM handles WHERE handle = $1)`, author)
 
 	env.doJSON(authorSess, http.MethodPost, "/api/v1/agents",
-		map[string]any{"namespace": author, "name": "browsable", "kind": "skill", "visibility": "public"}, nil, http.StatusCreated)
+		map[string]any{"namespace": author, "name": "browsable", "modes": []string{"autonomous"}, "visibility": "public"}, nil, http.StatusCreated)
 	_, pat := env.mintPAT(authorSess, "pub", "agent:publish", "agent:read", "repo:read")
 
 	files := map[string]string{

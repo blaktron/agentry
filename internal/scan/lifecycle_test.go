@@ -790,7 +790,7 @@ func (e *pipeEnv) trySubmitOrg(org testOrg, name, visibility string, files map[s
 	ctx := context.Background()
 	p := e.orgPrincipal(org)
 	a, err := e.reg.CreateAgent(ctx, p, registry.CreateAgentInput{
-		Namespace: org.handle, Name: name, Kind: "skill", Visibility: visibility,
+		Namespace: org.handle, Name: name, Modes: []string{"autonomous"}, Visibility: visibility,
 	}, audit.Event{Actor: e.owner, ActorKind: audit.ActorUser})
 	if err != nil {
 		e.t.Fatalf("create org agent %s: %v", name, err)
@@ -814,7 +814,7 @@ func (e *pipeEnv) publishOrg(org testOrg, name, visibility string, files map[str
 	ctx := context.Background()
 	p := e.orgPrincipal(org)
 	a, err := e.reg.CreateAgent(ctx, p, registry.CreateAgentInput{
-		Namespace: org.handle, Name: name, Kind: "skill", Visibility: visibility,
+		Namespace: org.handle, Name: name, Modes: []string{"autonomous"}, Visibility: visibility,
 	}, audit.Event{Actor: e.owner, ActorKind: audit.ActorUser})
 	if err != nil {
 		e.t.Fatal(err)
@@ -842,7 +842,7 @@ func (e *pipeEnv) trySubmitSource(name, visibility string, files map[string]stri
 		OrgRoles: map[uuid.UUID]auth.OrgRole{},
 	}
 	a, err := e.reg.CreateAgent(ctx, p, registry.CreateAgentInput{
-		Namespace: u.Handle, Name: name, Kind: "skill", Visibility: visibility,
+		Namespace: u.Handle, Name: name, Modes: []string{"autonomous"}, Visibility: visibility,
 	}, audit.Event{Actor: e.owner, ActorKind: audit.ActorUser})
 	if err != nil {
 		e.t.Fatalf("create agent %s: %v", name, err)

@@ -45,9 +45,9 @@ func (s *Server) SearchAgents(w http.ResponseWriter, r *http.Request, params Sea
 	qp := storegen.SearchAgentsParams{
 		Query: query, Limit: int32(limit), Offset: int32(offset), Sort: sort,
 	}
-	if params.Kind != nil {
-		k := string(*params.Kind)
-		qp.Kind = &k
+	if params.Mode != nil {
+		m := string(*params.Mode)
+		qp.Mode = &m
 	}
 	if params.Capability != nil {
 		if c := strings.TrimSpace(*params.Capability); c != "" {
@@ -73,7 +73,7 @@ func (s *Server) SearchAgents(w http.ResponseWriter, r *http.Request, params Sea
 		installs := int(row.Installs)
 		qs := SearchHitQuarantineState(row.QuarantineState)
 		hits = append(hits, SearchHit{
-			Namespace: row.Namespace, Name: row.Name, Kind: AgentKind(row.Kind),
+			Namespace: row.Namespace, Name: row.Name, Modes: apiModes(row.Modes),
 			Summary: row.Summary, Installs30d: &installs, QuarantineState: &qs,
 		})
 	}
@@ -82,15 +82,7 @@ func (s *Server) SearchAgents(w http.ResponseWriter, r *http.Request, params Sea
 	// can show "12 MIT, 3 Apache-2.0" alongside an active license filter
 	// rather than only the count of what is already selected.
 	facets := map[string]map[string]int{}
-	if frows, err := s.q().SearchFacetKinds(r.Context(), query); err == nil {
-		kinds := map[string]int{}
-		for _, f := range frows {
-			kinds[f.Kind] = int(f.N)
-		}
-		facets["kind"] = kinds
-	}
-	// The run-mode facet (DEV-088) rides beside kind until agentry#145
-	// retires kind from the contract; the facets map is open-keyed.
+	// The run-mode facet (DEV-088) replaced the kind facet in 0.3.0.
 	if mrows, err := s.q().SearchFacetModes(r.Context(), query); err == nil && len(mrows) > 0 {
 		modes := map[string]int{}
 		for _, f := range mrows {

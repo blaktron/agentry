@@ -50,15 +50,18 @@ export default async function NewAgentPage({
             />
           </label>
           <fieldset>
-            <legend className="mb-1">Kind</legend>
+            <legend className="mb-1">Run modes</legend>
             <div className="flex gap-4">
-              {(["skill", "prompt-agent", "mcp-server"] as const).map((k) => (
-                <label key={k} className="flex items-center gap-1">
-                  <input type="radio" name="kind" value={k} defaultChecked={k === "skill"} required />
-                  {k}
+              {(["autonomous", "interactive"] as const).map((m) => (
+                <label key={m} className="flex items-center gap-1">
+                  <input type="checkbox" name="modes" value={m} defaultChecked={m === "autonomous"} />
+                  {m}
                 </label>
               ))}
             </div>
+            <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>
+              Autonomous runs from its files and ends; interactive is a conversation with the same controls. Pick one or both.
+            </p>
           </fieldset>
           <fieldset>
             <legend className="mb-1">Visibility</legend>

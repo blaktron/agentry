@@ -191,16 +191,12 @@ func (s *Service) EffectiveRole(ctx context.Context, p *auth.Principal, a Agent)
 
 // CreateAgentInput is the validated input for CreateAgent.
 type CreateAgentInput struct {
-	Namespace string
-	Name      string
-	// Kind is the v1 classification the API still speaks (agentry#145
-	// retires it). skill and prompt-agent are accepted; mcp-server is
-	// withdrawn (DEV-088).
-	Kind       string
+	Namespace  string
+	Name       string
 	Visibility string
 	Summary    string
-	// Modes are the run modes the agent supports; empty derives
-	// [autonomous] from Kind, which is what every v1 kind maps to.
+	// Modes are the run modes the agent supports (DEV-088); empty means
+	// [autonomous], the mode every v1 package maps to.
 	Modes []string
 }
 
@@ -239,13 +235,6 @@ func (s *Service) CreateAgent(ctx context.Context, p *auth.Principal, in CreateA
 	}
 	if !AgentNameRe.MatchString(in.Name) {
 		return Agent{}, fmt.Errorf("%w: invalid agent name", ErrDenied)
-	}
-	switch in.Kind {
-	case "skill", "prompt-agent":
-	case "mcp-server":
-		return Agent{}, fmt.Errorf("%w: kind mcp-server is withdrawn (DEV-088): MCP server codebases are no longer BriefAgents", ErrDenied)
-	default:
-		return Agent{}, fmt.Errorf("%w: invalid kind", ErrDenied)
 	}
 	modes, err := normalizeModes(in.Modes)
 	if err != nil {
@@ -305,7 +294,7 @@ func (s *Service) CreateAgent(ctx context.Context, p *auth.Principal, in CreateA
 			return err
 		}
 		if _, err := q.CreateAgent(ctx, storegen.CreateAgentParams{
-			ID: agentID, NamespaceID: ns.ID, Name: in.Name, Kind: in.Kind,
+			ID: agentID, NamespaceID: ns.ID, Name: in.Name,
 			Visibility: in.Visibility, RepoID: repoID, Summary: in.Summary, Modes: modes,
 		}); err != nil {
 			return err
@@ -316,7 +305,7 @@ func (s *Service) CreateAgent(ctx context.Context, p *auth.Principal, in CreateA
 			e.OrgID = ns.ID
 		}
 		e.TargetKind, e.TargetID = "agent", agentID
-		e.Detail = map[string]any{"path": in.Namespace + "/" + in.Name, "kind": in.Kind, "modes": modes, "visibility": in.Visibility}
+		e.Detail = map[string]any{"path": in.Namespace + "/" + in.Name, "modes": modes, "visibility": in.Visibility}
 		return s.aud.Write(ctx, q, e)
 	})
 	if err != nil {

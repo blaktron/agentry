@@ -21,7 +21,7 @@ func TestSubmissionRecordsIPClusterHash(t *testing.T) {
 	env.verifyEmail(user)
 	sess := env.login(user)
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents",
-		map[string]any{"namespace": user, "name": "clustered", "kind": "skill", "visibility": "public"}, nil, http.StatusCreated)
+		map[string]any{"namespace": user, "name": "clustered", "modes": []string{"autonomous"}, "visibility": "public"}, nil, http.StatusCreated)
 	_, pat := env.mintPAT(sess, "pub", "agent:publish", "agent:read")
 	if status, body := env.uploadVersionCLIWithHeaders(user, "clustered", pat, map[string]string{
 		"agent.yaml": skillYAML(user, "clustered", "1.0.0"),
@@ -45,7 +45,7 @@ func TestSubmissionRecordsIPClusterHash(t *testing.T) {
 	}
 	// From the server's own host nothing is recorded.
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents",
-		map[string]any{"namespace": user, "name": "local", "kind": "skill", "visibility": "public"}, nil, http.StatusCreated)
+		map[string]any{"namespace": user, "name": "local", "modes": []string{"autonomous"}, "visibility": "public"}, nil, http.StatusCreated)
 	if status, body := env.uploadVersionCLI(user, "local", pat, map[string]string{
 		"agent.yaml": skillYAML(user, "local", "1.0.0"),
 		"README.md":  "# local\n",
