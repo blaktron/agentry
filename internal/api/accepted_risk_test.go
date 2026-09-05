@@ -40,15 +40,15 @@ func TestAcceptedRiskOnOrgAgentReservedToOrgReviewers(t *testing.T) {
 	// platform queue; one low finding (an S3 HTML comment) is the thing a
 	// reviewer could accept risk on.
 	files := map[string]string{
-		"agent.yaml": `schemaVersion: "1"
+		"agent.yaml": `schemaVersion: "2"
 name: risky
 namespace: ` + orgH + `
-kind: skill
+modes: [autonomous]
 version: 1.0.0
 summary: "test"
 license: Apache-2.0
 entrypoints:
-  skill: SKILL.md
+  instruction: SKILL.md
 publish:
   include: [agent.yaml, README.md, SKILL.md, LICENSE]
 `,

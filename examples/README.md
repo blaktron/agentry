@@ -7,10 +7,10 @@ in the gate, not in the agent.
 
 | Agent | Kind | Why it is here |
 |---|---|---|
-| [incident-summarizer](incident-summarizer/) | skill | The canonical example: declares network egress to one host and one secret. |
-| [pr-reviewer](pr-reviewer/) | prompt-agent | Pure instructions, no capabilities at all — the "empty means pure text" case. |
-| [injection-defense](injection-defense/) | skill | **Discusses** prompt injection at length. It must publish cleanly; if a scanner flags it, our precision has regressed (§17.3 benign lookalike, as a shipped artifact). |
-| [changelog-writer](changelog-writer/) | skill | Reads the workspace, writes nothing, no network. Shows a read-only filesystem declaration. |
+| [incident-summarizer](incident-summarizer/) | autonomous | The canonical example: declares network egress to one host and one secret. |
+| [pr-reviewer](pr-reviewer/) | autonomous | Pure instructions, no capabilities at all — the "empty means pure text" case. |
+| [injection-defense](injection-defense/) | autonomous | **Discusses** prompt injection at length. It must publish cleanly; if a scanner flags it, our precision has regressed (§17.3 benign lookalike, as a shipped artifact). |
+| [changelog-writer](changelog-writer/) | autonomous | Reads the workspace, writes nothing, no network. Shows a read-only filesystem declaration. |
 
 ## Publishing them
 
