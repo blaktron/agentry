@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { apiGet, type AgentMode, type SearchResults } from "@/lib/api";
-import { AgentRow, Card } from "@/components/ui";
+import { AgentRow, Card, MODE_MEANING } from "@/components/ui";
 import { BrowsePane } from "@/components/browse-pane";
 
 export const metadata: Metadata = { title: "Browse BriefAgents" };
@@ -122,11 +122,11 @@ export default async function SearchPage({
         </div>
         <div className="flex flex-wrap items-center gap-4 text-sm" style={{ color: "var(--color-muted)" }}>
           <label>
-            <span className="mr-2">Mode</span>
+            <span className="mr-2" title="How the agent runs: autonomous (files in, receipts out) or interactive (a conversation with the same controls). Agents can support both.">Mode</span>
             <select name="mode" defaultValue={mode ?? ""} className="rounded-md border px-2 py-1.5 text-sm" style={inputStyle()}>
-              <option value="">any</option>
+              <option value="">any mode</option>
               {MODES.map((k) => (
-                <option key={k} value={k}>
+                <option key={k} value={k} title={MODE_MEANING[k]}>
                   {k}
                   {modeFacets[k] !== undefined ? ` (${modeFacets[k]})` : ""}
                 </option>
