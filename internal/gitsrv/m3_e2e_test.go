@@ -57,6 +57,25 @@ license: Apache-2.0
 publish:
   include: [agent.yaml, README.md, prompts/**, LICENSE]
 `, name, ns, version)
+	case "v2":
+		base["AGENT.md"] = "---\nname: " + name + "\n---\nDo the thing carefully, and ask when unsure.\n"
+		base["agent.yaml"] = fmt.Sprintf(`schemaVersion: "2"
+name: %s
+namespace: %s
+version: %s
+summary: "Test v2 agent"
+license: Apache-2.0
+modes: [autonomous, interactive]
+entrypoints:
+  instruction: AGENT.md
+intake:
+  - id: topic
+    prompt: "What should I look at?"
+interactive:
+  opening: "What should I look at?"
+publish:
+  include: [agent.yaml, README.md, AGENT.md, LICENSE]
+`, name, ns, version)
 	case "mcp-server":
 		base["src/server.js"] = "console.log('mcp server')\n"
 		base["package-lock.json"] = `{"name":"t","lockfileVersion":3,"packages":{}}` + "\n"
@@ -166,24 +185,28 @@ func (e *gitEnv) installRoundTrip(agent, rangeStr, wantVersion string, wantFiles
 	}
 }
 
-// TestM3PublishInstallRoundTrip covers 3 kinds × 2 sources.
+// TestM3PublishInstallRoundTrip covers the manifest shapes that publish ×
+// 2 sources: the two v1 kinds still accepted, and a v2 manifest (modes,
+// DEV-088) published to an agent row that still carries a v1 kind — the
+// column goes with agentry#144.
 func TestM3PublishInstallRoundTrip(t *testing.T) {
 	env := newGitEnv(t)
 
 	kinds := []struct {
-		kind      string
+		kind      string // fixture shape
+		seedKind  string // the agent row's kind column
 		entryFile string
 	}{
-		{"skill", "SKILL.md"},
-		{"prompt-agent", "prompts/main.md"},
-		{"mcp-server", "src/server.js"},
+		{"skill", "skill", "SKILL.md"},
+		{"prompt-agent", "prompt-agent", "prompts/main.md"},
+		{"v2", "prompt-agent", "AGENT.md"},
 	}
 
 	for _, k := range kinds {
 		k := k
 		t.Run(k.kind+"/git-tag", func(t *testing.T) {
 			name := strings.ReplaceAll(k.kind, "-", "") + "gt"
-			env.seedAgentKind(name, k.kind, "public")
+			env.seedAgentKind(name, k.seedKind, "public")
 			work := seedWorkdir(t, kindFixture(k.kind, env.owner.handle, name, "1.0.0"))
 			mustGit(t, work, "push", env.cloneURL(name, env.owner.patRW), "main")
 			mustGit(t, work, "tag", "v1.0.0")
@@ -194,7 +217,7 @@ func TestM3PublishInstallRoundTrip(t *testing.T) {
 
 		t.Run(k.kind+"/cli-upload", func(t *testing.T) {
 			name := strings.ReplaceAll(k.kind, "-", "") + "up"
-			env.seedAgentKind(name, k.kind, "public")
+			env.seedAgentKind(name, k.seedKind, "public")
 			ws := t.TempDir()
 			for path, content := range kindFixture(k.kind, env.owner.handle, name, "1.0.0") {
 				full := filepath.Join(ws, path)
@@ -213,6 +236,58 @@ func TestM3PublishInstallRoundTrip(t *testing.T) {
 			env.installRoundTrip(name, "1.0.0", "1.0.0", "agent.yaml", k.entryFile)
 		})
 	}
+}
+
+// TestM3WithdrawnKindIsRefused: kind mcp-server is withdrawn (DEV-088). A
+// manifest under it is refused on both sources and nothing resolves. The
+// tag submission runs inline in post-receive and a refused manifest leaves
+// no version row at all (http.go: failures surface as the version's
+// absence), so once the push has returned the absence is the assertion;
+// the CLI upload is refused with 422 naming the withdrawal.
+func TestM3WithdrawnKindIsRefused(t *testing.T) {
+	env := newGitEnv(t)
+
+	t.Run("git-tag", func(t *testing.T) {
+		name := "mcpservergt"
+		env.seedAgentKind(name, "mcp-server", "public")
+		work := seedWorkdir(t, kindFixture("mcp-server", env.owner.handle, name, "1.0.0"))
+		mustGit(t, work, "push", env.cloneURL(name, env.owner.patRW), "main")
+		mustGit(t, work, "tag", "v1.0.0")
+		mustGit(t, work, "push", env.cloneURL(name, env.owner.patRW), "v1.0.0")
+		for _, path := range []string{
+			"/api/v1/agents/" + env.owner.handle + "/" + name + "/versions/1.0.0",
+			"/api/v1/resolve?ref=" + env.owner.handle + "/" + name,
+		} {
+			res, err := http.Get(env.srv.URL + path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, _ := io.ReadAll(res.Body)
+			_ = res.Body.Close()
+			if res.StatusCode != http.StatusNotFound {
+				t.Fatalf("GET %s after a refused tag push: %d %s (want 404: no version may exist)", path, res.StatusCode, body)
+			}
+		}
+	})
+
+	t.Run("cli-upload", func(t *testing.T) {
+		name := "mcpserverup"
+		env.seedAgentKind(name, "mcp-server", "public")
+		ws := t.TempDir()
+		for path, content := range kindFixture("mcp-server", env.owner.handle, name, "1.0.0") {
+			full := filepath.Join(ws, path)
+			if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		status, body := env.uploadVersion(name, ws)
+		if status != http.StatusUnprocessableEntity || !strings.Contains(body, "withdrawn") {
+			t.Fatalf("upload of a withdrawn kind: %d %s (want 422 naming the withdrawal)", status, body)
+		}
+	})
 }
 
 // uploadVersion packs ws exactly like the CLI will (deterministic archive of

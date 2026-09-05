@@ -56,7 +56,7 @@ func mustParse(t *testing.T, y string) *Manifest {
 
 func TestParseNormativeExample(t *testing.T) {
 	m := mustParse(t, normativeYAML)
-	if m.Name != "incident-summarizer" || m.Namespace != "acme" || m.Kind != KindSkill {
+	if m.Name != "incident-summarizer" || m.Namespace != "acme" || m.Kind != "skill" {
 		t.Errorf("identity fields: %+v", m)
 	}
 	if m.Version != "1.4.2" || m.License != "Apache-2.0" {
@@ -122,8 +122,9 @@ func TestParseSchemaVersion(t *testing.T) {
 		{"major 1", `"1"`, true},
 		{"unquoted 1", `1`, true},
 		{"minor allowed", `"1.0"`, true},
-		{"major 2", `"2"`, false},
-		{"major 2 dotted", `"2.0"`, false},
+		{"major 2", `"2"`, true},
+		{"major 2 dotted", `"2.0"`, true},
+		{"major 3", `"3"`, false},
 		{"garbage", `"one"`, false},
 		{"empty", `""`, false},
 		{"trailing dot", `"1."`, false},

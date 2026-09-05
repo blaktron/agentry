@@ -274,18 +274,32 @@ func imageMetadataFindings(sc stageContext, in *Input) []Finding {
 // predate V9) and records the description divergence for the reviewer.
 func s1Frontmatter(in *Input) []Finding {
 	var m struct {
-		Name        string `json:"name"`
-		Summary     string `json:"summary"`
-		Entrypoints struct {
-			Skill string `json:"skill"`
+		SchemaVersion string `json:"schemaVersion"`
+		Name          string `json:"name"`
+		Summary       string `json:"summary"`
+		Entrypoints   struct {
+			Instruction string `json:"instruction"`
+			Skill       string `json:"skill"`
 		} `json:"entrypoints"`
 	}
-	if err := json.Unmarshal(in.ManifestJSON, &m); err != nil || m.Entrypoints.Skill == "" {
+	if err := json.Unmarshal(in.ManifestJSON, &m); err != nil {
+		return nil
+	}
+	// v2 names one instruction file (AGENT.md when unnamed); v1 checks the
+	// skill entrypoint only, as it always has.
+	entry := m.Entrypoints.Skill
+	if strings.HasPrefix(m.SchemaVersion, "2") {
+		entry = m.Entrypoints.Instruction
+		if entry == "" {
+			entry = manifest.DefaultInstructionFile
+		}
+	}
+	if entry == "" {
 		return nil
 	}
 	var file *FileEntry
 	for i := range in.Files {
-		if in.Files[i].Path == m.Entrypoints.Skill {
+		if in.Files[i].Path == entry {
 			file = &in.Files[i]
 			break
 		}
