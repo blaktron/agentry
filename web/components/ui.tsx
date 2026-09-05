@@ -114,15 +114,26 @@ export function StatusBadge({ status }: { status: VersionStatus }) {
   return <Badge tone={tone}>{status.replace(/_/g, " ")}</Badge>;
 }
 
-// One badge per run mode the release supports (DEV-088).
+// What each run mode means, in the words the docs use (DEV-088). The badge
+// carries it as a title so a listing explains itself without a legend.
+export const MODE_MEANING: Record<AgentMode, string> = {
+  autonomous: "Runs from its files, writes its output and receipts, and ends.",
+  interactive: "A conversation with you — same controls as an autonomous run, plus a read-only file drop.",
+};
+
+// One badge per run mode the release supports, in a fixed order so two
+// releases with both modes read the same way.
 export function ModeBadges({ modes }: { modes: AgentMode[] }) {
+  const order: AgentMode[] = ["autonomous", "interactive"];
   return (
     <>
-      {modes.map((m) => (
-        <Badge key={m} tone="accent">
-          {m}
-        </Badge>
-      ))}
+      {order
+        .filter((m) => modes.includes(m))
+        .map((m) => (
+          <Badge key={m} tone={m === "interactive" ? "ok" : "accent"} title={MODE_MEANING[m]}>
+            {m}
+          </Badge>
+        ))}
     </>
   );
 }
