@@ -145,6 +145,7 @@ func (g *generator) seedAgents(ctx context.Context, st *store.Store, owners []ow
 				ID: uuid.Must(uuid.NewV7()), NamespaceID: own.handleID,
 				Name: name, Kind: kind, Visibility: "public",
 				RepoID: repo.ID, Summary: g.summary(),
+				Modes: []string{"autonomous"},
 			})
 			if err != nil {
 				return fmt.Errorf("agent %s: %w", name, err)
