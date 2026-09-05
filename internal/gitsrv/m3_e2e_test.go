@@ -238,18 +238,21 @@ func TestM3PublishInstallRoundTrip(t *testing.T) {
 	}
 }
 
-// TestM3WithdrawnKindIsRefused: kind mcp-server is withdrawn (DEV-088). A
-// manifest under it is refused on both sources and nothing resolves. The
-// tag submission runs inline in post-receive and a refused manifest leaves
-// no version row at all (http.go: failures surface as the version's
-// absence), so once the push has returned the absence is the assertion;
-// the CLI upload is refused with 422 naming the withdrawal.
+// TestM3WithdrawnKindIsRefused: kind mcp-server is withdrawn (DEV-088). An
+// agent of that kind can no longer be created (the registry refuses it;
+// the rows that predate the withdrawal are blocked by migration 00023), so
+// the manifest arrives against an instruction agent and is refused on both
+// sources, and nothing resolves. The tag submission runs inline in
+// post-receive and a refused manifest leaves no version row at all
+// (http.go: failures surface as the version's absence), so once the push
+// has returned the absence is the assertion; the CLI upload is refused
+// with 422 naming the withdrawal.
 func TestM3WithdrawnKindIsRefused(t *testing.T) {
 	env := newGitEnv(t)
 
 	t.Run("git-tag", func(t *testing.T) {
 		name := "mcpservergt"
-		env.seedAgentKind(name, "mcp-server", "public")
+		env.seedAgentKind(name, "skill", "public")
 		work := seedWorkdir(t, kindFixture("mcp-server", env.owner.handle, name, "1.0.0"))
 		mustGit(t, work, "push", env.cloneURL(name, env.owner.patRW), "main")
 		mustGit(t, work, "tag", "v1.0.0")
@@ -272,7 +275,7 @@ func TestM3WithdrawnKindIsRefused(t *testing.T) {
 
 	t.Run("cli-upload", func(t *testing.T) {
 		name := "mcpserverup"
-		env.seedAgentKind(name, "mcp-server", "public")
+		env.seedAgentKind(name, "skill", "public")
 		ws := t.TempDir()
 		for path, content := range kindFixture("mcp-server", env.owner.handle, name, "1.0.0") {
 			full := filepath.Join(ws, path)
