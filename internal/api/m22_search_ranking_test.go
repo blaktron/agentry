@@ -69,7 +69,7 @@ func names(hits []searchHit) []string {
 func (env *testEnv) publishSearchable(t *testing.T, sess caller, ns, name, summary, readme string) {
 	t.Helper()
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
-		"namespace": ns, "name": name, "kind": "skill", "visibility": "public",
+		"namespace": ns, "name": name, "modes": []string{"autonomous"}, "visibility": "public",
 		"summary": summary,
 	}, nil, http.StatusCreated)
 	_, pat := env.mintPAT(sess, "pub-"+name, "agent:publish", "agent:read")

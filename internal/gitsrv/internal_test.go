@@ -192,7 +192,7 @@ func (e *bkEnv) seedAgent(name string) (registry.Agent, string) {
 	e.t.Helper()
 	p := &auth.Principal{UserID: e.owner, Handle: "bko" + e.sfx, Via: "session", EmailVerified: true}
 	agent, err := e.reg.CreateAgent(context.Background(), p, registry.CreateAgentInput{
-		Namespace: "bko" + e.sfx, Name: name, Kind: "skill", Visibility: "public",
+		Namespace: "bko" + e.sfx, Name: name, Modes: []string{"autonomous"}, Visibility: "public",
 	}, audit.Event{Actor: e.owner, ActorKind: audit.ActorUser})
 	if err != nil {
 		e.t.Fatal(err)

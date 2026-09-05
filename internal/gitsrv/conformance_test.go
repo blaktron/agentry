@@ -162,14 +162,14 @@ func (e *gitEnv) seedPAT(userID uuid.UUID, name string, scopes ...string) string
 }
 
 func (e *gitEnv) seedAgent(name, visibility string) registry.Agent {
-	return e.seedAgentKind(name, "skill", visibility)
+	return e.seedAgentModes(name, []string{"autonomous"}, visibility)
 }
 
-func (e *gitEnv) seedAgentKind(name, kind, visibility string) registry.Agent {
+func (e *gitEnv) seedAgentModes(name string, modes []string, visibility string) registry.Agent {
 	e.t.Helper()
 	p := &auth.Principal{UserID: e.owner.id, Handle: e.owner.handle, Via: "session", EmailVerified: true}
 	a, err := e.reg.CreateAgent(context.Background(), p, registry.CreateAgentInput{
-		Namespace: e.owner.handle, Name: name, Kind: kind, Visibility: visibility,
+		Namespace: e.owner.handle, Name: name, Modes: modes, Visibility: visibility,
 	}, audit.Event{Actor: e.owner.id, ActorKind: audit.ActorUser})
 	if err != nil {
 		e.t.Fatal(err)
@@ -224,7 +224,7 @@ func (e *gitEnv) seedOrgAgent(orgHandle string, orgID uuid.UUID, name, visibilit
 		OrgRoles: map[uuid.UUID]auth.OrgRole{orgID: auth.RoleOwner},
 	}
 	a, err := e.reg.CreateAgent(context.Background(), p, registry.CreateAgentInput{
-		Namespace: orgHandle, Name: name, Kind: "skill", Visibility: visibility,
+		Namespace: orgHandle, Name: name, Modes: []string{"autonomous"}, Visibility: visibility,
 	}, audit.Event{Actor: e.owner.id, ActorKind: audit.ActorUser, OrgID: orgID})
 	if err != nil {
 		e.t.Fatal(err)

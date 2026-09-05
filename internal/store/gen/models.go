@@ -40,7 +40,6 @@ type Agent struct {
 	ID                       uuid.UUID   `json:"id"`
 	NamespaceID              uuid.UUID   `json:"namespace_id"`
 	Name                     string      `json:"name"`
-	Kind                     string      `json:"kind"`
 	Visibility               string      `json:"visibility"`
 	RepoID                   uuid.UUID   `json:"repo_id"`
 	Summary                  string      `json:"summary"`

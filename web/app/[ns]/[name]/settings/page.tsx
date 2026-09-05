@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Badge, Card, KindBadge, RefusalCard } from "@/components/ui";
+import { Badge, Card, ModeBadges, RefusalCard } from "@/components/ui";
 import type { Agent, AgentGrant, AgentRole, AgentVersion, Org } from "@/lib/api";
 import { fmtUTC } from "@/lib/format";
 import { AccessError, authedGet, currentUser } from "@/lib/session";
@@ -72,7 +72,7 @@ export default async function AgentSettingsPage({
           </Link>{" "}
           settings
         </h1>
-        <KindBadge kind={agent.kind} />
+        <ModeBadges modes={agent.modes} />
         <Badge tone={agent.visibility === "public" ? "neutral" : "warn"}>{agent.visibility}</Badge>
         <span className="text-sm" style={{ color: "var(--color-muted)" }}>
           created {fmtUTC(agent.createdAt)}

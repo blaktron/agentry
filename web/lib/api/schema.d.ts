@@ -1972,10 +1972,12 @@ export interface components {
             publicKey: string;
         };
         /**
-         * @description Supported agent kinds (§1.4).
+         * @description A run mode a release supports (DEV-088). `autonomous` runs from its source files, writes its output and receipts, and ends; `interactive` starts from the same plan and controls but the run is a conversation with the user in the CLI or the desktop. A release declares one or both.
          * @enum {string}
          */
-        AgentKind: "skill" | "prompt-agent" | "mcp-server";
+        AgentMode: "autonomous" | "interactive";
+        /** @description The run modes a release supports; at least one. */
+        AgentModes: components["schemas"]["AgentMode"][];
         /**
          * @description Per-agent grant levels (§12.2), read < write < maintain < publish.
          * @enum {string}
@@ -1985,7 +1987,7 @@ export interface components {
             /** @description User or org handle owning the agent. */
             namespace: string;
             name: string;
-            kind: components["schemas"]["AgentKind"];
+            modes: components["schemas"]["AgentModes"];
             /**
              * @default private
              * @enum {string}
@@ -1998,7 +2000,7 @@ export interface components {
             id: string;
             namespace: string;
             name: string;
-            kind: components["schemas"]["AgentKind"];
+            modes: components["schemas"]["AgentModes"];
             /** @enum {string} */
             visibility: "public" | "private";
             summary: string;
@@ -2038,6 +2040,11 @@ export interface components {
             channel: "stable" | "beta";
             /** @enum {string} */
             source: "git-tag" | "cli-upload";
+            /**
+             * @description Schema major of the manifest snapshot this version carries: 1 (kind-classified, read through the v1 mapping) or 2 (modes). Clients that show a version's manifest read it accordingly.
+             * @enum {integer}
+             */
+            manifestSchemaVersion?: 1 | 2;
             commitSha?: string;
             /** @description sha256:<hex>, the release identity (D-15). */
             archiveDigest?: string;
@@ -2188,7 +2195,7 @@ export interface components {
         SearchHit: {
             namespace: string;
             name: string;
-            kind: components["schemas"]["AgentKind"];
+            modes: components["schemas"]["AgentModes"];
             summary: string;
             installs30d?: number;
             /** @enum {string} */
@@ -3512,6 +3519,8 @@ export interface operations {
                     autoPublishTags?: boolean;
                     /** @description Allow non-fast-forward pushes to the default branch (§6.3). Off by default; maintain only. */
                     allowForcePush?: boolean;
+                    /** @description Replace the run modes the agent advertises (maintain only). Published versions keep the modes their own manifests declare. */
+                    modes?: components["schemas"]["AgentModes"];
                 };
             };
         };
@@ -5217,7 +5226,8 @@ export interface operations {
             query?: {
                 /** @description Free-text query; empty lists by popularity. */
                 q?: string;
-                kind?: components["schemas"]["AgentKind"];
+                /** @description Only agents that support this run mode. */
+                mode?: components["schemas"]["AgentMode"];
                 /** @description Capability the latest published version actually asks for, e.g. `network`, `filesystem`, `exec`, `secrets`, `dataAccess` (§5.4). A capability declared as `none`, null, or empty does not match: `network: {egress: none}` is not a network agent. */
                 capability?: string;
                 /** @description SPDX identifier from the latest published manifest. */

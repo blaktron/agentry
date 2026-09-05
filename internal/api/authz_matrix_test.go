@@ -93,7 +93,7 @@ func seedMatrix(t *testing.T, env *testEnv) *matrixSeed {
 
 	// A public agent in the org for agent-scoped routes.
 	env.doJSON(sessions["owner"], http.MethodPost, "/api/v1/agents", map[string]any{
-		"namespace": orgH, "name": "mx-agent", "kind": "skill", "visibility": "public",
+		"namespace": orgH, "name": "mx-agent", "modes": []string{"autonomous"}, "visibility": "public",
 	}, nil, http.StatusCreated)
 
 	// A second public agent that deleteAgent targets. An abuse report pins it
@@ -102,7 +102,7 @@ func seedMatrix(t *testing.T, env *testEnv) *matrixSeed {
 	// fixture for later cases. The real delete path is covered by
 	// TestDeleteAgent* in the M-10 handler tests.
 	env.doJSON(sessions["owner"], http.MethodPost, "/api/v1/agents", map[string]any{
-		"namespace": orgH, "name": "mx-undeletable", "kind": "skill", "visibility": "public",
+		"namespace": orgH, "name": "mx-undeletable", "modes": []string{"autonomous"}, "visibility": "public",
 	}, nil, http.StatusCreated)
 	env.doJSON(sessions["member"], http.MethodPost,
 		"/api/v1/agents/"+orgH+"/mx-undeletable/abuse-reports",
@@ -315,7 +315,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 		"createAgent": {
 			method: "POST", path: sPath("/api/v1/agents"),
 			body: func(s *matrixSeed, _ string) any {
-				return map[string]any{"namespace": s.orgH, "name": "ag" + nextUniq(), "kind": "skill"}
+				return map[string]any{"namespace": s.orgH, "name": "ag" + nextUniq(), "modes": []string{"autonomous"}}
 			},
 		},
 		"listAgents": {
@@ -556,7 +556,7 @@ func TestAuthzMatrix(t *testing.T) {
 					// caller; org-namespace policy is registry-level and
 					// tested separately.
 					bodyOverride = map[string]any{
-						"namespace": mc.caller.name, "name": "ag" + caseID, "kind": "skill",
+						"namespace": mc.caller.name, "name": "ag" + caseID, "modes": []string{"autonomous"},
 					}
 				}
 				if opID == "revokeToken" && mc.caller.session != "" {

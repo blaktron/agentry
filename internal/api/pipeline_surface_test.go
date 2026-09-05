@@ -33,7 +33,7 @@ func TestBlockedAgentDownloadReturns410(t *testing.T) {
 		`UPDATE users SET created_at = now() - interval '30 days' WHERE id = (SELECT id FROM handles WHERE handle = $1)`, author)
 
 	env.doJSON(authorSess, http.MethodPost, "/api/v1/agents",
-		map[string]any{"namespace": author, "name": "banned", "kind": "skill", "visibility": "public"}, nil, http.StatusCreated)
+		map[string]any{"namespace": author, "name": "banned", "modes": []string{"autonomous"}, "visibility": "public"}, nil, http.StatusCreated)
 	_, pat := env.mintPAT(authorSess, "pub", "agent:publish", "agent:read", "repo:read")
 
 	if status, body := env.uploadVersionCLI(author, "banned", pat, map[string]string{
@@ -131,7 +131,7 @@ func TestUploadRejectsOversizedBodyAndRatioBomb(t *testing.T) {
 	env.verifyEmail(author)
 	sess := env.login(author)
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents",
-		map[string]any{"namespace": author, "name": "uploads", "kind": "skill", "visibility": "private"}, nil, http.StatusCreated)
+		map[string]any{"namespace": author, "name": "uploads", "modes": []string{"autonomous"}, "visibility": "private"}, nil, http.StatusCreated)
 	_, pat := env.mintPAT(sess, "pub", "agent:publish", "agent:read", "repo:read")
 
 	t.Run("oversized body", func(t *testing.T) {
@@ -215,7 +215,7 @@ func TestReportCarriesScanDateAndDismissalRationale(t *testing.T) {
 		`UPDATE users SET created_at = now() - interval '30 days' WHERE id = (SELECT id FROM handles WHERE handle = $1)`, author)
 
 	env.doJSON(authorSess, http.MethodPost, "/api/v1/agents",
-		map[string]any{"namespace": author, "name": "reported", "kind": "skill", "visibility": "public"}, nil, http.StatusCreated)
+		map[string]any{"namespace": author, "name": "reported", "modes": []string{"autonomous"}, "visibility": "public"}, nil, http.StatusCreated)
 	_, pat := env.mintPAT(authorSess, "pub", "agent:publish", "agent:read", "repo:read")
 
 	if status, body := env.uploadVersionCLI(author, "reported", pat, map[string]string{
