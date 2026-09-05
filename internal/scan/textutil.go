@@ -5,47 +5,6 @@ import (
 	"strings"
 )
 
-// editDistance1 reports whether a and b differ by a single insertion,
-// deletion, or substitution (Levenshtein distance exactly 1) — the typosquat
-// heuristic for S7.
-func editDistance1(a, b string) bool {
-	la, lb := len(a), len(b)
-	if la == lb {
-		diff := 0
-		for i := 0; i < la; i++ {
-			if a[i] != b[i] {
-				diff++
-				if diff > 1 {
-					return false
-				}
-			}
-		}
-		return diff == 1
-	}
-	if la > lb {
-		a, b = b, a
-		la, lb = lb, la
-	}
-	if lb-la != 1 {
-		return false
-	}
-	// b is one longer: check it is a with one insertion.
-	i, j, skipped := 0, 0, false
-	for i < la && j < lb {
-		if a[i] == b[j] {
-			i++
-			j++
-			continue
-		}
-		if skipped {
-			return false
-		}
-		skipped = true
-		j++ // skip the extra char in b
-	}
-	return true
-}
-
 // editDistance is Levenshtein distance over runes with an early exit: once
 // every cell of a row exceeds cap the answer can only grow, so the function
 // returns cap. S8 only ever asks "are these two names within two edits", and

@@ -120,23 +120,13 @@ func findingKey(f Finding) string { return f.Scanner + "\x00" + f.FilePath }
 // existed, so a package with one long-standing postinstall hook was escalated
 // on every single release forever, and the escalation carried no information
 // about the diff it claimed to describe.
-func baselineFindings(bundle *rules.Bundle, prevFiles []FileEntry, kind string) map[string]bool {
+func baselineFindings(bundle *rules.Bundle, prevFiles []FileEntry) map[string]bool {
 	out := map[string]bool{}
 	if len(prevFiles) == 0 {
 		return out
 	}
 	for _, rf := range rules.Scan(bundle, toRuleFiles(prevFiles)) {
 		out[findingKey(fromRules(rf))] = true
-	}
-	if kind == "mcp-server" {
-		for _, f := range prevFiles {
-			if f.Content == nil || path.Base(f.Path) != "package.json" {
-				continue
-			}
-			for _, fnd := range s7PackageJSON(f) {
-				out[findingKey(fnd)] = true
-			}
-		}
 	}
 	return out
 }
@@ -197,34 +187,4 @@ func isProsePath(p string) bool {
 		return true
 	}
 	return false
-}
-
-// declaredDeps returns the runtime dependency names declared by every
-// package.json / pyproject.toml in a file set, for the S9 new-dependency diff.
-func declaredDeps(files []FileEntry) map[string]bool {
-	out := map[string]bool{}
-	for _, f := range files {
-		if f.Content == nil {
-			continue
-		}
-		switch path.Base(f.Path) {
-		case "package.json":
-			if p := parsePackageJSON(f.Content); p != nil {
-				for name := range merged(p.runtimeDeps(), p.DevDeps) {
-					out[name] = true
-				}
-			}
-		case "pyproject.toml":
-			for name := range pyprojectDeps(f.Content) {
-				out[name] = true
-			}
-		case "requirements.txt", "uv.lock", "package-lock.json":
-			if lf := parseLockfile(f.Path, f.Content); lf != nil {
-				for name := range lf.Entries {
-					out[name] = true
-				}
-			}
-		}
-	}
-	return out
 }

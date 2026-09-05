@@ -184,7 +184,7 @@ func TestImageMetadataInjectionFixture(t *testing.T) {
 			t.Fatal(err)
 		}
 		res := orch.Run(context.Background(), RunParams{
-			Input:  Input{Dir: dir, ManifestJSON: []byte(`{"kind":"prompt-agent","capabilities":{}}`), Kind: "prompt-agent"},
+			Input:  Input{Dir: dir, ManifestJSON: []byte(`{"capabilities":{}}`)},
 			Policy: DefaultBaseline(), Public: true,
 		})
 		got := map[string]bool{}
@@ -247,7 +247,7 @@ func TestMarkdownAltTextIsScanned(t *testing.T) {
 		t.Fatal(err)
 	}
 	res := NewOrchestrator(bundle, StaticProvider{}, nil).Run(context.Background(), RunParams{
-		Input:  Input{Dir: dir, ManifestJSON: []byte(`{"kind":"prompt-agent","capabilities":{}}`), Kind: "prompt-agent"},
+		Input:  Input{Dir: dir, ManifestJSON: []byte(`{"capabilities":{}}`)},
 		Policy: DefaultBaseline(), Public: true,
 	})
 	for _, f := range res.Findings {
