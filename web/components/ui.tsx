@@ -1,6 +1,7 @@
 // Shared presentational components (§10). Server components by default —
 // nothing here needs client-side JS, which keeps the CSP strict (§10.3).
 import Link from "next/link";
+import { egressHosts } from "@/lib/caps";
 import type { AgentMode, Severity, VersionStatus } from "@/lib/api";
 
 // Two tiers of card. `primary` (the default) is a filled surface for the
@@ -171,7 +172,7 @@ export function StatTile({ label, value, hint }: { label: string; value: string;
 export function CapabilityBadges({ capabilities }: { capabilities?: Record<string, unknown> }) {
   if (!capabilities) return <span style={{ color: "var(--color-muted)" }}>none declared</span>;
   const caps = capabilities as {
-    network?: { egress?: string[] };
+    network?: { egress?: unknown };
     filesystem?: { read?: unknown; write?: unknown };
     exec?: unknown;
     secrets?: string[];
@@ -181,8 +182,8 @@ export function CapabilityBadges({ capabilities }: { capabilities?: Record<strin
 
   const items: { label: string; detail: string; tone: "neutral" | "warn" | "danger" }[] = [];
 
-  const egress = caps.network?.egress ?? [];
-  const realEgress = egress.filter((h) => h && h !== "none");
+  // The union is none | "*" | [hosts]; a scalar must not take the page down.
+  const realEgress = egressHosts(caps.network?.egress);
   if (realEgress.length > 0) {
     const wildcard = realEgress.includes("*");
     items.push({
