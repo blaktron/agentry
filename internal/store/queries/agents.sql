@@ -10,8 +10,8 @@ SELECT * FROM repos WHERE id = $1;
 UPDATE repos SET size_bytes = $2, last_push_at = now() WHERE id = $1;
 
 -- name: CreateAgent :one
-INSERT INTO agents (id, namespace_id, name, kind, visibility, repo_id, summary, modes)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO agents (id, namespace_id, name, visibility, repo_id, summary, modes)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: GetAgentByPath :one
@@ -98,7 +98,7 @@ WHERE id = $1 AND readme_text IS DISTINCT FROM $2;
 -- version's manifest/capabilities, so an agent's facets always describe what
 -- someone would actually install today. `sort` picks the primary ordering;
 -- the trailing keys keep every ordering total (stable pages).
-SELECT a.id, a.name, a.kind, a.visibility, a.summary, a.quarantine_state,
+SELECT a.id, a.name, a.modes, a.visibility, a.summary, a.quarantine_state,
        a.created_at, h.handle AS namespace,
        coalesce(d.installs, 0)::bigint AS installs,
        ts_rank_cd(a.search_tsv, websearch_to_tsquery('english', sqlc.arg(query)::text)) AS rank,
@@ -160,7 +160,6 @@ WHERE a.visibility = 'public'
     OR h.handle = lower(sqlc.arg(query)::text)::citext
     OR h.handle::text % sqlc.arg(query)::text
   )
-  AND (sqlc.narg('kind')::text IS NULL OR a.kind = sqlc.narg('kind'))
   -- mode= means "supports this run mode" (DEV-088): one of the array's values.
   AND (sqlc.narg('mode')::text IS NULL OR sqlc.narg('mode')::text = ANY(a.modes))
   -- capability= means "this agent actually asks for it", not merely "the key
@@ -189,13 +188,6 @@ ORDER BY
   a.id DESC
 LIMIT $1 OFFSET $2;
 
--- name: SearchFacetKinds :many
-SELECT a.kind, count(*)::bigint AS n
-FROM agents a
-WHERE a.visibility = 'public' AND a.quarantine_state <> 'blocked'
-  AND (sqlc.arg(query)::text = '' OR a.search_tsv @@ websearch_to_tsquery('english', sqlc.arg(query)::text))
-GROUP BY a.kind ORDER BY a.kind;
-
 -- name: SearchFacetModes :many
 -- One row per run mode with the number of public, unblocked agents that
 -- support it; an agent supporting both counts under each.
@@ -220,7 +212,7 @@ GROUP BY 1 ORDER BY n DESC, 1 LIMIT 20;
 -- GET /tags/{tag} (§9.2): public agents whose LATEST PUBLISHED manifest
 -- carries the tag (V8 tags are lowercase [a-z0-9-]). Keyset-paged on
 -- (created_at, id) so the cursor is stable across inserts.
-SELECT a.id, a.name, a.kind, a.summary, a.quarantine_state, a.created_at,
+SELECT a.id, a.name, a.modes, a.summary, a.quarantine_state, a.created_at,
        h.handle AS namespace,
        coalesce(d.installs, 0)::bigint AS installs
 FROM agents a

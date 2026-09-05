@@ -26,7 +26,7 @@ func TestWebhookCatalogEventsAreEmitted(t *testing.T) {
 	}, &hook, http.StatusCreated)
 
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents",
-		map[string]any{"namespace": orgH, "name": "hooked", "kind": "skill", "visibility": "private"}, nil, http.StatusCreated)
+		map[string]any{"namespace": orgH, "name": "hooked", "modes": []string{"autonomous"}, "visibility": "private"}, nil, http.StatusCreated)
 	env.doJSON(sess, http.MethodPut, "/api/v1/orgs/"+orgH+"/policy", map[string]any{"requireEvals": false}, nil, http.StatusOK)
 
 	_, pat := env.mintPAT(sess, "pub", "agent:publish", "agent:read")

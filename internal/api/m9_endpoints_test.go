@@ -22,7 +22,7 @@ func TestStarsAndStats(t *testing.T) {
 	env.verifyEmail(owner)
 	sess := env.login(owner)
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
-		"namespace": owner, "name": "starred", "kind": "skill", "visibility": "public",
+		"namespace": owner, "name": "starred", "modes": []string{"autonomous"}, "visibility": "public",
 	}, nil, http.StatusCreated)
 
 	statsPath := "/api/v1/agents/" + owner + "/starred/stats"
@@ -77,7 +77,7 @@ func TestStatsAndStarsHidePrivateAgents(t *testing.T) {
 	env.verifyEmail(owner)
 	ownerSess := env.login(owner)
 	env.doJSON(ownerSess, http.MethodPost, "/api/v1/agents", map[string]any{
-		"namespace": owner, "name": "hidden", "kind": "skill", "visibility": "private",
+		"namespace": owner, "name": "hidden", "modes": []string{"autonomous"}, "visibility": "private",
 	}, nil, http.StatusCreated)
 
 	outsider := env.register("star-out")
@@ -105,7 +105,7 @@ func TestDeleteAgentWithoutVersions(t *testing.T) {
 	env.verifyEmail(owner)
 	sess := env.login(owner)
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
-		"namespace": owner, "name": "scratch", "kind": "skill",
+		"namespace": owner, "name": "scratch", "modes": []string{"autonomous"},
 	}, nil, http.StatusCreated)
 
 	var repoID string
@@ -149,7 +149,7 @@ func TestDeleteAgentRefusedOncePublished(t *testing.T) {
 	env.verifyEmail(owner)
 	sess := env.login(owner)
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
-		"namespace": owner, "name": "shipped", "kind": "skill", "visibility": "public",
+		"namespace": owner, "name": "shipped", "modes": []string{"autonomous"}, "visibility": "public",
 	}, nil, http.StatusCreated)
 	_, pat := env.mintPAT(sess, "pub", "agent:publish", "agent:read")
 	status, body := env.uploadVersionCLI(owner, "shipped", pat, skillFiles(owner, "shipped", "1.0.0", nil))
@@ -188,7 +188,7 @@ func TestAgentActivityPublicVersusFull(t *testing.T) {
 	env.verifyEmail(owner)
 	sess := env.login(owner)
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
-		"namespace": owner, "name": "watched", "kind": "skill", "visibility": "public",
+		"namespace": owner, "name": "watched", "modes": []string{"autonomous"}, "visibility": "public",
 	}, nil, http.StatusCreated)
 	env.doJSON(sess, http.MethodPatch, "/api/v1/agents/"+owner+"/watched",
 		map[string]any{"summary": "now with a summary"}, nil, http.StatusOK)
@@ -244,7 +244,7 @@ func TestTagListing(t *testing.T) {
 	env.verifyEmail(owner)
 	sess := env.login(owner)
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
-		"namespace": owner, "name": "tagged", "kind": "skill", "visibility": "public",
+		"namespace": owner, "name": "tagged", "modes": []string{"autonomous"}, "visibility": "public",
 	}, nil, http.StatusCreated)
 	_, pat := env.mintPAT(sess, "pub", "agent:publish", "agent:read")
 	tag := "t" + env.sfx
@@ -450,7 +450,7 @@ func TestSearchFacets(t *testing.T) {
 	env.verifyEmail(owner)
 	sess := env.login(owner)
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
-		"namespace": owner, "name": "faceted", "kind": "skill", "visibility": "public",
+		"namespace": owner, "name": "faceted", "modes": []string{"autonomous"}, "visibility": "public",
 		"summary": "facetsearch" + env.sfx,
 	}, nil, http.StatusCreated)
 	_, pat := env.mintPAT(sess, "pub", "agent:publish", "agent:read")

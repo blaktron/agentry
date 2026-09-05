@@ -17,7 +17,7 @@ import (
 func (env *testEnv) publishUnder(t *testing.T, sess caller, ns, name string) {
 	t.Helper()
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
-		"namespace": ns, "name": name, "kind": "skill", "visibility": "public",
+		"namespace": ns, "name": name, "modes": []string{"autonomous"}, "visibility": "public",
 	}, nil, http.StatusCreated)
 	_, pat := env.mintPAT(sess, "pub-"+name, "agent:publish", "agent:read")
 	status, body := env.uploadVersionCLI(ns, name, pat, skillFiles(ns, name, "1.0.0", nil))

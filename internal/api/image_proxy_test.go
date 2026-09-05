@@ -46,7 +46,7 @@ func TestImageProxy(t *testing.T) {
 	env.verifyEmail(user)
 	sess := env.login(user)
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents",
-		map[string]any{"namespace": user, "name": "pics", "kind": "skill", "visibility": "public"}, nil, http.StatusCreated)
+		map[string]any{"namespace": user, "name": "pics", "modes": []string{"autonomous"}, "visibility": "public"}, nil, http.StatusCreated)
 	_, pat := env.mintPAT(sess, "pub", "agent:publish", "agent:read")
 	files := map[string]string{
 		"agent.yaml": skillYAML(user, "pics", "1.0.0"),

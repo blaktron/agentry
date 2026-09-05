@@ -21,7 +21,7 @@ func TestAccountErasureFlow(t *testing.T) {
 
 	// Publish something so the chooser has content to act on.
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents",
-		map[string]any{"namespace": user, "name": "doomed", "kind": "skill", "visibility": "public"}, nil, http.StatusCreated)
+		map[string]any{"namespace": user, "name": "doomed", "modes": []string{"autonomous"}, "visibility": "public"}, nil, http.StatusCreated)
 	_, pat := env.mintPAT(sess, "pub", "agent:publish", "agent:read")
 	status, body := env.uploadVersionCLI(user, "doomed", pat, map[string]string{
 		"agent.yaml": skillYAML(user, "doomed", "1.0.0"),

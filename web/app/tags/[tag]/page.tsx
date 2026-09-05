@@ -63,7 +63,7 @@ export default async function TagPage({
               namespace={hit.namespace}
               name={hit.name}
               summary={hit.summary}
-              kind={hit.kind}
+              modes={hit.modes}
             />
           ))}
         </ul>

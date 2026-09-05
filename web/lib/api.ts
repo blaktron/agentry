@@ -88,7 +88,8 @@ export async function apiGetText(path: string, opts?: { revalidate?: number }): 
 // small so pages are typed without pulling the whole generated client into
 // the server bundle). ---
 
-export type AgentKind = "skill" | "prompt-agent" | "mcp-server";
+// Run modes a release supports (DEV-088): one or both.
+export type AgentMode = "autonomous" | "interactive";
 export type VersionStatus =
   | "submitted" | "scanning" | "needs_review" | "approved"
   | "published" | "rejected" | "yanked" | "quarantined" | "blocked";
@@ -98,7 +99,7 @@ export interface Agent {
   id: string;
   namespace: string;
   name: string;
-  kind: AgentKind;
+  modes: AgentMode[];
   visibility: "public" | "private";
   summary: string;
   defaultBranch: string;

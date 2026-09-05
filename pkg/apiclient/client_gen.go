@@ -99,21 +99,18 @@ func (e AgentGrantKind) Valid() bool {
 	}
 }
 
-// Defines values for AgentKind.
+// Defines values for AgentMode.
 const (
-	McpServer   AgentKind = "mcp-server"
-	PromptAgent AgentKind = "prompt-agent"
-	Skill       AgentKind = "skill"
+	Autonomous  AgentMode = "autonomous"
+	Interactive AgentMode = "interactive"
 )
 
-// Valid indicates whether the value is a known member of the AgentKind enum.
-func (e AgentKind) Valid() bool {
+// Valid indicates whether the value is a known member of the AgentMode enum.
+func (e AgentMode) Valid() bool {
 	switch e {
-	case McpServer:
+	case Autonomous:
 		return true
-	case PromptAgent:
-		return true
-	case Skill:
+	case Interactive:
 		return true
 	default:
 		return false
@@ -156,6 +153,24 @@ func (e AgentVersionChannel) Valid() bool {
 	case AgentVersionChannelBeta:
 		return true
 	case AgentVersionChannelStable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentVersionManifestSchemaVersion.
+const (
+	N1 AgentVersionManifestSchemaVersion = 1
+	N2 AgentVersionManifestSchemaVersion = 2
+)
+
+// Valid indicates whether the value is a known member of the AgentVersionManifestSchemaVersion enum.
+func (e AgentVersionManifestSchemaVersion) Valid() bool {
+	switch e {
+	case N1:
+		return true
+	case N2:
 		return true
 	default:
 		return false
@@ -983,8 +998,8 @@ type Agent struct {
 	GitSshUrl *string            `json:"gitSshUrl,omitempty"`
 	Id        openapi_types.UUID `json:"id"`
 
-	// Kind Supported agent kinds (§1.4).
-	Kind            AgentKind            `json:"kind"`
+	// Modes The run modes a release supports; at least one.
+	Modes           AgentModes           `json:"modes"`
 	Name            string               `json:"name"`
 	Namespace       string               `json:"namespace"`
 	QuarantineState AgentQuarantineState `json:"quarantineState"`
@@ -1011,8 +1026,11 @@ type AgentGrant struct {
 // AgentGrantKind defines model for AgentGrant.Kind.
 type AgentGrantKind string
 
-// AgentKind Supported agent kinds (§1.4).
-type AgentKind string
+// AgentMode A run mode a release supports (DEV-088). `autonomous` runs from its source files, writes its output and receipts, and ends; `interactive` starts from the same plan and controls but the run is a conversation with the user in the CLI or the desktop. A release declares one or both.
+type AgentMode string
+
+// AgentModes The run modes a release supports; at least one.
+type AgentModes = []AgentMode
 
 // AgentRole Per-agent grant levels (§12.2), read < write < maintain < publish.
 type AgentRole string
@@ -1039,8 +1057,11 @@ type AgentVersion struct {
 	CommitSha    *string                 `json:"commitSha,omitempty"`
 	CreatedAt    time.Time               `json:"createdAt"`
 	Id           openapi_types.UUID      `json:"id"`
-	PublishedAt  *time.Time              `json:"publishedAt,omitempty"`
-	Source       AgentVersionSource      `json:"source"`
+
+	// ManifestSchemaVersion Schema major of the manifest snapshot this version carries: 1 (kind-classified, read through the v1 mapping) or 2 (modes). Clients that show a version's manifest read it accordingly.
+	ManifestSchemaVersion *AgentVersionManifestSchemaVersion `json:"manifestSchemaVersion,omitempty"`
+	PublishedAt           *time.Time                         `json:"publishedAt,omitempty"`
+	Source                AgentVersionSource                 `json:"source"`
 
 	// Status Publication state machine states (§7). `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change (DEV-046).
 	Status       VersionStatus `json:"status"`
@@ -1052,6 +1073,9 @@ type AgentVersion struct {
 
 // AgentVersionChannel defines model for AgentVersion.Channel.
 type AgentVersionChannel string
+
+// AgentVersionManifestSchemaVersion Schema major of the manifest snapshot this version carries: 1 (kind-classified, read through the v1 mapping) or 2 (modes). Clients that show a version's manifest read it accordingly.
+type AgentVersionManifestSchemaVersion int
 
 // AgentVersionSource defines model for AgentVersion.Source.
 type AgentVersionSource string
@@ -1097,9 +1121,9 @@ type AuditPage struct {
 
 // CreateAgentRequest defines model for CreateAgentRequest.
 type CreateAgentRequest struct {
-	// Kind Supported agent kinds (§1.4).
-	Kind AgentKind `json:"kind"`
-	Name string    `json:"name"`
+	// Modes The run modes a release supports; at least one.
+	Modes AgentModes `json:"modes"`
+	Name  string     `json:"name"`
 
 	// Namespace User or org handle owning the agent.
 	Namespace  string                        `json:"namespace"`
@@ -1457,8 +1481,8 @@ type Scope string
 type SearchHit struct {
 	Installs30d *int `json:"installs30d,omitempty"`
 
-	// Kind Supported agent kinds (§1.4).
-	Kind            AgentKind                 `json:"kind"`
+	// Modes The run modes a release supports; at least one.
+	Modes           AgentModes                `json:"modes"`
 	Name            string                    `json:"name"`
 	Namespace       string                    `json:"namespace"`
 	QuarantineState *SearchHitQuarantineState `json:"quarantineState,omitempty"`
@@ -1722,10 +1746,13 @@ type ListAgentsParams struct {
 // UpdateAgentJSONBody defines parameters for UpdateAgent.
 type UpdateAgentJSONBody struct {
 	// AllowForcePush Allow non-fast-forward pushes to the default branch (§6.3). Off by default; maintain only.
-	AllowForcePush  *bool                          `json:"allowForcePush,omitempty"`
-	AutoPublishTags *bool                          `json:"autoPublishTags,omitempty"`
-	Summary         *string                        `json:"summary,omitempty"`
-	Visibility      *UpdateAgentJSONBodyVisibility `json:"visibility,omitempty"`
+	AllowForcePush  *bool `json:"allowForcePush,omitempty"`
+	AutoPublishTags *bool `json:"autoPublishTags,omitempty"`
+
+	// Modes The run modes a release supports; at least one.
+	Modes      *AgentModes                    `json:"modes,omitempty"`
+	Summary    *string                        `json:"summary,omitempty"`
+	Visibility *UpdateAgentJSONBodyVisibility `json:"visibility,omitempty"`
 }
 
 // UpdateAgentJSONBodyVisibility defines parameters for UpdateAgent.
@@ -2007,8 +2034,10 @@ type ListReviewQueueParamsQueue string
 // SearchAgentsParams defines parameters for SearchAgents.
 type SearchAgentsParams struct {
 	// Q Free-text query; empty lists by popularity.
-	Q    *string    `form:"q,omitempty" json:"q,omitempty"`
-	Kind *AgentKind `form:"kind,omitempty" json:"kind,omitempty"`
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// Mode Only agents that support this run mode.
+	Mode *AgentMode `form:"mode,omitempty" json:"mode,omitempty"`
 
 	// Capability Capability the latest published version actually asks for, e.g. `network`, `filesystem`, `exec`, `secrets`, `dataAccess` (§5.4). A capability declared as `none`, null, or empty does not match: `network: {egress: none}` is not a network agent.
 	Capability *string `form:"capability,omitempty" json:"capability,omitempty"`
@@ -10125,9 +10154,9 @@ func NewSearchAgentsRequest(server string, params *SearchAgentsParams) (*http.Re
 
 		}
 
-		if params.Kind != nil {
+		if params.Mode != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "kind", *params.Kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "mode", *params.Mode, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

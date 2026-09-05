@@ -20,7 +20,7 @@ func TestSubmitVersionIdempotencyReplay(t *testing.T) {
 	env.verifyEmail(user)
 	sess := env.login(user)
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents",
-		map[string]any{"namespace": user, "name": "replay", "kind": "skill", "visibility": "public"}, nil, http.StatusCreated)
+		map[string]any{"namespace": user, "name": "replay", "modes": []string{"autonomous"}, "visibility": "public"}, nil, http.StatusCreated)
 	_, pat := env.mintPAT(sess, "pub", "agent:publish", "agent:read")
 
 	// A README past 1 MiB that does not compress away (the archive builder

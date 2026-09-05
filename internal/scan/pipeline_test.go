@@ -119,7 +119,7 @@ func (e *pipeEnv) publish(name, visibility string, files map[string]string) stor
 	u, _ := e.st.Queries().GetUserByID(ctx, e.owner)
 	p.Handle = u.Handle
 	a, err := e.reg.CreateAgent(ctx, p, registry.CreateAgentInput{
-		Namespace: u.Handle, Name: name, Kind: "skill", Visibility: visibility,
+		Namespace: u.Handle, Name: name, Modes: []string{"autonomous"}, Visibility: visibility,
 	}, audit.Event{Actor: e.owner, ActorKind: audit.ActorUser})
 	if err != nil {
 		e.t.Fatal(err)

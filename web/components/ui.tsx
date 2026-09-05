@@ -1,7 +1,7 @@
 // Shared presentational components (§10). Server components by default —
 // nothing here needs client-side JS, which keeps the CSP strict (§10.3).
 import Link from "next/link";
-import type { AgentKind, Severity, VersionStatus } from "@/lib/api";
+import type { AgentMode, Severity, VersionStatus } from "@/lib/api";
 
 // Two tiers of card. `primary` (the default) is a filled surface for the
 // things a page is about — the report card, the install block. `secondary`
@@ -114,8 +114,17 @@ export function StatusBadge({ status }: { status: VersionStatus }) {
   return <Badge tone={tone}>{status.replace(/_/g, " ")}</Badge>;
 }
 
-export function KindBadge({ kind }: { kind: AgentKind }) {
-  return <Badge tone="accent">{kind}</Badge>;
+// One badge per run mode the release supports (DEV-088).
+export function ModeBadges({ modes }: { modes: AgentMode[] }) {
+  return (
+    <>
+      {modes.map((m) => (
+        <Badge key={m} tone="accent">
+          {m}
+        </Badge>
+      ))}
+    </>
+  );
 }
 
 // RefusalCard is the shared rendering for an API 401/403 on an authed page.
@@ -242,14 +251,14 @@ export function AgentRow({
   namespace,
   name,
   summary,
-  kind,
+  modes,
   detailHref,
   selected = false,
 }: {
   namespace: string;
   name: string;
   summary: string;
-  kind: AgentKind;
+  modes: AgentMode[];
   detailHref?: string;
   selected?: boolean;
 }) {
@@ -273,7 +282,7 @@ export function AgentRow({
         >
           {namespace}/{name}
         </Link>
-        <KindBadge kind={kind} />
+        <ModeBadges modes={modes} />
       </div>
       {summary && (
         <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
