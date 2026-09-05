@@ -26,15 +26,15 @@ func setupReviewItem(t *testing.T, env *testEnv, prefix string) (string, string,
 	_, pat := env.mintPAT(authorSess, "pub", "agent:publish", "agent:read", "repo:read")
 
 	files := map[string]string{
-		"agent.yaml": `schemaVersion: "1"
+		"agent.yaml": `schemaVersion: "2"
 name: risky
 namespace: ` + author + `
-kind: skill
+modes: [autonomous]
 version: 1.0.0
 summary: "test"
 license: Apache-2.0
 entrypoints:
-  skill: SKILL.md
+  instruction: SKILL.md
 publish:
   include: [agent.yaml, README.md, SKILL.md, LICENSE, img.png]
 `,

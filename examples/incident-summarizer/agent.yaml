@@ -1,7 +1,7 @@
-schemaVersion: "1"
+schemaVersion: "2"
 name: incident-summarizer
 namespace: agentry
-kind: skill
+modes: [autonomous]
 version: 1.0.0
 summary: "Turns a PagerDuty incident into a postmortem draft"
 license: Apache-2.0
@@ -10,7 +10,7 @@ authors:
 tags: [incident-response, summarization, postmortem]
 
 entrypoints:
-  skill: SKILL.md
+  instruction: SKILL.md
 
 runtime:
   interfaces: [claude-skill]

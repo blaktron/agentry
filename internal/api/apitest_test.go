@@ -194,10 +194,10 @@ func (env *testEnv) sfxDigits() string {
 //
 //nolint:unparam // version is part of the address; tests happen to use 1.0.0
 func skillFiles(ns, name, version string, tags []string) map[string]string {
-	y := `schemaVersion: "1"
+	y := `schemaVersion: "2"
 name: ` + name + `
 namespace: ` + ns + `
-kind: skill
+modes: [autonomous]
 version: ` + version + `
 summary: "test"
 license: Apache-2.0
@@ -206,7 +206,7 @@ license: Apache-2.0
 		y += "tags: [" + strings.Join(tags, ", ") + "]\n"
 	}
 	y += `entrypoints:
-  skill: SKILL.md
+  instruction: SKILL.md
 publish:
   include: [agent.yaml, README.md, SKILL.md, LICENSE]
 `

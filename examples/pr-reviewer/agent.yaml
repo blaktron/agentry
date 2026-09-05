@@ -1,13 +1,16 @@
-schemaVersion: "1"
+schemaVersion: "2"
 name: pr-reviewer
 namespace: agentry
-kind: prompt-agent
+modes: [autonomous]
 version: 1.0.0
 summary: "Review a diff for correctness and risk, in priority order"
 license: Apache-2.0
 authors:
   - name: Agentry maintainers
 tags: [code-review, correctness]
+
+entrypoints:
+  instruction: prompts/main.md
 
 runtime:
   interfaces: [agents-md]

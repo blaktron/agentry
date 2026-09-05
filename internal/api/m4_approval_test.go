@@ -98,15 +98,15 @@ func TestReviewApprovalFlow(t *testing.T) {
 //
 //nolint:unparam // fixtures happen to use 1.0.0
 func skillYAML(ns, name, version string) string {
-	return `schemaVersion: "1"
+	return `schemaVersion: "2"
 name: ` + name + `
 namespace: ` + ns + `
-kind: skill
+modes: [autonomous]
 version: ` + version + `
 summary: "test"
 license: Apache-2.0
 entrypoints:
-  skill: SKILL.md
+  instruction: SKILL.md
 publish:
   include: [agent.yaml, README.md, SKILL.md, LICENSE]
 `

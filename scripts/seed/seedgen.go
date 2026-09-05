@@ -135,7 +135,6 @@ func (g *generator) seedAgents(ctx context.Context, st *store.Store, owners []ow
 			idx := offset + i
 			own := owners[idx%len(owners)]
 			name := fmt.Sprintf("%s-%s-%05d", g.pfx, g.word(), idx)
-			kind := kinds[g.rnd.Intn(len(kinds))]
 
 			repo, err := q.CreateRepo(ctx, uuid.Must(uuid.NewV7()))
 			if err != nil {
@@ -154,8 +153,8 @@ func (g *generator) seedAgents(ctx context.Context, st *store.Store, owners []ow
 			caps := g.capabilities()
 			version := fmt.Sprintf("%d.%d.%d", 1+g.rnd.Intn(3), g.rnd.Intn(10), g.rnd.Intn(20))
 			manifest := fmt.Sprintf(
-				`{"schemaVersion":"1","name":%q,"namespace":%q,"kind":%q,"version":%q,"summary":%q,"license":%q,"capabilities":%s}`,
-				name, own.handle, kind, version, agent.Summary, licenses[g.rnd.Intn(len(licenses))], caps)
+				`{"schemaVersion":"2","name":%q,"namespace":%q,"modes":["autonomous"],"entrypoints":{"instruction":"AGENT.md"},"version":%q,"summary":%q,"license":%q,"capabilities":%s}`,
+				name, own.handle, version, agent.Summary, licenses[g.rnd.Intn(len(licenses))], caps)
 
 			v, err := q.CreateAgentVersion(ctx, storegen.CreateAgentVersionParams{
 				ID: uuid.Must(uuid.NewV7()), AgentID: agent.ID, Version: version,
@@ -204,7 +203,6 @@ func (g *generator) seedAgents(ctx context.Context, st *store.Store, owners []ow
 }
 
 var (
-	kinds    = []string{"skill", "prompt-agent"} // mcp-server is withdrawn (DEV-088)
 	licenses = []string{"Apache-2.0", "MIT", "BSD-3-Clause", "MPL-2.0"}
 	// Vocabulary for names and summaries. Kept small and domain-flavoured so
 	// full-text search has realistic term frequencies rather than uniform

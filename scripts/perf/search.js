@@ -34,8 +34,8 @@ const TERMS = ["incident", "changelog", "invoice", "schema", "release",
   "dependency", "runbook", "dashboard", "migration", "digest", "postmortem"];
 const MODIFIERS = ["summarizer", "auditor", "linter", "reporter", "triager"];
 const FACETS = [
-  "kind=skill",
-  "kind=mcp-server",
+  "mode=autonomous",
+  "mode=interactive",
   "capability=network",
   "license=Apache-2.0",
   "sort=installs",

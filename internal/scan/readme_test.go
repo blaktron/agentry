@@ -37,7 +37,7 @@ func archiveWith(t *testing.T, files map[string]string) []byte {
 
 func TestExtractREADMEFindsTheRootReadme(t *testing.T) {
 	blob := blobFake{data: archiveWith(t, map[string]string{
-		"agent.yaml": "kind: skill\n",
+		"agent.yaml": "modes: [autonomous]\n",
 		"README.md":  "# Widget\n\nSummarizes invoices.\n",
 	})}
 	got, err := ExtractREADME(t.Context(), blob, "releases/aa/x.tar.zst", nil)
@@ -69,7 +69,7 @@ func TestExtractREADMETriesAlternateNames(t *testing.T) {
 // appears to be about in search.
 func TestExtractREADMEIgnoresNestedReadmes(t *testing.T) {
 	blob := blobFake{data: archiveWith(t, map[string]string{
-		"agent.yaml":       "kind: skill\n",
+		"agent.yaml":       "modes: [autonomous]\n",
 		"vendor/README.md": "# Some Other Project\n",
 	})}
 	_, err := ExtractREADME(t.Context(), blob, "k", nil)
@@ -79,7 +79,7 @@ func TestExtractREADMEIgnoresNestedReadmes(t *testing.T) {
 }
 
 func TestExtractREADMEReportsAbsence(t *testing.T) {
-	blob := blobFake{data: archiveWith(t, map[string]string{"agent.yaml": "kind: skill\n"})}
+	blob := blobFake{data: archiveWith(t, map[string]string{"agent.yaml": "modes: [autonomous]\n"})}
 	if _, err := ExtractREADME(t.Context(), blob, "k", nil); !errors.Is(err, ErrNoReadme) {
 		t.Errorf("err = %v, want ErrNoReadme", err)
 	}

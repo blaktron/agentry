@@ -45,18 +45,18 @@ PAT=$(curl -fsS -b "$TMP/jar" -H "X-Agentry-CSRF: $CSRF" -X POST "$API/user/toke
 
 echo "== create private agent + push content + tag =="
 curl -fsS -H "Authorization: Bearer $PAT" -X POST "$API/agents" -H 'Content-Type: application/json' \
-  -d "{\"namespace\":\"$H\",\"name\":\"hello-dev\",\"kind\":\"skill\",\"visibility\":\"private\",\"summary\":\"container stack smoke\"}" >/dev/null
+  -d "{\"namespace\":\"$H\",\"name\":\"hello-dev\",\"modes\":[\"autonomous\"],\"visibility\":\"private\",\"summary\":\"container stack smoke\"}" >/dev/null
 git init -q "$TMP/w" && cd "$TMP/w"
 git -c init.defaultBranch=main checkout -qb main 2>/dev/null || true
 cat > agent.yaml <<YAML
-schemaVersion: "1"
+schemaVersion: "2"
 name: hello-dev
 namespace: $H
-kind: skill
+modes: [autonomous]
 version: 0.1.0
 summary: "container stack smoke"
 entrypoints:
-  skill: SKILL.md
+  instruction: SKILL.md
 capabilities: {}
 publish:
   include: [agent.yaml, SKILL.md]
