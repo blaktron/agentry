@@ -98,20 +98,20 @@ PAT=$(curl -fsS -b "$CJ" -H "X-Agentry-CSRF: $CSRF" -X POST "http://localhost:$P
   | python3 -c 'import json,sys;print(json.load(sys.stdin)["token"])')
 curl -fsS -b "$CJ" -H "X-Agentry-CSRF: $CSRF" -X POST "http://localhost:$PORT/api/v1/agents" \
   -H 'Content-Type: application/json' \
-  -d "{\"namespace\":\"$H\",\"name\":\"demo-skill\",\"kind\":\"skill\",\"visibility\":\"public\",\"summary\":\"M5 acceptance demo agent\"}" >/dev/null
+  -d "{\"namespace\":\"$H\",\"name\":\"demo-skill\",\"modes\":[\"autonomous\"],\"visibility\":\"public\",\"summary\":\"M5 acceptance demo agent\"}" >/dev/null
 
 AG=$(mktemp -d)
 cat > "$AG/agent.yaml" <<YAML
-schemaVersion: "1"
+schemaVersion: "2"
 name: demo-skill
 namespace: $H
-kind: skill
+modes: [autonomous]
 version: 1.0.0
 summary: "M5 acceptance demo agent"
 license: Apache-2.0
 tags: [acceptance, summarize]
 entrypoints:
-  skill: SKILL.md
+  instruction: SKILL.md
 capabilities:
   network:
     egress: [api.example.com]
