@@ -7,7 +7,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { redirectBack, sameOrigin, readForm } from "@/lib/forms";
 import { apiSend, apiUpload, currentUser, problemDetail } from "@/lib/session";
 import {
-  BuilderInput, packArchive, parseServerLines, serverLinesFromForm, validateInput, workspaceFiles,
+  BuilderInput, intakeLinesFromForm, packArchive, parseIntakeLines, parseServerLines, serverLinesFromForm,
+  validateInput, workspaceFiles,
 } from "@/lib/briefagent";
 
 function list(v: FormDataEntryValue | null): string[] {
@@ -28,14 +29,18 @@ export async function POST(req: NextRequest) {
   }
   const form = await readForm(req);
 
-  const kind = String(form.get("kind") ?? "skill");
+  const modes = form.getAll("modes").map(String).filter((m): m is "autonomous" | "interactive" => m === "autonomous" || m === "interactive");
   const { servers, error: serverErr } = parseServerLines([serverLinesFromForm(form), String(form.get("mcpServers") ?? "")].join("\n"));
   if (serverErr) return redirectBack(req, "/build", { error: serverErr });
+  const { intake, error: intakeErr } = parseIntakeLines([intakeLinesFromForm(form), String(form.get("intake") ?? "")].join("\n"));
+  if (intakeErr) return redirectBack(req, "/build", { error: intakeErr });
   const input: BuilderInput = {
     mcpServers: servers,
     name: String(form.get("name") ?? "").trim(),
     namespace: String(form.get("namespace") ?? "").trim(),
-    kind: kind === "prompt-agent" ? "prompt-agent" : "skill",
+    modes,
+    intake,
+    opening: String(form.get("opening") ?? "").trim(),
     version: String(form.get("version") ?? "").trim(),
     summary: String(form.get("summary") ?? "").trim(),
     license: String(form.get("license") ?? "").trim(),
@@ -68,7 +73,7 @@ export async function POST(req: NextRequest) {
     const created = await apiSend("POST", "/agents", {
       namespace: input.namespace,
       name: input.name,
-      kind: input.kind,
+      modes: input.modes,
       visibility,
       summary: input.summary,
     });
