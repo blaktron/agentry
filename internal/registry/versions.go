@@ -157,10 +157,31 @@ func (s *Service) TransitionInTx(ctx context.Context, q *storegen.Queries, versi
 			return TransitionResult{}, err
 		}
 	}
+	// A publish is what makes a release's modes true of the agent (DEV-088,
+	// agentry#162): the row's modes follow the manifest just published, the
+	// same denormalisation as the pointer above. Yanks and blocks leave it;
+	// the next publish sets it again. A snapshot with no modes (the
+	// withdrawn kind) sets nothing.
+	var publishedModes []string
+	if to == StatusPublished {
+		if m, err := manifest.Parse(row.Manifest); err == nil {
+			for _, mode := range m.SupportedModes() {
+				publishedModes = append(publishedModes, string(mode))
+			}
+		}
+		if len(publishedModes) > 0 {
+			if err := q.UpdateAgentSettings(ctx, storegen.UpdateAgentSettingsParams{ID: row.AgentID, Modes: publishedModes}); err != nil {
+				return TransitionResult{}, fmt.Errorf("registry: agent modes on publish: %w", err)
+			}
+		}
+	}
 	e := actorEvent
 	e.Action = audit.ActionVersionTransition
 	e.TargetKind, e.TargetID = "agent_version", versionID
 	e.Detail = map[string]any{"from": string(from), "to": string(to), "reason": reason, "version": row.Version}
+	if publishedModes != nil {
+		e.Detail["modes"] = publishedModes
+	}
 	if err := s.aud.Write(ctx, q, e); err != nil {
 		return TransitionResult{}, err
 	}
