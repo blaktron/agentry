@@ -139,7 +139,7 @@ func TestMCPServersRefusals(t *testing.T) {
 	}
 }
 
-func TestMCPServersRefusedOnMCPServerKind(t *testing.T) {
+func TestMCPServersOnWithdrawnKindRefused(t *testing.T) {
 	doc := `schemaVersion: "1"
 name: composed
 namespace: acme
@@ -159,8 +159,8 @@ publish:
   include: [agent.yaml, server.js]
 `
 	text := blockingText(issuesFor(t, doc))
-	if !strings.Contains(text, "cannot itself require MCP servers") {
-		t.Fatalf("mcp-server kind with mcpServers not refused:\n%s", text)
+	if !strings.Contains(text, "withdrawn") {
+		t.Fatalf("withdrawn mcp-server kind not refused:\n%s", text)
 	}
 }
 

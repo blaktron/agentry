@@ -310,8 +310,19 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 	if blocking := manifest.Blocking(issues); len(blocking) > 0 {
 		return Version{}, &ErrValidation{Issues: blocking}
 	}
-	if string(m.Kind) != a.Kind {
-		return Version{}, &ErrValidation{Issues: []error{fmt.Errorf("manifest kind %q does not match agent kind %q", m.Kind, a.Kind)}}
+	// The agent row still carries its v1 kind until the modes migration
+	// (agentry#144). A v1 manifest must name that kind; a v2 manifest may
+	// publish to any agent that was never an mcp-server — that kind is
+	// withdrawn (DEV-088) and its rows are blocked by the migration.
+	switch m.Major() {
+	case 2:
+		if a.Kind == "mcp-server" {
+			return Version{}, &ErrValidation{Issues: []error{fmt.Errorf("agent %s/%s is an mcp-server, a withdrawn kind; a v2 manifest cannot publish to it", a.Namespace, a.Name)}}
+		}
+	default:
+		if m.Kind != a.Kind {
+			return Version{}, &ErrValidation{Issues: []error{fmt.Errorf("manifest kind %q does not match agent kind %q", m.Kind, a.Kind)}}
+		}
 	}
 
 	canonical, err := manifest.CanonicalJSON(m)
