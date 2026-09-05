@@ -31,8 +31,6 @@ Ten stages run against those bytes:
 | **S3** | Hidden and obfuscated content: zero-width and bidi characters, Unicode tag blocks, confusables, private-use codepoints, HTML comments, CSS-hidden text, data URIs, entropy-gated encoded blobs |
 | **S4** | Prompt-injection signatures: instruction override, exfiltration, tool coercion, credential harvesting, persistence, obfuscation |
 | **S5** | LLM adjudication against a fixed rubric, with no tools; a judge showing signs of manipulation is itself a finding |
-| **S6** | Capability consistency: what the manifest declares versus what the code does |
-| **S7** | Dependencies, licenses, install scripts, typosquat heuristics |
 | **S8** | Metadata, namespace and publisher-behaviour abuse |
 | **S9** | Release-diff risk: the rug-pull check, comparing a version against its predecessor |
 | **S10** | Report assembly into a canonical, digest-addressed document |
@@ -78,14 +76,14 @@ rule about honesty, and these are the specific things behind it:
 - **Declared capabilities are a contract, not a sandbox.** The manifest says
   what an agent claims to need: network egress, filesystem access,
   subprocess execution, secrets. The registry checks that claim against the
-  code (S6) and gates on it (§8.6 policy), but it cannot enforce anything
+  manifest and gates on it (§8.6 policy), but it cannot enforce anything
   once the agent is running on your machine. Your runtime should read the
   manifest and sandbox accordingly. That is what it is for.
 - **Scanning happens at publication, not at push and not at run time.** A
   private repository's contents are not scanned until a version is submitted.
 - **The shipped scanners are good, not identical to the tools PLAN §8.3
-  names.** S2, S6 and S7 use native Go implementations behind adapter
-  interfaces rather than gitleaks, opengrep and osv-scanner. They detect
+  names.** S2 uses a native Go implementation behind an adapter
+  interface, with gitleaks optional beside it. It detects
   everything the committed attack corpus exercises; they are not those
   tools. See DEV-006.
 - **Review is human, and humans are the ones deciding.** Reviewer

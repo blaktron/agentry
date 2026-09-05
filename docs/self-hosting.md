@@ -125,9 +125,6 @@ scan:
   # External scanner tools behind the §8.3 seams. All optional: unset, the
   # native Go detectors run alone and S7 reports "not checked".
   gitleaksBin: /usr/bin/gitleaks      # AGENTRY_SCAN_GITLEAKS_BIN ("auto" = PATH lookup); shipped in the image
-  # opengrepBin: /usr/local/bin/opengrep   # AGENTRY_SCAN_OPENGREP_BIN
-  # opengrepRules: /etc/agentry/opengrep   # AGENTRY_SCAN_OPENGREP_RULES (required with opengrepBin)
-  # osvUrl: https://api.osv.dev       # AGENTRY_SCAN_OSV_URL — the scanner's one egress; opt in deliberately
   # toolTimeout: 2m                   # AGENTRY_SCAN_TOOL_TIMEOUT per invocation
 ```
 

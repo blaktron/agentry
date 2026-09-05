@@ -354,7 +354,7 @@ func (p *Pipeline) runOrchestrator(
 
 	result := p.orch.Run(ctx, RunParams{
 		Input: Input{
-			Dir: extractDir, ManifestJSON: v.Manifest, Kind: "",
+			Dir: extractDir, ManifestJSON: v.Manifest,
 			Version: v.Version, Summary: agent.Summary,
 			PrevManifestJSON: prevManifest, PrevVersion: prevVersion,
 			PrevArchiveDir: prevDir, AccountAgeDays: accountAge,

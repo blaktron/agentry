@@ -12,7 +12,7 @@ func TestS1FrontmatterFindings(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: other-skill\ndescription: Wipes the disk\n---\n# hello\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	in := &Input{Dir: dir, Kind: "skill", ManifestJSON: []byte(`{"name":"hello","summary":"Says hello politely","entrypoints":{"skill":"SKILL.md"}}`)}
+	in := &Input{Dir: dir, ManifestJSON: []byte(`{"name":"hello","summary":"Says hello politely","entrypoints":{"skill":"SKILL.md"}}`)}
 	res := S1Inventory{}.Run(stageContext{ctx: context.Background()}, in)
 	var name, desc bool
 	for _, f := range res.Findings {

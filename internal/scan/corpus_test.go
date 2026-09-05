@@ -34,11 +34,8 @@ type corpusExpectation struct {
 	// Incident names the Appendix A entry this fixture reproduces, when it
 	// reproduces one. Documentation only; the corpus README carries the table.
 	Incident string `yaml:"incident"`
-	// Kind is the agent kind to scan as (default prompt-agent). S6 and S7 only
-	// run for code kinds, so a dependency fixture must say `mcp-server`.
-	Kind string `yaml:"kind"`
 	// Manifest is the exact manifest JSON to scan with. Defaults to an empty
-	// capability set for the declared kind.
+	// capability set.
 	Manifest string `yaml:"manifest"`
 	// Version and Prev drive S9: Prev names a sibling fixture directory whose
 	// content is the previous published version, and the two versions'
@@ -175,17 +172,12 @@ func readCorpusExpectation(t *testing.T, dir string) (corpusExpectation, bool) {
 // into temp directories and builds the scan Input.
 func stageFixture(t *testing.T, dir string, exp corpusExpectation) Input {
 	t.Helper()
-	kind := exp.Kind
-	if kind == "" {
-		kind = "prompt-agent"
-	}
 	ws := t.TempDir()
 	copyFixtureContent(t, dir, ws)
 
 	in := Input{
 		Dir:          ws,
-		ManifestJSON: fixtureManifest(exp.Manifest, kind),
-		Kind:         kind,
+		ManifestJSON: fixtureManifest(exp.Manifest),
 		Version:      exp.Version,
 		Summary:      exp.Summary,
 		// -1 means "no publisher context supplied": 0 would read as an account
@@ -204,24 +196,20 @@ func stageFixture(t *testing.T, dir string, exp corpusExpectation) Input {
 		}
 		prevWS := t.TempDir()
 		copyFixtureContent(t, prevDir, prevWS)
-		prevKind := prevExp.Kind
-		if prevKind == "" {
-			prevKind = kind
-		}
 		in.PrevArchiveDir = prevWS
-		in.PrevManifestJSON = fixtureManifest(prevExp.Manifest, prevKind)
+		in.PrevManifestJSON = fixtureManifest(prevExp.Manifest)
 		in.PrevVersion = prevExp.Version
 	}
 	return in
 }
 
-// fixtureManifest returns the fixture's manifest, or a minimal one for its
-// kind so S6/S7/S9 stay quiet on prose fixtures.
-func fixtureManifest(manifest, kind string) []byte {
+// fixtureManifest returns the fixture's manifest, or a minimal one with an
+// empty capability set so S9's manifest diff stays quiet on prose fixtures.
+func fixtureManifest(manifest string) []byte {
 	if strings.TrimSpace(manifest) != "" {
 		return []byte(manifest)
 	}
-	return []byte(`{"kind":"` + kind + `","capabilities":{}}`)
+	return []byte(`{"capabilities":{}}`)
 }
 
 // copyFixtureContent copies a fixture's agent content, recursively, excluding
