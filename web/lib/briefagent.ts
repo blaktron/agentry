@@ -14,6 +14,8 @@ import { zstdCompressSync } from "node:zlib";
 
 // BuilderMCPServer is one declared MCP server (RUNNER-PLAN-3): exactly one
 // ecosystem, an EXACT version (the pin rides the release digest).
+import type { AgentMode } from "./api";
+
 export type BuilderMCPServer = {
   source: "npm" | "pypi";
   pkg: string;
@@ -23,11 +25,27 @@ export type BuilderMCPServer = {
   egress: string[];
 };
 
+// One up-front question (manifest v2 `intake`, plan §3.5): asked before a
+// run in either mode; the runner stages the answers read-only for the agent.
+export type BuilderIntakeQuestion = {
+  id: string;
+  prompt: string;
+  type: "text" | "secret" | "choice" | "file";
+  required: boolean;
+  choices: string[];
+};
+
 export type BuilderInput = {
   mcpServers: BuilderMCPServer[];
   name: string;
   namespace: string;
-  kind: "skill" | "prompt-agent";
+  // Run modes the release supports (DEV-088): one or both.
+  modes: AgentMode[];
+  // Up-front questions; empty is the common case.
+  intake: BuilderIntakeQuestion[];
+  // The assistant's first message in an interactive session when no task
+  // text was given (manifest v2 `interactive.opening`); empty for none.
+  opening: string;
   version: string;
   summary: string;
   license: string;
@@ -50,6 +68,13 @@ const NPM_NAME_RE = /^(@[a-z0-9][a-z0-9-_.]*\/)?[a-z0-9][a-z0-9-_.]*$/;
 const PYPI_NAME_RE = /^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$/;
 const PEP440_EXACT_RE = /^\d+(\.\d+)*((a|b|rc)\d+)?(\.post\d+)?(\.dev\d+)?$/;
 const ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const INTAKE_ID_RE = /^[a-z0-9_]{1,64}$/;
+const INTAKE_TYPES = ["text", "secret", "choice", "file"] as const;
+// The manifest's own limits (pkg/manifest V10).
+export const MAX_INTAKE_QUESTIONS = 20;
+export const MAX_OPENING_CHARS = 500;
+// The single instruction file a v2 package names (plan §3.2).
+export const INSTRUCTION_FILE = "AGENT.md";
 
 // parseServerLines parses the Builder's line-based mcpServers field (one
 // declared server per line; the plain-HTML form has no list controls,
@@ -85,6 +110,89 @@ export function serverLinesFromForm(form: { get(name: string): FormDataEntryValu
     lines.push(line);
   }
   return lines.join("\n");
+}
+
+// intakeLinesFromForm turns the Builder's structured intake rows
+// (intake<i>Id/Prompt/Type/Required/Choices, i = 0..BUILDER_INTAKE_ROWS-1)
+// into the line syntax parseIntakeLines accepts, so the rows and the
+// advanced textarea feed one parser. Rows with no id are skipped.
+export const BUILDER_INTAKE_ROWS = 3;
+export function intakeLinesFromForm(form: { get(name: string): FormDataEntryValue | null }): string {
+  const lines: string[] = [];
+  for (let i = 0; i < BUILDER_INTAKE_ROWS; i++) {
+    const id = String(form.get(`intake${i}Id`) ?? "").trim();
+    if (!id) continue;
+    const prompt = String(form.get(`intake${i}Prompt`) ?? "").trim();
+    const type = String(form.get(`intake${i}Type`) ?? "text").trim() || "text";
+    const required = String(form.get(`intake${i}Required`) ?? "") !== "";
+    const choices = String(form.get(`intake${i}Choices`) ?? "")
+      .split(/[\s,]+/)
+      .map((c) => c.trim())
+      .filter(Boolean)
+      .join(",");
+    let line = `${id}: ${prompt} type=${type}`;
+    if (choices) line += ` choices=${choices}`;
+    if (required) line += " required";
+    lines.push(line);
+  }
+  return lines.join("\n");
+}
+
+// parseIntakeLines parses one question per line:
+//
+//	topic: What should I look at? type=text required
+//	region: Which region? type=choice choices=emea,apac,amer
+//
+// The prompt is everything between "id:" and the trailing options
+// (type=, choices=, required). Blank lines and #-comments are skipped.
+export function parseIntakeLines(text: string): { intake: BuilderIntakeQuestion[]; error: string | null } {
+  const intake: BuilderIntakeQuestion[] = [];
+  for (const rawLine of text.split("\n")) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const m = /^([^:\s]+):\s*(.*)$/.exec(line);
+    if (!m) return { intake, error: `intake line "${line}": expected <id>: <prompt> [type=…] [choices=a,b] [required]` };
+    const q: BuilderIntakeQuestion = { id: m[1], prompt: "", type: "text", required: false, choices: [] };
+    const words = m[2].split(/\s+/).filter(Boolean);
+    const promptWords: string[] = [];
+    let inOptions = false;
+    for (const w of words) {
+      const om = /^(type|choices)=(.*)$/.exec(w);
+      if (w === "required") { q.required = true; inOptions = true; continue; }
+      if (om) {
+        inOptions = true;
+        if (om[1] === "type") {
+          if (!(INTAKE_TYPES as readonly string[]).includes(om[2])) {
+            return { intake, error: `intake "${q.id}": unknown type "${om[2]}" (text | secret | choice | file)` };
+          }
+          q.type = om[2] as BuilderIntakeQuestion["type"];
+        } else {
+          q.choices = om[2].split(",").map((c) => c.trim()).filter(Boolean);
+        }
+        continue;
+      }
+      if (inOptions) return { intake, error: `intake "${q.id}": "${w}" after the options — put the prompt before type=/choices=/required` };
+      promptWords.push(w);
+    }
+    q.prompt = promptWords.join(" ");
+    intake.push(q);
+  }
+  return { intake, error: null };
+}
+
+// validateIntake applies the V10 rules the API will re-check.
+function validateIntake(intake: BuilderIntakeQuestion[]): string | null {
+  if (intake.length > MAX_INTAKE_QUESTIONS) return `at most ${MAX_INTAKE_QUESTIONS} intake questions`;
+  const seen = new Set<string>();
+  for (const q of intake) {
+    if (!INTAKE_ID_RE.test(q.id)) return `intake id "${q.id}" must be [a-z0-9_], 1–64 chars`;
+    if (seen.has(q.id)) return `duplicate intake id "${q.id}"`;
+    seen.add(q.id);
+    if (!q.prompt.trim()) return `intake "${q.id}": the prompt is required`;
+    if (q.type === "choice" && q.choices.length === 0) return `intake "${q.id}": type choice needs choices=`;
+    if (q.type !== "choice" && q.choices.length > 0) return `intake "${q.id}": choices= only applies to type choice`;
+  }
+  return null;
 }
 
 export function parseServerLines(text: string): { servers: BuilderMCPServer[]; error: string | null } {
@@ -157,13 +265,15 @@ export function validateInput(i: BuilderInput): string | null {
   if (i.egressMode === "hosts" && i.egressHosts.length === 0) return "egress is set to hosts but no hosts are listed";
   if (i.fsRead === "paths" && i.fsReadPaths.length === 0) return "fs read is set to paths but no paths are listed";
   if (i.fsWrite === "paths" && i.fsWritePaths.length === 0) return "fs write is set to paths but no paths are listed";
+  if (i.modes.length === 0) return "pick at least one run mode (autonomous, interactive)";
+  for (const m of i.modes) if (m !== "autonomous" && m !== "interactive") return `unknown run mode "${m}"`;
+  if (i.opening.length > MAX_OPENING_CHARS) return `the interactive opening must be at most ${MAX_OPENING_CHARS} characters`;
+  if (i.opening.trim() && !i.modes.includes("interactive")) return "an interactive opening is set but interactive is not among the run modes";
+  const intakeErr = validateIntake(i.intake);
+  if (intakeErr) return intakeErr;
   const serverErr = validateServers(i.mcpServers);
   if (serverErr) return serverErr;
   return null;
-}
-
-export function entrypointFile(kind: BuilderInput["kind"]): string {
-  return kind === "skill" ? "SKILL.md" : "AGENT.md";
 }
 
 // yamlString double-quotes a scalar; JSON string escaping is valid YAML.
@@ -180,25 +290,30 @@ function fsValue(mode: string, paths: string[]): string {
 // renderManifest writes agent.yaml the way the template repo reads:
 // stable key order, the capability contract last before publish.
 export function renderManifest(i: BuilderInput): string {
-  const entry = entrypointFile(i.kind);
+  const entry = INSTRUCTION_FILE;
+  const order: AgentMode[] = ["autonomous", "interactive"];
+  const modes = order.filter((m) => i.modes.includes(m));
   const lines: string[] = [
-    `schemaVersion: "1"`,
+    `schemaVersion: "2"`,
     `name: ${i.name}`,
     `namespace: ${i.namespace}`,
-    `kind: ${i.kind}`,
     `version: ${i.version}`,
     `summary: ${yamlString(i.summary)}`,
   ];
   if (i.license) lines.push(`license: ${i.license}`);
   if (i.tags.length > 0) lines.push(`tags: [${i.tags.join(", ")}]`);
-  lines.push(
-    "",
-    "entrypoints:",
-    `  ${i.kind === "skill" ? "skill" : "prompt"}: ${entry}`,
-    "",
-    "capabilities:",
-    "  network:",
-  );
+  lines.push("", `modes: [${modes.join(", ")}]`, "", "entrypoints:", `  instruction: ${entry}`);
+  if (i.intake.length > 0) {
+    lines.push("", "intake:");
+    for (const q of i.intake) {
+      lines.push(`  - id: ${q.id}`, `    prompt: ${yamlString(q.prompt)}`);
+      if (q.type !== "text") lines.push(`    type: ${q.type}`);
+      if (q.required) lines.push("    required: true");
+      if (q.choices.length > 0) lines.push(`    choices: [${q.choices.map(yamlString).join(", ")}]`);
+    }
+  }
+  if (i.opening.trim()) lines.push("", "interactive:", `  opening: ${yamlString(i.opening.trim())}`);
+  lines.push("", "capabilities:", "  network:");
   if (i.egressMode === "all") lines.push(`    egress: "*"`);
   else if (i.egressMode === "hosts") lines.push(`    egress: [${i.egressHosts.join(", ")}]`);
   else lines.push("    egress: none");
@@ -235,7 +350,7 @@ export function workspaceFiles(i: BuilderInput): { path: string; content: string
   const instructions = i.instructions.endsWith("\n") ? i.instructions : i.instructions + "\n";
   return [
     { path: "agent.yaml", content: renderManifest(i) },
-    { path: entrypointFile(i.kind), content: instructions },
+    { path: INSTRUCTION_FILE, content: instructions },
     { path: "README.md", content: `# ${i.name}\n\n${i.summary}\n` },
     { path: "LICENSE", content: mitLicense(i.namespace) },
   ];
