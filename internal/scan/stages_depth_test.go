@@ -322,11 +322,3 @@ func boolSet(m map[string]Finding) map[string]bool {
 	}
 	return out
 }
-
-func toStrings(v any) []string {
-	items, ok := v.([]string)
-	if !ok {
-		return nil
-	}
-	return items
-}

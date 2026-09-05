@@ -11,7 +11,8 @@ import (
 
 // fakeTool writes an executable shell script that ignores its arguments
 // except for finding the report path (gitleaks) and prints canned output.
-func fakeTool(t *testing.T, name, script string) string {
+func fakeTool(t *testing.T, script string) string {
+	const name = "gitleaks"
 	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("shell fixtures")
@@ -30,7 +31,7 @@ func TestResolveExecTool(t *testing.T) {
 	if _, err := ResolveExecTool("gitleaks", filepath.Join(t.TempDir(), "missing"), "", 0); err == nil {
 		t.Fatal("missing binary must error")
 	}
-	bin := fakeTool(t, "gitleaks", "exit 0\n")
+	bin := fakeTool(t, "exit 0\n")
 	if _, err := ResolveExecTool("gitleaks", bin, filepath.Join(t.TempDir(), "no-rules"), 0); err == nil {
 		t.Fatal("missing rules must error")
 	}
@@ -45,7 +46,7 @@ func TestResolveExecTool(t *testing.T) {
 
 func TestRunGitleaksMergesReport(t *testing.T) {
 	// The fixture writes a two-hit report to the --report-path argument.
-	bin := fakeTool(t, "gitleaks", `
+	bin := fakeTool(t, `
 for a in "$@"; do last="$a"; done
 cat > "$last" <<'JSON'
 [
@@ -72,12 +73,12 @@ JSON
 }
 
 func TestRunGitleaksFailureIsAFinding(t *testing.T) {
-	bin := fakeTool(t, "gitleaks", "echo boom >&2; exit 3\n")
+	bin := fakeTool(t, "echo boom >&2; exit 3\n")
 	got := runGitleaks(context.Background(), &ExecTool{Bin: bin}, t.TempDir(), nil)
 	if len(got) != 1 || got[0].Scanner != "S2/tool-error" || !strings.Contains(got[0].Detail["error"].(string), "boom") {
 		t.Fatalf("expected a tool-error finding: %+v", got)
 	}
-	empty := fakeTool(t, "gitleaks", `for a in "$@"; do last="$a"; done; : > "$last"`)
+	empty := fakeTool(t, `for a in "$@"; do last="$a"; done; : > "$last"`)
 	if got := runGitleaks(context.Background(), &ExecTool{Bin: empty}, t.TempDir(), nil); len(got) != 0 {
 		t.Fatalf("empty report must yield nothing: %+v", got)
 	}
