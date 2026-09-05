@@ -672,10 +672,10 @@ func benignFiles(ns, name, version string) map[string]string {
 }
 
 func wildcardEgressManifest(ns, name, version string) string {
-	return `schemaVersion: "1"
+	return `schemaVersion: "2"
 name: ` + name + `
 namespace: ` + ns + `
-kind: skill
+modes: [autonomous]
 version: ` + version + `
 summary: "test"
 license: Apache-2.0
@@ -683,17 +683,17 @@ capabilities:
   network:
     egress: ["*"]
 entrypoints:
-  skill: SKILL.md
+  instruction: SKILL.md
 publish:
   include: [agent.yaml, README.md, SKILL.md, LICENSE]
 `
 }
 
 func execManifest(ns, name, version string) string {
-	return `schemaVersion: "1"
+	return `schemaVersion: "2"
 name: ` + name + `
 namespace: ` + ns + `
-kind: skill
+modes: [autonomous]
 version: ` + version + `
 summary: "test"
 license: Apache-2.0
@@ -701,37 +701,37 @@ capabilities:
   exec:
     commands: ["git"]
 entrypoints:
-  skill: SKILL.md
+  instruction: SKILL.md
 publish:
   include: [agent.yaml, README.md, SKILL.md, LICENSE]
 `
 }
 
 func licensedManifest(ns, name, version, license string) string {
-	return `schemaVersion: "1"
+	return `schemaVersion: "2"
 name: ` + name + `
 namespace: ` + ns + `
-kind: skill
+modes: [autonomous]
 version: ` + version + `
 summary: "test"
 license: ` + license + `
 entrypoints:
-  skill: SKILL.md
+  instruction: SKILL.md
 publish:
   include: [agent.yaml, README.md, SKILL.md, LICENSE]
 `
 }
 
 func evalsManifest(ns, name, version string) string {
-	return `schemaVersion: "1"
+	return `schemaVersion: "2"
 name: ` + name + `
 namespace: ` + ns + `
-kind: skill
+modes: [autonomous]
 version: ` + version + `
 summary: "test"
 license: Apache-2.0
 entrypoints:
-  skill: SKILL.md
+  instruction: SKILL.md
 publish:
   include: [agent.yaml, README.md, SKILL.md, LICENSE, evals/**]
 `

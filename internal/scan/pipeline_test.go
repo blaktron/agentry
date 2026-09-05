@@ -173,15 +173,15 @@ func (e *pipeEnv) publishExisting(name string, files map[string]string) storegen
 }
 
 func skillManifest(ns, name, version string) string {
-	return `schemaVersion: "1"
+	return `schemaVersion: "2"
 name: ` + name + `
 namespace: ` + ns + `
-kind: skill
+modes: [autonomous]
 version: ` + version + `
 summary: "test"
 license: Apache-2.0
 entrypoints:
-  skill: SKILL.md
+  instruction: SKILL.md
 publish:
   include: [agent.yaml, README.md, SKILL.md, LICENSE]
 `

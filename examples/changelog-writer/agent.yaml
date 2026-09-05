@@ -1,7 +1,7 @@
-schemaVersion: "1"
+schemaVersion: "2"
 name: changelog-writer
 namespace: agentry
-kind: skill
+modes: [autonomous]
 version: 1.0.0
 summary: "Write release notes from the commits since the last tag"
 license: Apache-2.0
@@ -10,7 +10,7 @@ authors:
 tags: [release, changelog, documentation]
 
 entrypoints:
-  skill: SKILL.md
+  instruction: SKILL.md
 
 runtime:
   interfaces: [claude-skill]

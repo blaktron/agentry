@@ -72,19 +72,19 @@ PAT=$(curl -fsS -b "$CJA" -H "X-Agentry-CSRF: $CSRFA" -X POST "$API/user/tokens"
   -H 'Content-Type: application/json' -d '{"name":"pub","scopes":["agent:publish","agent:read"]}' \
   | python3 -c 'import json,sys;print(json.load(sys.stdin)["token"])')
 curl -fsS -b "$CJA" -H "X-Agentry-CSRF: $CSRFA" -X POST "$API/agents" -H 'Content-Type: application/json' \
-  -d "{\"namespace\":\"$AUTHOR\",\"name\":\"gated\",\"kind\":\"skill\",\"visibility\":\"public\",\"summary\":\"console acceptance\"}" >/dev/null
+  -d "{\"namespace\":\"$AUTHOR\",\"name\":\"gated\",\"modes\":[\"autonomous\"],\"visibility\":\"public\",\"summary\":\"console acceptance\"}" >/dev/null
 
 AG=$(mktemp -d)
 cat > "$AG/agent.yaml" <<YAML
-schemaVersion: "1"
+schemaVersion: "2"
 name: gated
 namespace: $AUTHOR
-kind: skill
+modes: [autonomous]
 version: 1.0.0
 summary: "console acceptance"
 license: Apache-2.0
 entrypoints:
-  skill: SKILL.md
+  instruction: SKILL.md
 publish:
   include: [agent.yaml, README.md, SKILL.md, LICENSE]
 YAML
@@ -272,7 +272,7 @@ fi
 #     the point here is the settings surface, not enforcement interactions.
 SETNAME="wsettings$SFX"
 curl -fsS -b "$CJA" -H "X-Agentry-CSRF: $CSRFA" -X POST "$API/agents" -H 'Content-Type: application/json' \
-  -d "{\"namespace\":\"$AUTHOR\",\"name\":\"$SETNAME\",\"kind\":\"skill\",\"visibility\":\"private\",\"summary\":\"settings acceptance\"}" >/dev/null
+  -d "{\"namespace\":\"$AUTHOR\",\"name\":\"$SETNAME\",\"modes\":[\"autonomous\"],\"visibility\":\"private\",\"summary\":\"settings acceptance\"}" >/dev/null
 checkao "/$AUTHOR/$SETNAME/settings" "Publish on tag push" "agent settings: auto-publish toggle"
 checkao "/$AUTHOR/$SETNAME/settings" "Access ("            "agent settings: grants section"
 LOC=$(curl -fsS -b "$JARA" -o /dev/null -w '%{redirect_url}' -X POST "$WEB/$AUTHOR/$SETNAME/settings/save" \
