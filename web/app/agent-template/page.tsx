@@ -52,9 +52,8 @@ export default function AgentTemplatePage() {
           <CodeBlock>{`my-briefagent/
 ├── agent.yaml      # the manifest (required)
 ├── README.md       # rendered on the BriefAgent page (required to publish publicly)
-├── SKILL.md        # instruction entrypoint for a skill
-├── prompts/…       # prompt-agent content (AGENT.md at the root)
-├── src/… + lockfile  # mcp-server code (JS/TS or Python)
+├── AGENT.md        # the instruction file (entrypoints.instruction; frontmatter allowed)
+├── prompts/…       # supporting instruction files, if any
 └── LICENSE`}</CodeBlock>
         </div>
       </section>
@@ -67,16 +66,25 @@ export default function AgentTemplatePage() {
           least privilege. An undeclared capability is a tool the BriefAgent does not have.
         </p>
         <div className="mt-3">
-          <CodeBlock>{`schemaVersion: "1"
+          <CodeBlock>{`schemaVersion: "2"
 name: incident-summarizer
 namespace: acme
-kind: skill                 # skill | prompt-agent | mcp-server
 version: 1.4.2              # strict semver, matches the git tag
 summary: "Summarizes incidents into postmortem drafts"
 license: Apache-2.0
 
+modes: [autonomous, interactive]   # one or both run modes
+
 entrypoints:
-  skill: SKILL.md
+  instruction: AGENT.md     # default AGENT.md; a SKILL.md-shaped file works too
+
+intake:                     # optional up-front questions, either mode
+  - id: incident
+    prompt: "Incident id or a path to its export"
+    required: true
+
+interactive:                # optional session hints
+  opening: "Which incident, and what do you need from it?"
 
 capabilities:               # the security contract: closed vocabulary
   network:
@@ -95,27 +103,30 @@ capabilities:               # the security contract: closed vocabulary
   #     egress: [api.github.com]  # the server's own outbound allowlist
 
 publish:
-  include: [agent.yaml, README.md, SKILL.md, LICENSE]  # allowlist`}</CodeBlock>
+  include: [agent.yaml, README.md, AGENT.md, LICENSE]  # allowlist`}</CodeBlock>
         </div>
       </section>
 
       <section className="grid gap-4 sm:grid-cols-3">
         <Card>
-          <div className="font-medium">skill</div>
+          <div className="font-medium">autonomous</div>
           <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-            An instruction package with support files; maps to Agent Skills.
+            Runs from its files — optionally after the up-front questions — writes its output and
+            receipts, and ends.
           </p>
         </Card>
         <Card>
-          <div className="font-medium">prompt-agent</div>
+          <div className="font-medium">interactive</div>
           <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-            Pure instructions: a system prompt, persona, or workflow. No code.
+            The same plan and controls, but the run is a conversation: the agent can ask, you can
+            answer and add files, and nothing widens what the manifest allows.
           </p>
         </Card>
         <Card>
-          <div className="font-medium">mcp-server</div>
+          <div className="font-medium">MCP servers</div>
           <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-            A small MCP server in JS/TS or Python, with a lockfile.
+            Declared under <code>capabilities.mcpServers</code> and installed with the release; they
+            are tools an agent uses, not packages of their own.
           </p>
         </Card>
       </section>
@@ -137,7 +148,7 @@ agentry run acme/incident-summarizer@^1 --input incident.json`}</CodeBlock>
           <a href="/build" className="underline">
             BriefAgent Builder
           </a>{" "}
-          authors a skill or prompt-agent in the browser — download it locally, or publish it
+          authors a BriefAgent in the browser — download it locally, or publish it
           signed in.
         </p>
       </section>
