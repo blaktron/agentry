@@ -151,7 +151,7 @@ func TestCacheableStagesMatchSpec(t *testing.T) {
 	for _, s := range CacheableStages() {
 		got[s] = true
 	}
-	for _, want := range []string{"S2", "S3S4", "S6", "S7", "S8"} {
+	for _, want := range []string{"S2", "S3S4", "S8"} {
 		if !got[want] {
 			t.Errorf("%s is not cacheable but §8.7 lists it as deterministic", want)
 		}

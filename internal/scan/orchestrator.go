@@ -41,12 +41,10 @@ type Orchestrator struct {
 func (o *Orchestrator) SetMetrics(m *metrics.Metrics) { o.mx = m }
 
 // ExternalTools are the production upgrades DEV-006 left behind interfaces:
-// an OSV API client for S7, gitleaks for S2, opengrep for S6. Each is
-// optional and independent.
+// gitleaks for S2. The OSV client (S7) and opengrep (S6) went with the code
+// kinds (DEV-088): nothing code-bearing is published any more.
 type ExternalTools struct {
-	OSV      OSVClient
 	Gitleaks *ExecTool
-	Opengrep *ExecTool
 }
 
 // SetExternalTools wires the external scanners.
@@ -113,7 +111,7 @@ func (r Resume) skips(id string) bool {
 // results cache keyed (digest, scanner, ruleset) — §8.7. S1 always runs (it
 // is the inventory), S5 is the judge (re-adjudicated only on major bumps),
 // S9 depends on the previous published version rather than on these bytes.
-func CacheableStages() []string { return []string{"S2", "S3S4", "S6", "S7", "S8"} }
+func CacheableStages() []string { return []string{"S2", "S3S4", "S8"} }
 
 // Report is the S10 canonical report (§8.3 S10). Field order is fixed and
 // slices are sorted so ReportDigest is reproducible.
@@ -198,13 +196,12 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 		stageErrs = append(stageErrs, "S1: "+s1.Err.Error())
 	}
 
-	// S2–S8 in parallel (S9 needs the others' findings; run it after).
+	// S2–S5 and S8 in parallel (S9 needs the others' findings; run it after).
+	// S6 and S7 were the code-kind stages, withdrawn with the kind (DEV-088).
 	parallel := []Stage{
 		S2Secrets{Gitleaks: o.tools.Gitleaks},
 		S3S4Content{},
 		S5Judge{},
-		S6Capabilities{Opengrep: o.tools.Opengrep},
-		S7Dependencies{OSV: o.tools.OSV},
 		S8Metadata{PopularAgentNames: p.PopularAgentNames, AgentName: p.AgentName},
 	}
 	results := make([]StageResult, len(parallel))

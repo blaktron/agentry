@@ -114,8 +114,6 @@ type Input struct {
 	Files []FileEntry
 	// Manifest is the parsed, validated manifest (capabilities drive S6).
 	ManifestJSON []byte
-	// Kind is the agent kind (skill|prompt-agent|mcp-server).
-	Kind string
 	// Version is this version's semver string; S9 classifies the bump size
 	// against PrevVersion (a patch bump that changes behaviour is the
 	// rug-pull shape).

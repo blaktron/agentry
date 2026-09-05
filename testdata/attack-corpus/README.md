@@ -32,7 +32,7 @@ Two runners read this tree:
 | Runner | Scope | Asserts |
 |---|---|---|
 | `pkg/rules/corpus_test.go` | S3 + S4 only, no pipeline | the `S3/…` and `S4/…` entries of `expect`/`forbid`; `expectClean` ⇒ zero findings |
-| `internal/scan/corpus_test.go` | the whole orchestrator | every `expect`/`forbid` id including S6–S9; attack fixtures must not auto-publish; benign fixtures must not be rejected |
+| `internal/scan/corpus_test.go` | the whole orchestrator | every `expect`/`forbid` id including S8–S9; attack fixtures must not auto-publish; benign fixtures must not be rejected |
 
 ## expected.yaml schema
 
@@ -46,9 +46,8 @@ forbid:            # finding ids that MUST NOT be found
 expectClean: true  # when true, the fixture must yield ZERO rule-level findings
 
 # --- optional pipeline context (read by internal/scan's runner only) ---
-kind: mcp-server                 # default prompt-agent; S6/S7 only run for code kinds
 manifest: |                      # default {"kind":"<kind>","capabilities":{}}
-  {"kind":"mcp-server","license":"MIT","capabilities":{}}
+  {"license":"MIT","capabilities":{}}
 version: "1.0.1"                 # this version's semver
 prev: incident-postmark-v1       # sibling fixture = the PREVIOUS published version
 agentName: "crypto-assistant"    # feeds S8 name similarity
@@ -68,10 +67,9 @@ and the pipeline runner fails the build if the corpus contains no such pair.
 
 | Incident | Pattern | Fixture(s) | Stage that must catch it |
 |---|---|---|---|
-| postmark-mcp (2025-09): 15 clean releases, then one line BCC-ing all mail | rug-pull diff | `incident-postmark-v1` + `incident-postmark-v2` (pair), `incident-postmark-benign-docs` | **S9** new egress destination in package content on a patch bump + **S6** undeclared network |
+| postmark-mcp (2025-09): 15 clean releases, then one line BCC-ing all mail | rug-pull diff | `incident-postmark-v1` + `incident-postmark-v2` (pair), `incident-postmark-benign-docs` | **S9** new egress destination in package content on a patch bump |
 | GlassWorm (2025-10): worm hidden via invisible Unicode in editor extensions | invisible payload | `incident-glassworm`, `incident-glassworm-benign` (also `s3-tag-block`) | **S3** Unicode tag block (high on sight — no legitimate prose use) |
 | Amazon Q extension wiper prompt (2025-07): destructive instruction shipped to ~1M installs | malicious instructions in prose | `incident-amazonq-wiper`, `incident-amazonq-wiper-benign` | **S4** `destructive` family (added in ruleset 0.2.0) + S5 C6 |
-| Shai-Hulud npm worm (2025-09/11): postinstall credential stealer | install-script supply chain | `incident-shai-hulud`, `incident-shai-hulud-benign` | **S7** install-script detection (+ lockfile audit, + S9 escalation when the hook is new) |
 | ClawHavoc (2026-02): 1,184 malicious skills from 12 accounts | mass-publish + content | `incident-clawhavoc`, `incident-clawhavoc-benign` | **S8** young-account velocity + keyword stuffing |
 | s1ngularity/nx (2025-08): stolen-token publishes | provenance gap | *not a content fixture* — the defense is S8 publisher signals plus the attestation's `source` field (§8.8), exercised in `internal/scan/signing_test.go` | — |
 

@@ -7,13 +7,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -648,13 +646,6 @@ func ipClusterSecret(cfg config.Config) []byte {
 // error: an operator who asked for gitleaks must not get silent native-only.
 func externalScanTools(c config.Scan, log *slog.Logger) (scan.ExternalTools, error) {
 	var t scan.ExternalTools
-	if u := strings.TrimSpace(c.OSVURL); u != "" {
-		if !strings.HasPrefix(u, "https://") && !strings.HasPrefix(u, "http://") {
-			return t, fmt.Errorf("AGENTRY_SCAN_OSV_URL: %q is not an http(s) URL", u)
-		}
-		t.OSV = &scan.HTTPOSV{BaseURL: u}
-		log.Info("scan: OSV lookups enabled", "url", u)
-	}
 	gl, err := scan.ResolveExecTool("gitleaks", c.GitleaksBin, "", c.ToolTimeout)
 	if err != nil {
 		return t, err
@@ -662,17 +653,6 @@ func externalScanTools(c config.Scan, log *slog.Logger) (scan.ExternalTools, err
 	if gl != nil {
 		t.Gitleaks = gl
 		log.Info("scan: gitleaks enabled", "bin", gl.Bin)
-	}
-	if strings.TrimSpace(c.OpengrepBin) != "" && strings.TrimSpace(c.OpengrepRules) == "" {
-		return t, fmt.Errorf("AGENTRY_SCAN_OPENGREP_BIN is set but AGENTRY_SCAN_OPENGREP_RULES is empty")
-	}
-	og, err := scan.ResolveExecTool("opengrep", c.OpengrepBin, c.OpengrepRules, c.ToolTimeout)
-	if err != nil {
-		return t, err
-	}
-	if og != nil {
-		t.Opengrep = og
-		log.Info("scan: opengrep enabled", "bin", og.Bin, "rules", og.Rules)
 	}
 	return t, nil
 }

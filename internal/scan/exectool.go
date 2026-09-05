@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// External scanner tools (§8.3: gitleaks for S2, opengrep for S6). DEV-006
+// External scanner tools (§8.3: gitleaks for S2). DEV-006
 // shipped the native detectors with these as the production upgrade; the
 // adapters here exec the real binary against the extracted archive and fold
 // its report into the stage's findings (agentry#40). Rules of the road:
@@ -40,7 +40,7 @@ const (
 type ExecTool struct {
 	// Bin is the binary path. ResolveExecTool turns "auto" into a PATH lookup.
 	Bin string
-	// Rules is the rules file/dir for tools that take one (opengrep).
+	// Rules is the rules file/dir for tools that take one; none do today.
 	Rules string
 	// Timeout bounds one invocation; 0 means execToolDefaultTimeout.
 	Timeout time.Duration
@@ -245,110 +245,6 @@ func runGitleaks(ctx context.Context, t *ExecTool, dir string, seen map[string]b
 	return out
 }
 
-// ---- opengrep (S6) --------------------------------------------------------
-
-// opengrepReport is the subset of the semgrep-compatible JSON report S6
-// consumes.
-type opengrepReport struct {
-	Results []struct {
-		CheckID string `json:"check_id"`
-		Path    string `json:"path"`
-		Start   struct {
-			Line int `json:"line"`
-		} `json:"start"`
-		End struct {
-			Line int `json:"line"`
-		} `json:"end"`
-		Extra struct {
-			Message  string         `json:"message"`
-			Severity string         `json:"severity"`
-			Lines    string         `json:"lines"`
-			Metadata map[string]any `json:"metadata"`
-		} `json:"extra"`
-	} `json:"results"`
-	Errors []struct {
-		Message string `json:"message"`
-		Level   string `json:"level"`
-	} `json:"errors"`
-}
-
-// runOpengrep scans dir with opengrep against t.Rules. A rule whose
-// metadata carries `capability` (network | exec | fs-write | env | eval |
-// fs-read) is a capability detector: its hits join the native detections and
-// go through the same declared-vs-detected compare, so an undeclared one
-// surfaces as the usual `S6/undeclared-<cap>` finding. Other rules surface as
-// `S6/opengrep-<rule>` with the rule's own severity.
-func runOpengrep(ctx context.Context, t *ExecTool, dir string) ([]Finding, map[string][]detection) {
-	out, err := t.run(ctx, dir, "scan", "--json", "--quiet", "--metrics=off", "--disable-version-check",
-		"--config", t.Rules, ".")
-	var ee *execExit
-	// opengrep exits 1 when findings exist; only other non-zero codes are
-	// failures.
-	findingsExit := errors.As(err, &ee) && ee.code == 1 && len(bytes.TrimSpace(out)) > 0
-	if err != nil && !findingsExit {
-		return []Finding{toolErrorFinding("S6", "opengrep", err)}, nil
-	}
-	var rep opengrepReport
-	if err := json.Unmarshal(out, &rep); err != nil {
-		return []Finding{toolErrorFinding("S6", "opengrep", fmt.Errorf("report: %w", err))}, nil
-	}
-	sort.SliceStable(rep.Results, func(i, j int) bool {
-		a, b := rep.Results[i], rep.Results[j]
-		if a.Path != b.Path {
-			return a.Path < b.Path
-		}
-		if a.Start.Line != b.Start.Line {
-			return a.Start.Line < b.Start.Line
-		}
-		return a.CheckID < b.CheckID
-	})
-	var findings []Finding
-	detected := map[string][]detection{}
-	for _, r := range rep.Results {
-		path := relPath(dir, r.Path)
-		capTok, _ := r.Extra.Metadata["capability"].(string)
-		capTok = strings.ToLower(strings.TrimSpace(capTok))
-		if capTok != "" {
-			detected[capTok] = append(detected[capTok], detection{file: path, line: r.Start.Line})
-			continue
-		}
-		if len(findings) >= execToolMaxFindings {
-			continue
-		}
-		sev := SevMedium
-		switch strings.ToUpper(r.Extra.Severity) {
-		case "ERROR", "CRITICAL", "HIGH":
-			sev = SevHigh
-		case "INFO", "LOW":
-			sev = SevLow
-		}
-		findings = append(findings, Finding{
-			Scanner: "S6/opengrep-" + sanitizeRuleID(shortCheckID(r.CheckID)), Severity: sev, Confidence: ConfMedium,
-			Title:    firstNonEmpty(firstLine(r.Extra.Message), r.CheckID),
-			FilePath: path, LineStart: r.Start.Line, LineEnd: r.End.Line,
-			Excerpt:  firstLine(r.Extra.Lines),
-			Detail:   map[string]any{"tool": "opengrep", "rule": r.CheckID},
-			Taxonomy: []string{"LLM03", "ASI04"},
-		})
-	}
-	for _, e := range rep.Errors {
-		if strings.EqualFold(e.Level, "error") {
-			findings = append(findings, toolErrorFinding("S6", "opengrep", errors.New(firstLine(e.Message))))
-			break
-		}
-	}
-	return findings, detected
-}
-
-// shortCheckID keeps the last path segment of a semgrep-style check id
-// ("rules.agentry.net.raw-socket" → "raw-socket").
-func shortCheckID(id string) string {
-	if i := strings.LastIndex(id, "."); i >= 0 && i < len(id)-1 {
-		return id[i+1:]
-	}
-	return id
-}
-
 // sanitizeRuleID keeps finding ids to the [a-z0-9-] vocabulary the report
 // consumers and the §8.6 policy matcher expect.
 func sanitizeRuleID(s string) string {
@@ -373,4 +269,15 @@ func firstNonEmpty(a, b string) string {
 		return a
 	}
 	return b
+}
+
+func firstLine(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i]
+	}
+	if len(s) > 200 {
+		s = s[:200] + "…"
+	}
+	return s
 }
