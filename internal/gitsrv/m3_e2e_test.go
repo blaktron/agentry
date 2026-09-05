@@ -129,6 +129,27 @@ func (e *gitEnv) waitPublished(agent, version string) {
 	}
 }
 
+// wantAgentModes reads the agent back through the API and asserts the run
+// modes a publish left on the row.
+func (e *gitEnv) wantAgentModes(agent string, want []string) {
+	e.t.Helper()
+	res, err := http.Get(e.srv.URL + "/api/v1/agents/" + e.owner.handle + "/" + agent)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	body, _ := io.ReadAll(res.Body)
+	_ = res.Body.Close()
+	var a struct {
+		Modes []string `json:"modes"`
+	}
+	if res.StatusCode != 200 || json.Unmarshal(body, &a) != nil {
+		e.t.Fatalf("get agent %s: %d %s", agent, res.StatusCode, body)
+	}
+	if strings.Join(a.Modes, ",") != strings.Join(want, ",") {
+		e.t.Fatalf("agent %s modes after publish = %v, want %v", agent, a.Modes, want)
+	}
+}
+
 // installRoundTrip resolves, downloads, verifies the digest, and extracts.
 func (e *gitEnv) installRoundTrip(agent, rangeStr, wantVersion string, wantFiles ...string) {
 	e.t.Helper()
@@ -193,12 +214,15 @@ func TestM3PublishInstallRoundTrip(t *testing.T) {
 
 	kinds := []struct {
 		kind      string   // fixture shape
-		seedModes []string // the agent row's modes
+		seedModes []string // the agent row's modes at creation
+		wantModes []string // the row's modes after the publish (agentry#162)
 		entryFile string
 	}{
-		{"skill", []string{"autonomous"}, "SKILL.md"},
-		{"prompt-agent", []string{"autonomous"}, "prompts/main.md"},
-		{"v2", []string{"autonomous", "interactive"}, "AGENT.md"},
+		{"skill", []string{"autonomous"}, []string{"autonomous"}, "SKILL.md"},
+		{"prompt-agent", []string{"autonomous"}, []string{"autonomous"}, "prompts/main.md"},
+		// Seeded autonomous-only on purpose: the v2 manifest declares both
+		// modes and the publish must be what makes that true of the agent.
+		{"v2", []string{"autonomous"}, []string{"autonomous", "interactive"}, "AGENT.md"},
 	}
 
 	for _, k := range kinds {
@@ -211,6 +235,7 @@ func TestM3PublishInstallRoundTrip(t *testing.T) {
 			mustGit(t, work, "tag", "v1.0.0")
 			mustGit(t, work, "push", env.cloneURL(name, env.owner.patRW), "v1.0.0")
 			env.waitPublished(name, "1.0.0")
+			env.wantAgentModes(name, k.wantModes)
 			env.installRoundTrip(name, "^1.0", "1.0.0", "agent.yaml", "README.md", k.entryFile)
 		})
 
@@ -232,6 +257,7 @@ func TestM3PublishInstallRoundTrip(t *testing.T) {
 				t.Fatalf("upload: %d %s", status, body)
 			}
 			env.waitPublished(name, "1.0.0")
+			env.wantAgentModes(name, k.wantModes)
 			env.installRoundTrip(name, "1.0.0", "1.0.0", "agent.yaml", k.entryFile)
 		})
 	}
