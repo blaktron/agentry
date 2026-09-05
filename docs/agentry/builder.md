@@ -16,16 +16,19 @@ exits, and only one of them needs an account:
 
 ## What the form covers
 
-- **Identity** — name, namespace (your handle by default), kind (`skill`
-  or `prompt-agent`), version, license, visibility, summary, tags.
+- **Identity** — name, namespace (your handle by default), the run modes
+  the release supports (autonomous, interactive, or both), version,
+  license, visibility, summary, tags.
 - **The capability contract** — network egress (none / specific hosts /
   unrestricted), filesystem read and write, exec commands, secret *names*
   (never values), data-access categories, and declared **MCP servers**
   (one per line: `npm:pkg@1.2.3 tools=a,b secrets=X egress=host` — exact
   versions, pinned to this release and installed per-signature by the
   runner).
-- **Instructions** — the entrypoint file itself (SKILL.md for a skill,
-  AGENT.md for a prompt-agent).
+- **Up-front questions** — the optional `intake` block: three structured
+  rows (id, prompt, type, choices, required) plus a line-syntax textarea
+  for more, and the interactive session's opening message.
+- **Instructions** — the instruction file itself (`AGENT.md`).
 
 Unrestricted egress is refused by runners unless the operator's policy
 allows it, and routes the version to review by default — the form warns
