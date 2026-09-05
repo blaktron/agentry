@@ -59,7 +59,7 @@ clones and builds it, using a sibling checkout when one exists):
 ```bash
 CLI=$(./scripts/dev/cli-bin.sh)
 $CLI login --registry http://localhost:8080
-$CLI init --kind=skill my-first-agent
+$CLI init my-first-agent
 cd my-first-agent && $CLI validate
 ```
 

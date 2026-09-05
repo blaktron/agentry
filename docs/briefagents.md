@@ -87,7 +87,7 @@ missing one refuses the run (exit 11) rather than degrading.
 ```
 my-briefagent/
 ├── agent.yaml                  # the manifest (required)
-├── SKILL.md                    # kind: skill instructions (AGENT.md for prompt-agent)
+├── AGENT.md                    # the instruction file (entrypoints.instruction)
 ├── README.md                   # rendered on the BriefAgent's registry page
 ├── LICENSE                     # required for public publication
 └── output.schema.json          # optional: structured-output contract
@@ -95,17 +95,21 @@ my-briefagent/
 
 ## The manifest, option by option
 
-`agent.yaml` uses manifest schema v1, a **closed** schema: unknown keys
-are rejected, so a typo cannot silently disable a control.
+`agent.yaml` uses manifest schema **v2**, a **closed** schema: unknown keys
+are rejected, so a typo cannot silently disable a control. Releases
+published under schema v1 (the `kind`-classified manifest) stay readable
+forever — the registry maps `skill` and `prompt-agent` to
+`modes: [autonomous]` — but a v2 manifest is what you write today, and
+only a v2 manifest can declare `interactive`.
 
 ### Identity and metadata
 
 | Field | Required | Meaning and rules |
 |---|---|---|
-| `schemaVersion` | yes | the manifest schema major; only `"1"` exists |
+| `schemaVersion` | yes | the manifest schema major: `"2"` (v1 is read, not written) |
 | `name` | yes | lowercase `[a-z0-9-]`, ≤64 chars, starts/ends alphanumeric; unique within the namespace |
 | `namespace` | yes | the publishing handle (a user or org), lowercase `[a-z0-9-]`, ≤39 chars |
-| `kind` | yes | `skill` \| `prompt-agent` \| `mcp-server` (table below) |
+| `modes` | yes | the run modes the release supports: `[autonomous]`, `[interactive]`, or both (section below) |
 | `version` | yes | strict semver without a leading `v`; equals the git tag when publishing from a tag; must exceed every existing version on its channel |
 | `summary` | yes | one plain-text line, ≤140 characters |
 | `license` | public publish | SPDX identifier or expression (`MIT OR Apache-2.0`) matching the LICENSE file |
@@ -113,20 +117,77 @@ are rejected, so a typo cannot silently disable a control.
 | `homepage` | no | informational URL |
 | `tags` | no | lowercase `[a-z0-9-]` search facets |
 
-### Kinds and entrypoints
+### Modes and the instruction file
 
-| `kind` | What it is | Entrypoint | Runnable by `agentry run`? |
-|---|---|---|---|
-| `skill` | an instruction package (Claude-skill-shaped) | `entrypoints.skill:`, the repo-relative skill file (default `SKILL.md`); frontmatter is stripped, the body becomes the harness instruction | yes |
-| `prompt-agent` | pure instructions, no code entrypoint | none; the runner reads `AGENT.md`, else `PROMPT.md`, at the archive root | yes |
-| `mcp-server` | a tool server other BriefAgents can use | `entrypoints.mcp: {command, args[], transport: stdio\|http}`; args naming repo files must appear in `publish.include` | no; it is a tool, not an agent (exit 12) |
+A BriefAgent is an instruction package. What varies is how it runs, and a
+release declares the set of run modes it supports:
+
+| Mode | What a run is | Status |
+|---|---|---|
+| `autonomous` | starts from its files — after the up-front questions, if any, and MCP profile authentication — does the job, writes its output and receipts, and ends | this is `agentry run` today |
+| `interactive` | starts from the same plan and controls, but the run is a conversation: in the CLI a chat in the terminal, in the desktop an in-app window. The agent can ask for information as the work reveals the need; you can answer and drop files into the read-only inputs folder. You **cannot** give it more access than the manifest declares — the capability contract, the gateway and the egress allowlist are exactly those of an autonomous run of the same release | declarable now; interactive sessions arrive with the runner work ([agentry-cli#35](https://github.com/blaktron/agentry-cli/issues/35), [#36](https://github.com/blaktron/agentry-cli/issues/36)); until then a release that declares only `interactive` cannot be run |
+
+The instruction is one file:
+
+| Field | Meaning |
+|---|---|
+| `entrypoints.instruction` | the repo-relative instruction file, `AGENT.md` when omitted. A leading YAML frontmatter block (the Agent Skills `SKILL.md` shape) is stripped; the body becomes the harness instruction, so a `SKILL.md` works unchanged as `entrypoints.instruction: SKILL.md`. The file must exist and be matched by `publish.include` |
+
+There are no other package kinds. An MCP server is something a BriefAgent
+*uses* — declared under `capabilities.mcpServers` and installed with the
+release — not a package of its own; the former `mcp-server` kind was
+withdrawn, and the one such package on the public registry is blocked
+with an advisory saying so.
+
+### `intake`: questions asked before a run
+
+Both modes may ask a few things up front. The runner asks them through
+the same prompter that collects MCP profile secrets (a terminal prompt in
+the CLI, a form in the desktop) and stages the answers read-only for the
+agent at `/inputs/intake.json`.
+
+```yaml
+intake:
+  - id: dataset            # [a-z0-9_]+, unique
+    prompt: "Path to the dataset to analyse"
+    type: file             # text (default) | secret | choice | file
+    required: true
+  - id: region
+    prompt: "Which region?"
+    type: choice
+    choices: [emea, apac, amer]
+```
+
+| Rule | |
+|---|---|
+| `id` | `[a-z0-9_]{1,64}`, unique within the manifest |
+| `prompt` | required |
+| `type` | `text`, `secret` (injected as a run-scoped secret, never written as text or recorded), `choice` (needs `choices`), `file` (a host path the runner stages into the inputs folder) |
+| `choices` | only with `type: choice` |
+| at most 20 questions | |
+
+Non-secret answers are part of the run's receipts.
+
+### `interactive`: session hints
+
+```yaml
+interactive:
+  opening: "Which incident, and what do you need from it?"   # ≤ 500 characters
+  idleTimeoutSeconds: 900                                    # policy caps it
+```
+
+`opening` is the assistant's first message when a session starts with no
+task text. Everything else about a session — budgets, idle timeout, wall
+time — is the operator's runner policy, which a manifest can only
+tighten. Hints declared by a release that does not list `interactive`
+are accepted with a warning and never apply.
 
 ### `runtime`: informational hints
 
 | Field | Meaning |
 |---|---|
 | `runtime.models` | free-form model hint patterns (e.g. `["claude-*"]`). A hint, never a lock: the **operator's** runner policy chooses the model and owns the API key |
-| `runtime.interfaces` | which install targets the package supports: `claude-skill`, `mcp`, `agents-md` |
+| `runtime.interfaces` | which install targets the package supports: `claude-skill`, `agents-md`. Independent of mode — an interactive agent still exports as a Claude skill; what it loses in that host is the Agentry session, not its instructions. The first listed interface picks the default `agentry install` target |
 
 ### `capabilities`: the security contract
 
@@ -222,7 +283,10 @@ in v1: recorded and displayed, not auto-installed.
 `agentry run` verifies the release exactly like `agentry install`
 (sha256 digest + DSSE attestation against pinned keys; unsigned requires
 `--allow-unsigned`), compiles manifest + operator policy into a
-deterministic run plan, then executes one container tree. The isolated
+deterministic run plan, then executes one container tree. That is an
+**autonomous** run; an **interactive** session starts from the same plan
+and the same enforcement and adds only a conversation and a read-only
+file drop (see [Modes](#modes-and-the-instruction-file)). The isolated
 agent container sits on an internal-only network; its only reachable
 endpoints are the MCP gateway and an allowlisting egress proxy for the
 model API. A per-run Docker MCP Gateway fronts the companion tools server.
@@ -295,7 +359,6 @@ flows); the explicit `--target` forms remain:
 |---|---|---|
 | `claude-skill` | `~/.claude/skills/<name>/` with SKILL.md frontmatter | capabilities compile to `allowed-tools`: `Read`/`Grep`/`Glob` ⇐ read, `Write`/`Edit` ⇐ write, `Bash(cmd:*)` ⇐ exec, `WebFetch(domain:host)` ⇐ egress |
 | `agents-md` | `./agents/<name>/` + a section in `./AGENTS.md` | the section records the same contract as a Tools note |
-| `mcp` | `./agents/<name>/` + a server entry merged into `.mcp.json` | for `kind: mcp-server`; declared secrets become empty env placeholders |
 
 Enforcement in embedded mode is the host's. The
 [trust model](trust.md) page explains what each layer does and does not
