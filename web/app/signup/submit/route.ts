@@ -3,7 +3,7 @@
 // session: the verification email is the next step (§12.1), and social
 // sign-in covers the password-free path.
 import { NextRequest, NextResponse } from "next/server";
-import { API_BASE } from "@/lib/session";
+import { API_BASE, browserHeaders } from "@/lib/session";
 import { readForm, requestOrigin, sameOrigin } from "@/lib/forms";
 
 export async function POST(req: NextRequest) {
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
   const res = await fetch(`${API_BASE}/api/v1/auth/register`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    headers: { "Content-Type": "application/json", Accept: "application/json", ...(await browserHeaders()) },
     body: JSON.stringify(body),
     cache: "no-store",
   });
