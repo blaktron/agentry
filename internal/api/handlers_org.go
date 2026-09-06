@@ -86,6 +86,10 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		problemValidation(w, r, "invalid org handle")
 		return
 	}
+	if handleReserved(req.Handle) {
+		problemValidation(w, r, "reserved org handle")
+		return
+	}
 	name := strings.TrimSpace(req.DisplayName)
 	if name == "" || len(name) > 120 {
 		problemValidation(w, r, "displayName must be 1-120 characters")
