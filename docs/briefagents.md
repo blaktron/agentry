@@ -299,8 +299,10 @@ recorded and displayed, not auto-installed.
 
 `agentry run` verifies the release exactly like `agentry install`
 (sha256 digest + DSSE attestation against pinned keys; unsigned requires
-`--allow-unsigned`), compiles manifest + operator policy into a
-deterministic run plan, then executes one container tree. That is an
+`--allow-unsigned`), asks the registry whether any declared MCP server
+version carries a known high or critical vulnerability (refusing if so,
+unless the operator overrides it), compiles manifest + operator policy into
+a deterministic run plan, then executes one container tree. That is an
 **autonomous** run; an **interactive** session starts from the same plan
 and the same enforcement and adds only a conversation and a read-only
 file drop (see [Modes](#modes-and-the-instruction-file)). The isolated
