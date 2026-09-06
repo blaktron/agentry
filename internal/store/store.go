@@ -8,6 +8,9 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+	"hash/fnv"
+	"io/fs"
+	"strings"
 	"sync"
 	"time"
 
@@ -122,6 +125,45 @@ func Migrate(ctx context.Context, databaseURL string) error {
 	}
 	if err := goose.UpContext(ctx, db, "migrations"); err != nil {
 		return fmt.Errorf("store: migrate: %w", err)
+	}
+	return nil
+}
+
+// MigrateExtension runs an extension's goose migrations (pkg/extension,
+// DEV-091) under the extension's own version table
+// (ent_<name>_goose_version), so the core's numbering and an extension's
+// never collide; the SQL owns its schema (CREATE SCHEMA IF NOT EXISTS
+// ent_<name>). Same in-process mutex as Migrate and a per-extension
+// advisory lock, for the same reasons.
+func MigrateExtension(ctx context.Context, databaseURL, name string, fsys fs.FS) error {
+	migrateMu.Lock()
+	defer migrateMu.Unlock()
+
+	db, err := connectStd(databaseURL)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = db.Close() }()
+	db.SetMaxOpenConns(1)
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(name))
+	lockID := migrateLockID ^ int64(h.Sum64()&0x7fffffff)
+	if _, err := db.ExecContext(ctx, "SELECT pg_advisory_lock($1)", lockID); err != nil {
+		return fmt.Errorf("store: migrate %s: advisory lock: %w", name, err)
+	}
+	defer func() {
+		_, _ = db.ExecContext(context.WithoutCancel(ctx), "SELECT pg_advisory_unlock($1)", lockID)
+	}()
+
+	goose.SetBaseFS(fsys)
+	defer goose.SetBaseFS(migrationsFS)
+	goose.SetTableName("ent_" + strings.ReplaceAll(name, "-", "_") + "_goose_version")
+	defer goose.SetTableName("goose_db_version")
+	if err := goose.SetDialect("postgres"); err != nil {
+		return fmt.Errorf("store: goose dialect: %w", err)
+	}
+	if err := goose.UpContext(ctx, db, "."); err != nil {
+		return fmt.Errorf("store: migrate %s: %w", name, err)
 	}
 	return nil
 }

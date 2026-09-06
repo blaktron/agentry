@@ -3097,6 +3097,13 @@ components:
           $ref: '#/components/schemas/BrandInfo'
         ui:
           $ref: '#/components/schemas/UIInfo'
+        extensions:
+          type: array
+          description: >
+            Names of the extensions this build mounts under `/api/v1/x/<name>/`
+            (DEV-091, pkg/extension); absent on the core build.
+          items:
+            type: string
 
     BrandInfo:
       type: object

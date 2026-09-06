@@ -1785,6 +1785,8 @@ export interface components {
             minCLIVersion?: string;
             brand?: components["schemas"]["BrandInfo"];
             ui?: components["schemas"]["UIInfo"];
+            /** @description Names of the extensions this build mounts under `/api/v1/x/<name>/` (DEV-091, pkg/extension); absent on the core build. */
+            extensions?: string[];
         };
         /** @description What this deployment calls itself (config `brand.*`, DEV-091): the name for prompts and titles, and optional logo and support address. */
         BrandInfo: {
