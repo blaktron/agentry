@@ -70,6 +70,10 @@ func (p *Pipeline) SetMCPScanning(client OSVClient, cache MCPScanCache) {
 	}
 }
 
+// MCPScanningEnabled reports whether the sweep has a vulnerability database
+// to ask — the wiring check agentry#184 exists for.
+func (p *Pipeline) MCPScanningEnabled() bool { return osvEnabled(p.osv) && p.mcpCache != nil }
+
 // SetNotifier overrides the author-notification transport (§8.7).
 func (p *Pipeline) SetNotifier(n notify.Notifier) {
 	if n != nil {
