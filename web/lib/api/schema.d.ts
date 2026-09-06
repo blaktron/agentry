@@ -347,6 +347,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/user/dependency-alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Open dependency alerts on published versions the caller submitted (agentry#177).
+         * @description A dependency alert says a published version declares an MCP server version that the daily sweep found to carry a newly known high or critical vulnerability. It closes on its own when the version is yanked, quarantined or blocked, or when the advisory is withdrawn; publishing a fixed version does not close the old version's alert. The web app shows these as the banner after sign-in and on the dashboard.
+         */
+        get: operations["listUserDependencyAlerts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/user/tokens/desktop-grant": {
         parameters: {
             query?: never;
@@ -1587,6 +1607,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mcp-servers/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The registry's last vulnerability check of one MCP server package version (agentry#177).
+         * @description What S7 recorded for the exact package version: `safe` means no known advisories at `lastCheckedAt`, `vulnerable` lists them, `error` means the last lookup failed and the advisories are the last known. 404 when no manifest has ever declared this version. The runner asks here before installing a declared server.
+         */
+        get: operations["getMcpServerScan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/advisories": {
         parameters: {
             query?: never;
@@ -2020,6 +2060,51 @@ export interface components {
             visibility: "public" | "private";
             summary?: string;
         };
+        /** @description A published version declares an MCP server version with a newly known high or critical vulnerability (agentry#177). */
+        DependencyAlert: {
+            /** Format: uuid */
+            id: string;
+            /** @description namespace/name */
+            agent: string;
+            /** @description The affected published version. */
+            version: string;
+            /** @enum {string} */
+            ecosystem: "npm" | "pypi";
+            package: string;
+            packageVersion: string;
+            /** @enum {string} */
+            severity: "high" | "critical";
+            advisoryIds: string[];
+            /** @description Server versions the advisories name as fixed. */
+            fixedIn: string[];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        McpAdvisory: {
+            id: string;
+            aliases?: string[];
+            /** @enum {string} */
+            severity: "info" | "low" | "medium" | "high" | "critical";
+            summary: string;
+            fixedIn?: string[];
+            references?: string[];
+        };
+        McpServerScan: {
+            /** @enum {string} */
+            ecosystem: "npm" | "pypi";
+            package: string;
+            version: string;
+            /** @enum {string} */
+            status: "safe" | "vulnerable" | "error";
+            /** @enum {string} */
+            maxSeverity?: "info" | "low" | "medium" | "high" | "critical";
+            advisories: components["schemas"]["McpAdvisory"][];
+            /** Format: date-time */
+            firstSeenAt: string;
+            /** Format: date-time */
+            lastCheckedAt: string;
+            lastError?: string;
+        };
         Agent: {
             /** Format: uuid */
             id: string;
@@ -2034,6 +2119,8 @@ export interface components {
             gitHttpUrl: string;
             /** @description SSH clone URL (§6.1 Q7), present when the deployment serves the SSH transport. */
             gitSshUrl?: string;
+            /** @description Open dependency alerts on this agent's published versions (agentry#177). Present on GET /agents/{ns}/{name}. */
+            dependencyAlerts?: components["schemas"]["DependencyAlert"][];
             /** @enum {string} */
             quarantineState: "none" | "quarantined" | "blocked";
             /** @description Present for callers with maintain (§6.3 toggle). */
@@ -2918,6 +3005,27 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listUserDependencyAlerts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Open alerts, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DependencyAlert"][];
+                };
             };
             default: components["responses"]["Problem"];
         };
@@ -5213,6 +5321,31 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getMcpServerScan: {
+        parameters: {
+            query: {
+                ecosystem: "npm" | "pypi";
+                package: string;
+                version: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The scan record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpServerScan"];
+                };
             };
             default: components["responses"]["Problem"];
         };

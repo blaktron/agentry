@@ -32,8 +32,15 @@ Top to bottom, in reading order:
   scanning and policy; the registry cannot enforce them at run time. Your
   runtime should.
 - **MCP servers involved** — exactly which tools the runner will grant for
-  this contract, and which MCP servers are installed with it (pinned to
-  this release by version and digest).
+  this contract, and each MCP server the release declares (exact package
+  version, the tools it is limited to) with the registry's last
+  vulnerability check of that version: "no known advisories as of …", or
+  the advisories it carries.
+- **Dependency alerts** — when a published version declares an MCP server
+  version that has since gained a high or critical advisory, the page says
+  so above the advisories, with the advisory ids and the fixed versions;
+  the author sees the same alert as a banner after signing in and on the
+  dashboard.
 - **Security report** — "scanned, N findings, signed", never "safe". The
   scan date, ruleset version, and adjudication mode are shown so you can
   judge how fresh the check is; the full report lists every finding, and

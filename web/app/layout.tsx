@@ -5,6 +5,7 @@ import "./globals.css";
 import { plexMono, plexSans } from "./fonts";
 import { Mark, Wordmark } from "@/components/brand";
 import { CookieBanner, COOKIE_ACK_COOKIE } from "@/components/cookie-banner";
+import { DependencyAlertBanner } from "@/components/dependency-alert-banner";
 import { cookies } from "next/headers";
 import { currentUser, reviewerOrgs } from "@/lib/session";
 import { SITE } from "@/lib/site";
@@ -268,6 +269,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en" className={`${plexSans.variable} ${plexMono.variable}`}>
       <body>
         <SiteHeader />
+        <DependencyAlertBanner user={user} />
         <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
         <SiteFooter />
         <CookieBanner user={user} acked={cookieAcked} />
