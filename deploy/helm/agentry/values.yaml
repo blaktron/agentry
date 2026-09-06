@@ -20,10 +20,6 @@ image:
     repository: ghcr.io/blaktron/agentry/agentryd
     tag: "" # defaults to .Chart.AppVersion
     pullPolicy: IfNotPresent
-  web:
-    repository: ghcr.io/blaktron/agentry/web
-    tag: ""
-    pullPolicy: IfNotPresent
   pullSecrets: []
 
 # Rendered into a ConfigMap as agentry.yaml and mounted at /etc/agentry.
@@ -61,9 +57,18 @@ config:
       clientId: ""
       issuer: "" # https://auth.example.com/application/o/agentry/
   idp:
-    # End-session URL the web tier sends the browser through on sign-out;
-    # also allowed in the page CSP's form-action (DEV-082).
+    # End-session URL sign-out sends the browser through (the server's own
+    # /ui/ sign-out, and a site's; DEV-082, DEV-091).
     logoutUrl: "" # https://auth.example.com/application/o/agentry/end-session/
+  # DEV-091: a site fronting this server (its origin; empty = the server's
+  # own /ui/ pages), how much of /ui/ to serve (full | authorize | off), and
+  # what the server calls itself.
+  web:
+    url: ""
+  ui:
+    mode: full
+  brand:
+    name: ""
   storage:
     kind: s3 # s3 | local
     s3Bucket: ""
@@ -210,21 +215,6 @@ worker:
   tolerations: []
   affinity: {}
 
-web:
-  replicaCount: 2
-  port: 3000
-  resources:
-    requests: { cpu: 250m, memory: 256Mi }
-    limits: { cpu: 500m, memory: 512Mi }
-  autoscaling:
-    enabled: true
-    minReplicas: 2
-    maxReplicas: 6
-    targetCPUUtilizationPercentage: 70
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
-
 # --- Ingress ---------------------------------------------------------------
 
 ingress:
@@ -232,13 +222,8 @@ ingress:
   className: nginx
   annotations: {}
   hosts:
-    web: agentry.example
+    registry: agentry.example   # the API and the server's /ui/ pages
     git: git.agentry.example
-  # api paths are served on the web host (§9 same-origin), git on its own host.
-  apiPaths:
-    - /api
-    - /.well-known
-    - /scim
   tls: []
   # - secretName: agentry-tls
   #   hosts: [agentry.example, git.agentry.example]
