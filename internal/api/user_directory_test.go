@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 
 	"github.com/blaktron/agentry/internal/api"
@@ -15,6 +16,7 @@ import (
 // derived from the OIDC issuer, and the caller's enrolled authenticators
 // through the same admin access account erasure uses.
 func TestUserDirectoryLinksAndDevices(t *testing.T) {
+	var deleted atomic.Int32
 	idp := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer idp-admin-token" {
 			http.Error(w, "unauthorized", http.StatusForbidden)
@@ -32,9 +34,16 @@ func TestUserDirectoryLinksAndDevices(t *testing.T) {
 				return
 			}
 			_ = json.NewEncoder(w).Encode([]map[string]any{
-				{"name": "Phone", "type": "authentik_stages_authenticator_totp.TOTPDevice", "verbose_name": "TOTP Device", "created": "2026-09-01T10:00:00.000000Z"},
-				{"name": "", "type": "authentik_stages_authenticator_webauthn.WebAuthnDevice", "verbose_name": "WebAuthn Device"},
+				{"pk": 7, "name": "Phone", "type": "authentik_stages_authenticator_totp.TOTPDevice", "verbose_name": "TOTP Device", "created": "2026-09-01T10:00:00.000000Z"},
+				{"pk": 9, "name": "", "type": "authentik_stages_authenticator_webauthn.WebAuthnDevice", "verbose_name": "WebAuthn Device"},
 			})
+		case "/api/v3/authenticators/admin/totp/7/":
+			if r.Method != http.MethodDelete {
+				http.Error(w, "method", http.StatusMethodNotAllowed)
+				return
+			}
+			deleted.Add(1)
+			w.WriteHeader(http.StatusNoContent)
 		default:
 			http.Error(w, "unexpected "+r.URL.Path, http.StatusNotFound)
 		}
@@ -95,21 +104,36 @@ func TestUserDirectoryLinksAndDevices(t *testing.T) {
 		t.Fatal("social login issued no session cookie")
 	}
 	var on struct {
-		Managed           bool   `json:"managed"`
-		AccountUrl        string `json:"accountUrl"`
-		PasswordChangeUrl string `json:"passwordChangeUrl"`
-		TotpSetupUrl      string `json:"totpSetupUrl"`
+		Managed           bool    `json:"managed"`
+		AccountUrl        *string `json:"accountUrl"`
+		PasswordChangeUrl string  `json:"passwordChangeUrl"`
+		TotpSetupUrl      string  `json:"totpSetupUrl"`
+		WebauthnSetupUrl  string  `json:"webauthnSetupUrl"`
 		Devices           []struct {
-			Kind, Name string
-			CreatedAt  *string `json:"createdAt"`
+			Id, Kind, Name string
+			CreatedAt      *string `json:"createdAt"`
 		} `json:"devices"`
 	}
 	env2.doJSON(sess2, http.MethodGet, "/api/v1/user/directory", nil, &on, http.StatusOK)
 	base := oidc.srv.URL
-	if !on.Managed || on.AccountUrl != base+"/if/user/#/settings" || on.PasswordChangeUrl != base+"/if/flow/default-password-change/" || on.TotpSetupUrl != base+"/if/flow/default-authenticator-totp-setup/" {
+	// DEV-089: the directory stays behind the scenes — no account URL, and the
+	// flows are Agentry's own, which return to /settings when they finish.
+	if !on.Managed || on.AccountUrl != nil || on.PasswordChangeUrl != base+"/if/flow/agentry-password-change/" || on.TotpSetupUrl != base+"/if/flow/agentry-totp-setup/" || on.WebauthnSetupUrl != base+"/if/flow/agentry-webauthn-setup/" {
 		t.Fatalf("links: %+v", on)
 	}
-	if len(on.Devices) != 2 || on.Devices[0].Kind != "totp" || on.Devices[0].Name != "Phone" || on.Devices[0].CreatedAt == nil || on.Devices[1].Kind != "webauthn" || on.Devices[1].Name != "WebAuthn Device" {
+	if len(on.Devices) != 2 || on.Devices[0].Id != "7" || on.Devices[0].Kind != "totp" || on.Devices[0].Name != "Phone" || on.Devices[0].CreatedAt == nil || on.Devices[1].Id != "9" || on.Devices[1].Kind != "webauthn" || on.Devices[1].Name != "WebAuthn Device" {
 		t.Fatalf("devices: %+v", on.Devices)
+	}
+
+	// Removing a device goes through Agentry, which checks the device is the
+	// caller's own before asking the directory to delete it.
+	env2.doJSON(sess2, http.MethodDelete, "/api/v1/user/directory/devices/totp/7", nil, nil, http.StatusNoContent)
+	if deleted.Load() != 1 {
+		t.Fatalf("directory delete calls: %d", deleted.Load())
+	}
+	env2.doJSON(sess2, http.MethodDelete, "/api/v1/user/directory/devices/totp/999", nil, nil, http.StatusNotFound)
+	env2.doJSON(sess, http.MethodDelete, "/api/v1/user/directory/devices/totp/7", nil, nil, http.StatusNotFound) // native account: not managed
+	if deleted.Load() != 1 {
+		t.Fatalf("directory delete calls after misses: %d", deleted.Load())
 	}
 }
