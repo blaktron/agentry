@@ -118,6 +118,9 @@ func TestAuthorizeNeedsASession(t *testing.T) {
 	if cc := w.Header().Get("Cache-Control"); cc != "no-store, no-transform" {
 		t.Fatalf("cache-control: %q", cc)
 	}
+	if !strings.Contains(w.Body.String(), "/ui/static/ui.css?v="+stylesheetVersion) || len(stylesheetVersion) != 12 {
+		t.Fatalf("stylesheet link not versioned by content: %q", stylesheetVersion)
+	}
 	// Malformed parameters: a page that says so, not a form.
 	w = get(newUI(t, Options{}), "/ui/authorize?port=80&state=x", sessCookie, csrfCookieV)
 	if w.Code != http.StatusBadRequest || strings.Contains(w.Body.String(), `name="state"`) {
