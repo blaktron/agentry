@@ -210,6 +210,7 @@ func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st 
 	// replicas exactly one runs it per interval (SKIP LOCKED), and so an
 	// operator can trigger a reconcile by hand.
 	go reconcileTicker(ctx, q, log)
+	go mcpSweepTicker(ctx, q, log)
 	return q, nil
 }
 
@@ -226,6 +227,36 @@ func reconcileTicker(ctx context.Context, q queue.Client, log *slog.Logger) {
 	}
 	enqueue()
 	t := time.NewTicker(reconcileWindow)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			enqueue()
+		}
+	}
+}
+
+// mcpSweepWindow is how often the MCP server vulnerability sweep is
+// enqueued (agentry#177): daily, and once shortly after start-up so a
+// worker that was down for a day catches up; the handler re-checks only
+// rows older than its own threshold, so an early run is cheap.
+const mcpSweepWindow = 24 * time.Hour
+
+func mcpSweepTicker(ctx context.Context, q queue.Client, log *slog.Logger) {
+	enqueue := func() {
+		if _, err := q.Enqueue(ctx, scan.JobMCPSweep, "core", struct{}{}); err != nil {
+			log.Error("worker: enqueue mcp sweep", "err", err)
+		}
+	}
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(time.Minute):
+		enqueue()
+	}
+	t := time.NewTicker(mcpSweepWindow)
 	defer t.Stop()
 	for {
 		select {
