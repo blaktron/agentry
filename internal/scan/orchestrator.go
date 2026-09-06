@@ -33,16 +33,28 @@ type Orchestrator struct {
 	// working no-op.
 	mx *metrics.Metrics
 	// tools are the optional external scanners behind the §8.3 seams
-	// (agentry#40). Zero value = native scanners only, offline OSV.
+	// (agentry#40). Zero value = native scanners only.
 	tools ExternalTools
+	// osv and mcpCache drive S7, the declared-MCP-server vulnerability
+	// check (agentry#177): the database client and the registry of scanned
+	// server versions. nil = offline, and S7 says so on the report.
+	osv      OSVClient
+	mcpCache MCPScanCache
+}
+
+// SetMCPScanning wires S7's vulnerability database and the scanned-server
+// registry. A nil client leaves S7 reporting "not checked".
+func (o *Orchestrator) SetMCPScanning(client OSVClient, cache MCPScanCache) {
+	o.osv = client
+	o.mcpCache = cache
 }
 
 // SetMetrics wires the §16.2 instrument set.
 func (o *Orchestrator) SetMetrics(m *metrics.Metrics) { o.mx = m }
 
 // ExternalTools are the production upgrades DEV-006 left behind interfaces:
-// gitleaks for S2. The OSV client (S7) and opengrep (S6) went with the code
-// kinds (DEV-088): nothing code-bearing is published any more.
+// gitleaks for S2. Opengrep (S6) went with the code kinds (DEV-088); the
+// OSV client came back for declared MCP servers (SetMCPScanning).
 type ExternalTools struct {
 	Gitleaks *ExecTool
 }
@@ -155,7 +167,7 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 	ctx, cancel := context.WithTimeout(ctx, o.scanTimeout)
 	defer cancel()
 
-	sc := stageContext{ctx: ctx, bundle: o.bundle, judge: o.judge, log: o.log}
+	sc := stageContext{ctx: ctx, bundle: o.bundle, judge: o.judge, log: o.log, osv: o.osv, mcpCache: o.mcpCache}
 	in := &p.Input
 
 	// Stages already answered (a previous attempt, or the §8.7 cache) come in
@@ -197,11 +209,13 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 	}
 
 	// S2–S5 and S8 in parallel (S9 needs the others' findings; run it after).
-	// S6 and S7 were the code-kind stages, withdrawn with the kind (DEV-088).
+	// S6 was a code-kind stage, withdrawn with the kind (DEV-088); S7 is
+	// back as the declared-MCP-server vulnerability check (agentry#177).
 	parallel := []Stage{
 		S2Secrets{Gitleaks: o.tools.Gitleaks},
 		S3S4Content{},
 		S5Judge{},
+		S7MCPServers{},
 		S8Metadata{PopularAgentNames: p.PopularAgentNames, AgentName: p.AgentName},
 	}
 	results := make([]StageResult, len(parallel))
