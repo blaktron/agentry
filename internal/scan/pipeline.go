@@ -1037,6 +1037,9 @@ func (p *Pipeline) notifyAdvisoryPublished(ctx context.Context, agentID uuid.UUI
 		p.log.Error("advisory notification: load author", "agent", agentID, "err", err)
 		return
 	}
+	if !notify.AllowsEmail(ctx, q, u.ID, notify.KindAdvisory) {
+		return // the author switched these off (agentry#190)
+	}
 	if err := p.notifier.AdvisoryPublished(ctx, notify.AdvisoryNotice{
 		ToEmail:  u.Email,
 		Agent:    agent.Namespace + "/" + agent.Name,

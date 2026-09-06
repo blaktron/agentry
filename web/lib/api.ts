@@ -200,6 +200,7 @@ export type RedTeamReport = components["schemas"]["RedTeamReport"];
 export type Org = components["schemas"]["Org"];
 export type DependencyAlert = components["schemas"]["DependencyAlert"];
 export type McpServerScan = components["schemas"]["McpServerScan"];
+export type NotificationSettings = components["schemas"]["NotificationSettings"];
 export type WebhookDelivery = components["schemas"]["WebhookDelivery"];
 
 // --- Review + console types (§10.1 reviewer / staff surfaces) ---

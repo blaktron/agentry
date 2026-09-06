@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Badge, Card, RefusalCard } from "@/components/ui";
 import { fmtUTC, fmtUTCDate } from "@/lib/format";
-import { apiGet } from "@/lib/api";
+import { apiGet, type NotificationSettings } from "@/lib/api";
 import { AccessError, authedGet, currentUser } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -81,6 +81,12 @@ export default async function SettingsPage({
 }) {
   const user = await currentUser();
   if (!user) redirect("/login?next=/settings");
+  // Notification settings (agentry#190); a server without the endpoint
+  // answers 404 → null, shown as everything on.
+  const notifications: NotificationSettings = (await authedGet<NotificationSettings>("/user/notifications").catch(() => null)) ?? {
+    email: { dependencyAlerts: true, quarantine: true, reviewDecisions: true, advisories: true, orgInvites: true },
+    web: { dependencyAlerts: true },
+  };
   const q = await searchParams;
 
   let tokens: Pat[] = [];
@@ -388,6 +394,51 @@ export default async function SettingsPage({
           </div>
         </form>
       </Card>
+      <Card>
+        <h2 className="mb-2 font-semibold">Notifications</h2>
+        <p className="mb-3 text-sm" style={{ color: "var(--color-muted)" }}>
+          How the registry&apos;s alerts reach you. Email goes to {user.email}; the banner is the
+          notice shown on every page while one of your published versions has a dependency alert.
+          Your dashboard lists alerts either way, and organizations&apos; webhooks and the audit
+          trail are not affected by these switches.
+        </p>
+        <form method="post" action="/settings/notifications" className="flex flex-col gap-2 text-sm">
+          <fieldset className="flex flex-col gap-1">
+            <legend className="mb-1 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
+              Email me when
+            </legend>
+            {(
+              [
+                ["email.dependencyAlerts", "a published version of mine declares an MCP server with a newly known vulnerability", notifications.email.dependencyAlerts],
+                ["email.quarantine", "a published version of mine is quarantined by a rescan", notifications.email.quarantine],
+                ["email.reviewDecisions", "a reviewer decides one of my submissions", notifications.email.reviewDecisions],
+                ["email.advisories", "an advisory naming one of my BriefAgents is published", notifications.email.advisories],
+                ["email.orgInvites", "I am added to an organization", notifications.email.orgInvites],
+              ] as [string, string, boolean][]
+            ).map(([name, label, on]) => (
+              <label key={name} className="flex items-baseline gap-2">
+                <input type="checkbox" name={name} value="on" defaultChecked={on} />
+                <span>{label}</span>
+              </label>
+            ))}
+          </fieldset>
+          <fieldset className="flex flex-col gap-1">
+            <legend className="mb-1 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
+              In the web app
+            </legend>
+            <label className="flex items-baseline gap-2">
+              <input type="checkbox" name="web.dependencyAlerts" value="on" defaultChecked={notifications.web.dependencyAlerts} />
+              <span>Show the dependency-alert banner on every page while an alert is open</span>
+            </label>
+          </fieldset>
+          <div>
+            <button type="submit" className="rounded-md border px-3 py-1.5" style={{ borderColor: "var(--color-border)" }}>
+              Save notifications
+            </button>
+          </div>
+        </form>
+      </Card>
+
 
       <Card className="lg:col-span-2">
         <h2 className="mb-2 font-semibold">Sessions</h2>
