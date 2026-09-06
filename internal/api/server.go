@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -186,6 +187,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 			panic(terr)
 		}
 		orch.SetExternalTools(tools)
+		orch.SetMCPScanning(osvClient(cfg.Scan, log), scan.NewStoreMCPScanCache(st))
 		srv.pipeline = scan.NewPipeline(scan.PipelineDeps{
 			Store: st, Registry: srv.reg, Blobs: srv.blobs, Orchestrator: orch,
 			Signer: signer, Audit: aud, Notifier: srv.notifier, Log: log,
@@ -285,6 +287,14 @@ func (s *Server) SetEntitlements(r entitlements.Resolver) {
 	s.ents = r
 	if s.reg != nil {
 		s.reg.SetEntitlements(r)
+	}
+}
+
+// SetMCPScanning swaps S7's vulnerability database client (tests use a
+// fake); the scanned-server registry stays the store's.
+func (s *Server) SetMCPScanning(client scan.OSVClient) {
+	if s.pipeline != nil && s.st != nil {
+		s.pipeline.SetMCPScanning(client, scan.NewStoreMCPScanCache(s.st))
 	}
 }
 
@@ -644,6 +654,21 @@ func ipClusterSecret(cfg config.Config) []byte {
 // externalScanTools builds the §8.3 external-scanner set from config
 // (agentry#40). A configured tool that cannot be resolved is a startup
 // error: an operator who asked for gitleaks must not get silent native-only.
+// osvClient builds S7's vulnerability database client (agentry#177):
+// api.osv.dev unless the operator points elsewhere, offline when told so.
+func osvClient(c config.Scan, log *slog.Logger) scan.OSVClient {
+	u := strings.TrimSpace(c.OSVURL)
+	switch strings.ToLower(u) {
+	case "none", "off", "false", "disabled":
+		log.Info("scan: MCP server vulnerability lookup disabled (AGENTRY_SCAN_OSV_URL)")
+		return scan.OfflineOSV{}
+	case "":
+		u = "https://api.osv.dev"
+	}
+	log.Info("scan: MCP server vulnerability lookup enabled", "osv", u)
+	return &scan.HTTPOSV{BaseURL: u}
+}
+
 func externalScanTools(c config.Scan, log *slog.Logger) (scan.ExternalTools, error) {
 	var t scan.ExternalTools
 	gl, err := scan.ResolveExecTool("gitleaks", c.GitleaksBin, "", c.ToolTimeout)
