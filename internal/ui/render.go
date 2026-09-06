@@ -3,6 +3,7 @@ package ui
 import (
 	"embed"
 	"fmt"
+	"github.com/blaktron/agentry/internal/version"
 	"html/template"
 	"io/fs"
 	"net/http"
@@ -31,6 +32,8 @@ type page struct {
 	Data    any
 	LogoURL string
 	CSSURL  string
+	// CSSVersion busts the stylesheet's hour-long cache on every build.
+	CSSVersion string
 }
 
 type navItem struct {
@@ -125,6 +128,7 @@ func (h *handler) render(w http.ResponseWriter, r *http.Request, status int, nam
 	}
 	p.LogoURL = h.opt.Brand.LogoURL
 	p.CSSURL = h.opt.Brand.CSSURL
+	p.CSSVersion = version.Version
 	if p.User != nil && h.opt.Mode == "full" {
 		for _, n := range []navItem{{Href: "/ui/account", Label: "Account"}, {Href: "/ui/account/tokens", Label: "Tokens"}, {Href: "/ui/account/ssh-keys", Label: "SSH keys"}, {Href: "/ui/account/sessions", Label: "Sessions"}, {Href: "/ui/review", Label: "Review"}, {Href: "/ui/staff", Label: "Staff"}, {Href: "/ui/orgs", Label: "Organizations"}} {
 			n.Current = strings.HasPrefix(r.URL.Path, n.Href) && (n.Href != "/ui/account" || r.URL.Path == "/ui/account" || r.URL.Path == "/ui/account/directory")
