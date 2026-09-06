@@ -7,13 +7,18 @@ import (
 	"github.com/pquerna/otp/totp"
 )
 
-// TOTPIssuer names the service in authenticator apps. Placeholder per Q1.
+// TOTPIssuer names the service in authenticator apps when the deployment
+// has no name of its own (config brand.name / Config.DisplayName, DEV-091).
 const TOTPIssuer = "Agentry"
 
 // GenerateTOTP creates a new TOTP secret for enrollment. Returns the base32
-// secret and the otpauth:// provisioning URL.
-func GenerateTOTP(accountName string) (secret, url string, err error) {
-	key, err := totp.Generate(totp.GenerateOpts{Issuer: TOTPIssuer, AccountName: accountName})
+// secret and the otpauth:// provisioning URL. issuer is what the
+// authenticator app shows; empty means TOTPIssuer.
+func GenerateTOTP(issuer, accountName string) (secret, url string, err error) {
+	if issuer == "" {
+		issuer = TOTPIssuer
+	}
+	key, err := totp.Generate(totp.GenerateOpts{Issuer: issuer, AccountName: accountName})
 	if err != nil {
 		return "", "", fmt.Errorf("auth: totp generate: %w", err)
 	}

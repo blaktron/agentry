@@ -1783,6 +1783,23 @@ export interface components {
             };
             /** @description Oldest supported agentry CLI version (§11 distribution note). */
             minCLIVersion?: string;
+            brand?: components["schemas"]["BrandInfo"];
+            ui?: components["schemas"]["UIInfo"];
+        };
+        /** @description What this deployment calls itself (config `brand.*`, DEV-091): the name for prompts and titles, and optional logo and support address. */
+        BrandInfo: {
+            /** @example Agentry */
+            name: string;
+            /** Format: uri */
+            logoUrl?: string;
+            supportEmail?: string;
+        };
+        /** @description The server's own browser surface under `/ui/` (DEV-091). `mode` is `full` (device authorize, sign-in, account, review, staff, org admin), `authorize` (only the device-authorize page — a site fronts this server) or `off`. `authorizeUrl` is the absolute page a CLI or the desktop app opens for browser sign-in, when served. */
+        UIInfo: {
+            /** @enum {string} */
+            mode: "full" | "authorize" | "off";
+            /** Format: uri */
+            authorizeUrl?: string;
         };
         RegisterRequest: {
             handle: string;

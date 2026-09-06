@@ -124,6 +124,17 @@ type Options struct {
 	Registry string
 	SMTP     SMTPOptions
 	Log      *slog.Logger
+	// Links are the browser destinations this deployment resolved (DEV-091):
+	// Dashboard is where "see your dashboard" points; VerifyEmail builds the
+	// address-verification link for a token. Unset falls back to the legacy
+	// site paths under BaseURL.
+	Links Links
+}
+
+// Links carries the resolved browser destinations for the renderer.
+type Links struct {
+	Dashboard   string
+	VerifyEmail func(token string) string
 }
 
 // New builds the configured notifier.
@@ -136,7 +147,13 @@ func New(opt Options) (Notifier, error) {
 	case "", "log":
 		return LogNotifier{Log: opt.Log}, nil
 	case "smtp":
-		return NewSMTP(opt.SMTP, reg, opt.BaseURL, opt.Log)
+		n, err := NewSMTP(opt.SMTP, reg, opt.BaseURL, opt.Log)
+		if err != nil {
+			return nil, err
+		}
+		n.render.dashboard = opt.Links.Dashboard
+		n.render.verifyEmail = opt.Links.VerifyEmail
+		return n, nil
 	default:
 		return nil, fmt.Errorf("notify: unknown kind %q (want log|smtp)", opt.Kind)
 	}
@@ -215,6 +232,12 @@ type message struct {
 type renderer struct {
 	registry string
 	baseURL  string
+	// dashboard and verifyEmail are the browser destinations the server
+	// resolved for this deployment (a site in front of it, or its own /ui/
+	// pages — DEV-091); when unset the legacy site paths under baseURL are
+	// used, so a bare renderer still produces the same links as before.
+	dashboard   string
+	verifyEmail func(token string) string
 }
 
 func (r renderer) link(path string) string {
@@ -233,6 +256,9 @@ func (r renderer) footer() string {
 
 func (r renderer) verification(token string) message {
 	url := r.link("/auth/verify-email?token=" + token)
+	if r.verifyEmail != nil {
+		url = r.verifyEmail(token)
+	}
 	body := "Confirm this address to finish setting up your " + r.registry + " account.\n\n"
 	if url != "" {
 		body += url + "\n\n"
@@ -335,7 +361,7 @@ func (r renderer) mcpAlert(n MCPDependencyAlertNotice) message {
 	body += "\nThe published version stays installable, and its page and your\n" +
 		"dashboard now carry this alert. To clear it, publish a new version\n" +
 		"that pins a fixed server version, then yank the affected one.\n"
-	if u := firstNonEmpty(n.AgentURL, r.link("/dashboard")); u != "" {
+	if u := firstNonEmpty(n.AgentURL, r.dashboard, r.link("/dashboard")); u != "" {
 		body += "\n" + u + "\n"
 	}
 	return message{

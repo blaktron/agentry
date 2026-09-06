@@ -225,15 +225,14 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 			return
 		}
 		if c, err := r.Cookie(socialRestartCookie); err == nil && c.Value != "" {
-			http.Redirect(w, r, "/login?error="+url.QueryEscape(
-				"sign-in could not complete — your browser is not keeping cookies for this site"), http.StatusSeeOther)
+			http.Redirect(w, r, s.paths.login("sign-in could not complete — your browser is not keeping cookies for this site"), http.StatusSeeOther)
 			return
 		}
 		http.SetCookie(w, &http.Cookie{
 			Name: socialRestartCookie, Value: "1", Path: "/", HttpOnly: true,
 			Secure: s.cfg.Auth.CookieSecure, SameSite: http.SameSiteLaxMode, MaxAge: 120,
 		})
-		http.Redirect(w, r, "/api/v1/auth/oidc/"+name+"/start?next="+url.QueryEscape("/dashboard"), http.StatusSeeOther)
+		http.Redirect(w, r, "/api/v1/auth/oidc/"+name+"/start?next="+url.QueryEscape(s.paths.dashboardPath()), http.StatusSeeOther)
 	}
 
 	st, stateErr, stateUnauthorized := s.peekSocialState(w, r, name)
@@ -265,7 +264,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 	// it lands on. Failures go back to /login with the message; success is
 	// a 303 to `next` once the session cookie is set. API mode is unchanged.
 	browserFail := func(msg string) {
-		http.Redirect(w, r, "/login?error="+url.QueryEscape(msg), http.StatusSeeOther)
+		http.Redirect(w, r, s.paths.login(msg), http.StatusSeeOther)
 	}
 	id, err := rp.Exchange(r.Context(), *params.Code, st.Verifier, st.Nonce)
 	if err != nil {

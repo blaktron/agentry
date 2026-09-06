@@ -65,7 +65,7 @@ func (s *Server) nativeCredsGone(w http.ResponseWriter, r *http.Request) bool {
 	if !s.cfg.Auth.ExternalOnly {
 		return false
 	}
-	problemGone(w, r, "credentials are managed by this deployment's directory service (DEV-057); sign in through /login")
+	problemGone(w, r, "credentials are managed by this deployment's directory service (DEV-057); sign in through "+s.paths.login(""))
 	return true
 }
 
@@ -384,7 +384,7 @@ func (s *Server) TotpSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
-	secret, url, err := auth.GenerateTOTP(p.Handle)
+	secret, url, err := auth.GenerateTOTP(s.cfg.DisplayName(), p.Handle)
 	if err != nil {
 		s.log.Error("totp setup", "err", err)
 		problemInternal(w, r)
