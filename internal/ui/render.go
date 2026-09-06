@@ -39,12 +39,18 @@ type navItem struct {
 }
 
 type userInfo struct {
-	ID            string `json:"id"`
-	Handle        string `json:"handle"`
-	Email         string `json:"email"`
-	DisplayName   string `json:"displayName"`
-	EmailVerified bool   `json:"emailVerified"`
-	TotpEnabled   bool   `json:"totpEnabled"`
+	ID            string    `json:"id"`
+	Handle        string    `json:"handle"`
+	Email         string    `json:"email"`
+	DisplayName   string    `json:"displayName"`
+	EmailVerified bool      `json:"emailVerified"`
+	TotpEnabled   bool      `json:"totpEnabled"`
+	Orgs          []userOrg `json:"orgs"`
+}
+
+type userOrg struct {
+	Handle string `json:"handle"`
+	Role   string `json:"role"`
 }
 
 var funcs = template.FuncMap{
@@ -119,13 +125,16 @@ func (h *handler) render(w http.ResponseWriter, r *http.Request, status int, nam
 	p.LogoURL = h.opt.Brand.LogoURL
 	p.CSSURL = h.opt.Brand.CSSURL
 	if p.User != nil && h.opt.Mode == "full" {
-		for _, n := range []navItem{{Href: "/ui/account", Label: "Account"}, {Href: "/ui/account/tokens", Label: "Tokens"}, {Href: "/ui/account/ssh-keys", Label: "SSH keys"}, {Href: "/ui/account/sessions", Label: "Sessions"}} {
+		for _, n := range []navItem{{Href: "/ui/account", Label: "Account"}, {Href: "/ui/account/tokens", Label: "Tokens"}, {Href: "/ui/account/ssh-keys", Label: "SSH keys"}, {Href: "/ui/account/sessions", Label: "Sessions"}, {Href: "/ui/review", Label: "Review"}, {Href: "/ui/staff", Label: "Staff"}} {
 			n.Current = strings.HasPrefix(r.URL.Path, n.Href) && (n.Href != "/ui/account" || r.URL.Path == "/ui/account" || r.URL.Path == "/ui/account/directory")
 			p.Nav = append(p.Nav, n)
 		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
+	// no-transform: a CDN in front (Cloudflare on the hosted site) must not
+	// rewrite the page — its email obfuscation replaces addresses with a
+	// script this CSP blocks, leaving "[email protected]" on the account page.
+	w.Header().Set("Cache-Control", "no-store, no-transform")
 	w.Header().Set("Content-Security-Policy", h.csp)
 	w.WriteHeader(status)
 	if err := t.ExecuteTemplate(w, "layout", p); err != nil {
