@@ -293,3 +293,43 @@ disposition.
 5. Ship, then publish the advisory with credit.
 
 **Verify:** the regression test fails on the old code and passes on the new.
+
+---
+
+## 11. Directory service unavailable or misconfigured
+
+**Trigger:** sign-in fails or loops, `/login?error=…`, sign-out lands on a
+second login screen, or Settings' password/authenticator actions error.
+Existing registry sessions and PATs keep working throughout — the directory
+is consulted at sign-in, not per request — so the API is not down; people
+just cannot sign in.
+
+1. Is authentik up? `curl -fsS https://auth.<site>/-/health/ready/` and
+   `docker compose ps authentik-server authentik-worker`. A crash loop
+   after an upgrade that says "Major version skips are not allowed" is the
+   release-line rule in the self-hosting guide: step through each line.
+2. Did the blueprint apply? Authentik's admin console → Customisation →
+   Blueprints: "SecureAgentry - Account flows" must be *successful*, and
+   the `agentry-invalidation` flow must exist. A blueprint that fails to
+   apply names the offending entry in the worker log.
+3. Is the registry's OIDC client still what authentik has? Re-run
+   `scripts/dev/authentik-bootstrap.sh` (idempotent): it restores the
+   provider's redirect URIs (authorization *and* logout), the scope
+   mappings, the application's launch URL, and the brand's default
+   application and unset user-settings flow — everything a deployment that
+   predates agentry#164 lacks. It needs `AGENTRY_PUBLIC_WEB_URL` and the
+   bootstrap token from `.env`; read individual keys from that file rather
+   than `source`-ing it (values with spaces are not shell-quoted).
+4. Do the containers know the site? `AGENTRY_PUBLIC_WEB_URL` must reach the
+   `authentik-*` containers (compose passes it through); the account-flows
+   blueprint formats it into the redirect stages. After changing it,
+   recreate the authentik containers, not just the registry.
+5. A user who cannot complete MFA is an operator action in the authentik
+   admin console (`/if/admin/` still serves); email alone never resets both
+   factors.
+
+**Verify:** `GET https://<site>/api/v1/auth/oidc/authentik/start?next=%2Fdashboard`
+in a browser ends on the dashboard with no directory screen in between;
+`https://auth.<site>/` answers 302 to the site; the provider's end-session
+URL lands in the `agentry-invalidation` flow whose first challenge (the
+executor API) is a redirect to the site.
