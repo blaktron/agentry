@@ -39,15 +39,17 @@ entrypoints:
   instruction: SKILL.md
 capabilities:
   mcpServers:
-    - npm: minimist
-      version: "1.2.5"
+    - npm: mcp-sweep-fixture
+      version: "0.1.0"
 publish:
   include: [agent.yaml, README.md, SKILL.md, LICENSE]
 `
 }
 
 // The daily sweep (agentry#177 M2): a server version that was clean at
-// publication and now carries a high advisory opens one alert per published
+// publication (a fixture package name of its own: the test database is
+// shared with the API tests, and mcp_server_scans is keyed by version) and now
+// carries a high advisory opens one alert per published
 // version declaring it and tells each author once; a yanked version's alert
 // closes with the transition; a withdrawn advisory closes the rest.
 func TestMCPSweepOpensAndResolvesAlerts(t *testing.T) {
@@ -87,7 +89,7 @@ func TestMCPSweepOpensAndResolvesAlerts(t *testing.T) {
 	}
 
 	// The database learns of a high advisory for that exact version.
-	osv.vulns["npm/minimist@1.2.5"] = []scan.OSVVulnerability{{ID: "GHSA-xvch-5gv4-984h", Aliases: []string{"CVE-2021-44906"}, Severity: "high", Summary: "Prototype Pollution", FixedIn: []string{"1.2.6"}}}
+	osv.vulns["npm/mcp-sweep-fixture@0.1.0"] = []scan.OSVVulnerability{{ID: "GHSA-xvch-5gv4-984h", Aliases: []string{"CVE-2021-44906"}, Severity: "high", Summary: "Prototype Pollution", FixedIn: []string{"1.2.6"}}}
 	backdate()
 	sum, err = e.pipe.MCPSweep(ctx)
 	if err != nil || sum.AlertsOpened != 2 || sum.Vulnerable != 1 {
@@ -97,7 +99,7 @@ func TestMCPSweepOpensAndResolvesAlerts(t *testing.T) {
 		t.Fatalf("author notices: %d, want 2", len(notifier.mcpAlerts))
 	}
 	n := notifier.mcpAlerts[0]
-	if n.ToEmail != u.Email || n.Server != "npm:minimist@1.2.5" || n.Severity != "high" || len(n.Advisories) != 1 || n.FixedIn[0] != "1.2.6" || n.Version != "1.0.0" {
+	if n.ToEmail != u.Email || n.Server != "npm:mcp-sweep-fixture@0.1.0" || n.Severity != "high" || len(n.Advisories) != 1 || n.FixedIn[0] != "1.2.6" || n.Version != "1.0.0" {
 		t.Fatalf("notice: %+v", n)
 	}
 	open1, _ := e.st.Queries().ListOpenMCPDependencyAlertsForVersion(ctx, v1.ID)
