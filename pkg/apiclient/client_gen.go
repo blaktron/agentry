@@ -1523,6 +1523,9 @@ type Meta struct {
 	// Brand What this deployment calls itself (config `brand.*`, DEV-091): the name for prompts and titles, and optional logo and support address.
 	Brand *BrandInfo `json:"brand,omitempty"`
 
+	// Extensions Names of the extensions this build mounts under `/api/v1/x/<name>/` (DEV-091, pkg/extension); absent on the core build.
+	Extensions *[]string `json:"extensions,omitempty"`
+
 	// Features Self-host feature flags: `judge`, `signing`, `redis`, `s3`, and `externalOnly` (accounts live in an external directory service; the native register/password/TOTP surface answers 410 — clients should not offer those forms).
 	Features map[string]bool `json:"features"`
 

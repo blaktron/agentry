@@ -75,6 +75,9 @@ type Server struct {
 	oidcHTTPClient *http.Client
 	// imgHTTPClient overrides the image proxy's guarded client (tests).
 	imgHTTPClient *http.Client
+	// extensions and eventHooks are the closed build's additions (extensions.go).
+	extensions []extensionMount
+	eventHooks []func(ctx context.Context, ev Event)
 }
 
 // New creates the API server. st may be nil in database-less dev mode; any
@@ -367,16 +370,24 @@ func (s *Server) RegisterQueueHandlers(q queue.Client) {
 // namespaces (no org) and fan-out errors are swallowed — webhooks never affect
 // the state change that triggered them.
 func (s *Server) emitAgentEvent(ctx context.Context, agentID uuid.UUID, event string, payload map[string]any) {
-	if s.webhooks == nil || s.st == nil {
+	if s.st == nil {
+		return
+	}
+	if s.webhooks == nil {
+		s.fireEvent(ctx, Event{Kind: event, AgentID: agentID, Payload: payload})
 		return
 	}
 	orgID, err := s.q().GetAgentOwnerOrg(ctx, agentID)
 	if err != nil {
-		return // personal namespace or agent gone
+		// Personal namespace or agent gone: no webhooks, but the extension
+		// hooks still hear the transition.
+		s.fireEvent(ctx, Event{Kind: event, AgentID: agentID, Payload: payload})
+		return
 	}
 	if err := s.webhooks.Emit(ctx, orgID, event, payload); err != nil {
 		s.log.Error("webhook emit", "event", event, "err", err)
 	}
+	s.fireEvent(ctx, Event{Kind: event, OrgID: orgID, AgentID: agentID, Payload: payload})
 }
 
 // q returns the base query layer, or nil without a database.
@@ -431,6 +442,9 @@ func (s *Server) GetMeta(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	meta.Ui = &ui
+	if names := s.ExtensionNames(); len(names) > 0 {
+		meta.Extensions = &names
+	}
 	if s.cfg.MinCLIVersion != "" {
 		meta.MinCLIVersion = &s.cfg.MinCLIVersion
 	}
@@ -588,6 +602,11 @@ func NewHandlerWithGit(s *Server, mountGit func(*http.ServeMux)) http.Handler {
 	// org's configured SAML/OIDC login. Root-mounted for the same reason as
 	// SCIM — it is a browser destination, not part of the JSON API surface.
 	s.mountSSOLanding(mux)
+
+	// Extension routes (DEV-091, extensions.go): /api/v1/x/<name>/ behind
+	// the principal middleware, registered before the generated routes so a
+	// clash with a generated path is a start-up panic, never a shadow.
+	s.mountExtensions(mux)
 
 	// Generated OpenAPI routes under /api/v1 (spec-first, D-09).
 	apiHandler := HandlerWithOptions(s, StdHTTPServerOptions{

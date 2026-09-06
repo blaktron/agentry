@@ -121,9 +121,7 @@ func (s *Server) SetOrgPolicy(w http.ResponseWriter, r *http.Request, org OrgHan
 			}
 			sort.Strings(keys)
 		}
-		if err := s.webhooks.Emit(r.Context(), orgRow.ID, webhook.EventPolicyUpdated, map[string]any{"org": orgRow.Handle, "keys": keys}); err != nil {
-			s.log.Error("webhook emit", "event", webhook.EventPolicyUpdated, "err", err)
-		}
+		s.emitOrgEvent(r.Context(), orgRow.ID, webhook.EventPolicyUpdated, map[string]any{"org": orgRow.Handle, "keys": keys})
 	}
 	writeJSON(w, http.StatusOK, merged)
 }
