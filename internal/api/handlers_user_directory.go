@@ -18,6 +18,7 @@ var issuerOriginRe = regexp.MustCompile(`^(https?://[^/]+)/application/o/[^/]+/?
 // userDirectoryDevice mirrors the generated anonymous item type.
 type userDirectoryDevice = struct {
 	CreatedAt *time.Time `json:"createdAt,omitempty"`
+	Id        *string    `json:"id,omitempty"`
 	Kind      string     `json:"kind"`
 	Name      string     `json:"name"`
 }
@@ -45,10 +46,12 @@ func (s *Server) GetUserDirectory(w http.ResponseWriter, r *http.Request) {
 	str := func(v string) *string { return &v }
 	// authentik's default flow slugs (2026.x); the user interface path is
 	// stable across releases.
-	out.AccountUrl = str(origin + "/if/user/#/settings")
-	out.PasswordChangeUrl = str(origin + "/if/flow/default-password-change/")
-	out.TotpSetupUrl = str(origin + "/if/flow/default-authenticator-totp-setup/")
-	out.WebauthnSetupUrl = str(origin + "/if/flow/default-authenticator-webauthn-setup/")
+	// The Agentry flows (compose blueprint agentry-account-flows.yaml,
+	// agentry#164): each ends with a redirect back to /settings, and no
+	// link ever points at the directory's own panel.
+	out.PasswordChangeUrl = str(origin + "/if/flow/agentry-password-change/")
+	out.TotpSetupUrl = str(origin + "/if/flow/agentry-totp-setup/")
+	out.WebauthnSetupUrl = str(origin + "/if/flow/agentry-webauthn-setup/")
 
 	if lister, ok := s.dirEraser.(directoryDevices); ok {
 		p := principalFrom(r.Context())
@@ -64,10 +67,52 @@ func (s *Server) GetUserDirectory(w http.ResponseWriter, r *http.Request) {
 		} else {
 			list := make([]userDirectoryDevice, 0, len(devs))
 			for _, d := range devs {
-				list = append(list, userDirectoryDevice{CreatedAt: d.CreatedAt, Kind: d.Kind, Name: d.Name})
+				item := userDirectoryDevice{CreatedAt: d.CreatedAt, Kind: d.Kind, Name: d.Name}
+				if d.ID != "" {
+					item.Id = str(d.ID)
+				}
+				list = append(list, item)
 			}
 			out.Devices = &list
 		}
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// DeleteUserDirectoryDevice implements DELETE /user/directory/devices/{kind}/{deviceId}
+// (agentry#164): the caller removes one of their own authenticators from the
+// directory without ever seeing the directory's settings panel. The
+// directory admin access does the work; ownership is checked against the
+// account's own device list, so an id that is not the caller's answers 404
+// exactly like a missing one.
+func (s *Server) DeleteUserDirectoryDevice(w http.ResponseWriter, r *http.Request, kindParam DeleteUserDirectoryDeviceParamsKind, deviceId string) {
+	kind := string(kindParam)
+	if !s.authorize(w, r, auth.ActUserSelfUpdate, uuid.Nil) {
+		return
+	}
+	if !s.requireDB(w, r) {
+		return
+	}
+	lister, ok := s.dirEraser.(directoryDevices)
+	if !ok || !s.cfg.Auth.ExternalOnly {
+		writeProblem(w, r, http.StatusNotFound, "not-found", "Not found", "this server has no directory admin access")
+		return
+	}
+	p := principalFrom(r.Context())
+	row, err := s.q().GetUserByID(r.Context(), p.UserID)
+	if err != nil {
+		problemInternal(w, r)
+		return
+	}
+	deleted, err := lister.DeleteDevice(r.Context(), row.Email, kind, deviceId)
+	if err != nil {
+		s.log.Warn("user directory: delete device", "err", err)
+		writeProblem(w, r, http.StatusBadGateway, "directory-unavailable", "Directory unavailable", "the directory did not answer; try again")
+		return
+	}
+	if !deleted {
+		writeProblem(w, r, http.StatusNotFound, "not-found", "Not found", "no such authenticator on this account")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

@@ -120,6 +120,9 @@ services:
       AUTHENTIK_POSTGRESQL__NAME: authentik
       AUTHENTIK_REDIS__HOST: redis
       AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+      # The web origin the directory's flows return to (agentry#164): read
+      # by the account-flows blueprint's redirect stages via !Env.
+      AGENTRY_PUBLIC_WEB_URL: ${AGENTRY_PUBLIC_WEB_URL:?the web origin (https://host) the directory's flows return to}
       # Per-IP budget for the enrollment/recovery flows (emails sent +
       # accounts created per hour, agentry#53); formatted into the
       # account-flows blueprint's rate-limit policy at apply time.

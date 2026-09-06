@@ -665,6 +665,24 @@ ignored entirely. Setting it higher than the real hop count lets any client
 choose its own rate-limit bucket and forge audit IPs, which is worse than
 having no per-IP limiting at all.
 
+**The directory stays behind the scenes.** Nobody browses it directly:
+the edge sends `auth.<site>/` and the directory's user panel
+(`/if/user/…`) back to the site, and the registry's Settings page is
+where a person changes their password, adds an authenticator app or
+security key, or removes one — each is one short step in the directory
+that returns to Settings. For that the directory needs to know the site:
+`AGENTRY_PUBLIC_WEB_URL` (the same value the registry uses) is passed to
+the `authentik-*` containers and read by the account-flows blueprint,
+and `scripts/dev/authentik-bootstrap.sh` points the application's launch
+URL at the registry's sign-in start and the brand's default application
+at it, so a sign-in, sign-up or recovery that ends without a return lands
+in the app signed in. Sign-out goes through the blueprint's
+`agentry-invalidation` flow, which ends the directory session and
+redirects to the site; keep `AGENTRY_IDP_LOGOUT_URL` on the provider's
+`end-session/` endpoint. The blueprint also unsets the brand's
+user-settings flow. Re-run the bootstrap script after upgrading a
+deployment that predates this (agentry#164).
+
 ## Hosting the downloads
 
 The web app's `/download` page serves binaries from a directory on the
