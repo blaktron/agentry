@@ -921,6 +921,36 @@ func (e DeleteCurrentUserParamsPublishedContent) Valid() bool {
 	}
 }
 
+// Defines values for DeleteUserDirectoryDeviceParamsKind.
+const (
+	Duo      DeleteUserDirectoryDeviceParamsKind = "duo"
+	Email    DeleteUserDirectoryDeviceParamsKind = "email"
+	Sms      DeleteUserDirectoryDeviceParamsKind = "sms"
+	Static   DeleteUserDirectoryDeviceParamsKind = "static"
+	Totp     DeleteUserDirectoryDeviceParamsKind = "totp"
+	Webauthn DeleteUserDirectoryDeviceParamsKind = "webauthn"
+)
+
+// Valid indicates whether the value is a known member of the DeleteUserDirectoryDeviceParamsKind enum.
+func (e DeleteUserDirectoryDeviceParamsKind) Valid() bool {
+	switch e {
+	case Duo:
+		return true
+	case Email:
+		return true
+	case Sms:
+		return true
+	case Static:
+		return true
+	case Totp:
+		return true
+	case Webauthn:
+		return true
+	default:
+		return false
+	}
+}
+
 // AbuseReport defines model for AbuseReport.
 type AbuseReport struct {
 	Agent     string             `json:"agent"`
@@ -1625,12 +1655,16 @@ type User struct {
 
 // UserDirectory defines model for UserDirectory.
 type UserDirectory struct {
-	// AccountUrl The directory's own account page (name, email, sessions, consents).
+	// AccountUrl Deprecated and no longer set (agentry#164): the directory's own account page is not offered; every setting lives here.
+	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 	AccountUrl *string `json:"accountUrl,omitempty"`
 
 	// Devices The caller's enrolled authenticators as the directory reports them; absent when the server has no directory admin access.
 	Devices *[]struct {
 		CreatedAt *time.Time `json:"createdAt,omitempty"`
+
+		// Id The directory's id for the device; pass it to DELETE /user/directory/devices/{kind}/{deviceId}.
+		Id *string `json:"id,omitempty"`
 
 		// Kind totp | webauthn | static | duo | sms | email | other
 		Kind string `json:"kind"`
@@ -2082,6 +2116,9 @@ type DeleteCurrentUserParams struct {
 
 // DeleteCurrentUserParamsPublishedContent defines parameters for DeleteCurrentUser.
 type DeleteCurrentUserParamsPublishedContent string
+
+// DeleteUserDirectoryDeviceParamsKind defines parameters for DeleteUserDirectoryDevice.
+type DeleteUserDirectoryDeviceParamsKind string
 
 // CreateAgentJSONRequestBody defines body for CreateAgent for application/json ContentType.
 type CreateAgentJSONRequestBody = CreateAgentRequest
@@ -3123,6 +3160,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /user/directory (the `GetUserDirectory` operationId).
 	GetUserDirectory(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteUserDirectoryDevice Remove one of the caller's own authenticators from the directory service (agentry#164).
+	//
+	// With auth.externalOnly and directory admin access, removes the caller's authenticator device of this kind and id through the directory's admin API, so the settings page manages MFA without ever showing the directory's own panel. The device must be on the caller's own account: an id that is somebody else's answers 404 exactly like a missing one. 404 when the server has no directory admin access; 502 when the directory did not answer.
+	//
+	// Corresponds with DELETE /user/directory/devices/{kind}/{deviceId} (the `DeleteUserDirectoryDevice` operationId).
+	DeleteUserDirectoryDevice(ctx context.Context, kind DeleteUserDirectoryDeviceParamsKind, deviceId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RevokeOtherUserSessions Revoke every session except the calling one ("sign out everywhere else").
 	//
@@ -5399,6 +5443,23 @@ func (c *Client) DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUse
 // Corresponds with GET /user/directory (the `GetUserDirectory` operationId).
 func (c *Client) GetUserDirectory(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetUserDirectoryRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteUserDirectoryDevice Remove one of the caller's own authenticators from the directory service (agentry#164).
+//
+// With auth.externalOnly and directory admin access, removes the caller's authenticator device of this kind and id through the directory's admin API, so the settings page manages MFA without ever showing the directory's own panel. The device must be on the caller's own account: an id that is somebody else's answers 404 exactly like a missing one. 404 when the server has no directory admin access; 502 when the directory did not answer.
+//
+// Corresponds with DELETE /user/directory/devices/{kind}/{deviceId} (the `DeleteUserDirectoryDevice` operationId).
+func (c *Client) DeleteUserDirectoryDevice(ctx context.Context, kind DeleteUserDirectoryDeviceParamsKind, deviceId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteUserDirectoryDeviceRequest(c.Server, kind, deviceId)
 	if err != nil {
 		return nil, err
 	}
@@ -10485,6 +10546,47 @@ func NewGetUserDirectoryRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewDeleteUserDirectoryDeviceRequest constructs an http.Request for the DeleteUserDirectoryDevice method
+func NewDeleteUserDirectoryDeviceRequest(server string, kind DeleteUserDirectoryDeviceParamsKind, deviceId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "kind", kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "deviceId", deviceId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/directory/devices/%s/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewRevokeOtherUserSessionsRequest constructs an http.Request for the RevokeOtherUserSessions method
 func NewRevokeOtherUserSessionsRequest(server string) (*http.Request, error) {
 	var err error
@@ -11976,6 +12078,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /user/directory (the `GetUserDirectory` operationId).
 	GetUserDirectoryWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserDirectoryResponse, error)
+
+	// DeleteUserDirectoryDeviceWithResponse Remove one of the caller's own authenticators from the directory service (agentry#164).
+	//
+	// With auth.externalOnly and directory admin access, removes the caller's authenticator device of this kind and id through the directory's admin API, so the settings page manages MFA without ever showing the directory's own panel. The device must be on the caller's own account: an id that is somebody else's answers 404 exactly like a missing one. 404 when the server has no directory admin access; 502 when the directory did not answer.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /user/directory/devices/{kind}/{deviceId} (the `DeleteUserDirectoryDevice` operationId).
+	DeleteUserDirectoryDeviceWithResponse(ctx context.Context, kind DeleteUserDirectoryDeviceParamsKind, deviceId string, reqEditors ...RequestEditorFn) (*DeleteUserDirectoryDeviceResponse, error)
 
 	// RevokeOtherUserSessionsWithResponse Revoke every session except the calling one ("sign out everywhere else").
 	//
@@ -16754,6 +16865,47 @@ func (r GetUserDirectoryResponse) ContentType() string {
 	return ""
 }
 
+type DeleteUserDirectoryDeviceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DeleteUserDirectoryDeviceResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteUserDirectoryDeviceResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteUserDirectoryDeviceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteUserDirectoryDeviceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteUserDirectoryDeviceResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type RevokeOtherUserSessionsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -19128,6 +19280,21 @@ func (c *ClientWithResponses) GetUserDirectoryWithResponse(ctx context.Context, 
 		return nil, err
 	}
 	return ParseGetUserDirectoryResponse(rsp)
+}
+
+// DeleteUserDirectoryDeviceWithResponse Remove one of the caller's own authenticators from the directory service (agentry#164).
+//
+// With auth.externalOnly and directory admin access, removes the caller's authenticator device of this kind and id through the directory's admin API, so the settings page manages MFA without ever showing the directory's own panel. The device must be on the caller's own account: an id that is somebody else's answers 404 exactly like a missing one. 404 when the server has no directory admin access; 502 when the directory did not answer.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /user/directory/devices/{kind}/{deviceId} (the `DeleteUserDirectoryDevice` operationId).
+func (c *ClientWithResponses) DeleteUserDirectoryDeviceWithResponse(ctx context.Context, kind DeleteUserDirectoryDeviceParamsKind, deviceId string, reqEditors ...RequestEditorFn) (*DeleteUserDirectoryDeviceResponse, error) {
+	rsp, err := c.DeleteUserDirectoryDevice(ctx, kind, deviceId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteUserDirectoryDeviceResponse(rsp)
 }
 
 // RevokeOtherUserSessionsWithResponse Revoke every session except the calling one ("sign out everywhere else").
@@ -22600,6 +22767,35 @@ func ParseGetUserDirectoryResponse(rsp *http.Response) (*GetUserDirectoryRespons
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteUserDirectoryDeviceResponse parses an HTTP response from a DeleteUserDirectoryDeviceWithResponse call
+func ParseDeleteUserDirectoryDeviceResponse(rsp *http.Response) (*DeleteUserDirectoryDeviceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteUserDirectoryDeviceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

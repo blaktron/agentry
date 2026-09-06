@@ -171,10 +171,11 @@ var routeAuthz = map[string]RouteDecl{
 	// admitted and answered with an empty list (a PAT has no sessions of its
 	// own); revoking is session-only, like logout — a token must not be able
 	// to sign its holder's browsers out.
-	"listUserSessions":        {Action: auth.ActUserSelfRead},
-	"getUserDirectory":        {Action: auth.ActUserSelfRead},
-	"revokeUserSession":       {Action: auth.ActUserSecurityManage, SessionOnly: true},
-	"revokeOtherUserSessions": {Action: auth.ActUserSecurityManage, SessionOnly: true},
+	"listUserSessions":          {Action: auth.ActUserSelfRead},
+	"getUserDirectory":          {Action: auth.ActUserSelfRead},
+	"deleteUserDirectoryDevice": {Action: auth.ActUserSelfUpdate},
+	"revokeUserSession":         {Action: auth.ActUserSecurityManage, SessionOnly: true},
+	"revokeOtherUserSessions":   {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	// The rule bundle is the same artifact the CLI already embeds; serving it
 	// discloses nothing that shipping the binary did not.
 	"getLatestRulesetBundle":      {Action: auth.ActPublicRead, Anonymous: true, NoAuthz: true},
