@@ -15,48 +15,10 @@
 // Named `proxy.ts` rather than `middleware.ts`: Next 16 renamed the
 // convention and warns on every build for the old name (DEV-022).
 import { NextResponse, type NextRequest } from "next/server";
+import { buildCSP } from "@/lib/csp";
 
-// Everything except script-src, which is assembled per request. Unchanged
-// from the original policy: `style-src 'unsafe-inline'` remains the §10.3
-// compromise (Tailwind + inline style attributes; no inline SCRIPT, which is
-// the XSS vector that matters).
-// form-action governs where a form may be SUBMITTED, and browsers apply it
-// to the redirect chain too: a same-origin POST /logout that answers with a
-// 303 to the directory service's end-session URL is blocked by
-// `form-action 'self'` and the Sign out button appears dead (agentry#81).
-// The IdP origin is therefore allowed when one is configured (DEV-057).
-const BASE_DIRECTIVES = [
-  "default-src 'self'",
-  // Styles (DEV-041 → agentry#46): the rendered pages carry NO inline
-  // <style> elements — Tailwind ships as one linked stylesheet — but ~150
-  // inline style="" attributes (theme tokens on server components). CSP3
-  // splits the two: style-src-elem is strict, style-src-attr keeps
-  // 'unsafe-inline' for the attributes, and the plain style-src stays as
-  // the fallback for browsers without the split (they see what they saw
-  // before). An injected <style> element is therefore blocked in every
-  // current browser while nothing visible changes.
-  "style-src 'self' 'unsafe-inline'",
-  "style-src-elem 'self'",
-  "style-src-attr 'unsafe-inline'",
-  "img-src 'self' data:",
-  "font-src 'self'",
-  "connect-src 'self'",
-  "frame-ancestors 'none'",
-  "base-uri 'self'",
-  `form-action 'self'${formActionExtras()}`,
-];
-
-function formActionExtras(): string {
-  const raw = process.env.AGENTRY_IDP_LOGOUT_URL;
-  if (!raw) return "";
-  try {
-    const u = new URL(raw);
-    if (u.protocol !== "https:" && u.protocol !== "http:") return "";
-    return ` ${u.origin}`;
-  } catch {
-    return "";
-  }
-}
+// The policy itself (and the reasons behind each directive) is lib/csp.ts;
+// this proxy only mints the nonce and stamps the headers.
 
 function newNonce(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -67,7 +29,7 @@ function newNonce(): string {
 
 export default function proxy(req: NextRequest) {
   const nonce = newNonce();
-  const csp = [`script-src 'self' 'nonce-${nonce}'`, ...BASE_DIRECTIVES].join("; ");
+  const csp = buildCSP(nonce, req.nextUrl.pathname);
 
   // Next's app renderer reads the nonce from the request header; the browser
   // gets it from the response header. Both must carry the same policy.
