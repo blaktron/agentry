@@ -101,6 +101,7 @@ var routeAuthz = map[string]RouteDecl{
 	"setOrgPolicy":          {Action: auth.ActOrgSettingsManage, OrgScoped: true},
 	"platformAgentAction":   {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"listAdvisories":        {Action: auth.ActPublicRead, Anonymous: true},
+	"getMcpServerScan":      {Action: auth.ActPublicRead, Anonymous: true},
 	"searchAgents":          {Action: auth.ActPublicRead, Anonymous: true},
 	"listAgentsByTag":       {Action: auth.ActPublicRead, Anonymous: true},
 	// Platform-staff surfaces: the staff flag is not an org role, so the
@@ -173,6 +174,7 @@ var routeAuthz = map[string]RouteDecl{
 	// to sign its holder's browsers out.
 	"listUserSessions":          {Action: auth.ActUserSelfRead},
 	"getUserDirectory":          {Action: auth.ActUserSelfRead},
+	"listUserDependencyAlerts":  {Action: auth.ActUserSelfRead},
 	"deleteUserDirectoryDevice": {Action: auth.ActUserSelfUpdate},
 	"revokeUserSession":         {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	"revokeOtherUserSessions":   {Action: auth.ActUserSecurityManage, SessionOnly: true},
