@@ -21,7 +21,7 @@ export const CSRF_COOKIE = "agentry_csrf";
 // and the API's trusted-hop count (AGENTRY_TRUSTED_PROXIES) describes the
 // edge, so this tier must not append a hop of its own — and User-Agent is
 // the browser's. Without an edge the API ignores the header, as before.
-async function browserHeaders(): Promise<Record<string, string>> {
+export async function browserHeaders(): Promise<Record<string, string>> {
   const h = await requestHeaders();
   const out: Record<string, string> = {};
   const fwd = h.get("x-forwarded-for");

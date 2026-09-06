@@ -6,7 +6,7 @@
 // call is the same shape as a password login: on success it Set-Cookies a
 // session and returns a csrfToken, so it mirrors through the same helper.
 import { NextRequest, NextResponse } from "next/server";
-import { API_BASE } from "@/lib/session";
+import { API_BASE, browserHeaders } from "@/lib/session";
 import { establishSession, redirectBack, safeNext, sameOrigin, requestOrigin, readForm } from "@/lib/forms";
 
 export async function POST(req: NextRequest) {
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 
   const res = await fetch(`${API_BASE}/api/v1/auth/2fa/totp/challenge`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    headers: { "Content-Type": "application/json", Accept: "application/json", ...(await browserHeaders()) },
     body: JSON.stringify({ challenge, code }),
     cache: "no-store",
   });
