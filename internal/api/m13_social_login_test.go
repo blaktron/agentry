@@ -525,7 +525,7 @@ func TestSocialLoginCallbackRestartsBrowserWithoutState(t *testing.T) {
 	if res2.StatusCode != http.StatusSeeOther {
 		t.Fatalf("guarded callback: got %d want 303", res2.StatusCode)
 	}
-	if loc := res2.Header.Get("Location"); !strings.HasPrefix(loc, "/login?error=") {
+	if loc := res2.Header.Get("Location"); !strings.HasPrefix(loc, "/ui/login?error=") {
 		t.Fatalf("guarded callback Location = %q, want /login?error=…", loc)
 	}
 
