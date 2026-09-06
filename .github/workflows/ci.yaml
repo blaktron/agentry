@@ -1,6 +1,8 @@
-# CI gate: lint, generated-code drift, ruleset-copy drift, tests (real
-# Postgres), build, dependency hygiene (govulncheck + osv-scanner + lockfile
-# integrity + image scan), OpenAPI breaking-change check, TS client smoke.
+# CI gate for the core (DEV-091: the headless registry — the site has its
+# own repository and CI): lint, generated-code drift, ruleset-copy drift,
+# tests (real Postgres), build, the M0 and core-UI acceptance scripts,
+# dependency hygiene (govulncheck + osv-scanner + lockfile integrity + image
+# scan), OpenAPI breaking-change check.
 name: ci
 on:
   push:
@@ -37,13 +39,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
       - name: Install sqlc
         run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
-      - name: Install web deps
-        run: cd web && npm ci
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
@@ -58,44 +55,11 @@ jobs:
         run: make sync-rules-check
       - name: make check
         run: make check
-      - name: web check (types + unit)
-        run: make web-check
       - name: acceptance M0
         run: ./scripts/acceptance/m0.sh
-
-  # Browser smoke (DEV-031): real Chromium over the load-bearing pages and a
-  # same-origin form post. Exists because curl-level coverage shipped a
-  # browser-only outage — every form post 403'd under real browser semantics
-  # (Referrer-Policy ⇒ Origin: null) while every scripted check stayed green.
-  e2e-browser:
-    runs-on: [self-hosted, linux, x64]
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: agentry
-          POSTGRES_PASSWORD: agentry
-          POSTGRES_DB: agentry_test
-        ports: ["5432"]  # ephemeral host port: several runners per host (agentry#125)
-        options: >-
-          --health-cmd "pg_isready -U agentry" --health-interval 5s
-          --health-timeout 3s --health-retries 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Point the tests at the service's mapped port
-        run: echo "AGENTRY_TEST_DATABASE_URL=postgres://agentry:agentry@localhost:${{ job.services.postgres.ports['5432'] }}/agentry_test?sslmode=disable" >> "$GITHUB_ENV"
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: Install web deps
-        run: cd web && npm ci
-      - name: Install chromium
-        run: cd web && npx playwright install --with-deps chromium
-      - name: browser smoke
-        run: ./scripts/acceptance/e2e-browser.sh
+      # The server's own browser surface, driven with curl (DEV-091).
+      - name: acceptance core UI
+        run: ./scripts/acceptance/ui.sh
 
   govulncheck:
     runs-on: [self-hosted, linux, x64]
@@ -122,16 +86,11 @@ jobs:
       - name: lockfile presence and integrity
         run: |
           set -euo pipefail
-          test -f go.sum               || { echo "go.sum is missing"; exit 1; }
-          test -f web/package-lock.json || { echo "web/package-lock.json is missing"; exit 1; }
+          test -f go.sum || { echo "go.sum is missing"; exit 1; }
           # `go mod verify` checks the module cache against go.sum hashes;
           # `go mod tidy -diff` fails when go.mod/go.sum do not match the code.
           go mod verify
           go mod tidy -diff
-          jq -e '.lockfileVersion >= 2' web/package-lock.json > /dev/null \
-            || { echo "web/package-lock.json is not lockfileVersion >= 2"; exit 1; }
-      - name: npm lockfile matches package.json
-        run: cd web && npm ci --ignore-scripts --dry-run
       # The osv-scanner release binary (v2.5.1, the latest release) is built
       # with Go 1.26 and cannot load this go 1.27 module for call analysis,
       # so the action degrades to a lockfile-only scan and re-reports
@@ -139,8 +98,8 @@ jobs:
       # this repo imports only x/crypto/argon2). Compile the scanner with
       # the runner's Go 1.27 toolchain instead, which restores call
       # analysis — the same mechanism `make deps-audit` uses locally.
-      - name: osv-scanner (go.mod + web/package-lock.json)
-        run: go run github.com/google/osv-scanner/v2/cmd/osv-scanner@latest scan --lockfile=go.mod --lockfile=web/package-lock.json
+      - name: osv-scanner (go.mod)
+        run: go run github.com/google/osv-scanner/v2/cmd/osv-scanner@latest scan --lockfile=go.mod
 
   # Third-party verification of the attestations this code signs
   # (agentry#26, DEV-035): cosign — which shares no code with pkg/attest —
