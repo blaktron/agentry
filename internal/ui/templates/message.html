@@ -1,0 +1,4 @@
+{{define "content"}}
+<h1>{{.Title}}</h1>
+{{with .Data}}{{if .Link}}<p><a class="button" href="{{.Link}}">{{.LinkText}}</a></p>{{end}}{{end}}
+{{end}}
