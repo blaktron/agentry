@@ -63,3 +63,18 @@ LIMIT $1;
 -- than DELETE rows (the append-only trigger refuses row deletes, and dropping
 -- a partition is O(1)). Returns the number of partitions dropped.
 SELECT audit_prune_partitions($1::date)::int AS dropped;
+
+-- name: ListUserActivity :many
+-- GET /user/activity (agentry#192): the audit events the caller performed —
+-- sign-ins, tokens and keys, profile changes, publishes, reviews — newest
+-- first, keyset-paged like the agent feed.
+SELECT a.id, a.occurred_at, a.action, a.detail, a.target_kind, a.target_id, a.actor_kind,
+       host(a.ip)::text AS ip, a.user_agent, v.version AS version
+FROM audit_events a
+LEFT JOIN agent_versions v ON a.target_kind = 'agent_version' AND v.id = a.target_id
+WHERE a.actor_id = sqlc.arg(actor_id)
+  AND (sqlc.narg('before_time')::timestamptz IS NULL
+       OR a.occurred_at < sqlc.narg('before_time')
+       OR (a.occurred_at = sqlc.narg('before_time') AND a.id < sqlc.narg('before_id')))
+ORDER BY a.occurred_at DESC, a.id DESC
+LIMIT $1;

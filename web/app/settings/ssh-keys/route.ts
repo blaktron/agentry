@@ -11,15 +11,15 @@ export async function POST(req: NextRequest) {
   if (action === "remove") {
     const id = String(form.get("keyId") ?? "");
     const res = await apiSend("DELETE", `/user/ssh-keys/${encodeURIComponent(id)}`);
-    if (!res.ok) return redirectBack(req, "/settings", { error: await problemDetail(res) });
-    return redirectBack(req, "/settings", { ok: "SSH key removed." });
+    if (!res.ok) return redirectBack(req, "/settings/authentication", { error: await problemDetail(res) });
+    return redirectBack(req, "/settings/authentication", { ok: "SSH key removed." });
   }
 
   const title = String(form.get("title") ?? "").trim();
   const publicKey = String(form.get("publicKey") ?? "").trim();
-  if (!title) return redirectBack(req, "/settings", { error: "title required" });
-  if (!publicKey) return redirectBack(req, "/settings", { error: "public key required" });
+  if (!title) return redirectBack(req, "/settings/authentication", { error: "title required" });
+  if (!publicKey) return redirectBack(req, "/settings/authentication", { error: "public key required" });
   const res = await apiSend("POST", "/user/ssh-keys", { title, publicKey });
-  if (!res.ok) return redirectBack(req, "/settings", { error: await problemDetail(res) });
-  return redirectBack(req, "/settings", { ok: `SSH key "${title}" added.` });
+  if (!res.ok) return redirectBack(req, "/settings/authentication", { error: await problemDetail(res) });
+  return redirectBack(req, "/settings/authentication", { ok: `SSH key "${title}" added.` });
 }

@@ -10,12 +10,12 @@ export async function POST(req: NextRequest) {
   if (!sameOrigin(req)) return new NextResponse("cross-origin form post rejected", { status: 403 });
   const form = await readForm(req);
   const action = String(form.get("action") ?? "");
-  if (action !== "remove-device") return redirectBack(req, "/settings", { error: "unknown action" });
+  if (action !== "remove-device") return redirectBack(req, "/settings/authentication", { error: "unknown action" });
   const kind = String(form.get("kind") ?? "").trim();
   const id = String(form.get("deviceId") ?? "").trim();
-  if (!kind || !id) return redirectBack(req, "/settings", { error: "no authenticator selected" });
+  if (!kind || !id) return redirectBack(req, "/settings/authentication", { error: "no authenticator selected" });
   const res = await apiSend("DELETE", `/user/directory/devices/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`);
-  if (res.status === 404) return redirectBack(req, "/settings", { error: "that authenticator is no longer on your account" });
-  if (!res.ok) return redirectBack(req, "/settings", { error: await problemDetail(res) });
-  return redirectBack(req, "/settings", { ok: "authenticator removed." });
+  if (res.status === 404) return redirectBack(req, "/settings/authentication", { error: "that authenticator is no longer on your account" });
+  if (!res.ok) return redirectBack(req, "/settings/authentication", { error: await problemDetail(res) });
+  return redirectBack(req, "/settings/authentication", { ok: "authenticator removed." });
 }

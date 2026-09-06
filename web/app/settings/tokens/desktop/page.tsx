@@ -65,7 +65,7 @@ export default async function DesktopAuthorizePage({
         </p>
         <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>
           Scopes: agent read/publish, repo read/write, profile. The token
-          appears under Settings → Tokens and can be revoked there any time.
+          appears under Settings → Authentication and can be revoked there any time.
           If you did not just click “Sign in via browser” in the desktop app,
           close this tab.
         </p>
