@@ -618,6 +618,27 @@ func (e SsoConnectionTestKind) Valid() bool {
 	}
 }
 
+// Defines values for UIInfoMode.
+const (
+	Authorize UIInfoMode = "authorize"
+	Full      UIInfoMode = "full"
+	Off       UIInfoMode = "off"
+)
+
+// Valid indicates whether the value is a known member of the UIInfoMode enum.
+func (e UIInfoMode) Valid() bool {
+	switch e {
+	case Authorize:
+		return true
+	case Full:
+		return true
+	case Off:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for VersionStatus.
 const (
 	VersionStatusApproved    VersionStatus = "approved"
@@ -1308,6 +1329,15 @@ type AuditPage struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
+// BrandInfo What this deployment calls itself (config `brand.*`, DEV-091): the name for prompts and titles, and optional logo and support address.
+type BrandInfo struct {
+	LogoUrl *string `json:"logoUrl,omitempty"`
+
+	// Name Example: Agentry
+	Name         string  `json:"name"`
+	SupportEmail *string `json:"supportEmail,omitempty"`
+}
+
 // CreateAgentRequest defines model for CreateAgentRequest.
 type CreateAgentRequest struct {
 	// Modes The run modes a release supports; at least one.
@@ -1490,11 +1520,17 @@ type Meta struct {
 	// Example: v1
 	ApiVersion string `json:"apiVersion"`
 
+	// Brand What this deployment calls itself (config `brand.*`, DEV-091): the name for prompts and titles, and optional logo and support address.
+	Brand *BrandInfo `json:"brand,omitempty"`
+
 	// Features Self-host feature flags: `judge`, `signing`, `redis`, `s3`, and `externalOnly` (accounts live in an external directory service; the native register/password/TOTP surface answers 410 — clients should not offer those forms).
 	Features map[string]bool `json:"features"`
 
 	// MinCLIVersion Oldest supported agentry CLI version (§11 distribution note).
 	MinCLIVersion *string `json:"minCLIVersion,omitempty"`
+
+	// Ui The server's own browser surface under `/ui/` (DEV-091). `mode` is `full` (device authorize, sign-in, account, review, staff, org admin), `authorize` (only the device-authorize page — a site fronts this server) or `off`. `authorizeUrl` is the absolute page a CLI or the desktop app opens for browser sign-in, when served.
+	Ui *UIInfo `json:"ui,omitempty"`
 
 	// Version agentryd semantic version (build-stamped).
 	//
@@ -1879,6 +1915,15 @@ type TotpSetupResult struct {
 	// Secret Base32 TOTP secret (display once for authenticator apps).
 	Secret string `json:"secret"`
 }
+
+// UIInfo The server's own browser surface under `/ui/` (DEV-091). `mode` is `full` (device authorize, sign-in, account, review, staff, org admin), `authorize` (only the device-authorize page — a site fronts this server) or `off`. `authorizeUrl` is the absolute page a CLI or the desktop app opens for browser sign-in, when served.
+type UIInfo struct {
+	AuthorizeUrl *string    `json:"authorizeUrl,omitempty"`
+	Mode         UIInfoMode `json:"mode"`
+}
+
+// UIInfoMode defines model for UIInfo.Mode.
+type UIInfoMode string
 
 // User defines model for User.
 type User struct {

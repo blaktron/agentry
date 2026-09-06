@@ -105,6 +105,18 @@ signing:
   kind: file            # file | kms, 'none' is refused in prod
   keyFile: /etc/agentry/signing-key.pem
 
+# How the server presents itself and where browsers land (DEV-091).
+web:
+  url: ""               # a site fronting this server; unset = the server's own /ui/ pages
+ui:
+  mode: full            # full | authorize | off — the server's own browser surface
+brand:
+  name: ""              # emails, authenticator apps and /ui/ call it this (default: the public host)
+  logoURL: ""           # optional; the /ui/ pages and the directory show it
+  cssURL: ""            # optional stylesheet the /ui/ pages load
+  supportEmail: ""      # shown where people need help
+  securityEmail: ""     # shown on the security notes
+
 judge:
   provider: none        # none | static | openai | anthropic | bedrock | classifier
   # For openai/anthropic, point at any endpoint speaking that protocol:
