@@ -193,6 +193,14 @@ func requestFactories(env *testEnv) map[string]opRequest {
 		},
 		"listUserSessions": {method: "GET", path: sPath("/api/v1/user/sessions")},
 		"getUserDirectory": {method: "GET", path: sPath("/api/v1/user/directory")},
+		"deleteUserDirectoryDevice": {
+			// No directory is configured in the matrix env, so an authorized
+			// caller gets 404 (not denied) and nothing is removed anywhere.
+			method: "DELETE",
+			path: func(*matrixSeed, string) string {
+				return "/api/v1/user/directory/devices/totp/" + uuid.NewString()
+			},
+		},
 		// Non-destructive by construction: the query spares the calling
 		// session, and every matrix caller holds exactly one.
 		"revokeOtherUserSessions": {method: "DELETE", path: sPath("/api/v1/user/sessions")},
