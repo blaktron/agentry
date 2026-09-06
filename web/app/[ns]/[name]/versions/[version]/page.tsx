@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { publicOrSessionReader } from "@/lib/session";
 import { apiGet, type Agent, type AgentVersion, type ScanReport } from "@/lib/api";
 import { Badge, CapabilityBadges, Card, CodeBlock, StatusBadge } from "@/components/ui";
 import { FindingsList } from "@/components/report";
@@ -34,16 +35,19 @@ export default async function VersionPage({ params }: { params: Promise<Params> 
   const v = encodeURIComponent(version);
   const vbase = `/agents/${n}/${a}/versions/${v}`;
 
+  // Public agents read anonymously (cached); a private one answers 401 and
+  // is read through the session instead (agentry#186).
+  const { read } = publicOrSessionReader();
   const [agent, ver] = await Promise.all([
-    apiGet<Agent>(`/agents/${n}/${a}`, { revalidate: 60 }),
-    apiGet<AgentVersion>(vbase, { revalidate: 60 }),
+    read<Agent>(`/agents/${n}/${a}`, { revalidate: 60 }),
+    read<AgentVersion>(vbase, { revalidate: 60 }),
   ]);
   if (!agent || !ver) notFound();
 
   const [report, manifest, attestation] = await Promise.all([
-    apiGet<ScanReport>(`${vbase}/report`, { revalidate: 60 }).catch(() => null),
-    apiGet<VersionManifest>(`${vbase}/manifest`, { revalidate: 300 }).catch(() => null),
-    apiGet<DsseEnvelope>(`${vbase}/attestation`, { revalidate: 300 }).catch(() => null),
+    read<ScanReport>(`${vbase}/report`, { revalidate: 60 }).catch(() => null),
+    read<VersionManifest>(`${vbase}/manifest`, { revalidate: 300 }).catch(() => null),
+    read<DsseEnvelope>(`${vbase}/attestation`, { revalidate: 300 }).catch(() => null),
   ]);
 
   const counts = report?.findingCounts ?? {};

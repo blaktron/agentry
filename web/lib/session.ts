@@ -5,6 +5,7 @@
 // client-side JavaScript.
 import "server-only";
 import { cookies } from "next/headers";
+import { apiGet, apiGetText } from "@/lib/api";
 
 const API_BASE = (process.env.AGENTRY_API_BASE ?? "http://localhost:8080").replace(/\/$/, "");
 
@@ -82,6 +83,43 @@ export async function authedGetText(path: string): Promise<string | null> {
   if (res.status === 401 || res.status === 403) throw new AccessError(res.status, path);
   if (!res.ok) throw new Error(`API ${path} → ${res.status}`);
   return await res.text();
+}
+
+// publicOrSessionReader serves the pages that are public for public agents
+// and the owner's (or reviewer's) for private ones (agentry#186). `read`
+// tries the anonymous, cached fetch first; on 401/403 it retries through
+// the session and remembers that, so every later read of the same page
+// goes through the session too. An AccessError on the session read means
+// "not yours": null, and the page 404s like the API would.
+export function publicOrSessionReader() {
+  let viaSession = false;
+  const viaSessionRead = async <T,>(path: string): Promise<T | null> => {
+    viaSession = true;
+    return authedGet<T>(path).catch((err) => {
+      if (err instanceof AccessError) return null;
+      throw err;
+    });
+  };
+  const read = async <T,>(path: string, opts?: { revalidate?: number }): Promise<T | null> => {
+    if (viaSession) return viaSessionRead<T>(path);
+    try {
+      return await apiGet<T>(path, opts);
+    } catch (e) {
+      if (!/→ 40[13]$/.test(String(e))) throw e;
+      return viaSessionRead<T>(path);
+    }
+  };
+  const readText = async (path: string, opts?: { revalidate?: number }): Promise<string | null> => {
+    if (viaSession) return authedGetText(path).catch((err) => (err instanceof AccessError ? null : Promise.reject(err)));
+    try {
+      return await apiGetText(path, opts);
+    } catch (e) {
+      if (!/→ 40[13]$/.test(String(e))) throw e;
+      viaSession = true;
+      return authedGetText(path).catch((err) => (err instanceof AccessError ? null : Promise.reject(err)));
+    }
+  };
+  return { read, readText, get viaSession() { return viaSession; } };
 }
 
 // apiSend performs a cookie-authenticated mutation from a route handler,
