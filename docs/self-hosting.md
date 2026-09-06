@@ -72,7 +72,7 @@ injection-signature scanners the server runs at publish time, offline.
 |---|---|---|
 | **Single process** | `agentryd all` + Postgres | evaluation, small teams |
 | **HA** | Helm chart: `api`×N, `git`×N (shared RWX volume), `worker`×N, `web`×N | production self-host |
-| **AWS reference** | the Terraform modules in `deploy/terraform` | mirrors how the hosted service runs |
+| **AWS reference** | the hosted service's Terraform, kept with the site (not in this repository) | mirrors how the hosted service runs |
 
 The same binary serves every role; `agentryd api|git|worker|all` selects it.
 The `git` role is the only one that needs repo storage mounted, and the
@@ -218,7 +218,7 @@ Env equivalents: `AGENTRY_STORAGE_KIND`, `AGENTRY_STORAGE_S3_BUCKET`,
 `AGENTRY_STORAGE_S3_REGION`, `AGENTRY_SIGNING_KIND`,
 `AGENTRY_SIGNING_KMS_KEY_ARN`. Credentials come from the ambient AWS chain:
 an instance or task role, not keys in this file. The Terraform in
-`deploy/terraform` provisions both the bucket and a key whose `kms:Sign`
+The hosted service's Terraform provisions both the bucket and a key whose `kms:Sign`
 permission is restricted to the worker task role.
 
 **Honest caveat:** these two backends have **not yet been exercised against a
@@ -676,13 +676,11 @@ emits `amr` on its ID tokens; check one sign-in's token (or the
 `user.login` audit row) before enabling the flag, because with it on and a
 directory that never asserts a factor, nobody can publish publicly.
 
-To make the directory service wear the product's visual scheme (the
-tokens in `web/app/globals.css`; assets under `web/public/brand/`), run
-`scripts/dev/authentik-brand.sh` with `ASSET_BASE` set to the web app's
-public origin — it PATCHes the default brand's title, wordmark, favicon,
-flow background, and custom CSS
-(`deploy/compose/authentik/branding.css`). Re-run it after editing
-either file.
+The directory's flows are unbranded here and call the deployment
+`AGENTRY_BRAND_NAME`; a site that fronts the registry applies its own
+brand (title, wordmark, favicon, flow background, custom CSS) through the
+directory's API — the hosted site's repository carries that script and
+stylesheet (DEV-091).
 
 **Upgrading the directory service.** Authentik refuses to skip a release
 line: every `YYYY.M` line between the running version and the target
@@ -733,13 +731,16 @@ deployment that predates this (agentry#164).
 
 ## Hosting the downloads
 
-The web app's `/download` page serves binaries from a directory on the
-host rather than from the image, so publishing a build is a file copy:
+The edge serves whatever is in the downloads directory
+(`AGENTRY_DOWNLOADS_DIR`, default `deploy/compose/downloads`) at
+`/downloads/`, so publishing a build for your users is a file copy — the
+CLI and the desktop app build from their own repositories (`agentry-cli`,
+`agentry-desktop`); the hosted site's repository has the script that
+builds the whole matrix and writes the `manifest.json` its download page
+renders. A registry without a site simply hosts the files:
 
 ```bash
-AGENTRY_DEFAULT_REGISTRY=https://your.registry.example \
-  scripts/release/build-downloads.sh          # → dist/downloads/
-scp dist/downloads/* host:/srv/agentry/downloads/
+scp agentry-*-linux-amd64 host:/srv/agentry/downloads/
 ```
 
 `AGENTRY_DEFAULT_REGISTRY` bakes the registry these binaries talk to when

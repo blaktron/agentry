@@ -295,7 +295,7 @@ services:
       # SSH git transport (§6.1 Q7, agentry#70): listens in-container on
       # 2222; the host key is generated under /data/git on first start.
       # AGENTRY_GIT_SSH_PUBLIC_URL is what agent pages print as the clone
-      # URL (e.g. ssh://git@dev.secureagentry.net:2222); leave it empty to
+      # URL (e.g. ssh://git@registry.example.test:2222); leave it empty to
       # keep the transport reachable but unadvertised.
       AGENTRY_GIT_SSH_ADDR: ${AGENTRY_GIT_SSH_ADDR:-:2222}
       AGENTRY_GIT_SSH_PUBLIC_URL: ${AGENTRY_GIT_SSH_PUBLIC_URL:-}
