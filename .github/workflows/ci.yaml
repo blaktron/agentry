@@ -51,6 +51,15 @@ jobs:
       # match; nothing did, so a rule could ship to the CLI and not the server.
       # `make check` runs this too; it is called out here so a drift failure
       # names itself in the job log rather than hiding inside a long target.
+      # The site left this repository at the cut-over (DEV-091, agentry#206):
+      # nothing of it may come back — its app, image, brand, terraform,
+      # downloads tooling and pages live in blaktron/agentry-web.
+      - name: site files stay out
+        run: |
+          set -euo pipefail
+          if git ls-files | grep -E '^(web/|deploy/compose/Dockerfile\.web$|deploy/terraform/|deploy/compose/downloads/|deploy/compose/authentik/branding\.css$|scripts/dev/authentik-brand\.sh$|scripts/release/build-downloads\.sh$|docs/agentry/|docs/index\.md$|docs/extra\.css$|docs/ops/deployment\.md$)'; then
+            echo "site files above belong to blaktron/agentry-web"; exit 1
+          fi
       - name: ruleset copy in sync
         run: make sync-rules-check
       - name: make check

@@ -261,8 +261,8 @@ type Notify struct {
 	Kind string `yaml:"kind"`
 }
 
-// Web names a front end that fronts this server — the SecureAgentry site,
-// or any other (DEV-091). When URL is set, every browser destination the
+// Web names a front end that fronts this server — the closed site from
+// blaktron/agentry-web, or any other (DEV-091). When URL is set, every browser destination the
 // API writes (where a failed sign-in lands, where a signed-in browser goes,
 // where an email link points, where sign-out ends) is a page of that site.
 // When it is unset the server points at its own pages under /ui/.

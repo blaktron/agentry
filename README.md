@@ -78,9 +78,9 @@ Then [docs/self-hosting.md](docs/self-hosting.md) for a real deployment, or
 | `pkg/` | public: manifest spec + refs, rules engine, embedded ruleset, deterministic archives + extractor, attestation verify, generated API client — the surface the CLI and third parties build on |
 | `rules/` | the versioned S3/S4 rule bundle |
 | `testdata/attack-corpus/` | the golden corpus: attack fixtures and their benign twins |
-| `web/` | the Next.js registry UI |
-| — | the docs & developers sites live in [blaktron/agentry-docs](https://github.com/blaktron/agentry-docs) (they clone this repo's `docs/` and `schemas/` at build) |
-| `deploy/` | compose, Helm, Terraform |
+| — | the site (the Next.js front end, its brand and deployment overlay) lives in blaktron/agentry-web, closed source; a registry runs without it and serves its own pages at `/ui/` (DEV-091) |
+| — | the docs & developers sites live in blaktron/agentry-docs (they clone this repo's `docs/` and `schemas/` at build, beside the site's pages) |
+| `deploy/` | the headless compose stack and the Helm chart |
 | `docs/` | user, operator, and API docs — start with `trust.md`, `self-hosting.md`, `api-conventions.md` |
 
 ## Documentation

@@ -24,7 +24,7 @@ test:
 
 ## lint: gofmt + go vet + golangci-lint (if installed)
 lint:
-	@fmt_out=$$(gofmt -l . | grep -v '^web/' || true); \
+	@fmt_out=$$(gofmt -l . || true); \
 	if [ -n "$$fmt_out" ]; then echo "gofmt needed on:"; echo "$$fmt_out"; exit 1; fi
 	$(GO) vet ./...
 	@if command -v golangci-lint >/dev/null 2>&1; then golangci-lint run ./...; \
@@ -39,7 +39,6 @@ generate:
 	$(GO) tool oapi-codegen -config schemas/codegen-server.yaml schemas/openapi.yaml
 	$(GO) tool oapi-codegen -config schemas/codegen-goclient.yaml schemas/openapi.yaml
 	@if command -v sqlc >/dev/null 2>&1; then sqlc generate; else echo "sqlc not installed; skipped"; fi
-	@if [ -d web/node_modules ]; then cd web && npm run --silent gen; else echo "web deps not installed; TS gen skipped"; fi
 
 ## generate-check: fail if generated code drifted from the spec/queries
 generate-check: generate
