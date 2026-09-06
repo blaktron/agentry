@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/google/uuid"
 
@@ -185,16 +184,18 @@ func (s *Server) samlSlo(w http.ResponseWriter, r *http.Request, org OrgHandle) 
 	_, _ = w.Write([]byte("logged out\n"))
 }
 
-// webHomeURL is where a completed SP-initiated logout lands.
+// webHomeURL is where a completed SP-initiated logout lands: the site's
+// home when one fronts this server, else the server's own /ui/ page
+// (DEV-091), on the public origin or, failing that, this request's host.
 func (s *Server) webHomeURL(r *http.Request) string {
-	if base := strings.TrimRight(s.cfg.BaseURL, "/"); base != "" {
-		return base + "/"
+	if u := s.paths.homeURL(); u != "" {
+		return u
 	}
 	scheme := "https"
 	if r.TLS == nil {
 		scheme = "http"
 	}
-	return scheme + "://" + r.Host + "/"
+	return scheme + "://" + r.Host + "/ui/"
 }
 
 // samlLogoutURLForSession returns the IdP logout redirect for a session
