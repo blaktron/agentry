@@ -22,15 +22,17 @@ There is no flag, plan, or role that lets a public version skip the pipeline
 ship**: the deterministic archive, not the working tree, not the tag as the
 author describes it.
 
-Ten stages run against those bytes:
+Eight stages run against those bytes (two code-analysis stages, S6 and S7,
+were retired with the package kinds they served; BriefAgents carry no tool
+code):
 
 | | |
 |---|---|
 | **S1** | Inventory and hygiene: safe unpack, content-sniffed types, archive anomalies, binaries |
-| **S2** | Secrets, including Agentry's own `agy_` token format |
+| **S2** | Secrets, including Agentry's own `agy_` token format; on a git-tag publish also the added lines of every commit reachable from the tag, so a key committed and later removed still surfaces |
 | **S3** | Hidden and obfuscated content: zero-width and bidi characters, Unicode tag blocks, confusables, private-use codepoints, HTML comments, CSS-hidden text, data URIs, entropy-gated encoded blobs |
 | **S4** | Prompt-injection signatures: instruction override, exfiltration, tool coercion, credential harvesting, persistence, obfuscation |
-| **S5** | LLM adjudication against a fixed rubric, with no tools; a judge showing signs of manipulation is itself a finding |
+| **S5** | LLM adjudication against a fixed rubric, with no tools; a judge showing signs of manipulation is itself a finding. The judge is an Anthropic-, OpenAI-compatible or Bedrock model, or a PromptGuard-class classifier that scores only the injection axis and therefore always routes to human review |
 | **S8** | Metadata, namespace and publisher-behaviour abuse |
 | **S9** | Release-diff risk: the rug-pull check, comparing a version against its predecessor |
 | **S10** | Report assembly into a canonical, digest-addressed document |

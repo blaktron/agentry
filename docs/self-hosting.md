@@ -122,8 +122,8 @@ judge:
   # apiKey: ...                       # optional bearer token
 
 scan:
-  # External scanner tools behind the §8.3 seams. All optional: unset, the
-  # native Go detectors run alone and S7 reports "not checked".
+  # The one external scanner tool behind the §8.3 seam. Optional: unset,
+  # the native Go secret detectors run alone.
   gitleaksBin: /usr/bin/gitleaks      # AGENTRY_SCAN_GITLEAKS_BIN ("auto" = PATH lookup); shipped in the image
   # toolTimeout: 2m                   # AGENTRY_SCAN_TOOL_TIMEOUT per invocation
 ```
@@ -136,12 +136,12 @@ single `all` role does; a separate worker without shared git storage reports
 `S2/history-not-scanned` instead of implying a clean history.
 
 A configured tool that cannot be found is a startup error, never a silent
-fallback. A tool that fails mid-scan leaves an `S2/tool-error` or
-`S6/tool-error` finding on the report, so "gitleaks did not run" is
-distinguishable from "no secrets". Opengrep rules whose `metadata.capability`
-is `network`, `exec`, `fs-write`, `fs-read`, `env` or `eval` feed the
-declared-vs-detected capability compare; other rules surface as
-`S6/opengrep-<rule>` with their own severity.
+fallback. A tool that fails mid-scan leaves an `S2/tool-error` finding on
+the report, so "gitleaks did not run" is distinguishable from "no
+secrets". The code-analysis stages that once ran opengrep and an OSV
+dependency check (S6, S7) were retired with the package kinds they served:
+BriefAgents carry no tool code, and the MCP servers one declares are
+resolved and pinned by the runner instead.
 
 Generate a signing key:
 

@@ -56,6 +56,15 @@ hold it.
 | `google` | gemini-3-pro | `GEMINI_API_KEY` | generativelanguage.googleapis.com:443 |
 | `custom` | asked | asked | derived from `--base-url` |
 
+For an **OpenAI-compatible endpoint** (a gateway, a hosted open-weight
+model, a vendor's compatible mode) use `--provider openai --base-url
+https://…/v1 --model <id>`: the provider name is what the harness sees, and
+`openai` with a base URL is its OpenAI-compatible mode. The key reaches the
+harness under the **same variable name** you give `--api-key-env`, and the
+harness's providers read their conventional names — so name it
+`OPENAI_API_KEY` for that path. The agent container's egress allowlist is
+derived from the base URL's host.
+
 `agentry run` still self-heals (it performs the same steps lazily on first
 use), so setup is a convenience, not a gate. The desktop app drives the
 same configuration from its Settings surface.
@@ -125,7 +134,7 @@ release declares the set of run modes it supports:
 | Mode | What a run is | Status |
 |---|---|---|
 | `autonomous` | starts from its files — after the up-front questions, if any, and MCP profile authentication — does the job, writes its output and receipts, and ends | this is `agentry run` today |
-| `interactive` | starts from the same plan and controls, but the run is a conversation: in the CLI a chat in the terminal, in the desktop an in-app window. The agent can ask for information as the work reveals the need; you can answer and drop files into the read-only inputs folder. You **cannot** give it more access than the manifest declares — the capability contract, the gateway and the egress allowlist are exactly those of an autonomous run of the same release | declarable now; interactive sessions arrive with the runner work ([agentry-cli#35](https://github.com/blaktron/agentry-cli/issues/35), [#36](https://github.com/blaktron/agentry-cli/issues/36)); until then a release that declares only `interactive` cannot be run |
+| `interactive` | starts from the same plan and controls, but the run is a conversation: in the CLI a chat in the terminal (`agentry run --mode interactive`), in the desktop the run panel's chat. The agent can ask for information as the work reveals the need; you can answer and drop files into the read-only inputs folder (`/add PATH`), then `/finish` for the final result. You **cannot** give it more access than the manifest declares — the capability contract, the gateway and the egress allowlist are exactly those of an autonomous run of the same release, and a permission request from inside the sandbox is always refused | `agentry run --mode interactive`; a release with one mode runs in it, one with both is asked on a terminal and runs autonomous otherwise |
 
 The instruction is one file:
 
@@ -268,8 +277,8 @@ mechanics: the [Runner reference](runner.md).
 
 ### `dependencies`
 
-`dependencies.agents: [{ref: ns/name, version: "^1.2"}]` is informational
-in v1: recorded and displayed, not auto-installed.
+`dependencies.agents: [{ref: ns/name, version: "^1.2"}]` is informational:
+recorded and displayed, not auto-installed.
 
 ### `publish`
 
@@ -320,9 +329,11 @@ otherwise, with the raw output preserved in the receipts.
 **Task input and composition.** `--input FILE`, else piped stdin, else an
 empty task. Runs compose: `agentry run a … | agentry run b …`.
 
-**Budgets and exit codes.** The operator policy sets the default timeout
-and tool-call budget; `--timeout` / `--max-turns` override per run.
-Exit codes: `0` ok · `10` verify failed · `11` refused by policy /
+**Budgets and exit codes.** The operator policy sets the default timeout,
+tool-call budget and cost ceiling; `--timeout` / `--max-turns` /
+`--max-cost` override per run (a run is killed once the harness reports
+more than the cost ceiling, `0` = unlimited). Exit codes: `0` ok · `1`
+other CLI error · `2` usage · `10` verify failed · `11` refused by policy /
 missing secret · `12` not compilable/runnable · `13` gateway or docker
 environment · `14` the BriefAgent failed · `15` timeout · `16` budget ·
 `17` output schema.

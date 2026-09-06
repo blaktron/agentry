@@ -24,8 +24,11 @@ the mail on your phone, and you end up signed in on the phone.
 ## Signing in and out
 
 **Sign in** goes straight to the directory service and returns you to the
-page you started from. **Sign out** ends both sessions — the registry's and
-the directory's — so signing out actually signs you out.
+page you started from — you see its login form and nothing else of it;
+there is no directory "app panel" to land on, and the directory's own
+address sends a browser back to the site. **Sign out** ends both sessions
+— the registry's and the directory's — and returns you to the site, so
+signing out actually signs you out without a second login screen.
 
 Forgot your password? **"Forgot username or password?"** on the sign-in
 page mails a reset link. The form gives the same answer whether or not the
@@ -33,12 +36,32 @@ address has an account, so it cannot be used to discover who is registered.
 A reset proves you control the mailbox; it deliberately does **not**
 reactivate an account an operator has deactivated.
 
+## Password and two-factor authentication
+
+Your password and authenticators are kept by the directory service, but
+you manage them from **Settings → Password and two-factor authentication**
+on the registry: change your password, add an authenticator app (TOTP),
+add a security key or passkey, and remove an enrolled authenticator. Each
+action opens one short step in the directory service and brings you
+straight back to Settings; the page also lists what is enrolled. Publishing
+to a public namespace requires a second factor on the account — the
+registry accepts the directory's own evidence that you signed in with one.
+
+## Sessions
+
+**Settings → Sessions** lists every browser session on the account with
+its start time, last activity, address and user agent. Revoke one, or
+**Sign out everywhere else** to end all but the current one. Revoking a
+session invalidates its cookie immediately; it does not revoke personal
+access tokens, which are listed and revoked separately.
+
 ## Personal access tokens
 
 The CLI and other API clients authenticate with personal access tokens,
-managed under **Settings → Tokens**. Tokens are scoped (publishing, repo
-access, profile) and revocable individually; treat them like the
-credentials they are.
+managed under **Settings → Tokens**. Tokens are scoped — `repo:read`,
+`repo:write`, `agent:publish`, `agent:read`, `org:admin`, `review:act`,
+`audit:read`, `user:profile` — and revocable individually; treat them like
+the credentials they are.
 
 Neither the **desktop app** nor the **CLI** asks you to paste one.
 `agentry login` (on a terminal) and the desktop's "Sign in via browser"
@@ -49,9 +72,28 @@ appears in your browser. `agentry login --paste` still accepts a token from
 Settings → Tokens for machines without a browser, and revoking either kind
 later is the same Settings → Tokens list.
 
+## SSH keys
+
+**Settings → SSH keys** registers public keys for `git clone
+ssh://git@…/ns/name.git` and pushes over SSH, on instances that serve the
+SSH transport. A key is worth repository read/write and the release tag
+your role allows — never the API — and organizations that enforce SSO take
+pushes only over HTTPS with an org-bound token.
+
 ## Organizations
 
 Org membership, team roles, SAML/OIDC single sign-on (`/sso/<org>`), and
 SCIM provisioning are configured by org admins under the org's admin pages.
-Individual sign-in through the directory service never grants org
-membership by itself.
+A SAML or OIDC connection can be **tested** from the admin page before it
+is enforced, and a SAML identity provider's single-logout request ends the
+registry session too. Individual sign-in through the directory service
+never grants org membership by itself.
+
+## Deleting your account
+
+Account erasure is an API call, `DELETE /api/v1/user`, described under
+[API conventions](../api-conventions.md#account-erasure-gdpr): it purges
+personal data, revokes every credential, asks you to choose what happens
+to any published versions (they are yanked or transferred, never deleted),
+and — where the operator has configured it — removes the sign-in account
+from the directory service as well.
