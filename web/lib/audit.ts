@@ -6,6 +6,7 @@
 export const ACTION_LABEL: Record<string, string> = {
   "user.register": "registered",
   "user.login": "signed in",
+  "user.social_login": "signed in through a social account",
   "user.login_failed": "sign-in failed",
   "user.logout": "signed out",
   "user.email_verified": "email verified",

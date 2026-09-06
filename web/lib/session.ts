@@ -4,13 +4,32 @@
 // material stays in httpOnly cookies end to end — no token ever reaches
 // client-side JavaScript.
 import "server-only";
-import { cookies } from "next/headers";
+import { cookies, headers as requestHeaders } from "next/headers";
 import { apiGet, apiGetText } from "@/lib/api";
 
 const API_BASE = (process.env.AGENTRY_API_BASE ?? "http://localhost:8080").replace(/\/$/, "");
 
 export const SESSION_COOKIE = "agentry_session";
 export const CSRF_COOKIE = "agentry_csrf";
+
+// browserHeaders carries the browser's identity on the calls this tier makes
+// for it (agentry#194). The API records the caller's address and client on
+// every audit event; without these it would record this container ("node",
+// the compose network address) and the account's activity feed would show
+// people their own actions as somebody else's. X-Forwarded-For is relayed
+// exactly as the edge sent it — the edge sets it to the browser's address
+// and the API's trusted-hop count (AGENTRY_TRUSTED_PROXIES) describes the
+// edge, so this tier must not append a hop of its own — and User-Agent is
+// the browser's. Without an edge the API ignores the header, as before.
+export async function browserHeaders(): Promise<Record<string, string>> {
+  const h = await requestHeaders();
+  const out: Record<string, string> = {};
+  const fwd = h.get("x-forwarded-for");
+  if (fwd) out["X-Forwarded-For"] = fwd;
+  const ua = h.get("user-agent");
+  if (ua) out["User-Agent"] = ua;
+  return out;
+}
 
 export interface SessionUser {
   id: string;
@@ -63,7 +82,7 @@ export class AccessError extends Error {
 export async function authedGet<T>(path: string): Promise<T | null> {
   const jar = await cookies();
   const sess = jar.get(SESSION_COOKIE)?.value;
-  const headers: Record<string, string> = { Accept: "application/json" };
+  const headers: Record<string, string> = { Accept: "application/json", ...(await browserHeaders()) };
   if (sess) headers.Cookie = `${SESSION_COOKIE}=${sess}`;
   const res = await fetch(`${API_BASE}/api/v1${path}`, { headers, cache: "no-store" });
   if (res.status === 404) return null;
@@ -76,7 +95,7 @@ export async function authedGet<T>(path: string): Promise<T | null> {
 export async function authedGetText(path: string): Promise<string | null> {
   const jar = await cookies();
   const sess = jar.get(SESSION_COOKIE)?.value;
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...(await browserHeaders()) };
   if (sess) headers.Cookie = `${SESSION_COOKIE}=${sess}`;
   const res = await fetch(`${API_BASE}/api/v1${path}`, { headers, cache: "no-store" });
   if (res.status === 404) return null;
@@ -129,7 +148,7 @@ export async function apiSend(method: string, path: string, body?: unknown): Pro
   const jar = await cookies();
   const sess = jar.get(SESSION_COOKIE)?.value;
   const csrf = jar.get(CSRF_COOKIE)?.value;
-  const headers: Record<string, string> = { Accept: "application/json" };
+  const headers: Record<string, string> = { Accept: "application/json", ...(await browserHeaders()) };
   if (sess) headers.Cookie = `${SESSION_COOKIE}=${sess}`;
   if (csrf) headers["X-Agentry-CSRF"] = csrf;
   if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -148,7 +167,7 @@ export async function apiUpload(path: string, form: FormData): Promise<Response>
   const jar = await cookies();
   const sess = jar.get(SESSION_COOKIE)?.value;
   const csrf = jar.get(CSRF_COOKIE)?.value;
-  const headers: Record<string, string> = { Accept: "application/json" };
+  const headers: Record<string, string> = { Accept: "application/json", ...(await browserHeaders()) };
   if (sess) headers.Cookie = `${SESSION_COOKIE}=${sess}`;
   if (csrf) headers["X-Agentry-CSRF"] = csrf;
   return fetch(`${API_BASE}/api/v1${path}`, {

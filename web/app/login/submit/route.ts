@@ -3,7 +3,7 @@
 // The CSRF token rides a second httpOnly cookie that only this web tier
 // ever reads.
 import { NextRequest, NextResponse } from "next/server";
-import { API_BASE } from "@/lib/session";
+import { API_BASE, browserHeaders } from "@/lib/session";
 import { establishSession, redirectBack, safeNext, sameOrigin, requestOrigin, readForm } from "@/lib/forms";
 
 export async function POST(req: NextRequest) {
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
   const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    headers: { "Content-Type": "application/json", Accept: "application/json", ...(await browserHeaders()) },
     body: JSON.stringify(body),
     cache: "no-store",
   });
