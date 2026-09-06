@@ -609,7 +609,7 @@ func NewHandlerWithGit(s *Server, mountGit func(*http.ServeMux)) http.Handler {
 	// would be a ServeMux conflict (neither is more specific), and the
 	// handle `ui` is reserved (handles.go) so no repository path can begin
 	// with it.
-	var root http.Handler = apiHandler
+	root := apiHandler
 	if s.cfg.UI.Mode != "off" {
 		var final http.Handler // bound below; the UI calls the full chain
 		uiH := ui.New(ui.Options{
