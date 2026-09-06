@@ -28,7 +28,8 @@ exits, and only one of them needs an account:
 - **Up-front questions** — the optional `intake` block: three structured
   rows (id, prompt, type, choices, required) plus a line-syntax textarea
   for more, and the interactive session's opening message.
-- **Instructions** — the instruction file itself (`AGENT.md`).
+- **Instructions** — the instruction file itself (`AGENT.md`), up to
+  1 MiB.
 
 Unrestricted egress is refused by runners unless the operator's policy
 allows it, and routes the version to review by default — the form warns

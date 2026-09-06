@@ -32,10 +32,10 @@ means the request conflicts with current state and the `detail` says how.
 Send `Idempotency-Key: <opaque string, ≤255 chars>` on a mutating POST and a
 retry cannot create a second resource.
 
-Currently honoured on `POST /orgs`, `POST /orgs/{org}/webhooks`,
-`POST /orgs/{org}/webhooks/{id}/ping`, and
-`POST /platform/ruleset-releases`. `POST /agents/{ns}/{name}/versions` is the
-notable gap (DEV-021).
+Honoured on `POST /orgs`, `POST /orgs/{org}/webhooks`,
+`POST /orgs/{org}/webhooks/{id}/ping`, `POST /platform/ruleset-releases`,
+and `POST /agents/{ns}/{name}/versions` (a version upload with a key is a
+multipart body; the key is pinned to it like any other, agentry#22).
 
 Semantics:
 
@@ -97,6 +97,15 @@ anonymous traffic, and burst and sustained budgets are separate (§19).
 Self-hosters behind a load balancer must configure trusted proxies or all
 anonymous traffic shares one bucket. See
 [self-hosting.md](self-hosting.md#running-behind-a-proxy).
+
+## Event streams
+
+`GET /agents/{ns}/{name}/versions/{version}/events` is `text/event-stream`:
+it streams a submission's pipeline progress (scanning, verdict, publication)
+as server-sent events until the version reaches a terminal state.
+`agentry publish` follows it and falls back to polling
+`GET /agents/{ns}/{name}/versions/{version}` when the stream is unavailable;
+do the same in a client of your own.
 
 ## Search facets
 
@@ -165,6 +174,29 @@ the TOTP setup/verify pair — then answer **`410 Gone`**: the surface is
 switched off, not missing. Sign-in happens through
 `GET /auth/oidc/{provider}/start`, and sessions, PATs, and every
 authorization decision stay the registry's own either way.
+
+Two surfaces exist only for that arrangement. **Account settings**:
+`GET /user/directory` reports whether the account is directory-managed and,
+when it is, the URLs of the directory's password-change and authenticator
+enrolment flows (each returns to the registry's Settings when it finishes)
+plus the enrolled authenticators; `DELETE
+/user/directory/devices/{kind}/{deviceId}` removes one of the caller's own
+(DEV-089). **Desktop sign-in**: a signed-in browser records a grant with
+`POST /user/tokens/desktop-grant` (the app's `state` nonce), and the app
+exchanges the resulting one-time code for its PAT at `POST
+/auth/desktop/exchange` from its own process — the code is single-use and
+valid for 60 seconds, and the token never rides a URL (DEV-058, agentry#19).
+
+## Enterprise SSO
+
+Beyond the browser destinations (`/sso/{org}`, the SAML `acs` and `metadata`
+endpoints, the OIDC `start`/`callback` pair): `POST
+/orgs/{org}/sso/connections/{kind}/test` exercises a stored connection —
+metadata, certificate, issuer — without enforcing it, and
+`/orgs/{org}/sso/saml/slo` accepts the identity provider's single-logout
+request over both the redirect and POST bindings, ending the registry
+session for that user. SSH keys registered at `/user/ssh-keys` are a git
+credential only (they never authenticate to the API).
 
 ## Downloads and version states
 

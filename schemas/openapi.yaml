@@ -49,9 +49,15 @@ tags:
   - name: meta
     description: Server metadata and feature discovery.
   - name: auth
-    description: Registration, login, sessions, 2FA (§12.1).
+    description: >-
+      Registration, login, sessions, 2FA (§12.1); sign-in through the
+      directory service (DEV-057) and the desktop app's one-time-code
+      exchange (DEV-058).
   - name: users
-    description: Current user, public profiles, personal access tokens.
+    description: >-
+      Current user, public profiles, personal access tokens, SSH keys,
+      browser sessions, and the account's directory-service settings
+      (DEV-089).
   - name: orgs
     description: Organizations, members, teams (§12.2).
   - name: audit

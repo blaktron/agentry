@@ -21,7 +21,13 @@ card](agentry/browsing.md), [the BriefAgent Builder](agentry/builder.md),
 secured](trust.md) (what scanning proves, and what it does not), and
 [how to run them](runner.md) — every command, flag, policy key, and
 enforcement mechanism, plus MCP profiles and the desktop app. Start a new
-one from the [template](https://github.com/blaktron/agentry-template).
+one from the [template](https://github.com/blaktron/agentry-template),
+or read the forty worked ones in
+[agentry-examples](https://github.com/blaktron/agentry-examples). The
+[CLI](https://github.com/blaktron/agentry-cli) and the
+[desktop app](https://github.com/blaktron/agentry-desktop) are separate
+repositories; the [Downloads](agentry/downloads.md) page is where their
+builds live.
 
 **[Self-hosting](self-hosting.md)** — running your own: the
 [instance guide](self-hosting.md) (compose stack, directory service,
