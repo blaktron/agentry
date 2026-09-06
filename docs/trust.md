@@ -108,6 +108,16 @@ and the `advisory.published` / `agent.quarantined` webhooks are the
 notification path, which is why pinning versions in a lockfile you actually
 review is worth the trouble.
 
+The same holds for the MCP servers a BriefAgent declares. Every scanned
+server version is re-checked daily against the vulnerability database; a
+version that gains a high or critical advisory raises a **dependency
+alert** on each published BriefAgent version declaring it — shown on the
+agent page and the author's dashboard, mailed to the author, recorded in
+the audit trail, and sent to org webhooks as `agent.dependency_alert`. An
+alert is not an advisory: it says the dependency has a known fix to pin,
+and it closes when the affected version is yanked or the advisory is
+withdrawn.
+
 Advisories are shown on the affected agent's page, and the registry's
 `/advisories` page is the global feed — every advisory published against a
 public BriefAgent, newest first, each with a permalink — followed by the

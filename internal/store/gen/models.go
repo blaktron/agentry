@@ -249,6 +249,21 @@ type Job struct {
 	FinishedAt  *time.Time `json:"finished_at"`
 }
 
+type McpDependencyAlert struct {
+	ID             uuid.UUID  `json:"id"`
+	VersionID      uuid.UUID  `json:"version_id"`
+	Ecosystem      string     `json:"ecosystem"`
+	Package        string     `json:"package"`
+	PackageVersion string     `json:"package_version"`
+	Severity       string     `json:"severity"`
+	AdvisoryIds    []string   `json:"advisory_ids"`
+	FixedIn        []string   `json:"fixed_in"`
+	CreatedAt      time.Time  `json:"created_at"`
+	NotifiedAt     *time.Time `json:"notified_at"`
+	ResolvedAt     *time.Time `json:"resolved_at"`
+	ResolvedReason *string    `json:"resolved_reason"`
+}
+
 type McpServerScan struct {
 	Ecosystem     string    `json:"ecosystem"`
 	Package       string    `json:"package"`

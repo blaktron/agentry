@@ -58,9 +58,12 @@ const (
 	ActionAgentBlock      Action = "agent.block"
 	ActionAgentReinstate  Action = "agent.reinstate"
 	ActionAdvisoryPublish Action = "advisory.publish"
-	ActionRulesetRelease  Action = "ruleset.release"
-	ActionAbuseReport     Action = "abuse.report"
-	ActionAbuseTriage     Action = "abuse.triage"
+	// ActionAgentDependencyAlert records the daily MCP sweep opening a
+	// dependency alert on a published version (agentry#177).
+	ActionAgentDependencyAlert Action = "agent.dependency_alert"
+	ActionRulesetRelease       Action = "ruleset.release"
+	ActionAbuseReport          Action = "abuse.report"
+	ActionAbuseTriage          Action = "abuse.triage"
 
 	// Enterprise (M6): SSO, SCIM, webhooks, domain verification, audit export.
 	ActionSSOConnectionSet    Action = "sso.connection_set"
@@ -105,7 +108,7 @@ func init() {
 		ActionVersionSubmit, ActionVersionTransition, ActionVersionYank,
 		ActionReviewDecision, ActionFindingVerdict, ActionPolicyUpdate,
 		ActionAgentQuarantine, ActionAgentBlock, ActionAgentReinstate,
-		ActionAdvisoryPublish, ActionRulesetRelease, ActionAbuseReport,
+		ActionAdvisoryPublish, ActionAgentDependencyAlert, ActionRulesetRelease, ActionAbuseReport,
 		ActionAbuseTriage,
 		ActionSSOConnectionSet, ActionSSOConnectionDelete, ActionSSOLogin,
 		ActionSCIMTokenCreate, ActionSCIMTokenRevoke, ActionSCIMUserProvision,

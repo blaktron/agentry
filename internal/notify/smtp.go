@@ -106,6 +106,11 @@ func (n *SMTPNotifier) AdvisoryPublished(ctx context.Context, notice AdvisoryNot
 	return n.deliver(ctx, notice.ToEmail, n.render.advisory(notice), "advisory_published")
 }
 
+// MCPDependencyAlert implements Notifier.
+func (n *SMTPNotifier) MCPDependencyAlert(ctx context.Context, notice MCPDependencyAlertNotice) error {
+	return n.deliver(ctx, notice.ToEmail, n.render.mcpAlert(notice), "mcp_dependency_alert")
+}
+
 // OrgInvite implements Notifier.
 func (n *SMTPNotifier) OrgInvite(ctx context.Context, notice InviteNotice) error {
 	return n.deliver(ctx, notice.ToEmail, n.render.invite(notice), "org_invite")

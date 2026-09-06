@@ -38,6 +38,28 @@ type Notifier interface {
 	// OrgInvite tells someone they have been added to an organisation
 	// (§13.4 lists invites among the transactional mails).
 	OrgInvite(ctx context.Context, n InviteNotice) error
+	// MCPDependencyAlert tells an author that a published version of theirs
+	// declares an MCP server version with a newly known high or critical
+	// vulnerability, and that the fix is a new version (agentry#177).
+	MCPDependencyAlert(ctx context.Context, n MCPDependencyAlertNotice) error
+}
+
+// MCPDependencyAlertNotice is a dependency alert delivered to the version's
+// author.
+type MCPDependencyAlertNotice struct {
+	ToEmail string
+	// Agent is "namespace/name"; Version the affected published version.
+	Agent   string
+	Version string
+	// Server is the declared server, "npm:pkg@1.2.3" / "pypi:pkg@1.2.3".
+	Server   string
+	Severity string
+	// Advisories are the advisory ids (GHSA/CVE) behind the alert.
+	Advisories []string
+	// FixedIn lists the server versions the advisories name as fixed.
+	FixedIn []string
+	// AgentURL points at the agent page.
+	AgentURL string
 }
 
 // QuarantineNotice is what an author is told when a published version is
@@ -166,6 +188,14 @@ func (n LogNotifier) AdvisoryPublished(_ context.Context, notice AdvisoryNotice)
 	return nil
 }
 
+// MCPDependencyAlert implements Notifier.
+func (n LogNotifier) MCPDependencyAlert(_ context.Context, notice MCPDependencyAlertNotice) error {
+	n.logger().Warn("notify: MCP dependency alert (author notification)",
+		"to", notice.ToEmail, "agent", notice.Agent, "version", notice.Version,
+		"server", notice.Server, "severity", notice.Severity, "advisories", notice.Advisories)
+	return nil
+}
+
 // OrgInvite implements Notifier.
 func (n LogNotifier) OrgInvite(_ context.Context, notice InviteNotice) error {
 	n.logger().Info("notify: org invite",
@@ -288,6 +318,28 @@ func (r renderer) advisory(n AdvisoryNotice) message {
 		"mechanism that reaches them directly.\n"
 	return message{
 		Subject: r.registry + ": advisory published for " + n.Agent,
+		Body:    body + r.footer(),
+	}
+}
+
+func (r renderer) mcpAlert(n MCPDependencyAlertNotice) message {
+	body := n.Agent + "@" + n.Version + " declares the MCP server " + n.Server +
+		", which now has a known vulnerability.\n\n" +
+		"Severity: " + severityLine(n.Severity) + "\n"
+	if len(n.Advisories) > 0 {
+		body += "Advisories: " + strings.Join(n.Advisories, ", ") + "\n"
+	}
+	if len(n.FixedIn) > 0 {
+		body += "Fixed in: " + strings.Join(n.FixedIn, ", ") + "\n"
+	}
+	body += "\nThe published version stays installable, and its page and your\n" +
+		"dashboard now carry this alert. To clear it, publish a new version\n" +
+		"that pins a fixed server version, then yank the affected one.\n"
+	if u := firstNonEmpty(n.AgentURL, r.link("/dashboard")); u != "" {
+		body += "\n" + u + "\n"
+	}
+	return message{
+		Subject: r.registry + ": " + n.Agent + "@" + n.Version + " uses a vulnerable MCP server (" + n.Severity + ")",
 		Body:    body + r.footer(),
 	}
 }

@@ -998,6 +998,12 @@ type recordingNotifier struct {
 	notices    []notify.QuarantineNotice
 	reviews    []notify.ReviewNotice
 	advisories []notify.AdvisoryNotice
+	mcpAlerts  []notify.MCPDependencyAlertNotice
+}
+
+func (n *recordingNotifier) MCPDependencyAlert(_ context.Context, notice notify.MCPDependencyAlertNotice) error {
+	n.mcpAlerts = append(n.mcpAlerts, notice)
+	return nil
 }
 
 func (n *recordingNotifier) AgentQuarantined(_ context.Context, notice notify.QuarantineNotice) error {
