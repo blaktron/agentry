@@ -72,7 +72,7 @@ func TestSealerRoundTrip(t *testing.T) {
 }
 
 func TestTOTPRoundTrip(t *testing.T) {
-	secret, url, err := GenerateTOTP("tester")
+	secret, url, err := GenerateTOTP("", "tester")
 	if err != nil {
 		t.Fatal(err)
 	}

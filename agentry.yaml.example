@@ -36,6 +36,20 @@ auth:
   # register/password/TOTP endpoints answer 410; configure social.authentik.
   externalOnly: false
 
+# DEV-091: how this server presents itself and where browsers land.
+web:
+  url: ""              # a site that fronts this server (its origin); unset = the server's own /ui/ pages
+ui:
+  mode: full           # full | authorize | off — the server's own browser surface under /ui/
+brand:
+  name: ""             # what emails, authenticator apps and /ui/ call this deployment (default: the public host)
+  logoURL: ""
+  cssURL: ""
+  supportEmail: ""
+  securityEmail: ""
+  privacyURL: ""
+  termsURL: ""
+
 signing:
   kind: none         # none (dev) | file | kms — prod requires file or kms
 

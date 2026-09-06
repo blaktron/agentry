@@ -5,6 +5,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -39,6 +40,9 @@ type Config struct {
 	Notify    Notify    `yaml:"notify"`
 	SMTP      SMTP      `yaml:"smtp"`
 	BaseURL   string    `yaml:"baseURL"` // public origin, e.g. https://agentry.example
+	Web       Web       `yaml:"web"`
+	UI        UI        `yaml:"ui"`
+	Brand     Brand     `yaml:"brand"`
 	// MinCLIVersion, when set, is advertised via GET /api/v1/meta so the CLI
 	// can warn (or refuse, on a major gap) before talking to an API it
 	// predates (§11 distribution note). Empty = no minimum advertised.
@@ -253,6 +257,53 @@ type Notify struct {
 	Kind string `yaml:"kind"`
 }
 
+// Web names a front end that fronts this server — the SecureAgentry site,
+// or any other (DEV-091). When URL is set, every browser destination the
+// API writes (where a failed sign-in lands, where a signed-in browser goes,
+// where an email link points, where sign-out ends) is a page of that site.
+// When it is unset the server points at its own pages under /ui/.
+type Web struct {
+	// URL is the site's origin, e.g. https://agentry.example (no path).
+	URL string `yaml:"url"`
+}
+
+// UI selects how much of the server's own browser surface (/ui/…,
+// DEV-091) is served: full (device authorize, sign-in, account, review,
+// staff, org admin), authorize (only the device-authorize page — what a
+// deployment with a site in front uses), or off.
+type UI struct {
+	Mode string `yaml:"mode"`
+}
+
+// Brand is what this deployment calls itself and where it sends people
+// for help. Nothing is required: a deployment without a name is called by
+// its public host, then "Agentry" (see Config.DisplayName).
+type Brand struct {
+	Name          string `yaml:"name"`
+	LogoURL       string `yaml:"logoURL"`
+	CSSURL        string `yaml:"cssURL"`
+	SupportEmail  string `yaml:"supportEmail"`
+	SecurityEmail string `yaml:"securityEmail"`
+	PrivacyURL    string `yaml:"privacyURL"`
+	TermsURL      string `yaml:"termsURL"`
+}
+
+// DisplayName is what notification bodies, authenticator apps and the
+// server's own pages call this deployment: brand.name, else the public
+// origin's host, else "Agentry".
+func (c Config) DisplayName() string {
+	if c.Brand.Name != "" {
+		return c.Brand.Name
+	}
+	if c.BaseURL != "" {
+		if u, err := url.Parse(c.BaseURL); err == nil && u.Host != "" {
+			return u.Host
+		}
+		return c.BaseURL
+	}
+	return "Agentry"
+}
+
 // SMTP configures the smtp notifier. Point it at SES's SMTP endpoint on AWS
 // (see docs/ops/deployment.md) or at mailpit on :1025 in dev.
 type SMTP struct {
@@ -398,6 +449,7 @@ func Default() Config {
 		},
 		Signing: Signing{Kind: "none"},
 		Judge:   Judge{Provider: "none"},
+		UI:      UI{Mode: "full"},
 		Audit: Audit{
 			StreamKind:    "none",
 			StreamDir:     ".devdata/audit-stream",
@@ -513,6 +565,15 @@ func applyEnv(c *Config) error {
 	str("AGENTRY_GIT_SSH_PUBLIC_URL", &c.Git.SSHPublicURL)
 	str("AGENTRY_LOG_LEVEL", &c.Log.Level)
 	str("AGENTRY_BASE_URL", &c.BaseURL)
+	str("AGENTRY_WEB_URL", &c.Web.URL)
+	str("AGENTRY_UI_MODE", &c.UI.Mode)
+	str("AGENTRY_BRAND_NAME", &c.Brand.Name)
+	str("AGENTRY_BRAND_LOGO_URL", &c.Brand.LogoURL)
+	str("AGENTRY_BRAND_CSS_URL", &c.Brand.CSSURL)
+	str("AGENTRY_SUPPORT_EMAIL", &c.Brand.SupportEmail)
+	str("AGENTRY_SECURITY_EMAIL", &c.Brand.SecurityEmail)
+	str("AGENTRY_PRIVACY_URL", &c.Brand.PrivacyURL)
+	str("AGENTRY_TERMS_URL", &c.Brand.TermsURL)
 	str("AGENTRY_SIGNING_KIND", &c.Signing.Kind)
 	str("AGENTRY_SIGNING_KMS_KEY_ARN", &c.Signing.KMSKeyARN)
 	str("AGENTRY_SIGNING_KMS_REGION", &c.Signing.KMSRegion)
@@ -709,6 +770,17 @@ func (c Config) Validate() error {
 	case "none", "file", "kms":
 	default:
 		return fmt.Errorf("config: signing.kind must be none|file|kms, got %q", c.Signing.Kind)
+	}
+	switch c.UI.Mode {
+	case "full", "authorize", "off":
+	default:
+		return fmt.Errorf("config: ui.mode must be full|authorize|off, got %q", c.UI.Mode)
+	}
+	if c.Web.URL != "" {
+		u, err := url.Parse(c.Web.URL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.RawQuery != "" || u.Fragment != "" {
+			return fmt.Errorf("config: web.url must be an absolute http(s) origin, got %q", c.Web.URL)
+		}
 	}
 	if c.Env == "prod" && c.Signing.Kind == "none" {
 		return fmt.Errorf("config: signing.kind none is not allowed in prod")

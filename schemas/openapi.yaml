@@ -3093,6 +3093,43 @@ components:
         minCLIVersion:
           type: string
           description: Oldest supported agentry CLI version (§11 distribution note).
+        brand:
+          $ref: '#/components/schemas/BrandInfo'
+        ui:
+          $ref: '#/components/schemas/UIInfo'
+
+    BrandInfo:
+      type: object
+      required: [name]
+      description: >
+        What this deployment calls itself (config `brand.*`, DEV-091): the
+        name for prompts and titles, and optional logo and support address.
+      properties:
+        name:
+          type: string
+          example: Agentry
+        logoUrl:
+          type: string
+          format: uri
+        supportEmail:
+          type: string
+
+    UIInfo:
+      type: object
+      required: [mode]
+      description: >
+        The server's own browser surface under `/ui/` (DEV-091). `mode` is
+        `full` (device authorize, sign-in, account, review, staff, org
+        admin), `authorize` (only the device-authorize page — a site fronts
+        this server) or `off`. `authorizeUrl` is the absolute page a CLI or
+        the desktop app opens for browser sign-in, when served.
+      properties:
+        mode:
+          type: string
+          enum: [full, authorize, off]
+        authorizeUrl:
+          type: string
+          format: uri
 
     RegisterRequest:
       type: object

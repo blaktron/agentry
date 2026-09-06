@@ -47,7 +47,8 @@ func (s *Server) GetUserDirectory(w http.ResponseWriter, r *http.Request) {
 	// authentik's default flow slugs (2026.x); the user interface path is
 	// stable across releases.
 	// The Agentry flows (compose blueprint agentry-account-flows.yaml,
-	// agentry#164): each ends with a redirect back to /settings, and no
+	// agentry#164): each ends with a redirect back to the account settings
+	// (the site's, or the server's own /ui/ page — DEV-091), and no
 	// link ever points at the directory's own panel.
 	out.PasswordChangeUrl = str(origin + "/if/flow/agentry-password-change/")
 	out.TotpSetupUrl = str(origin + "/if/flow/agentry-totp-setup/")

@@ -10,7 +10,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -45,6 +44,9 @@ type Server struct {
 	log      *slog.Logger
 	auditW   *audit.Writer
 	notifier notify.Notifier
+	// paths is where this server sends browsers (a site in front of it, or
+	// its own /ui/ pages — DEV-091).
+	paths webPaths
 	// dirEraser deletes the sign-in account in the directory service on
 	// erasure (agentry#20); nil when auth.idpAdminURL is unset.
 	dirEraser directoryEraser
@@ -93,18 +95,21 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 	auditStream := audit.NewStream(cfg.Audit.StreamKind, cfg.Audit.StreamDir,
 		cfg.Audit.StreamS3Bucket, cfg.Audit.StreamFlush, log)
 	aud.SetStream(auditStream)
+	paths := newWebPaths(cfg)
 	notifier, nerr := notify.New(notify.Options{
 		Kind:     cfg.Notify.Kind,
 		BaseURL:  cfg.BaseURL,
 		SMTP:     smtpOptions(cfg),
 		Log:      log,
-		Registry: registryDisplayName(cfg),
+		Registry: cfg.DisplayName(),
+		Links:    notify.Links{Dashboard: paths.dashboardURL(), VerifyEmail: paths.verifyEmailURL},
 	})
 	if nerr != nil {
 		panic(nerr) // startup-time config failure, never mid-request
 	}
 	srv := &Server{
 		cfg:      cfg,
+		paths:    paths,
 		st:       st,
 		log:      log,
 		auditW:   aud,
@@ -264,19 +269,6 @@ func smtpOptions(cfg config.Config) notify.SMTPOptions {
 	}
 }
 
-// registryDisplayName is what notification bodies call this deployment. The
-// public origin's host is the name users already know it by; "Agentry" is the
-// fallback for a deployment that has not set one.
-func registryDisplayName(cfg config.Config) string {
-	if cfg.BaseURL == "" {
-		return "Agentry"
-	}
-	if u, err := url.Parse(cfg.BaseURL); err == nil && u.Host != "" {
-		return u.Host
-	}
-	return cfg.BaseURL
-}
-
 // entitlements returns the §14.2 resolver, defaulting to the shipped §19
 // limits so a partially wired server still enforces quotas.
 func (s *Server) entitlements() entitlements.Resolver {
@@ -421,6 +413,24 @@ func (s *Server) GetMeta(w http.ResponseWriter, r *http.Request) {
 		ApiVersion: "v1",
 		Features:   features,
 	}
+	// brand and ui (DEV-091): what this deployment calls itself and whether
+	// it serves its own browser pages, so a client can name it and open
+	// the device-authorize page wherever it lives.
+	brand := BrandInfo{Name: s.cfg.DisplayName()}
+	if v := s.cfg.Brand.LogoURL; v != "" {
+		brand.LogoUrl = &v
+	}
+	if v := s.cfg.Brand.SupportEmail; v != "" {
+		brand.SupportEmail = &v
+	}
+	meta.Brand = &brand
+	ui := UIInfo{Mode: UIInfoMode(s.cfg.UI.Mode)}
+	if s.cfg.UI.Mode != "off" {
+		if u := s.paths.authorizeURL(); u != "" {
+			ui.AuthorizeUrl = &u
+		}
+	}
+	meta.Ui = &ui
 	if s.cfg.MinCLIVersion != "" {
 		meta.MinCLIVersion = &s.cfg.MinCLIVersion
 	}
