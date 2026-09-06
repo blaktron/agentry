@@ -1390,6 +1390,24 @@ type DomainClaim struct {
 	VerifiedAt        *time.Time `json:"verifiedAt,omitempty"`
 }
 
+// EmailNotificationSettings Which of the registry's mails the person receives.
+type EmailNotificationSettings struct {
+	// Advisories An advisory naming one of the person's BriefAgents was published.
+	Advisories bool `json:"advisories"`
+
+	// DependencyAlerts A published version declares an MCP server with a newly known vulnerability.
+	DependencyAlerts bool `json:"dependencyAlerts"`
+
+	// OrgInvites The person was added to an organization.
+	OrgInvites bool `json:"orgInvites"`
+
+	// Quarantine A published version was quarantined by a rescan.
+	Quarantine bool `json:"quarantine"`
+
+	// ReviewDecisions A reviewer decided one of the person's submissions.
+	ReviewDecisions bool `json:"reviewDecisions"`
+}
+
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
 	// Login Handle or email.
@@ -1473,6 +1491,15 @@ type Meta struct {
 	//
 	// Example: 0.1.0
 	Version string `json:"version"`
+}
+
+// NotificationSettings defines model for NotificationSettings.
+type NotificationSettings struct {
+	// Email Which of the registry's mails the person receives.
+	Email EmailNotificationSettings `json:"email"`
+
+	// Web In-app alerts.
+	Web WebNotificationSettings `json:"web"`
 }
 
 // Org defines model for Org.
@@ -1894,6 +1921,12 @@ type UserDirectory struct {
 
 // VersionStatus Publication state machine states (§7). `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change (DEV-046).
 type VersionStatus string
+
+// WebNotificationSettings In-app alerts.
+type WebNotificationSettings struct {
+	// DependencyAlerts Show the dependency-alert banner on every page while an alert is open (the dashboard lists alerts regardless).
+	DependencyAlerts bool `json:"dependencyAlerts"`
+}
 
 // WebhookDelivery defines model for WebhookDelivery.
 type WebhookDelivery struct {
@@ -2436,6 +2469,9 @@ type DecideReviewItemJSONRequestBody DecideReviewItemJSONBody
 
 // UpdateCurrentUserJSONRequestBody defines body for UpdateCurrentUser for application/json ContentType.
 type UpdateCurrentUserJSONRequestBody UpdateCurrentUserJSONBody
+
+// UpdateUserNotificationSettingsJSONRequestBody defines body for UpdateUserNotificationSettings for application/json ContentType.
+type UpdateUserNotificationSettingsJSONRequestBody = NotificationSettings
 
 // AddSshKeyJSONRequestBody defines body for AddSshKey for application/json ContentType.
 type AddSshKeyJSONRequestBody = AddSshKeyRequest
@@ -3402,6 +3438,27 @@ type ClientInterface interface {
 	//
 	// Corresponds with DELETE /user/directory/devices/{kind}/{deviceId} (the `DeleteUserDirectoryDevice` operationId).
 	DeleteUserDirectoryDevice(ctx context.Context, kind DeleteUserDirectoryDeviceParamsKind, deviceId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetUserNotificationSettings How the registry's alerts reach the caller (agentry#190).
+	//
+	// Email per kind of notification, and whether the dependency-alert banner shows in the web app. An account that never changed anything reads back with everything on.
+	//
+	// Corresponds with GET /user/notifications (the `GetUserNotificationSettings` operationId).
+	GetUserNotificationSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateUserNotificationSettingsWithBody Replace the caller's notification settings (agentry#190).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /user/notifications (the `UpdateUserNotificationSettings` operationId).
+	UpdateUserNotificationSettingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateUserNotificationSettings Replace the caller's notification settings (agentry#190).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /user/notifications (the `UpdateUserNotificationSettings` operationId).
+	UpdateUserNotificationSettings(ctx context.Context, body UpdateUserNotificationSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RevokeOtherUserSessions Revoke every session except the calling one ("sign out everywhere else").
 	//
@@ -5729,6 +5786,57 @@ func (c *Client) GetUserDirectory(ctx context.Context, reqEditors ...RequestEdit
 // Corresponds with DELETE /user/directory/devices/{kind}/{deviceId} (the `DeleteUserDirectoryDevice` operationId).
 func (c *Client) DeleteUserDirectoryDevice(ctx context.Context, kind DeleteUserDirectoryDeviceParamsKind, deviceId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteUserDirectoryDeviceRequest(c.Server, kind, deviceId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetUserNotificationSettings How the registry's alerts reach the caller (agentry#190).
+//
+// Email per kind of notification, and whether the dependency-alert banner shows in the web app. An account that never changed anything reads back with everything on.
+//
+// Corresponds with GET /user/notifications (the `GetUserNotificationSettings` operationId).
+func (c *Client) GetUserNotificationSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetUserNotificationSettingsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateUserNotificationSettingsWithBody Replace the caller's notification settings (agentry#190).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /user/notifications (the `UpdateUserNotificationSettings` operationId).
+func (c *Client) UpdateUserNotificationSettingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateUserNotificationSettingsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateUserNotificationSettings Replace the caller's notification settings (agentry#190).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /user/notifications (the `UpdateUserNotificationSettings` operationId).
+func (c *Client) UpdateUserNotificationSettings(ctx context.Context, body UpdateUserNotificationSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateUserNotificationSettingsRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -10949,6 +11057,73 @@ func NewDeleteUserDirectoryDeviceRequest(server string, kind DeleteUserDirectory
 	return req, nil
 }
 
+// NewGetUserNotificationSettingsRequest constructs an http.Request for the GetUserNotificationSettings method
+func NewGetUserNotificationSettingsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/notifications")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateUserNotificationSettingsRequest calls the generic UpdateUserNotificationSettings builder with application/json body
+func NewUpdateUserNotificationSettingsRequest(server string, body UpdateUserNotificationSettingsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateUserNotificationSettingsRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewUpdateUserNotificationSettingsRequestWithBody constructs an http.Request for the UpdateUserNotificationSettings method, with any body, and a specified content type
+func NewUpdateUserNotificationSettingsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/notifications")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewRevokeOtherUserSessionsRequest constructs an http.Request for the RevokeOtherUserSessions method
 func NewRevokeOtherUserSessionsRequest(server string) (*http.Request, error) {
 	var err error
@@ -12467,6 +12642,29 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with DELETE /user/directory/devices/{kind}/{deviceId} (the `DeleteUserDirectoryDevice` operationId).
 	DeleteUserDirectoryDeviceWithResponse(ctx context.Context, kind DeleteUserDirectoryDeviceParamsKind, deviceId string, reqEditors ...RequestEditorFn) (*DeleteUserDirectoryDeviceResponse, error)
+
+	// GetUserNotificationSettingsWithResponse How the registry's alerts reach the caller (agentry#190).
+	//
+	// Email per kind of notification, and whether the dependency-alert banner shows in the web app. An account that never changed anything reads back with everything on.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /user/notifications (the `GetUserNotificationSettings` operationId).
+	GetUserNotificationSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserNotificationSettingsResponse, error)
+
+	// UpdateUserNotificationSettingsWithBodyWithResponse Replace the caller's notification settings (agentry#190).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /user/notifications (the `UpdateUserNotificationSettings` operationId).
+	UpdateUserNotificationSettingsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateUserNotificationSettingsResponse, error)
+
+	// UpdateUserNotificationSettingsWithResponse Replace the caller's notification settings (agentry#190).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /user/notifications (the `UpdateUserNotificationSettings` operationId).
+	UpdateUserNotificationSettingsWithResponse(ctx context.Context, body UpdateUserNotificationSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateUserNotificationSettingsResponse, error)
 
 	// RevokeOtherUserSessionsWithResponse Revoke every session except the calling one ("sign out everywhere else").
 	//
@@ -17382,6 +17580,102 @@ func (r DeleteUserDirectoryDeviceResponse) ContentType() string {
 	return ""
 }
 
+type GetUserNotificationSettingsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *NotificationSettings
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetUserNotificationSettingsResponse) GetJSON200() *NotificationSettings {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetUserNotificationSettingsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetUserNotificationSettingsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetUserNotificationSettingsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetUserNotificationSettingsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetUserNotificationSettingsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UpdateUserNotificationSettingsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *NotificationSettings
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UpdateUserNotificationSettingsResponse) GetJSON200() *NotificationSettings {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r UpdateUserNotificationSettingsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r UpdateUserNotificationSettingsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateUserNotificationSettingsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateUserNotificationSettingsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdateUserNotificationSettingsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type RevokeOtherUserSessionsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -19801,6 +20095,47 @@ func (c *ClientWithResponses) DeleteUserDirectoryDeviceWithResponse(ctx context.
 		return nil, err
 	}
 	return ParseDeleteUserDirectoryDeviceResponse(rsp)
+}
+
+// GetUserNotificationSettingsWithResponse How the registry's alerts reach the caller (agentry#190).
+//
+// Email per kind of notification, and whether the dependency-alert banner shows in the web app. An account that never changed anything reads back with everything on.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /user/notifications (the `GetUserNotificationSettings` operationId).
+func (c *ClientWithResponses) GetUserNotificationSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserNotificationSettingsResponse, error) {
+	rsp, err := c.GetUserNotificationSettings(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetUserNotificationSettingsResponse(rsp)
+}
+
+// UpdateUserNotificationSettingsWithBodyWithResponse Replace the caller's notification settings (agentry#190).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /user/notifications (the `UpdateUserNotificationSettings` operationId).
+func (c *ClientWithResponses) UpdateUserNotificationSettingsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateUserNotificationSettingsResponse, error) {
+	rsp, err := c.UpdateUserNotificationSettingsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateUserNotificationSettingsResponse(rsp)
+}
+
+// UpdateUserNotificationSettingsWithResponse Replace the caller's notification settings (agentry#190).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /user/notifications (the `UpdateUserNotificationSettings` operationId).
+func (c *ClientWithResponses) UpdateUserNotificationSettingsWithResponse(ctx context.Context, body UpdateUserNotificationSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateUserNotificationSettingsResponse, error) {
+	rsp, err := c.UpdateUserNotificationSettings(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateUserNotificationSettingsResponse(rsp)
 }
 
 // RevokeOtherUserSessionsWithResponse Revoke every session except the calling one ("sign out everywhere else").
@@ -23368,6 +23703,72 @@ func ParseDeleteUserDirectoryDeviceResponse(rsp *http.Response) (*DeleteUserDire
 	switch {
 	case rsp.StatusCode == 204:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetUserNotificationSettingsResponse parses an HTTP response from a GetUserNotificationSettingsWithResponse call
+func ParseGetUserNotificationSettingsResponse(rsp *http.Response) (*GetUserNotificationSettingsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetUserNotificationSettingsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest NotificationSettings
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateUserNotificationSettingsResponse parses an HTTP response from a UpdateUserNotificationSettingsWithResponse call
+func ParseUpdateUserNotificationSettingsResponse(rsp *http.Response) (*UpdateUserNotificationSettingsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateUserNotificationSettingsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest NotificationSettings
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

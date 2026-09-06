@@ -347,6 +347,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/user/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How the registry's alerts reach the caller (agentry#190).
+         * @description Email per kind of notification, and whether the dependency-alert banner shows in the web app. An account that never changed anything reads back with everything on.
+         */
+        get: operations["getUserNotificationSettings"];
+        /** Replace the caller's notification settings (agentry#190). */
+        put: operations["updateUserNotificationSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/user/dependency-alerts": {
         parameters: {
             query?: never;
@@ -2060,6 +2081,28 @@ export interface components {
             visibility: "public" | "private";
             summary?: string;
         };
+        /** @description Which of the registry's mails the person receives. */
+        EmailNotificationSettings: {
+            /** @description A published version declares an MCP server with a newly known vulnerability. */
+            dependencyAlerts: boolean;
+            /** @description A published version was quarantined by a rescan. */
+            quarantine: boolean;
+            /** @description A reviewer decided one of the person's submissions. */
+            reviewDecisions: boolean;
+            /** @description An advisory naming one of the person's BriefAgents was published. */
+            advisories: boolean;
+            /** @description The person was added to an organization. */
+            orgInvites: boolean;
+        };
+        /** @description In-app alerts. */
+        WebNotificationSettings: {
+            /** @description Show the dependency-alert banner on every page while an alert is open (the dashboard lists alerts regardless). */
+            dependencyAlerts: boolean;
+        };
+        NotificationSettings: {
+            email: components["schemas"]["EmailNotificationSettings"];
+            web: components["schemas"]["WebNotificationSettings"];
+        };
         /** @description A published version declares an MCP server version with a newly known high or critical vulnerability (agentry#177). */
         DependencyAlert: {
             /** Format: uuid */
@@ -3005,6 +3048,52 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getUserNotificationSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateUserNotificationSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationSettings"];
+            };
+        };
+        responses: {
+            /** @description The saved settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationSettings"];
+                };
             };
             default: components["responses"]["Problem"];
         };
