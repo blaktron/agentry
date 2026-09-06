@@ -132,7 +132,7 @@ func TestUserDirectoryLinksAndDevices(t *testing.T) {
 		t.Fatalf("directory delete calls: %d", deleted.Load())
 	}
 	env2.doJSON(sess2, http.MethodDelete, "/api/v1/user/directory/devices/totp/999", nil, nil, http.StatusNotFound)
-	env2.doJSON(sess, http.MethodDelete, "/api/v1/user/directory/devices/totp/7", nil, nil, http.StatusNotFound) // native account: not managed
+	env.doJSON(sess, http.MethodDelete, "/api/v1/user/directory/devices/totp/7", nil, nil, http.StatusNotFound) // unmanaged server: nothing to remove from
 	if deleted.Load() != 1 {
 		t.Fatalf("directory delete calls after misses: %d", deleted.Load())
 	}
