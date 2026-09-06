@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { DependencyAlert } from "@/lib/api";
+import type { DependencyAlert, NotificationSettings } from "@/lib/api";
 import { authedGet, type SessionUser } from "@/lib/session";
 
 // The sign-in banner for dependency alerts (agentry#177): while a signed-in
@@ -11,6 +11,10 @@ export async function DependencyAlertBanner({ user }: { user: SessionUser | null
   if (!user) return null;
   const alerts = (await authedGet<DependencyAlert[]>("/user/dependency-alerts").catch(() => null)) ?? [];
   if (alerts.length === 0) return null;
+  // The person may have switched the banner off (Settings → Notifications,
+  // agentry#190); the dashboard still lists the alerts.
+  const prefs = await authedGet<NotificationSettings>("/user/notifications").catch(() => null);
+  if (prefs && !prefs.web.dependencyAlerts) return null;
   const agents = new Set(alerts.map((a) => a.agent));
   const worst = alerts.some((a) => a.severity === "critical") ? "critical" : "high";
   return (

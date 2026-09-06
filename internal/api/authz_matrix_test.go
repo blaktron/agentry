@@ -191,9 +191,19 @@ func requestFactories(env *testEnv) map[string]opRequest {
 				return "/api/v1/user/tokens/" + uuid.NewString()
 			},
 		},
-		"listUserSessions":         {method: "GET", path: sPath("/api/v1/user/sessions")},
-		"getUserDirectory":         {method: "GET", path: sPath("/api/v1/user/directory")},
-		"listUserDependencyAlerts": {method: "GET", path: sPath("/api/v1/user/dependency-alerts")},
+		"listUserSessions":            {method: "GET", path: sPath("/api/v1/user/sessions")},
+		"getUserDirectory":            {method: "GET", path: sPath("/api/v1/user/directory")},
+		"listUserDependencyAlerts":    {method: "GET", path: sPath("/api/v1/user/dependency-alerts")},
+		"getUserNotificationSettings": {method: "GET", path: sPath("/api/v1/user/notifications")},
+		"updateUserNotificationSettings": {
+			method: "PUT", path: sPath("/api/v1/user/notifications"),
+			body: func(*matrixSeed, string) any {
+				return map[string]any{
+					"email": map[string]any{"dependencyAlerts": true, "quarantine": true, "reviewDecisions": true, "advisories": true, "orgInvites": true},
+					"web":   map[string]any{"dependencyAlerts": true},
+				}
+			},
+		},
 		// Public read; the registry has never seen this version, so 404.
 		"getMcpServerScan": {method: "GET", path: sPath("/api/v1/mcp-servers/scan?ecosystem=npm&package=nobody&version=0.0.0")},
 		"deleteUserDirectoryDevice": {

@@ -603,6 +603,43 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /user/notifications:
+    get:
+      operationId: getUserNotificationSettings
+      tags: [users]
+      summary: How the registry's alerts reach the caller (agentry#190).
+      description: >-
+        Email per kind of notification, and whether the dependency-alert
+        banner shows in the web app. An account that never changed anything
+        reads back with everything on.
+      responses:
+        "200":
+          description: The settings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationSettings"
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      operationId: updateUserNotificationSettings
+      tags: [users]
+      summary: Replace the caller's notification settings (agentry#190).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationSettings"
+      responses:
+        "200":
+          description: The saved settings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationSettings"
+        default:
+          $ref: "#/components/responses/Problem"
   /user/dependency-alerts:
     get:
       operationId: listUserDependencyAlerts
@@ -3616,6 +3653,42 @@ components:
           type: string
           maxLength: 140
 
+    EmailNotificationSettings:
+      type: object
+      description: Which of the registry's mails the person receives.
+      required: [dependencyAlerts, quarantine, reviewDecisions, advisories, orgInvites]
+      properties:
+        dependencyAlerts:
+          type: boolean
+          description: A published version declares an MCP server with a newly known vulnerability.
+        quarantine:
+          type: boolean
+          description: A published version was quarantined by a rescan.
+        reviewDecisions:
+          type: boolean
+          description: A reviewer decided one of the person's submissions.
+        advisories:
+          type: boolean
+          description: An advisory naming one of the person's BriefAgents was published.
+        orgInvites:
+          type: boolean
+          description: The person was added to an organization.
+    WebNotificationSettings:
+      type: object
+      description: In-app alerts.
+      required: [dependencyAlerts]
+      properties:
+        dependencyAlerts:
+          type: boolean
+          description: Show the dependency-alert banner on every page while an alert is open (the dashboard lists alerts regardless).
+    NotificationSettings:
+      type: object
+      required: [email, web]
+      properties:
+        email:
+          $ref: "#/components/schemas/EmailNotificationSettings"
+        web:
+          $ref: "#/components/schemas/WebNotificationSettings"
     DependencyAlert:
       type: object
       description: >-

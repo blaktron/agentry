@@ -2,6 +2,7 @@ package scan_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/blaktron/agentry/internal/audit"
@@ -142,5 +143,41 @@ func TestMCPSweepOpensAndResolvesAlerts(t *testing.T) {
 	_ = e.st.Pool().QueryRow(ctx, `SELECT resolved_reason FROM mcp_dependency_alerts WHERE version_id = $1`, v2.ID).Scan(&reason)
 	if reason != "withdrawn" {
 		t.Fatalf("withdrawn reason: %q", reason)
+	}
+}
+
+// A person who switched dependency-alert mail off (agentry#190) still gets
+// the alert — banner, dashboard, audit, webhook — and no mail.
+func TestMCPSweepRespectsEmailPreference(t *testing.T) {
+	notifier := &recordingNotifier{}
+	e := newPipeEnv(t, func(d *scan.PipelineDeps) { d.Notifier = notifier })
+	ctx := context.Background()
+	osv := &sweepOSV{vulns: map[string][]scan.OSVVulnerability{}}
+	e.pipe.SetMCPScanning(osv, scan.NewStoreMCPScanCache(e.st))
+	u, _ := e.st.Queries().GetUserByID(ctx, e.owner)
+	if _, err := e.st.Pool().Exec(ctx, `INSERT INTO user_notification_settings (user_id, email_dependency_alerts) VALUES ($1, false)`, e.owner); err != nil {
+		t.Fatal(err)
+	}
+	manifest := strings.ReplaceAll(mcpServerManifest(u.Handle, "quiet-owner", "1.0.0"), "mcp-sweep-fixture", "quiet-fixture")
+	v := e.publish("quiet-owner", "public", map[string]string{
+		"agent.yaml": manifest, "README.md": "# quiet\n", "SKILL.md": "Summarize.\n", "LICENSE": "Apache-2.0\n",
+	})
+	if v.Status != "published" {
+		t.Fatalf("publish: %s", v.Status)
+	}
+	osv.vulns["npm/quiet-fixture@0.1.0"] = []scan.OSVVulnerability{{ID: "GHSA-quiet", Severity: "high", Summary: "x"}}
+	if _, err := e.st.Pool().Exec(ctx, `UPDATE mcp_server_scans SET last_checked_at = now() - interval '25 hours'`); err != nil {
+		t.Fatal(err)
+	}
+	sum, err := e.pipe.MCPSweep(ctx)
+	if err != nil || sum.AlertsOpened != 1 {
+		t.Fatalf("sweep: %+v %v", sum, err)
+	}
+	if len(notifier.mcpAlerts) != 0 {
+		t.Fatalf("mail sent despite the setting: %+v", notifier.mcpAlerts)
+	}
+	open, _ := e.st.Queries().ListOpenMCPDependencyAlertsForVersion(ctx, v.ID)
+	if len(open) != 1 {
+		t.Fatalf("alert must still open: %+v", open)
 	}
 }
