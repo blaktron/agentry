@@ -87,6 +87,8 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 	var fields []FieldError
 	if !reHandle.MatchString(req.Handle) {
 		fields = append(fields, FieldError{Field: "handle", Message: "must match ^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"})
+	} else if handleReserved(req.Handle) {
+		fields = append(fields, FieldError{Field: "handle", Message: "reserved"})
 	}
 	email := strings.TrimSpace(string(req.Email))
 	if !strings.Contains(email, "@") || len(email) > 254 {
@@ -157,6 +159,7 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 		s.log.Warn("register: verification email", "err", err)
 	}
 
+	s.fireEvent(r.Context(), Event{Kind: "user.registered", UserID: created.ID, Payload: map[string]any{"handle": req.Handle, "email": email}})
 	writeJSON(w, http.StatusCreated, User{
 		Id: created.ID, Handle: req.Handle, Email: created.Email,
 		DisplayName: created.DisplayName, EmailVerified: false,

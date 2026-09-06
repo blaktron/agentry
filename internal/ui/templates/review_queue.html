@@ -1,0 +1,16 @@
+{{define "content"}}
+<h1>Review queue</h1>
+{{with .Data}}
+<form method="get" action="/ui/review" class="row">
+  <label class="check"><input type="radio" name="queue" value="platform"{{if eq .Queue "platform"}} checked{{end}}> Platform</label>
+  <label class="check"><input type="radio" name="queue" value="org"{{if eq .Queue "org"}} checked{{end}}> Organization</label>
+  <label class="inline-label">handle {{if .Orgs}}<select name="org">{{range .Orgs}}<option value="{{.Handle}}"{{if eq .Handle $.Data.Org}} selected{{end}}>{{.Handle}} ({{.Role}})</option>{{end}}</select>{{else}}<input name="org" value="{{.Org}}" placeholder="acme" class="short">{{end}}</label>
+  <button type="submit" class="small secondary">Show</button>
+</form>
+{{if .Error}}<p class="flash error">{{.Error}}</p>{{end}}
+<section class="card">
+{{if not .Items}}<p class="muted">Nothing awaits review in this queue.</p>
+{{else}}<ul class="list">{{range .Items}}<li><a href="/ui/review/{{.ID}}"><strong>{{.Namespace}}/{{.Agent}}</strong> @{{.Version}}</a> <span class="badge">{{.State}}</span>{{if .CreatedAt}} <span class="muted">submitted {{utc .CreatedAt}}</span>{{end}}</li>{{end}}</ul>{{end}}
+</section>
+{{end}}
+{{end}}

@@ -31,6 +31,7 @@ import (
 	"github.com/blaktron/agentry/internal/scan"
 	"github.com/blaktron/agentry/internal/store"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/internal/ui"
 	"github.com/blaktron/agentry/internal/version"
 	"github.com/blaktron/agentry/internal/webhook"
 	"github.com/blaktron/agentry/pkg/ruleset"
@@ -75,6 +76,9 @@ type Server struct {
 	oidcHTTPClient *http.Client
 	// imgHTTPClient overrides the image proxy's guarded client (tests).
 	imgHTTPClient *http.Client
+	// extensions and eventHooks are the closed build's additions (extensions.go).
+	extensions []extensionMount
+	eventHooks []func(ctx context.Context, ev Event)
 }
 
 // New creates the API server. st may be nil in database-less dev mode; any
@@ -367,16 +371,24 @@ func (s *Server) RegisterQueueHandlers(q queue.Client) {
 // namespaces (no org) and fan-out errors are swallowed — webhooks never affect
 // the state change that triggered them.
 func (s *Server) emitAgentEvent(ctx context.Context, agentID uuid.UUID, event string, payload map[string]any) {
-	if s.webhooks == nil || s.st == nil {
+	if s.st == nil {
+		return
+	}
+	if s.webhooks == nil {
+		s.fireEvent(ctx, Event{Kind: event, AgentID: agentID, Payload: payload})
 		return
 	}
 	orgID, err := s.q().GetAgentOwnerOrg(ctx, agentID)
 	if err != nil {
-		return // personal namespace or agent gone
+		// Personal namespace or agent gone: no webhooks, but the extension
+		// hooks still hear the transition.
+		s.fireEvent(ctx, Event{Kind: event, AgentID: agentID, Payload: payload})
+		return
 	}
 	if err := s.webhooks.Emit(ctx, orgID, event, payload); err != nil {
 		s.log.Error("webhook emit", "event", event, "err", err)
 	}
+	s.fireEvent(ctx, Event{Kind: event, OrgID: orgID, AgentID: agentID, Payload: payload})
 }
 
 // q returns the base query layer, or nil without a database.
@@ -431,6 +443,9 @@ func (s *Server) GetMeta(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	meta.Ui = &ui
+	if names := s.ExtensionNames(); len(names) > 0 {
+		meta.Extensions = &names
+	}
 	if s.cfg.MinCLIVersion != "" {
 		meta.MinCLIVersion = &s.cfg.MinCLIVersion
 	}
@@ -589,6 +604,11 @@ func NewHandlerWithGit(s *Server, mountGit func(*http.ServeMux)) http.Handler {
 	// SCIM — it is a browser destination, not part of the JSON API surface.
 	s.mountSSOLanding(mux)
 
+	// Extension routes (DEV-091, extensions.go): /api/v1/x/<name>/ behind
+	// the principal middleware, registered before the generated routes so a
+	// clash with a generated path is a start-up panic, never a shadow.
+	s.mountExtensions(mux)
+
 	// Generated OpenAPI routes under /api/v1 (spec-first, D-09).
 	apiHandler := HandlerWithOptions(s, StdHTTPServerOptions{
 		BaseURL:    "/api/v1",
@@ -599,7 +619,71 @@ func NewHandlerWithGit(s *Server, mountGit func(*http.ServeMux)) http.Handler {
 		Middlewares: []MiddlewareFunc{s.principalMiddleware},
 	})
 
-	return withMiddleware(apiHandler, s.log, s.Metrics, s.cfg.HTTP.TrustedProxies)
+	// The server's own browser surface (DEV-091, internal/ui): the device
+	// authorize page, sign-in, the account basics and the operator pages,
+	// served at /ui/ and acting through the same handler chain in-process.
+	// Off by config, or down to the authorize page when a site fronts this
+	// server. It is dispatched by prefix in front of the mux rather than
+	// registered on it: a "/ui/" pattern and git's "GET /{ns}/{repo}/info/refs"
+	// would be a ServeMux conflict (neither is more specific), and the
+	// handle `ui` is reserved (handles.go) so no repository path can begin
+	// with it.
+	root := apiHandler
+	if s.cfg.UI.Mode != "off" {
+		var final http.Handler // bound below; the UI calls the full chain
+		uiH := ui.New(ui.Options{
+			API:          http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { final.ServeHTTP(w, r) }),
+			Mode:         s.cfg.UI.Mode,
+			SiteURL:      s.cfg.Web.URL,
+			BaseURL:      s.cfg.BaseURL,
+			Brand:        s.uiBrand(),
+			Providers:    s.socialProviders(),
+			ExternalOnly: s.cfg.Auth.ExternalOnly,
+			IdPLogoutURL: s.cfg.Auth.IdPLogoutURL,
+			CookieSecure: s.cfg.Auth.CookieSecure,
+			Log:          s.log,
+		})
+		root = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/ui" || strings.HasPrefix(r.URL.Path, "/ui/") {
+				uiH.ServeHTTP(w, r)
+				return
+			}
+			apiHandler.ServeHTTP(w, r)
+		})
+		final = withMiddleware(root, s.log, s.Metrics, s.cfg.HTTP.TrustedProxies)
+		return final
+	}
+	return withMiddleware(root, s.log, s.Metrics, s.cfg.HTTP.TrustedProxies)
+}
+
+func (s *Server) uiBrand() ui.Brand {
+	b := s.cfg.Brand
+	return ui.Brand{Name: s.cfg.DisplayName(), LogoURL: b.LogoURL, CSSURL: b.CSSURL, SupportEmail: b.SupportEmail, SecurityEmail: b.SecurityEmail, PrivacyURL: b.PrivacyURL, TermsURL: b.TermsURL}
+}
+
+// socialProviders lists the configured individual-login providers in the
+// order the sign-in page offers them: the directory first when there is
+// one (it is THE way in under externalOnly, agentry#164), then the rest.
+func (s *Server) socialProviders() []ui.Provider {
+	soc := s.cfg.Social
+	all := []struct {
+		id, label string
+		cfg       config.SocialProvider
+	}{
+		{"authentik", "your " + s.cfg.DisplayName() + " account", soc.Authentik},
+		{"google", "Google", soc.Google},
+		{"github", "GitHub", soc.GitHub},
+		{"microsoft", "Microsoft", soc.Microsoft},
+		{"openai", "OpenAI", soc.OpenAI},
+		{"claude", "Claude", soc.Claude},
+	}
+	var out []ui.Provider
+	for _, p := range all {
+		if p.cfg.ClientID != "" {
+			out = append(out, ui.Provider{ID: p.id, Label: p.label})
+		}
+	}
+	return out
 }
 
 // metricsHandler serves /metrics, reading s.mx at request time so
