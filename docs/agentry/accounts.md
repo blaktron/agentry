@@ -47,6 +47,18 @@ straight back to Settings; the page also lists what is enrolled. Publishing
 to a public namespace requires a second factor on the account — the
 registry accepts the directory's own evidence that you signed in with one.
 
+## Notifications
+
+**Settings → Notifications** decides how the registry's alerts reach you.
+Email, per kind: a published version of yours declares an MCP server with a
+newly known vulnerability; a published version is quarantined by a rescan;
+a reviewer decides one of your submissions; an advisory naming one of your
+BriefAgents is published; you are added to an organization. In the web app:
+whether the dependency-alert banner shows on every page while one of your
+versions has an open alert. Everything is on until you change it; your
+dashboard lists open alerts whichever way the banner is set, and an
+organization's webhooks and audit trail are not affected by your choices.
+
 ## Sessions
 
 **Settings → Sessions** lists every browser session on the account with

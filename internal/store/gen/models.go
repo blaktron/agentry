@@ -458,6 +458,17 @@ type User struct {
 	IdpMfaAt         *time.Time `json:"idp_mfa_at"`
 }
 
+type UserNotificationSetting struct {
+	UserID                uuid.UUID `json:"user_id"`
+	EmailDependencyAlerts bool      `json:"email_dependency_alerts"`
+	EmailQuarantine       bool      `json:"email_quarantine"`
+	EmailReviewDecisions  bool      `json:"email_review_decisions"`
+	EmailAdvisories       bool      `json:"email_advisories"`
+	EmailOrgInvites       bool      `json:"email_org_invites"`
+	WebDependencyAlerts   bool      `json:"web_dependency_alerts"`
+	UpdatedAt             time.Time `json:"updated_at"`
+}
+
 type UserSshKey struct {
 	ID          uuid.UUID  `json:"id"`
 	UserID      uuid.UUID  `json:"user_id"`

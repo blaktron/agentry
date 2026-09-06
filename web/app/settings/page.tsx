@@ -81,6 +81,12 @@ export default async function SettingsPage({
 }) {
   const user = await currentUser();
   if (!user) redirect("/login?next=/settings");
+  // Notification settings (agentry#190); a server without the endpoint
+  // answers 404 → null, shown as everything on.
+  const notifications: NotificationSettings = (await authedGet<NotificationSettings>("/user/notifications").catch(() => null)) ?? {
+    email: { dependencyAlerts: true, quarantine: true, reviewDecisions: true, advisories: true, orgInvites: true },
+    web: { dependencyAlerts: true },
+  };
   const q = await searchParams;
 
   let tokens: Pat[] = [];

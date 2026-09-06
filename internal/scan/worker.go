@@ -268,6 +268,9 @@ func (p *Pipeline) notifyAuthorQuarantined(ctx context.Context, v storegen.Agent
 		p.log.Error("rescan: could not load author for notification", "version", v.ID, "err", err)
 		return
 	}
+	if !notify.AllowsEmail(ctx, p.st.Queries(), u.ID, notify.KindQuarantine) {
+		return // the author switched these off (agentry#190)
+	}
 	if err := p.notifier.AgentQuarantined(ctx, notify.QuarantineNotice{
 		ToEmail:  u.Email,
 		Agent:    agent.Namespace + "/" + agent.Name,
