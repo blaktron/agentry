@@ -113,6 +113,8 @@ export interface Agent {
   autoPublishTags?: boolean;
   allowForcePush?: boolean;
   createdAt: string;
+  // Open dependency alerts on published versions (agentry#177); present on GET /agents/{ns}/{name}.
+  dependencyAlerts?: DependencyAlert[];
 }
 
 export interface AgentVersion {
@@ -196,6 +198,8 @@ export type AuditEvent = components["schemas"]["AuditEvent"];
 export type AuditPage = components["schemas"]["AuditPage"];
 export type RedTeamReport = components["schemas"]["RedTeamReport"];
 export type Org = components["schemas"]["Org"];
+export type DependencyAlert = components["schemas"]["DependencyAlert"];
+export type McpServerScan = components["schemas"]["McpServerScan"];
 export type WebhookDelivery = components["schemas"]["WebhookDelivery"];
 
 // --- Review + console types (§10.1 reviewer / staff surfaces) ---

@@ -50,8 +50,9 @@ node/python runtime images when the agent declares MCP servers of that
 ecosystem), and the registry's `/healthz`. With a ref or `--local DIR` it
 also checks that BriefAgent: resolution, the verified install (a warning
 until the first `run --prepare`), the declared MCP servers' store, the
-compiled plan, the MCP profile, and that **every declared secret resolves** —
-the exit-11 refusal a scheduled run would otherwise meet at 03:00. Exit 0
+compiled plan, the MCP profile, the registry's vulnerability verdict on each
+declared MCP server, and that **every declared secret resolves** —
+the exit-11 refusals a scheduled run would otherwise meet at 03:00. Exit 0
 when every check passes (warnings allowed), 1 otherwise; `--json` for
 machines. No secret *value* is ever printed.
 
@@ -73,6 +74,7 @@ One BriefAgent, one job, one container tree, then gone.
 | `--adapter NAME` / `--list-adapters` | harness adapter (default `docker-agent`; goose/claude/codex are planned slots) |
 | `--local DIR` | run an unpublished BriefAgent tree (unsigned by definition: requires `--allow-unsigned`) |
 | `--allow-unsigned` | run a release the registry has no attestation for; a *mismatched* attestation always refuses |
+| `--allow-vulnerable-mcp` | run even though the registry reports a known high or critical vulnerability for a declared MCP server version (the receipt records the override) |
 | `--pin sha256:…` | require the resolved archive digest to equal this value |
 | `--prepare` | verify, compile, install images, run guided profile setup — then stop |
 | `--dry-run` | print the compiled run plan; touches no docker, never prompts |
@@ -192,6 +194,18 @@ run with `--ignore-scripts`. At run time the per-run gateway loads exactly those
 servers — each with its declared tool filter, its own egress allowlist,
 and only its own secret values — alongside the agentry tools server.
 
+**Known vulnerabilities.** Before a declared server is resolved, the runner
+asks the registry what its scan and daily sweep recorded for that exact
+package version (`GET /mcp-servers/scan`). A known **high or critical**
+advisory refuses the run (exit 11, naming the advisories and the versions
+they are fixed in) unless `--allow-vulnerable-mcp` or the policy's
+`mcpServers.allowVulnerable` overrides it; lower severities and a version
+the registry has never seen only print a line. A registry that cannot be
+reached does not stop the run. Whatever happened, the receipt's
+`capabilities_enforced.mcpServers.vulnerabilities` says what was checked,
+against which registry, and why the run went ahead. `agentry doctor`
+reports the same verdict per server, as a failure when a run would refuse.
+
 The isolation rules are the profile rules: server configuration and keys
 belong to one signature (ns/name@version + digest). No other BriefAgent
 can reach them, no other user can read them (0700, per-run containers are
@@ -221,6 +235,7 @@ Created on first use; `AGENTRY_RUNNER_HOME` moves the whole runner home.
 | `dataAccessServers.<category>` | operator-cataloged MCP server-entry files attached when a manifest declares that dataAccess category |
 | `mcpRegistries.npm` / `mcpRegistries.pypi` | where declared `capabilities.mcpServers` resolve (defaults: registry.npmjs.org, pypi.org; point at private mirrors here) |
 | `mcpRegistries.pypiAllowSourceDists` | allow a PyPI MCP server to install from a source distribution (default false: wheels only, see below) |
+| `mcpServers.allowVulnerable` | let runs proceed when the registry reports a high or critical advisory for a declared server version (default false: refused, exit 11) |
 | `images.nodeRuntime` / `images.pythonRuntime` | pinned runtime images that install and run declared npm/PyPI MCP servers |
 
 The policy participates in the plan hash: editing it invalidates cached

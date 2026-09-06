@@ -202,7 +202,12 @@ func (s *Server) GetAgent(w http.ResponseWriter, r *http.Request, ns Namespace, 
 		return
 	}
 	maintain := auth.CheckAgent(principalFrom(r.Context()), auth.AgentResource{Public: a.Visibility == "public", EffectiveRole: role}, auth.ActAgentMaintain) == nil
-	writeJSON(w, http.StatusOK, s.agentToAPI(a, maintain))
+	out := s.agentToAPI(a, maintain)
+	// Open dependency alerts (agentry#177): public on the page, because a
+	// consumer deciding whether to install needs them as much as the author.
+	alerts := s.dependencyAlertsForAgent(r, a.ID, a.Namespace+"/"+a.Name)
+	out.DependencyAlerts = &alerts
+	writeJSON(w, http.StatusOK, out)
 }
 
 // UpdateAgent implements PATCH /agents/{ns}/{name} (maintain).
