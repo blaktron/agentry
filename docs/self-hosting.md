@@ -139,6 +139,17 @@ the `mcp_server_scans` table, so a server version is looked up live the
 first time any manifest declares it and served from that registry for the
 next 24 hours.
 
+**The daily sweep.** The worker re-checks every row of that registry once
+a day (the `scan.mcp_sweep` job, enqueued a minute after start-up and every
+24 hours after). A server version that was clean and now carries a high or
+critical advisory opens a **dependency alert** on every published version
+that declares it; the author is told by email (`AGENTRY_NOTIFY_KIND=smtp`),
+the audit trail records `agent.dependency_alert`, and an org's webhooks
+receive `agent.dependency_alert`. The alert closes on its own when the
+version is yanked, quarantined or blocked, or when the advisory is
+withdrawn; publishing a fixed version does not close the old version's
+alert, because the old version stays installable until it is yanked.
+
 Git-tag publishes also have their **git history** scanned for secrets (§8.3):
 S2 walks the added lines of every commit reachable from the tag, so a key
 committed and later removed still surfaces as `S2/history-<rule>`. That needs

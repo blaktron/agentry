@@ -150,6 +150,17 @@ func (s *Service) TransitionInTx(ctx context.Context, q *storegen.Queries, versi
 	}); err != nil {
 		return TransitionResult{}, err
 	}
+	// A version that leaves `published` is no longer an installable
+	// dependency risk: its open MCP dependency alerts close with the new
+	// state as the reason (agentry#177, D6).
+	if from == StatusPublished && to != StatusPublished {
+		r := "version-" + string(to)
+		if _, err := q.ResolveMCPDependencyAlertsForVersion(ctx, storegen.ResolveMCPDependencyAlertsForVersionParams{
+			VersionID: versionID, ResolvedReason: &r,
+		}); err != nil {
+			return TransitionResult{}, fmt.Errorf("resolve dependency alerts: %w", err)
+		}
+	}
 	// Maintain agents.latest_published_version_id on entry/exit of
 	// published (§4.2 denormalized pointer).
 	if to == StatusPublished || from == StatusPublished {

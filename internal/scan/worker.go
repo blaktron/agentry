@@ -54,6 +54,10 @@ func (p *Pipeline) RegisterHandlers(q queue.Client) {
 		}
 		return p.RescanSweep(ctx)
 	})
+	q.Register(JobMCPSweep, func(ctx context.Context, _ queue.Job) error {
+		_, err := p.MCPSweep(ctx)
+		return err
+	})
 	q.Register(JobScanReconcile, func(ctx context.Context, _ queue.Job) error {
 		moved, err := p.ReconcileStuckScans(ctx)
 		if err != nil {

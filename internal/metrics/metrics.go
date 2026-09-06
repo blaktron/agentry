@@ -100,6 +100,10 @@ type Metrics struct {
 	// "We did not check" has to be visible on a dashboard, not only in a
 	// log line.
 	failOpen metric.Int64Counter
+	// mcpSweeps / mcpAlerts: the daily MCP server vulnerability sweep and
+	// the dependency alerts it opens (agentry#177).
+	mcpSweeps metric.Int64Counter
+	mcpAlerts metric.Int64Counter
 }
 
 // New builds the meter provider and instruments. It returns an error only for
@@ -214,6 +218,8 @@ func (m *Metrics) instrument(meter metric.Meter) error {
 	m.scanStageErrors = i64c("ScanStageErrors", "Scan stage executions that failed.")
 	m.failOpen = i64c("FailOpenEvents", "Deliberate fail-open events by path (audit_stream_drop, osv_not_checked, osv_error).")
 	m.scanStageHits = i64c("ScanStageHits", "Findings produced by a scan stage.")
+	m.mcpSweeps = i64c("McpSweepRuns", "Daily MCP server vulnerability sweeps, by outcome (ok, error).")
+	m.mcpAlerts = i64c("McpDependencyAlertsOpened", "Dependency alerts opened on published versions by the MCP sweep.")
 	m.scanStageDuration = f64h("ScanStageDurationSeconds", "Scan stage duration.")
 
 	// Publish funnel (§16.2 pipeline dashboard).
@@ -344,6 +350,23 @@ const (
 	// could not (fully) scan for secrets (agentry#54).
 	FailOpenHistoryNotScanned = "history_not_scanned"
 )
+
+// RecordMCPSweep counts one sweep run and the alerts it opened.
+func (m *Metrics) RecordMCPSweep(ctx context.Context, opened int, err error) {
+	if m == nil {
+		return
+	}
+	outcome := "ok"
+	if err != nil {
+		outcome = "error"
+	}
+	if m.mcpSweeps != nil {
+		m.mcpSweeps.Add(ctx, 1, metric.WithAttributes(attribute.String("outcome", outcome)))
+	}
+	if m.mcpAlerts != nil && opened > 0 {
+		m.mcpAlerts.Add(ctx, int64(opened))
+	}
+}
 
 // RecordFailOpen counts one fail-open event on the named path.
 func (m *Metrics) RecordFailOpen(ctx context.Context, path string) {

@@ -220,6 +220,8 @@ series.
 | `GitCloneFirstByteSeconds` | histogram | none | §16.1 SLI: p95 < 2 s |
 | `FailOpenEvents` | counter | path (`audit_stream_drop`, `history_not_scanned`, `osv_not_checked`, `osv_error`) | **TICKET**: any fail-open event in an hour (agentry#33) |
 | `WebhookDeliveries` | counter | outcome (`ok`/`error`/`throttled`) | delivery health |
+| `McpSweepRuns` | counter | outcome (`ok`/`error`) | the daily MCP server vulnerability sweep ran (agentry#177) |
+| `McpDependencyAlertsOpened` | counter | none | dependency alerts opened on published versions; a spike is an ecosystem advisory wave |
 
 `route` is the **matched route pattern** (`/agents/{ns}/{name}`), never the
 concrete path; a per-path metric would let any caller mint unbounded series.
