@@ -1,4 +1,4 @@
-# Agentry account flows: self-enrollment, password recovery, and the
+# Account flows for the directory service: self-enrollment, password recovery, and the
 # abuse controls on both. Applied automatically by authentik's blueprint
 # discovery (mounted at /blueprints/custom); idempotent — every entry is
 # keyed by a stable identifier, so re-applying updates in place.
@@ -194,7 +194,7 @@ entries:
       slug: agentry-enrollment
     attrs:
       name: Agentry enrollment
-      title: Create your Agentry account
+      title: !Format ["Create your %s account", !Env [AGENTRY_BRAND_NAME, "Agentry"]]
       designation: enrollment
       authentication: require_unauthenticated
       denied_action: message_continue
@@ -268,7 +268,7 @@ entries:
     attrs:
       use_global_settings: true
       template: email/account_confirmation.html
-      subject: Confirm your Agentry account
+      subject: !Format ["Confirm your %s account", !Env [AGENTRY_BRAND_NAME, "Agentry"]]
       activate_user_on_success: true
       token_expiry: minutes=30
 
@@ -287,7 +287,7 @@ entries:
     identifiers:
       name: agentry-authenticator-totp-setup
     attrs:
-      friendly_name: Agentry authenticator
+      friendly_name: !Format ["%s authenticator", !Env [AGENTRY_BRAND_NAME, "Agentry"]]
       digits: 6
 
   - model: authentik_flows.flowstagebinding
@@ -340,7 +340,7 @@ entries:
       slug: agentry-recovery
     attrs:
       name: Agentry recovery
-      title: Reset your Agentry password
+      title: !Format ["Reset your %s password", !Env [AGENTRY_BRAND_NAME, "Agentry"]]
       designation: recovery
       authentication: require_unauthenticated
       denied_action: message_continue
@@ -373,7 +373,7 @@ entries:
     attrs:
       use_global_settings: true
       template: email/password_reset.html
-      subject: Reset your Agentry password
+      subject: !Format ["Reset your %s password", !Env [AGENTRY_BRAND_NAME, "Agentry"]]
       activate_user_on_success: false
       token_expiry: minutes=30
       recovery_max_attempts: 5
@@ -548,10 +548,15 @@ entries:
   # Seamless integration (agentry#164): every flow ends back in Agentry and
   # the directory never shows its own panels
   # ==========================================================================
-  # Two redirect stages carry the return paths. They read the web origin
-  # from the container environment (AGENTRY_PUBLIC_WEB_URL, compose) so the
-  # same file serves every deployment. `?next=` cannot do this job:
-  # authentik only honours a same-host `next`, and the app lives elsewhere.
+  # Two redirect stages carry the return paths, read from the container
+  # environment so the same file serves every deployment (DEV-091):
+  # AGENTRY_PUBLIC_WEB_URL is where sign-out lands (the site's home, or the
+  # server's own /ui/ page when nothing fronts it) and AGENTRY_ACCOUNT_URL
+  # is where a password change or an authenticator enrolment returns (the
+  # site's Settings → Authentication, or the server's /ui/account/directory).
+  # compose defaults both to the server's own pages; a site's overlay points
+  # them at itself. `?next=` cannot do this job: authentik only honours a
+  # same-host `next`, and the app lives elsewhere.
   - model: authentik_stages_redirect.redirectstage
     id: stage-redirect-site
     identifiers:
@@ -566,7 +571,7 @@ entries:
       name: agentry-redirect-settings
     attrs:
       mode: static
-      target_static: !Format ["%s/settings/authentication?ok=%s", !Env AGENTRY_PUBLIC_WEB_URL, "Saved%20in%20the%20directory."]
+      target_static: !Format ["%s?ok=%s", !Env AGENTRY_ACCOUNT_URL, "Saved%20in%20the%20directory."]
       keep_context: false
 
   # Sign-out: the provider's invalidation flow ends the directory session
@@ -622,7 +627,7 @@ entries:
       slug: agentry-password-change
     attrs:
       name: Agentry password change
-      title: Change your Agentry password
+      title: !Format ["Change your %s password", !Env [AGENTRY_BRAND_NAME, "Agentry"]]
       designation: stage_configuration
       authentication: require_authenticated
       denied_action: message_continue
@@ -671,7 +676,7 @@ entries:
     identifiers:
       name: agentry-authenticator-webauthn-setup
     attrs:
-      friendly_name: Agentry security key
+      friendly_name: !Format ["%s security key", !Env [AGENTRY_BRAND_NAME, "Agentry"]]
   - model: authentik_flows.flow
     id: flow-webauthn-setup
     identifiers:
