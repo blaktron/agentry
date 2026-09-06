@@ -1,0 +1,23 @@
+{{define "content"}}
+<h1>Authorize this device</h1>
+{{with .Data}}
+{{if .Valid}}
+<section class="card">
+<p>A program on <strong>this computer</strong> — the {{$.Brand.Name}} command line or desktop app — is asking for access as <strong>{{$.User.Handle}}</strong>.</p>
+<p>Approving hands the program listening on <code>127.0.0.1:{{.Port}}</code> a one-time code, which it exchanges for a personal access token within a minute. The token itself never appears in your browser, and nothing leaves this machine.</p>
+<p class="muted">Scopes: agent read/publish, repo read/write, profile. The token appears under Tokens and can be revoked there any time. If you did not just start a sign-in from the program, close this tab.</p>
+<form method="post" action="/ui/authorize">
+  <input type="hidden" name="_csrf" value="{{$.CSRF}}">
+  <input type="hidden" name="port" value="{{.Port}}">
+  <input type="hidden" name="state" value="{{.State}}">
+  <button type="submit">Authorize</button>
+  <a class="button secondary" href="/ui/">Cancel</a>
+</form>
+</section>
+{{else}}
+<section class="card">
+<p>This page is opened by the command line or the desktop app during sign-in, and this request is missing or malforms its callback parameters. Start the sign-in again from the program.</p>
+</section>
+{{end}}
+{{end}}
+{{end}}

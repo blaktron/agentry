@@ -1,0 +1,40 @@
+{{define "content"}}
+<h1>Staff</h1>
+{{with .Data}}
+{{if .Forbidden}}<p class="flash error">This account is not platform staff.</p>{{end}}
+<section class="card">
+<h2>Platform review queue ({{len .Queue}})</h2>
+{{if not .Queue}}<p class="muted">Empty.</p>{{else}}<ul class="list">{{range .Queue}}<li><a href="/ui/review/{{.ID}}"><strong>{{.Namespace}}/{{.Agent}}</strong> @{{.Version}}</a>{{if .CreatedAt}} <span class="muted">{{utc .CreatedAt}}</span>{{end}}</li>{{end}}</ul>{{end}}
+</section>
+<section class="card">
+<h2>Abuse reports</h2>
+<form method="get" action="/ui/staff" class="row">{{range .States}}<label class="check"><input type="radio" name="state" value="{{.}}"{{if eq . $.Data.State}} checked{{end}}> {{.}}</label>{{end}}<button type="submit" class="small secondary">Show</button></form>
+{{if not .Reports}}<p class="muted">No {{.State}} reports.</p>{{else}}<ul class="list">{{range .Reports}}<li><strong>{{.Namespace}}/{{.Agent}}</strong>{{if .Version}} @{{.Version}}{{end}} <span class="badge">{{.Category}}</span> <span class="badge">{{.State}}</span>{{if .CreatedAt}} <span class="muted">{{utc .CreatedAt}}</span>{{end}}
+<p>{{.Detail}}</p>
+<form method="post" action="/ui/staff/abuse" class="row"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="reportId" value="{{.ID}}">
+<select name="state"><option value="triaged">triaged</option><option value="actioned">actioned</option><option value="dismissed">dismissed</option></select>
+<input name="resolution" placeholder="resolution" class="short"><button type="submit" class="small secondary">Update</button></form></li>{{end}}</ul>{{end}}
+</section>
+<section class="card">
+<h2>Quarantine, block, reinstate</h2>
+<form method="post" action="/ui/staff/agent-action">
+  <input type="hidden" name="_csrf" value="{{$.CSRF}}">
+  <label>Agent (namespace/name)<input name="ref" required placeholder="acme/support-bot"></label>
+  <label>Action<select name="action"><option value="quarantine">quarantine</option><option value="block">block</option><option value="reinstate">reinstate</option></select></label>
+  <label>Reason<input name="reason" required></label>
+  <button type="submit" class="danger">Apply</button>
+</form>
+</section>
+<section class="card">
+<h2>Ruleset releases</h2>
+{{if not .Releases}}<p class="muted">None recorded.</p>{{else}}<ul class="list">{{range .Releases}}<li><strong>{{.Semver}}</strong> <code>{{.BundleDigest}}</code>{{if .PublishedAt}} <span class="muted">{{utc .PublishedAt}}</span>{{end}}{{if .Notes}}<p class="muted">{{.Notes}}</p>{{end}}</li>{{end}}</ul>{{end}}
+<form method="post" action="/ui/staff/ruleset-release">
+  <input type="hidden" name="_csrf" value="{{$.CSRF}}">
+  <label>Semver<input name="semver" placeholder="1.4.0"></label>
+  <label>Bundle digest<input name="bundleDigest" placeholder="sha256:…"></label>
+  <label>Notes<input name="notes"></label>
+  <button type="submit">Record release</button>
+</form>
+</section>
+{{end}}
+{{end}}

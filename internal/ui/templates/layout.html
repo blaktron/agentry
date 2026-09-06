@@ -1,0 +1,30 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · {{.Brand.Name}}</title>
+<link rel="stylesheet" href="/ui/static/ui.css?v={{.CSSVersion}}">
+{{if .CSSURL}}<link rel="stylesheet" href="{{.CSSURL}}">{{end}}
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/ui/">{{if .LogoURL}}<img src="{{.LogoURL}}" alt="" height="24">{{end}}<span>{{.Brand.Name}}</span></a>
+  {{if .User}}<nav class="user"><span>{{.User.Handle}}</span>
+    {{if eq .Mode "full"}}<form method="post" action="/ui/logout"><input type="hidden" name="_csrf" value="{{.CSRF}}"><button type="submit" class="link">Sign out</button></form>{{end}}
+  </nav>{{end}}
+</header>
+<main>
+  {{if .Nav}}<nav class="sections">{{range .Nav}}<a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}</nav>{{end}}
+  {{if .Flash}}<p class="flash ok">{{.Flash}}</p>{{end}}
+  {{if .Error}}<p class="flash error">{{.Error}}</p>{{end}}
+  {{template "content" .}}
+</main>
+<footer>
+  <span>{{.Brand.Name}}</span>
+  {{if .Brand.SupportEmail}} · <a href="mailto:{{.Brand.SupportEmail}}">Support</a>{{end}}
+  {{if .Brand.PrivacyURL}} · <a href="{{.Brand.PrivacyURL}}">Privacy</a>{{end}}
+  {{if .Brand.TermsURL}} · <a href="{{.Brand.TermsURL}}">Terms</a>{{end}}
+</footer>
+</body>
+</html>{{end}}
