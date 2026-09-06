@@ -372,13 +372,20 @@ separate and are what your load balancer should use.
 
 ### What the stack exposes
 
+`/ui/` is the server's own browser surface (DEV-091): the device authorize
+page `agentry login` and the desktop app open, and, on a server without a
+site in front, sign-in, the account pages and the review, staff and
+organization pages. The edge sends it to the API like `/api/`. The handle
+`ui` (and the other root paths of the server and the site) cannot be
+registered.
+
 Docker publishes ports by inserting its own firewall rules ahead of the
 host's (firewalld and ufw zones do not apply to a published port), so a
 plain `"5432:5432"` on a machine with a public address is Postgres — with
 the compose file's development password — on the internet. The stack
 therefore publishes every service **except the edge** on `AGENTRY_BIND`,
 default `127.0.0.1`: Postgres (5432), MinIO (9000/9001), mailpit
-(1025/8025), agentryd (8080), the web app (3000) and the two docs sites
+(1025/8025) and agentryd (8080); the site, when one fronts the stack, and its docs sites
 (8000/8001) answer on the host itself and nowhere else. The acceptance
 scripts, `agentry` on the host, and the quickstart above all use
 `localhost`, so nothing changes for them.
@@ -705,7 +712,14 @@ the edge sends `auth.<site>/` and the directory's user panel
 where a person changes their password, adds an authenticator app or
 security key, or removes one — each is one short step in the directory
 that returns to Settings. For that the directory needs to know the site:
-`AGENTRY_PUBLIC_WEB_URL` (the same value the registry uses) is passed to
+Two variables tell the directory where its flows return (DEV-091): sign-out
+lands on `AGENTRY_PUBLIC_WEB_URL` and a password change or an authenticator
+enrolment on `AGENTRY_ACCOUNT_URL`. Both default to the server's own pages
+(`<AGENTRY_PUBLIC_URL>/ui/` and `…/ui/account/directory`); a site in front
+sets them to its home and its Settings → Authentication page. The flows'
+titles and mail subjects call the deployment `AGENTRY_BRAND_NAME`
+(default `Agentry`). The original text of this paragraph, for the site's
+values: `AGENTRY_PUBLIC_WEB_URL` (the same value the registry uses) is passed to
 the `authentik-*` containers and read by the account-flows blueprint,
 and `scripts/dev/authentik-bootstrap.sh` points the application's launch
 URL at the registry's sign-in start and the brand's default application

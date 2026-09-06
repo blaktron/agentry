@@ -519,7 +519,7 @@ func sanitizeHandle(s string) string {
 	if len(s) < 1 {
 		return ""
 	}
-	return s
+	return unreservedHandle(s) // root paths are not handles (DEV-091)
 }
 
 func truncateHandle(s string, n int) string {
