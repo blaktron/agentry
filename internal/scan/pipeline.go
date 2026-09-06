@@ -57,6 +57,14 @@ func (p *Pipeline) SetMetrics(m *metrics.Metrics) {
 	}
 }
 
+// SetMCPScanning wires S7's vulnerability database and scanned-server
+// registry onto the orchestrator (agentry#177).
+func (p *Pipeline) SetMCPScanning(client OSVClient, cache MCPScanCache) {
+	if p.orch != nil {
+		p.orch.SetMCPScanning(client, cache)
+	}
+}
+
 // SetNotifier overrides the author-notification transport (§8.7).
 func (p *Pipeline) SetNotifier(n notify.Notifier) {
 	if n != nil {
@@ -369,12 +377,89 @@ func (p *Pipeline) runOrchestrator(
 		Resume:            resume,
 		OnStage:           onStage,
 	})
+	// The version ↔ declared-server join the daily sweep maps alerts
+	// through (agentry#177). Recorded whatever the outcome: a version in
+	// review still declares the servers it declares.
+	p.recordVersionMCPServers(ctx, v.ID, v.Manifest)
 	sinkMu.Lock()
 	defer sinkMu.Unlock()
 	if len(sinkErrs) > 0 {
 		return RunResult{}, fmt.Errorf("scan: persist stage results: %w", errors.Join(sinkErrs...))
 	}
 	return result, nil
+}
+
+// recordVersionMCPServers replaces the version's rows in
+// agent_version_mcp_servers with the servers its manifest declares.
+func (p *Pipeline) recordVersionMCPServers(ctx context.Context, versionID uuid.UUID, manifestJSON []byte) {
+	q := p.st.Queries()
+	if err := q.DeleteVersionMCPServers(ctx, versionID); err != nil {
+		p.log.Warn("scan: clear version mcp servers", "version", versionID, "err", err)
+		return
+	}
+	for _, d := range DeclaredMCPServers(manifestJSON) {
+		if err := q.InsertVersionMCPServer(ctx, storegen.InsertVersionMCPServerParams{
+			VersionID: versionID, Ecosystem: d.Ecosystem, Package: d.Package, Version: d.Version,
+		}); err != nil {
+			p.log.Warn("scan: record version mcp server", "version", versionID, "err", err)
+		}
+	}
+}
+
+// storeMCPScanCache is the MCPScanCache over mcp_server_scans.
+type storeMCPScanCache struct{ st *store.Store }
+
+// NewStoreMCPScanCache returns the store-backed registry of scanned MCP
+// server versions.
+func NewStoreMCPScanCache(st *store.Store) MCPScanCache { return storeMCPScanCache{st: st} }
+
+func (c storeMCPScanCache) Get(ctx context.Context, eco, pkg, ver string) (*MCPScanRecord, error) {
+	row, err := c.st.Queries().GetMCPServerScan(ctx, storegen.GetMCPServerScanParams{Ecosystem: eco, Package: pkg, Version: ver})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return mcpScanRecordFromRow(row), nil
+}
+
+func (c storeMCPScanCache) Put(ctx context.Context, rec MCPScanRecord) error {
+	advs, err := json.Marshal(rec.Advisories)
+	if err != nil {
+		return err
+	}
+	if rec.Advisories == nil {
+		advs = []byte("[]")
+	}
+	var maxSev, lastErr *string
+	if rec.MaxSeverity != "" {
+		maxSev = &rec.MaxSeverity
+	}
+	if rec.LastError != "" {
+		lastErr = &rec.LastError
+	}
+	_, err = c.st.Queries().UpsertMCPServerScan(ctx, storegen.UpsertMCPServerScanParams{
+		Ecosystem: rec.Ecosystem, Package: rec.Package, Version: rec.Version,
+		Status: rec.Status, MaxSeverity: maxSev, Advisories: advs, LastError: lastErr,
+	})
+	return err
+}
+
+// mcpScanRecordFromRow converts a registry row.
+func mcpScanRecordFromRow(row storegen.McpServerScan) *MCPScanRecord {
+	rec := &MCPScanRecord{
+		Ecosystem: row.Ecosystem, Package: row.Package, Version: row.Version, Status: row.Status,
+		FirstSeen: row.FirstSeenAt, LastChecked: row.LastCheckedAt,
+	}
+	if row.MaxSeverity != nil {
+		rec.MaxSeverity = *row.MaxSeverity
+	}
+	if row.LastError != nil {
+		rec.LastError = *row.LastError
+	}
+	_ = json.Unmarshal(row.Advisories, &rec.Advisories)
+	return rec
 }
 
 // persistStage writes one stage's findings and its (scan_run_id, scanner)

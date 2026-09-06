@@ -16,6 +16,10 @@ type stageContext struct {
 	bundle *rules.Bundle
 	judge  JudgeProvider
 	log    *slog.Logger
+	// osv and mcpCache are S7's vulnerability database and the registry of
+	// scanned MCP server versions (agentry#177); nil = offline.
+	osv      OSVClient
+	mcpCache MCPScanCache
 }
 
 // Context returns the cancellation context.

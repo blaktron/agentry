@@ -294,6 +294,10 @@ type Scan struct {
 	GitleaksBin string `yaml:"gitleaksBin"`
 	// ToolTimeout bounds one external tool invocation; 0 means two minutes.
 	ToolTimeout time.Duration `yaml:"toolTimeout"`
+	// OSVURL is the vulnerability database S7 asks about declared MCP
+	// servers (agentry#177). Empty means https://api.osv.dev; "none"
+	// switches the lookup off (S7 then reports "not checked").
+	OSVURL string `yaml:"osvUrl"`
 }
 
 // Social configures social login for individual accounts (§12.1). A provider
@@ -526,6 +530,7 @@ func applyEnv(c *Config) error {
 	str("AGENTRY_JUDGE_TYPE", &c.Judge.Provider)
 	// External scanner tools (§8.3 seams, agentry#40).
 	str("AGENTRY_SCAN_GITLEAKS_BIN", &c.Scan.GitleaksBin)
+	str("AGENTRY_SCAN_OSV_URL", &c.Scan.OSVURL)
 	if v := os.Getenv("AGENTRY_SCAN_TOOL_TIMEOUT"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
 			c.Scan.ToolTimeout = d

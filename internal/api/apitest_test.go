@@ -70,6 +70,7 @@ func newTestEnvCfg(t *testing.T, cfgFn func(*config.Config), opts ...func(*api.S
 	}
 
 	cfg := config.Default()
+	cfg.Scan.OSVURL = "none" // S7 never dials out of a test; TestS7 installs a fake
 	cfg.Auth.SessionTTL = time.Hour
 	// Tests hammer auth endpoints from one IP; keep prod defaults out of the way.
 	cfg.Limits.LoginPerMin = 10000

@@ -126,7 +126,18 @@ scan:
   # the native Go secret detectors run alone.
   gitleaksBin: /usr/bin/gitleaks      # AGENTRY_SCAN_GITLEAKS_BIN ("auto" = PATH lookup); shipped in the image
   # toolTimeout: 2m                   # AGENTRY_SCAN_TOOL_TIMEOUT per invocation
+  # The vulnerability database S7 asks about the MCP servers a manifest
+  # declares. Default api.osv.dev; point it at a mirror, or set "none" to
+  # switch the lookup off (S7 then reports "not checked" and routes nothing).
+  # osvUrl: https://api.osv.dev       # AGENTRY_SCAN_OSV_URL
 ```
+
+The scanning role needs egress to that database (one host); a worker that
+cannot reach it leaves an `S7/osv-error` finding, which routes the version
+to review rather than through. The answers are kept per package version in
+the `mcp_server_scans` table, so a server version is looked up live the
+first time any manifest declares it and served from that registry for the
+next 24 hours.
 
 Git-tag publishes also have their **git history** scanned for secrets (§8.3):
 S2 walks the added lines of every commit reachable from the tag, so a key

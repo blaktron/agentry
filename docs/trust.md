@@ -22,9 +22,8 @@ There is no flag, plan, or role that lets a public version skip the pipeline
 ship**: the deterministic archive, not the working tree, not the tag as the
 author describes it.
 
-Eight stages run against those bytes (two code-analysis stages, S6 and S7,
-were retired with the package kinds they served; BriefAgents carry no tool
-code):
+Nine stages run against those bytes (S6, a code-analysis stage, was
+retired with the package kinds it served; BriefAgents carry no tool code):
 
 | | |
 |---|---|
@@ -33,6 +32,7 @@ code):
 | **S3** | Hidden and obfuscated content: zero-width and bidi characters, Unicode tag blocks, confusables, private-use codepoints, HTML comments, CSS-hidden text, data URIs, entropy-gated encoded blobs |
 | **S4** | Prompt-injection signatures: instruction override, exfiltration, tool coercion, credential harvesting, persistence, obfuscation |
 | **S5** | LLM adjudication against a fixed rubric, with no tools; a judge showing signs of manipulation is itself a finding. The judge is an Anthropic-, OpenAI-compatible or Bedrock model, or a PromptGuard-class classifier that scores only the injection axis and therefore always routes to human review |
+| **S7** | Declared MCP servers: every `capabilities.mcpServers` package version is checked against the OSV vulnerability database — live the first time a version is seen, from the registry of scanned server versions afterwards — and each advisory is a finding at the advisory's own severity, CVE ids included. A lookup that fails routes to review; a database that is switched off says "not checked", never "no advisories" |
 | **S8** | Metadata, namespace and publisher-behaviour abuse |
 | **S9** | Release-diff risk: the rug-pull check, comparing a version against its predecessor |
 | **S10** | Report assembly into a canonical, digest-addressed document |
