@@ -12,9 +12,8 @@ import {
   type Org,
   type ScanReport,
 } from "@/lib/api";
-import { fmtBytes, fmtCount, fmtUTCDate } from "@/lib/format";
+import { fmtBytes, fmtCount, fmtUTC, fmtUTCDate } from "@/lib/format";
 import { embeddedAllowedTools, gatewayToolRows, parseContract } from "@/lib/mcp";
-import { fmtUTC } from "@/lib/format";
 import { authedGet, currentUser } from "@/lib/session";
 import {
   Badge,
