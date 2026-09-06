@@ -1,0 +1,62 @@
+{{define "content"}}
+{{with .Data}}
+<p><a href="/ui/orgs">&larr; Organizations</a></p>
+<h1>{{.Org.Handle}}{{if .Org.DisplayName}} <span class="muted">{{.Org.DisplayName}}</span>{{end}}</h1>
+{{if .Refused}}<p class="flash error">{{.Refused}}</p>{{else}}
+<section class="card"><h2>Organization</h2>
+<form method="post" action="/ui/orgs/{{.Handle}}"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="section" value="org">
+<label>Display name<input name="displayName" value="{{.Org.DisplayName}}" maxlength="100"></label>
+<label class="check"><input type="checkbox" name="ssoRequired" value="true"{{if and .Org.SsoRequired (deref .Org.SsoRequired)}} checked{{end}}> Require SSO for members</label>
+{{if .Org.VerifiedDomain}}<p class="muted">Verified domain: {{.Org.VerifiedDomain}}</p>{{end}}
+<div><button type="submit">Save</button></div></form></section>
+
+<section class="card"><h2>Members</h2>
+<ul class="list">{{range .Members}}<li><strong>{{.User.Handle}}</strong>{{if .User.DisplayName}} <span class="muted">{{.User.DisplayName}}</span>{{end}} <span class="badge">{{.Role}}</span>{{if .ViaScim}} <span class="badge">scim</span>{{end}}
+<form method="post" action="/ui/orgs/{{$.Data.Handle}}" class="inline"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="section" value="member"><input type="hidden" name="handle" value="{{.User.Handle}}">
+<select name="role">{{range $.Data.Roles}}<option value="{{.}}">{{.}}</option>{{end}}</select><button type="submit" class="small secondary">Set role</button>
+<button type="submit" name="action" value="remove" class="small danger">Remove</button></form></li>{{end}}</ul>
+<form method="post" action="/ui/orgs/{{.Handle}}" class="row"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="section" value="member">
+<input name="handle" placeholder="handle" class="short" required><select name="role">{{range .Roles}}<option value="{{.}}">{{.}}</option>{{end}}</select><button type="submit" class="small">Add member</button></form>
+</section>
+
+<section class="card"><h2>Teams</h2>
+{{if not .Teams}}<p class="muted">No teams.</p>{{end}}
+<ul class="list">{{range .Teams}}<li><strong>{{.Slug}}</strong> <span class="muted">{{len .Members}} members:</span> {{$slug := .Slug}}{{range .Members}}<code>{{.User.Handle}}</code> <form method="post" action="/ui/orgs/{{$.Data.Handle}}" class="inline"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="section" value="team"><input type="hidden" name="action" value="remove-member"><input type="hidden" name="slug" value="{{$slug}}"><input type="hidden" name="handle" value="{{.User.Handle}}"><button type="submit" class="small">×</button></form> {{end}}
+<form method="post" action="/ui/orgs/{{$.Data.Handle}}" class="inline"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="section" value="team"><input type="hidden" name="action" value="add-member"><input type="hidden" name="slug" value="{{.Slug}}"><input name="handle" placeholder="handle" class="short"><button type="submit" class="small secondary">Add</button></form>
+<form method="post" action="/ui/orgs/{{$.Data.Handle}}" class="inline"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="section" value="team"><input type="hidden" name="action" value="delete"><input type="hidden" name="slug" value="{{.Slug}}"><button type="submit" class="small danger">Delete team</button></form></li>{{end}}</ul>
+<form method="post" action="/ui/orgs/{{.Handle}}" class="row"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="section" value="team"><input name="slug" placeholder="team-slug" class="short" required><button type="submit" class="small">Create team</button></form>
+</section>
+
+<section class="card"><h2>Policy</h2>
+<form method="post" action="/ui/orgs/{{.Handle}}"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="section" value="policy">
+<label>Policy JSON<textarea name="policy" rows="10" class="mono">{{.Policy}}</textarea></label><button type="submit">Save policy</button></form></section>
+
+<section class="card"><h2>Single sign-on</h2>
+<ul class="list">{{range .SSO}}<li><strong>{{.Kind}}</strong> <span class="badge{{if .Enabled}} ok{{end}}">{{if .Enabled}}enabled{{else}}disabled{{end}}</span>
+<form method="post" action="/ui/orgs/{{$.Data.Handle}}" class="inline"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="section" value="sso"><input type="hidden" name="kind" value="{{.Kind}}"><button type="submit" name="action" value="test" class="small secondary">Test</button><button type="submit" name="action" value="delete" class="small danger">Remove</button></form></li>{{end}}</ul>
+<form method="post" action="/ui/orgs/{{.Handle}}"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="section" value="sso"><input type="hidden" name="kind" value="saml">
+<h3>SAML</h3><label>IdP metadata XML<textarea name="idpMetadataXml" rows="4" class="mono"></textarea></label><label class="check"><input type="checkbox" name="enabled" value="true"> Enabled</label><div><button type="submit" class="secondary">Save SAML</button></div></form>
+<form method="post" action="/ui/orgs/{{.Handle}}"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="section" value="sso"><input type="hidden" name="kind" value="oidc">
+<h3>OIDC</h3><label>Issuer<input name="issuer" value="{{.OIDCIssuer}}"></label><label>Client id<input name="clientId" value="{{.OIDCClient}}"></label><label>Client secret<input name="clientSecret" type="password" autocomplete="off" placeholder="unchanged when empty"></label><label class="check"><input type="checkbox" name="enabled" value="true"> Enabled</label><div><button type="submit" class="secondary">Save OIDC</button></div></form>
+</section>
+
+<section class="card"><h2>SCIM tokens</h2>
+<ul class="list">{{range .SCIM}}<li><code>{{.ID}}</code>{{if .CreatedAt}} <span class="muted">created {{utc .CreatedAt}}</span>{{end}}{{if .ExpiresAt}} <span class="muted">expires {{utc .ExpiresAt}}</span>{{end}}
+<form method="post" action="/ui/orgs/{{$.Data.Handle}}" class="inline"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="section" value="scim"><input type="hidden" name="action" value="revoke"><input type="hidden" name="tokenId" value="{{.ID}}"><button type="submit" class="small danger">Revoke</button></form></li>{{end}}</ul>
+<form method="post" action="/ui/orgs/{{.Handle}}"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="section" value="scim"><button type="submit" class="secondary">Create SCIM token</button></form></section>
+
+<section class="card"><h2>Domains</h2>
+<ul class="list">{{range .Domains}}<li><strong>{{.Domain}}</strong> {{if .Verified}}<span class="badge ok">verified</span>{{else}}<span class="badge warn">pending</span> <span class="muted">TXT <code>{{.RecordName}}</code> = <code>{{.RecordValue}}</code></span>
+<form method="post" action="/ui/orgs/{{$.Data.Handle}}" class="inline"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="section" value="domain"><input type="hidden" name="action" value="verify"><input type="hidden" name="domain" value="{{.Domain}}"><button type="submit" class="small secondary">Verify</button></form>{{end}}</li>{{end}}</ul>
+<form method="post" action="/ui/orgs/{{.Handle}}" class="row"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="section" value="domain"><input name="domain" placeholder="example.com" class="short" required><button type="submit" class="small">Claim domain</button></form></section>
+
+<section class="card"><h2>Webhooks</h2>
+<ul class="list">{{range .Webhooks}}<li><code>{{.URL}}</code> <span class="muted">{{join .Events " "}}</span> <span class="badge{{if .Active}} ok{{end}}">{{if .Active}}active{{else}}inactive{{end}}</span>
+<form method="post" action="/ui/orgs/{{$.Data.Handle}}" class="inline"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="section" value="webhook"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" name="action" value="ping" class="small secondary">Ping</button><button type="submit" name="action" value="delete" class="small danger">Delete</button></form></li>{{end}}</ul>
+<form method="post" action="/ui/orgs/{{.Handle}}"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="section" value="webhook">
+<label>Endpoint URL<input name="url" type="url" required placeholder="https://example.com/hook"></label>
+<fieldset><legend>Events</legend>{{range .Events}}<label class="check"><input type="checkbox" name="events" value="{{.}}"> <code>{{.}}</code></label>{{end}}</fieldset>
+<button type="submit" class="secondary">Create webhook</button></form></section>
+{{end}}
+{{end}}
+{{end}}
