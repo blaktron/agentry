@@ -404,6 +404,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/user/directory/devices/{kind}/{deviceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove one of the caller's own authenticators from the directory service (agentry#164).
+         * @description With auth.externalOnly and directory admin access, removes the caller's authenticator device of this kind and id through the directory's admin API, so the settings page manages MFA without ever showing the directory's own panel. The device must be on the caller's own account: an id that is somebody else's answers 404 exactly like a missing one. 404 when the server has no directory admin access; 502 when the directory did not answer.
+         */
+        delete: operations["deleteUserDirectoryDevice"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/user/sessions": {
         parameters: {
             query?: never;
@@ -1719,13 +1739,18 @@ export interface components {
         UserDirectory: {
             /** @description True when a directory service owns credentials for this deployment. */
             managed: boolean;
-            /** @description The directory's own account page (name, email, sessions, consents). */
+            /**
+             * @deprecated
+             * @description Deprecated and no longer set (agentry#164): the directory's own account page is not offered; every setting lives here.
+             */
             accountUrl?: string;
             passwordChangeUrl?: string;
             totpSetupUrl?: string;
             webauthnSetupUrl?: string;
             /** @description The caller's enrolled authenticators as the directory reports them; absent when the server has no directory admin access. */
             devices?: {
+                /** @description The directory's id for the device; pass it to DELETE /user/directory/devices/{kind}/{deviceId}. */
+                id?: string;
                 /** @description totp | webauthn | static | duo | sms | email | other */
                 kind: string;
                 name: string;
@@ -2960,6 +2985,28 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["UserDirectory"];
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteUserDirectoryDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: "totp" | "webauthn" | "static" | "duo" | "sms" | "email";
+                deviceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };
