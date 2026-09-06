@@ -120,9 +120,15 @@ services:
       AUTHENTIK_POSTGRESQL__NAME: authentik
       AUTHENTIK_REDIS__HOST: redis
       AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
-      # The web origin the directory's flows return to (agentry#164): read
-      # by the account-flows blueprint's redirect stages via !Env.
-      AGENTRY_PUBLIC_WEB_URL: ${AGENTRY_PUBLIC_WEB_URL:?the web origin (https://host) the directory's flows return to}
+      # Where the directory's flows return (agentry#164, DEV-091), read by
+      # the account-flows blueprint's redirect stages via !Env: sign-out to
+      # AGENTRY_PUBLIC_WEB_URL, password/authenticator changes to
+      # AGENTRY_ACCOUNT_URL. Both default to the server's own /ui/ pages; a
+      # site in front sets them to its own (its compose overlay does).
+      AGENTRY_PUBLIC_WEB_URL: ${AGENTRY_PUBLIC_WEB_URL:-${AGENTRY_PUBLIC_URL:-http://localhost:8080}/ui/}
+      AGENTRY_ACCOUNT_URL: ${AGENTRY_ACCOUNT_URL:-${AGENTRY_PUBLIC_URL:-http://localhost:8080}/ui/account/directory}
+      # What the flows call this deployment (titles, mail subjects).
+      AGENTRY_BRAND_NAME: ${AGENTRY_BRAND_NAME:-Agentry}
       # Per-IP budget for the enrollment/recovery flows (emails sent +
       # accounts created per hour, agentry#53); formatted into the
       # account-flows blueprint's rate-limit policy at apply time.
@@ -242,6 +248,14 @@ services:
       # in deploy/compose/.env (compose reads .env from the compose file's
       # own directory, NOT the cwd) or export it in the shell before `up`.
       AGENTRY_BASE_URL: ${AGENTRY_PUBLIC_URL:-http://localhost:8080}
+      # DEV-091: a site fronting this server, how much of the server's own
+      # /ui/ surface to serve, what it calls itself, and the directory's
+      # end-session flow for sign-out. All optional; empty = the server on
+      # its own.
+      AGENTRY_WEB_URL: ${AGENTRY_WEB_URL:-}
+      AGENTRY_UI_MODE: ${AGENTRY_UI_MODE:-full}
+      AGENTRY_BRAND_NAME: ${AGENTRY_BRAND_NAME:-}
+      AGENTRY_IDP_LOGOUT_URL: ${AGENTRY_IDP_LOGOUT_URL:-}
       # Behind the `edge` service the server sees exactly one proxy hop:
       # set AGENTRY_TRUSTED_PROXIES=1 in .env when the edge is the entry
       # point, and AGENTRY_COOKIE_SECURE=true once it serves a certificate
