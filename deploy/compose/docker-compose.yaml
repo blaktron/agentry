@@ -298,86 +298,16 @@ services:
       minio-init:
         condition: service_completed_successfully
 
-  # Optional: the Next.js web app (§10).
-  web:
-    profiles: ["server"]
-    restart: unless-stopped
-    build:
-      context: ../..
-      dockerfile: deploy/compose/Dockerfile.web
-    environment:
-      AGENTRY_API_BASE: http://server:8080
-      # The docs and developers sites are separate deployments; the nav/footer
-      # link to them by URL. In production these are docs./developers.
-      # secureagentry.net; override per-deployment via .env in this directory.
-      AGENTRY_SITE_URL: ${AGENTRY_PUBLIC_WEB_URL:-http://localhost:3000}
-      AGENTRY_DOCS_URL: ${AGENTRY_DOCS_PUBLIC_URL:-http://localhost:8000}
-      AGENTRY_DEVELOPERS_URL: ${AGENTRY_DEVELOPERS_PUBLIC_URL:-http://localhost:8001}
-      # DEV-057: /logout also ends the directory-service session when set
-      # (the IdP's end-session URL for the registry application).
-      AGENTRY_IDP_LOGOUT_URL: ${AGENTRY_IDP_LOGOUT_URL:-}
-      # The /download page reads manifest.json here; the edge serves the
-      # files at AGENTRY_DOWNLOADS_URL (default /downloads).
-      AGENTRY_DOWNLOADS_DIR: /downloads
-    ports:
-      - "${AGENTRY_BIND:-127.0.0.1}:3000:3000"
-    volumes:
-      - ${AGENTRY_DOWNLOADS_DIR:-./downloads}:/downloads:ro
-    depends_on:
-      - server
-
-  # Separate deployment: the wiki-style documentation site
-  # (docs.secureagentry.net). The site machinery lives in the agentry-docs
-  # repo; its build clones THIS repo for the docs/ content. No token is
-  # required for public repos. While the repos are private, export
-  # GITHUB_TOKEN for the build only (e.g. GITHUB_TOKEN="$(gh auth token)"
-  # docker compose ...) — it feeds the BuildKit secret for the inner clone
-  # and, via AGENTRY_DOCS_REMOTE, the context fetch; nothing is written to
-  # disk. For local hacking on the sites, point AGENTRY_DOCS_CONTEXT at a
-  # checkout (e.g. ../../../agentry-docs).
-  docs:
-    profiles: ["server"]
-    restart: unless-stopped
-    build:
-      context: ${AGENTRY_DOCS_CONTEXT:-${AGENTRY_DOCS_REMOTE:-https://github.com/blaktron/agentry-docs.git#main}}
-      dockerfile: docs-site/Dockerfile
-      args:
-        SITE_URL: ${AGENTRY_DOCS_PUBLIC_URL:-http://localhost:8000}
-        AGENTRY_REF: ${AGENTRY_CONTENT_REF:-main}
-        # Optional cache buster for the content clone (BuildKit caches the
-        # clone layer by instruction + args): export
-        # AGENTRY_CONTENT_BUST=$(date +%s) before `docker compose build`.
-        AGENTRY_CONTENT_BUST: ${AGENTRY_CONTENT_BUST:-}
-      secrets:
-        - gh_token
-    ports:
-      - "${AGENTRY_BIND:-127.0.0.1}:8000:80"
-
-  # Separate deployment: the developers / API-reference site
-  # (developers.secureagentry.net) — Redoc over this repo's OpenAPI spec,
-  # built from the agentry-docs repo the same way.
-  developers:
-    profiles: ["server"]
-    restart: unless-stopped
-    build:
-      context: ${AGENTRY_DOCS_CONTEXT:-${AGENTRY_DOCS_REMOTE:-https://github.com/blaktron/agentry-docs.git#main}}
-      dockerfile: developers-site/Dockerfile
-      args:
-        AGENTRY_REF: ${AGENTRY_CONTENT_REF:-main}
-        AGENTRY_CONTENT_BUST: ${AGENTRY_CONTENT_BUST:-}
-      secrets:
-        - gh_token
-    ports:
-      - "${AGENTRY_BIND:-127.0.0.1}:8001:80"
-
-  # The edge: TLS termination, one public origin split into web + server,
-  # and a cache for the immutable static assets. edge/nginx.conf explains
-  # why TLS is load-bearing here (browsers send no same-origin signal to a
-  # plain-http hostname). Certificates come from AGENTRY_EDGE_CERT_DIR as
-  # edge.crt + edge.key; on a Tailscale host `tailscale cert` issues a real
-  # one, otherwise a self-signed pair bootstraps the stack. Once the edge is
-  # the entry point, set AGENTRY_PUBLIC_WEB_URL (and, with a certificate
-  # clients trust, AGENTRY_PUBLIC_URL) to its https origin.
+  # The edge: TLS termination and the one public origin of the server —
+  # API, git, the server's own /ui/ pages, the downloads directory — with
+  # the directory service on auth.* (DEV-091: the headless stack; a site in
+  # front is an overlay from its own repository, which replaces this
+  # config with the full-site one). edge/nginx.conf explains why TLS is
+  # load-bearing (browsers send no same-origin signal to a plain-http
+  # hostname). Certificates come from AGENTRY_EDGE_CERT_DIR as edge.crt +
+  # edge.key; on a Tailscale host `tailscale cert` issues a real one,
+  # otherwise a self-signed pair bootstraps the stack. Once the edge is the
+  # entry point, set AGENTRY_PUBLIC_URL to its https origin.
   edge:
     profiles: ["server"]
     image: nginx:1.27-alpine
@@ -394,7 +324,6 @@ services:
       - ${AGENTRY_DOWNLOADS_DIR:-./downloads}:/srv/downloads:ro
     depends_on:
       - server
-      - web
 
   # Cloudflare Tunnel (profile `tunnel`): the outbound-only connector that
   # publishes the edge to the internet without opening a port. Remotely
@@ -420,13 +349,6 @@ services:
     security_opt: [no-new-privileges:true]
     depends_on:
       - edge
-
-secrets:
-  # Read token for the blaktron repos, consumed by the site builds' inner
-  # clone of this repo. Export it for the build only when the repos are
-  # private; empty (the default) means the clone runs anonymously.
-  gh_token:
-    environment: GITHUB_TOKEN
 
 volumes:
   pgdata:
