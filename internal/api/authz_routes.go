@@ -175,6 +175,7 @@ var routeAuthz = map[string]RouteDecl{
 	"listUserSessions":               {Action: auth.ActUserSelfRead},
 	"getUserDirectory":               {Action: auth.ActUserSelfRead},
 	"listUserDependencyAlerts":       {Action: auth.ActUserSelfRead},
+	"listUserActivity":               {Action: auth.ActUserSelfRead},
 	"getUserNotificationSettings":    {Action: auth.ActUserSelfRead},
 	"updateUserNotificationSettings": {Action: auth.ActUserSelfUpdate},
 	"deleteUserDirectoryDevice":      {Action: auth.ActUserSelfUpdate},

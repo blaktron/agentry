@@ -22,16 +22,16 @@ export async function POST(req: NextRequest) {
     ok = "every other session signed out.";
   } else {
     const id = String(form.get("sessionId") ?? "").trim();
-    if (!id) return redirectBack(req, "/settings", { error: "no session selected" });
+    if (!id) return redirectBack(req, "/settings/activity", { error: "no session selected" });
     res = await apiSend("DELETE", `/user/sessions/${encodeURIComponent(id)}`);
     ok = "session revoked.";
   }
 
   if (res.status === 404) {
-    return redirectBack(req, "/settings", {
+    return redirectBack(req, "/settings/activity", {
       error: "this registry build does not serve session management",
     });
   }
-  if (!res.ok) return redirectBack(req, "/settings", { error: await problemDetail(res) });
-  return redirectBack(req, "/settings", { ok });
+  if (!res.ok) return redirectBack(req, "/settings/activity", { error: await problemDetail(res) });
+  return redirectBack(req, "/settings/activity", { ok });
 }

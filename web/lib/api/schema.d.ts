@@ -368,6 +368,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/user/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The caller's own activity — the audit events they performed (agentry#192).
+         * @description Sign-ins, tokens and SSH keys created or revoked, profile and notification changes, publishes and reviews, newest first, with the address and user agent each was performed from. Keyset-paged like the agent activity feed.
+         */
+        get: operations["listUserActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/user/dependency-alerts": {
         parameters: {
             query?: never;
@@ -1961,6 +1981,12 @@ export interface components {
             actorHandle?: string;
             /** @description The version this entry concerns, when it names one. */
             version?: string;
+            /** @description What the entry acted on (agent, agent_version, pat, ssh_key, session, user…); on the caller's own feed. */
+            targetKind?: string;
+            /** @description The address the action was performed from; on the caller's own feed. */
+            ip?: string;
+            /** @description The client that performed it; on the caller's own feed. */
+            userAgent?: string;
             /** @description Present only for callers with read access. */
             detail?: {
                 [key: string]: unknown;
@@ -3093,6 +3119,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NotificationSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listUserActivity: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityPage"];
                 };
             };
             default: components["responses"]["Problem"];

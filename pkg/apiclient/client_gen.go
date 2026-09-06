@@ -1122,9 +1122,18 @@ type ActivityEvent struct {
 	ActorHandle *string `json:"actorHandle,omitempty"`
 
 	// Detail Present only for callers with read access.
-	Detail     *map[string]interface{} `json:"detail,omitempty"`
-	Id         openapi_types.UUID      `json:"id"`
-	OccurredAt time.Time               `json:"occurredAt"`
+	Detail *map[string]interface{} `json:"detail,omitempty"`
+	Id     openapi_types.UUID      `json:"id"`
+
+	// Ip The address the action was performed from; on the caller's own feed.
+	Ip         *string   `json:"ip,omitempty"`
+	OccurredAt time.Time `json:"occurredAt"`
+
+	// TargetKind What the entry acted on (agent, agent_version, pat, ssh_key, session, user…); on the caller's own feed.
+	TargetKind *string `json:"targetKind,omitempty"`
+
+	// UserAgent The client that performed it; on the caller's own feed.
+	UserAgent *string `json:"userAgent,omitempty"`
 
 	// Version The version this entry concerns, when it names one.
 	Version *string `json:"version,omitempty"`
@@ -2359,6 +2368,12 @@ type UpdateCurrentUserJSONBody struct {
 	DisplayName *string `json:"displayName,omitempty"`
 }
 
+// ListUserActivityParams defines parameters for ListUserActivity.
+type ListUserActivityParams struct {
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
 // DeleteCurrentUserParams defines parameters for DeleteCurrentUser.
 type DeleteCurrentUserParams struct {
 	// PublishedContent What to do with published public versions. Required when the account has any; ignored (and defaulted to yank) when it has none.
@@ -3410,6 +3425,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with PATCH /user (the `UpdateCurrentUser` operationId).
 	UpdateCurrentUser(ctx context.Context, body UpdateCurrentUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListUserActivity The caller's own activity — the audit events they performed (agentry#192).
+	//
+	// Sign-ins, tokens and SSH keys created or revoked, profile and notification changes, publishes and reviews, newest first, with the address and user agent each was performed from. Keyset-paged like the agent activity feed.
+	//
+	// Corresponds with GET /user/activity (the `ListUserActivity` operationId).
+	ListUserActivity(ctx context.Context, params *ListUserActivityParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteCurrentUser Erase the caller's account (GDPR flow, §12.7).
 	//
@@ -5718,6 +5740,23 @@ func (c *Client) UpdateCurrentUserWithBody(ctx context.Context, contentType stri
 // Corresponds with PATCH /user (the `UpdateCurrentUser` operationId).
 func (c *Client) UpdateCurrentUser(ctx context.Context, body UpdateCurrentUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateCurrentUserRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListUserActivity The caller's own activity — the audit events they performed (agentry#192).
+//
+// Sign-ins, tokens and SSH keys created or revoked, profile and notification changes, publishes and reviews, newest first, with the address and user agent each was performed from. Keyset-paged like the agent activity feed.
+//
+// Corresponds with GET /user/activity (the `ListUserActivity` operationId).
+func (c *Client) ListUserActivity(ctx context.Context, params *ListUserActivityParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListUserActivityRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -10896,6 +10935,72 @@ func NewUpdateCurrentUserRequestWithBody(server string, contentType string, body
 	return req, nil
 }
 
+// NewListUserActivityRequest constructs an http.Request for the ListUserActivity method
+func NewListUserActivityRequest(server string, params *ListUserActivityParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/activity")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewDeleteCurrentUserRequest constructs an http.Request for the DeleteCurrentUser method
 func NewDeleteCurrentUserRequest(server string, params *DeleteCurrentUserParams) (*http.Request, error) {
 	var err error
@@ -12606,6 +12711,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PATCH /user (the `UpdateCurrentUser` operationId).
 	UpdateCurrentUserWithResponse(ctx context.Context, body UpdateCurrentUserJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateCurrentUserResponse, error)
+
+	// ListUserActivityWithResponse The caller's own activity — the audit events they performed (agentry#192).
+	//
+	// Sign-ins, tokens and SSH keys created or revoked, profile and notification changes, publishes and reviews, newest first, with the address and user agent each was performed from. Keyset-paged like the agent activity feed.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /user/activity (the `ListUserActivity` operationId).
+	ListUserActivityWithResponse(ctx context.Context, params *ListUserActivityParams, reqEditors ...RequestEditorFn) (*ListUserActivityResponse, error)
 
 	// DeleteCurrentUserWithResponse Erase the caller's account (GDPR flow, §12.7).
 	//
@@ -17402,6 +17516,54 @@ func (r UpdateCurrentUserResponse) ContentType() string {
 	return ""
 }
 
+type ListUserActivityResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ActivityPage
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListUserActivityResponse) GetJSON200() *ActivityPage {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListUserActivityResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListUserActivityResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListUserActivityResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListUserActivityResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListUserActivityResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type DeleteCurrentUserResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -20035,6 +20197,21 @@ func (c *ClientWithResponses) UpdateCurrentUserWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseUpdateCurrentUserResponse(rsp)
+}
+
+// ListUserActivityWithResponse The caller's own activity — the audit events they performed (agentry#192).
+//
+// Sign-ins, tokens and SSH keys created or revoked, profile and notification changes, publishes and reviews, newest first, with the address and user agent each was performed from. Keyset-paged like the agent activity feed.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /user/activity (the `ListUserActivity` operationId).
+func (c *ClientWithResponses) ListUserActivityWithResponse(ctx context.Context, params *ListUserActivityParams, reqEditors ...RequestEditorFn) (*ListUserActivityResponse, error) {
+	rsp, err := c.ListUserActivity(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListUserActivityResponse(rsp)
 }
 
 // DeleteCurrentUserWithResponse Erase the caller's account (GDPR flow, §12.7).
@@ -23575,6 +23752,39 @@ func ParseUpdateCurrentUserResponse(rsp *http.Response) (*UpdateCurrentUserRespo
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest User
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListUserActivityResponse parses an HTTP response from a ListUserActivityWithResponse call
+func ParseListUserActivityResponse(rsp *http.Response) (*ListUserActivityResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListUserActivityResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ActivityPage
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
