@@ -261,6 +261,135 @@ func (e CreateAgentRequestVisibility) Valid() bool {
 	}
 }
 
+// Defines values for DependencyAlertEcosystem.
+const (
+	DependencyAlertEcosystemNpm  DependencyAlertEcosystem = "npm"
+	DependencyAlertEcosystemPypi DependencyAlertEcosystem = "pypi"
+)
+
+// Valid indicates whether the value is a known member of the DependencyAlertEcosystem enum.
+func (e DependencyAlertEcosystem) Valid() bool {
+	switch e {
+	case DependencyAlertEcosystemNpm:
+		return true
+	case DependencyAlertEcosystemPypi:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DependencyAlertSeverity.
+const (
+	DependencyAlertSeverityCritical DependencyAlertSeverity = "critical"
+	DependencyAlertSeverityHigh     DependencyAlertSeverity = "high"
+)
+
+// Valid indicates whether the value is a known member of the DependencyAlertSeverity enum.
+func (e DependencyAlertSeverity) Valid() bool {
+	switch e {
+	case DependencyAlertSeverityCritical:
+		return true
+	case DependencyAlertSeverityHigh:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for McpAdvisorySeverity.
+const (
+	McpAdvisorySeverityCritical McpAdvisorySeverity = "critical"
+	McpAdvisorySeverityHigh     McpAdvisorySeverity = "high"
+	McpAdvisorySeverityInfo     McpAdvisorySeverity = "info"
+	McpAdvisorySeverityLow      McpAdvisorySeverity = "low"
+	McpAdvisorySeverityMedium   McpAdvisorySeverity = "medium"
+)
+
+// Valid indicates whether the value is a known member of the McpAdvisorySeverity enum.
+func (e McpAdvisorySeverity) Valid() bool {
+	switch e {
+	case McpAdvisorySeverityCritical:
+		return true
+	case McpAdvisorySeverityHigh:
+		return true
+	case McpAdvisorySeverityInfo:
+		return true
+	case McpAdvisorySeverityLow:
+		return true
+	case McpAdvisorySeverityMedium:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for McpServerScanEcosystem.
+const (
+	McpServerScanEcosystemNpm  McpServerScanEcosystem = "npm"
+	McpServerScanEcosystemPypi McpServerScanEcosystem = "pypi"
+)
+
+// Valid indicates whether the value is a known member of the McpServerScanEcosystem enum.
+func (e McpServerScanEcosystem) Valid() bool {
+	switch e {
+	case McpServerScanEcosystemNpm:
+		return true
+	case McpServerScanEcosystemPypi:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for McpServerScanMaxSeverity.
+const (
+	McpServerScanMaxSeverityCritical McpServerScanMaxSeverity = "critical"
+	McpServerScanMaxSeverityHigh     McpServerScanMaxSeverity = "high"
+	McpServerScanMaxSeverityInfo     McpServerScanMaxSeverity = "info"
+	McpServerScanMaxSeverityLow      McpServerScanMaxSeverity = "low"
+	McpServerScanMaxSeverityMedium   McpServerScanMaxSeverity = "medium"
+)
+
+// Valid indicates whether the value is a known member of the McpServerScanMaxSeverity enum.
+func (e McpServerScanMaxSeverity) Valid() bool {
+	switch e {
+	case McpServerScanMaxSeverityCritical:
+		return true
+	case McpServerScanMaxSeverityHigh:
+		return true
+	case McpServerScanMaxSeverityInfo:
+		return true
+	case McpServerScanMaxSeverityLow:
+		return true
+	case McpServerScanMaxSeverityMedium:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for McpServerScanStatus.
+const (
+	Error      McpServerScanStatus = "error"
+	Safe       McpServerScanStatus = "safe"
+	Vulnerable McpServerScanStatus = "vulnerable"
+)
+
+// Valid indicates whether the value is a known member of the McpServerScanStatus enum.
+func (e McpServerScanStatus) Valid() bool {
+	switch e {
+	case Error:
+		return true
+	case Safe:
+		return true
+	case Vulnerable:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OrgRole.
 const (
 	Admin            OrgRole = "admin"
@@ -708,6 +837,24 @@ func (e SetFindingVerdictJSONBodyVerdict) Valid() bool {
 	}
 }
 
+// Defines values for GetMcpServerScanParamsEcosystem.
+const (
+	GetMcpServerScanParamsEcosystemNpm  GetMcpServerScanParamsEcosystem = "npm"
+	GetMcpServerScanParamsEcosystemPypi GetMcpServerScanParamsEcosystem = "pypi"
+)
+
+// Valid indicates whether the value is a known member of the GetMcpServerScanParamsEcosystem enum.
+func (e GetMcpServerScanParamsEcosystem) Valid() bool {
+	switch e {
+	case GetMcpServerScanParamsEcosystemNpm:
+		return true
+	case GetMcpServerScanParamsEcosystemPypi:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DeleteSsoConnectionParamsKind.
 const (
 	DeleteSsoConnectionParamsKindOidc DeleteSsoConnectionParamsKind = "oidc"
@@ -1021,6 +1168,9 @@ type Agent struct {
 	CreatedAt       time.Time `json:"createdAt"`
 	DefaultBranch   string    `json:"defaultBranch"`
 
+	// DependencyAlerts Open dependency alerts on this agent's published versions (agentry#177). Present on GET /agents/{ns}/{name}.
+	DependencyAlerts *[]DependencyAlert `json:"dependencyAlerts,omitempty"`
+
 	// GitHttpUrl Clone URL for the hosted repository (§6.1).
 	GitHttpUrl string `json:"gitHttpUrl"`
 
@@ -1181,6 +1331,32 @@ type CreateTokenRequest struct {
 	Scopes    []Scope `json:"scopes"`
 }
 
+// DependencyAlert A published version declares an MCP server version with a newly known high or critical vulnerability (agentry#177).
+type DependencyAlert struct {
+	AdvisoryIds []string `json:"advisoryIds"`
+
+	// Agent namespace/name
+	Agent     string                   `json:"agent"`
+	CreatedAt time.Time                `json:"createdAt"`
+	Ecosystem DependencyAlertEcosystem `json:"ecosystem"`
+
+	// FixedIn Server versions the advisories name as fixed.
+	FixedIn        []string                `json:"fixedIn"`
+	Id             openapi_types.UUID      `json:"id"`
+	Package        string                  `json:"package"`
+	PackageVersion string                  `json:"packageVersion"`
+	Severity       DependencyAlertSeverity `json:"severity"`
+
+	// Version The affected published version.
+	Version string `json:"version"`
+}
+
+// DependencyAlertEcosystem defines model for DependencyAlert.Ecosystem.
+type DependencyAlertEcosystem string
+
+// DependencyAlertSeverity defines model for DependencyAlert.Severity.
+type DependencyAlertSeverity string
+
 // DesktopExchangeRequest defines model for DesktopExchangeRequest.
 type DesktopExchangeRequest struct {
 	Code  string `json:"code"`
@@ -1236,6 +1412,41 @@ type LogoutResult struct {
 	// IdpLogoutUrl Send the browser here to end the IdP session too (SAML SLO).
 	IdpLogoutUrl string `json:"idpLogoutUrl"`
 }
+
+// McpAdvisory defines model for McpAdvisory.
+type McpAdvisory struct {
+	Aliases    *[]string           `json:"aliases,omitempty"`
+	FixedIn    *[]string           `json:"fixedIn,omitempty"`
+	Id         string              `json:"id"`
+	References *[]string           `json:"references,omitempty"`
+	Severity   McpAdvisorySeverity `json:"severity"`
+	Summary    string              `json:"summary"`
+}
+
+// McpAdvisorySeverity defines model for McpAdvisory.Severity.
+type McpAdvisorySeverity string
+
+// McpServerScan defines model for McpServerScan.
+type McpServerScan struct {
+	Advisories    []McpAdvisory             `json:"advisories"`
+	Ecosystem     McpServerScanEcosystem    `json:"ecosystem"`
+	FirstSeenAt   time.Time                 `json:"firstSeenAt"`
+	LastCheckedAt time.Time                 `json:"lastCheckedAt"`
+	LastError     *string                   `json:"lastError,omitempty"`
+	MaxSeverity   *McpServerScanMaxSeverity `json:"maxSeverity,omitempty"`
+	Package       string                    `json:"package"`
+	Status        McpServerScanStatus       `json:"status"`
+	Version       string                    `json:"version"`
+}
+
+// McpServerScanEcosystem defines model for McpServerScan.Ecosystem.
+type McpServerScanEcosystem string
+
+// McpServerScanMaxSeverity defines model for McpServerScan.MaxSeverity.
+type McpServerScanMaxSeverity string
+
+// McpServerScanStatus defines model for McpServerScan.Status.
+type McpServerScanStatus string
 
 // Membership defines model for Membership.
 type Membership struct {
@@ -1896,6 +2107,16 @@ type SetFindingVerdictJSONBody struct {
 
 // SetFindingVerdictJSONBodyVerdict defines parameters for SetFindingVerdict.
 type SetFindingVerdictJSONBodyVerdict string
+
+// GetMcpServerScanParams defines parameters for GetMcpServerScan.
+type GetMcpServerScanParams struct {
+	Ecosystem GetMcpServerScanParamsEcosystem `form:"ecosystem" json:"ecosystem"`
+	Package   string                          `form:"package" json:"package"`
+	Version   string                          `form:"version" json:"version"`
+}
+
+// GetMcpServerScanParamsEcosystem defines parameters for GetMcpServerScan.
+type GetMcpServerScanParamsEcosystem string
 
 // UpdateOrgJSONBody defines parameters for UpdateOrg.
 type UpdateOrgJSONBody struct {
@@ -2665,6 +2886,13 @@ type ClientInterface interface {
 	// Corresponds with POST /findings/{id}/verdict (the `SetFindingVerdict` operationId).
 	SetFindingVerdict(ctx context.Context, id openapi_types.UUID, body SetFindingVerdictJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetMcpServerScan The registry's last vulnerability check of one MCP server package version (agentry#177).
+	//
+	// What S7 recorded for the exact package version: `safe` means no known advisories at `lastCheckedAt`, `vulnerable` lists them, `error` means the last lookup failed and the advisories are the last known. 404 when no manifest has ever declared this version. The runner asks here before installing a declared server.
+	//
+	// Corresponds with GET /mcp-servers/scan (the `GetMcpServerScan` operationId).
+	GetMcpServerScan(ctx context.Context, params *GetMcpServerScanParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetMeta Server version and self-host feature flags (§9.2).
 	//
 	// Corresponds with GET /meta (the `GetMeta` operationId).
@@ -3153,6 +3381,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
 	DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListUserDependencyAlerts Open dependency alerts on published versions the caller submitted (agentry#177).
+	//
+	// A dependency alert says a published version declares an MCP server version that the daily sweep found to carry a newly known high or critical vulnerability. It closes on its own when the version is yanked, quarantined or blocked, or when the advisory is withdrawn; publishing a fixed version does not close the old version's alert. The web app shows these as the banner after sign-in and on the dashboard.
+	//
+	// Corresponds with GET /user/dependency-alerts (the `ListUserDependencyAlerts` operationId).
+	ListUserDependencyAlerts(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetUserDirectory Where the caller manages password, MFA and profile when a directory service owns the account (DEV-057).
 	//
@@ -4147,6 +4382,23 @@ func (c *Client) SetFindingVerdictWithBody(ctx context.Context, id openapi_types
 // Corresponds with POST /findings/{id}/verdict (the `SetFindingVerdict` operationId).
 func (c *Client) SetFindingVerdict(ctx context.Context, id openapi_types.UUID, body SetFindingVerdictJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSetFindingVerdictRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetMcpServerScan The registry's last vulnerability check of one MCP server package version (agentry#177).
+//
+// What S7 recorded for the exact package version: `safe` means no known advisories at `lastCheckedAt`, `vulnerable` lists them, `error` means the last lookup failed and the advisories are the last known. 404 when no manifest has ever declared this version. The runner asks here before installing a declared server.
+//
+// Corresponds with GET /mcp-servers/scan (the `GetMcpServerScan` operationId).
+func (c *Client) GetMcpServerScan(ctx context.Context, params *GetMcpServerScanParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetMcpServerScanRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5426,6 +5678,23 @@ func (c *Client) UpdateCurrentUser(ctx context.Context, body UpdateCurrentUserJS
 // Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
 func (c *Client) DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteCurrentUserRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListUserDependencyAlerts Open dependency alerts on published versions the caller submitted (agentry#177).
+//
+// A dependency alert says a published version declares an MCP server version that the daily sweep found to carry a newly known high or critical vulnerability. It closes on its own when the version is yanked, quarantined or blocked, or when the advisory is withdrawn; publishing a fixed version does not close the old version's alert. The web app shows these as the banner after sign-in and on the dashboard.
+//
+// Corresponds with GET /user/dependency-alerts (the `ListUserDependencyAlerts` operationId).
+func (c *Client) ListUserDependencyAlerts(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListUserDependencyAlertsRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -7606,6 +7875,72 @@ func NewSetFindingVerdictRequestWithBody(server string, id openapi_types.UUID, c
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetMcpServerScanRequest constructs an http.Request for the GetMcpServerScan method
+func NewGetMcpServerScanRequest(server string, params *GetMcpServerScanParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/mcp-servers/scan")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "ecosystem", params.Ecosystem, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "package", params.Package, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "version", params.Version, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -10519,6 +10854,33 @@ func NewDeleteCurrentUserRequest(server string, params *DeleteCurrentUserParams)
 	return req, nil
 }
 
+// NewListUserDependencyAlertsRequest constructs an http.Request for the ListUserDependencyAlerts method
+func NewListUserDependencyAlertsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/dependency-alerts")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetUserDirectoryRequest constructs an http.Request for the GetUserDirectory method
 func NewGetUserDirectoryRequest(server string) (*http.Request, error) {
 	var err error
@@ -11491,6 +11853,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /findings/{id}/verdict (the `SetFindingVerdict` operationId).
 	SetFindingVerdictWithResponse(ctx context.Context, id openapi_types.UUID, body SetFindingVerdictJSONRequestBody, reqEditors ...RequestEditorFn) (*SetFindingVerdictResponse, error)
 
+	// GetMcpServerScanWithResponse The registry's last vulnerability check of one MCP server package version (agentry#177).
+	//
+	// What S7 recorded for the exact package version: `safe` means no known advisories at `lastCheckedAt`, `vulnerable` lists them, `error` means the last lookup failed and the advisories are the last known. 404 when no manifest has ever declared this version. The runner asks here before installing a declared server.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /mcp-servers/scan (the `GetMcpServerScan` operationId).
+	GetMcpServerScanWithResponse(ctx context.Context, params *GetMcpServerScanParams, reqEditors ...RequestEditorFn) (*GetMcpServerScanResponse, error)
+
 	// GetMetaWithResponse Server version and self-host feature flags (§9.2).
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -12069,6 +12440,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
 	DeleteCurrentUserWithResponse(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*DeleteCurrentUserResponse, error)
+
+	// ListUserDependencyAlertsWithResponse Open dependency alerts on published versions the caller submitted (agentry#177).
+	//
+	// A dependency alert says a published version declares an MCP server version that the daily sweep found to carry a newly known high or critical vulnerability. It closes on its own when the version is yanked, quarantined or blocked, or when the advisory is withdrawn; publishing a fixed version does not close the old version's alert. The web app shows these as the banner after sign-in and on the dashboard.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /user/dependency-alerts (the `ListUserDependencyAlerts` operationId).
+	ListUserDependencyAlertsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListUserDependencyAlertsResponse, error)
 
 	// GetUserDirectoryWithResponse Where the caller manages password, MFA and profile when a directory service owns the account (DEV-057).
 	//
@@ -13931,6 +14311,54 @@ func (r SetFindingVerdictResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r SetFindingVerdictResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetMcpServerScanResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *McpServerScan
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetMcpServerScanResponse) GetJSON200() *McpServerScan {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetMcpServerScanResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetMcpServerScanResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetMcpServerScanResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetMcpServerScanResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetMcpServerScanResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -16817,6 +17245,54 @@ func (r DeleteCurrentUserResponse) ContentType() string {
 	return ""
 }
 
+type ListUserDependencyAlertsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]DependencyAlert
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListUserDependencyAlertsResponse) GetJSON200() *[]DependencyAlert {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListUserDependencyAlertsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListUserDependencyAlertsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListUserDependencyAlertsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListUserDependencyAlertsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListUserDependencyAlertsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetUserDirectoryResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -18214,6 +18690,21 @@ func (c *ClientWithResponses) SetFindingVerdictWithResponse(ctx context.Context,
 	return ParseSetFindingVerdictResponse(rsp)
 }
 
+// GetMcpServerScanWithResponse The registry's last vulnerability check of one MCP server package version (agentry#177).
+//
+// What S7 recorded for the exact package version: `safe` means no known advisories at `lastCheckedAt`, `vulnerable` lists them, `error` means the last lookup failed and the advisories are the last known. 404 when no manifest has ever declared this version. The runner asks here before installing a declared server.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /mcp-servers/scan (the `GetMcpServerScan` operationId).
+func (c *ClientWithResponses) GetMcpServerScanWithResponse(ctx context.Context, params *GetMcpServerScanParams, reqEditors ...RequestEditorFn) (*GetMcpServerScanResponse, error) {
+	rsp, err := c.GetMcpServerScan(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetMcpServerScanResponse(rsp)
+}
+
 // GetMetaWithResponse Server version and self-host feature flags (§9.2).
 //
 // Returns a wrapper object for the known response body format(s).
@@ -19265,6 +19756,21 @@ func (c *ClientWithResponses) DeleteCurrentUserWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseDeleteCurrentUserResponse(rsp)
+}
+
+// ListUserDependencyAlertsWithResponse Open dependency alerts on published versions the caller submitted (agentry#177).
+//
+// A dependency alert says a published version declares an MCP server version that the daily sweep found to carry a newly known high or critical vulnerability. It closes on its own when the version is yanked, quarantined or blocked, or when the advisory is withdrawn; publishing a fixed version does not close the old version's alert. The web app shows these as the banner after sign-in and on the dashboard.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /user/dependency-alerts (the `ListUserDependencyAlerts` operationId).
+func (c *ClientWithResponses) ListUserDependencyAlertsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListUserDependencyAlertsResponse, error) {
+	rsp, err := c.ListUserDependencyAlerts(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListUserDependencyAlertsResponse(rsp)
 }
 
 // GetUserDirectoryWithResponse Where the caller manages password, MFA and profile when a directory service owns the account (DEV-057).
@@ -20718,6 +21224,39 @@ func ParseSetFindingVerdictResponse(rsp *http.Response) (*SetFindingVerdictRespo
 	switch {
 	case rsp.StatusCode == 204:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetMcpServerScanResponse parses an HTTP response from a GetMcpServerScanWithResponse call
+func ParseGetMcpServerScanResponse(rsp *http.Response) (*GetMcpServerScanResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetMcpServerScanResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest McpServerScan
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
@@ -22734,6 +23273,39 @@ func ParseDeleteCurrentUserResponse(rsp *http.Response) (*DeleteCurrentUserRespo
 	switch {
 	case rsp.StatusCode == 204:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListUserDependencyAlertsResponse parses an HTTP response from a ListUserDependencyAlertsWithResponse call
+func ParseListUserDependencyAlertsResponse(rsp *http.Response) (*ListUserDependencyAlertsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListUserDependencyAlertsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []DependencyAlert
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
