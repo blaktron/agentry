@@ -1,0 +1,281 @@
+// Package ui is the server's own browser surface (DEV-091, plan
+// core-web-split §3.2): the pages a registry needs to be usable without a
+// site in front of it — the device-authorize page the CLI and the desktop
+// app open, sign-in, and the account basics — served by agentryd at /ui/.
+//
+// It is deliberately plain: server-rendered html/template, no JavaScript,
+// one stylesheet, brand from config. Every page acts through the API's own
+// handlers in-process with the browser's cookies (client.go), so a page can
+// do nothing the API would refuse and the authorization matrix stays the
+// only one.
+package ui
+
+import (
+	"log/slog"
+	"net/http"
+	"net/url"
+	"strings"
+)
+
+const (
+	sessionCookie = "agentry_session"
+	csrfCookie    = "agentry_csrf"
+)
+
+// Brand is what the pages call this deployment and where they send people.
+type Brand struct {
+	Name          string
+	LogoURL       string
+	CSSURL        string
+	SupportEmail  string
+	SecurityEmail string
+	PrivacyURL    string
+	TermsURL      string
+}
+
+// Provider is a sign-in provider the login page offers (config social.*).
+type Provider struct {
+	ID    string
+	Label string
+}
+
+// Options wires the surface to the server.
+type Options struct {
+	// API is the server's full handler chain (middleware included); every
+	// page call goes through it in-process.
+	API http.Handler
+	// Mode is config ui.mode: full or authorize (off is never mounted).
+	Mode string
+	// SiteURL is config web.url: when set, sign-in and the account pages
+	// are the site's, and only the authorize page is served here.
+	SiteURL string
+	// BaseURL is the server's public origin (for absolute links); may be "".
+	BaseURL string
+	Brand   Brand
+	// Providers are the configured social/OIDC providers, in display order.
+	Providers []Provider
+	// ExternalOnly says a directory service owns credentials: no password
+	// form, sign-in goes through a provider, password/MFA live in the
+	// directory (DEV-057).
+	ExternalOnly bool
+	// IdPLogoutURL, when set, is where sign-out sends the browser after the
+	// session is revoked (the directory's end-session flow).
+	IdPLogoutURL string
+	CookieSecure bool
+	Log          *slog.Logger
+}
+
+type handler struct {
+	opt  Options
+	tmpl templates
+	log  *slog.Logger
+	csp  string
+	mux  *http.ServeMux
+}
+
+// New returns the handler to mount at /ui/.
+func New(opt Options) http.Handler {
+	if opt.Log == nil {
+		opt.Log = slog.Default()
+	}
+	if opt.Mode == "" {
+		opt.Mode = "full"
+	}
+	if opt.Brand.Name == "" {
+		opt.Brand.Name = "Agentry"
+	}
+	opt.SiteURL = strings.TrimRight(opt.SiteURL, "/")
+	opt.BaseURL = strings.TrimRight(opt.BaseURL, "/")
+	tmpl, err := loadTemplates()
+	if err != nil {
+		panic(err) // embedded templates: a build-time mistake, never a request-time one
+	}
+	h := &handler{opt: opt, tmpl: tmpl, log: opt.Log, mux: http.NewServeMux()}
+	h.csp = h.buildCSP()
+	m := h.mux
+	m.HandleFunc("GET /ui/static/ui.css", h.serveCSS)
+	m.HandleFunc("GET /ui/authorize", h.authorizePage)
+	m.HandleFunc("POST /ui/authorize", h.authorizeApprove)
+	m.HandleFunc("GET /ui/{$}", h.landing)
+	m.HandleFunc("GET /ui", h.landing)
+	if opt.Mode == "full" {
+		m.HandleFunc("GET /ui/login", h.loginPage)
+		m.HandleFunc("POST /ui/login", h.loginSubmit)
+		m.HandleFunc("POST /ui/logout", h.logout)
+		m.HandleFunc("GET /ui/verify-email", h.verifyEmail)
+		m.HandleFunc("GET /ui/account", h.accountPage)
+		m.HandleFunc("GET /ui/account/directory", h.accountPage)
+		m.HandleFunc("POST /ui/account", h.accountSave)
+		m.HandleFunc("POST /ui/account/directory/devices", h.directoryDeviceRemove)
+		m.HandleFunc("GET /ui/account/tokens", h.tokensPage)
+		m.HandleFunc("POST /ui/account/tokens", h.tokensSubmit)
+		m.HandleFunc("GET /ui/account/ssh-keys", h.sshKeysPage)
+		m.HandleFunc("POST /ui/account/ssh-keys", h.sshKeysSubmit)
+		m.HandleFunc("GET /ui/account/sessions", h.sessionsPage)
+		m.HandleFunc("POST /ui/account/sessions", h.sessionsSubmit)
+	}
+	return h
+}
+
+func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "DENY")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	h.mux.ServeHTTP(w, r)
+}
+
+func (h *handler) serveCSS(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/css; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	_, _ = w.Write(stylesheet)
+}
+
+// buildCSP: the pages carry no scripts; styles are the embedded sheet (plus
+// the brand's, if any); images are self, data: and the brand logo's origin;
+// forms post here and, for the device authorize flow, redirect to the
+// loopback listener (agentry#172: form-action governs the redirect after a
+// POST in Chrome), and sign-out may redirect to the directory or the site.
+func (h *handler) buildCSP() string {
+	style := "'self' 'unsafe-inline'"
+	if o := originOf(h.opt.Brand.CSSURL); o != "" {
+		style += " " + o
+	}
+	img := "'self' data:"
+	if o := originOf(h.opt.Brand.LogoURL); o != "" {
+		img += " " + o
+	}
+	form := "'self' http://127.0.0.1:*"
+	for _, u := range []string{h.opt.IdPLogoutURL, h.opt.SiteURL} {
+		if o := originOf(u); o != "" && !strings.Contains(form, o) {
+			form += " " + o
+		}
+	}
+	return "default-src 'none'; style-src " + style + "; img-src " + img + "; form-action " + form + "; base-uri 'none'; frame-ancestors 'none'"
+}
+
+func originOf(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
+}
+
+// call binds the in-process client to this browser request.
+func (h *handler) call(r *http.Request) apiCall {
+	return apiCall{api: h.opt.API, r: r, csrf: cookieValue(r, csrfCookie)}
+}
+
+// currentUser resolves the browser's session through GET /user; nil when
+// signed out (or the session is stale).
+func (h *handler) currentUser(r *http.Request) *userInfo {
+	if cookieValue(r, sessionCookie) == "" {
+		return nil
+	}
+	res, err := h.call(r).do(http.MethodGet, "/user", nil)
+	if err != nil || !res.OK() {
+		return nil
+	}
+	var u userInfo
+	if err := res.decode(&u); err != nil || u.ID == "" {
+		return nil
+	}
+	return &u
+}
+
+// loginURL is where a signed-out browser is sent: the site's sign-in when a
+// site fronts this server, else this surface's own. next is a path on this
+// origin to return to.
+func (h *handler) loginURL(next string) string {
+	base := "/ui/login"
+	if h.opt.SiteURL != "" {
+		base = h.opt.SiteURL + "/login"
+	}
+	if next != "" {
+		return base + "?next=" + url.QueryEscape(next)
+	}
+	return base
+}
+
+// homeURL is where sign-out ends and where the landing page sends a
+// signed-out visitor with nothing to do.
+func (h *handler) homeURL() string {
+	if h.opt.SiteURL != "" {
+		return h.opt.SiteURL + "/"
+	}
+	return "/ui/"
+}
+
+// requireUser redirects a signed-out browser to sign-in (remembering where
+// it was) and returns nil.
+func (h *handler) requireUser(w http.ResponseWriter, r *http.Request) *userInfo {
+	u := h.currentUser(r)
+	if u == nil {
+		http.Redirect(w, r, h.loginURL(r.URL.RequestURI()), http.StatusSeeOther)
+	}
+	return u
+}
+
+// sameOrigin is the web tier's rule for form posts (web/lib/forms.ts):
+// Sec-Fetch-Site when the browser sends it, else Origin against Host.
+func sameOrigin(r *http.Request) bool {
+	if site := r.Header.Get("Sec-Fetch-Site"); site != "" {
+		return site == "same-origin" || site == "none"
+	}
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	host := r.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = r.Host
+	}
+	u, err := url.Parse(origin)
+	return err == nil && u.Host == host
+}
+
+// acceptForm parses a form post and applies the two checks every mutation
+// gets: same origin, and the hidden _csrf field matching the CSRF cookie
+// (a double submit on top of the API's own header check).
+func (h *handler) acceptForm(w http.ResponseWriter, r *http.Request) bool {
+	if !sameOrigin(r) {
+		http.Error(w, "cross-origin form post rejected", http.StatusForbidden)
+		return false
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return false
+	}
+	if c := cookieValue(r, csrfCookie); c == "" || r.PostFormValue("_csrf") != c {
+		http.Error(w, "missing or invalid CSRF token", http.StatusForbidden)
+		return false
+	}
+	return true
+}
+
+// back redirects to path with a flash (?ok= / ?error=), rendered as text by
+// the page, never as HTML.
+func back(w http.ResponseWriter, r *http.Request, path string, ok, errMsg string) {
+	u := url.URL{Path: path}
+	q := url.Values{}
+	if ok != "" {
+		q.Set("ok", ok)
+	}
+	if errMsg != "" {
+		q.Set("error", errMsg)
+	}
+	u.RawQuery = q.Encode()
+	http.Redirect(w, r, u.String(), http.StatusSeeOther)
+}
+
+// safeNext admits only a path-absolute reference on this origin, the same
+// rule as the API's social-login callback.
+func safeNext(v, fallback string) string {
+	if v == "" || !strings.HasPrefix(v, "/") || strings.HasPrefix(v, "//") || strings.HasPrefix(v, "/\\") || strings.ContainsAny(v, "\r\n") {
+		return fallback
+	}
+	return v
+}
