@@ -543,3 +543,165 @@ entries:
     state: absent
     identifiers:
       name: agentry-enrollment-password-policy
+
+  # ==========================================================================
+  # Seamless integration (agentry#164): every flow ends back in Agentry and
+  # the directory never shows its own panels
+  # ==========================================================================
+  # Two redirect stages carry the return paths. They read the web origin
+  # from the container environment (AGENTRY_PUBLIC_WEB_URL, compose) so the
+  # same file serves every deployment. `?next=` cannot do this job:
+  # authentik only honours a same-host `next`, and the app lives elsewhere.
+  - model: authentik_stages_redirect.redirectstage
+    id: stage-redirect-site
+    identifiers:
+      name: agentry-redirect-site
+    attrs:
+      mode: static
+      target_static: !Env AGENTRY_PUBLIC_WEB_URL
+      keep_context: false
+  - model: authentik_stages_redirect.redirectstage
+    id: stage-redirect-settings
+    identifiers:
+      name: agentry-redirect-settings
+    attrs:
+      mode: static
+      target_static: !Format ["%s/settings?ok=%s", !Env AGENTRY_PUBLIC_WEB_URL, "Saved%20in%20the%20directory."]
+      keep_context: false
+
+  # Sign-out: the provider's invalidation flow ends the directory session
+  # and sends the browser straight back to the site — no "you've logged
+  # out, log back in" page. The bootstrap script points the provider (and
+  # the brand below) at it.
+  - model: authentik_stages_user_logout.userlogoutstage
+    id: stage-logout
+    identifiers:
+      name: agentry-logout
+  - model: authentik_flows.flow
+    id: flow-invalidation
+    identifiers:
+      slug: agentry-invalidation
+    attrs:
+      name: Agentry sign-out
+      title: Signing you out
+      designation: invalidation
+      authentication: none
+      denied_action: message_continue
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow-invalidation
+      stage: !KeyOf stage-logout
+      order: 10
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow-invalidation
+      stage: !KeyOf stage-redirect-site
+      order: 20
+
+  # Password change: the same two password fields and the same strength
+  # rule as enrollment and recovery, then straight back to Settings.
+  - model: authentik_stages_prompt.promptstage
+    id: stage-password-change-prompt
+    identifiers:
+      name: agentry-password-change-prompt
+    attrs:
+      fields:
+        - !KeyOf field-password
+        - !KeyOf field-password-repeat
+      validation_policies:
+        - !KeyOf password-policy
+  - model: authentik_stages_user_write.userwritestage
+    id: stage-password-change-write
+    identifiers:
+      name: agentry-password-change-write
+    attrs:
+      user_creation_mode: never_create
+  - model: authentik_flows.flow
+    id: flow-password-change
+    identifiers:
+      slug: agentry-password-change
+    attrs:
+      name: Agentry password change
+      title: Change your Agentry password
+      designation: stage_configuration
+      authentication: require_authenticated
+      denied_action: message_continue
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow-password-change
+      stage: !KeyOf stage-password-change-prompt
+      order: 10
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow-password-change
+      stage: !KeyOf stage-password-change-write
+      order: 20
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow-password-change
+      stage: !KeyOf stage-redirect-settings
+      order: 30
+
+  # Authenticator app: the enrollment TOTP stage, bound again as a
+  # configuration flow that returns to Settings.
+  - model: authentik_flows.flow
+    id: flow-totp-setup
+    identifiers:
+      slug: agentry-totp-setup
+    attrs:
+      name: Agentry authenticator app
+      title: Add an authenticator app
+      designation: stage_configuration
+      authentication: require_authenticated
+      denied_action: message_continue
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow-totp-setup
+      stage: !KeyOf stage-totp-setup
+      order: 10
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow-totp-setup
+      stage: !KeyOf stage-redirect-settings
+      order: 20
+
+  # Security key / passkey, likewise.
+  - model: authentik_stages_authenticator_webauthn.authenticatorwebauthnstage
+    id: stage-webauthn-setup
+    identifiers:
+      name: agentry-authenticator-webauthn-setup
+    attrs:
+      friendly_name: Agentry security key
+  - model: authentik_flows.flow
+    id: flow-webauthn-setup
+    identifiers:
+      slug: agentry-webauthn-setup
+    attrs:
+      name: Agentry security key
+      title: Add a security key or passkey
+      designation: stage_configuration
+      authentication: require_authenticated
+      denied_action: message_continue
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow-webauthn-setup
+      stage: !KeyOf stage-webauthn-setup
+      order: 10
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf flow-webauthn-setup
+      stage: !KeyOf stage-redirect-settings
+      order: 20
+
+  # The brand: no user-settings flow (the directory's own settings panel is
+  # not offered anywhere), sign-out and recovery go through the flows
+  # above. default_application (the last piece: where a flow that ends
+  # without a return lands) is set by scripts/dev/authentik-bootstrap.sh,
+  # which owns the application object.
+  - model: authentik_brands.brand
+    identifiers:
+      domain: authentik-default
+    attrs:
+      flow_user_settings: null
+      flow_invalidation: !KeyOf flow-invalidation
+      flow_recovery: !KeyOf flow-recovery

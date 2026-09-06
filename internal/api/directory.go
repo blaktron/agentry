@@ -92,10 +92,14 @@ func (a *authentikEraser) EraseByEmail(ctx context.Context, email string) (bool,
 // authenticators a user has enrolled, for the settings page (agentry#113).
 type directoryDevices interface {
 	DevicesByEmail(ctx context.Context, email string) ([]DirectoryDevice, error)
+	// DeleteDevice removes one of the account's authenticators; false when
+	// the account has no device of that kind and id (never somebody else's).
+	DeleteDevice(ctx context.Context, email, kind, id string) (bool, error)
 }
 
 // DirectoryDevice is one enrolled authenticator as the directory reports it.
 type DirectoryDevice struct {
+	ID        string
 	Kind      string
 	Name      string
 	CreatedAt *time.Time
@@ -144,17 +148,18 @@ func (a *authentikEraser) DevicesByEmail(ctx context.Context, email string) ([]D
 		return nil, fmt.Errorf("directory devices: %d", res.StatusCode)
 	}
 	var raw []struct {
-		Name        string `json:"name"`
-		Type        string `json:"type"`
-		VerboseName string `json:"verbose_name"`
-		Created     string `json:"created"`
+		PK          json.RawMessage `json:"pk"`
+		Name        string          `json:"name"`
+		Type        string          `json:"type"`
+		VerboseName string          `json:"verbose_name"`
+		Created     string          `json:"created"`
 	}
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, fmt.Errorf("directory devices: %w", err)
 	}
 	out := make([]DirectoryDevice, 0, len(raw))
 	for _, d := range raw {
-		dev := DirectoryDevice{Kind: deviceKind(d.Type, d.VerboseName), Name: d.Name}
+		dev := DirectoryDevice{ID: strings.Trim(string(d.PK), `"`), Kind: deviceKind(d.Type, d.VerboseName), Name: d.Name}
 		if dev.Name == "" {
 			dev.Name = d.VerboseName
 		}
@@ -164,6 +169,48 @@ func (a *authentikEraser) DevicesByEmail(ctx context.Context, email string) ([]D
 		out = append(out, dev)
 	}
 	return out, nil
+}
+
+// DeleteDevice implements directoryDevices: the device must be one the
+// account's own list reports (kind and id), so a caller can never reach
+// another account's authenticator through this path.
+func (a *authentikEraser) DeleteDevice(ctx context.Context, email, kind, id string) (bool, error) {
+	if _, ok := deviceAdminPath[kind]; !ok || id == "" {
+		return false, nil
+	}
+	devs, err := a.DevicesByEmail(ctx, email)
+	if err != nil {
+		return false, err
+	}
+	found := false
+	for _, d := range devs {
+		if d.Kind == kind && d.ID == id {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return false, nil
+	}
+	res, err := a.do(ctx, http.MethodDelete, fmt.Sprintf("/api/v3/authenticators/admin/%s/%s/", deviceAdminPath[kind], url.PathEscape(id)))
+	if err != nil {
+		return false, fmt.Errorf("directory device delete: %w", err)
+	}
+	_, _ = io.Copy(io.Discard, res.Body)
+	_ = res.Body.Close()
+	switch res.StatusCode {
+	case http.StatusNoContent, http.StatusOK:
+		return true, nil
+	case http.StatusNotFound:
+		return false, nil
+	}
+	return false, fmt.Errorf("directory device delete: %d", res.StatusCode)
+}
+
+// deviceAdminPath maps the device kinds the API reports to authentik's
+// admin authenticator endpoints.
+var deviceAdminPath = map[string]string{
+	"totp": "totp", "webauthn": "webauthn", "static": "static", "duo": "duo", "sms": "sms", "email": "email",
 }
 
 // deviceKind folds authentik's device class names onto the settings page's

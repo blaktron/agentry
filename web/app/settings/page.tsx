@@ -49,7 +49,7 @@ interface UserDirectory {
   passwordChangeUrl?: string;
   totpSetupUrl?: string;
   webauthnSetupUrl?: string;
-  devices?: { kind: string; name: string; createdAt?: string }[];
+  devices?: { id?: string; kind: string; name: string; createdAt?: string }[];
   devicesError?: string;
 }
 
@@ -159,8 +159,8 @@ export default async function SettingsPage({
         {externalOnly && directory?.managed ? (
           <div className="flex flex-col gap-3 text-sm">
             <p style={{ color: "var(--color-muted)" }}>
-              Your password and authenticators live in the directory service you sign in through.
-              These links open its own pages; you may be asked to sign in again there.
+              Your password and authenticators are kept by the sign-in service. Each action below
+              opens one short step there and brings you straight back here.
             </p>
             <div className="flex flex-wrap gap-2">
               {directory.passwordChangeUrl && (
@@ -176,11 +176,6 @@ export default async function SettingsPage({
               {directory.webauthnSetupUrl && (
                 <a href={directory.webauthnSetupUrl} className="rounded-md border px-3 py-1.5" style={{ borderColor: "var(--color-border)" }}>
                   Add security key / passkey
-                </a>
-              )}
-              {directory.accountUrl && (
-                <a href={directory.accountUrl} className="rounded-md border px-3 py-1.5" style={{ borderColor: "var(--color-border)" }}>
-                  All directory settings
                 </a>
               )}
             </div>
@@ -209,6 +204,16 @@ export default async function SettingsPage({
                       <span>{d.name}</span>
                       {d.createdAt && (
                         <span className="text-xs" style={{ color: "var(--color-muted)" }}>added {fmtUTCDate(d.createdAt)}</span>
+                      )}
+                      {d.id && (
+                        <form method="post" action="/settings/directory" className="inline">
+                          <input type="hidden" name="action" value="remove-device" />
+                          <input type="hidden" name="kind" value={d.kind} />
+                          <input type="hidden" name="deviceId" value={d.id} />
+                          <button type="submit" className="rounded-md border px-2 py-0.5 text-xs" style={{ borderColor: "var(--color-border)" }}>
+                            Remove
+                          </button>
+                        </form>
                       )}
                     </li>
                   ))}

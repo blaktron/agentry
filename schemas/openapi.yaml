@@ -661,6 +661,36 @@ paths:
                 $ref: "#/components/schemas/UserDirectory"
         default:
           $ref: "#/components/responses/Problem"
+  /user/directory/devices/{kind}/{deviceId}:
+    delete:
+      operationId: deleteUserDirectoryDevice
+      tags: [users]
+      summary: Remove one of the caller's own authenticators from the directory service (agentry#164).
+      description: >
+        With auth.externalOnly and directory admin access, removes the
+        caller's authenticator device of this kind and id through the
+        directory's admin API, so the settings page manages MFA without
+        ever showing the directory's own panel. The device must be on the
+        caller's own account: an id that is somebody else's answers 404
+        exactly like a missing one. 404 when the server has no directory
+        admin access; 502 when the directory did not answer.
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [totp, webauthn, static, duo, sms, email]
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Removed.
+        default:
+          $ref: "#/components/responses/Problem"
   /user/sessions:
     get:
       operationId: listUserSessions
@@ -3003,8 +3033,11 @@ components:
           description: True when a directory service owns credentials for this deployment.
           type: boolean
         accountUrl:
-          description: The directory's own account page (name, email, sessions, consents).
+          description: >
+            Deprecated and no longer set (agentry#164): the directory's own
+            account page is not offered; every setting lives here.
           type: string
+          deprecated: true
         passwordChangeUrl:
           type: string
         totpSetupUrl:
@@ -3020,6 +3053,9 @@ components:
             type: object
             required: [kind, name]
             properties:
+              id:
+                description: The directory's id for the device; pass it to DELETE /user/directory/devices/{kind}/{deviceId}.
+                type: string
               kind:
                 description: totp | webauthn | static | duo | sms | email | other
                 type: string
