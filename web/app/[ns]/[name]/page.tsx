@@ -14,7 +14,7 @@ import {
 } from "@/lib/api";
 import { fmtBytes, fmtCount, fmtUTC, fmtUTCDate } from "@/lib/format";
 import { embeddedAllowedTools, gatewayToolRows, parseContract } from "@/lib/mcp";
-import { authedGet, currentUser } from "@/lib/session";
+import { AccessError, authedGet, authedGetText, currentUser } from "@/lib/session";
 import {
   Badge,
   CapabilityBadges,
@@ -108,12 +108,32 @@ export default async function AgentPage({
   const a = encodeURIComponent(name);
   const base = `/agents/${n}/${a}`;
 
-  const agent = await apiGet<Agent>(base, { revalidate: 30 });
+  // A public agent is read anonymously (cached). A private one answers 401
+  // to that read, so the signed-in session is tried before giving up — and
+  // when that is what worked, the rest of the page reads through the
+  // session too (agentry#186: an owner could not open their own
+  // private BriefAgent's page).
+  let viaSession = false;
+  let agent: Agent | null = null;
+  try {
+    agent = await apiGet<Agent>(base, { revalidate: 30 });
+  } catch (e) {
+    if (!/→ 40[13]$/.test(String(e))) throw e;
+    agent = await authedGet<Agent>(base).catch((err) => {
+      if (err instanceof AccessError) return null;
+      throw err;
+    });
+    viaSession = agent !== null;
+  }
   if (!agent) notFound();
+  const read = <T,>(path: string, opts?: { revalidate?: number }): Promise<T | null> =>
+    viaSession ? authedGet<T>(path) : apiGet<T>(path, opts);
+  const readText = (path: string, opts?: { revalidate?: number }): Promise<string | null> =>
+    viaSession ? authedGetText(path) : apiGetText(path, opts);
 
   const [versions, readmeHtmlPublished, advisories, stats, org] = await Promise.all([
-    apiGet<AgentVersion[]>(`${base}/versions`, { revalidate: 30 }).catch(() => null),
-    apiGetText(`${base}/readme`, { revalidate: 60 }).catch(() => null),
+    read<AgentVersion[]>(`${base}/versions`, { revalidate: 30 }).catch(() => null),
+    readText(`${base}/readme`, { revalidate: 60 }).catch(() => null),
     apiGet<Advisory[]>(`/advisories?affecting=${n}/${a}`, { revalidate: 60 }).catch(() => null),
     // Stats are public, but `starred` is per-caller, so this one goes through
     // the authed client (which forwards the session cookie when there is one).
@@ -133,13 +153,13 @@ export default async function AgentPage({
   const readmeHtml = latestPublished
     ? readmeHtmlPublished
     : lv
-      ? await apiGetText(`${base}/readme?version=${lv}`, { revalidate: 60 }).catch(() => null)
+      ? await readText(`${base}/readme?version=${lv}`, { revalidate: 60 }).catch(() => null)
       : null;
 
   const [report, manifest] = await Promise.all([
-    lv ? apiGet<ScanReport>(`${base}/versions/${lv}/report`, { revalidate: 60 }).catch(() => null) : null,
+    lv ? read<ScanReport>(`${base}/versions/${lv}/report`, { revalidate: 60 }).catch(() => null) : null,
     lv
-      ? apiGet<AgentManifest>(`${base}/versions/${lv}/manifest`, { revalidate: 300 }).catch(() => null)
+      ? read<AgentManifest>(`${base}/versions/${lv}/manifest`, { revalidate: 300 }).catch(() => null)
       : null,
   ]);
 
@@ -181,7 +201,7 @@ export default async function AgentPage({
   // (yanked and earlier versions keep their own pages). `path` selects a
   // directory (default root) or one file to display.
   const filesResp = lv
-    ? await apiGet<{ files: VersionFile[] }>(`${base}/versions/${lv}/files`, { revalidate: 60 }).catch(() => null)
+    ? await read<{ files: VersionFile[] }>(`${base}/versions/${lv}/files`, { revalidate: 60 }).catch(() => null)
     : null;
   const inventory = filesResp?.files ?? null;
   const want = (sp.path ?? "").replace(/^\.\//, "").replace(/^\/+/, "");
@@ -189,7 +209,7 @@ export default async function AgentPage({
   const wantIsDir = want === "" || (inventory !== null && inventory.some((f) => f.path.startsWith(want + "/")));
   const fileContent =
     lv && wantIsFile
-      ? await apiGet<VersionFileContent>(
+      ? await read<VersionFileContent>(
           `${base}/versions/${lv}/file?path=${encodeURIComponent(want)}`,
           { revalidate: 60 },
         ).catch(() => null)
