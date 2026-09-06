@@ -333,3 +333,48 @@ in a browser ends on the dashboard with no directory screen in between;
 `https://auth.<site>/` answers 302 to the site; the provider's end-session
 URL lands in the `agentry-invalidation` flow whose first challenge (the
 executor API) is a redirect to the site.
+
+---
+
+## 12. Dependency alert wave (a popular MCP server gets a CVE)
+
+**Trigger:** `McpDependencyAlertsOpened` jumps in one sweep, authors write in
+about the "Package issue" banner, or a `mcp sweep: done … alertsOpened=N`
+log line with a large N.
+
+This is the system working: the daily sweep (`scan.mcp_sweep`) re-checked
+every scanned MCP server version, one of them gained a high or critical
+advisory, and every published BriefAgent version declaring it got a
+dependency alert — banner and dashboard for the author, one email, an
+`agent.dependency_alert` audit event, and the org webhook. Nothing was
+quarantined: the versions stay installable, and the alert closes on its
+own when the author yanks the version or the advisory is withdrawn.
+
+1. **Confirm the advisory is real.** `GET /api/v1/mcp-servers/scan?ecosystem=&package=&version=`
+   shows what the registry recorded (ids, severity, fixed versions); the
+   ids resolve at osv.dev. A withdrawn or re-scored advisory clears itself
+   at the next sweep; do not edit `mcp_server_scans` by hand.
+2. **Scope it.** How many published versions, how many authors:
+   ```sql
+   select a.ecosystem, a.package, a.package_version, a.severity, count(*) versions,
+          count(distinct v.submitted_by) authors
+   from mcp_dependency_alerts a join agent_versions v on v.id = a.version_id
+   where a.resolved_at is null group by 1,2,3,4 order by versions desc;
+   ```
+3. **Decide whether it is also a trust-and-safety matter.** A server with a
+   remote-code-execution advisory that a BriefAgent runs against its declared
+   secrets may deserve quarantine of the affected versions (runbook 4) and an
+   advisory; an alert alone is right for the ordinary case. The runner
+   already refuses to install a server the registry marks high/critical, so
+   new runs are protected either way; installed copies are not.
+4. **Watch the sweep itself.** `McpSweepRuns{outcome="error"}` or a
+   `mcp sweep: vulnerability lookup failed` line means the database was
+   unreachable: rows keep their last answer and are retried tomorrow; check
+   egress from the worker to `AGENTRY_SCAN_OSV_URL`.
+5. **Tell people once.** Authors were emailed per alert already; a status
+   note is for consumers, who see the alert on the agent page but get no
+   mail.
+
+**Verify:** the alert count stops growing after one sweep, affected authors'
+new versions pin a fixed server (their S7 result is clean), and old versions
+are yanked (their alerts show `resolved_reason = version-yanked`).
