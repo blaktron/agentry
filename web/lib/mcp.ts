@@ -31,6 +31,34 @@ export interface McpContract {
   exec: ExecContract;
   secrets: string[];
   dataAccess: string[];
+  // mcpServers are the declared servers (capabilities.mcpServers): exact
+  // npm / PyPI package versions the runner installs per release and S7
+  // checks for known vulnerabilities (agentry#177).
+  mcpServers: DeclaredMcpServer[];
+}
+
+export interface DeclaredMcpServer {
+  ecosystem: "npm" | "pypi";
+  package: string;
+  version: string;
+  tools: string[];
+}
+
+function parseMcpServers(v: unknown): DeclaredMcpServer[] {
+  if (!Array.isArray(v)) return [];
+  const out: DeclaredMcpServer[] = [];
+  for (const e of v) {
+    if (typeof e !== "object" || e === null) continue;
+    const o = e as { npm?: unknown; pypi?: unknown; version?: unknown; tools?: unknown };
+    const version = typeof o.version === "string" ? o.version : "";
+    if (!version) continue;
+    if (typeof o.npm === "string" && o.npm) {
+      out.push({ ecosystem: "npm", package: o.npm, version, tools: strList(o.tools) });
+    } else if (typeof o.pypi === "string" && o.pypi) {
+      out.push({ ecosystem: "pypi", package: o.pypi, version, tools: strList(o.tools) });
+    }
+  }
+  return out;
 }
 
 // One row of the "Tools the runner grants" table. `declaration` is the
@@ -84,6 +112,7 @@ export function parseContract(capabilities?: Record<string, unknown>): McpContra
     exec?: unknown;
     secrets?: unknown;
     dataAccess?: unknown;
+    mcpServers?: unknown;
   };
   return {
     egress: parseEgress(caps.network?.egress),
@@ -92,6 +121,7 @@ export function parseContract(capabilities?: Record<string, unknown>): McpContra
     exec: parseExec(caps.exec),
     secrets: strList(caps.secrets),
     dataAccess: strList(caps.dataAccess),
+    mcpServers: parseMcpServers(caps.mcpServers),
   };
 }
 

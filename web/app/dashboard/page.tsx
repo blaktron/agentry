@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Badge, Card, ModeBadges } from "@/components/ui";
-import type { ActivityPage, Agent, ReviewItem } from "@/lib/api";
+import type { ActivityPage, Agent, DependencyAlert, ReviewItem } from "@/lib/api";
 import { fmtUTC } from "@/lib/format";
 import { adminOrgs, authedGet, currentUser, reviewerOrgs } from "@/lib/session";
 
@@ -50,6 +50,12 @@ export default async function DashboardPage({
   const q = await searchParams;
 
   const namespaces = [user.handle, ...(user.orgs ?? []).map((o) => o.handle)];
+
+  // Dependency alerts (agentry#177): published versions of mine that
+
+  // declare an MCP server with a newly known high/critical vulnerability.
+
+  const dependencyAlerts = (await authedGet<DependencyAlert[]>("/user/dependency-alerts").catch(() => null)) ?? [];
   const agentLists: NamespaceAgents[] = await Promise.all(
     namespaces.map((ns) =>
       authedGet<Agent[]>(`/agents?namespace=${encodeURIComponent(ns)}`)
@@ -124,6 +130,39 @@ export default async function DashboardPage({
         <p role="alert" className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: "var(--color-sev-high)", color: "var(--color-sev-high)" }}>
           {q.error}
         </p>
+      )}
+
+      {dependencyAlerts.length > 0 && (
+        <Card>
+          <h2 id="dependency-alerts" className="mb-1 font-semibold" style={{ color: "var(--color-sev-high)" }}>
+            Dependency alerts
+          </h2>
+          <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+            These published versions declare an MCP server version with a known high or critical
+            vulnerability. They stay installable until yanked: publish a version that pins a fixed
+            server, then yank the affected ones. The alert clears on its own once the version is
+            yanked or the advisory is withdrawn.
+          </p>
+          <ul className="mt-3 space-y-2 text-sm">
+            {dependencyAlerts.map((al) => (
+              <li key={al.id} className="flex flex-wrap items-baseline gap-x-2">
+                <Badge tone="danger">{al.severity}</Badge>
+                <Link href={`/${al.agent}`} className="font-medium underline">
+                  {al.agent}@{al.version}
+                </Link>
+                <span className="font-mono text-xs">
+                  {al.ecosystem}:{al.package}@{al.packageVersion}
+                </span>
+                <span style={{ color: "var(--color-muted)" }}>
+                  {al.advisoryIds.join(", ")}
+                  {al.fixedIn.length > 0 ? ` · fixed in ${al.fixedIn.join(", ")}` : ""}
+                  {" · "}
+                  {fmtUTC(al.createdAt)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
 
       {(user.platformStaff || revOrgs.length > 0) && (

@@ -187,6 +187,23 @@ exchanges the resulting one-time code for its PAT at `POST
 /auth/desktop/exchange` from its own process — the code is single-use and
 valid for 60 seconds, and the token never rides a URL (DEV-058, agentry#19).
 
+## Dependency alerts and scanned MCP servers
+
+`GET /user/dependency-alerts` lists the open dependency alerts on published
+versions the caller submitted — a version that declares an MCP server
+version which the daily sweep found to carry a newly known high or critical
+vulnerability. The web app's sign-in banner and dashboard read it. An alert
+closes on its own when the version is yanked, quarantined or blocked, or
+the advisory is withdrawn; publishing a fixed version does not close the old
+version's alert. The same alerts appear publicly as `dependencyAlerts` on
+`GET /agents/{ns}/{name}`.
+
+`GET /mcp-servers/scan?ecosystem=npm|pypi&package=…&version=…` is the
+registry's last vulnerability check of one exact package version (`safe`
+means "no known advisories at `lastCheckedAt`", never "safe"); `404` means
+no manifest has ever declared that version. The runner asks here before it
+installs a declared server.
+
 ## Enterprise SSO
 
 Beyond the browser destinations (`/sso/{org}`, the SAML `acs` and `metadata`

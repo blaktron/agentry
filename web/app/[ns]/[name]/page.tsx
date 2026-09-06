@@ -5,6 +5,7 @@ import {
   apiGet,
   apiGetText,
   type Advisory,
+  type McpServerScan,
   type Agent,
   type AgentStats,
   type AgentVersion,
@@ -13,6 +14,7 @@ import {
 } from "@/lib/api";
 import { fmtBytes, fmtCount, fmtUTCDate } from "@/lib/format";
 import { embeddedAllowedTools, gatewayToolRows, parseContract } from "@/lib/mcp";
+import { fmtUTC } from "@/lib/format";
 import { authedGet, currentUser } from "@/lib/session";
 import {
   Badge,
@@ -162,6 +164,17 @@ export default async function AgentPage({
   // per-run gateway, and as host built-ins in an embedded install. Derived
   // entirely from the manifest; absent capabilities read as pure text.
   const contract = parseContract(latest?.capabilities);
+  // The registry's last vulnerability check of each declared server
+  // (agentry#177): one public read per server, cached like the manifest.
+  const serverScans = await Promise.all(
+    contract.mcpServers.map((sv) =>
+      apiGet<McpServerScan>(
+        `/mcp-servers/scan?ecosystem=${sv.ecosystem}&package=${encodeURIComponent(sv.package)}&version=${encodeURIComponent(sv.version)}`,
+        { revalidate: 300 },
+      ).catch(() => null),
+    ),
+  );
+  const dependencyAlerts = agent.dependencyAlerts ?? [];
   const toolRows = gatewayToolRows(contract);
   const hostTools = embeddedAllowedTools(contract);
 
@@ -351,6 +364,30 @@ export default async function AgentPage({
                   its tool surface is exactly the table above.
                 </span>
               </li>
+              {contract.mcpServers.map((sv, i) => {
+                const scan = serverScans[i];
+                const ref = `${sv.ecosystem}:${sv.package}@${sv.version}`;
+                return (
+                  <li key={ref}>
+                    <span className="font-mono">{ref}</span>
+                    {sv.tools.length > 0 && (
+                      <span style={{ color: "var(--color-muted)" }}> — tools {sv.tools.join(", ")}</span>
+                    )}
+                    <span
+                      className="block text-xs"
+                      style={{ color: scan?.status === "vulnerable" ? "var(--color-sev-high)" : "var(--color-muted)" }}
+                    >
+                      {scan
+                        ? scan.status === "vulnerable"
+                          ? `${scan.advisories.length} known ${scan.advisories.length === 1 ? "advisory" : "advisories"} (${scan.maxSeverity ?? "unknown"}), checked ${fmtUTC(scan.lastCheckedAt)}: ${scan.advisories.map((a) => a.id).join(", ")}`
+                          : scan.status === "error"
+                            ? `last vulnerability check failed (${fmtUTC(scan.lastCheckedAt)}); the previous answer stands`
+                            : `no known advisories as of ${fmtUTC(scan.lastCheckedAt)}`
+                        : "vulnerability check pending"}
+                    </span>
+                  </li>
+                );
+              })}
               {contract.dataAccess.length > 0 && (
                 <li style={{ color: "var(--color-muted)" }}>
                   Operator-cataloged MCP servers may be attached for the declared dataAccess{" "}
@@ -692,6 +729,33 @@ export default async function AgentPage({
                   Signing key and full report →
                 </Link>
               </p>
+            </Card>
+          )}
+
+          {dependencyAlerts.length > 0 && (
+            <Card>
+              <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--color-sev-high)" }}>
+                Dependency alerts
+              </h2>
+              <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>
+                A published version declares an MCP server version with a known vulnerability. It stays
+                installable until the author yanks it; a fixed version is the remedy.
+              </p>
+              <ul className="mt-3 space-y-2 text-sm">
+                {dependencyAlerts.map((al) => (
+                  <li key={al.id}>
+                    <Badge tone="danger">{al.severity}</Badge>{" "}
+                    <span className="font-medium">v{al.version}</span>{" "}
+                    <span className="font-mono text-xs">
+                      {al.ecosystem}:{al.package}@{al.packageVersion}
+                    </span>
+                    <span className="block text-xs" style={{ color: "var(--color-muted)" }}>
+                      {al.advisoryIds.join(", ")}
+                      {al.fixedIn.length > 0 ? ` · fixed in ${al.fixedIn.join(", ")}` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </Card>
           )}
 

@@ -155,3 +155,20 @@ describe("embeddedAllowedTools", () => {
     expect(embeddedAllowedTools(parseContract({ network: { egress: "*" } }))).toEqual(["WebFetch"]);
   });
 });
+
+describe("parseContract mcpServers", () => {
+  it("lists declared servers with ecosystem, exact version and tool filter", () => {
+    const c = parseContract({
+      mcpServers: [
+        { npm: "@modelcontextprotocol/server-github", version: "2026.1.2", tools: ["list_issues"] },
+        { pypi: "mcp-server-fetch", version: "0.6.2" },
+        { npm: "no-version" },
+      ],
+    });
+    expect(c.mcpServers).toEqual([
+      { ecosystem: "npm", package: "@modelcontextprotocol/server-github", version: "2026.1.2", tools: ["list_issues"] },
+      { ecosystem: "pypi", package: "mcp-server-fetch", version: "0.6.2", tools: [] },
+    ]);
+    expect(parseContract({}).mcpServers).toEqual([]);
+  });
+});

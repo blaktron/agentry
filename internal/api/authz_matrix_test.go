@@ -191,8 +191,11 @@ func requestFactories(env *testEnv) map[string]opRequest {
 				return "/api/v1/user/tokens/" + uuid.NewString()
 			},
 		},
-		"listUserSessions": {method: "GET", path: sPath("/api/v1/user/sessions")},
-		"getUserDirectory": {method: "GET", path: sPath("/api/v1/user/directory")},
+		"listUserSessions":         {method: "GET", path: sPath("/api/v1/user/sessions")},
+		"getUserDirectory":         {method: "GET", path: sPath("/api/v1/user/directory")},
+		"listUserDependencyAlerts": {method: "GET", path: sPath("/api/v1/user/dependency-alerts")},
+		// Public read; the registry has never seen this version, so 404.
+		"getMcpServerScan": {method: "GET", path: sPath("/api/v1/mcp-servers/scan?ecosystem=npm&package=nobody&version=0.0.0")},
 		"deleteUserDirectoryDevice": {
 			// No directory is configured in the matrix env, so an authorized
 			// caller gets 404 (not denied) and nothing is removed anywhere.
