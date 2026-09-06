@@ -93,6 +93,13 @@ type AgentVersion struct {
 	SubmitterIpHash *string    `json:"submitter_ip_hash"`
 }
 
+type AgentVersionMcpServer struct {
+	VersionID uuid.UUID `json:"version_id"`
+	Ecosystem string    `json:"ecosystem"`
+	Package   string    `json:"package"`
+	Version   string    `json:"version"`
+}
+
 type Attestation struct {
 	ID            uuid.UUID `json:"id"`
 	VersionID     uuid.UUID `json:"version_id"`
@@ -240,6 +247,18 @@ type Job struct {
 	LockedAt    *time.Time `json:"locked_at"`
 	CreatedAt   time.Time  `json:"created_at"`
 	FinishedAt  *time.Time `json:"finished_at"`
+}
+
+type McpServerScan struct {
+	Ecosystem     string    `json:"ecosystem"`
+	Package       string    `json:"package"`
+	Version       string    `json:"version"`
+	Status        string    `json:"status"`
+	MaxSeverity   *string   `json:"max_severity"`
+	Advisories    []byte    `json:"advisories"`
+	FirstSeenAt   time.Time `json:"first_seen_at"`
+	LastCheckedAt time.Time `json:"last_checked_at"`
+	LastError     *string   `json:"last_error"`
 }
 
 type Membership struct {

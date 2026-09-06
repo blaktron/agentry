@@ -275,6 +275,14 @@ default; keeping them is an explicit option, and a kept configuration is
 reachable by nothing except a reinstall of the same digest. Full runtime
 mechanics: the [Runner reference](runner.md).
 
+**Declared servers are scanned too.** At submission, stage S7 checks each
+declared package version against the OSV vulnerability database and reports
+every advisory as a finding at the advisory's own severity, CVE ids and
+fixed versions included — a high finding routes the version to review, a
+critical one rejects it, exactly like a finding in your own files. Pin a
+version with a fix rather than asking for an exception; the [trust
+model](trust.md) page describes what the check does and does not prove.
+
 ### `dependencies`
 
 `dependencies.agents: [{ref: ns/name, version: "^1.2"}]` is informational:
