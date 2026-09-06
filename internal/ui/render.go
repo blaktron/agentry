@@ -131,7 +131,10 @@ func (h *handler) render(w http.ResponseWriter, r *http.Request, status int, nam
 		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
+	// no-transform: a CDN in front (Cloudflare on the hosted site) must not
+	// rewrite the page — its email obfuscation replaces addresses with a
+	// script this CSP blocks, leaving "[email protected]" on the account page.
+	w.Header().Set("Cache-Control", "no-store, no-transform")
 	w.Header().Set("Content-Security-Policy", h.csp)
 	w.WriteHeader(status)
 	if err := t.ExecuteTemplate(w, "layout", p); err != nil {

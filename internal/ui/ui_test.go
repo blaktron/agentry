@@ -115,6 +115,9 @@ func TestAuthorizeNeedsASession(t *testing.T) {
 	if csp := w.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "form-action 'self' http://127.0.0.1:*") || !strings.Contains(csp, "default-src 'none'") {
 		t.Fatalf("csp: %q", csp)
 	}
+	if cc := w.Header().Get("Cache-Control"); cc != "no-store, no-transform" {
+		t.Fatalf("cache-control: %q", cc)
+	}
 	// Malformed parameters: a page that says so, not a form.
 	w = get(newUI(t, Options{}), "/ui/authorize?port=80&state=x", sessCookie, csrfCookieV)
 	if w.Code != http.StatusBadRequest || strings.Contains(w.Body.String(), `name="state"`) {
