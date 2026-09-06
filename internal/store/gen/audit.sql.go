@@ -306,6 +306,78 @@ func (q *Queries) ListPlatformAuditEvents(ctx context.Context, arg ListPlatformA
 	return items, nil
 }
 
+const listUserActivity = `-- name: ListUserActivity :many
+SELECT a.id, a.occurred_at, a.action, a.detail, a.target_kind, a.target_id, a.actor_kind,
+       host(a.ip)::text AS ip, a.user_agent, v.version AS version
+FROM audit_events a
+LEFT JOIN agent_versions v ON a.target_kind = 'agent_version' AND v.id = a.target_id
+WHERE a.actor_id = $2
+  AND ($3::timestamptz IS NULL
+       OR a.occurred_at < $3
+       OR (a.occurred_at = $3 AND a.id < $4))
+ORDER BY a.occurred_at DESC, a.id DESC
+LIMIT $1
+`
+
+type ListUserActivityParams struct {
+	Limit      int32      `json:"limit"`
+	ActorID    *uuid.UUID `json:"actor_id"`
+	BeforeTime *time.Time `json:"before_time"`
+	BeforeID   *uuid.UUID `json:"before_id"`
+}
+
+type ListUserActivityRow struct {
+	ID         uuid.UUID  `json:"id"`
+	OccurredAt time.Time  `json:"occurred_at"`
+	Action     string     `json:"action"`
+	Detail     []byte     `json:"detail"`
+	TargetKind *string    `json:"target_kind"`
+	TargetID   *uuid.UUID `json:"target_id"`
+	ActorKind  string     `json:"actor_kind"`
+	Ip         string     `json:"ip"`
+	UserAgent  *string    `json:"user_agent"`
+	Version    *string    `json:"version"`
+}
+
+// GET /user/activity (agentry#192): the audit events the caller performed —
+// sign-ins, tokens and keys, profile changes, publishes, reviews — newest
+// first, keyset-paged like the agent feed.
+func (q *Queries) ListUserActivity(ctx context.Context, arg ListUserActivityParams) ([]ListUserActivityRow, error) {
+	rows, err := q.db.Query(ctx, listUserActivity,
+		arg.Limit,
+		arg.ActorID,
+		arg.BeforeTime,
+		arg.BeforeID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUserActivityRow
+	for rows.Next() {
+		var i ListUserActivityRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OccurredAt,
+			&i.Action,
+			&i.Detail,
+			&i.TargetKind,
+			&i.TargetID,
+			&i.ActorKind,
+			&i.Ip,
+			&i.UserAgent,
+			&i.Version,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const pruneAuditPartitions = `-- name: PruneAuditPartitions :one
 SELECT audit_prune_partitions($1::date)::int AS dropped
 `

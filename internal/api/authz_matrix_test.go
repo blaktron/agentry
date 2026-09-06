@@ -194,6 +194,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 		"listUserSessions":            {method: "GET", path: sPath("/api/v1/user/sessions")},
 		"getUserDirectory":            {method: "GET", path: sPath("/api/v1/user/directory")},
 		"listUserDependencyAlerts":    {method: "GET", path: sPath("/api/v1/user/dependency-alerts")},
+		"listUserActivity":            {method: "GET", path: sPath("/api/v1/user/activity")},
 		"getUserNotificationSettings": {method: "GET", path: sPath("/api/v1/user/notifications")},
 		"updateUserNotificationSettings": {
 			method: "PUT", path: sPath("/api/v1/user/notifications"),

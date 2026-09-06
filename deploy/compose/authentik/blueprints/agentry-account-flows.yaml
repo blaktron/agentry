@@ -566,7 +566,7 @@ entries:
       name: agentry-redirect-settings
     attrs:
       mode: static
-      target_static: !Format ["%s/settings?ok=%s", !Env AGENTRY_PUBLIC_WEB_URL, "Saved%20in%20the%20directory."]
+      target_static: !Format ["%s/settings/authentication?ok=%s", !Env AGENTRY_PUBLIC_WEB_URL, "Saved%20in%20the%20directory."]
       keep_context: false
 
   # Sign-out: the provider's invalidation flow ends the directory session

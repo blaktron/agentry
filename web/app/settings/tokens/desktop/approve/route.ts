@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   // The scope set is fixed server-side (the desktop set; no review:act, no
   // org scopes) — see internal/api/handlers_desktop_grant.go.
   const res = await apiSend("POST", "/user/tokens/desktop-grant", { state });
-  if (!res.ok) return redirectBack(req, "/settings", { error: await problemDetail(res) });
+  if (!res.ok) return redirectBack(req, "/settings/authentication", { error: await problemDetail(res) });
   const grant = (await res.json()) as { code: string };
 
   const cb = new URL(`http://127.0.0.1:${port}/callback`);
