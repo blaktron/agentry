@@ -21,10 +21,13 @@ exits, and only one of them needs an account:
   license, visibility, summary, tags.
 - **The capability contract** — network egress (none / specific hosts /
   unrestricted), filesystem read and write, exec commands, secret *names*
-  (never values), data-access categories, and declared **MCP servers**
-  (one per line: `npm:pkg@1.2.3 tools=a,b secrets=X egress=host` — exact
-  versions, pinned to this release and installed per-signature by the
-  runner).
+  (never values), data-access categories, and declared **MCP servers**:
+  three structured rows (ecosystem, package, exact version, optional tool
+  allowlist, secret names, egress hosts) plus a line-syntax textarea for
+  more (`npm:pkg@1.2.3 tools=a,b secrets=X egress=host`) — exact versions,
+  pinned to this release and installed per-signature by the runner, and
+  checked by the pipeline against the vulnerability database when you
+  submit.
 - **Up-front questions** — the optional `intake` block: three structured
   rows (id, prompt, type, choices, required) plus a line-syntax textarea
   for more, and the interactive session's opening message.
