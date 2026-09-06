@@ -71,6 +71,19 @@ export async function authedGet<T>(path: string): Promise<T | null> {
   return (await res.json()) as T;
 }
 
+// authedGetText is authedGet for text endpoints (the rendered README).
+export async function authedGetText(path: string): Promise<string | null> {
+  const jar = await cookies();
+  const sess = jar.get(SESSION_COOKIE)?.value;
+  const headers: Record<string, string> = {};
+  if (sess) headers.Cookie = `${SESSION_COOKIE}=${sess}`;
+  const res = await fetch(`${API_BASE}/api/v1${path}`, { headers, cache: "no-store" });
+  if (res.status === 404) return null;
+  if (res.status === 401 || res.status === 403) throw new AccessError(res.status, path);
+  if (!res.ok) throw new Error(`API ${path} → ${res.status}`);
+  return await res.text();
+}
+
 // apiSend performs a cookie-authenticated mutation from a route handler,
 // echoing the CSRF token the API issued at login (§9.1). Returns the raw
 // Response; callers map status onto a redirect.
