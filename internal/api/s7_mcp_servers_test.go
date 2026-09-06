@@ -2,9 +2,11 @@ package api_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/config"
@@ -63,7 +65,7 @@ func TestS7DeclaredMCPServerVulnerability(t *testing.T) {
 	if status, body := env.uploadVersionCLI(author, "uses-minimist", pat, files("1.0.0", "minimist", "1.2.5")); status != http.StatusAccepted {
 		t.Fatalf("submit: %d %s", status, body)
 	}
-	env.waitStatus(author, "uses-minimist", "1.0.0", "needs_review")
+	waitStatusLong(env, author, "uses-minimist", "1.0.0", "needs_review")
 
 	var rep struct {
 		Findings []struct {
@@ -113,7 +115,7 @@ func TestS7DeclaredMCPServerVulnerability(t *testing.T) {
 	if status, body := env.uploadVersionCLI(author, "uses-minimist", pat, files("1.0.1", "minimist", "1.2.5")); status != http.StatusAccepted {
 		t.Fatalf("submit 1.0.1: %d %s", status, body)
 	}
-	env.waitStatus(author, "uses-minimist", "1.0.1", "needs_review")
+	waitStatusLong(env, author, "uses-minimist", "1.0.1", "needs_review")
 	if osv.calls != 1 {
 		t.Fatalf("osv calls after cached submission = %d, want 1", osv.calls)
 	}
@@ -122,8 +124,32 @@ func TestS7DeclaredMCPServerVulnerability(t *testing.T) {
 	if status, body := env.uploadVersionCLI(author, "uses-minimist", pat, files("1.1.0", "left-pad", "1.3.0")); status != http.StatusAccepted {
 		t.Fatalf("submit 1.1.0: %d %s", status, body)
 	}
-	env.waitStatus(author, "uses-minimist", "1.1.0", "rejected")
+	waitStatusLong(env, author, "uses-minimist", "1.1.0", "rejected")
 	if osv.calls != 2 {
 		t.Fatalf("osv calls after a new server = %d, want 2", osv.calls)
 	}
+}
+
+// waitStatusLong is waitStatus with a budget for a loaded CI runner: the S7
+// path adds a registry round trip per declared server, and the shared
+// helper's ~1 s is what a quiet machine needs, not a busy one.
+func waitStatusLong(env *testEnv, ns, name, version, want string) {
+	env.t.Helper()
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		res := env.do(anonymous, http.MethodGet, "/api/v1/agents/"+ns+"/"+name+"/versions/"+version, nil)
+		var v struct {
+			Status string `json:"status"`
+		}
+		_ = json.NewDecoder(res.Body).Decode(&v)
+		_ = res.Body.Close()
+		if v.Status == want {
+			return
+		}
+		if v.Status == "rejected" || v.Status == "published" || v.Status == "needs_review" {
+			env.t.Fatalf("version %s/%s@%s reached %s, want %s", ns, name, version, v.Status, want)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	env.t.Fatalf("version %s/%s@%s did not reach %s in time", ns, name, version, want)
 }

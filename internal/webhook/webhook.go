@@ -35,10 +35,13 @@ const (
 	EventAgentQuarantined   = "agent.quarantined"
 	EventAgentReinstated    = "agent.reinstated"
 	EventAdvisoryPublished  = "advisory.published"
-	EventScanCompleted      = "scan.completed"
-	EventMemberAdded        = "member.added"
-	EventMemberRemoved      = "member.removed"
-	EventPolicyUpdated      = "policy.updated"
+	// EventAgentDependencyAlert: a published version declares an MCP server
+	// version with a newly known high/critical vulnerability (agentry#177).
+	EventAgentDependencyAlert = "agent.dependency_alert"
+	EventScanCompleted        = "scan.completed"
+	EventMemberAdded          = "member.added"
+	EventMemberRemoved        = "member.removed"
+	EventPolicyUpdated        = "policy.updated"
 )
 
 // AllEvents lists the subscribable event types (validation, docs).
@@ -46,7 +49,7 @@ func AllEvents() []string {
 	return []string{
 		EventAgentCreated, EventVersionSubmitted, EventVersionPublished,
 		EventVersionRejected, EventVersionNeedsReview, EventVersionYanked,
-		EventAgentQuarantined, EventAgentReinstated, EventAdvisoryPublished,
+		EventAgentQuarantined, EventAgentReinstated, EventAdvisoryPublished, EventAgentDependencyAlert,
 		EventScanCompleted, EventMemberAdded, EventMemberRemoved, EventPolicyUpdated,
 	}
 }

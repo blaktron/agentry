@@ -46,6 +46,10 @@ type Pipeline struct {
 	gitHistory GitHistory
 	// mx records the §16.2 publish funnel. nil is a working no-op.
 	mx *metrics.Metrics
+	// osv and mcpCache are S7's vulnerability database and scanned-server
+	// registry, kept here for the daily sweep (agentry#177).
+	osv      OSVClient
+	mcpCache MCPScanCache
 }
 
 // SetMetrics wires the §16.2 instrument set onto the pipeline and the
@@ -60,6 +64,7 @@ func (p *Pipeline) SetMetrics(m *metrics.Metrics) {
 // SetMCPScanning wires S7's vulnerability database and scanned-server
 // registry onto the orchestrator (agentry#177).
 func (p *Pipeline) SetMCPScanning(client OSVClient, cache MCPScanCache) {
+	p.osv, p.mcpCache = client, cache
 	if p.orch != nil {
 		p.orch.SetMCPScanning(client, cache)
 	}
