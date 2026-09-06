@@ -187,13 +187,17 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 			panic(terr)
 		}
 		orch.SetExternalTools(tools)
-		orch.SetMCPScanning(osvClient(cfg.Scan, log), scan.NewStoreMCPScanCache(st))
 		srv.pipeline = scan.NewPipeline(scan.PipelineDeps{
 			Store: st, Registry: srv.reg, Blobs: srv.blobs, Orchestrator: orch,
 			Signer: signer, Audit: aud, Notifier: srv.notifier, Log: log,
 			RegistryURL: cfg.BaseURL,
 			RulesetID:   rulesetReg.ID, RulesetVer: rulesetReg.Semver,
 		})
+		// S7's vulnerability database and the scanned-server registry go on
+		// the pipeline, which hands them to the orchestrator (S7) and keeps
+		// them for the daily sweep (agentry#177); setting them on the
+		// orchestrator alone left the sweep with no database.
+		srv.pipeline.SetMCPScanning(osvClient(cfg.Scan, log), scan.NewStoreMCPScanCache(st))
 		srv.reg.SetPipeline(srv.pipeline)
 		// §8.6 knobs that reject at submission time, and the §12.1/§19
 		// 2FA-before-public-publish gate. Both sit on the registry so the
@@ -297,6 +301,10 @@ func (s *Server) SetMCPScanning(client scan.OSVClient) {
 		s.pipeline.SetMCPScanning(client, scan.NewStoreMCPScanCache(s.st))
 	}
 }
+
+// MCPSweepReady reports whether the daily MCP sweep would consult a
+// vulnerability database (the wiring check for agentry#177's sweep).
+func (s *Server) MCPSweepReady() bool { return s.pipeline != nil && s.pipeline.MCPScanningEnabled() }
 
 // SetMetrics wires the §16.2 instrument set. nil leaves every record a no-op.
 func (s *Server) SetMetrics(m *metrics.Metrics) {
