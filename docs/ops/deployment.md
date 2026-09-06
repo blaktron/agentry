@@ -9,12 +9,16 @@ modules) and `deploy/helm/agentry/` (self-host HA). As built:
 §2.4, §13, §16) and departures are logged in the deviations register.
 
 !!! note "Compose is ahead of the IaC"
-    The dev compose stack carries three pieces the Terraform and Helm
-    shapes do not yet model: the **directory service** (authentik —
-    sign-in, self-enrollment, recovery; DEV-057/062/063), the
-    **Cloudflare Tunnel** connector (DEV-068), and the **hosted downloads**
-    directory (DEV-066). Porting them is recorded work, not an accident of
-    omission; until then this page describes the AWS reference as built.
+    The dev compose stack carries pieces the Terraform and Helm shapes do
+    not fully model. The Helm chart and the Terraform environments carry
+    the knobs to **consume** a directory service (external-only auth, the
+    `authentik` provider, the staff group, the logout URL — see
+    [self-hosting](../self-hosting.md#the-directory-service-dev-057)), but
+    neither deploys authentik itself (DEV-057/062/063); the **Cloudflare
+    Tunnel** connector (DEV-068) and the **hosted downloads** directory
+    (DEV-066) exist only in compose. Porting them is recorded work, not an
+    accident of omission; until then this page describes the AWS reference
+    as built.
 
 ## The three deployment shapes (§2.4)
 
@@ -214,7 +218,7 @@ series.
 | `GitOpDurationSeconds` | histogram | op | git dashboard |
 | `GitOpConcurrency` | gauge | op | git dashboard, git autoscaling signal |
 | `GitCloneFirstByteSeconds` | histogram | none | §16.1 SLI: p95 < 2 s |
-| `FailOpenEvents` | counter | path (`audit_stream_drop`, `osv_not_checked`, `osv_error`) | **TICKET**: any fail-open event in an hour (agentry#33) |
+| `FailOpenEvents` | counter | path (`audit_stream_drop`, `history_not_scanned`, `osv_not_checked`, `osv_error`) | **TICKET**: any fail-open event in an hour (agentry#33) |
 | `WebhookDeliveries` | counter | outcome (`ok`/`error`/`throttled`) | delivery health |
 
 `route` is the **matched route pattern** (`/agents/{ns}/{name}`), never the
@@ -225,12 +229,14 @@ An instrument with no observations yet is absent from a scrape; the
 alarms are configured `treat_missing_data = "notBreaching"` to match.
 
 **`JudgeCostCents` carries no data today.** The instrument exists and the
-pipeline dashboard plots it, but no judge provider reports a cost:
-`bedrock`, `anthropic` and `classifier` all resolve to `UnconfiguredProvider`,
-and `scan.JudgeVerdict` has no cost field to carry one. The recording seam is
-`metrics.RecordJudgeCost`, one call from the S5 stage away. Whoever
-implements a real provider should populate it; until then that dashboard
-panel is empty rather than zero. Do not read an empty panel as "no spend".
+pipeline dashboard plots it, but no judge provider reports a cost: the
+`openai`, `anthropic`, `bedrock` and `classifier` providers all run real
+adjudication now, yet `scan.JudgeVerdict` has no cost field to carry one
+(a provider that cannot be built still resolves to `UnconfiguredProvider`,
+which routes to review). The recording seam is `metrics.RecordJudgeCost`,
+one call from the S5 stage away; until a provider populates it, that
+dashboard panel is empty rather than zero. Do not read an empty panel as
+"no spend".
 
 **Dimension rollup.** The §16.3 alarms address `QueueAgeSeconds`,
 `ScanStageErrors` and `ScanStageRuns` with no dimensions, while the app emits
