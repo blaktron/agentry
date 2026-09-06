@@ -13,7 +13,7 @@
 // chose to set, so the browser is what actually talks to the IdP (or to
 // /api/v1/orgs/{org}/sso/oidc/start, which is same-origin and reachable).
 import { NextRequest, NextResponse } from "next/server";
-import { API_BASE } from "@/lib/session";
+import { API_BASE, browserHeaders } from "@/lib/session";
 import { redirectBack, requestOrigin} from "@/lib/forms";
 
 export async function GET(req: NextRequest) {
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
     res = await fetch(`${API_BASE}/sso/${encodeURIComponent(org)}`, {
       redirect: "manual",
       cache: "no-store",
-      headers: { Accept: "text/html" },
+      headers: { Accept: "text/html", ...(await browserHeaders()) },
     });
   } catch {
     return redirectBack(req, "/login", { error: "the registry is not reachable right now" });
