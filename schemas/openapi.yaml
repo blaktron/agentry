@@ -640,6 +640,37 @@ paths:
                 $ref: "#/components/schemas/NotificationSettings"
         default:
           $ref: "#/components/responses/Problem"
+  /user/activity:
+    get:
+      operationId: listUserActivity
+      tags: [users]
+      summary: The caller's own activity — the audit events they performed (agentry#192).
+      description: >-
+        Sign-ins, tokens and SSH keys created or revoked, profile and
+        notification changes, publishes and reviews, newest first, with the
+        address and user agent each was performed from. Keyset-paged like
+        the agent activity feed.
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The page.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityPage"
+        default:
+          $ref: "#/components/responses/Problem"
   /user/dependency-alerts:
     get:
       operationId: listUserDependencyAlerts
@@ -3443,6 +3474,15 @@ components:
         version:
           type: string
           description: The version this entry concerns, when it names one.
+        targetKind:
+          type: string
+          description: What the entry acted on (agent, agent_version, pat, ssh_key, session, user…); on the caller's own feed.
+        ip:
+          type: string
+          description: The address the action was performed from; on the caller's own feed.
+        userAgent:
+          type: string
+          description: The client that performed it; on the caller's own feed.
         detail:
           type: object
           additionalProperties: true

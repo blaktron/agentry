@@ -12,16 +12,16 @@ export async function POST(req: NextRequest) {
   if (action === "revoke") {
     const id = String(form.get("tokenId") ?? "");
     const res = await apiSend("DELETE", `/user/tokens/${encodeURIComponent(id)}`);
-    if (!res.ok) return redirectBack(req, "/settings", { error: await problemDetail(res) });
-    return redirectBack(req, "/settings", { ok: "token revoked." });
+    if (!res.ok) return redirectBack(req, "/settings/authentication", { error: await problemDetail(res) });
+    return redirectBack(req, "/settings/authentication", { ok: "token revoked." });
   }
 
   const name = String(form.get("name") ?? "").trim();
   const scopes = form.getAll("scopes").map(String);
-  if (!name) return redirectBack(req, "/settings", { error: "token name required" });
-  if (scopes.length === 0) return redirectBack(req, "/settings", { error: "pick at least one scope" });
+  if (!name) return redirectBack(req, "/settings/authentication", { error: "token name required" });
+  if (scopes.length === 0) return redirectBack(req, "/settings/authentication", { error: "pick at least one scope" });
   const res = await apiSend("POST", "/user/tokens", { name, scopes });
-  if (!res.ok) return redirectBack(req, "/settings", { error: await problemDetail(res) });
+  if (!res.ok) return redirectBack(req, "/settings/authentication", { error: await problemDetail(res) });
   const created = (await res.json()) as { token: string };
   return showOnce({
     title: "Token created",
@@ -29,6 +29,6 @@ export async function POST(req: NextRequest) {
       [`Personal access token "${name}"`, created.token],
       ["Scopes", scopes.join(" ")],
     ],
-    backHref: "/settings",
+    backHref: "/settings/authentication",
   });
 }

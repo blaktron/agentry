@@ -13,13 +13,13 @@ export async function POST(req: NextRequest) {
     const code = String(form.get("code") ?? "").trim();
     const res = await apiSend("POST", "/auth/2fa/totp/verify", { code });
     if (!res.ok) {
-      return redirectBack(req, "/settings?totp=verify", { error: await problemDetail(res) });
+      return redirectBack(req, "/settings/authentication?totp=verify", { error: await problemDetail(res) });
     }
-    return redirectBack(req, "/settings", { ok: "two-factor authentication enabled." });
+    return redirectBack(req, "/settings/authentication", { ok: "two-factor authentication enabled." });
   }
 
   const res = await apiSend("POST", "/auth/2fa/totp/setup");
-  if (!res.ok) return redirectBack(req, "/settings", { error: await problemDetail(res) });
+  if (!res.ok) return redirectBack(req, "/settings/authentication", { error: await problemDetail(res) });
   const setup = (await res.json()) as { secret: string; otpauthUrl: string };
   return showOnce({
     title: "Add this secret to your authenticator",
@@ -28,6 +28,6 @@ export async function POST(req: NextRequest) {
       ["otpauth URL (paste into your authenticator app)", setup.otpauthUrl],
       ["Next step", "Return to Settings and enter the 6-digit code to enable 2FA."],
     ],
-    backHref: "/settings?totp=verify",
+    backHref: "/settings/authentication?totp=verify",
   });
 }

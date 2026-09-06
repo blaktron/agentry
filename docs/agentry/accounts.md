@@ -39,7 +39,7 @@ reactivate an account an operator has deactivated.
 ## Password and two-factor authentication
 
 Your password and authenticators are kept by the directory service, but
-you manage them from **Settings → Password and two-factor authentication**
+you manage them from **Settings → Authentication**
 on the registry: change your password, add an authenticator app (TOTP),
 add a security key or passkey, and remove an enrolled authenticator. Each
 action opens one short step in the directory service and brings you
@@ -49,7 +49,7 @@ registry accepts the directory's own evidence that you signed in with one.
 
 ## Notifications
 
-**Settings → Notifications** decides how the registry's alerts reach you.
+**Settings → Profile → Notifications** decides how the registry's alerts reach you.
 Email, per kind: a published version of yours declares an MCP server with a
 newly known vulnerability; a published version is quarantined by a rescan;
 a reviewer decides one of your submissions; an advisory naming one of your
@@ -61,7 +61,10 @@ organization's webhooks and audit trail are not affected by your choices.
 
 ## Sessions
 
-**Settings → Sessions** lists every browser session on the account with
+**Settings → Activity** lists what the account did lately — sign-ins,
+tokens and keys created or revoked, profile changes, publishes, reviews,
+each with the address and client it came from, so an action you do not
+recognise stands out — and every browser session on the account with
 its start time, last activity, address and user agent. Revoke one, or
 **Sign out everywhere else** to end all but the current one. Revoking a
 session invalidates its cookie immediately; it does not revoke personal
@@ -70,7 +73,7 @@ access tokens, which are listed and revoked separately.
 ## Personal access tokens
 
 The CLI and other API clients authenticate with personal access tokens,
-managed under **Settings → Tokens**. Tokens are scoped — `repo:read`,
+managed under **Settings → Authentication**. Tokens are scoped — `repo:read`,
 `repo:write`, `agent:publish`, `agent:read`, `org:admin`, `review:act`,
 `audit:read`, `user:profile` — and revocable individually; treat them like
 the credentials they are.
@@ -81,12 +84,12 @@ open your browser, you sign in as usual, and one explicit approval page
 hands the app a one-time code on a local listener; the app exchanges that
 code for a scoped token from its own process, so the token itself never
 appears in your browser. `agentry login --paste` still accepts a token from
-Settings → Tokens for machines without a browser, and revoking either kind
-later is the same Settings → Tokens list.
+Settings → Authentication for machines without a browser, and revoking
+either kind later is the same list.
 
 ## SSH keys
 
-**Settings → SSH keys** registers public keys for `git clone
+**Settings → Authentication → SSH keys** registers public keys for `git clone
 ssh://git@…/ns/name.git` and pushes over SSH, on instances that serve the
 SSH transport. A key is worth repository read/write and the release tag
 your role allows — never the API — and organizations that enforce SSO take

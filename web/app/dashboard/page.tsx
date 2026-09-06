@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Badge, Card, ModeBadges } from "@/components/ui";
 import type { ActivityPage, Agent, DependencyAlert, ReviewItem } from "@/lib/api";
+import { ACTION_LABEL } from "@/lib/audit";
 import { fmtUTC } from "@/lib/format";
 import { adminOrgs, authedGet, currentUser, reviewerOrgs } from "@/lib/session";
 
@@ -13,30 +14,6 @@ export const metadata: Metadata = { title: "Dashboard" };
 // is a much worse lie than "we could not read this".
 type NamespaceAgents = { ns: string; agents: Agent[]; failed: boolean };
 
-// ACTION_LABEL turns the audit action ids (internal/audit/actions.go) into
-// something readable. Unknown ids fall through to the raw id rather than
-// being dropped: an activity feed that silently omits events it does not
-// recognise is worse than one that shows a name you have to look up.
-const ACTION_LABEL: Record<string, string> = {
-  "agent.create": "created",
-  "agent.update": "settings changed",
-  "agent.grant_set": "grant set",
-  "agent.grant_remove": "grant removed",
-  "agent.quarantine": "quarantined",
-  "agent.block": "blocked",
-  "agent.reinstate": "reinstated",
-  "agent.delete": "deleted",
-  "agent.transfer": "transferred",
-  "repo.push": "pushed to repo",
-  "version.submit": "submitted",
-  "version.transition": "changed state",
-  "version.yank": "yanked",
-  "review.decision": "review decided",
-  "finding.verdict": "finding verdict recorded",
-  "advisory.publish": "advisory published",
-  "abuse.report": "reported for abuse",
-  "abuse.triage": "abuse report triaged",
-};
 
 // Authed dashboard (§10.1): my agents across namespaces, recent activity on
 // them, and the review work assigned to me.
