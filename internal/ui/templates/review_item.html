@@ -1,0 +1,45 @@
+{{define "content"}}
+{{with .Data}}
+<p><a href="/ui/review">&larr; Review queue</a></p>
+<h1>{{.Bundle.Item.Namespace}}/{{.Bundle.Item.Agent}} <span class="muted">@{{.Bundle.Item.Version}}</span> <span class="badge">{{.Bundle.Item.State}}</span></h1>
+{{if .Manifest}}<section class="card"><h2>Manifest</h2><pre class="secret">{{.Manifest}}</pre></section>{{end}}
+<section class="card">
+<h2>Findings ({{len .Bundle.Findings}})</h2>
+{{if not .Bundle.Findings}}<p class="muted">No findings.</p>
+{{else}}<ul class="list">{{range .Bundle.Findings}}<li>
+<span class="badge sev-{{.Severity}}">{{.Severity}}</span> <strong>{{.Title}}</strong> <span class="muted">{{.Scanner}} · {{.Confidence}} confidence · {{.Verdict}}</span>
+{{if .FilePath}}<br><a href="/ui/review/{{$.Data.Bundle.Item.ID}}?file={{.FilePath}}#L{{.LineStart}}"><code>{{.FilePath}}{{if .LineStart}}:{{.LineStart}}{{end}}</code></a>{{end}}
+{{if .Excerpt}}<pre class="excerpt">{{.Excerpt}}</pre>{{end}}
+{{if .VerdictReason}}<p class="muted">{{.VerdictReason}}</p>{{end}}
+{{if .ID}}<form method="post" action="/ui/review/{{$.Data.Bundle.Item.ID}}/findings/{{.ID}}/verdict" class="row">
+  <input type="hidden" name="_csrf" value="{{$.CSRF}}">
+  <select name="verdict">{{range $.Data.Verdicts}}<option value="{{.}}">{{.}}</option>{{end}}</select>
+  <input name="reason" placeholder="reason" class="short">
+  <button type="submit" class="small secondary">Record verdict</button>
+</form>{{end}}
+</li>{{end}}</ul>{{end}}
+</section>
+<section class="card">
+<h2>Files</h2>
+{{if not .Files}}<p class="muted">No file listing.</p>
+{{else}}<p class="files">{{range .Files}}<a href="/ui/review/{{$.Data.Bundle.Item.ID}}?file={{.Path}}"><code>{{.Path}}</code></a> <span class="muted">{{.Size}} B</span> · {{end}}</p>{{end}}
+{{with .File}}
+<h3>{{.Path}}{{if .Truncated}} <span class="badge warn">truncated</span>{{end}}</h3>
+{{if .Binary}}<p class="muted">Binary file ({{.Size}} B).</p>
+{{else}}<pre class="code">{{range $.Data.Lines}}<span id="L{{.N}}" class="ln{{if .Hit}} hit{{end}}">{{.N}}</span> {{.Text}}
+{{end}}</pre>{{end}}
+{{end}}
+</section>
+{{if eq .Bundle.Item.State "pending"}}
+<section class="card">
+<h2>Decision</h2>
+<form method="post" action="/ui/review/{{.Bundle.Item.ID}}/decision">
+  <input type="hidden" name="_csrf" value="{{$.CSRF}}">
+  <label>Rationale<textarea name="rationale" rows="3" required></textarea></label>
+  <button type="submit" name="decision" value="approve">Approve and publish</button>
+  <button type="submit" name="decision" value="reject" class="danger">Reject</button>
+</form>
+</section>
+{{end}}
+{{end}}
+{{end}}

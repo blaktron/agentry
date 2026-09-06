@@ -372,6 +372,13 @@ separate and are what your load balancer should use.
 
 ### What the stack exposes
 
+`/ui/` is the server's own browser surface (DEV-091): the device authorize
+page `agentry login` and the desktop app open, and, on a server without a
+site in front, sign-in, the account pages and the review, staff and
+organization pages. The edge sends it to the API like `/api/`. The handle
+`ui` (and the other root paths of the server and the site) cannot be
+registered.
+
 Docker publishes ports by inserting its own firewall rules ahead of the
 host's (firewalld and ufw zones do not apply to a published port), so a
 plain `"5432:5432"` on a machine with a public address is Postgres — with
