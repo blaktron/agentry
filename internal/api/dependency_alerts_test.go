@@ -35,7 +35,7 @@ func TestDependencyAlertSurfaces(t *testing.T) {
 	}); status != http.StatusAccepted {
 		t.Fatalf("submit: %d %s", status, body)
 	}
-	env.waitStatus(author, "alerted", "1.0.0", "published")
+	waitStatusLong(env, author, "alerted", "1.0.0", "published")
 
 	// The registry's record is public and says what S7 saw.
 	var rec struct {
