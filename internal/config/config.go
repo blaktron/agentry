@@ -144,6 +144,10 @@ type Auth struct {
 	// can enrol a native TOTP factor while this is set (see
 	// internal/api/publish_gate.go).
 	ExternalOnly bool `yaml:"externalOnly"`
+	// IdPLogoutURL is the directory's end-session flow: where sign-out sends
+	// the browser once the session is revoked, so the next sign-in asks
+	// again (DEV-057). Empty means sign-out ends on the home page.
+	IdPLogoutURL string `yaml:"idpLogoutURL"`
 	// IdPAdminURL / IdPAdminToken let account erasure (§12.7) reach into the
 	// directory service and delete the sign-in account there too — authentik's
 	// API, as a bearer token with rights over users (agentry#20). Empty means
@@ -566,6 +570,7 @@ func applyEnv(c *Config) error {
 	str("AGENTRY_LOG_LEVEL", &c.Log.Level)
 	str("AGENTRY_BASE_URL", &c.BaseURL)
 	str("AGENTRY_WEB_URL", &c.Web.URL)
+	str("AGENTRY_IDP_LOGOUT_URL", &c.Auth.IdPLogoutURL)
 	str("AGENTRY_UI_MODE", &c.UI.Mode)
 	str("AGENTRY_BRAND_NAME", &c.Brand.Name)
 	str("AGENTRY_BRAND_LOGO_URL", &c.Brand.LogoURL)
