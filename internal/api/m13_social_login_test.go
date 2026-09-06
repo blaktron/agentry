@@ -506,7 +506,7 @@ func TestSocialLoginCallbackRestartsBrowserWithoutState(t *testing.T) {
 	if res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("browser callback without state: got %d want 303", res.StatusCode)
 	}
-	if loc := res.Header.Get("Location"); loc != "/api/v1/auth/oidc/github/start?next=%2Fdashboard" {
+	if loc := res.Header.Get("Location"); loc != "/api/v1/auth/oidc/github/start?next=%2Fui%2Faccount" {
 		t.Fatalf("restart Location = %q", loc)
 	}
 	var guard *http.Cookie
