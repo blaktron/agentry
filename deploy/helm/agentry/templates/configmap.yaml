@@ -11,6 +11,12 @@ data:
     env: {{ .Values.config.env }}
     devMode: {{ .Values.config.devMode }}
     baseURL: {{ .Values.config.baseURL | quote }}
+    web:
+      url: {{ .Values.config.web.url | quote }}
+    ui:
+      mode: {{ .Values.config.ui.mode | quote }}
+    brand:
+      name: {{ .Values.config.brand.name | quote }}
     http:
       addr: {{ .Values.config.http.addr | quote }}
       trustedProxies: {{ .Values.config.http.trustedProxies }}
@@ -23,6 +29,9 @@ data:
       sessionTTL: {{ .Values.config.auth.sessionTTL }}
       patMaxTTL: {{ .Values.config.auth.patMaxTTL }}
       externalOnly: {{ .Values.config.auth.externalOnly }}
+      {{- with .Values.config.idp.logoutUrl }}
+      idpLogoutURL: {{ . | quote }}
+      {{- end }}
       {{- with .Values.config.auth.idpAdminURL }}
       idpAdminURL: {{ . | quote }}
       {{- end }}

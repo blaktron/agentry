@@ -1,0 +1,8 @@
+{{define "content"}}
+<h1>Organizations</h1>
+<section class="card">
+{{if not .Data}}<p class="muted">You administer no organization. Owners and admins see theirs here.</p>
+{{else}}<ul class="list">{{range .Data}}<li><a href="/ui/orgs/{{.Handle}}"><strong>{{.Handle}}</strong></a> <span class="badge">{{.Role}}</span></li>{{end}}</ul>{{end}}
+<p class="muted">Any organization's page is <code>/ui/orgs/&lt;handle&gt;</code>; the server decides what you may see there.</p>
+</section>
+{{end}}

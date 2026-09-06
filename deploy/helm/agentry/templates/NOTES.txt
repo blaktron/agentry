@@ -5,7 +5,6 @@ Roles deployed:
   api     x{{ .Values.api.replicaCount }}   (autoscaling: {{ .Values.api.autoscaling.enabled }})
   git     x{{ .Values.git.replicaCount }}   (shared RWX volume at {{ .Values.config.git.dataDir }})
   worker  x{{ .Values.worker.replicaCount }}   (queues: {{ if .Values.worker.queues }}{{ .Values.worker.queues }}{{ else }}all{{ end }})
-  web     x{{ .Values.web.replicaCount }}
 
 1. Operator-supplied dependencies (NOT bundled):
    - PostgreSQL 16 via secret key AGENTRY_DATABASE_URL
@@ -30,8 +29,8 @@ Roles deployed:
 
 2. Reach the app:
 {{- if .Values.ingress.enabled }}
-   Web:  https://{{ .Values.ingress.hosts.web }}
-   API:  https://{{ .Values.ingress.hosts.web }}/api/v1/meta
+   UI:   https://{{ .Values.ingress.hosts.registry }}/ui/
+   API:  https://{{ .Values.ingress.hosts.registry }}/api/v1/meta
    Git:  https://{{ .Values.ingress.hosts.git }}
 {{- else }}
    Ingress disabled. Port-forward to try locally:
