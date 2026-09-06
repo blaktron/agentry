@@ -28,7 +28,7 @@ func TestDependencyAlertSurfaces(t *testing.T) {
 		map[string]any{"namespace": author, "name": "alerted", "modes": []string{"autonomous"}, "visibility": "public"}, nil, http.StatusCreated)
 	_, pat := env.mintPAT(sess, "pub", "agent:publish", "agent:read", "repo:read")
 	if status, body := env.uploadVersionCLI(author, "alerted", pat, map[string]string{
-		"agent.yaml": mcpManifest(author, "alerted", "1.0.0", "minimist", "1.2.5"),
+		"agent.yaml": mcpManifest(author, "alerted", "1.0.0", "alerts-fixture", "2.0.0"),
 		"AGENT.md":   "Summarise the ticket the user pastes.\n",
 		"README.md":  "# alerted\n",
 		"LICENSE":    "Apache-2.0\n",
@@ -47,11 +47,11 @@ func TestDependencyAlertSurfaces(t *testing.T) {
 		LastError  *string `json:"lastError"`
 		MaxSev     *string `json:"maxSeverity"`
 	}
-	env.doJSON(anonymous, http.MethodGet, "/api/v1/mcp-servers/scan?ecosystem=npm&package=minimist&version=1.2.5", nil, &rec, http.StatusOK)
-	if rec.Status != "safe" || len(rec.Advisories) != 0 || rec.Package != "minimist" || rec.MaxSev != nil {
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/mcp-servers/scan?ecosystem=npm&package=alerts-fixture&version=2.0.0", nil, &rec, http.StatusOK)
+	if rec.Status != "safe" || len(rec.Advisories) != 0 || rec.Package != "alerts-fixture" || rec.MaxSev != nil {
 		t.Fatalf("scan record: %+v", rec)
 	}
-	env.doJSON(anonymous, http.MethodGet, "/api/v1/mcp-servers/scan?ecosystem=npm&package=minimist&version=9.9.9", nil, nil, http.StatusNotFound)
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/mcp-servers/scan?ecosystem=npm&package=alerts-fixture&version=9.9.9", nil, nil, http.StatusNotFound)
 
 	// No alerts yet: an empty list, and none on the page.
 	var alerts []map[string]any
@@ -64,7 +64,7 @@ func TestDependencyAlertSurfaces(t *testing.T) {
 	// internal/scan).
 	if _, err := env.st.Pool().Exec(context.Background(), `
 		INSERT INTO mcp_dependency_alerts (id, version_id, ecosystem, package, package_version, severity, advisory_ids, fixed_in)
-		SELECT gen_random_uuid(), v.id, 'npm', 'minimist', '1.2.5', 'high', ARRAY['GHSA-xvch-5gv4-984h'], ARRAY['1.2.6']
+		SELECT gen_random_uuid(), v.id, 'npm', 'alerts-fixture', '2.0.0', 'high', ARRAY['GHSA-xvch-5gv4-984h'], ARRAY['1.2.6']
 		FROM agent_versions v JOIN agents a ON a.id = v.agent_id WHERE a.name = 'alerted' AND v.version = '1.0.0'`); err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestDependencyAlertSurfaces(t *testing.T) {
 		DependencyAlerts []map[string]any `json:"dependencyAlerts"`
 	}
 	env.doJSON(anonymous, http.MethodGet, "/api/v1/agents/"+author+"/alerted", nil, &agent, http.StatusOK)
-	if len(agent.DependencyAlerts) != 1 || agent.DependencyAlerts[0]["packageVersion"] != "1.2.5" {
+	if len(agent.DependencyAlerts) != 1 || agent.DependencyAlerts[0]["packageVersion"] != "2.0.0" {
 		t.Fatalf("agent page alerts: %v", agent.DependencyAlerts)
 	}
 }
