@@ -4,7 +4,7 @@
 # `authentik` social provider. Idempotent — safe to re-run.
 #
 # Required environment:
-#   AUTHENTIK_URL                    e.g. https://agentry.tail49832b.ts.net:8443
+#   AUTHENTIK_URL                    e.g. https://auth.example.test:8443
 #   AUTHENTIK_BOOTSTRAP_TOKEN        the API token first boot created
 #   AGENTRY_AUTHENTIK_CLIENT_SECRET  OAuth client secret to (re)set
 #   AGENTRY_REDIRECT_URI             e.g. https://<host>/api/v1/auth/oidc/authentik/callback
