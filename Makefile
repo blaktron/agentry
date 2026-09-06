@@ -8,7 +8,7 @@ GO      ?= go
 BIN_DIR := bin
 LDFLAGS := -X github.com/blaktron/agentry/internal/version.Version=$(shell git describe --tags --always --dirty 2>/dev/null || echo 0.0.0-dev)
 
-.PHONY: all build test lint vuln generate generate-check check dev db-up db-down clean web-install web-check e2e sync-rules sync-rules-check fuzz deps-audit attest-interop
+.PHONY: all build test lint vuln generate generate-check check dev db-up db-down clean e2e sync-rules sync-rules-check fuzz deps-audit attest-interop
 
 all: build
 
@@ -43,7 +43,7 @@ generate:
 
 ## generate-check: fail if generated code drifted from the spec/queries
 generate-check: generate
-	@if ! git diff --quiet -- internal/api/openapi_gen.go pkg/apiclient/client_gen.go internal/store/gen web/lib/api; then \
+	@if ! git diff --quiet -- internal/api/openapi_gen.go pkg/apiclient/client_gen.go internal/store/gen; then \
 	  echo "generated code is stale — run 'make generate' and commit"; git --no-pager diff --stat; exit 1; fi
 
 ## sync-rules: copy the canonical /rules bundle into the embeddable copy
@@ -85,12 +85,6 @@ db-up:
 
 db-down:
 	./scripts/dev/pg.sh down
-
-web-install:
-	cd web && npm install
-
-web-check:
-	cd web && npm run check
 
 ## e2e: acceptance scripts (per-milestone)
 e2e:

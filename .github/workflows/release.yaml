@@ -38,11 +38,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
       - run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
-      - run: cd web && npm ci
       - run: make check
       - name: attack-corpus gate must be green to release
         run: go test ./internal/scan -run TestAttackCorpusGate -count=1
@@ -140,11 +136,9 @@ jobs:
 
             An SPDX SBOM (`agentry-sbom.spdx.json`) ships with every release.
 
-  # Two images per release: agentryd (every role, git included) and the web
-  # app. The chart and the ECS task definitions both reference them by the
-  # same tag, so they are built from one job and must succeed together — a
-  # release that shipped one and not the other would leave a deployment
-  # pointing at a tag that does not exist.
+  # One image per release: agentryd (every role, git included). The site's
+  # image is built and released from its own repository (DEV-091); the
+  # chart references only this one.
   image:
     needs: verify
     runs-on: ubuntu-latest
@@ -152,7 +146,6 @@ jobs:
       matrix:
         include:
           - { name: agentryd, file: deploy/compose/Dockerfile }
-          - { name: web, file: deploy/compose/Dockerfile.web }
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3

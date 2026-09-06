@@ -61,12 +61,6 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- printf "%s:%s" .Values.image.agentryd.repository $tag }}
 {{- end }}
 
-{{/* web image ref */}}
-{{- define "agentry.webImage" -}}
-{{- $tag := default .Chart.AppVersion .Values.image.web.tag -}}
-{{- printf "%s:%s" .Values.image.web.repository $tag }}
-{{- end }}
-
 {{/*
   Shared env for agentryd containers: non-secret AGENTRY_* from config plus
   secret refs. Include with: {{- include "agentry.agentrydEnv" . | nindent 12 }}

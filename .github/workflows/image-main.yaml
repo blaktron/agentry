@@ -1,0 +1,44 @@
+# The agentryd image of the current main (DEV-091, plan core-web-split
+# §3.5): every merge publishes ghcr.io/blaktron/agentry/agentryd:main and
+# :sha-<short>, so the site's and the enterprise build's CI can boot a real
+# API without building Go. Releases keep publishing the tagged images from
+# release.yaml; this is the moving tag in between.
+name: image-main
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  packages: write
+  id-token: write   # keyless signing (OIDC)
+concurrency:
+  group: image-main
+  cancel-in-progress: true
+jobs:
+  image:
+    runs-on: [self-hosted, linux, x64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: short sha
+        run: echo "SHORT=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+      - uses: docker/build-push-action@v6
+        id: build
+        with:
+          context: .
+          file: deploy/compose/Dockerfile
+          push: true
+          build-args: |
+            VERSION=main-${{ env.SHORT }}
+          tags: |
+            ghcr.io/${{ github.repository }}/agentryd:main
+            ghcr.io/${{ github.repository }}/agentryd:sha-${{ env.SHORT }}
+          provenance: true
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign the image
+        run: cosign sign --yes "ghcr.io/${{ github.repository }}/agentryd@${{ steps.build.outputs.digest }}"
