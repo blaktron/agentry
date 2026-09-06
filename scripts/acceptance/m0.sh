@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # M0 acceptance (PLAN §18.2): stack boots, `make check` is green (run
 # separately in CI), and a smoke test hits the API through the generated
-# Go client (in `make test`) and the generated TS client (here, live).
+# Go client (in `make test`); the TS client smoke lives with the site now.
 set -euo pipefail
 cd "$(cd "$(dirname "$0")/../.." && pwd)"
 
@@ -46,8 +46,7 @@ curl -fsS "http://localhost:$PORT/.well-known/agentry/registry.json" >/dev/null 
 # 5. Go client smoke (same code path as make test, run explicitly).
 go test ./internal/api -run 'TestM0Smoke' -count=1 >/dev/null && echo "go client smoke: OK"
 
-# 6. TS client smoke against the live server.
-if [ ! -d web/node_modules ]; then (cd web && npm install --silent); fi
-(cd web && npm run --silent gen && AGENTRY_BASE_URL="http://localhost:$PORT" npm run --silent smoke)
+# 6. The server's own surface answers (the full check is scripts/acceptance/ui.sh).
+curl -fsS -o /dev/null -w '%{http_code}' "http://localhost:$PORT/ui/login" | grep -q 200 && echo "core UI: OK"
 
 echo "== M0 acceptance PASSED =="
