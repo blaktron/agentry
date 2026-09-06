@@ -113,6 +113,14 @@ func New(opt Options) http.Handler {
 		m.HandleFunc("POST /ui/account/ssh-keys", h.sshKeysSubmit)
 		m.HandleFunc("GET /ui/account/sessions", h.sessionsPage)
 		m.HandleFunc("POST /ui/account/sessions", h.sessionsSubmit)
+		m.HandleFunc("GET /ui/review", h.reviewQueue)
+		m.HandleFunc("GET /ui/review/{id}", h.reviewItemPage)
+		m.HandleFunc("POST /ui/review/{id}/decision", h.reviewDecide)
+		m.HandleFunc("POST /ui/review/{id}/findings/{fid}/verdict", h.findingVerdict)
+		m.HandleFunc("GET /ui/staff", h.staffPage)
+		m.HandleFunc("POST /ui/staff/abuse", h.staffAbuseTriage)
+		m.HandleFunc("POST /ui/staff/agent-action", h.staffAgentAction)
+		m.HandleFunc("POST /ui/staff/ruleset-release", h.staffRulesetRelease)
 	}
 	return h
 }

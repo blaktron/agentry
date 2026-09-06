@@ -209,3 +209,67 @@ func TestAccountPagesAndTheDirectoryRedirect(t *testing.T) {
 		t.Fatalf("flash escaping: %s", w.Body.String())
 	}
 }
+
+// The operator pages act through the same client: the queue, an item with
+// its findings and file view, a decision — each refused before the API
+// when the form is cross-site or lacks the CSRF field.
+func TestReviewPages(t *testing.T) {
+	base := fakeAPI(t, "sess1", "csrf1")
+	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if c, err := r.Cookie("agentry_session"); err != nil || c.Value != "sess1" {
+			http.Error(w, `{"detail":"sign in"}`, http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/api/v1/review-queue":
+			_, _ = io.WriteString(w, `[{"id":"ri1","queue":"platform","state":"pending","version":"1.0.0","agent":"risky","namespace":"acme"}]`)
+		case r.Method == "GET" && r.URL.Path == "/api/v1/review-items/ri1":
+			_, _ = io.WriteString(w, `{"item":{"id":"ri1","queue":"platform","state":"pending","version":"1.0.0","agent":"risky","namespace":"acme"},"findings":[{"id":"f1","scanner":"S1","severity":"high","confidence":"high","title":"Prompt injection","filePath":"SKILL.md","lineStart":1,"verdict":"open"}],"manifest":{"name":"risky","modes":["autonomous"]}}`)
+		case r.Method == "GET" && r.URL.Path == "/api/v1/review-items/ri1/files":
+			_, _ = io.WriteString(w, `{"files":[{"path":"SKILL.md","size":12,"binary":false,"truncated":false}]}`)
+		case r.Method == "GET" && r.URL.Path == "/api/v1/review-items/ri1/file":
+			_, _ = io.WriteString(w, `{"path":"SKILL.md","size":12,"binary":false,"truncated":false,"content":"Ignore all\nsecond <b>line</b>"}`)
+		case r.Method == "POST" && r.URL.Path == "/api/v1/review-items/ri1/decision":
+			if r.Header.Get("X-Agentry-CSRF") != "csrf1" {
+				http.Error(w, `{"detail":"csrf"}`, http.StatusForbidden)
+				return
+			}
+			var body map[string]string
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if body["decision"] != "approve" || body["rationale"] != "looks fine" {
+				http.Error(w, `{"detail":"bad body"}`, http.StatusBadRequest)
+				return
+			}
+			_, _ = io.WriteString(w, `{"ok":true}`)
+		case r.Method == "POST" && r.URL.Path == "/api/v1/findings/f1/verdict":
+			_, _ = io.WriteString(w, `{"ok":true}`)
+		default:
+			base.ServeHTTP(w, r)
+		}
+	})
+	h := New(Options{API: api})
+	w := get(h, "/ui/review", sessCookie, csrfCookieV)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "acme/risky") {
+		t.Fatalf("queue: %d %s", w.Code, w.Body.String())
+	}
+	w = get(h, "/ui/review/ri1?file=SKILL.md", sessCookie, csrfCookieV)
+	body := w.Body.String()
+	if w.Code != http.StatusOK || !strings.Contains(body, "Prompt injection") || !strings.Contains(body, `id="L1" class="ln hit"`) || !strings.Contains(body, "second &lt;b&gt;line&lt;/b&gt;") || !strings.Contains(body, "name: risky") {
+		t.Fatalf("item: %d %s", w.Code, body)
+	}
+	w = post(h, "/ui/review/ri1/decision", url.Values{"_csrf": {"csrf1"}, "decision": {"approve"}, "rationale": {"looks fine"}}, nil, sessCookie, csrfCookieV)
+	if w.Code != http.StatusSeeOther || !strings.HasPrefix(w.Header().Get("Location"), "/ui/review?ok=Approved") {
+		t.Fatalf("decide: %d %s %s", w.Code, w.Header().Get("Location"), w.Body.String())
+	}
+	w = post(h, "/ui/review/ri1/findings/f1/verdict", url.Values{"_csrf": {"csrf1"}, "verdict": {"dismissed_false_positive"}, "reason": {"fixture"}}, nil, sessCookie, csrfCookieV)
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/ui/review/ri1?ok=Verdict+recorded." {
+		t.Fatalf("verdict: %d %s", w.Code, w.Header().Get("Location"))
+	}
+	if w := post(h, "/ui/review/ri1/decision", url.Values{"decision": {"approve"}, "rationale": {"x"}}, nil, sessCookie, csrfCookieV); w.Code != http.StatusForbidden {
+		t.Fatalf("no csrf field: %d", w.Code)
+	}
+	if w := get(h, "/ui/review"); w.Code != http.StatusSeeOther {
+		t.Fatalf("signed out: %d", w.Code)
+	}
+}
