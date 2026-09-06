@@ -1,0 +1,15 @@
+# gitleaks configuration (agentry#209, open-source readiness). The default
+# rules apply; the three paths below are the known false positives —
+# generated base64 in the embedded OpenAPI spec, a placeholder helm value in
+# an acceptance script, and the attack corpus's own fixtures — so a clean
+# scan means something.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "generated spec, acceptance placeholders, the attack corpus"
+paths = [
+  '''internal/api/openapi_gen\.go''',
+  '''scripts/acceptance/m7\.sh''',
+  '''testdata/attack-corpus/.*''',
+]
