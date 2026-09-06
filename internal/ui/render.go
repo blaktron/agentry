@@ -1,9 +1,10 @@
 package ui
 
 import (
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"fmt"
-	"github.com/blaktron/agentry/internal/version"
 	"html/template"
 	"io/fs"
 	"net/http"
@@ -16,6 +17,12 @@ var templateFS embed.FS
 
 //go:embed static/ui.css
 var stylesheet []byte
+
+// stylesheetVersion is the first 12 hex digits of the sheet's SHA-256.
+var stylesheetVersion = func() string {
+	sum := sha256.Sum256(stylesheet)
+	return hex.EncodeToString(sum[:6])
+}()
 
 // page is what every template receives.
 type page struct {
@@ -32,7 +39,9 @@ type page struct {
 	Data    any
 	LogoURL string
 	CSSURL  string
-	// CSSVersion busts the stylesheet's hour-long cache on every build.
+	// CSSVersion busts the stylesheet's hour-long cache whenever the sheet
+	// changes: a short hash of its bytes, not the build version (which is
+	// "dev" in an unstamped build).
 	CSSVersion string
 }
 
@@ -128,7 +137,7 @@ func (h *handler) render(w http.ResponseWriter, r *http.Request, status int, nam
 	}
 	p.LogoURL = h.opt.Brand.LogoURL
 	p.CSSURL = h.opt.Brand.CSSURL
-	p.CSSVersion = version.Version
+	p.CSSVersion = stylesheetVersion
 	if p.User != nil && h.opt.Mode == "full" {
 		for _, n := range []navItem{{Href: "/ui/account", Label: "Account"}, {Href: "/ui/account/tokens", Label: "Tokens"}, {Href: "/ui/account/ssh-keys", Label: "SSH keys"}, {Href: "/ui/account/sessions", Label: "Sessions"}, {Href: "/ui/review", Label: "Review"}, {Href: "/ui/staff", Label: "Staff"}, {Href: "/ui/orgs", Label: "Organizations"}} {
 			n.Current = strings.HasPrefix(r.URL.Path, n.Href) && (n.Href != "/ui/account" || r.URL.Path == "/ui/account" || r.URL.Path == "/ui/account/directory")
