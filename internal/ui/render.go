@@ -71,7 +71,8 @@ var funcs = template.FuncMap{
 		}
 		return fmt.Sprint(v)
 	},
-	"join": strings.Join,
+	"join":  strings.Join,
+	"deref": func(b *bool) bool { return b != nil && *b },
 }
 
 // templates parses the layout once and each page against a clone of it.
@@ -125,7 +126,7 @@ func (h *handler) render(w http.ResponseWriter, r *http.Request, status int, nam
 	p.LogoURL = h.opt.Brand.LogoURL
 	p.CSSURL = h.opt.Brand.CSSURL
 	if p.User != nil && h.opt.Mode == "full" {
-		for _, n := range []navItem{{Href: "/ui/account", Label: "Account"}, {Href: "/ui/account/tokens", Label: "Tokens"}, {Href: "/ui/account/ssh-keys", Label: "SSH keys"}, {Href: "/ui/account/sessions", Label: "Sessions"}, {Href: "/ui/review", Label: "Review"}, {Href: "/ui/staff", Label: "Staff"}} {
+		for _, n := range []navItem{{Href: "/ui/account", Label: "Account"}, {Href: "/ui/account/tokens", Label: "Tokens"}, {Href: "/ui/account/ssh-keys", Label: "SSH keys"}, {Href: "/ui/account/sessions", Label: "Sessions"}, {Href: "/ui/review", Label: "Review"}, {Href: "/ui/staff", Label: "Staff"}, {Href: "/ui/orgs", Label: "Organizations"}} {
 			n.Current = strings.HasPrefix(r.URL.Path, n.Href) && (n.Href != "/ui/account" || r.URL.Path == "/ui/account" || r.URL.Path == "/ui/account/directory")
 			p.Nav = append(p.Nav, n)
 		}

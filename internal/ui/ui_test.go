@@ -276,3 +276,64 @@ func TestReviewPages(t *testing.T) {
 		t.Fatalf("signed out: %d", w.Code)
 	}
 }
+
+// The org admin page over a fake API: the sections render from the org's
+// data, a non-admin gets the members refusal as the page's own status, and
+// the policy form posts the parsed document.
+func TestOrgAdminPage(t *testing.T) {
+	base := fakeAPI(t, "sess1", "csrf1")
+	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if c, err := r.Cookie("agentry_session"); err != nil || c.Value != "sess1" {
+			http.Error(w, `{"detail":"sign in"}`, http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Method + " " + r.URL.Path {
+		case "GET /api/v1/orgs/acme":
+			_, _ = io.WriteString(w, `{"handle":"acme","displayName":"Acme Corp","ssoRequired":false}`)
+		case "GET /api/v1/orgs/acme/members":
+			_, _ = io.WriteString(w, `[{"user":{"handle":"chris"},"role":"owner"},{"user":{"handle":"pat"},"role":"member"}]`)
+		case "GET /api/v1/orgs/acme/teams":
+			_, _ = io.WriteString(w, `[{"id":"t1","slug":"platform"}]`)
+		case "GET /api/v1/orgs/acme/teams/platform/members":
+			_, _ = io.WriteString(w, `[{"user":{"handle":"pat"},"role":"member"}]`)
+		case "GET /api/v1/orgs/acme/policy":
+			_, _ = io.WriteString(w, `{"allowPrivateIps":false}`)
+		case "GET /api/v1/orgs/acme/sso/connections", "GET /api/v1/orgs/acme/scim/tokens", "GET /api/v1/orgs/acme/domain-claims", "GET /api/v1/orgs/acme/webhooks":
+			_, _ = io.WriteString(w, `[]`)
+		case "PUT /api/v1/orgs/acme/policy":
+			var doc map[string]any
+			if json.NewDecoder(r.Body).Decode(&doc) != nil || doc["allowPrivateIps"] != true {
+				http.Error(w, `{"detail":"bad policy"}`, http.StatusBadRequest)
+				return
+			}
+			_, _ = io.WriteString(w, `{}`)
+		case "GET /api/v1/orgs/other":
+			_, _ = io.WriteString(w, `{"handle":"other"}`)
+		case "GET /api/v1/orgs/other/members":
+			http.Error(w, `{"detail":"org admin required"}`, http.StatusForbidden)
+		default:
+			base.ServeHTTP(w, r)
+		}
+	})
+	h := New(Options{API: api})
+	w := get(h, "/ui/orgs/acme", sessCookie, csrfCookieV)
+	body := w.Body.String()
+	for _, want := range []string{"Acme Corp", "<strong>chris</strong>", "<strong>platform</strong>", `&#34;allowPrivateIps&#34;: false`, "Create webhook"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("org page missing %q: %d %s", want, w.Code, body)
+		}
+	}
+	w = post(h, "/ui/orgs/acme", url.Values{"_csrf": {"csrf1"}, "section": {"policy"}, "policy": {`{"allowPrivateIps": true}`}}, nil, sessCookie, csrfCookieV)
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/ui/orgs/acme?ok=Policy+saved." {
+		t.Fatalf("policy: %d %s", w.Code, w.Header().Get("Location"))
+	}
+	w = post(h, "/ui/orgs/acme", url.Values{"_csrf": {"csrf1"}, "section": {"policy"}, "policy": {`{not json`}}, nil, sessCookie, csrfCookieV)
+	if !strings.Contains(w.Header().Get("Location"), "error=the+policy+must+be+valid+JSON") {
+		t.Fatalf("bad json: %s", w.Header().Get("Location"))
+	}
+	w = get(h, "/ui/orgs/other", sessCookie, csrfCookieV)
+	if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "org admin required") {
+		t.Fatalf("non-admin: %d %s", w.Code, w.Body.String())
+	}
+}

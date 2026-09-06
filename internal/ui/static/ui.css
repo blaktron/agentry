@@ -43,3 +43,4 @@ pre.excerpt { padding: 0.3rem 0.5rem; border-left: 3px solid var(--line); margin
 .files a { margin-right: 0.2rem; }
 .badge.sev-critical, .badge.sev-high { border-color: var(--danger); color: var(--danger); }
 .badge.sev-medium { border-color: var(--warn); color: var(--warn); }
+textarea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85em; }
