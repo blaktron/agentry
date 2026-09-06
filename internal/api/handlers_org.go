@@ -129,6 +129,7 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := orgToAPI(row, true)
+	s.fireEvent(r.Context(), Event{Kind: "org.created", OrgID: out.Id, Payload: map[string]any{"org": out.Handle}})
 	ik.complete(r, http.StatusCreated, out)
 	writeJSON(w, http.StatusCreated, out)
 }
@@ -329,8 +330,8 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 		return
 	}
 	// Webhook fan-out (§9.3): a brand-new membership is a member.added event.
-	if s.webhooks != nil && current == auth.RoleNone {
-		_ = s.webhooks.Emit(r.Context(), orgRow.ID, webhook.EventMemberAdded,
+	if current == auth.RoleNone {
+		s.emitOrgEvent(r.Context(), orgRow.ID, webhook.EventMemberAdded,
 			map[string]any{"user": target.Handle, "role": string(requested)})
 	}
 	// §13.4 lists invites among the transactional mails. There is no separate
@@ -409,10 +410,8 @@ func (s *Server) RemoveOrgMember(w http.ResponseWriter, r *http.Request, org Org
 		problemInternal(w, r)
 		return
 	}
-	if s.webhooks != nil {
-		_ = s.webhooks.Emit(r.Context(), orgRow.ID, webhook.EventMemberRemoved,
-			map[string]any{"user": target.Handle})
-	}
+	s.emitOrgEvent(r.Context(), orgRow.ID, webhook.EventMemberRemoved,
+		map[string]any{"user": target.Handle})
 	w.WriteHeader(http.StatusNoContent)
 }
 
