@@ -163,7 +163,8 @@ Keys rotate with **overlapping validity windows** because clients pin what
 they have seen (TOFU). A hard swap makes every installed client report a key
 mismatch.
 
-1. Create the new key (Terraform, `modules/kms`). Do not delete the old one.
+1. Create the new key (your KMS or a new file key; on the hosted
+   deployment the site's Terraform, `modules/kms`). Do not delete the old one.
 2. Publish both at `/.well-known/agentry/signing-keys.json` (new key first).
    Clients now accept either.
 3. Point signing at the new key (`AGENTRY_SIGNING_KMS_KEY_ARN`), roll the
