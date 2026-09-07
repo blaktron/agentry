@@ -2,6 +2,7 @@ package scan
 
 import (
 	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -78,6 +79,9 @@ func extractEgressTargets(files []FileEntry) map[string]egressTarget {
 			continue
 		}
 		for i, line := range strings.Split(string(f.Content), "\n") {
+			if isCommentLine(f.Path, line) {
+				continue
+			}
 			for _, u := range urlRe.FindAllString(line, -1) {
 				record(urlHost(u), "url", f.Path, i+1, line)
 			}
@@ -90,6 +94,27 @@ func extractEgressTargets(files []FileEntry) map[string]egressTarget {
 		}
 	}
 	return out
+}
+
+// isCommentLine reports whether a line is a comment in a file the machine
+// reads rather than the agent: a `#` line in YAML, TOML, shell or Python, a
+// `//` line in code. A destination named only in such a comment is not one
+// the package can reach, and the CLI's own scaffold carries a commented
+// `# egress: [host]` example that sent every first publish to review
+// (agentry#223). Prose files (markdown, plain text) are not comment-aware:
+// an agent reads all of them.
+func isCommentLine(path, line string) bool {
+	t := strings.TrimSpace(line)
+	if t == "" {
+		return false
+	}
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf", ".sh", ".bash", ".zsh", ".py", ".rb", ".env", ".properties", ".dockerfile":
+		return strings.HasPrefix(t, "#")
+	case ".go", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".java", ".c", ".h", ".cpp", ".cc", ".rs", ".swift", ".kt", ".cs", ".php", ".scala":
+		return strings.HasPrefix(t, "//")
+	}
+	return false
 }
 
 // urlHost returns the host component of a URL string.
