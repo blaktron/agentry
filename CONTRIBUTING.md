@@ -2,7 +2,7 @@
 
 Agentry is a security product, so the bar for changes is a little higher than
 usual in two specific places: the scanners and the authorization layer. Almost
-everything else is ordinary Go and TypeScript work.
+everything else is ordinary Go work.
 
 ## Before you start
 
@@ -12,6 +12,27 @@ everything else is ordinary Go and TypeScript work.
 - The build plan lives in [agentry-notes](https://github.com/blaktron/agentry-notes) and is immutable during the v1 build.
   Deviations get an entry in the deviations register there — dated, with what/why/impact —
   rather than an edit to the plan.
+
+## Which repository
+
+This repository is the open core: the server, the pipeline, auth, the git
+host, the headless deployment and the server's own `/ui/` pages. The hosted
+service's site (`blaktron/agentry-web`) and enterprise build
+(`blaktron/agentry-enterprise`) are closed repositories; a bug in the hosted
+site's pages, brand or deployment goes to the service's support address, not
+to an issue here. The CLI, the desktop app, the MCP server, the docs machinery
+and the examples each have their own public repository (see
+[docs/dev/getting-started.md](docs/dev/getting-started.md)).
+
+## Contributing from outside
+
+Fork, branch from `main`, open a pull request. CI runs on the maintainers'
+own runners once a maintainer approves the run for a first-time contributor.
+Sign off every commit (the DCO, below); keep a change to one concern; say in
+the PR what you verified and how. A change that departs from the recorded
+design gets a dated entry in the deviations register in
+[agentry-notes](https://github.com/blaktron/agentry-notes) — the maintainers
+will write it with you.
 
 ## Development setup
 
@@ -26,9 +47,10 @@ Everyday commands:
 | Command | What |
 |---|---|
 | `make check` | the full gate: generated-code drift, lint, tests, build |
-| `make generate` | regenerate OpenAPI server/client, sqlc, TS types |
+| `make generate` | regenerate the OpenAPI server and Go client, and sqlc |
 | `make test` | Go tests (DB tests need `AGENTRY_TEST_DATABASE_URL`) |
 | `./scripts/acceptance/mN.sh` | the acceptance script for milestone N |
+| `./scripts/acceptance/ui.sh` | the server's own `/ui/` pages, driven with curl and a cookie jar |
 
 Docker is optional; `scripts/dev/pg.sh` manages a private Postgres cluster if
 you would rather not run a container.
@@ -48,6 +70,12 @@ express (platform staff, org reviewer, "not the author"), mark it
 
 **All SQL lives in `internal/store/queries/` and goes through sqlc.** No
 string-built SQL anywhere else.
+
+**The core UI can do nothing the API refuses.** A page under `internal/ui`
+calls the API in-process with the browser's own session and CSRF token; it
+never reaches into the store or around `routeAuthz`. A new page gets a test in
+`internal/ui/ui_test.go`, and a new flow gets a step in
+`scripts/acceptance/ui.sh`.
 
 **Every scanner rule ships with fixtures.** A rule in `rules/` needs at least
 two matching and two non-matching cases, and the non-matching cases must
@@ -100,8 +128,8 @@ submit it under the project's license.
 
 ## Licensing
 
-The project license is being finalized (PLAN §20 Q2); the planning default is
-Apache-2.0. Do not add dependencies under AGPL, and do not import rule content
+The project license is MIT ([LICENSE](LICENSE)). Do not add dependencies
+under AGPL, and do not import rule content
 whose license restricts competing use — both would contaminate the
 distribution (PLAN §14.4, threat T-13). New dependencies need a line in the PR
 description explaining why an existing one will not do.

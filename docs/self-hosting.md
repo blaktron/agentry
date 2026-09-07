@@ -1,9 +1,12 @@
 # Self-hosting Agentry
 
-The whole product is open source: the scanners, the review queue, SSO and
-SCIM, signing with your own key. There is no "community edition" with the
-security features removed; a registry you cannot audit is not trust
-infrastructure.
+The whole registry is open source: the scanners, the review queue, SSO and
+SCIM, signing with your own key, and the server's own browser pages. There
+is no "community edition" with the security features removed; a registry you
+cannot audit is not trust infrastructure. What is *not* in this repository is
+the hosted service's site — a closed front end that runs in front of this
+same server; a registry does not need one, and
+[the last section](#fronting-it-with-a-site) says how one plugs in.
 
 **Target: a working private registry in under 15 minutes.**
 
@@ -24,6 +27,10 @@ cd agentry
 docker compose -f deploy/compose/docker-compose.yaml up -d   # postgres, minio, mailpit
 docker compose -f deploy/compose/docker-compose.yaml --profile server up -d
 ```
+
+The server's own pages are at http://localhost:8080/ui/ — sign-in, your
+account, tokens and SSH keys, the review queue, the staff console and
+organization administration. `agentry login` opens `/ui/authorize` there.
 
 Then create the first account:
 
@@ -71,7 +78,7 @@ injection-signature scanners the server runs at publish time, offline.
 | Shape | What runs | Who it is for |
 |---|---|---|
 | **Single process** | `agentryd all` + Postgres | evaluation, small teams |
-| **HA** | Helm chart: `api`×N, `git`×N (shared RWX volume), `worker`×N, `web`×N | production self-host |
+| **HA** | Helm chart: `api`×N, `git`×N (shared RWX volume), `worker`×N; a site in front is its own deployment | production self-host |
 | **AWS reference** | the hosted service's Terraform, kept with the site (not in this repository) | mirrors how the hosted service runs |
 
 The same binary serves every role; `agentryd api|git|worker|all` selects it.
@@ -385,8 +392,8 @@ plain `"5432:5432"` on a machine with a public address is Postgres — with
 the compose file's development password — on the internet. The stack
 therefore publishes every service **except the edge** on `AGENTRY_BIND`,
 default `127.0.0.1`: Postgres (5432), MinIO (9000/9001), mailpit
-(1025/8025) and agentryd (8080); the site, when one fronts the stack, and its docs sites
-(8000/8001) answer on the host itself and nowhere else. The acceptance
+(1025/8025) and agentryd (8080). A site overlay publishes its own services
+the same way. The acceptance
 scripts, `agentry` on the host, and the quickstart above all use
 `localhost`, so nothing changes for them.
 
@@ -415,13 +422,12 @@ they were initialised with.
 
 ### Rate limits at the edge
 
-agentryd applies the §19 per-IP limits to the API; the web tier has none of
-its own, so the edge adds `limit_req` zones (keyed on the resolved visitor
-address) for the routes that do work for strangers: the Builder's download
-and submit routes (10/min, burst 10), the login and sign-up forms and
-`/api/v1/auth/*` (30/min, burst 30), and the git endpoints (120/min, burst
-60). Over the limit is `429` with `Retry-After`. Tune the zones in
-`edge/nginx.conf`; behind Cloudflare, mirror the same paths with a
+agentryd applies the §19 per-IP limits to the API; the edge adds `limit_req`
+zones (keyed on the resolved visitor address) for the routes that do work for
+strangers: the sign-in page `/ui/login` and `/api/v1/auth/*` (30/min, burst
+30), and the git endpoints (120/min, burst 60). Over the limit is `429` with
+`Retry-After`. Tune the zones in `edge/nginx.conf`; a site's overlay adds
+zones for its own forms; behind Cloudflare, mirror the same paths with a
 rate-limiting rule so the edge is the second line, not the first.
 
 ### Running behind a proxy
@@ -632,11 +638,12 @@ none is sent through the same setup stage. Lost-authenticator recovery is an
 operator action in the Authentik admin UI; email alone never resets both
 factors.
 
-Sign-in from the web app runs in the API's browser mode: `/login`
-forwards to `/api/v1/auth/oidc/authentik/start?next=<in-app path>` and
-the callback answers a 303 back into the app (or to `/login?error=…`)
-once the session cookie is set; without `next` the same callback returns
-the JSON result the CLI and tests consume.
+Sign-in from a browser runs in the API's browser mode: the server's
+`/ui/login` (or a site's own sign-in page) forwards to
+`/api/v1/auth/oidc/authentik/start?next=<path>` and the callback answers
+a 303 back to that path (or to the sign-in page with `?error=…`) once the
+session cookie is set; without `next` the same callback returns the JSON
+result the CLI and tests consume.
 
 With `AGENTRY_AUTH_EXTERNAL_ONLY=true` the native register, password
 login, email-verify, and TOTP endpoints answer 410 Gone, and the web
@@ -737,16 +744,18 @@ The edge serves whatever is in the downloads directory
 CLI and the desktop app build from their own repositories (`agentry-cli`,
 `agentry-desktop`); the hosted site's repository has the script that
 builds the whole matrix and writes the `manifest.json` its download page
-renders. A registry without a site simply hosts the files:
+renders. A registry without a site simply hosts the files and links to
+them from wherever it tells its users about the clients:
 
 ```bash
 scp agentry-*-linux-amd64 host:/srv/agentry/downloads/
 ```
 
 `AGENTRY_DEFAULT_REGISTRY` bakes the registry these binaries talk to when
-the user configures nothing — set it to the site that serves them, so a
-download from `/download` connects back to that site by default (`--registry`
-and the config file still override). Left empty, the source defaults apply.
+the user configures nothing — set it to the registry (or the site in front
+of it) that serves them, so a downloaded client connects back there by
+default (`--registry` and the config file still override). Left empty, the
+source defaults apply.
 
 The script cross-compiles the CLI for macOS (arm64, amd64), Linux (amd64,
 arm64) and Windows (amd64) — it is pure Go — and builds the desktop app
@@ -756,9 +765,10 @@ machines). It writes `SHA256SUMS` and `manifest.json`; the page renders
 from the manifest, shows every target on the release matrix, and marks the
 ones without an artifact as not yet available instead of linking to
 nothing. Point `AGENTRY_DOWNLOADS_DIR` in `.env` at the directory — the
-edge serves it at `/downloads/` and the web container reads the manifest
-from it — and re-create the `edge` and `web` services once so the mount
-exists. Versions come from `git describe` in each repo, so tag releases
+edge serves it at `/downloads/`, and a site's `web` container reads the
+manifest from it — and re-create the `edge` service (and the site's `web`,
+when one is in front) once so the mount exists. Versions come from
+`git describe` in each repo, so tag releases
 (`v0.1.0`) to get readable file names.
 
 ## Choosing your publication policy
@@ -847,3 +857,52 @@ same authorization, hooks and quotas as HTTPS.
   `ssh://git@git.example.com:2222`) and agent pages show the SSH clone URL next to HTTPS.
 - **Enforced SSO:** an organization that requires SSO takes pushes only over HTTPS with an
   org-bound token; over SSH the push is refused with that message.
+
+## Fronting it with a site
+
+Everything above is a complete registry. The hosted service puts a site in
+front of the same server — a closed front end that renders the catalogue,
+the report cards, the Builder and the account pages in its own brand — and
+so can you. The contract between a front end and this server is small and
+entirely configuration:
+
+- **`web.url` / `AGENTRY_WEB_URL`** — the site's origin. When it is set,
+  every browser destination the API writes (where a failed sign-in lands,
+  where a signed-in browser goes, where an email link points, where sign-out
+  ends) is a page of that site instead of the server's `/ui/` pages. The
+  site's paths are fixed by convention (`/login`, `/dashboard`,
+  `/settings/…`, `/verify-email`); `internal/api/webpaths.go` is the one
+  table that knows them.
+- **`ui.mode` / `AGENTRY_UI_MODE`** — `full` serves every `/ui/` page,
+  `authorize` keeps only the device-authorize page the CLI and the desktop
+  app open (the site provides the rest), `off` serves none. A site in front
+  normally runs `authorize`.
+- **`brand.*` / `AGENTRY_BRAND_NAME`, `AGENTRY_BRAND_LOGO_URL`,
+  `AGENTRY_BRAND_CSS_URL`, `AGENTRY_SUPPORT_EMAIL`, `AGENTRY_SECURITY_EMAIL`**
+  — what the server calls the deployment in emails, in the directory's flow
+  titles and authenticator names, and on the `/ui/` pages that remain; the
+  stylesheet and logo the remaining pages load. `GET /api/v1/meta` reports
+  `brand` and `ui` (with `authorizeUrl`) so clients need no other
+  configuration.
+- **The directory's returns** — `AGENTRY_PUBLIC_WEB_URL` (where sign-out
+  lands) and `AGENTRY_ACCOUNT_URL` (where a password or authenticator change
+  returns) default to the server's own pages; a site sets them to its home
+  and its settings page, and applies its own brand object to the directory
+  through the directory's API (the flows stay the core's blueprint).
+  `AGENTRY_IDP_LOGOUT_URL` stays on the provider's end-session endpoint.
+- **The edge** — a site replaces `edge/nginx.conf` with one that sends
+  `/api/`, git, `/ui/` and `/downloads/` to the server and everything else to
+  the site, and adds rate-limit zones for its own forms.
+
+In compose that is one overlay file: a second `-f` that adds the site's
+services, replaces the edge config, and sets the variables above; the core
+stack is untouched. The site talks to the same API as the CLI, with the
+browser's session cookie, under the same authorization matrix — a front end
+cannot do anything the API refuses, and the server's own `/ui/` pages are the
+proof that the API is enough.
+
+A closed build can also extend the server itself: `pkg/extension` lets an
+outside Go module mount routes under `/api/v1/x/<name>/`, run its own
+migrations in its own schema, replace the entitlements resolver, subscribe to
+committed events and add worker jobs, with `GET /api/v1/meta` listing what is
+loaded. The core carries no extension and behaves identically with none.
