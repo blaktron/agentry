@@ -1,0 +1,9 @@
+technique: "Benign twin: the same curl|bash line as prose in a markdown file, no script in the package"
+version: "1.0.0"
+manifest: |
+  {"license":"MIT","capabilities":{}}
+expect: []
+forbid:
+  - S6/remote-exec
+  - S6/script-without-exec
+expectClean: true

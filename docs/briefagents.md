@@ -204,7 +204,15 @@ Closed vocabulary. Omitted or empty means a **pure-text BriefAgent**
 (its only run-time tool is `write_report`). The registry scans releases
 against these declarations, installs prompt on them (egress/exec need
 typed consent; a widened contract re-asks on upgrade), and the runner
-turns each line into a concrete control:
+turns each line into a concrete control. Support scripts are held to the
+same contract: the scan reads every shell, Python or JavaScript file in the
+package and reports a script under `exec: none`, a network call to a host
+outside `network.egress`, a file write under `filesystem.write: none`, an
+undeclared subprocess or `eval`, and any `curl … | sh` remote execution as
+high, and an environment variable read outside `secrets` as medium. It
+matches text without running anything, and a host only counts inside a
+network call, so a documentation URL in a comment is not a finding (see
+[trust](trust.md), stage S6).
 
 **`network.egress`**
 

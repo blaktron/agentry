@@ -23,8 +23,7 @@ There is no flag, plan, or role that lets a public version skip the pipeline
 ship**: the deterministic archive, not the working tree, not the tag as the
 author describes it.
 
-Nine stages run against those bytes (S6, a code-analysis stage, was
-retired with the package kinds it served; BriefAgents carry no tool code):
+Ten stages run against those bytes:
 
 | | |
 |---|---|
@@ -33,6 +32,7 @@ retired with the package kinds it served; BriefAgents carry no tool code):
 | **S3** | Hidden and obfuscated content: zero-width and bidi characters, Unicode tag blocks, confusables, private-use codepoints, HTML comments, CSS-hidden text, data URIs, entropy-gated encoded blobs |
 | **S4** | Prompt-injection signatures: instruction override, exfiltration, tool coercion, credential harvesting, persistence, obfuscation |
 | **S5** | LLM adjudication against a fixed rubric, with no tools; a judge showing signs of manipulation is itself a finding. The judge is an Anthropic-, OpenAI-compatible or Bedrock model, or a PromptGuard-class classifier that scores only the injection axis and therefore always routes to human review |
+| **S6** | Support scripts against the manifest: every shell, Python or JavaScript file in the package (by extension or shebang) is read for network calls, file writes, subprocesses, `eval`, environment reads and `curl … \| sh` remote execution, and each is compared with `capabilities`. A script in a package whose `exec` is `none`, a call to a host outside `network.egress`, a write under `filesystem.write: none`, an undeclared subprocess and any remote execution are high; an environment variable outside `secrets` is medium. The stage matches text and never runs the script; a host counts only inside a network call, so a URL in a comment is not a finding |
 | **S7** | Declared MCP servers: every `capabilities.mcpServers` package version is checked against the OSV vulnerability database — live the first time a version is seen, from the registry of scanned server versions afterwards — and each advisory is a finding at the advisory's own severity, CVE ids included. A lookup that fails routes to review; a database that is switched off says "not checked", never "no advisories" |
 | **S8** | Metadata, namespace and publisher-behaviour abuse |
 | **S9** | Release-diff risk: the rug-pull check, comparing a version against its predecessor |

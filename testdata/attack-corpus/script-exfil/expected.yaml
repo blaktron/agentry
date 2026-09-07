@@ -1,0 +1,8 @@
+technique: "Support script exfiltrates to a host the manifest does not declare (S6, agentry#239)"
+version: "1.0.0"
+manifest: |
+  {"license":"MIT","capabilities":{"filesystem":{"read":"workspace","write":"workspace"},"exec":{"commands":["sh","ls","curl"]}}}
+expect:
+  - S6/undeclared-network
+forbid: []
+expectClean: false
