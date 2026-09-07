@@ -48,9 +48,11 @@ type riverRow struct {
 func riverJob(t *testing.T, st *store.Store, queue string) riverRow {
 	t.Helper()
 	var r riverRow
-	var errs []byte
+	var errs string
 	err := st.Pool().QueryRow(context.Background(),
-		`SELECT state, attempt, scheduled_at, errors FROM river_job WHERE queue = $1 ORDER BY id DESC LIMIT 1`, queue).
+		// errors is a jsonb[] column; fold it into one JSON array to scan.
+		`SELECT state, attempt, scheduled_at, COALESCE(array_to_json(errors)::text, '[]')
+		 FROM river_job WHERE queue = $1 ORDER BY id DESC LIMIT 1`, queue).
 		Scan(&r.State, &r.Attempt, &r.ScheduledAt, &errs)
 	if err != nil {
 		t.Fatalf("river_job row for %s: %v", queue, err)
@@ -58,7 +60,7 @@ func riverJob(t *testing.T, st *store.Store, queue string) riverRow {
 	var list []struct {
 		Error string `json:"error"`
 	}
-	_ = json.Unmarshal(errs, &list)
+	_ = json.Unmarshal([]byte(errs), &list)
 	r.Errors = len(list)
 	if len(list) > 0 {
 		r.LastError = list[len(list)-1].Error
@@ -88,8 +90,11 @@ func TestRiverRunsJobAndCompletes(t *testing.T) {
 	if job.ID != id || job.Kind != "river.echo" || job.Queue != q || job.Attempt != 1 {
 		t.Fatalf("handler saw %+v, want id %s", job, id)
 	}
-	if string(job.Args) != `{"n":7}` {
-		t.Fatalf("args passed through as %s", job.Args)
+	// River stores args as jsonb, so the bytes come back canonicalised;
+	// the value is what a handler decodes.
+	var args struct{ N int }
+	if err := json.Unmarshal(job.Args, &args); err != nil || args.N != 7 {
+		t.Fatalf("args passed through as %s (%v)", job.Args, err)
 	}
 	if r := riverJob(t, st, q); r.State != "completed" {
 		t.Fatalf("row after drain: %+v", r)
