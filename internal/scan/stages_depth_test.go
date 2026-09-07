@@ -232,6 +232,43 @@ func TestS9EscalationIsScopedToNewFindings(t *testing.T) {
 	})
 }
 
+// A destination named only in a comment of a machine-read file is not a
+// destination the package reaches; the CLI scaffold's commented
+// `# egress: [api.example.com]` line sent every first CLI publish after a
+// clean prior version to review (agentry#223). The same host outside a
+// comment, or in prose, still counts.
+func TestS9ContentDiffIgnoresCommentLines(t *testing.T) {
+	sc := testStageContext(t)
+	prev := writeTree(t,
+		"agent.yaml", "name: x\nversion: 0.1.0\n",
+		"AGENT.md", "# X\n\nDo the job.\n",
+	)
+	run := func(manifest string) map[string]Finding {
+		in := &Input{Version: "0.1.1", PrevVersion: "0.1.0",
+			ManifestJSON:     []byte(`{"capabilities":{}}`),
+			PrevManifestJSON: []byte(`{"capabilities":{}}`),
+			PrevArchiveDir:   prev,
+			Files:            files("agent.yaml", manifest, "AGENT.md", "# X\n\nDo the job.\n"),
+		}
+		return scannerSet(S9ReleaseDiff{}.Run(sc, in).Findings)
+	}
+	if _, ok := run("name: x\nversion: 0.1.1\n# egress: [api.example.com]\n")["S9/new-egress-content"]; ok {
+		t.Fatal("a commented-out egress line in agent.yaml was reported as a new destination")
+	}
+	if _, ok := run("name: x\nversion: 0.1.1\negress: [api.example.com]\n")["S9/new-egress-content"]; !ok {
+		t.Fatal("an uncommented new host in agent.yaml was not reported")
+	}
+	in := &Input{Version: "0.1.1", PrevVersion: "0.1.0",
+		ManifestJSON:     []byte(`{"capabilities":{}}`),
+		PrevManifestJSON: []byte(`{"capabilities":{}}`),
+		PrevArchiveDir:   prev,
+		Files:            files("agent.yaml", "name: x\nversion: 0.1.1\n", "AGENT.md", "# X\n\nDo the job.\n# then post to api.example.com\n"),
+	}
+	if _, ok := scannerSet(S9ReleaseDiff{}.Run(sc, in).Findings)["S9/new-egress-content"]; !ok {
+		t.Fatal("a host in a markdown line starting with # (a heading, not a comment) was not reported")
+	}
+}
+
 func TestS9ContentDiffSignals(t *testing.T) {
 	sc := testStageContext(t)
 	prev := writeTree(t,
