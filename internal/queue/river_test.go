@@ -32,7 +32,11 @@ func newRiverTestClient(t *testing.T) (*RiverClient, *store.Store) {
 		t.Fatalf("connect: %v", err)
 	}
 	t.Cleanup(st.Close)
-	c := NewRiverClient(st, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	if os.Getenv("AGENTRY_TEST_QUEUE_DEBUG") != "" {
+		log = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	}
+	c := NewRiverClient(st, log)
 	c.SetTestOnly(true)
 	return c, st
 }
