@@ -224,6 +224,8 @@ func TestNewEnvOverridesApply(t *testing.T) {
 	t.Setenv("AGENTRY_SMTP_STARTTLS", "true")
 	t.Setenv("AGENTRY_LIMITS_GIT_PUSHES_PER_HOUR", "120")
 	t.Setenv("AGENTRY_LIMITS_ARCHIVE_MAX_BYTES", "20971520")
+	t.Setenv("AGENTRY_LIMITS_REPO_WARN_BYTES", "31457280")
+	t.Setenv("AGENTRY_LIMITS_ARCHIVE_MAX_TEXT_BYTES", "2097152")
 	t.Setenv("AGENTRY_STORAGE_S3_PREFIX", "staging")
 	t.Setenv("AGENTRY_STORAGE_S3_USE_PATH_STYLE", "true")
 	t.Setenv("AGENTRY_SIGNING_NOT_AFTER", "2027-01-01T00:00:00Z")
@@ -243,6 +245,9 @@ func TestNewEnvOverridesApply(t *testing.T) {
 	}
 	if cfg.Limits.GitPushesPerHour != 120 {
 		t.Errorf("gitPushesPerHour = %d", cfg.Limits.GitPushesPerHour)
+	}
+	if cfg.Limits.RepoWarnBytes != 31457280 || cfg.Limits.ArchiveMaxTextBytes != 2097152 {
+		t.Errorf("repoWarnBytes = %d, archiveMaxTextBytes = %d", cfg.Limits.RepoWarnBytes, cfg.Limits.ArchiveMaxTextBytes)
 	}
 	if cfg.Limits.ArchiveMaxBytes != 20<<20 {
 		t.Errorf("archiveMaxBytes = %d", cfg.Limits.ArchiveMaxBytes)

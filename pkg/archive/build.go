@@ -60,7 +60,7 @@ func WalkWorkspace(root string) ([]manifest.FileInfo, error) {
 		if !info.Mode().IsRegular() {
 			return fmt.Errorf("archive: unsupported file type at %s", rel)
 		}
-		files = append(files, manifest.FileInfo{Path: rel, Size: info.Size()})
+		files = append(files, manifest.FileInfo{Path: rel, Size: info.Size(), IsText: looksTextFile(path, rel)})
 		return nil
 	})
 	return files, err
@@ -201,4 +201,25 @@ type countingWriter struct{ n int64 }
 func (c *countingWriter) Write(p []byte) (int, error) {
 	c.n += int64(len(p))
 	return len(p), nil
+}
+
+// looksTextFile applies S1's sniff to a file on disk: an image by
+// extension is not text; otherwise the first bytes decide (LooksText). A
+// file that cannot be read counts as not text — V8's total is a cap, and
+// an unreadable file fails elsewhere.
+func looksTextFile(path, rel string) bool {
+	if IsImagePath(rel) {
+		return false
+	}
+	f, err := os.Open(path) //nolint:gosec // walking the caller's workspace
+	if err != nil {
+		return false
+	}
+	defer func() { _ = f.Close() }()
+	head := make([]byte, 512)
+	n, err := f.Read(head)
+	if err != nil && n == 0 {
+		return false
+	}
+	return LooksText(head[:n])
 }

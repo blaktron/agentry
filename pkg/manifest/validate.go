@@ -127,16 +127,21 @@ type Quotas struct {
 	MaxFileBytes int64
 	// MaxImageFileBytes caps each image file (recognized by extension).
 	MaxImageFileBytes int64
+	// MaxTextBytes caps the total size of the text files (FileInfo.IsText)
+	// in the resolved include set: §19's "instruction-file total ≤ 1 MB
+	// text", the prose S3/S4/S5 read in full. Zero disables the check.
+	MaxTextBytes int64
 }
 
 // DefaultQuotas returns the §19 v1 defaults: 10 MiB archive, 2000 files,
-// 2 MiB per file, 5 MiB per image.
+// 2 MiB per file, 5 MiB per image, 1 MiB of text in total.
 func DefaultQuotas() Quotas {
 	return Quotas{
 		MaxArchiveBytes:   10 << 20,
 		MaxFiles:          2000,
 		MaxFileBytes:      2 << 20,
 		MaxImageFileBytes: 5 << 20,
+		MaxTextBytes:      1 << 20,
 	}
 }
 
@@ -150,6 +155,12 @@ type FileInfo struct {
 	// Symlink marks symbolic links, which are rejected in the resolved
 	// include set (V4/S1).
 	Symlink bool
+	// IsText marks a file the scanners read as prose (the same sniff S1
+	// applies: no NUL byte in the head, not an image). V8 sums these
+	// against Quotas.MaxTextBytes — §19's "instruction-file total"
+	// (agentry#44, DEV-036). A lister that does not classify leaves it
+	// false and the total check does not apply.
+	IsText bool
 }
 
 // Context is the server-supplied context for ValidateInContext. Namespace
@@ -924,6 +935,20 @@ func validateQuotas(s *issues, ctx Context, resolved []FileInfo) {
 	}
 	if total > q.MaxArchiveBytes {
 		s.errf("V8", "publish.include", "archive would be %d bytes; the maximum is %d", total, q.MaxArchiveBytes)
+	}
+	// §19: the prose the scanners read in full is capped as a total, not
+	// only per file — a package cannot spread an oversized instruction set
+	// across many files (agentry#44).
+	if q.MaxTextBytes > 0 {
+		var text int64
+		for _, f := range resolved {
+			if f.IsText {
+				text += f.Size
+			}
+		}
+		if text > q.MaxTextBytes {
+			s.errf("V8", "publish.include", "text files total %d bytes; the maximum scanned prose is %d", text, q.MaxTextBytes)
+		}
 	}
 }
 

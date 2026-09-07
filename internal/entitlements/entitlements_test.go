@@ -45,7 +45,7 @@ func TestDefaultResolverReproducesSection19(t *testing.T) {
 	if org.RepoQuotaBytes != 100<<20 {
 		t.Errorf("repo quota = %d, want %d", org.RepoQuotaBytes, 100<<20)
 	}
-	want := ArchiveLimits{MaxBytes: 10 << 20, MaxFiles: 2000, MaxFileBytes: 2 << 20, MaxImageFileBytes: 5 << 20}
+	want := ArchiveLimits{MaxBytes: 10 << 20, MaxFiles: 2000, MaxFileBytes: 2 << 20, MaxImageFileBytes: 5 << 20, MaxTextBytes: 1 << 20}
 	if org.Archive != want {
 		t.Errorf("archive limits = %+v, want %+v", org.Archive, want)
 	}

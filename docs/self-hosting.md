@@ -362,6 +362,31 @@ configured at all, email verification tokens are logged at debug level.
 That is usable for a single-operator instance, not for anything with real
 users.
 
+### Limits and quotas
+
+The §19 quotas are configuration (`limits.*`, or `AGENTRY_LIMITS_*` in the
+environment) and an organization on a larger plan can be raised above them
+through the entitlements resolver. The defaults:
+
+| Key | Default | What |
+|---|---|---|
+| `limits.repoQuotaBytes` | 100 MiB | a push that would take the repository past it is refused |
+| `limits.repoWarnBytes` | 25 MiB | past it the push succeeds and the pusher sees `remote: agentry: warning: repository is N MB of the M MB quota` |
+| `limits.repoMaxBlobBytes` | 25 MiB | no single object in a pushed tree may exceed it |
+| `limits.archiveMaxBytes` | 10 MiB | the release archive, after `publish.include` |
+| `limits.archiveMaxFiles` | 2000 | files in the archive |
+| `limits.archiveMaxFileBytes` / `archiveMaxImageFileBytes` | 2 MiB / 5 MiB | any one file, images by extension |
+| `limits.archiveMaxTextBytes` | 1 MiB | the text files in total — the prose the scanners read in full; a package cannot spread an oversized instruction set across many files (V8) |
+| `limits.gitPushesPerHour` | 60 | per repository |
+| `limits.agentsPerUserNamespace` / `agentsPerOrgNamespace` | 200 / 500 | |
+| `limits.versionsPerDay` | 20 | per agent |
+| `limits.webhookEndpointsPerOrg` / `webhookDeliveriesPerSecond` | 20 / 5 | |
+| `limits.authedPerHour`, `authedBurstPerMin`, `anonymousPerMin`, `loginPerMin` | 5000, 100, 60, 10 | the API rate buckets (also enforced at the edge) |
+
+The archive quotas are checked by the manifest rules (V8) both on the server
+at submission and by `agentry validate` offline, so a package learns it is
+over before it is uploaded.
+
 ### Metrics
 
 The API exposes Prometheus metrics at **`/metrics`**: HTTP request counts and

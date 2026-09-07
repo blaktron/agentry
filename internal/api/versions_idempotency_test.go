@@ -23,10 +23,13 @@ func TestSubmitVersionIdempotencyReplay(t *testing.T) {
 		map[string]any{"namespace": user, "name": "replay", "modes": []string{"autonomous"}, "visibility": "public"}, nil, http.StatusCreated)
 	_, pat := env.mintPAT(sess, "pub", "agent:publish", "agent:read")
 
-	// A README past 1 MiB that does not compress away (the archive builder
+	// A body past 1 MiB that does not compress away (the archive builder
 	// refuses zip-bomb ratios): the guard used to refuse to read it at all.
+	// It is an image, not text: §19 caps the text files of a package at
+	// 1 MiB in total (V8, agentry#44), so a large README would be refused
+	// before the replay under test.
 	var sb strings.Builder
-	sb.WriteString("# replay\n")
+	sb.WriteString("\x89PNG\r\n\x1a\n")
 	seed := sha256.Sum256([]byte("idempotency fixture"))
 	for sb.Len() < 1400*1024 {
 		seed = sha256.Sum256(seed[:])
@@ -35,10 +38,12 @@ func TestSubmitVersionIdempotencyReplay(t *testing.T) {
 	}
 	big := sb.String()
 	files := map[string]string{
-		"agent.yaml": skillYAML(user, "replay", "1.0.0"),
-		"README.md":  big,
-		"SKILL.md":   "Summarize politely and cite sources.\n",
-		"LICENSE":    "Apache-2.0\n",
+		"agent.yaml": strings.Replace(skillYAML(user, "replay", "1.0.0"),
+			"include: [agent.yaml, README.md, SKILL.md, LICENSE]", "include: [agent.yaml, README.md, SKILL.md, LICENSE, logo.png]", 1),
+		"README.md": "# replay\n",
+		"logo.png":  big,
+		"SKILL.md":  "Summarize politely and cite sources.\n",
+		"LICENSE":   "Apache-2.0\n",
 	}
 	key := map[string]string{"Idempotency-Key": "publish-" + randSuffix()}
 

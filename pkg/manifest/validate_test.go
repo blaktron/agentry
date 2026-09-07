@@ -368,6 +368,13 @@ func TestValidateInContext(t *testing.T) {
 			q.MaxFiles = 4
 			c.Quotas = &q
 		}, "V8", SeverityError, "publish.include"},
+		{"V8 text total over the prose cap", nil, func(c *Context) {
+			// Each file is under the per-file cap; together the prose the
+			// scanners read passes 1 MiB (§19 instruction-file total, agentry#44).
+			c.Files = append(c.Files,
+				FileInfo{Path: "prompts/a.md", Size: 600 << 10, IsText: true},
+				FileInfo{Path: "prompts/b.md", Size: 600 << 10, IsText: true})
+		}, "V8", SeverityError, "publish.include"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
