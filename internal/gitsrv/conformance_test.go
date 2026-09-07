@@ -741,6 +741,38 @@ func TestPreReceiveHookFailsClosed(t *testing.T) {
 	})
 }
 
+// TestPreReceiveHookWarnTier: past the warn tier the push goes through and
+// the pusher is told (git relays the hook's stderr as "remote:" lines);
+// past the quota it is refused (§19, agentry#44).
+func TestPreReceiveHookWarnTier(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "objects.pack"), bytes.Repeat([]byte{'x'}, 4096), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	// Deleting a non-default branch: no tree to check, only the usage checks.
+	line := strings.Repeat("a", 40) + " " + zeroesOID + " refs/heads/feature\n"
+
+	t.Setenv("AGENTRY_HOOK_WARN_BYTES", "1024")
+	t.Setenv("AGENTRY_HOOK_QUOTA_BYTES", "10485760")
+	var stderr bytes.Buffer
+	if code := gitsrv.RunPreReceiveHook(strings.NewReader(line), &stderr); code != 0 {
+		t.Fatalf("push over the warn tier was refused: %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "warning: repository is") {
+		t.Fatalf("no warning for a repo over the warn tier: %q", stderr.String())
+	}
+
+	t.Setenv("AGENTRY_HOOK_QUOTA_BYTES", "1024")
+	stderr.Reset()
+	if code := gitsrv.RunPreReceiveHook(strings.NewReader(line), &stderr); code == 0 {
+		t.Fatalf("push over the quota was accepted: %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "exceeds") {
+		t.Fatalf("no quota refusal: %q", stderr.String())
+	}
+}
+
 const zeroesOID = "0000000000000000000000000000000000000000"
 
 // errReader fails on first read, standing in for a truncated hook stdin.

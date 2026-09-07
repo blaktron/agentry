@@ -586,6 +586,7 @@ func (h *Handler) gitEnvFor(ctx context.Context, gitProtocol string, agent regis
 		fmt.Sprintf("AGENTRY_HOOK_CAN_PUBLISH=%t", canPublish),
 		fmt.Sprintf("AGENTRY_HOOK_MAX_BLOB_BYTES=%d", h.cfg.Limits.RepoMaxBlobBytes),
 		fmt.Sprintf("AGENTRY_HOOK_QUOTA_BYTES=%d", h.cfg.Limits.RepoQuotaBytes),
+		fmt.Sprintf("AGENTRY_HOOK_WARN_BYTES=%d", h.cfg.Limits.RepoWarnBytes),
 		// §6.3 agent setting (agentry#48): maintainers may allow non-fast-forward
 		// pushes to the default branch; deletion stays denied regardless.
 		fmt.Sprintf("AGENTRY_HOOK_ALLOW_FORCE=%t", agent.AllowForcePush),
