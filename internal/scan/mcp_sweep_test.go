@@ -170,7 +170,7 @@ func TestMCPSweepRespectsEmailPreference(t *testing.T) {
 		t.Fatalf("publish: %s", v.Status)
 	}
 	osv.vulns["npm/quiet-fixture@0.1.0"] = []scan.OSVVulnerability{{ID: "GHSA-quiet", Severity: "high", Summary: "x"}}
-	if _, err := e.st.Pool().Exec(ctx, `UPDATE mcp_server_scans SET last_checked_at = now() - interval '25 hours' WHERE ecosystem = 'npm' AND package = 'mcp-sweep-fixture'`); err != nil {
+	if _, err := e.st.Pool().Exec(ctx, `UPDATE mcp_server_scans SET last_checked_at = now() - interval '25 hours' WHERE ecosystem = 'npm' AND package = 'quiet-fixture'`); err != nil {
 		t.Fatal(err)
 	}
 	sum, err := e.pipe.MCPSweep(ctx)
