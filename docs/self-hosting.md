@@ -444,15 +444,16 @@ http:
 Env: `AGENTRY_TRUSTED_PROXIES` (an integer hop count, not a CIDR list).
 
 The compose stack ships its own proxy, the `edge` service
-(`deploy/compose/edge/nginx.conf`): nginx on 80/443 that terminates TLS,
-serves the web app, `/api`, `/scim`, `/.well-known` and `/<ns>/<name>.git`
-from one origin (the split the Helm ingress makes), and caches
-`/_next/static` and the docs sites. **Use it even in dev.** Browsers send no
-`Sec-Fetch-Site` and — under the app's `Referrer-Policy: no-referrer` — an
-`Origin` of `null` to any origin that is not https or localhost, so on a
-plain-http hostname every form post in the web app is refused as
-cross-origin. Point `AGENTRY_EDGE_CERT_DIR` at a directory holding
-`edge.crt` and `edge.key`; on a Tailscale host
+(`deploy/compose/edge/nginx.conf`): nginx on 80/443 that terminates TLS and
+serves the server's own `/ui/` pages, `/api`, `/scim`, `/.well-known`,
+`/downloads/` and `/<ns>/<name>.git` from one origin (the same split the
+Helm ingress makes; a site in front replaces this config with its own, see
+the last section). **Use it even in dev.** Browsers send no `Sec-Fetch-Site`
+and — under a `Referrer-Policy: no-referrer` — an `Origin` of `null` to any
+origin that is not https or localhost, so on a plain-http hostname every
+form post to the `/ui/` pages (or a site's) is refused as cross-origin.
+Point `AGENTRY_EDGE_CERT_DIR` at a directory holding `edge.crt` and
+`edge.key`; on a Tailscale host
 
 ```bash
 sudo tailscale cert --cert-file edge.crt --key-file edge.key <host>.<tailnet>.ts.net
@@ -568,9 +569,9 @@ org-scoped and minted by the org, not by the platform.
 The Helm chart carries the same knobs (`config.auth.externalOnly`,
 `config.social.authentik`, `config.auth.idpStaffGroup`,
 `config.idp.logoutUrl`, `secret.authentikClientSecret`,
-`secret.idpAdminToken`) and so do the Terraform environments
-(`idp_client_id`, `idp_issuer`, `idp_logout_url`, `idp_staff_group`, with
-the client secret in Secrets Manager under `agentry/<env>/idp-client-secret`).
+`secret.idpAdminToken`); the hosted service's Terraform (kept with the
+site) carries them as `idp_client_id`, `idp_issuer`, `idp_logout_url` and
+`idp_staff_group`, with the client secret in Secrets Manager.
 If you allow self-enrollment without one, drop that mapping and accept
 that such accounts start as new registry users.
 
@@ -739,7 +740,7 @@ deployment that predates this (agentry#164).
 ## Hosting the downloads
 
 The edge serves whatever is in the downloads directory
-(`AGENTRY_DOWNLOADS_DIR`, default `deploy/compose/downloads`) at
+(`AGENTRY_DOWNLOADS_DIR`; unset, an empty named volume `downloads`) at
 `/downloads/`, so publishing a build for your users is a file copy — the
 CLI and the desktop app build from their own repositories (`agentry-cli`,
 `agentry-desktop`); the hosted site's repository has the script that
