@@ -22,7 +22,9 @@ permissions:
 
 jobs:
   release-please:
-    runs-on: ubuntu-latest
+    # Self-hosted like every other workflow: GitHub-hosted minutes are
+    # exhausted, so on ubuntu-latest the job never scheduled (agentry#220).
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: googleapis/release-please-action@v4
         with:
