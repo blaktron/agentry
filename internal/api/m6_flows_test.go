@@ -64,7 +64,8 @@ func TestWebhookDeliveryViaQueue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	q := queue.NewPGClient(env.st, nil)
+	q := queue.NewRiverClient(env.st, nil)
+	q.SetTestOnly(true)
 	disp := webhook.NewDispatcher(webhook.Deps{
 		Store: env.st, Sealer: sealer, Queue: q,
 		Client: webhook.NewHTTPClient(webhook.Guard{AllowLoopback: true}, tlsTrusting(ts)),
@@ -158,7 +159,8 @@ func TestAuditExport(t *testing.T) {
 	}
 
 	// Run the export job.
-	q := queue.NewPGClient(env.st, nil)
+	q := queue.NewRiverClient(env.st, nil)
+	q.SetTestOnly(true)
 	srvRef.RegisterQueueHandlers(q)
 	q.Drain(context.Background(), "core")
 

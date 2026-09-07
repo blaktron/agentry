@@ -62,7 +62,8 @@ func TestWebhookDeliveriesAreRateLimitedPerOrg(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	q := queue.NewPGClient(env.st, nil)
+	q := queue.NewRiverClient(env.st, nil)
+	q.SetTestOnly(true)
 	disp := webhook.NewDispatcher(webhook.Deps{
 		Store: env.st, Sealer: sealer, Queue: q,
 		Client: webhook.NewHTTPClient(webhook.Guard{AllowLoopback: true}, tlsTrusting(ts)),
@@ -127,7 +128,8 @@ func TestWebhookRateLimitIsPerOrgNotGlobal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	q := queue.NewPGClient(env.st, nil)
+	q := queue.NewRiverClient(env.st, nil)
+	q.SetTestOnly(true)
 	// One client that trusts both loopback servers: they share a cert pool
 	// only if we build it from both, so use the permissive dev guard with A's
 	// pool and register B's cert too.

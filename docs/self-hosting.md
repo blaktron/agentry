@@ -387,6 +387,23 @@ The archive quotas are checked by the manifest rules (V8) both on the server
 at submission and by `agentry validate` offline, so a package learns it is
 over before it is uploaded.
 
+### The job queue
+
+Async work (scans, webhook deliveries, audit exports, repository
+bookkeeping, the watchdog and MCP sweeps) rides a queue in the same
+Postgres database. The driver is [River](https://riverqueue.com)
+(`queue.driver: river`, `AGENTRY_QUEUE_DRIVER`); its tables (`river_job`,
+`river_queue`, `river_leader`, `river_client`, `river_migration`) are
+created by the migrator on start beside the core schema, so nothing extra
+runs. `queue.workers` (`AGENTRY_QUEUE_WORKERS`, default 1) is how many jobs
+one worker process runs at once per queue: 1 keeps the serial behaviour of
+earlier releases; raise it on a worker with the memory for parallel scans.
+A job that fails retries with exponential backoff up to five attempts, a
+job a crashed worker held is rescued after 30 minutes, and every outcome is
+counted (see Metrics). `queue.driver: pg` selects the earlier `SELECT … FOR
+UPDATE SKIP LOCKED` implementation on the `jobs` table; it stays for one
+release as a fallback and is not for new installs.
+
 ### Metrics
 
 The API exposes Prometheus metrics at **`/metrics`**: HTTP request counts and
