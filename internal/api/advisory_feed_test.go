@@ -6,6 +6,7 @@ package api_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -71,8 +72,19 @@ func TestAdvisoryFeedAndPermalink(t *testing.T) {
 	}
 
 	// Paging: limit=1 yields a Link: rel="next" whose cursor continues.
+	// Page 2 is compared with what page 1 actually returned, not with the
+	// feed snapshot above: the feed is global and the package's tests run
+	// in parallel, so another test can publish an advisory between the
+	// two requests and move the head (agentry#226).
 	res := env.do(anonymous, http.MethodGet, "/api/v1/advisories?limit=1", nil)
+	var page1 []adv
+	if err := json.NewDecoder(res.Body).Decode(&page1); err != nil {
+		t.Fatalf("page 1: decode: %v", err)
+	}
 	_ = res.Body.Close()
+	if len(page1) != 1 {
+		t.Fatalf("page 1 with limit=1: %+v", page1)
+	}
 	link := res.Header.Get("Link")
 	if !strings.Contains(link, `rel="next"`) || !strings.Contains(link, "cursor=") {
 		t.Fatalf("no next link on a full page: %q", link)
@@ -80,8 +92,8 @@ func TestAdvisoryFeedAndPermalink(t *testing.T) {
 	next := link[strings.Index(link, "<")+1 : strings.Index(link, ">")]
 	var page2 []adv
 	env.doJSON(anonymous, http.MethodGet, next, nil, &page2, http.StatusOK)
-	if len(page2) == 0 || page2[0].Id == feed[0].Id {
-		t.Fatalf("second page did not advance: %+v", page2)
+	if len(page2) == 0 || page2[0].Id == page1[0].Id {
+		t.Fatalf("second page did not advance past %s: %+v", page1[0].Id, page2)
 	}
 	res = env.do(anonymous, http.MethodGet, "/api/v1/advisories?cursor=garbage", nil)
 	_ = res.Body.Close()
