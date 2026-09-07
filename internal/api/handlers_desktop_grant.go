@@ -16,7 +16,7 @@ import (
 
 // The desktop app's browser sign-in, hardened (agentry#19, DEV-058 / D-015).
 //
-// Before: the web tier's authorize form minted a PAT and 303'd it to the
+// Before: the site's authorize form minted a PAT and 303'd it to the
 // app's loopback listener as ?token=…, which left the token in the browser's
 // history. Now the form records a GRANT — a single-use code bound to the
 // app's state nonce, valid for desktopGrantTTL — and the app exchanges the

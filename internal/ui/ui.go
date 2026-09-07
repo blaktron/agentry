@@ -230,7 +230,7 @@ func (h *handler) requireUser(w http.ResponseWriter, r *http.Request) *userInfo 
 	return u
 }
 
-// sameOrigin is the web tier's rule for form posts (web/lib/forms.ts):
+// sameOrigin is the same rule the site applies to its form posts (agentry-web, lib/forms.ts):
 // Sec-Fetch-Site when the browser sends it, else Origin against Host.
 func sameOrigin(r *http.Request) bool {
 	if site := r.Header.Get("Sec-Fetch-Site"); site != "" {

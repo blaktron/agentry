@@ -2177,7 +2177,7 @@ type SocialOidcCallbackParamsProvider string
 
 // SocialOidcStartParams defines parameters for SocialOidcStart.
 type SocialOidcStartParams struct {
-	// Next Browser mode. An in-app, path-absolute return target (e.g. `/dashboard`). When present and valid, the callback answers the browser with a 303 to it instead of the JSON result, and a failed login 303s to `/login?error=…`. Anything that is not a single-slash path on this origin is ignored (open-redirect guard), which leaves the API behaviour unchanged.
+	// Next Browser mode. An in-app, path-absolute return target (e.g. `/dashboard` on the site, `/ui/account` on the server's own pages). When present and valid, the callback answers the browser with a 303 to it instead of the JSON result, and a failed login 303s to the sign-in page with `?error=…` (the site's `/login`, or `/ui/login`). Anything that is not a single-slash path on this origin is ignored (open-redirect guard), which leaves the API behaviour unchanged.
 	Next *string `form:"next,omitempty" json:"next,omitempty"`
 }
 
@@ -3490,7 +3490,7 @@ type ClientInterface interface {
 
 	// ListUserDependencyAlerts Open dependency alerts on published versions the caller submitted (agentry#177).
 	//
-	// A dependency alert says a published version declares an MCP server version that the daily sweep found to carry a newly known high or critical vulnerability. It closes on its own when the version is yanked, quarantined or blocked, or when the advisory is withdrawn; publishing a fixed version does not close the old version's alert. The web app shows these as the banner after sign-in and on the dashboard.
+	// A dependency alert says a published version declares an MCP server version that the daily sweep found to carry a newly known high or critical vulnerability. It closes on its own when the version is yanked, quarantined or blocked, or when the advisory is withdrawn; publishing a fixed version does not close the old version's alert. A front end shows these; the site renders them as the banner after sign-in and on the dashboard.
 	//
 	// Corresponds with GET /user/dependency-alerts (the `ListUserDependencyAlerts` operationId).
 	ListUserDependencyAlerts(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3511,7 +3511,7 @@ type ClientInterface interface {
 
 	// GetUserNotificationSettings How the registry's alerts reach the caller (agentry#190).
 	//
-	// Email per kind of notification, and whether the dependency-alert banner shows in the web app. An account that never changed anything reads back with everything on.
+	// Email per kind of notification, and whether the dependency-alert banner shows in a front end (the site reads it). An account that never changed anything reads back with everything on.
 	//
 	// Corresponds with GET /user/notifications (the `GetUserNotificationSettings` operationId).
 	GetUserNotificationSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3606,7 +3606,7 @@ type ClientInterface interface {
 
 	// CreateDesktopGrantWithBody Record a one-time grant for the desktop app's browser sign-in.
 	//
-	// Session-only. The web tier's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+	// Session-only. The site's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -3615,7 +3615,7 @@ type ClientInterface interface {
 
 	// CreateDesktopGrant Record a one-time grant for the desktop app's browser sign-in.
 	//
-	// Session-only. The web tier's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+	// Session-only. The site's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -5834,7 +5834,7 @@ func (c *Client) DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUse
 
 // ListUserDependencyAlerts Open dependency alerts on published versions the caller submitted (agentry#177).
 //
-// A dependency alert says a published version declares an MCP server version that the daily sweep found to carry a newly known high or critical vulnerability. It closes on its own when the version is yanked, quarantined or blocked, or when the advisory is withdrawn; publishing a fixed version does not close the old version's alert. The web app shows these as the banner after sign-in and on the dashboard.
+// A dependency alert says a published version declares an MCP server version that the daily sweep found to carry a newly known high or critical vulnerability. It closes on its own when the version is yanked, quarantined or blocked, or when the advisory is withdrawn; publishing a fixed version does not close the old version's alert. A front end shows these; the site renders them as the banner after sign-in and on the dashboard.
 //
 // Corresponds with GET /user/dependency-alerts (the `ListUserDependencyAlerts` operationId).
 func (c *Client) ListUserDependencyAlerts(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5885,7 +5885,7 @@ func (c *Client) DeleteUserDirectoryDevice(ctx context.Context, kind DeleteUserD
 
 // GetUserNotificationSettings How the registry's alerts reach the caller (agentry#190).
 //
-// Email per kind of notification, and whether the dependency-alert banner shows in the web app. An account that never changed anything reads back with everything on.
+// Email per kind of notification, and whether the dependency-alert banner shows in a front end (the site reads it). An account that never changed anything reads back with everything on.
 //
 // Corresponds with GET /user/notifications (the `GetUserNotificationSettings` operationId).
 func (c *Client) GetUserNotificationSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -6130,7 +6130,7 @@ func (c *Client) CreateToken(ctx context.Context, body CreateTokenJSONRequestBod
 
 // CreateDesktopGrantWithBody Record a one-time grant for the desktop app's browser sign-in.
 //
-// Session-only. The web tier's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+// Session-only. The site's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
 //
 // Takes any type of body and a specified content type.
 //
@@ -6149,7 +6149,7 @@ func (c *Client) CreateDesktopGrantWithBody(ctx context.Context, contentType str
 
 // CreateDesktopGrant Record a one-time grant for the desktop app's browser sign-in.
 //
-// Session-only. The web tier's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+// Session-only. The site's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -12780,7 +12780,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListUserDependencyAlertsWithResponse Open dependency alerts on published versions the caller submitted (agentry#177).
 	//
-	// A dependency alert says a published version declares an MCP server version that the daily sweep found to carry a newly known high or critical vulnerability. It closes on its own when the version is yanked, quarantined or blocked, or when the advisory is withdrawn; publishing a fixed version does not close the old version's alert. The web app shows these as the banner after sign-in and on the dashboard.
+	// A dependency alert says a published version declares an MCP server version that the daily sweep found to carry a newly known high or critical vulnerability. It closes on its own when the version is yanked, quarantined or blocked, or when the advisory is withdrawn; publishing a fixed version does not close the old version's alert. A front end shows these; the site renders them as the banner after sign-in and on the dashboard.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -12807,7 +12807,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetUserNotificationSettingsWithResponse How the registry's alerts reach the caller (agentry#190).
 	//
-	// Email per kind of notification, and whether the dependency-alert banner shows in the web app. An account that never changed anything reads back with everything on.
+	// Email per kind of notification, and whether the dependency-alert banner shows in a front end (the site reads it). An account that never changed anything reads back with everything on.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -12920,7 +12920,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreateDesktopGrantWithBodyWithResponse Record a one-time grant for the desktop app's browser sign-in.
 	//
-	// Session-only. The web tier's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+	// Session-only. The site's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12929,7 +12929,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreateDesktopGrantWithResponse Record a one-time grant for the desktop app's browser sign-in.
 	//
-	// Session-only. The web tier's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+	// Session-only. The site's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -20279,7 +20279,7 @@ func (c *ClientWithResponses) DeleteCurrentUserWithResponse(ctx context.Context,
 
 // ListUserDependencyAlertsWithResponse Open dependency alerts on published versions the caller submitted (agentry#177).
 //
-// A dependency alert says a published version declares an MCP server version that the daily sweep found to carry a newly known high or critical vulnerability. It closes on its own when the version is yanked, quarantined or blocked, or when the advisory is withdrawn; publishing a fixed version does not close the old version's alert. The web app shows these as the banner after sign-in and on the dashboard.
+// A dependency alert says a published version declares an MCP server version that the daily sweep found to carry a newly known high or critical vulnerability. It closes on its own when the version is yanked, quarantined or blocked, or when the advisory is withdrawn; publishing a fixed version does not close the old version's alert. A front end shows these; the site renders them as the banner after sign-in and on the dashboard.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -20324,7 +20324,7 @@ func (c *ClientWithResponses) DeleteUserDirectoryDeviceWithResponse(ctx context.
 
 // GetUserNotificationSettingsWithResponse How the registry's alerts reach the caller (agentry#190).
 //
-// Email per kind of notification, and whether the dependency-alert banner shows in the web app. An account that never changed anything reads back with everything on.
+// Email per kind of notification, and whether the dependency-alert banner shows in a front end (the site reads it). An account that never changed anything reads back with everything on.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -20527,7 +20527,7 @@ func (c *ClientWithResponses) CreateTokenWithResponse(ctx context.Context, body 
 
 // CreateDesktopGrantWithBodyWithResponse Record a one-time grant for the desktop app's browser sign-in.
 //
-// Session-only. The web tier's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+// Session-only. The site's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -20542,7 +20542,7 @@ func (c *ClientWithResponses) CreateDesktopGrantWithBodyWithResponse(ctx context
 
 // CreateDesktopGrantWithResponse Record a one-time grant for the desktop app's browser sign-in.
 //
-// Session-only. The web tier's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+// Session-only. The site's authorize page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
