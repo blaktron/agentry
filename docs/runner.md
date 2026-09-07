@@ -54,7 +54,11 @@ compiled plan, the MCP profile, the registry's vulnerability verdict on each
 declared MCP server, and that **every declared secret resolves** —
 the exit-11 refusals a scheduled run would otherwise meet at 03:00. Exit 0
 when every check passes (warnings allowed), 1 otherwise; `--json` for
-machines. No secret *value* is ever printed.
+machines. No secret *value* is ever printed. `--adapter NAME` adds the
+checks a host-run harness needs: that its executable resolves (on `PATH`
+or at `harness.<name>.path`), which release is installed and whether that
+is the one the adapter was written against, and whether the endpoint
+`harness.<name>.baseUrl` names is one `model.proxyAllow` permits.
 
 ### `agentry run <ns/name[@range]>`
 
@@ -71,7 +75,7 @@ One BriefAgent, one job, one container tree, then gone.
 | `--keep-profile true\|false` | this run's MCP-profile completion choice (default: the profile's own setting, else policy) |
 | `--reconfigure-profile` | re-run guided profile setup over an existing profile |
 | `--timeout N` / `--max-turns N` / `--max-cost USD` | override the policy budgets (exit 15 / 16 on breach; cost is the harness's running total, `0` = unlimited) |
-| `--adapter NAME` / `--list-adapters` | harness adapter (default `docker-agent`; goose/claude/codex are planned slots) |
+| `--adapter NAME` / `--list-adapters` | harness adapter (default `docker-agent`; `claude` drives your own Claude Code installation, see below; goose and codex are planned slots) |
 | `--local DIR` | run an unpublished BriefAgent tree (unsigned by definition: requires `--allow-unsigned`) |
 | `--allow-unsigned` | run a release the registry has no attestation for; a *mismatched* attestation always refuses |
 | `--allow-vulnerable-mcp` | run even though the registry reports a known high or critical vulnerability for a declared MCP server version (the receipt records the override) |
@@ -236,7 +240,8 @@ Created on first use; `AGENTRY_RUNNER_HOME` moves the whole runner home.
 | `mcpRegistries.npm` / `mcpRegistries.pypi` | where declared `capabilities.mcpServers` resolve (defaults: registry.npmjs.org, pypi.org; point at private mirrors here) |
 | `mcpRegistries.pypiAllowSourceDists` | allow a PyPI MCP server to install from a source distribution (default false: wheels only, see below) |
 | `mcpServers.allowVulnerable` | let runs proceed when the registry reports a high or critical advisory for a declared server version (default false: refused, exit 11) |
-| `harness.<adapter>.path` | the executable a host-run harness adapter uses instead of looking it up on `PATH` (for the adapters that run the person's own installation of a harness, RUNNER M-R4; none ships yet) |
+| `harness.<adapter>.path` | the executable a host-run harness adapter uses instead of looking it up on `PATH` |
+| `harness.<adapter>.baseUrl` / `.model` / `.apiKeyEnv` | the model endpoint that adapter is given, in its own vendor's terms — a host-run harness speaks its vendor's API, which is not always the one `model.*` describes. The host must also be in `model.proxyAllow` or the run's proxy denies it (`agentry doctor --adapter <name>` says so before a run finds out). |
 | `images.nodeRuntime` / `images.pythonRuntime` | pinned runtime images that install and run declared npm/PyPI MCP servers |
 
 The policy participates in the plan hash: editing it invalidates cached
@@ -253,6 +258,7 @@ plans, which recompile on next use.
 | `secrets: [names]` | values only in the profile, the per-run secrets file (0600, deleted at teardown), and the tools container env — never in plans, receipts, or process listings |
 | run inputs | `--file` items land in a per-run folder mounted **read-only** at `/inputs` on the tool plane, served by always-granted `list_inputs`/`read_input`; job output and receipts live on the separate `/out` volume |
 | the agent container itself | internal-only network; reachable endpoints: the gateway (Bearer token) and the egress proxy (allowlist = `model.proxyAllow`); `/plan` is its only mount |
+| a **host-run** harness instead (`--adapter claude`) | no agent container: the gateway's catalog is still the whole tool surface, and the proxy variables are still the route to the model, but they are configuration the harness is asked to honour rather than a network it cannot leave. The receipt says so in `capabilities_enforced["harness.isolation"]`, and `receipts/proxy.log` shows every CONNECT it actually made. |
 
 Every claim above appears, mechanism named, in the run's
 `capabilities_enforced` — the receipts stay honest about what is enforced
@@ -266,6 +272,46 @@ built once at install time from a one-line generated Dockerfile
 argv0 allowlist and shim `PATH`; the image simply no longer contains anything
 else to run. A declared command the runner image never had is reported absent,
 as before.
+
+## Harness adapters
+
+`--adapter` chooses which agent harness runs the BriefAgent. Every adapter
+gets the same contract — the gateway's catalog is the only tool surface, the
+model key and the gateway token arrive by variable name, telemetry is off,
+and the result envelope has one shape — and a conformance suite holds them
+to it. What differs is where the harness runs.
+
+| Adapter | What runs | Modes | Isolation |
+|---|---|---|---|
+| `docker-agent` (default) | the pinned `docker/docker-agent` image | autonomous, interactive (Agent Client Protocol over the container's stdio) | a container on the run's internal network: it has no route out but the proxy |
+| `claude` | **your own installation** of Claude Code, as a process of your user | autonomous, interactive (Claude Code's own bidirectional stream-json) | the harness is outside the run's network boundary — see below |
+| `goose`, `codex` | planned (RUNNER M-R4c/d) | — | — |
+
+### `claude`
+
+The runner does not package or pin Claude Code: it runs the `claude` you
+already have (`harness.claude.path` overrides the `PATH` lookup), and
+`agentry doctor --adapter claude` reports which release that is. Each run
+gets a generated MCP config naming the run's gateway and nothing else,
+locked in with `--strict-mcp-config`, with the built-in tools switched off
+and anything outside the gateway's catalog refused. It runs in Claude Code's
+bare mode, so none of your hooks, plugins, skills, memory or `CLAUDE.md`
+reaches a BriefAgent run, and `CLAUDE_CONFIG_DIR` points inside the run, so
+the run leaves nothing in your own configuration.
+
+Bare mode also reads no login credential of yours, which is deliberate: a
+run spends the **operator's** model access, never your subscription. Give it
+an endpoint that speaks the Anthropic Messages API — Anthropic's own or a
+compatible one — with `harness.claude.baseUrl`, `.model` and `.apiKeyEnv`,
+and put its host in `model.proxyAllow`.
+
+The trade-off to understand: a harness running as your own process is not
+inside the run's network boundary the way a container is. Its file and
+network access are bounded by its configuration and by the proxy variables,
+not by Docker. The tools container still enforces every declared capability
+for everything that goes through the gateway, and `receipts/proxy.log`
+records every CONNECT the harness made, so the enforcement record stays
+honest about which half is which.
 
 ## The output folder
 
