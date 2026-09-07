@@ -2,9 +2,10 @@
 
 What Agentry checks before a version becomes installable, what its signature
 proves, and what none of it guarantees (the part most registries leave out).
-This is the repository-side companion to the `/trust` page any
-running instance serves; that page additionally shows the live signing keys
-and the current ruleset version.
+This is the repository-side companion to the `/trust` page the hosted
+site serves; every registry publishes the same posture machine-readably —
+its live signing keys and the current ruleset version — at
+`/.well-known/agentry/registry.json`, and a site in front renders them.
 
 ## The premise
 
@@ -118,7 +119,7 @@ alert is not an advisory: it says the dependency has a known fix to pin,
 and it closes when the affected version is yanked or the advisory is
 withdrawn.
 
-Advisories are shown on the affected agent's page, and the registry's
+Advisories are shown on the affected agent's page, and the site's
 `/advisories` page is the global feed — every advisory published against a
 public BriefAgent, newest first, each with a permalink — followed by the
 explainer of the model and the notification paths. The API serves the same

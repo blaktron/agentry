@@ -17,12 +17,16 @@ Conventions: `agentryd` is the server binary; `$DB` is the database URL;
 project is additive-or-compatible so old and new code can run side by side
 during a rollout:
 
-1. `terraform plan` in the target env; a plan that touches RDS, EFS, or the
-   KMS signing key stops here and gets a second pair of eyes.
+1. Review the infrastructure change first (`helm diff`, `docker compose
+   config`, or the deployment's own plan step — the hosted service's
+   Terraform lives with its site); a change that touches the database, the
+   repo storage or the signing key stops here and gets a second pair of
+   eyes.
 2. Apply migrations: `agentryd migrate` (idempotent; takes a session lock, so
    running it twice concurrently is safe).
 3. Roll the services one at a time: `worker` first (it is the least
-   user-visible), then `api`, `git`, `web`.
+   user-visible), then `api`, `git`. A site in front rolls last, from its
+   own repository.
 4. Watch: 5xx rate, publish→verdict p95, queue age. Give it ten minutes.
 
 **Roll back.** Code rolls back freely; **migrations do not**. Redeploy the
@@ -180,14 +184,16 @@ version from a client that pinned the old key.
 
 ---
 
-## 6. Database restore (RDS PITR)
+## 6. Database restore (point in time)
 
 **Trigger:** data loss or corruption. RPO 15 minutes, RTO 4 hours (§13.6).
 
-1. Stop writes: scale `api`, `git`, and `worker` to zero. Leave `web` up (it
-   will show errors, which is better than silent divergence).
-2. Restore to a new instance at the chosen timestamp (`aws rds
-   restore-db-instance-to-point-in-time`). Never restore over the live one.
+1. Stop writes: scale `api`, `git`, and `worker` to zero. Leave the edge (and
+   a site in front) up: it will show errors, which is better than silent
+   divergence.
+2. Restore to a new instance at the chosen timestamp — from your Postgres
+   backups, or on the AWS reference deployment `aws rds
+   restore-db-instance-to-point-in-time`. Never restore over the live one.
 3. Point the app at the restored endpoint, run `agentryd migrate` (no-op if
    the restore is post-migration), scale `api`/`worker` back up.
 4. Reconcile object storage: S3 release archives are content-addressed and
@@ -210,15 +216,16 @@ verify` passes on a pre-incident version.
 
 ---
 
-## 7. Repo storage (EFS) restore
+## 7. Repo storage restore
 
 **Trigger:** git repos missing or corrupt.
 
 1. Repos are keyed by immutable UUID (`repos.id`), so a restore never has to
    guess ownership.
-2. Restore the EFS recovery point (AWS Backup) to a new file system, mount it
-   read-only alongside, and copy only the affected `{uuid[0:2]}/{uuid}.git`
-   directories back.
+2. Restore the storage snapshot (the volume's own snapshot; on the AWS
+   reference deployment the EFS recovery point from AWS Backup) to a new
+   file system, mount it read-only alongside, and copy only the affected
+   `{uuid[0:2]}/{uuid}.git` directories back.
 3. A missing repo is recoverable from any clone: `git push --mirror`. Release
    archives are **not** affected by EFS loss; they live in S3 and are what
    consumers download. Published versions keep working through a total repo
@@ -298,8 +305,9 @@ disposition.
 
 ## 11. Directory service unavailable or misconfigured
 
-**Trigger:** sign-in fails or loops, `/login?error=…`, sign-out lands on a
-second login screen, or Settings' password/authenticator actions error.
+**Trigger:** sign-in fails or loops, `/ui/login?error=…` (or the site's
+`/login?error=…`), sign-out lands on a second login screen, or the
+account page's password/authenticator actions error.
 Existing registry sessions and PATs keep working throughout — the directory
 is consulted at sign-in, not per request — so the API is not down; people
 just cannot sign in.
@@ -309,7 +317,7 @@ just cannot sign in.
    after an upgrade that says "Major version skips are not allowed" is the
    release-line rule in the self-hosting guide: step through each line.
 2. Did the blueprint apply? Authentik's admin console → Customisation →
-   Blueprints: "SecureAgentry - Account flows" must be *successful*, and
+   Blueprints: "Agentry - Account flows" must be *successful*, and
    the `agentry-invalidation` flow must exist. A blueprint that fails to
    apply names the offending entry in the worker log.
 3. Is the registry's OIDC client still what authentik has? Re-run
@@ -320,19 +328,22 @@ just cannot sign in.
    predates agentry#164 lacks. It needs `AGENTRY_PUBLIC_WEB_URL` and the
    bootstrap token from `.env`; read individual keys from that file rather
    than `source`-ing it (values with spaces are not shell-quoted).
-4. Do the containers know the site? `AGENTRY_PUBLIC_WEB_URL` must reach the
-   `authentik-*` containers (compose passes it through); the account-flows
-   blueprint formats it into the redirect stages. After changing it,
-   recreate the authentik containers, not just the registry.
+4. Do the containers know where to return? `AGENTRY_PUBLIC_WEB_URL` (sign-out)
+   and `AGENTRY_ACCOUNT_URL` (password and authenticator changes) must reach
+   the `authentik-*` containers (compose passes them through, defaulting to
+   the server's own `/ui/` pages; a site's overlay sets its own); the
+   account-flows blueprint formats them into the redirect stages. After
+   changing them, recreate the authentik containers, not just the registry.
 5. A user who cannot complete MFA is an operator action in the authentik
    admin console (`/if/admin/` still serves); email alone never resets both
    factors.
 
-**Verify:** `GET https://<site>/api/v1/auth/oidc/authentik/start?next=%2Fdashboard`
-in a browser ends on the dashboard with no directory screen in between;
-`https://auth.<site>/` answers 302 to the site; the provider's end-session
-URL lands in the `agentry-invalidation` flow whose first challenge (the
-executor API) is a redirect to the site.
+**Verify:** `GET https://<host>/api/v1/auth/oidc/authentik/start?next=%2Fui%2Faccount`
+(or the site's dashboard path) in a browser ends on that page with no
+directory screen in between; `https://auth.<host>/` answers 302 to the
+registry's home (`/ui/`, or the site); the provider's end-session URL lands
+in the `agentry-invalidation` flow whose first challenge (the executor API)
+is a redirect to the same home.
 
 ---
 

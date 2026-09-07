@@ -8,8 +8,10 @@ content hosted on an Agentry instance, as two separate reporting paths.
 
 **Do not open a public issue for a security vulnerability.**
 
-Email **security@** the project domain (see the repository's README for the
-current address) with:
+Email **security@secureagentry.net** — the hosted service's address, which
+also covers this code. (A self-hosted registry shows its own operator's
+address, from `brand.securityEmail` / `AGENTRY_SECURITY_EMAIL`, on its pages;
+a problem in the software itself is still ours to fix, so copy us.) Include:
 
 - what you found and where (file, endpoint, or version),
 - how to reproduce it — a minimal case is worth more than a long report,
@@ -33,9 +35,11 @@ and why. We will not ask you to sign anything to receive a fix.
 
 ### Scope
 
-In scope: the server (`agentryd`), the CLI (`agentry`), the web app, the
-scanner engine and rulesets, the deployment templates in `deploy/`, and the
-hosted service if you have an account on it.
+In scope: the server (`agentryd`) including its `/ui/` pages, the CLI
+(`agentry`), the desktop app, the scanner engine and rulesets, the deployment
+templates in `deploy/`, and the hosted service — its site and its enterprise
+build are closed repositories, but a report about them comes to the same
+address — if you have an account on it.
 
 Particularly interesting to us:
 
@@ -52,8 +56,9 @@ Particularly interesting to us:
 - **Git endpoints** — auth bypass, ref smuggling, resource exhaustion.
 - **SSRF** — webhooks or any other server-side fetch reaching internal
   addresses or cloud metadata.
-- **XSS / content injection** in the web app via README, manifest, or finding
-  excerpts.
+- **XSS / content injection** in the server's `/ui/` pages, the rendered
+  README (`internal/render`) or the hosted site, via README, manifest, or
+  finding excerpts.
 
 Out of scope: findings that require a compromised operator machine or a
 malicious platform administrator; missing hardening headers with no

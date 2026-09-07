@@ -388,10 +388,10 @@ prove.
 ## Publishing
 
 Three doors, one pipeline. `agentry publish` submits a workspace from the
-command line; the registry's **BriefAgent Builder** (`/build`) authors one
-in the browser — anyone can download the packed archive for local use, and
-signed-in users can submit it; and the **desktop app**'s Build tab does the
-same from a form. Repos hosted on the registry can also publish by pushing
+command line; the hosted site's **BriefAgent Builder** (`/build`, on a
+registry with the site in front) authors one in the browser — anyone can
+download the packed archive for local use, and signed-in users can submit
+it; and the **desktop app**'s Build tab does the same from a form. Repos hosted on the registry can also publish by pushing
 a release tag (the agent's auto-publish-tags setting). Whichever door,
 the submission is identical server-side: manifest validation, content
 scanning against the declared capabilities, human review where findings
