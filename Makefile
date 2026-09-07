@@ -34,7 +34,7 @@ lint:
 vuln:
 	$(GO) run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
-## generate: regenerate OpenAPI server/client, sqlc queries, TS types
+## generate: regenerate the OpenAPI server and Go client, and sqlc queries
 generate:
 	$(GO) tool oapi-codegen -config schemas/codegen-server.yaml schemas/openapi.yaml
 	$(GO) tool oapi-codegen -config schemas/codegen-goclient.yaml schemas/openapi.yaml

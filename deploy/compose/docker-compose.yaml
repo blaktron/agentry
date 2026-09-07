@@ -334,8 +334,12 @@ services:
       - ./edge/nginx.conf:/etc/nginx/nginx.conf:ro
       - ${AGENTRY_EDGE_CERT_DIR:-./edge/certs}:/etc/nginx/certs:ro
       - edgecache:/var/cache/nginx/edge
-      # Downloadable binaries (scripts/release/build-downloads.sh output).
-      - ${AGENTRY_DOWNLOADS_DIR:-./downloads}:/srv/downloads:ro
+      # Downloadable binaries a self-hoster publishes for its users (the
+      # hosted site's build script lives with the site). A host directory
+      # when AGENTRY_DOWNLOADS_DIR names one; otherwise the empty named
+      # volume below, so a fresh `up` never scaffolds a root-owned
+      # directory into the checkout (agentry#218 removed deploy/compose/downloads).
+      - ${AGENTRY_DOWNLOADS_DIR:-downloads}:/srv/downloads:ro
     depends_on:
       - server
 
@@ -372,3 +376,4 @@ volumes:
   redisdata:
   authentik-media:
   authentik-templates:
+  downloads:
