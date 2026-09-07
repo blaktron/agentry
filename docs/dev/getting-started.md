@@ -61,6 +61,28 @@ that is its CI gate. A change to the API contract is made in
 client here, and from the published spec into the CLI, agentry-mcp and the
 site's own types.
 
+## Until the repositories are public
+
+The open-core repositories are private until the operator flips them
+(agentry-notes `PUBLIC-FLIP.md`; the date is not scheduled). Until then the
+Go modules cannot be fetched anonymously, and three workarounds apply — each
+disappears at the flip:
+
+- **Locally**, a `go.work` at the workspace root resolves `agentry`,
+  `agentry-cli` and `agentry-desktop` against sibling checkouts, so no
+  download happens. Without it, `GOPRIVATE=github.com/blaktron` and
+  `GONOSUMDB=github.com/blaktron` plus a git credential helper that answers
+  with a read token let `go get` fetch the private module.
+- **In CI** (self-hosted runners), `AGENTRY_BUILD_TOKEN` is a read token
+  stored as a repository secret; the workflows write it into a git
+  `insteadOf` rule for `https://github.com/` before `go mod download`. A
+  repository without the secret fails at the module fetch and says so.
+- **The docs and site images** clone the private repositories with the same
+  kind of token as a BuildKit secret (`gh_token`).
+
+Never put a token in a workflow file, a Dockerfile or a commit; the secret's
+name is the only thing that belongs in the tree.
+
 ## Configuration
 
 `agentry.yaml` (copy from `agentry.yaml.example`) + `AGENTRY_*` env overrides. Env always wins. `internal/config/config.go` is the authoritative mapping.
