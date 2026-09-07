@@ -119,7 +119,10 @@ func TestRiverRetriesWithBackoffThenFails(t *testing.T) {
 	}
 	c.Drain(ctx, q)
 	r := riverJob(t, st, q)
-	if r.State != "retryable" || r.Attempt != 1 || calls.Load() != 1 {
+	// A retry due within River's scheduler interval is written back as
+	// available with a future scheduled_at (the fetch honours the time)
+	// rather than taking the retryable→available hop; either is a retry.
+	if (r.State != "retryable" && r.State != "available") || r.Attempt != 1 || calls.Load() != 1 {
 		t.Fatalf("after first attempt: %+v calls=%d", r, calls.Load())
 	}
 	if wait := time.Until(r.ScheduledAt); wait < 500*time.Millisecond || wait > 5*time.Second {
