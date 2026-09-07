@@ -72,13 +72,20 @@ func riverJob(t *testing.T, st *store.Store, queue string) riverRow {
 	return r
 }
 
-func testQueueName(t *testing.T) string {
-	return "rq-" + strings.ToLower(strings.ReplaceAll(t.Name(), "/", "-"))
+// testQueueName gives each test its own queue and empties it first, so a
+// re-run against a database that kept the last run's rows starts clean.
+func testQueueName(t *testing.T, st *store.Store) string {
+	t.Helper()
+	q := "rq-" + strings.ToLower(strings.ReplaceAll(t.Name(), "/", "-"))
+	if _, err := st.Pool().Exec(context.Background(), `DELETE FROM river_job WHERE queue = $1`, q); err != nil {
+		t.Fatalf("clear queue %s: %v", q, err)
+	}
+	return q
 }
 
 func TestRiverRunsJobAndCompletes(t *testing.T) {
 	c, st := newRiverTestClient(t)
-	q := testQueueName(t)
+	q := testQueueName(t, st)
 	ctx := context.Background()
 	var got atomic.Value
 	c.Register("river.echo", func(_ context.Context, job Job) error {
@@ -107,7 +114,7 @@ func TestRiverRunsJobAndCompletes(t *testing.T) {
 
 func TestRiverRetriesWithBackoffThenFails(t *testing.T) {
 	c, st := newRiverTestClient(t)
-	q := testQueueName(t)
+	q := testQueueName(t, st)
 	ctx := context.Background()
 	var calls atomic.Int32
 	c.Register("river.flaky", func(context.Context, Job) error {
@@ -141,7 +148,7 @@ func TestRiverRetriesWithBackoffThenFails(t *testing.T) {
 
 func TestRiverRecoversFromHandlerPanic(t *testing.T) {
 	c, st := newRiverTestClient(t)
-	q := testQueueName(t)
+	q := testQueueName(t, st)
 	ctx := context.Background()
 	c.Register("river.panic", func(context.Context, Job) error { panic("kaboom") })
 	if _, err := c.Enqueue(ctx, "river.panic", q, struct{}{}, WithMaxAttempts(1)); err != nil {
@@ -156,7 +163,7 @@ func TestRiverRecoversFromHandlerPanic(t *testing.T) {
 
 func TestRiverUnknownKindIsCancelled(t *testing.T) {
 	c, st := newRiverTestClient(t)
-	q := testQueueName(t)
+	q := testQueueName(t, st)
 	ctx := context.Background()
 	c.Register("river.known", func(context.Context, Job) error { return nil })
 	if _, err := c.Enqueue(ctx, "river.unknown", q, struct{}{}); err != nil {
@@ -170,7 +177,7 @@ func TestRiverUnknownKindIsCancelled(t *testing.T) {
 
 func TestRiverDelayedJobWaits(t *testing.T) {
 	c, st := newRiverTestClient(t)
-	q := testQueueName(t)
+	q := testQueueName(t, st)
 	ctx := context.Background()
 	var ran atomic.Bool
 	c.Register("river.later", func(context.Context, Job) error { ran.Store(true); return nil })
