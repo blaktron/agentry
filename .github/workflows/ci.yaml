@@ -39,6 +39,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          # The runners share one persistent host module cache (agentry#154);
+          # restoring the Actions cache over it is slow and, with several jobs
+          # extracting into the same directory, leaves partial modules that
+          # break `go mod verify` for everyone (agentry#225).
+          cache: false
       - name: Install sqlc
         run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
       - name: golangci-lint
@@ -77,6 +82,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          # The runners share one persistent host module cache (agentry#154);
+          # restoring the Actions cache over it is slow and, with several jobs
+          # extracting into the same directory, leaves partial modules that
+          # break `go mod verify` for everyone (agentry#225).
+          cache: false
       - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
   # Dependency hygiene of the product itself (§17.5, T-13). A registry that
@@ -89,6 +99,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          # The runners share one persistent host module cache (agentry#154);
+          # restoring the Actions cache over it is slow and, with several jobs
+          # extracting into the same directory, leaves partial modules that
+          # break `go mod verify` for everyone (agentry#225).
+          cache: false
       # Both lockfiles must exist and be internally consistent BEFORE the
       # vulnerability scan reads them: osv-scanner reports nothing at all for
       # a lockfile it cannot parse, which looks exactly like a clean result.
@@ -121,6 +136,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          # The runners share one persistent host module cache (agentry#154);
+          # restoring the Actions cache over it is slow and, with several jobs
+          # extracting into the same directory, leaves partial modules that
+          # break `go mod verify` for everyone (agentry#225).
+          cache: false
       - uses: sigstore/cosign-installer@v3
       - run: make attest-interop
 
