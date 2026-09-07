@@ -181,8 +181,10 @@ type Limits struct {
 	AnonymousPerMin   int `yaml:"anonymousPerMin"`   // anonymous per-IP
 	LoginPerMin       int `yaml:"loginPerMin"`       // login/register per-IP
 
-	// Git/repo quotas (§19): 100 MB hard, 25 MB single-object cap.
+	// Git/repo quotas (§19): 100 MB hard, 25 MB warn (the pre-receive hook
+	// tells the pusher), 25 MB single-object cap.
 	RepoQuotaBytes   int `yaml:"repoQuotaBytes"`
+	RepoWarnBytes    int `yaml:"repoWarnBytes"`
 	RepoMaxBlobBytes int `yaml:"repoMaxBlobBytes"`
 	// GitPushesPerHour is the §19 per-repo push budget (60/h).
 	GitPushesPerHour int `yaml:"gitPushesPerHour"`
@@ -201,6 +203,7 @@ type Limits struct {
 	ArchiveMaxFiles          int   `yaml:"archiveMaxFiles"`          // 2000
 	ArchiveMaxFileBytes      int64 `yaml:"archiveMaxFileBytes"`      // 2 MiB
 	ArchiveMaxImageFileBytes int64 `yaml:"archiveMaxImageFileBytes"` // 5 MiB
+	ArchiveMaxTextBytes      int64 `yaml:"archiveMaxTextBytes"`      // 1 MiB: the text files in total (§19)
 }
 
 // Signing configures attestation signing (D-16): kms | file | none(dev).
@@ -439,6 +442,7 @@ func Default() Config {
 			AnonymousPerMin:            60,
 			LoginPerMin:                10,
 			RepoQuotaBytes:             100 << 20,
+			RepoWarnBytes:              25 << 20,
 			RepoMaxBlobBytes:           25 << 20,
 			GitPushesPerHour:           60,
 			AgentsPerUserNamespace:     200,
@@ -450,6 +454,7 @@ func Default() Config {
 			ArchiveMaxFiles:            2000,
 			ArchiveMaxFileBytes:        2 << 20,
 			ArchiveMaxImageFileBytes:   5 << 20,
+			ArchiveMaxTextBytes:        1 << 20,
 		},
 		Signing: Signing{Kind: "none"},
 		Judge:   Judge{Provider: "none"},
@@ -713,6 +718,7 @@ func applyEnv(c *Config) error {
 		{"AGENTRY_LIMITS_ANONYMOUS_PER_MIN", &c.Limits.AnonymousPerMin},
 		{"AGENTRY_LIMITS_LOGIN_PER_MIN", &c.Limits.LoginPerMin},
 		{"AGENTRY_LIMITS_GIT_PUSHES_PER_HOUR", &c.Limits.GitPushesPerHour},
+		{"AGENTRY_LIMITS_REPO_WARN_BYTES", &c.Limits.RepoWarnBytes},
 		{"AGENTRY_LIMITS_AGENTS_PER_USER_NAMESPACE", &c.Limits.AgentsPerUserNamespace},
 		{"AGENTRY_LIMITS_AGENTS_PER_ORG_NAMESPACE", &c.Limits.AgentsPerOrgNamespace},
 		{"AGENTRY_LIMITS_VERSIONS_PER_DAY", &c.Limits.VersionsPerDay},
@@ -731,6 +737,7 @@ func applyEnv(c *Config) error {
 		{"AGENTRY_LIMITS_ARCHIVE_MAX_BYTES", &c.Limits.ArchiveMaxBytes},
 		{"AGENTRY_LIMITS_ARCHIVE_MAX_FILE_BYTES", &c.Limits.ArchiveMaxFileBytes},
 		{"AGENTRY_LIMITS_ARCHIVE_MAX_IMAGE_FILE_BYTES", &c.Limits.ArchiveMaxImageFileBytes},
+		{"AGENTRY_LIMITS_ARCHIVE_MAX_TEXT_BYTES", &c.Limits.ArchiveMaxTextBytes},
 	} {
 		if err := integer64(m.key, m.dst); err != nil {
 			return err
@@ -932,6 +939,7 @@ func (c Config) validateLimits() error {
 		{"limits.anonymousPerMin", int64(c.Limits.AnonymousPerMin)},
 		{"limits.loginPerMin", int64(c.Limits.LoginPerMin)},
 		{"limits.repoQuotaBytes", int64(c.Limits.RepoQuotaBytes)},
+		{"limits.repoWarnBytes", int64(c.Limits.RepoWarnBytes)},
 		{"limits.repoMaxBlobBytes", int64(c.Limits.RepoMaxBlobBytes)},
 		{"limits.gitPushesPerHour", int64(c.Limits.GitPushesPerHour)},
 		{"limits.agentsPerUserNamespace", int64(c.Limits.AgentsPerUserNamespace)},
@@ -943,6 +951,7 @@ func (c Config) validateLimits() error {
 		{"limits.archiveMaxFiles", int64(c.Limits.ArchiveMaxFiles)},
 		{"limits.archiveMaxFileBytes", c.Limits.ArchiveMaxFileBytes},
 		{"limits.archiveMaxImageFileBytes", c.Limits.ArchiveMaxImageFileBytes},
+		{"limits.archiveMaxTextBytes", c.Limits.ArchiveMaxTextBytes},
 	} {
 		if l.value <= 0 {
 			return fmt.Errorf("config: %s must be > 0", l.name)

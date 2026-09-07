@@ -82,6 +82,9 @@ type ArchiveLimits struct {
 	MaxFiles          int
 	MaxFileBytes      int64
 	MaxImageFileBytes int64
+	// MaxTextBytes caps the total of the text files in the include set
+	// (§19 "instruction-file total", agentry#44).
+	MaxTextBytes int64
 }
 
 // Feature names a capability an overlay may gate. The OSS Resolver enables
@@ -149,6 +152,7 @@ func (r *ConfigResolver) Limits(_ context.Context, s Subject) (Limits, error) {
 			MaxFiles:          l.ArchiveMaxFiles,
 			MaxFileBytes:      l.ArchiveMaxFileBytes,
 			MaxImageFileBytes: l.ArchiveMaxImageFileBytes,
+			MaxTextBytes:      l.ArchiveMaxTextBytes,
 		},
 	}, nil
 }

@@ -399,3 +399,9 @@ demand it, and DSSE signing. Published releases are immutable and content-addres
 language rule applies to BriefAgents as it does to everything here: a
 release is *scanned, with N findings, signed*, never "safe". Declare the
 least you need and the whole chain stays reviewable.
+
+Every door checks the same quotas (V8): at most 2,000 files and 10 MiB in
+the archive, 2 MiB per file (5 MiB per image), and 1 MiB of text files in
+total — the prose the scanners read in full, so an instruction set cannot
+grow past what a reviewer can read by being split across files.
+`agentry validate` reports the same limits offline.
