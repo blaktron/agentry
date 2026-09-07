@@ -196,6 +196,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          # Shared persistent module cache on the self-hosted runners
+          # (agentry#225); the rebuilt runner image ships no Go of its own.
+          cache: false
       - name: oasdiff breaking
         run: |
           # Diff against the PR's merge-base, not the tip of main: a path that
