@@ -236,6 +236,7 @@ Created on first use; `AGENTRY_RUNNER_HOME` moves the whole runner home.
 | `mcpRegistries.npm` / `mcpRegistries.pypi` | where declared `capabilities.mcpServers` resolve (defaults: registry.npmjs.org, pypi.org; point at private mirrors here) |
 | `mcpRegistries.pypiAllowSourceDists` | allow a PyPI MCP server to install from a source distribution (default false: wheels only, see below) |
 | `mcpServers.allowVulnerable` | let runs proceed when the registry reports a high or critical advisory for a declared server version (default false: refused, exit 11) |
+| `harness.<adapter>.path` | the executable a host-run harness adapter uses instead of looking it up on `PATH` (for the adapters that run the person's own installation of a harness, RUNNER M-R4; none ships yet) |
 | `images.nodeRuntime` / `images.pythonRuntime` | pinned runtime images that install and run declared npm/PyPI MCP servers |
 
 The policy participates in the plan hash: editing it invalidates cached
@@ -277,6 +278,7 @@ as before.
   receipts/
     events.ndjson        the raw harness event stream
     gateway.log          the gateway's own log, tool calls included
+    proxy.log            the LLM egress proxy's decisions: one allow/deny line per CONNECT
     run-plan.json        the exact compiled plan that ran
     meta.json, task.txt  run identity, timing, budgets, the task input
     intake.json          the non-secret intake answers (when the release asks any)
