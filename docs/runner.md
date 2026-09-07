@@ -13,9 +13,9 @@ under `archive/agentry-cli/`, and departures from them are logged in
 
 Two flags are global and available on every command below:
 `--registry URL` (the registry to talk to — otherwise the configured
-default, then the default baked into the binary: builds served from a
-registry's `/download` page point at that registry, and a source build
-falls back to `http://localhost:8080`) and `--json` (machine-readable
+default, then the default baked into the binary: builds a registry serves
+under `/downloads/` — or a site's download page — point at that registry,
+and a source build falls back to `http://localhost:8080`) and `--json` (machine-readable
 output where a command supports it: `info`, `search`, `verify`).
 
 ### `agentry setup`

@@ -3,11 +3,15 @@
 **A registry and git host for single-purpose AI agents, with a mandatory
 pre-publication security pipeline and signed provenance.**
 
-> **Agentry** is the product and hosted service (secureagentry.net). The
-> open-source framework it is built on, and the technical identifiers in this
-> repository — the Go module path, the `agentryd` / `agentry` binaries, and the
-> `AGENTRY_` env prefix — keep the `agentry` name. The brand is distinct from
-> the command, the way many products ship a differently-named CLI.
+> This repository is the **open core**: the registry server (`agentryd`), the
+> security pipeline, the account and authorization system, the git host, and
+> a headless deployment. It runs on its own and serves its own pages at
+> `/ui/`. **SecureAgentry** ([secureagentry.net](https://secureagentry.net)) is
+> the hosted product built on it: a closed front end (`blaktron/agentry-web`)
+> and an enterprise build (`blaktron/agentry-enterprise`) that extend this code
+> through documented seams rather than forking it. The technical identifiers —
+> the Go module path, the `agentryd` / `agentry` binaries, the `AGENTRY_` env
+> prefix — keep the `agentry` name.
 
 Agent instruction files — skills, system prompts, small MCP servers — are
 executed with your credentials and your tool access. They are also, today,
@@ -61,8 +65,33 @@ make db-up      # local Postgres 16
 make dev        # migrations + agentryd (all roles) on :8080
 ```
 
-Then [docs/self-hosting.md](docs/self-hosting.md) for a real deployment, or
-`cd web && npm run dev` for the web app.
+Open http://localhost:8080/ui/ — sign-in, your account and tokens, the review
+queue, the staff console and organization administration are served by the
+server itself. Then [docs/self-hosting.md](docs/self-hosting.md) for a real
+deployment.
+
+## Headless, or behind a front end
+
+**Headless.** `deploy/compose` runs the whole registry with no site: Postgres,
+object storage, mail, the directory service (authentik, with the account flows
+as blueprints), `agentryd`, and an nginx edge. The server's `/ui/` pages are
+the browser surface; `agentry login` and the desktop app open its
+`/ui/authorize` page to get their token, and everything else they do is the
+API. The Helm chart deploys the same shape.
+
+**Behind a front end.** A site in front sets `web.url` (where every redirect
+and email link the API writes should land), `ui.mode: authorize` (the server
+keeps only the device-authorize page), and the brand hooks (`brand.name`,
+`logoURL`, `cssURL`, `supportEmail`, `securityEmail`, also reported by
+`GET /api/v1/meta`). It talks to the same API under the same authorization
+matrix — a front end cannot do anything the API refuses. The hosted site is
+closed; another one can be built on exactly these hooks
+([docs/self-hosting.md](docs/self-hosting.md), "Fronting it with a site").
+
+**Extended.** `pkg/extension` lets an outside Go module mount routes under
+`/api/v1/x/<name>/`, run its own migrations in its own schema, replace the
+entitlements resolver, subscribe to committed events, and add worker jobs.
+The enterprise build is one such module; the core carries none.
 
 ## Repository layout
 
@@ -75,10 +104,12 @@ Then [docs/self-hosting.md](docs/self-hosting.md) for a real deployment, or
 | `internal/gitsrv` | git smart-HTTP, repo storage, policy hooks |
 | `internal/api` `internal/auth` `internal/store` | HTTP layer, identity/authz, Postgres |
 | `internal/render` | the only path by which author markdown reaches a browser |
+| `internal/ui` | the server's own pages at `/ui/` (Go templates, no JavaScript build): device authorize, sign-in, account, review, staff, organizations |
+| `pkg/extension` | the seam a closed build extends the server through: routes, migrations, entitlements, hooks, jobs |
 | `pkg/` | public: manifest spec + refs, rules engine, embedded ruleset, deterministic archives + extractor, attestation verify, generated API client — the surface the CLI and third parties build on |
 | `rules/` | the versioned S3/S4 rule bundle |
 | `testdata/attack-corpus/` | the golden corpus: attack fixtures and their benign twins |
-| — | the site (the Next.js front end, its brand and deployment overlay) lives in blaktron/agentry-web, closed source; a registry runs without it and serves its own pages at `/ui/` (DEV-091) |
+| — | the hosted site (front end, brand, its compose overlay and Terraform) lives in blaktron/agentry-web and the enterprise build in blaktron/agentry-enterprise — both closed; a registry runs without them (DEV-091) |
 | — | the docs & developers sites live in blaktron/agentry-docs (they clone this repo's `docs/` and `schemas/` at build, beside the site's pages) |
 | `deploy/` | the headless compose stack and the Helm chart |
 | `docs/` | user, operator, and API docs — start with `trust.md`, `self-hosting.md`, `api-conventions.md` |
@@ -99,9 +130,10 @@ Then [docs/self-hosting.md](docs/self-hosting.md) for a real deployment, or
 Milestones **M0–M7** of the v1 plan are implemented, each with an automated
 acceptance script in `scripts/acceptance/`: scaffolding and CI (M0), identity
 and authorization (M1), git hosting (M2), the registry and publication state
-machine (M3), the security pipeline (M4), the web UI (M5), enterprise SSO/SCIM
-and webhooks (M6), and the AWS reference deployment (M7 — Terraform validated,
-never applied to a live account).
+machine (M3), the security pipeline (M4), the web UI (M5 — since moved to the
+closed site repository; the core keeps its own `/ui/` pages), enterprise
+SSO/SCIM and webhooks (M6), and the AWS reference deployment (M7 — Terraform
+validated, never applied to a live account; it now lives with the site).
 
 **M8 (launch hardening) is partial.** Done: SECURITY.md and coordinated
 disclosure, CONTRIBUTING/DCO, signed reproducible releases with SBOM,
