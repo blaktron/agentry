@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io/fs"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +19,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
+	"github.com/riverqueue/river/riverdriver/riverpgxv5"
+	"github.com/riverqueue/river/rivermigrate"
 
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
@@ -125,6 +128,26 @@ func Migrate(ctx context.Context, databaseURL string) error {
 	}
 	if err := goose.UpContext(ctx, db, "migrations"); err != nil {
 		return fmt.Errorf("store: migrate: %w", err)
+	}
+	// River's own tables and version table (river_job, river_queue,
+	// river_leader, river_client, river_migration), DEV-005's swap
+	// (agentry#39). Under the same advisory lock; River's migrator runs on
+	// its own pgx connection because it speaks the pgx driver, not database/sql.
+	return migrateRiver(ctx, databaseURL)
+}
+
+func migrateRiver(ctx context.Context, databaseURL string) error {
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		return fmt.Errorf("store: river migrate: pool: %w", err)
+	}
+	defer pool.Close()
+	m, err := rivermigrate.New(riverpgxv5.New(pool), &rivermigrate.Config{Logger: slog.Default()})
+	if err != nil {
+		return fmt.Errorf("store: river migrate: %w", err)
+	}
+	if _, err := m.Migrate(ctx, rivermigrate.DirectionUp, nil); err != nil {
+		return fmt.Errorf("store: river migrate: %w", err)
 	}
 	return nil
 }

@@ -195,7 +195,7 @@ var workerQueues = []string{"core", "sandbox"}
 // newWorkerQueue registers every async handler on a queue client and starts
 // the §7 watchdog ticker. Shared by the `worker` role and by `all`, so the
 // single-process shape runs exactly the handler set the split shape does.
-func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st *store.Store, log *slog.Logger, mx *metrics.Metrics, exts []Extension) (*queue.PGClient, error) {
+func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st *store.Store, log *slog.Logger, mx *metrics.Metrics, exts []Extension) (queue.Worker, error) {
 	pipeline := srv.Pipeline()
 	if pipeline == nil {
 		return nil, fmt.Errorf("the worker role requires archive storage (storage.kind=%q has none wired)", cfg.Storage.Kind)
@@ -211,7 +211,10 @@ func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st 
 		repos = nil
 	}
 
-	q := queue.NewPGClient(st, log)
+	q, qerr := queue.Open(cfg.Queue.Driver, cfg.Queue.Workers, st, log)
+	if qerr != nil {
+		return nil, qerr
+	}
 	q.SetMetrics(mx, cfg.Telemetry.QueueSampleInterval)
 	pipeline.RegisterHandlers(q)
 	// repo.pushed bookkeeping (§6.3, agentry#43): size when this role can
@@ -369,7 +372,11 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		git.SetMetrics(mx)
 		// Push bookkeeping rides the queue as repo.pushed (§6.3, agentry#43);
 		// the worker (in-process for `all`) runs it.
-		git.SetQueue(queue.NewPGClient(st, log))
+		gq, qerr := queue.Open(cfg.Queue.Driver, cfg.Queue.Workers, st, log)
+		if qerr != nil {
+			return nil, nil, qerr
+		}
+		git.SetQueue(gq)
 		closeAll := func() error { return errors.Join(git.Close(), s.Close()) }
 		// The SSH transport (§6.1 Q7, agentry#70) rides beside smart HTTP
 		// when configured; same handler, same authorization and hooks.

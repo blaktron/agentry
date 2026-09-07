@@ -37,6 +37,7 @@ type Config struct {
 	Audit     Audit     `yaml:"audit"`
 	RedTeam   RedTeam   `yaml:"redTeam"`
 	Telemetry Telemetry `yaml:"telemetry"`
+	Queue     Queue     `yaml:"queue"`
 	Notify    Notify    `yaml:"notify"`
 	SMTP      SMTP      `yaml:"smtp"`
 	BaseURL   string    `yaml:"baseURL"` // public origin, e.g. https://agentry.example
@@ -175,6 +176,17 @@ type Auth struct {
 // config-backed default Resolver hands out; the SaaS overlay swaps in a
 // Resolver that reads them per-org instead (§14.2). Nothing in the OSS tree
 // reads a limit except through that Resolver.
+// Queue selects the async job driver (D-05, DEV-005's swap in agentry#39).
+type Queue struct {
+	// Driver is "river" (the default: River, Postgres-backed, its tables
+	// created by the migrator) or "pg" (the SELECT … FOR UPDATE SKIP LOCKED
+	// implementation on the jobs table that the first releases shipped).
+	Driver string `yaml:"driver"`
+	// Workers is how many jobs one worker process runs at once per queue
+	// (river only; the pg driver is serial). 1 keeps the serial behaviour.
+	Workers int `yaml:"workers"`
+}
+
 type Limits struct {
 	AuthedPerHour     int `yaml:"authedPerHour"`     // sustained authed budget
 	AuthedBurstPerMin int `yaml:"authedBurstPerMin"` // authed burst
@@ -466,6 +478,7 @@ func Default() Config {
 			RetentionDays: 400,
 		},
 		RedTeam: RedTeam{Interval: 24 * time.Hour},
+		Queue:   Queue{Driver: "river", Workers: 1},
 		Telemetry: Telemetry{
 			ExportInterval: 30 * time.Second,
 			// Well under the §16.3 15-minute queue-age threshold, so the
@@ -694,6 +707,10 @@ func applyEnv(c *Config) error {
 	// Notifications (§13.4).
 	str("AGENTRY_NOTIFY_KIND", &c.Notify.Kind)
 	str("AGENTRY_SMTP_HOST", &c.SMTP.Host)
+	str("AGENTRY_QUEUE_DRIVER", &c.Queue.Driver)
+	if err := integer("AGENTRY_QUEUE_WORKERS", &c.Queue.Workers); err != nil {
+		return err
+	}
 	str("AGENTRY_SMTP_USER", &c.SMTP.Username)
 	str("AGENTRY_SMTP_PASS", &c.SMTP.Password)
 	str("AGENTRY_SMTP_FROM", &c.SMTP.From)
@@ -769,6 +786,14 @@ func (c Config) Validate() error {
 	case "dev", "staging", "prod":
 	default:
 		return fmt.Errorf("config: env must be dev|staging|prod, got %q", c.Env)
+	}
+	switch c.Queue.Driver {
+	case "", "river", "pg":
+	default:
+		return fmt.Errorf("config: queue.driver must be river|pg, got %q", c.Queue.Driver)
+	}
+	if c.Queue.Workers < 1 {
+		return fmt.Errorf("config: queue.workers must be at least 1, got %d", c.Queue.Workers)
 	}
 	if c.Env == "prod" && c.DevMode {
 		return fmt.Errorf("config: devMode must be false in prod")
