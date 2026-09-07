@@ -324,6 +324,7 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 		MaxFiles:          lim.Archive.MaxFiles,
 		MaxFileBytes:      lim.Archive.MaxFileBytes,
 		MaxImageFileBytes: lim.Archive.MaxImageFileBytes,
+		MaxTextBytes:      lim.Archive.MaxTextBytes,
 	}
 	issues := manifest.ValidateInContext(m, manifest.Context{
 		Namespace:        a.Namespace,

@@ -79,3 +79,28 @@ func TestArchiveReproducible(t *testing.T) {
 		t.Fatal("allowlist filter failed: excluded file shipped")
 	}
 }
+
+// WalkWorkspace classifies text the way S1 does, so V8's prose total sees
+// the same files the scanners read (agentry#44).
+func TestWalkWorkspaceClassifiesText(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name string, b []byte) {
+		if err := os.WriteFile(filepath.Join(dir, name), b, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("SKILL.md", []byte("# prose\n"))
+	write("blob.dat", []byte{0x00, 0x01, 0x02, 'x'})
+	write("logo.png", []byte("\x89PNG\r\n\x1a\n"))
+	files, err := WalkWorkspace(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, f := range files {
+		got[f.Path] = f.IsText
+	}
+	if !got["SKILL.md"] || got["blob.dat"] || got["logo.png"] {
+		t.Errorf("IsText = %v, want SKILL.md only", got)
+	}
+}

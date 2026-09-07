@@ -23,7 +23,9 @@ import (
 //     an existing v* tag is always denied (§5.5 immutable version namespace)
 //   - default branch: no deletion; no force-push unless allowed
 //   - new tips: no nested .git entries, no blobs over the size cap (§6.3)
-//   - repo quota: approximate disk usage check (§19)
+//   - repo quota: approximate disk usage check (§19); over the warn tier
+//     the push succeeds and the pusher is told (git relays hook stderr as
+//     "remote:" lines — the channel DEV-036 said a hook lacks; agentry#44)
 func RunPreReceiveHook(stdin io.Reader, stderr io.Writer) int {
 	deny := func(format string, args ...any) int {
 		_, _ = fmt.Fprintf(stderr, "agentry: "+format+"\n", args...)
@@ -35,6 +37,7 @@ func RunPreReceiveHook(stdin io.Reader, stderr io.Writer) int {
 	allowForce := os.Getenv("AGENTRY_HOOK_ALLOW_FORCE") == "true"
 	maxBlob := envInt("AGENTRY_HOOK_MAX_BLOB_BYTES", 25<<20)
 	quota := envInt("AGENTRY_HOOK_QUOTA_BYTES", 100<<20)
+	warn := envInt("AGENTRY_HOOK_WARN_BYTES", 25<<20)
 
 	scanner := bufio.NewScanner(stdin)
 	for scanner.Scan() {
@@ -87,8 +90,12 @@ func RunPreReceiveHook(stdin io.Reader, stderr io.Writer) int {
 	}
 
 	// Approximate quota: current repo dir + incoming quarantine.
-	if usage := duCwd(); usage > quota {
+	usage := duCwd()
+	if usage > quota {
 		return deny("repository exceeds the %d MB size quota", quota>>20)
+	}
+	if warn > 0 && usage > warn {
+		_, _ = fmt.Fprintf(stderr, "agentry: warning: repository is %d MB of the %d MB quota\n", usage>>20, quota>>20)
 	}
 	return 0
 }
