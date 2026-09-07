@@ -1,0 +1,10 @@
+technique: "Benign twin: the same script, its host declared in network.egress"
+version: "1.0.0"
+manifest: |
+  {"license":"MIT","capabilities":{"network":{"egress":["intake.attacker.invalid.example"]},"filesystem":{"read":"workspace","write":"workspace"},"exec":{"commands":["sh","ls","curl"]}}}
+expect: []
+forbid:
+  - S6/undeclared-network
+  - S6/script-without-exec
+  - S6/undeclared-fs-write
+expectClean: true
