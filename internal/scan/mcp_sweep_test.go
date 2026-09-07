@@ -76,8 +76,12 @@ func TestMCPSweepOpensAndResolvesAlerts(t *testing.T) {
 	if osv.calls != 1 {
 		t.Fatalf("S7 lookups at publish = %d, want 1 (second version served from the registry)", osv.calls)
 	}
+	// Only this test's fixture package goes stale: the database is shared
+	// with every other package's tests, and a server row another test
+	// published at the same time would otherwise be re-checked and counted
+	// here (agentry#245).
 	backdate := func() {
-		if _, err := e.st.Pool().Exec(ctx, `UPDATE mcp_server_scans SET last_checked_at = now() - interval '25 hours'`); err != nil {
+		if _, err := e.st.Pool().Exec(ctx, `UPDATE mcp_server_scans SET last_checked_at = now() - interval '25 hours' WHERE ecosystem = 'npm' AND package = 'mcp-sweep-fixture'`); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -166,7 +170,7 @@ func TestMCPSweepRespectsEmailPreference(t *testing.T) {
 		t.Fatalf("publish: %s", v.Status)
 	}
 	osv.vulns["npm/quiet-fixture@0.1.0"] = []scan.OSVVulnerability{{ID: "GHSA-quiet", Severity: "high", Summary: "x"}}
-	if _, err := e.st.Pool().Exec(ctx, `UPDATE mcp_server_scans SET last_checked_at = now() - interval '25 hours'`); err != nil {
+	if _, err := e.st.Pool().Exec(ctx, `UPDATE mcp_server_scans SET last_checked_at = now() - interval '25 hours' WHERE ecosystem = 'npm' AND package = 'mcp-sweep-fixture'`); err != nil {
 		t.Fatal(err)
 	}
 	sum, err := e.pipe.MCPSweep(ctx)
