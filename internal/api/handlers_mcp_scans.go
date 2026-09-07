@@ -18,7 +18,7 @@ import (
 
 // ListUserDependencyAlerts implements GET /user/dependency-alerts: the open
 // alerts on published versions the caller submitted, newest first. This is
-// what the web app's sign-in banner and dashboard read.
+// what the site's sign-in banner and dashboard read.
 func (s *Server) ListUserDependencyAlerts(w http.ResponseWriter, r *http.Request) {
 	if !s.authorize(w, r, auth.ActUserSelfRead, uuid.Nil) {
 		return

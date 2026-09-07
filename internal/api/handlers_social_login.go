@@ -68,13 +68,13 @@ type socialState struct {
 	Nonce    string `json:"n"`
 	Verifier string `json:"v"`
 	Provider string `json:"p"`
-	// Next is the in-app return path when the login began from the web app
+	// Next is the in-app return path when the login began from a front end
 	// (browser mode); empty means API mode and a JSON result.
 	Next string `json:"x,omitempty"`
 }
 
 // safeNextPath admits only a path-absolute reference on this origin — the
-// same rule as web/lib/urls.ts safeNext, mirrored here because the callback
+// same rule as the site's safeNext (agentry-web, lib/urls.ts), mirrored here because the callback
 // is the one that redirects. "//host" (scheme-relative), "/\host" (browsers
 // normalize the backslash) and control characters are the open-redirect
 // shapes a naive HasPrefix("/") lets through.
@@ -259,7 +259,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 		problemNotFound(w, r)
 		return
 	}
-	// Browser mode (DEV-061): the web app started this login with a return
+	// Browser mode (DEV-061): a front end (the site, or /ui/login) started this login with a return
 	// path, so the browser is the client and a JSON body would be the page
 	// it lands on. Failures go back to /login with the message; success is
 	// a 303 to `next` once the session cookie is set. API mode is unchanged.
