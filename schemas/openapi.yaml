@@ -703,7 +703,7 @@ paths:
       tags: [users]
       summary: Record a one-time grant for the desktop app's browser sign-in.
       description: >
-        Session-only. The site's authorize page calls this after the user
+        Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user
         consents; the response is a short-lived, single-use `code` bound to the
         app's `state` nonce. No token is minted here — the desktop app
         exchanges the code at `POST /auth/desktop/exchange` from its own
