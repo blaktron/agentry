@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/blaktron/agentry/blob/main/SECURITY.md
+    about: Never in a public issue. SECURITY.md has the address and what to include.
+  - name: Report malicious content on a registry
+    url: https://github.com/blaktron/agentry/blob/main/SECURITY.md#reporting-malicious-content-on-a-registry
+    about: Use the report control on the agent page or the instance's abuse address.
