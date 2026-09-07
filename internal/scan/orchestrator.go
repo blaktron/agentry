@@ -215,6 +215,7 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 		S2Secrets{Gitleaks: o.tools.Gitleaks},
 		S3S4Content{},
 		S5Judge{},
+		S6Scripts{},
 		S7MCPServers{},
 		S8Metadata{PopularAgentNames: p.PopularAgentNames, AgentName: p.AgentName},
 	}
