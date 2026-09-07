@@ -138,7 +138,14 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		// Webhook fan-out (§9.3): enqueue deliveries onto the Postgres queue;
 		// the worker role runs the delivery handler. Wired before the blobs
 		// early-return so the event sink is always active.
-		srv.jobs = queue.NewPGClient(st, log)
+		jobs, jerr := queue.Open(cfg.Queue.Driver, cfg.Queue.Workers, st, log)
+		if jerr != nil {
+			// Config.Validate rejects an unknown driver before New runs; a
+			// hand-built config that skipped it gets the default and a log line.
+			log.Error("queue: open", "driver", cfg.Queue.Driver, "err", jerr)
+			jobs = queue.NewRiverClient(st, log)
+		}
+		srv.jobs = jobs
 		srv.webhooks = webhook.NewDispatcher(webhook.Deps{
 			Store: st, Sealer: sealer, Queue: srv.jobs, Log: log,
 			DeliveriesPerSecond: float64(cfg.Limits.WebhookDeliveriesPerSecond),
