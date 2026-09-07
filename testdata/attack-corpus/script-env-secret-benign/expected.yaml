@@ -1,0 +1,10 @@
+technique: "Benign twin: only the declared secret is read"
+version: "1.0.0"
+manifest: |
+  {"license":"MIT","capabilities":{"network":{"egress":["tickets.example.test"]},"exec":{"commands":["python"]},"secrets":["TICKETS_TOKEN"]}}
+expect: []
+forbid:
+  - S6/undeclared-env
+  - S6/undeclared-network
+  - S6/script-without-exec
+expectClean: true
