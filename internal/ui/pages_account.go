@@ -143,7 +143,7 @@ func (h *handler) tokensSubmit(w http.ResponseWriter, r *http.Request) {
 		back(w, r, "/ui/account/tokens", "", "the token was created but not returned; revoke it and try again")
 		return
 	}
-	// Shown once, never in a URL (web/lib/show-once.ts): the page is the
+	// Shown once, never in a URL (the same rule as the site's show-once): the page is the
 	// POST's own response.
 	h.render(w, r, http.StatusOK, "showonce", page{Title: "Token created", User: h.currentUser(r), Data: showOnceData{
 		Intro: "Copy the value below now. It is not stored and cannot be shown again.",

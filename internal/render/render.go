@@ -81,7 +81,7 @@ func NewWithOptions(opts Options) *Renderer {
 			// ever"). Unsafe mode is simply not enabled; goldmark escapes it.
 			goldmarkhtml.WithXHTML(),
 			// Images become a visible placeholder (agentry#29, DEV-049):
-			// the web app's CSP refuses every image source but its own, so
+			// the site's CSP (and the /ui/ pages') refuses every image source but its own, so
 			// an <img> would render as nothing and the reader would not
 			// know an image was there.
 			renderer.WithNodeRenderers(util.Prioritized(imagePlaceholder{proxy: opts.ImageProxy}, 100)),
@@ -107,7 +107,7 @@ func NewWithOptions(opts Options) *Renderer {
 	p.AddTargetBlankToFullyQualifiedLinks(true)
 	p.AllowElements("a")
 	// Images: none. §10.3's camo-style image proxy is NOT built (DEV-049),
-	// and the web app's `img-src 'self' data:` CSP would refuse an
+	// and the site's `img-src 'self' data:` CSP would refuse an
 	// author's image anyway, which closes the tracking-pixel and
 	// third-party-request hole §10.3 is about. Rather than an <img> that
 	// renders as nothing, the markdown renderer above emits a visible
@@ -271,7 +271,7 @@ func htmlUnescape(s string) string { return htmlpkg.UnescapeString(s) }
 // <img> the browser would refuse (agentry#29). The alt text and the source
 // are shown, HTML-escaped, so the reader can tell what was there and where
 // it lives; the placeholder is a <span class="img-placeholder">, which the
-// sanitizer's allowlist admits and the web app styles.
+// sanitizer's allowlist admits and the site (or the /ui/ stylesheet) styles.
 type imagePlaceholder struct {
 	proxy func(dest string) (string, bool)
 }
