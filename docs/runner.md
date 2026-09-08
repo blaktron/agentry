@@ -75,7 +75,7 @@ One BriefAgent, one job, one container tree, then gone.
 | `--keep-profile true\|false` | this run's MCP-profile completion choice (default: the profile's own setting, else policy) |
 | `--reconfigure-profile` | re-run guided profile setup over an existing profile |
 | `--timeout N` / `--max-turns N` / `--max-cost USD` | override the policy budgets (exit 15 / 16 on breach; cost is the harness's running total, `0` = unlimited) |
-| `--adapter NAME` / `--list-adapters` | harness adapter (default `docker-agent`; `claude` drives your own Claude Code installation, see below; goose and codex are planned slots) |
+| `--adapter NAME` / `--list-adapters` | harness adapter (default `docker-agent`; `claude` and `codex` drive your own installation of those CLIs, see below; goose is a planned slot) |
 | `--local DIR` | run an unpublished BriefAgent tree (unsigned by definition: requires `--allow-unsigned`) |
 | `--allow-unsigned` | run a release the registry has no attestation for; a *mismatched* attestation always refuses |
 | `--allow-vulnerable-mcp` | run even though the registry reports a known high or critical vulnerability for a declared MCP server version (the receipt records the override) |
@@ -286,7 +286,8 @@ to it. What differs is where the harness runs.
 |---|---|---|---|
 | `docker-agent` (default) | the pinned `docker/docker-agent` image | autonomous, interactive (Agent Client Protocol over the container's stdio) | a container on the run's internal network: it has no route out but the proxy |
 | `claude` | **your own installation** of Claude Code, as a process of your user | autonomous, interactive (Claude Code's own bidirectional stream-json) | the harness is outside the run's network boundary — see below |
-| `goose`, `codex` | planned (RUNNER M-R4c/d) | — | — |
+| `codex` | **your own installation** of the OpenAI Codex CLI, as a process of your user | autonomous, interactive (codex's own app-server protocol) | as for `claude` — see below |
+| `goose` | planned (RUNNER M-R4d) | — | — |
 
 ### `claude`
 
@@ -305,6 +306,33 @@ run spends the **operator's** model access, never your subscription. Give it
 an endpoint that speaks the Anthropic Messages API — Anthropic's own or a
 compatible one — with `harness.claude.baseUrl`, `.model` and `.apiKeyEnv`,
 and put its host in `model.proxyAllow`.
+
+### `codex`
+
+The same shape as `claude`, with codex's own mechanisms. The runner runs
+the `codex` you have installed (`harness.codex.path` overrides the `PATH`
+lookup; `agentry doctor --adapter codex` reports the release) from a
+run-scoped `CODEX_HOME`, so none of your own config, rules, skills or
+sessions is read and nothing of the run lands in yours. The generated
+config declares the run's gateway as the only MCP server and switches
+every built-in tool off — the shell, the image viewer, web search, apps,
+the browser, computer use, image generation, sub-agents, hooks, memories —
+leaving the model the gateway's catalog and codex's three MCP resource
+readers, which read from that same gateway. It runs with `--strict-config`
+on purpose: a config key a codex release renames is a loud refusal, not a
+silently re-enabled tool.
+
+Codex speaks the OpenAI Responses API and, in the release the adapter was
+written against, nothing else. The policy's `model.baseUrl`, `.apiKeyEnv`
+and `.name` are what it is given, as a provider block in that config; an
+OpenAI-compatible endpoint that serves `/responses` works as it stands, and
+`harness.codex.baseUrl` / `.model` / `.apiKeyEnv` override those three when
+the endpoint differs from the default adapter's. An autonomous run is
+`codex exec` with JSONL events; an interactive session is codex's own
+app-server protocol over stdio, in which the runner is the approval
+authority — each MCP call is put to the runner, which accepts it for a
+gateway tool and declines anything else, and every answer is a transcript
+line.
 
 The trade-off to understand: a harness running as your own process is not
 inside the run's network boundary the way a container is. Its file and
