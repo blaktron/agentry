@@ -8,6 +8,9 @@
 /.devdata/
 *.log
 
+# python bytecode (the prose gate runs scripts/prose/*.py in place)
+__pycache__/
+
 # node
 node_modules/
 web/.next/
