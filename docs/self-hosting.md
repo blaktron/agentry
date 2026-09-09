@@ -155,10 +155,10 @@ The scanning role needs egress to that database (one host); a worker that
 cannot reach it leaves an `S7/osv-error` finding, which routes the version
 to review rather than through. The answers are kept per package version in
 the `mcp_server_scans` table, so a server version is looked up live the
-first time any manifest declares it and served from that registry for the
+first time any manifest declares it and served from that table for the
 next 24 hours.
 
-**The daily sweep.** The worker re-checks every row of that registry once
+**The daily sweep.** The worker re-checks every row of that table once
 a day (the `scan.mcp_sweep` job, enqueued a minute after start-up and every
 24 hours after). A server version that was clean and now carries a high or
 critical advisory opens a **dependency alert** on every published version
@@ -180,9 +180,11 @@ A configured tool that cannot be found is a startup error, never a silent
 fallback. A tool that fails mid-scan leaves an `S2/tool-error` finding on
 the report, so "gitleaks did not run" is distinguishable from "no
 secrets". The code-analysis stages that once ran opengrep and an OSV
-dependency check (S6, S7) were retired with the package kinds they served:
+dependency check were retired with the package kinds they served:
 BriefAgents carry no tool code, and the MCP servers one declares are
-resolved and pinned by the runner instead.
+resolved and pinned by the runner instead. Both ids are in use again — S6
+is the support-scripts stage that reads a package's shell, Python and
+JavaScript files against the manifest, and S7 the MCP server lookup above.
 
 Generate a signing key:
 
@@ -224,9 +226,9 @@ signing:
 Env equivalents: `AGENTRY_STORAGE_KIND`, `AGENTRY_STORAGE_S3_BUCKET`,
 `AGENTRY_STORAGE_S3_REGION`, `AGENTRY_SIGNING_KIND`,
 `AGENTRY_SIGNING_KMS_KEY_ARN`. Credentials come from the ambient AWS chain:
-an instance or task role, not keys in this file. The Terraform in
-The hosted service's Terraform provisions both the bucket and a key whose `kms:Sign`
-permission is restricted to the worker task role.
+an instance or task role, not keys in this file. The hosted service's
+Terraform provisions both the bucket and a key whose `kms:Sign` permission
+is restricted to the worker task role.
 
 **Honest caveat:** these two backends have **not yet been exercised against a
 live AWS account**. The Terraform is validated but never applied, and the
@@ -272,7 +274,7 @@ Register the callback with each provider as
 `{baseURL}/api/v1/auth/oidc/{provider}/callback`, so `baseURL` must be
 set correctly for social login to work at all.
 
-Three behaviours worth knowing before you enable this (DEV-019, DEV-055):
+Two behaviours worth knowing before you enable this (DEV-019, DEV-055):
 
 - **Google and Microsoft are real OIDC**: discovery, issuer pinning, PKCE,
   ID-token signature and nonce verification. Google uses
@@ -837,7 +839,7 @@ Organizations can tighten this for their own namespace but never loosen it:
 `blockedCapabilities` unions, `allowedLicenses` intersects, severity
 thresholds only move down.
 
-Two notes on the knobs:
+Three notes on the knobs:
 
 - `blockedMcpServers` rejects a submission whose manifest declares one of the
   listed MCP servers (`npm:<package>` / `pypi:<package>`, `path.Match` globs
