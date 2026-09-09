@@ -8,7 +8,8 @@
 /.devdata/
 *.log
 
-# python bytecode (the prose gate runs scripts/prose/*.py in place)
+# python bytecode: py_compile, or importing scripts/prose/gates.py to check a
+# list by hand, writes it next to the source
 __pycache__/
 
 # node
