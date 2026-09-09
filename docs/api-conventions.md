@@ -23,9 +23,10 @@ follows, so a client reading a v1 snapshot applies the v1 mapping
 ## Errors are problem+json
 
 Every error response is `application/problem+json` (RFC 9457) with `type`,
-`title`, `status` and `detail`. Read `detail` for the human-facing reason;
-do not parse `title`. A `422` carries field-level validation errors; a `409`
-means the request conflicts with current state and the `detail` says how.
+`title` and `status`; most also carry a `detail`. Read `detail` for the
+human-facing reason; do not parse `title`. A `422` carries field-level
+validation errors; a `409` means the request conflicts with current state
+and the `detail` says how.
 
 ## Idempotency-Key
 
@@ -119,13 +120,14 @@ that at least one member is non-empty (DEV-021).
 
 ## SCIM 2.0
 
-The subset is Users and Groups→teams (§12.5). Three behaviours to code
+The subset is Users and Groups→teams (§12.5). Four behaviours to code
 against:
 
 - **`PUT /scim/v2/Users/{id}` is a full-resource replace,** not a merge.
-  Anything you omit is cleared. Deactivation is a PUT of the whole user with
-  `"active": false`; that revokes the org's PATs and sessions for that user
-  in-request, inside 60 seconds by design.
+  Omit the active flag and it reads as false, so a partial PUT deactivates
+  the user. Deactivation is a PUT of the whole user with `"active": false`;
+  that revokes the org's PATs and sessions for that user in-request, inside
+  60 seconds by design.
 - **`userName` is immutable.** It is the account's email, and email changes
   are an identity operation, not a directory attribute update. A PUT that
   changes it gets `400` with a message telling you to deactivate and
