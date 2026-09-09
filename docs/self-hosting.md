@@ -3,9 +3,9 @@
 The whole registry is open source: the scanners, the review queue, SSO and
 SCIM, signing with your own key, and the server's own browser pages. There
 is no "community edition" with the security features removed; a registry you
-cannot audit is not trust infrastructure. What is *not* in this repository is
-the hosted service's site — a closed front end that runs in front of this
-same server; a registry does not need one, and
+cannot audit is one you have to take on faith. What is *not* in this
+repository is the hosted service's site — a closed front end that runs in
+front of this same server; a registry does not need one, and
 [the last section](#fronting-it-with-a-site) says how one plugs in.
 
 **Target: a working private registry in under 15 minutes.**
@@ -294,7 +294,7 @@ Three behaviours worth knowing before you enable this (DEV-019, DEV-055):
 ### Audit archive and retention
 
 Every audit event is written to the `audit_events` table. It is partitioned
-monthly and protected by an append-only trigger: rows cannot be updated or
+monthly and carries an append-only trigger: rows cannot be updated or
 deleted, by anyone, including you. §12.6 additionally wants a
 continuous NDJSON stream. It is **off by default**:
 
@@ -747,7 +747,7 @@ tag+digest pin (bump it when the target is new) and `docker image prune
 root volume. The registry needs no restart: the OIDC issuer, client, and
 brand ride the database.
 
-`X-Forwarded-For` is honoured **only** up to that many trusted hops: behind
+`X-Forwarded-For` is honoured **only** up to that many proxy hops: behind
 CloudFront → ALB set `2`; behind a single load balancer set `1`. Leave it at
 `0` (the default) if the server is directly exposed. The header is then
 ignored entirely. Setting it higher than the real hop count lets any client
@@ -787,7 +787,7 @@ The edge serves whatever is in the downloads directory
 CLI and the desktop app build from their own repositories (`agentry-cli`,
 `agentry-desktop`); the hosted site's repository has the script that
 builds the whole matrix and writes the `manifest.json` its download page
-renders. A registry without a site simply hosts the files and links to
+renders. A registry without a site hosts the files and links to
 them from wherever it tells its users about the clients:
 
 ```bash
@@ -862,8 +862,8 @@ Two notes on the knobs:
 - **The worker matters.** With no worker running, versions sit in `scanning`
   and never publish. That is the fail-closed design working, but it looks like
   a hang. Check the worker first when publishes stall.
-- **Rescan after ruleset updates.** New detection only protects you if you
-  apply it to what you already published; the rescan sweep quarantines
+- **Rescan after ruleset updates.** New detection reaches what you already
+  published only when you rescan it; the rescan sweep quarantines
   versions that newly trip a high finding.
 - Runbooks for the failure modes above: [docs/ops/runbooks.md](ops/runbooks.md).
 
@@ -879,7 +879,8 @@ Running your own registry means you own the trust decisions:
 - keeping the ruleset current; a scanner from a year ago is a scanner that
   has not seen this year's techniques.
 
-None of that is different from the hosted service; it is just visible.
+None of that is different from the hosted service; self-hosting makes it
+visible.
 
 ## SSH git transport
 
