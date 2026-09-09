@@ -219,10 +219,10 @@ the only consumers), and a **new version of the same BriefAgent starts
 over** — new digest, fresh resolve, fresh consent, fresh keys. A
 reinstall of the same signature whose registry resolution no longer
 matches the recorded digests refuses (the pin is the trust decision).
-`agentry profiles remove` deletes servers and keys with the profile —
-**remove is the default**; `agentry uninstall --keep-mcp` retains the
-signature directory so a same-digest reinstall reconnects without
-re-prompting.
+`agentry profiles remove` deletes servers and keys with the profile;
+uninstalling a BriefAgent does the same, because **remove is the default**.
+`agentry uninstall --keep-mcp` retains the signature directory so a
+same-digest reinstall reconnects without re-prompting.
 
 ## The operator policy (`~/.agentry/runner/policy.yaml`)
 
