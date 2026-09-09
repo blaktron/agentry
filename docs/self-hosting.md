@@ -864,7 +864,7 @@ Three notes on the knobs:
   a hang. Check the worker first when publishes stall.
 - **A new ruleset rescans the catalogue.** Registering a ruleset semver for the
   first time enqueues the §8.7 sweep automatically; the rescan sweep quarantines
-  versions that newly trip a high finding.
+  versions that newly trip a high or critical finding.
 - Runbooks for the failure modes above: [docs/ops/runbooks.md](ops/runbooks.md).
 
 ## What you are responsible for
