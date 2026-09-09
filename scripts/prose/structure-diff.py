@@ -62,6 +62,9 @@ def diff(a, b, name, out):
 
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    if len(args) != 2 or "--help" in sys.argv or "-h" in sys.argv:
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
     before, after = parse(args[0]), parse(args[1])
     out, ok = {}, True
     for k in ("fences", "tables", "admonitions", "headings", "links", "code"):

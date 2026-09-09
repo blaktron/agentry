@@ -120,7 +120,7 @@ that at least one member is non-empty (DEV-021).
 
 ## SCIM 2.0
 
-The subset is Users and Groups→teams (§12.5). Three behaviours to code
+The subset is Users and Groups→teams (§12.5). Four behaviours to code
 against:
 
 - **`PUT /scim/v2/Users/{id}` is a full-resource replace,** not a merge.
@@ -138,7 +138,7 @@ against:
   group had synced when the team was empty. The one tolerated case is "this
   user is not an org member", which is a legitimate no-op rather than a lost
   write, and is skipped rather than failed.
-- Only `userName eq "…"` is supported as a filter.
+- **Only `userName eq "…"` is supported as a filter.**
 
 ## Account erasure (GDPR)
 
