@@ -3,9 +3,9 @@
 The whole registry is open source: the scanners, the review queue, SSO and
 SCIM, signing with your own key, and the server's own browser pages. There
 is no "community edition" with the security features removed; a registry you
-cannot audit is not trust infrastructure. What is *not* in this repository is
-the hosted service's site — a closed front end that runs in front of this
-same server; a registry does not need one, and
+cannot audit is one you have to take on faith. What is *not* in this
+repository is the hosted service's site — a closed front end that runs in
+front of this same server; a registry does not need one, and
 [the last section](#fronting-it-with-a-site) says how one plugs in.
 
 **Target: a working private registry in under 15 minutes.**
@@ -155,10 +155,10 @@ The scanning role needs egress to that database (one host); a worker that
 cannot reach it leaves an `S7/osv-error` finding, which routes the version
 to review rather than through. The answers are kept per package version in
 the `mcp_server_scans` table, so a server version is looked up live the
-first time any manifest declares it and served from that registry for the
+first time any manifest declares it and served from that table for the
 next 24 hours.
 
-**The daily sweep.** The worker re-checks every row of that registry once
+**The daily sweep.** The worker re-checks every row of that table once
 a day (the `scan.mcp_sweep` job, enqueued a minute after start-up and every
 24 hours after). A server version that was clean and now carries a high or
 critical advisory opens a **dependency alert** on every published version
@@ -180,9 +180,11 @@ A configured tool that cannot be found is a startup error, never a silent
 fallback. A tool that fails mid-scan leaves an `S2/tool-error` finding on
 the report, so "gitleaks did not run" is distinguishable from "no
 secrets". The code-analysis stages that once ran opengrep and an OSV
-dependency check (S6, S7) were retired with the package kinds they served:
+dependency check were retired with the package kinds they served:
 BriefAgents carry no tool code, and the MCP servers one declares are
-resolved and pinned by the runner instead.
+resolved and pinned by the runner instead. Both ids are in use again — S6
+is the support-scripts stage that reads a package's shell, Python and
+JavaScript files against the manifest, and S7 the MCP server lookup above.
 
 Generate a signing key:
 
@@ -224,9 +226,9 @@ signing:
 Env equivalents: `AGENTRY_STORAGE_KIND`, `AGENTRY_STORAGE_S3_BUCKET`,
 `AGENTRY_STORAGE_S3_REGION`, `AGENTRY_SIGNING_KIND`,
 `AGENTRY_SIGNING_KMS_KEY_ARN`. Credentials come from the ambient AWS chain:
-an instance or task role, not keys in this file. The Terraform in
-The hosted service's Terraform provisions both the bucket and a key whose `kms:Sign`
-permission is restricted to the worker task role.
+an instance or task role, not keys in this file. The hosted service's
+Terraform provisions both the bucket and a key whose `kms:Sign` permission
+is restricted to the worker task role.
 
 **Honest caveat:** these two backends have **not yet been exercised against a
 live AWS account**. The Terraform is validated but never applied, and the
@@ -272,7 +274,7 @@ Register the callback with each provider as
 `{baseURL}/api/v1/auth/oidc/{provider}/callback`, so `baseURL` must be
 set correctly for social login to work at all.
 
-Three behaviours worth knowing before you enable this (DEV-019, DEV-055):
+Two behaviours worth knowing before you enable this (DEV-019, DEV-055):
 
 - **Google and Microsoft are real OIDC**: discovery, issuer pinning, PKCE,
   ID-token signature and nonce verification. Google uses
@@ -294,7 +296,7 @@ Three behaviours worth knowing before you enable this (DEV-019, DEV-055):
 ### Audit archive and retention
 
 Every audit event is written to the `audit_events` table. It is partitioned
-monthly and protected by an append-only trigger: rows cannot be updated or
+monthly and carries an append-only trigger: rows cannot be updated or
 deleted, by anyone, including you. §12.6 additionally wants a
 continuous NDJSON stream. It is **off by default**:
 
@@ -354,13 +356,12 @@ In dev the compose stack's **mailpit** (http://localhost:8025) is the default
 target and catches everything, so nothing leaves the machine. The compose
 file reads all of these (and the directory service's `AUTHENTIK_EMAIL_*`
 set) from `.env`, so switching both senders to a real provider is an `.env`
-edit plus recreating the `server` and `authentik-*` containers — with
+edit plus recreating the `server` and `authentik-*` containers. With
 Postmark, the server token is both SMTP username and password, and until
 the account is approved it only delivers to recipients on the sending
-domain. With no SMTP
-configured at all, email verification tokens are logged at debug level.
-That is usable for a single-operator instance, not for anything with real
-users.
+domain. With no SMTP configured at all, email verification tokens are
+logged at debug level. That is usable for a single-operator instance, not
+for anything with real users.
 
 ### Limits and quotas
 
@@ -485,6 +486,13 @@ http:
 
 Env: `AGENTRY_TRUSTED_PROXIES` (an integer hop count, not a CIDR list).
 
+`X-Forwarded-For` is honoured **only** up to that many proxy hops: behind
+CloudFront → ALB set `2`; behind a single load balancer set `1`. Leave it at
+`0` (the default) if the server is directly exposed. The header is then
+ignored entirely. Setting it higher than the real hop count lets any client
+choose its own rate-limit bucket and forge audit IPs, which is worse than
+having no per-IP limiting at all.
+
 The compose stack ships its own proxy, the `edge` service
 (`deploy/compose/edge/nginx.conf`): nginx on 80/443 that terminates TLS and
 serves the server's own `/ui/` pages, `/api`, `/scim`, `/.well-known`,
@@ -513,7 +521,7 @@ The compose stack can publish the edge through a Cloudflare Tunnel — an
 outbound-only connector, so the host needs no inbound port at all. The
 connector reaches the edge over the compose network, not through the
 published ports, so with the tunnel as the only intended entry point set
-`AGENTRY_EDGE_BIND` to a private address (or `127.0.0.1`) as well: a
+`AGENTRY_EDGE_BIND` to a private address (or `127.0.0.1`) as well. A
 Cloudflare-fronted site whose origin also answers on its public IP gets
 none of the WAF, rate limiting, or Access rules configured at the edge,
 and the address is only ever one stale DNS record away from being known.
@@ -585,6 +593,8 @@ existing account when *both* sides' addresses are verified. That
 assertion is sound exactly when authentik is your directory of record —
 accounts are created by operators, provisioned from an upstream
 directory, or enrolled through a flow with an email-verification stage.
+If you allow self-enrollment without one, drop that mapping and accept
+that such accounts start as new registry users.
 
 **Platform staff comes from a directory group.** The groups blueprint
 creates `agentry-platform-staff`; the registry reads the ID token's
@@ -614,8 +624,6 @@ The Helm chart carries the same knobs (`config.auth.externalOnly`,
 `secret.idpAdminToken`); the hosted service's Terraform (kept with the
 site) carries them as `idp_client_id`, `idp_issuer`, `idp_logout_url` and
 `idp_staff_group`, with the client secret in Secrets Manager.
-If you allow self-enrollment without one, drop that mapping and accept
-that such accounts start as new registry users.
 
 **Account flows.** `deploy/compose/authentik/blueprints/agentry-account-flows.yaml`
 is mounted into authentik as a blueprint and applied automatically on
@@ -672,10 +680,9 @@ production values:
   is the thing to alert on — the registry's `FailOpenEvents` metric covers
   the registry's own fail-open paths, not this one.
 
-The same flows are rate-limited per client IP — emails sent plus accounts
-created per hour — by `AUTHENTIK_ACCOUNT_FLOW_MAX_PER_HOUR` (default 10;
-compose passes it through, the blueprint formats it into the policy at
-apply time). Enrollment ends with authenticator (TOTP) setup, and recovery
+`AUTHENTIK_ACCOUNT_FLOW_MAX_PER_HOUR` sets that budget (default 10):
+compose passes it through, and the blueprint formats it into the policy at
+apply time. Enrollment ends with authenticator (TOTP) setup, and recovery
 verifies the authenticator before the password may change — a user who has
 none is sent through the same setup stage. Lost-authenticator recovery is an
 operator action in the Authentik admin UI; email alone never resets both
@@ -712,14 +719,14 @@ registry normally refuses to publish to a public namespace until the
 account has a TOTP factor (§12.1, §19). With the directory service in
 charge no account can enrol one — the native TOTP endpoints are the ones
 answering 410 — so that gate is **off under `externalOnly`** and the
-requirement is yours to enforce in authentik: bind an MFA policy (or an
+requirement is yours to enforce in authentik. Bind an MFA policy (or an
 authenticator-validation stage) to the authentication flow or to the
 `agentry` application, which also covers sign-in itself rather than only
 publishing.
 
-To turn trust back into evidence, set `AGENTRY_AUTH_REQUIRE_IDP_MFA=true`:
-the gate is then on under `externalOnly` and is satisfied when the account
-has signed in at least once with an ID token whose `amr` claim (RFC 8176)
+To turn trust back into evidence, set `AGENTRY_AUTH_REQUIRE_IDP_MFA=true`.
+The gate is then on under `externalOnly`, and it is satisfied when the
+account has signed in at least once with an ID token whose `amr` claim (RFC 8176)
 names a second factor — `mfa`, `otp`, `hwk`, `webauthn` and the like, never
 `pwd` alone — which the registry records as `users.idp_mfa_at`. authentik
 emits `amr` on its ID tokens; check one sign-in's token (or the
@@ -747,29 +754,22 @@ tag+digest pin (bump it when the target is new) and `docker image prune
 root volume. The registry needs no restart: the OIDC issuer, client, and
 brand ride the database.
 
-`X-Forwarded-For` is honoured **only** up to that many trusted hops: behind
-CloudFront → ALB set `2`; behind a single load balancer set `1`. Leave it at
-`0` (the default) if the server is directly exposed. The header is then
-ignored entirely. Setting it higher than the real hop count lets any client
-choose its own rate-limit bucket and forge audit IPs, which is worse than
-having no per-IP limiting at all.
-
 **The directory stays behind the scenes.** Nobody browses it directly:
 the edge sends `auth.<site>/` and the directory's user panel
 (`/if/user/…`) back to the site, and the registry's Settings page is
 where a person changes their password, adds an authenticator app or
 security key, or removes one — each is one short step in the directory
-that returns to Settings. For that the directory needs to know the site:
-Two variables tell the directory where its flows return (DEV-091): sign-out
-lands on `AGENTRY_PUBLIC_WEB_URL` and a password change or an authenticator
+that returns to Settings. For that the directory needs to know the site.
+Two variables tell it where its flows return (DEV-091): sign-out lands on
+`AGENTRY_PUBLIC_WEB_URL` and a password change or an authenticator
 enrolment on `AGENTRY_ACCOUNT_URL`. Both default to the server's own pages
 (`<AGENTRY_PUBLIC_URL>/ui/` and `…/ui/account/directory`); a site in front
 sets them to its home and its Settings → Authentication page. The flows'
 titles and mail subjects call the deployment `AGENTRY_BRAND_NAME`
-(default `Agentry`). The original text of this paragraph, for the site's
-values: `AGENTRY_PUBLIC_WEB_URL` (the same value the registry uses) is passed to
-the `authentik-*` containers and read by the account-flows blueprint,
-and `scripts/dev/authentik-bootstrap.sh` points the application's launch
+(default `Agentry`). `AGENTRY_PUBLIC_WEB_URL` (the same value the registry
+uses) is passed to the `authentik-*` containers and read by the
+account-flows blueprint.
+`scripts/dev/authentik-bootstrap.sh` points the application's launch
 URL at the registry's sign-in start and the brand's default application
 at it, so a sign-in, sign-up or recovery that ends without a return lands
 in the app signed in. Sign-out goes through the blueprint's
@@ -783,11 +783,11 @@ deployment that predates this (agentry#164).
 
 The edge serves whatever is in the downloads directory
 (`AGENTRY_DOWNLOADS_DIR`; unset, an empty named volume `downloads`) at
-`/downloads/`, so publishing a build for your users is a file copy — the
+`/downloads/`, so publishing a build for your users is a file copy. The
 CLI and the desktop app build from their own repositories (`agentry-cli`,
 `agentry-desktop`); the hosted site's repository has the script that
 builds the whole matrix and writes the `manifest.json` its download page
-renders. A registry without a site simply hosts the files and links to
+renders. A registry without a site hosts the files and links to
 them from wherever it tells its users about the clients:
 
 ```bash
@@ -837,7 +837,7 @@ Organizations can tighten this for their own namespace but never loosen it:
 `blockedCapabilities` unions, `allowedLicenses` intersects, severity
 thresholds only move down.
 
-Two notes on the knobs:
+Three notes on the knobs:
 
 - `blockedMcpServers` rejects a submission whose manifest declares one of the
   listed MCP servers (`npm:<package>` / `pypi:<package>`, `path.Match` globs
@@ -862,9 +862,9 @@ Two notes on the knobs:
 - **The worker matters.** With no worker running, versions sit in `scanning`
   and never publish. That is the fail-closed design working, but it looks like
   a hang. Check the worker first when publishes stall.
-- **Rescan after ruleset updates.** New detection only protects you if you
-  apply it to what you already published; the rescan sweep quarantines
-  versions that newly trip a high finding.
+- **A new ruleset rescans the catalogue.** Registering a ruleset semver for the
+  first time enqueues the §8.7 sweep automatically; the rescan sweep quarantines
+  versions that newly trip a high or critical finding.
 - Runbooks for the failure modes above: [docs/ops/runbooks.md](ops/runbooks.md).
 
 ## What you are responsible for
@@ -879,7 +879,8 @@ Running your own registry means you own the trust decisions:
 - keeping the ruleset current; a scanner from a year ago is a scanner that
   has not seen this year's techniques.
 
-None of that is different from the hosted service; it is just visible.
+None of that is different from the hosted service; self-hosting makes it
+visible.
 
 ## SSH git transport
 

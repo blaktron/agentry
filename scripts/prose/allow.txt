@@ -1,0 +1,42 @@
+# Spans that legitimately contain a word from never.txt.
+#
+# Each line is `<reason> :: <span>`. A banned word passes only when the whole
+# match falls inside one of these spans. A span is not scoped to the file its
+# reason names: it allows that wording anywhere in the core's markdown, which
+# is why every span here is a whole clause rather than a word. Matching is
+# case-insensitive and tolerant of line wrapping and either apostrophe, and it
+# runs after the masking: fenced blocks, inline code spans and quoted terms
+# are already gone, so a policy key, a status value and the honest-posture
+# rule's own `never "safe"` need no line here.
+#
+# The point of the allowlist is that the word ban cannot be satisfied by
+# deleting the disclaimer: "safe" is banned, and the sentences that say static
+# analysis cannot prove an agent safe are the reason the word appears at all.
+# Those sentences are also in protected.txt, so a rewrite cannot quietly drop
+# one to clear the ban — the protected half fails first.
+#
+# Adding a line here is a claim that the span is honest. It is a change worth
+# arguing in a PR, not a way past a red check. An entry that stops matching is
+# dropped in the PR that rewrites its sentence: a dead allowance covers a
+# wording nothing carries, and would silently cover it again if it returned.
+
+# The posture sentences themselves (protected.txt §1). The word "safe" is the
+# content of the claim, in README.md, CONTRIBUTING.md, SECURITY.md and
+# docs/trust.md.
+a protected posture sentence (protected.txt §1) :: cannot prove an agent safe
+
+# The one form of "guarantee" §4.4 keeps, and the trust page heading built on
+# it (protected.txt §5). Deleting the heading would delete the section that
+# states the limits.
+the §4.4 exception: the negation is the claim :: does not guarantee
+
+# Mechanism names that happen to be spelled with a banned word. Each names a
+# thing the code or the ecosystem already calls this, not a claim about a
+# reader's data.
+the S1 technique, in a table that is invariant (docs/trust.md) :: Inventory and hygiene: safe unpack
+the X-Forwarded-For configuration term (docs/api-conventions.md) :: configure trusted proxies
+
+# Not an entry, a decision: `docs/trust.md`'s title "Trust and security model"
+# needs no allowance. never.txt bans "trusted" and "secure" as whole words;
+# "Trust" is neither, and "security" is not "secure". The heading matches
+# nothing, and a dead allowance would only hide a future real hit.

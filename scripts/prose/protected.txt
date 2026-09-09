@@ -1,0 +1,53 @@
+# The posture sentences of the core's markdown, byte for byte (plan
+# front-end-voice-and-warmth §4.6, from a grep of this repository on
+# 2026-09-09).
+#
+# Each line is `<file>[, <file>…] :: <sentence>`: the sentence must appear in
+# every file named, with whitespace normalised and entities resolved, because
+# markdown reflows a sentence across source lines. Nothing else is stripped —
+# the emphasis markers, the colons and the quotation marks below are part of
+# the claim, so they are compared too.
+#
+# The check is a grep, deliberately: every unslop script passes the softened
+# form "Static analysis does not claim an agent is safe.", and only a
+# byte-for-byte comparison catches it. The sentences here are claim fragments,
+# not whole paragraphs. A rewrite may change the sentences around them; it may
+# not soften, reorder or drop these. Adding one is a change to the plan's §4.6
+# list and belongs in a PR that says so. Removing one needs the operator.
+#
+# The site's own wordings of the same claims ("cannot prove a BriefAgent
+# safe", "No flag, plan, or role skips the gate") live in blaktron/agentry-web
+# and are gated by that repository's prose-check, not here.
+
+# 1. Scanning does not prove safe, and the product says so in its own voice.
+README.md, CONTRIBUTING.md, docs/trust.md :: Static analysis cannot prove an agent safe
+SECURITY.md :: Static scanning cannot prove an agent safe.
+CONTRIBUTING.md :: Static analysis cannot prove an agent safe and we do not imply otherwise.
+README.md :: and the product never claims it does.
+SECURITY.md :: why the product never says "safe"
+docs/trust.md :: **"scanned, N findings, signed"**, never "safe" or "verified secure"
+docs/trust.md :: A sufficiently novel injection technique will pass a scan written before it existed.
+docs/briefagents.md :: release is *scanned, with N findings, signed*, never "safe".
+docs/api-conventions.md :: means "no known advisories at `lastCheckedAt`", never "safe"
+
+# 2. The gate fails toward review, never through.
+README.md :: fails **toward** review — never through.
+docs/trust.md :: A scanner that errors or times out fails toward review, never through.
+docs/self-hosting.md :: fail toward review, never toward skip
+docs/self-hosting.md :: routes the version to review rather than through
+
+# 3. Nothing skips the gate, and the claim is a test rather than a promise.
+docs/trust.md :: There is no flag, plan, or role that lets a public version skip the pipeline
+docs/trust.md :: "no path to `published` skips the gate" is a property test, not a promise.
+
+# 4. What a signature proves, and what it does not. The colon stays.
+docs/trust.md :: A verified signature means: **these exact bytes are the ones this registry scanned and published.** It does not mean the contents are benign.
+docs/trust.md :: Those are different claims and the product never conflates them.
+
+# 5. The section that states the limits, and the limits themselves.
+docs/trust.md :: What this does not guarantee
+docs/trust.md :: it cannot enforce anything once the agent is running on your machine.
+SECURITY.md :: Declared capabilities are not runtime-enforced.
+docs/trust.md :: Scanning happens at publication, not at push and not at run time.
+docs/trust.md :: The shipped scanners are good, not identical to the tools PLAN §8.3 names.
+docs/trust.md :: Review is human, and humans are the ones deciding.

@@ -11,12 +11,14 @@ under `archive/agentry-cli/`, and departures from them are logged in
 
 ## Commands
 
-Two flags are global and available on every command below:
-`--registry URL` (the registry to talk to — otherwise the configured
-default, then the default baked into the binary: builds a registry serves
-under `/downloads/` — or a site's download page — point at that registry,
-and a source build falls back to `http://localhost:8080`) and `--json` (machine-readable
-output where a command supports it: `info`, `search`, `verify`).
+Two flags are global to every command below.
+
+`--registry URL` names the registry to talk to. Without it the CLI uses the
+configured default, then the default baked into the binary: a build a
+registry serves under `/downloads/`, or one from a site's download page,
+points at that registry, and a source build falls back to
+`http://localhost:8080`. `--json` asks for machine-readable output where a
+command supports it: `info`, `search`, `verify`.
 
 ### `agentry setup`
 
@@ -102,7 +104,7 @@ policy. An **autonomous** run is the files in, the output and receipts
 out, the sandbox gone. An **interactive** session (`--mode interactive`)
 is the same plan, gateway and enforcement driven as a conversation: the
 harness serves the Agent Client Protocol over stdio inside the sandbox,
-and the CLI opens a chat in the terminal — type to talk, `/add PATH` to
+and the CLI opens a chat in the terminal. Type to talk, `/add PATH` to
 drop a file or directory into the read-only inputs folder, `/caps` to
 print the enforced contract, `/finish` to end the session with the
 agent's final result (validated against `output.schema.json` like an
@@ -170,10 +172,10 @@ under `~/.agentry/runner/profiles/…` (directory `0700`, file `0600`).
 - **Resolution order** at run time: profile → host environment / the
   policy's env file. A secret nothing resolves refuses the run (exit 11,
   naming the variable) — never a silent degrade.
-- **Completion**: keep → the profile survives (stamped `lastUsedAt`) and
-  the next run of that exact release just uses the authenticated
-  resources; remove → deleted when the run completes. Default comes from
-  policy `profiles.keepByDefault` (shipped `true`).
+- **Completion**, when the run ends: keep → the profile survives (stamped
+  `lastUsedAt`) and the next run of that exact release reuses the
+  authenticated resources; remove → deleted when the run completes.
+  Default comes from policy `profiles.keepByDefault` (shipped `true`).
 - A **different digest is a different trust decision** and gets a fresh
   guided setup. Non-interactive runs never create profiles and behave
   exactly like v1.
@@ -217,9 +219,10 @@ the only consumers), and a **new version of the same BriefAgent starts
 over** — new digest, fresh resolve, fresh consent, fresh keys. A
 reinstall of the same signature whose registry resolution no longer
 matches the recorded digests refuses (the pin is the trust decision).
-`agentry profiles remove` deletes servers and keys with the profile —
-**remove is the default**; `--keep-servers` retains the signature
-directory so a same-digest reinstall reconnects without re-prompting.
+`agentry profiles remove` deletes servers and keys with the profile;
+uninstalling a BriefAgent does the same, because **remove is the default**.
+`agentry uninstall --keep-mcp` retains the signature directory so a
+same-digest reinstall reconnects without re-prompting.
 
 ## The operator policy (`~/.agentry/runner/policy.yaml`)
 
@@ -270,7 +273,7 @@ per-BriefAgent **exec image** — the runner image with every executable deleted
 except the declared commands (and the runner binary that serves the tools),
 built once at install time from a one-line generated Dockerfile
 (`agentry-runner-exec:<version>-<hash>`). `run_command` is still gated by the
-argv0 allowlist and shim `PATH`; the image simply no longer contains anything
+argv0 allowlist and shim `PATH`; the image no longer contains anything
 else to run. A declared command the runner image never had is reported absent,
 as before.
 
@@ -374,7 +377,7 @@ provider table (including a prerequisites installer for docker and the
 MCP gateway), guided profile configuration and intake questions as forms,
 and in-app runs with task input, file/folder pickers for `/inputs` and the
 output folder, a keep-profile toggle, a live log stream, and the result
-envelope; an interactive release opens as a chat in the same run panel,
+envelope. An interactive release opens as a chat in the same run panel,
 over the same session API the CLI uses. It signs in through the browser —
 the registry's directory service handles the login, one explicit approval
 page hands the app a one-time code on a loopback listener, and the app
