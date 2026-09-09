@@ -1,8 +1,7 @@
 # Runbooks
 
-The procedures an on-call operator needs, written to be followed at 3am by
-someone who did not write the code. Each one states the trigger, the checks,
-the action, and how you know it worked.
+The procedures an on-call operator needs. Each one opens with its trigger,
+then the steps, and ends with the check that proves it worked.
 
 Conventions: `agentryd` is the server binary; `$DB` is the database URL;
 `psql "$DB"` assumes the app role. Anything destructive says so in bold.
@@ -23,7 +22,7 @@ during a rollout:
    repo storage or the signing key stops here and gets a second pair of
    eyes.
 2. Apply migrations: `agentryd migrate` (idempotent; takes a session lock, so
-   running it twice concurrently is safe).
+   a second concurrent run waits instead of racing).
 3. Roll the services one at a time: `worker` first (it is the least
    user-visible), then `api`, `git`. A site in front rolls last, from its
    own repository.
@@ -98,13 +97,13 @@ is hundreds of malicious agents from a handful of accounts, so assume the
 blast radius is an *account cluster*, not one agent.
 
 **A rescan sweep is now the most likely way you find out.** Registering a new
-ruleset release enqueues the §8.7 catalogue sweep automatically. You do not
-schedule it, and shipping detection for a live technique will surface every
+ruleset release enqueues the §8.7 catalogue sweep automatically; you do not
+schedule it. Shipping detection for a live technique surfaces every
 already-published version that trips it, all at once. Expect a wave of
-quarantines within a sweep of publishing a rule that matters, and read that
-as the system working rather than as an incident of its own. (Sweeps used to
-need triggering by hand, which meant new detection sat unapplied; that was
-fixed in the 2026-08-29 remediation.)
+quarantines after a rule that matters lands, and read it as the system
+working rather than as an incident of its own. (Sweeps used to need
+triggering by hand, which meant new detection sat unapplied; the 2026-08-29
+remediation fixed that.)
 
 S8's publisher-behaviour signal also covers **account age ×
 publish velocity** but does **not** correlate publisher IPs across accounts
@@ -130,13 +129,13 @@ the scanner will not do for you.
 3. **Quarantine, then block.** Quarantine is reversible: it stops resolution
    and refuses direct downloads with `409`. Block is for confirmed malware and
    returns **`410 Gone`** on every download of that agent or version, which
-   is now true in fact and not only on paper. Until the 2026-08-29
+   is now true in fact and not only on paper. Work through the API
+   (`POST /platform/agents/{ns}/{name}/quarantine`, then `.../block`) so every
+   action is audited with a reason, not in SQL. Until the 2026-08-29
    remediation, `block` set the agent's quarantine state and nothing else, so
    a blocked agent kept serving `200`s and its archive stayed downloadable;
    the `410` branch was unreachable code. If you ran this runbook before that
-   fix, **re-check anything you blocked**; it may still be being served.
-   Work through the API (`POST /platform/agents/{ns}/{name}/quarantine`, then
-   `.../block`) so every action is audited with a reason, not in SQL.
+   fix, **re-check anything you blocked**; it may still be downloadable.
 4. **Publish one advisory per affected agent** (or one covering the cluster,
    referenced from each). Consumers who already installed are reached by
    advisory + webhook, not by any push we control.
@@ -273,8 +272,8 @@ publisher locked out (check `user.login_failed` audit volume by handle).
    `publishedContent=transfer` (the latter also needs
    `transferOrg=<org handle>`, and the caller must be an owner or admin
    there); without it the request is refused with `400` naming the count.
-   There is no default. It used to silently default to `yank`, which meant
-   nobody was being asked. Ask before you run it, and record the answer.
+   There is no default. It used to silently default to `yank`, so nobody
+   asked the requester. Ask before you run it, and record the answer.
 4. If they insist published bytes be removed, that is a `blocked` decision by
    trust & safety with a written rationale, not an erasure step.
 5. Audit events keep the opaque user id. Do not delete audit rows; the table
@@ -311,7 +310,7 @@ disposition.
 account page's password/authenticator actions error.
 Existing registry sessions and PATs keep working throughout — the directory
 is consulted at sign-in, not per request — so the API is not down; people
-just cannot sign in.
+cannot sign in.
 
 1. Is authentik up? `curl -fsS https://auth.<site>/-/health/ready/` and
    `docker compose ps authentik-server authentik-worker`. A crash loop
@@ -334,7 +333,7 @@ just cannot sign in.
    the `authentik-*` containers (compose passes them through, defaulting to
    the server's own `/ui/` pages; a site's overlay sets its own); the
    account-flows blueprint formats them into the redirect stages. After
-   changing them, recreate the authentik containers, not just the registry.
+   changing them, recreate the authentik containers, not the registry alone.
 5. A user who cannot complete MFA is an operator action in the authentik
    admin console (`/if/admin/` still serves); email alone never resets both
    factors.
@@ -378,12 +377,12 @@ own when the author yanks the version or the advisory is withdrawn.
    secrets may deserve quarantine of the affected versions (runbook 4) and an
    advisory; an alert alone is right for the ordinary case. The runner
    already refuses to install a server the registry marks high/critical, so
-   new runs are protected either way; installed copies are not.
+   new runs do not get it; copies already installed keep running it.
 4. **Watch the sweep itself.** `McpSweepRuns{outcome="error"}` or a
    `mcp sweep: vulnerability lookup failed` line means the database was
    unreachable: rows keep their last answer and are retried tomorrow; check
    egress from the worker to `AGENTRY_SCAN_OSV_URL`.
-5. **Tell people once.** Authors were emailed per alert already; a status
+5. **Tell people once.** Authors already got one mail per alert; a status
    note is for consumers, who see the alert on the agent page but get no
    mail.
 

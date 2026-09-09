@@ -8,7 +8,7 @@ everything else is ordinary Go work.
 
 - **Security issues do not go in pull requests.** See [SECURITY.md](SECURITY.md).
 - Large changes: open an issue first. Protocol and manifest changes go through
-  an RFC in `docs/rfcs/` (copy the template, open a PR with just the RFC).
+  an RFC in `docs/rfcs/` (copy the template, open a PR with the RFC alone).
 - The build plan lives in [agentry-notes](https://github.com/blaktron/agentry-notes) and is immutable during the v1 build.
   Deviations get an entry in the deviations register there — dated, with what/why/impact —
   rather than an edit to the plan.
@@ -113,6 +113,64 @@ pure logic, real-Postgres integration tests for stores and handlers, and an
 acceptance-script assertion for anything a milestone promises. Fixtures for
 hostile content are text-only, defanged, and use `*.invalid.example` hosts —
 never functional malware, never real endpoints, never real secrets.
+
+## Writing
+
+The docs, the READMEs and this file speak in one register: you for the reader,
+no narrator, and no "we" unless the file already has one. A claim about
+protection names its mechanism in the same sentence or the next one — not
+"strict controls at every layer" but "the gateway serves only the tools the
+manifest declared, and traffic leaves through the egress proxy". Say it, then
+name it: "the manifest, the file that says what the agent may touch" on first
+use, plain "manifest" after. Sentences run 10 to 25 words and paragraphs 2 to 4
+sentences; a sentence passes 30 words only when it is listing mechanisms. Hedge
+where the hedge is the fact — "cannot prove", "reduces" and "today" are content,
+not softening — and end a section on a next step or a stated limit rather than a
+recap. The words the prose here does not use are `safe`, `secure` as a verdict,
+`secure by default`, `guarantee`, `trusted`, `protected`, `ensures`,
+`eliminates`, `prevents`, `peace of mind`, `trust infrastructure`,
+`enterprise-grade` and `leverage`, together with superlatives about protection,
+landscape openers, rhetorical questions, adjective triads, closing kickers,
+exclamation marks, emoji, `just` and `simply` as minimisers, and the passive
+voice where the actor is known. `does not guarantee` is the one form of those
+words the register keeps, and no word disappears by deleting the sentence that
+disclaims it. Section numbers and register ids stay out of product copy, but the
+docs keep their citations — §-numbers, DEV-nnn, RFC ids — because there they are
+the audit trail.
+
+Rewriting a file follows one loop. Copy it to a before file, then audit the
+whole file as a reader and with the four unslop scanners: a scanner hit is a
+candidate, and a quiet scanner is not a pass. Pull the constraints out with
+`extract_constraints.py`, add the sentences the file carries that may not move,
+and draft in place with the smallest repair that fixes what the audit confirmed.
+Then gate it: `validate_preservation.py --strict` (the flag comes first, or it
+is read as the constraints path and the run still exits 0), `diff_check.py`, the
+four scanners again on the result, and a structure diff proving every fence,
+table, heading, link and inline code span survived byte for byte. The full rule
+— what counts as a finding, which sentences may not move, and when a diff over
+40 % or a preservation warning needs a named sign-off in the pull request — is
+§4 and §6 of `plans/front-end-voice-and-warmth.md` in
+[agentry-notes](https://github.com/blaktron/agentry-notes).
+
+The check itself is `scripts/prose/check.sh`, run over the working tree, and
+`make prose-check` wraps it. Its blocking half looks for every sentence in
+`scripts/prose/protected.txt`, ignoring where a line wraps, and refuses every
+word in `scripts/prose/never.txt` that sits outside a span allowlisted in
+`scripts/prose/allow.txt`, one `<reason> :: <span>` per line; fences, inline
+code and quoted terms are masked first, so a command or a quoted term keeps its
+words. Its advisory half runs the unslop battery over the changed prose:
+`UNSLOP_DIR=<clone>` points it at a local clone instead of fetching, and
+`UNSLOP_SKIP=1` skips that half altogether.
+`scripts/prose/check.sh --self-test` proves the check still fails on a softened
+posture sentence and on a seeded never-word. The CI job is `prose-check` in
+`.github/workflows/ci.yaml`.
+
+A red check is one of two things. A sentence that may not move was softened or
+dropped: put it back, or edit `scripts/prose/protected.txt` in the same pull
+request if the claim itself changed. Or a never-word reached the prose: reword
+it so the mechanism carries the sentence, and where the word belongs, add the
+span to `scripts/prose/allow.txt` with its reason and argue that line in the
+pull request.
 
 ## Certificate of origin
 
