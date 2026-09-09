@@ -18,7 +18,11 @@ disclaimers must be there, the never list says nothing else may use the word.
 This is the core's copy of the site's gate (blaktron/agentry-web
 scripts/prose), with the TSX extractor dropped: the core ships markdown, its
 HTML templates and its Go strings, and only the markdown is gated. The
-templates and the notifier are read by the advisory half in check.sh.
+templates and the notifier are read by the advisory half in check.sh. It masks
+quoted spans as well, which the site's copy does not; the issue's acceptance
+asked for that. A never-word inside "…" on one line is a mention rather than a
+claim, so it is not a hit, and allow.txt carries the reasons only for the
+occurrences outside quotes.
 
 Stdlib only: the core's CI carries no Node.
 """
@@ -168,11 +172,11 @@ def mask_markdown(text: str) -> str:
     return "\n".join(out_lines)
 
 
-def normalise_with_lines(text: str, first_line: int = 1) -> tuple[str, list[int]]:
+def normalise_with_lines(text: str) -> tuple[str, list[int]]:
     """Collapse whitespace, returning the line number of every kept character."""
     out: list[str] = []
     lines: list[int] = []
-    line = first_line
+    line = 1
     space = False
     for ch in text:
         if ch == "\n":

@@ -20,11 +20,16 @@
 #             softened disclaimer passed all of them.
 #
 # This is the core's copy of the site's gate (blaktron/agentry-web
-# scripts/prose). It is stdlib Python 3 and bash: the core's CI carries no
-# Node, so nothing here may need one.
+# scripts/prose), with the TSX extractor dropped and quoted spans masked as
+# well as fences and inline code. A never-word inside "…" on one line is a
+# mention rather than a claim, so it is not a hit, and allow.txt carries the
+# reasons only for the occurrences outside quotes. It is stdlib Python 3 and
+# bash: the core's CI carries no Node, so nothing here may need one.
 #
 # Environment:
+#   PYTHON       the interpreter both halves run under (default: python3)
 #   UNSLOP_DIR   an existing unslop checkout; skips the clone
+#   UNSLOP_URL   where the advisory battery is fetched from when cloning
 #   UNSLOP_SHA   the commit to fetch when cloning (default: the pinned one)
 #   UNSLOP_SKIP  set to 1 to skip the advisory half entirely
 set -uo pipefail
