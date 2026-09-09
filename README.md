@@ -22,8 +22,9 @@ gate decides.
 
 ## What it does
 
-- **Hosts agents in git.** Smart-HTTP push/clone, per-agent permissions, a
-  protected `v*` tag namespace so releasing is a distinct right from editing.
+- **Hosts agents in git.** Smart-HTTP push/clone, per-agent permissions, a `v*`
+  tag namespace where tags are immutable and creating one needs publish
+  permission, so releasing is a distinct right from editing.
 - **Gates publication.** Ten scanner stages look for prompt injection, hidden
   and obfuscated content, secrets, undeclared capabilities, dependency and
   install-script risk, publisher anomalies, and rug-pull release diffs. Clean
@@ -143,14 +144,13 @@ status page, seed content beyond the four example agents (blocked on PLAN §20
 Q10), and `security@` / `abuse@` addresses live before launch.
 
 An independent audit of this repository found the tracking documents
-overstating completeness and roughly nineteen departures from the plan that
-were never recorded; remediation waves have since fixed the substantive gaps
-in the code and backfilled the register.
+overstating completeness, and roughly nineteen departures from the plan that
+were never recorded. The substantive gaps in the code have since been fixed and
+the register backfilled.
 
-The full development notes — the immutable build plan, per-workgroup status,
-and the deviations register (including the departures that make a claim
-weaker, not just the ones that make it stronger) — live in
-[agentry-notes](https://github.com/blaktron/agentry-notes).
+The register in [agentry-notes](https://github.com/blaktron/agentry-notes)
+records the departures that make a claim weaker, not only the ones that make it
+stronger.
 
 Decided since the plan was written: the product name (**Agentry**, PLAN
 §20 Q1 — this module keeps the `agentry` technical name) and the license
