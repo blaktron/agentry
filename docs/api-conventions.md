@@ -120,7 +120,7 @@ that at least one member is non-empty (DEV-021).
 
 ## SCIM 2.0
 
-The subset is Users and Groups→teams (§12.5). Four behaviours to code
+The subset is Users and Groups→teams (§12.5). Three behaviours to code
 against:
 
 - **`PUT /scim/v2/Users/{id}` is a full-resource replace,** not a merge.
