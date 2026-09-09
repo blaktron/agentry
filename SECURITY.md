@@ -88,9 +88,10 @@ discussion, but they will not be treated as security bugs:
 If an agent hosted on an Agentry instance is malicious — hidden instructions,
 credential theft, a rug-pull release, typosquatting — report it. There is no
 report control on the agent page yet. A signed-in account posts the report to
-`POST /api/v1/agents/{ns}/{name}/abuse-reports`. Without an account, use the
-address above; that is where abuse reports go until the control ships. Include
-the `namespace/name@version` and what you observed.
+`POST /api/v1/agents/{ns}/{name}/abuse-reports`. Without an account, email the
+security address the instance's operator publishes; that is where abuse reports
+go until the control ships. Include the `namespace/name@version` and what you
+observed.
 
 Valid reports are triaged into the platform review queue. Confirmed malicious
 content is quarantined (resolution stops, downloads warn) and then blocked
