@@ -18,10 +18,10 @@ option below shown in a commented `agent.yaml`. Or scaffold one with
 `agentry init`.
 
 `agentry init --from PATH` imports an existing source instead of
-scaffolding: an Agent Skills `SKILL.md` (frontmatter name, description,
-license and `metadata.version` are mapped; sibling files are copied and
-listed in `publish.include`) or an MCP registry `server.json`, which
-becomes a skill that declares the published package under
+scaffolding. From an Agent Skills `SKILL.md` it maps the frontmatter name,
+description, license and `metadata.version`, copies the sibling files and
+lists them in `publish.include`. From an MCP registry `server.json` it
+writes a BriefAgent that declares the published package under
 `capabilities.mcpServers` with its exact pin and the secret-flagged
 environment variable names. The capability contract is never guessed from
 the source: on a terminal the wizard asks for egress, secrets, exec and
@@ -41,13 +41,12 @@ agentry publish                                      # scanned, signed, immutabl
 ## Machine setup (`agentry setup`)
 
 One idempotent command prepares a machine for BriefAgent runs before any
-agent is involved: it configures **your preferred LLM provider** for agent
-runs into the operator policy (interactively on a terminal; `--provider`,
-`--model`, `--api-key-env`, `--base-url` with `--yes` in scripts), then
-stands up the docker-mcp-gateway plane right away — pulling the pinned
-gateway and harness images and building the local runner image. The key
-itself is never stored; only the environment variable *name* that will
-hold it.
+agent is involved. It writes **your preferred LLM provider** into the
+operator policy (interactively on a terminal; `--provider`, `--model`,
+`--api-key-env`, `--base-url` with `--yes` in scripts), then stands up the
+docker-mcp-gateway plane right away — pulling the pinned gateway and
+harness images and building the local runner image. The key itself is
+never stored; only the environment variable *name* that will hold it.
 
 | provider | default model | key env var | agent-container egress |
 |---|---|---|---|
@@ -77,8 +76,8 @@ identity (input hidden, values stored only in the profile, `0600`), and
 asks whether to keep the result. The stored **MCP profile** is keyed by
 *signature* — `ns/name@version` plus the archive digest — so:
 
-- **keep** (the default): the next run of the same exact release just uses
-  the authenticated resources — no re-prompting;
+- **keep** (the default): the next run of the same exact release uses the
+  authenticated resources — no re-prompting;
 - **remove**: the profile is deleted when the run completes.
 
 The choice is configurable at install time: `--keep-profile=true|false` on
@@ -87,8 +86,8 @@ or the policy default `profiles.keepByDefault`. A **different digest is a
 different trust decision** and gets a fresh guided setup. Manage stored
 profiles with `agentry profiles list` and `agentry profiles remove
 <ns/name[@version]>` (secret values are never printed); re-run the guided
-flow with `--reconfigure-profile`. Non-interactive runs behave as before:
-secrets resolve from the environment or the policy's env file, and a
+flow with `--reconfigure-profile`. A non-interactive run skips the guided
+setup: secrets resolve from the environment or the policy's env file, and a
 missing one refuses the run (exit 11) rather than degrading.
 
 ## Package layout
@@ -188,8 +187,8 @@ interactive:
 `opening` is the assistant's first message when a session starts with no
 task text. Everything else about a session — budgets, idle timeout, wall
 time — is the operator's runner policy, which a manifest can only
-tighten. Hints declared by a release that does not list `interactive`
-are accepted with a warning and never apply.
+tighten. A release that does not list `interactive` may still declare
+hints: validation warns, and they never apply.
 
 ### `runtime`: informational hints
 
@@ -202,17 +201,17 @@ are accepted with a warning and never apply.
 
 Closed vocabulary. Omitted or empty means a **pure-text BriefAgent**
 (its only run-time tool is `write_report`). The registry scans releases
-against these declarations, installs prompt on them (egress/exec need
+against these declarations, an install prompts on them (egress/exec need
 typed consent; a widened contract re-asks on upgrade), and the runner
-turns each line into a concrete control. Support scripts are held to the
-same contract: the scan reads every shell, Python or JavaScript file in the
-package and reports a script under `exec: none`, a network call to a host
-outside `network.egress`, a file write under `filesystem.write: none`, an
-undeclared subprocess or `eval`, and any `curl … | sh` remote execution as
-high, and an environment variable read outside `secrets` as medium. It
-matches text without running anything, and a host only counts inside a
-network call, so a documentation URL in a comment is not a finding (see
-[trust](trust.md), stage S6).
+turns each line into a concrete control. The same contract covers support
+scripts. The scan reads every shell, Python or JavaScript file in the
+package, and reports as high a script under `exec: none`, a network call
+to a host outside `network.egress`, a file write under
+`filesystem.write: none`, an undeclared subprocess or `eval`, and any
+`curl … | sh` remote execution; an environment variable read outside
+`secrets` is a medium finding. It matches text without running anything,
+and a host only counts inside a network call, so a documentation URL in a
+comment is not a finding (see [trust](trust.md), stage S6).
 
 **`network.egress`**
 
@@ -253,7 +252,8 @@ Operators may catalog extra MCP servers per category in their runner
 policy; undeclared categories are never wired in.
 
 **`mcpServers`** declares the MCP servers the BriefAgent requires at run
-time — explicitly, version-pinned, from a trusted repository:
+time — explicitly, version-pinned, from the operator's configured
+package registries:
 
 ```yaml
 capabilities:
@@ -327,10 +327,10 @@ model API. A per-run Docker MCP Gateway fronts the companion tools server.
 | `network.egress` hosts | `fetch` (with optional declared-secret auth) |
 | `exec.commands` | `run_command` |
 
-Every instruction is suffixed with the **runner contract**: tools come
-only from the gateway; the workspace is rooted at `/workspace` as seen by
-tools; provided input files are under `/inputs`; report files go through
-`write_report`; the final message is the run's result.
+The runner suffixes every instruction with the **runner contract**: tools
+come only from the gateway; the workspace is rooted at `/workspace` as
+seen by tools; provided input files are under `/inputs`; report files go
+through `write_report`; the final message is the run's result.
 
 **Input files.** Files and artifacts from outside the container reach a
 run through `agentry run --file PATH` (repeatable; files or directories).
