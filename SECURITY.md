@@ -1,8 +1,9 @@
 # Security policy
 
-Agentry is trust infrastructure: people rely on it to decide whether an agent
-is safe to install. We treat vulnerabilities in Agentry itself, and malicious
-content hosted on an Agentry instance, as two separate reporting paths.
+Agentry is a registry and git host for agents: people rely on its scan reports
+and its signatures when they decide what to install. We treat vulnerabilities in
+Agentry itself, and malicious content hosted on an Agentry instance, as two
+separate reporting paths.
 
 ## Reporting a vulnerability in Agentry
 
@@ -37,9 +38,9 @@ and why. We will not ask you to sign anything to receive a fix.
 
 In scope: the server (`agentryd`) including its `/ui/` pages, the CLI
 (`agentry`), the desktop app, the scanner engine and rulesets, the deployment
-templates in `deploy/`, and the hosted service — its site and its enterprise
-build are closed repositories, but a report about them comes to the same
-address — if you have an account on it.
+templates in `deploy/`, and the hosted service if you have an account on it.
+Its site and its enterprise build are closed repositories, but a report about
+them comes to the same address.
 
 Particularly interesting to us:
 
@@ -63,8 +64,8 @@ Particularly interesting to us:
 Out of scope: findings that require a compromised operator machine or a
 malicious platform administrator; missing hardening headers with no
 demonstrated impact; automated-scanner output without a working case; denial
-of service by simply sending a lot of traffic; and the known, documented
-limitations below.
+of service by sending a lot of traffic; and the known, documented limitations
+below.
 
 ### Known and documented limitations
 
@@ -85,9 +86,12 @@ discussion, but they will not be treated as security bugs:
 ## Reporting malicious content on a registry
 
 If an agent hosted on an Agentry instance is malicious — hidden instructions,
-credential theft, a rug-pull release, typosquatting — use the report control
-on the agent page, or email **abuse@** the instance's domain. Include the
-`namespace/name@version` and what you observed.
+credential theft, a rug-pull release, typosquatting — report it. There is no
+report control on the agent page yet. A signed-in account posts the report to
+`POST /api/v1/agents/{ns}/{name}/abuse-reports`. Without an account, email the
+security address the instance's operator publishes; that is where abuse reports
+go until the control ships. Include the `namespace/name@version` and what you
+observed.
 
 Valid reports are triaged into the platform review queue. Confirmed malicious
 content is quarantined (resolution stops, downloads warn) and then blocked

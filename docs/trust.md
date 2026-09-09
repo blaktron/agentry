@@ -1,20 +1,19 @@
 # Trust and security model
 
 What Agentry checks before a version becomes installable, what its signature
-proves, and what none of it guarantees (the part most registries leave out).
-This is the repository-side companion to the `/trust` page the hosted
-site serves; every registry publishes the same posture machine-readably —
-its live signing keys and the current ruleset version — at
-`/.well-known/agentry/registry.json`, and a site in front renders them.
+proves, and what none of it guarantees. This is the repository-side companion
+to the `/trust` page the hosted site serves; every registry publishes the same
+posture machine-readably — its live signing keys and the current ruleset
+version — at `/.well-known/agentry/registry.json`, and a site in front renders
+them.
 
 ## The premise
 
 An agent instruction file is executed with the reader's credentials and the
 reader's tool access. It is, functionally, code. Today it is also shipped
 through every mainstream distribution channel with no signature and no
-malware scan, and no one reviews it. Agentry's whole reason to exist is that
-gap, and the whole reason for this document is to be precise about how far it
-closes.
+malware scan, and no one reviews it. Agentry exists for that gap, and this
+document is precise about how far it closes.
 
 ## Nothing publishes unscanned
 
@@ -51,7 +50,11 @@ Each published release is content-addressed. On the transition to
 `published` (once, and never re-issued), the registry signs an in-toto
 statement binding the archive digest to the scan report that produced the
 decision, the ruleset version, the judge model, and the policy in force.
-It is wrapped in a DSSE envelope and served alongside the archive. The envelope is standard DSSE over a standard in-toto v1 statement, and that is tested rather than asserted: CI verifies one of our envelopes with `cosign verify-blob-attestation`, a verifier that shares no code with ours (`make attest-interop`).
+It is wrapped in a DSSE envelope and served alongside the archive. The
+envelope is standard DSSE over a standard in-toto v1 statement, and that is
+tested rather than asserted: CI verifies one of our envelopes with
+`cosign verify-blob-attestation`, a verifier that shares no code with ours
+(`make attest-interop`).
 
 ```bash
 agentry verify acme/incident-summarizer@1.4.2
@@ -85,10 +88,9 @@ rule about honesty, and these are the specific things behind it:
 - **Scanning happens at publication, not at push and not at run time.** A
   private repository's contents are not scanned until a version is submitted.
 - **The shipped scanners are good, not identical to the tools PLAN §8.3
-  names.** S2 uses a native Go implementation behind an adapter
-  interface, with gitleaks optional beside it. It detects
-  everything the committed attack corpus exercises; they are not those
-  tools. See DEV-006.
+  names.** S2 uses a native Go implementation behind an adapter interface,
+  with gitleaks optional beside it. It detects everything the committed
+  attack corpus exercises. See DEV-006.
 - **Review is human, and humans are the ones deciding.** Reviewer
   dismissals (false positive, or accepted risk) stay on the public report
   with their rationale, so a waived finding is visible rather than erased.
@@ -140,8 +142,11 @@ recorded in [DEVIATIONS.md](https://github.com/blaktron/agentry-notes/blob/main/
 
 ## Reporting
 
-- **Malicious content on a registry:** the report link on the agent page, or
-  `abuse@` the registry's domain.
+- **Malicious content on a registry:** there is no report control on the agent
+  page yet. A signed-in account posts the report to
+  `POST /api/v1/agents/{ns}/{name}/abuse-reports`, and it lands in the platform
+  triage queue. Without an account, email the security address the instance's
+  operator publishes; that is where abuse reports go until the control ships.
 - **A vulnerability in Agentry itself:** [SECURITY.md](https://github.com/blaktron/agentry/blob/main/SECURITY.md), which
   documents the coordinated-disclosure process and, deliberately, the
   classes of finding that are *not* vulnerabilities because they are

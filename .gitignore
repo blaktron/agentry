@@ -8,6 +8,10 @@
 /.devdata/
 *.log
 
+# python bytecode: py_compile, or importing scripts/prose/gates.py to check a
+# list by hand, writes it next to the source
+__pycache__/
+
 # node
 node_modules/
 web/.next/

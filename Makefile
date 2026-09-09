@@ -8,7 +8,7 @@ GO      ?= go
 BIN_DIR := bin
 LDFLAGS := -X github.com/blaktron/agentry/internal/version.Version=$(shell git describe --tags --always --dirty 2>/dev/null || echo 0.0.0-dev)
 
-.PHONY: all build test lint vuln generate generate-check check dev db-up db-down clean e2e sync-rules sync-rules-check fuzz deps-audit attest-interop
+.PHONY: all build test lint vuln generate generate-check check prose-check dev db-up db-down clean e2e sync-rules sync-rules-check fuzz deps-audit attest-interop
 
 all: build
 
@@ -71,6 +71,13 @@ deps-audit:
 
 ## check: the full local/CI gate
 check: generate-check sync-rules-check lint test build
+
+## prose-check: the §4.6 posture sentences and the §4.4 never list over the
+## markdown, then the advisory unslop battery (UNSLOP_SKIP=1 skips it,
+## UNSLOP_DIR=<clone> skips the fetch). Deliberately not part of `check`:
+## it needs python3 rather than Go, and CI runs it as its own job.
+prose-check:
+	./scripts/prose/check.sh
 
 ## dev: boot the dev stack (compose when docker exists, else local pg) and run agentryd all
 dev:
