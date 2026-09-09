@@ -1,0 +1,34 @@
+# Words the core's markdown does not use (plan front-end-voice-and-warmth §4.4).
+#
+# One entry per line, matched as whole words, case-insensitive, with flexible
+# whitespace and either apostrophe. Blank lines and lines starting with # are
+# comments.
+#
+# The ban is on the word, not on the claim it usually carries: an occurrence
+# inside an allowlisted span (allow.txt) passes, so the ban cannot be satisfied
+# by deleting the disclaimer that contains "safe". Code spans, fenced blocks
+# and quoted terms are masked before the search, so a policy key, a status
+# value and the honest-posture rule's own `never "safe"` are not hits.
+
+# A verdict the product may not give.
+safe
+secure
+secure by default
+guaranteed
+guarantee
+trusted
+protected
+ensures
+eliminates
+prevents
+peace of mind
+
+# Category nouns and marketing register.
+trust infrastructure
+enterprise-grade
+leverage
+leveraging
+
+# Machine tells the scanners taught us to watch for.
+Here's the thing
+It's worth noting

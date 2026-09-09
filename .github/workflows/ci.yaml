@@ -2,7 +2,7 @@
 # own repository and CI): lint, generated-code drift, ruleset-copy drift,
 # tests (real Postgres), build, the M0 and core-UI acceptance scripts,
 # dependency hygiene (govulncheck + osv-scanner + lockfile integrity + image
-# scan), OpenAPI breaking-change check.
+# scan), OpenAPI breaking-change check, and the prose gate over the markdown.
 name: ci
 on:
   push:
@@ -74,6 +74,34 @@ jobs:
       # The server's own browser surface, driven with curl (DEV-091).
       - name: acceptance core UI
         run: ./scripts/acceptance/ui.sh
+
+  # The prose gate (plan front-end-voice-and-warmth §7, agentry#258): the
+  # honest-posture sentences of §4.6 are still where they belong, and no
+  # never-word of §4.4 has appeared outside an allowlisted span. Stdlib
+  # python3 and bash — this repository's CI carries no Node. The job sets
+  # UNSLOP_SKIP=1 because the advisory battery is read by a person in the copy
+  # loop rather than in a job log, and a runner should not fetch and execute
+  # third-party code for output that never blocks. It runs by hand —
+  # `make prose-check`, or with UNSLOP_DIR pointing at a local clone.
+  prose-check:
+    runs-on: [self-hosted, linux, x64]
+    env:
+      UNSLOP_SKIP: "1"
+    steps:
+      - uses: actions/checkout@v4
+      # The runner image is Ubuntu-based and ships python3; the scripts are
+      # stdlib-only and need 3.9 or newer. This pins the version when the tool
+      # cache has it and is allowed to fail, so a runner without it falls back
+      # to the image's own python3 rather than turning the job red on setup.
+      - uses: actions/setup-python@v5
+        continue-on-error: true
+        with:
+          python-version: "3.12"
+      - run: python3 --version
+      - name: posture sentences and never list
+        run: scripts/prose/check.sh
+      - name: the gate fails when it should
+        run: scripts/prose/check.sh --self-test
 
   govulncheck:
     runs-on: [self-hosted, linux, x64]
