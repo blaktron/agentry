@@ -1,0 +1,52 @@
+# Spans that legitimately contain a word from never.txt.
+#
+# Each line is `<reason> :: <span>`. A banned word passes only when the whole
+# match falls inside one of these spans, in the same file. Matching is
+# case-insensitive and tolerant of line wrapping and either apostrophe, and it
+# runs after the masking: fenced blocks, inline code spans and quoted terms
+# are already gone, so a policy key, a status value and the honest-posture
+# rule's own `never "safe"` need no line here.
+#
+# The point of the allowlist is that the word ban cannot be satisfied by
+# deleting the disclaimer: "safe" is banned, and the sentences that say static
+# analysis cannot prove an agent safe are the reason the word appears at all.
+# Those sentences are also in protected.txt, so a rewrite cannot quietly drop
+# one to clear the ban — the protected half fails first.
+#
+# Adding a line here is a claim that the span is honest. It is a change worth
+# arguing in a PR, not a way past a red check.
+
+# The posture sentences themselves (protected.txt §1). The word "safe" is the
+# content of the claim, in README.md, CONTRIBUTING.md, SECURITY.md and
+# docs/trust.md.
+a protected posture sentence (protected.txt §1) :: cannot prove an agent safe
+
+# The one form of "guarantee" §4.4 keeps, and the trust page heading built on
+# it (protected.txt §5). Deleting the heading would delete the section that
+# states the limits.
+the §4.4 exception: the negation is the claim :: does not guarantee
+
+# SECURITY.md's opening names the reader's question. The word is what a
+# consumer is trying to decide, not a verdict the product gives; the same
+# document's §4.6 line says static scanning cannot answer it.
+the reader's question, not a verdict the product gives :: whether an agent is safe to install
+
+# Mechanism names that happen to be spelled with a banned word. Each names a
+# thing the code or the ecosystem already calls this, not a claim about a
+# reader's data.
+git's own name for a ref-permission namespace (README.md) :: protected tag namespace
+the S1 technique, in a table that is invariant (docs/trust.md) :: Inventory and hygiene: safe unpack
+the X-Forwarded-For configuration term (docs/api-conventions.md) :: configure trusted proxies
+the X-Forwarded-For configuration term (docs/self-hosting.md) :: up to that many trusted hops
+the database mechanism, named in the same sentence (docs/self-hosting.md) :: protected by an append-only trigger
+
+# Sentences where the banned word carries an honest claim: the mechanism is
+# named beside it, and the limit follows it.
+a concurrency claim whose mechanism is the session lock beside it :: running it twice concurrently is safe
+the runner's refusal, with the limit in the same sentence :: new runs are protected either way; installed copies are not
+the negation is the claim: this is why the whole registry is open source :: a registry you cannot audit is not trust infrastructure
+
+# Not an entry, a decision: `docs/trust.md`'s title "Trust and security model"
+# needs no allowance. never.txt bans "trusted" and "secure" as whole words;
+# "Trust" is neither, and "security" is not "secure". The heading matches
+# nothing, and a dead allowance would only hide a future real hit.
