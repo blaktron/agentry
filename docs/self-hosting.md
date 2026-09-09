@@ -862,8 +862,8 @@ Three notes on the knobs:
 - **The worker matters.** With no worker running, versions sit in `scanning`
   and never publish. That is the fail-closed design working, but it looks like
   a hang. Check the worker first when publishes stall.
-- **Rescan after ruleset updates.** New detection reaches what you already
-  published only when you rescan it; the rescan sweep quarantines
+- **A new ruleset rescans the catalogue.** Registering a ruleset semver for the
+  first time enqueues the §8.7 sweep automatically; the rescan sweep quarantines
   versions that newly trip a high finding.
 - Runbooks for the failure modes above: [docs/ops/runbooks.md](ops/runbooks.md).
 
