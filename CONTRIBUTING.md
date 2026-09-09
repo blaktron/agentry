@@ -116,61 +116,95 @@ never functional malware, never real endpoints, never real secrets.
 
 ## Writing
 
-The docs, the READMEs and this file speak in one register: you for the reader,
-no narrator, and no "we" unless the file already has one. A claim about
-protection names its mechanism in the same sentence or the next one — not
+### The register
+
+The docs, the READMEs and this file speak in one register, crisp: you for the
+reader and no narrator. A file with no "we" in it does not get one. A claim
+about protection names its mechanism in the same sentence or the next one. Not
 "strict controls at every layer" but "the gateway serves only the tools the
-manifest declared, and traffic leaves through the egress proxy". Say it, then
-name it: "the manifest, the file that says what the agent may touch" on first
-use, plain "manifest" after. Sentences run 10 to 25 words and paragraphs 2 to 4
-sentences; a sentence passes 30 words only when it is listing mechanisms. Hedge
-where the hedge is the fact — "cannot prove", "reduces" and "today" are content,
-not softening — and end a section on a next step or a stated limit rather than a
-recap. The words the prose here does not use are `safe`, `secure` as a verdict,
-`secure by default`, `guarantee`, `trusted`, `protected`, `ensures`,
-`eliminates`, `prevents`, `peace of mind`, `trust infrastructure`,
-`enterprise-grade` and `leverage`, together with superlatives about protection,
-landscape openers, rhetorical questions, adjective triads, closing kickers,
-exclamation marks, emoji, `just` and `simply` as minimisers, and the passive
-voice where the actor is known. `does not guarantee` is the one form of those
-words the register keeps, and no word disappears by deleting the sentence that
-disclaims it. Section numbers and register ids stay out of product copy, but the
-docs keep their citations — §-numbers, DEV-nnn, RFC ids — because there they are
-the audit trail.
+manifest declared, and traffic leaves through the egress proxy".
+
+Say it, then name it: "the manifest, the file that says what the agent may
+touch" on first use, plain "manifest" after. Sentences run 10 to 25 words and
+paragraphs 2 to 4 sentences. A sentence passes 30 words only when it is listing
+mechanisms.
+
+Hedge where the hedge is the fact: "cannot prove", "reduces" and "today" are
+content, not softening. End a section on a next step or a stated limit rather
+than a recap. Section numbers and register ids stay out of product copy, but
+the docs keep their citations — §-numbers, DEV-nnn, RFC ids — because there
+they are the audit trail.
+
+The words this prose does not use live in `scripts/prose/never.txt`, and the
+check reads them from there. They are reproduced here as data, not as prose:
+
+```
+safe                 trusted            leverage
+secure               protected          leveraging
+secure by default    ensures            trust infrastructure
+guarantee            eliminates         enterprise-grade
+guaranteed           prevents           peace of mind
+Here's the thing     It's worth noting
+```
+
+Also out: superlatives about protection, tools written as guardians, landscape
+openers, rhetorical questions, adjective triads, bold-colon listicles, closing
+kickers, exclamation marks, emoji, `just` and `simply` as minimisers, and the
+passive voice where the actor is known. `does not guarantee` is the one form of
+those words the register keeps. No word disappears by deleting the sentence
+that disclaims it.
+
+### The copy loop
 
 Rewriting a file follows one loop. Copy it to a before file, then audit the
-whole file as a reader and with the four unslop scanners: a scanner hit is a
-candidate, and a quiet scanner is not a pass. Pull the constraints out with
-`extract_constraints.py`, add the sentences the file carries that may not move,
-and draft in place with the smallest repair that fixes what the audit confirmed.
-Then gate it: `validate_preservation.py --strict` (the flag comes first, or it
-is read as the constraints path and the run still exits 0), `diff_check.py`, the
-four scanners again on the result, and a structure diff proving every fence,
-table, heading, link and inline code span survived byte for byte. The full rule
-— what counts as a finding, which sentences may not move, and when a diff over
-40 % or a preservation warning needs a named sign-off in the pull request — is
-§4 and §6 of `plans/front-end-voice-and-warmth.md` in
-[agentry-notes](https://github.com/blaktron/agentry-notes).
+whole file as a reader and with the four unslop scanners. A scanner hit is a
+candidate, and a quiet scanner is not a pass.
 
-The check itself is `scripts/prose/check.sh`, run over the working tree, and
-`make prose-check` wraps it. Its blocking half looks for every sentence in
-`scripts/prose/protected.txt`, ignoring where a line wraps, and refuses every
-word in `scripts/prose/never.txt` that sits outside a span allowlisted in
-`scripts/prose/allow.txt`, one `<reason> :: <span>` per line; fences, inline
-code and quoted terms are masked first, so a command or a quoted term keeps its
-words. Its advisory half runs the unslop battery over the changed prose:
+Pull the constraints out with `extract_constraints.py`, add the sentences the
+file carries that may not move, and draft in place with the smallest repair
+that fixes what the audit confirmed. Then gate it with
+`validate_preservation.py --strict`, `diff_check.py`, the four scanners again
+on the result, and `scripts/prose/structure-diff.py` proving every fence,
+table, heading, link and inline code span survived byte for byte.
+
+Every script in that loop except `scripts/prose/structure-diff.py` is unslop's,
+not this repository's — from the checkout `UNSLOP_DIR=<clone>` names below.
+Pass `--strict` first or it does nothing. As a fourth argument it is dropped,
+and a run with warnings still exits 0. In the constraints file's place it is
+read as a path, and the script dies with a traceback.
+
+§4 and §6 of `plans/front-end-voice-and-warmth.md` in
+[agentry-notes](https://github.com/blaktron/agentry-notes) carry the full rule.
+They say what counts as a finding, which sentences may not move, and when a
+diff over 40 % or a preservation warning needs a named sign-off in the pull
+request.
+
+### The prose check
+
+`scripts/prose/check.sh` runs over the working tree, and `make prose-check`
+wraps it. Its blocking half reads three lists. Every sentence in
+`scripts/prose/protected.txt` must appear in each file named beside it, with
+whitespace collapsed so a line wrap is not a change. Every word in
+`scripts/prose/never.txt` is refused unless it sits inside a span allowlisted
+in `scripts/prose/allow.txt`, one `<reason> :: <span>` per line.
+
+Fenced blocks, inline code spans and quoted terms are masked before that
+search, so a command, a policy key and a quoted term keep their words. The
+advisory half runs the unslop battery over the markdown, the server's HTML
+templates and the notifier's strings, and never fails a build.
 `UNSLOP_DIR=<clone>` points it at a local clone instead of fetching, and
-`UNSLOP_SKIP=1` skips that half altogether.
+`UNSLOP_SKIP=1` skips that half.
+
 `scripts/prose/check.sh --self-test` proves the check still fails on a softened
 posture sentence and on a seeded never-word. The CI job is `prose-check` in
-`.github/workflows/ci.yaml`.
+`.github/workflows/ci.yaml`, and it runs both of those with `UNSLOP_SKIP=1`.
 
 A red check is one of two things. A sentence that may not move was softened or
 dropped: put it back, or edit `scripts/prose/protected.txt` in the same pull
 request if the claim itself changed. Or a never-word reached the prose: reword
-it so the mechanism carries the sentence, and where the word belongs, add the
-span to `scripts/prose/allow.txt` with its reason and argue that line in the
-pull request.
+it so the mechanism carries the sentence. Where the word belongs, add the span
+to `scripts/prose/allow.txt` with its reason, and argue that line in the pull
+request.
 
 ## Certificate of origin
 
