@@ -356,13 +356,12 @@ In dev the compose stack's **mailpit** (http://localhost:8025) is the default
 target and catches everything, so nothing leaves the machine. The compose
 file reads all of these (and the directory service's `AUTHENTIK_EMAIL_*`
 set) from `.env`, so switching both senders to a real provider is an `.env`
-edit plus recreating the `server` and `authentik-*` containers — with
+edit plus recreating the `server` and `authentik-*` containers. With
 Postmark, the server token is both SMTP username and password, and until
 the account is approved it only delivers to recipients on the sending
-domain. With no SMTP
-configured at all, email verification tokens are logged at debug level.
-That is usable for a single-operator instance, not for anything with real
-users.
+domain. With no SMTP configured at all, email verification tokens are
+logged at debug level. That is usable for a single-operator instance, not
+for anything with real users.
 
 ### Limits and quotas
 
@@ -487,6 +486,13 @@ http:
 
 Env: `AGENTRY_TRUSTED_PROXIES` (an integer hop count, not a CIDR list).
 
+`X-Forwarded-For` is honoured **only** up to that many proxy hops: behind
+CloudFront → ALB set `2`; behind a single load balancer set `1`. Leave it at
+`0` (the default) if the server is directly exposed. The header is then
+ignored entirely. Setting it higher than the real hop count lets any client
+choose its own rate-limit bucket and forge audit IPs, which is worse than
+having no per-IP limiting at all.
+
 The compose stack ships its own proxy, the `edge` service
 (`deploy/compose/edge/nginx.conf`): nginx on 80/443 that terminates TLS and
 serves the server's own `/ui/` pages, `/api`, `/scim`, `/.well-known`,
@@ -515,7 +521,7 @@ The compose stack can publish the edge through a Cloudflare Tunnel — an
 outbound-only connector, so the host needs no inbound port at all. The
 connector reaches the edge over the compose network, not through the
 published ports, so with the tunnel as the only intended entry point set
-`AGENTRY_EDGE_BIND` to a private address (or `127.0.0.1`) as well: a
+`AGENTRY_EDGE_BIND` to a private address (or `127.0.0.1`) as well. A
 Cloudflare-fronted site whose origin also answers on its public IP gets
 none of the WAF, rate limiting, or Access rules configured at the edge,
 and the address is only ever one stale DNS record away from being known.
@@ -587,6 +593,8 @@ existing account when *both* sides' addresses are verified. That
 assertion is sound exactly when authentik is your directory of record —
 accounts are created by operators, provisioned from an upstream
 directory, or enrolled through a flow with an email-verification stage.
+If you allow self-enrollment without one, drop that mapping and accept
+that such accounts start as new registry users.
 
 **Platform staff comes from a directory group.** The groups blueprint
 creates `agentry-platform-staff`; the registry reads the ID token's
@@ -616,8 +624,6 @@ The Helm chart carries the same knobs (`config.auth.externalOnly`,
 `secret.idpAdminToken`); the hosted service's Terraform (kept with the
 site) carries them as `idp_client_id`, `idp_issuer`, `idp_logout_url` and
 `idp_staff_group`, with the client secret in Secrets Manager.
-If you allow self-enrollment without one, drop that mapping and accept
-that such accounts start as new registry users.
 
 **Account flows.** `deploy/compose/authentik/blueprints/agentry-account-flows.yaml`
 is mounted into authentik as a blueprint and applied automatically on
@@ -674,10 +680,9 @@ production values:
   is the thing to alert on — the registry's `FailOpenEvents` metric covers
   the registry's own fail-open paths, not this one.
 
-The same flows are rate-limited per client IP — emails sent plus accounts
-created per hour — by `AUTHENTIK_ACCOUNT_FLOW_MAX_PER_HOUR` (default 10;
-compose passes it through, the blueprint formats it into the policy at
-apply time). Enrollment ends with authenticator (TOTP) setup, and recovery
+`AUTHENTIK_ACCOUNT_FLOW_MAX_PER_HOUR` sets that budget (default 10):
+compose passes it through, and the blueprint formats it into the policy at
+apply time. Enrollment ends with authenticator (TOTP) setup, and recovery
 verifies the authenticator before the password may change — a user who has
 none is sent through the same setup stage. Lost-authenticator recovery is an
 operator action in the Authentik admin UI; email alone never resets both
@@ -714,14 +719,14 @@ registry normally refuses to publish to a public namespace until the
 account has a TOTP factor (§12.1, §19). With the directory service in
 charge no account can enrol one — the native TOTP endpoints are the ones
 answering 410 — so that gate is **off under `externalOnly`** and the
-requirement is yours to enforce in authentik: bind an MFA policy (or an
+requirement is yours to enforce in authentik. Bind an MFA policy (or an
 authenticator-validation stage) to the authentication flow or to the
 `agentry` application, which also covers sign-in itself rather than only
 publishing.
 
-To turn trust back into evidence, set `AGENTRY_AUTH_REQUIRE_IDP_MFA=true`:
-the gate is then on under `externalOnly` and is satisfied when the account
-has signed in at least once with an ID token whose `amr` claim (RFC 8176)
+To turn trust back into evidence, set `AGENTRY_AUTH_REQUIRE_IDP_MFA=true`.
+The gate is then on under `externalOnly`, and it is satisfied when the
+account has signed in at least once with an ID token whose `amr` claim (RFC 8176)
 names a second factor — `mfa`, `otp`, `hwk`, `webauthn` and the like, never
 `pwd` alone — which the registry records as `users.idp_mfa_at`. authentik
 emits `amr` on its ID tokens; check one sign-in's token (or the
@@ -749,29 +754,22 @@ tag+digest pin (bump it when the target is new) and `docker image prune
 root volume. The registry needs no restart: the OIDC issuer, client, and
 brand ride the database.
 
-`X-Forwarded-For` is honoured **only** up to that many proxy hops: behind
-CloudFront → ALB set `2`; behind a single load balancer set `1`. Leave it at
-`0` (the default) if the server is directly exposed. The header is then
-ignored entirely. Setting it higher than the real hop count lets any client
-choose its own rate-limit bucket and forge audit IPs, which is worse than
-having no per-IP limiting at all.
-
 **The directory stays behind the scenes.** Nobody browses it directly:
 the edge sends `auth.<site>/` and the directory's user panel
 (`/if/user/…`) back to the site, and the registry's Settings page is
 where a person changes their password, adds an authenticator app or
 security key, or removes one — each is one short step in the directory
-that returns to Settings. For that the directory needs to know the site:
-Two variables tell the directory where its flows return (DEV-091): sign-out
-lands on `AGENTRY_PUBLIC_WEB_URL` and a password change or an authenticator
+that returns to Settings. For that the directory needs to know the site.
+Two variables tell it where its flows return (DEV-091): sign-out lands on
+`AGENTRY_PUBLIC_WEB_URL` and a password change or an authenticator
 enrolment on `AGENTRY_ACCOUNT_URL`. Both default to the server's own pages
 (`<AGENTRY_PUBLIC_URL>/ui/` and `…/ui/account/directory`); a site in front
 sets them to its home and its Settings → Authentication page. The flows'
 titles and mail subjects call the deployment `AGENTRY_BRAND_NAME`
-(default `Agentry`). The original text of this paragraph, for the site's
-values: `AGENTRY_PUBLIC_WEB_URL` (the same value the registry uses) is passed to
-the `authentik-*` containers and read by the account-flows blueprint,
-and `scripts/dev/authentik-bootstrap.sh` points the application's launch
+(default `Agentry`). `AGENTRY_PUBLIC_WEB_URL` (the same value the registry
+uses) is passed to the `authentik-*` containers and read by the
+account-flows blueprint.
+`scripts/dev/authentik-bootstrap.sh` points the application's launch
 URL at the registry's sign-in start and the brand's default application
 at it, so a sign-in, sign-up or recovery that ends without a return lands
 in the app signed in. Sign-out goes through the blueprint's
@@ -785,7 +783,7 @@ deployment that predates this (agentry#164).
 
 The edge serves whatever is in the downloads directory
 (`AGENTRY_DOWNLOADS_DIR`; unset, an empty named volume `downloads`) at
-`/downloads/`, so publishing a build for your users is a file copy — the
+`/downloads/`, so publishing a build for your users is a file copy. The
 CLI and the desktop app build from their own repositories (`agentry-cli`,
 `agentry-desktop`); the hosted site's repository has the script that
 builds the whole matrix and writes the `manifest.json` its download page
