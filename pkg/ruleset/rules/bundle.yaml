@@ -1,7 +1,7 @@
 # Agentry S4 injection-signature rule bundle (PLAN §8.3, shipped as
 # ruleset_releases). This manifest gives the bundle its semantic version,
 # which is recorded on every scan_run and pinned in the CLI release (D-12).
-version: "0.2.0"
+version: "0.2.1"
 notes: >
   v1 signature set: the six families from the §8.3 S4 row
   (instruction-override, exfiltration, tool-coercion, credential-harvest,
