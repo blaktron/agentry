@@ -143,7 +143,7 @@ func (s *Server) PlatformAgentAction(w http.ResponseWriter, r *http.Request, ns 
 	}
 	p := principalFrom(r.Context())
 	if p.Anonymous {
-		problemUnauthorized(w, r, "")
+		problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
 		return
 	}
 	if !p.PlatformStaff {

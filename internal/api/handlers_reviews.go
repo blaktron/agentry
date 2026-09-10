@@ -148,7 +148,7 @@ func (s *Server) ListReviewQueue(w http.ResponseWriter, r *http.Request, params 
 	}
 	p := principalFrom(r.Context())
 	if p.Anonymous {
-		problemUnauthorized(w, r, "")
+		problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
 		return
 	}
 	limit := clampLimit(params.Limit, 50, 100)
@@ -204,7 +204,7 @@ func (s *Server) reviewItemAccess(w http.ResponseWriter, r *http.Request, id uui
 	}
 	p := principalFrom(r.Context())
 	if p.Anonymous {
-		problemUnauthorized(w, r, "")
+		problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
 		return storegen.ReviewItem{}, false
 	}
 	switch ri.Queue {
@@ -408,7 +408,7 @@ func (s *Server) SetFindingVerdict(w http.ResponseWriter, r *http.Request, id op
 	}
 	p := principalFrom(r.Context())
 	if p.Anonymous {
-		problemUnauthorized(w, r, "")
+		problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
 		return
 	}
 	f, err := s.q().GetFinding(r.Context(), id)

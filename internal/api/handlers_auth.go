@@ -86,7 +86,7 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 
 	var fields []FieldError
 	if !reHandle.MatchString(req.Handle) {
-		fields = append(fields, FieldError{Field: "handle", Message: "Must match ^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$ (lowercase letters, digits and hyphens)."})
+		fields = append(fields, FieldError{Field: "handle", Message: "Must be 1-39 lowercase letters, digits and hyphens, starting and ending with a letter or digit."})
 	} else if handleReserved(req.Handle) {
 		fields = append(fields, FieldError{Field: "handle", Message: "This handle is reserved."})
 	}

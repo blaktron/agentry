@@ -23,7 +23,7 @@ func (s *Server) StarAgent(w http.ResponseWriter, r *http.Request, ns Namespace,
 	}
 	p := principalFrom(r.Context())
 	if p.Anonymous {
-		problemUnauthorized(w, r, "")
+		problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
 		return
 	}
 	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentRead)
@@ -53,7 +53,7 @@ func (s *Server) UnstarAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	}
 	p := principalFrom(r.Context())
 	if p.Anonymous {
-		problemUnauthorized(w, r, "")
+		problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
 		return
 	}
 	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentRead)

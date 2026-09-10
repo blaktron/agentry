@@ -77,12 +77,12 @@ func (s *Server) resolveAgentForAction(w http.ResponseWriter, r *http.Request, n
 	if err := auth.CheckAgent(p, res, act); err != nil {
 		switch {
 		case errors.Is(err, auth.ErrUnauthorized):
-			problemUnauthorized(w, r, "")
+			problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
 		case act == auth.ActAgentRead || auth.CheckAgent(p, res, auth.ActAgentRead) != nil:
 			// Caller cannot even read the agent: hide its existence.
 			problemNotFound(w, r)
 		default:
-			problemForbidden(w, r, "")
+			problemForbidden(w, r, "This credential does not carry the role or scope this action needs.")
 		}
 		return registry.Agent{}, auth.AgentRoleNone, false
 	}
@@ -128,7 +128,7 @@ func (s *Server) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, auth.ErrForbidden):
 			problemForbidden(w, r, "Creating a BriefAgent here needs the namespace's owner, or an organization owner or admin.")
 		case errors.Is(err, auth.ErrUnauthorized):
-			problemUnauthorized(w, r, "")
+			problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
 		case errors.Is(err, registry.ErrDenied):
 			problemValidation(w, r, sentence(err.Error()))
 		case isUniqueViolation(err):

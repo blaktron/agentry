@@ -29,7 +29,7 @@ func (s *Server) versionArchive(w http.ResponseWriter, r *http.Request, ns Names
 	}
 	if a.QuarantineState == "blocked" {
 		writeProblem(w, r, http.StatusGone, "blocked", "Blocked BriefAgent",
-			"Trust & safety blocked this BriefAgent. Its files stay unreadable until platform staff reinstate it.")
+			"Trust & safety blocked this BriefAgent. This archive stays unavailable until platform staff reinstate it.")
 		return nil, false
 	}
 	switch registry.Status(v.Status) {
@@ -38,10 +38,10 @@ func (s *Server) versionArchive(w http.ResponseWriter, r *http.Request, ns Names
 		w.Header().Set("X-Agentry-Yanked", "true")
 	case registry.StatusBlocked:
 		writeProblem(w, r, http.StatusGone, "blocked", "Blocked version",
-			"Trust & safety blocked this version. Its files stay unreadable until platform staff reinstate it.")
+			"Trust & safety blocked this version. This archive stays unavailable until platform staff reinstate it and a reviewer decides.")
 		return nil, false
 	case registry.StatusQuarantined:
-		problemConflict(w, r, "This version is quarantined for review. Its files stay unreadable until a reviewer decides.")
+		problemConflict(w, r, "This version is quarantined for review. This archive stays unavailable until a reviewer decides.")
 		return nil, false
 	default:
 		problemNotFound(w, r)

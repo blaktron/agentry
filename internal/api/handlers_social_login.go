@@ -286,7 +286,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 				return
 			}
 			writeProblem(w, r, http.StatusConflict, "sso-link-required",
-				"Account linking requires confirmation", linkMsg)
+				"Email address already in use", linkMsg)
 			return
 		}
 		s.log.Error("social jit", "provider", name, "err", err)

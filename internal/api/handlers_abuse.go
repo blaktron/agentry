@@ -89,7 +89,7 @@ func (s *Server) ReportAbuse(w http.ResponseWriter, r *http.Request, ns Namespac
 func (s *Server) requireStaff(w http.ResponseWriter, r *http.Request) bool {
 	p := principalFrom(r.Context())
 	if p.Anonymous {
-		problemUnauthorized(w, r, "")
+		problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
 		return false
 	}
 	if !p.PlatformStaff {
