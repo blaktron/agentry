@@ -261,7 +261,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 
 	if row.TotpEnabled {
 		if req.TotpCode == nil || *req.TotpCode == "" {
-			writeProblem(w, r, http.StatusUnauthorized, "totp-required", "TOTP code required", "Send totpCode with the current code from your authenticator.")
+			writeProblem(w, r, http.StatusUnauthorized, "totp-required", "TOTP code required", "Send totpCode with the current code from the authenticator app.")
 			return
 		}
 		secret, err := s.sealer.Open(row.TotpSecretEnc)
@@ -437,7 +437,7 @@ func (s *Server) TotpVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !auth.ValidateTOTP(req.Code, string(secret)) {
-		problemValidation(w, r, "That code did not match. Try the current code from your authenticator.")
+		problemValidation(w, r, "That code did not match. Try the current code from the authenticator app.")
 		return
 	}
 	err = s.st.WithTx(r.Context(), func(q *storegen.Queries) error {

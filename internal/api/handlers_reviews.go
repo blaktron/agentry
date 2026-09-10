@@ -162,7 +162,7 @@ func (s *Server) ListReviewQueue(w http.ResponseWriter, r *http.Request, params 
 		}
 	case "org":
 		if params.Org == nil {
-			problemValidation(w, r, "Name the org for the org queue.")
+			problemValidation(w, r, "Name the organization for the org queue.")
 			return
 		}
 		orgRow, ok := s.orgOrNotFound(w, r, *params.Org)
@@ -170,7 +170,7 @@ func (s *Server) ListReviewQueue(w http.ResponseWriter, r *http.Request, params 
 			return
 		}
 		if !s.isOrgReviewer(p, orgRow.ID) {
-			problemForbidden(w, r, "The org queue needs the org's security_reviewer role or higher.")
+			problemForbidden(w, r, "The org queue needs the organization's security_reviewer role or higher.")
 			return
 		}
 		qp.OrgID = &orgRow.ID
@@ -215,7 +215,7 @@ func (s *Server) reviewItemAccess(w http.ResponseWriter, r *http.Request, id uui
 		}
 	case "org":
 		if ri.OrgID == nil || !s.isOrgReviewer(p, *ri.OrgID) {
-			problemForbidden(w, r, "This review item needs the org's security_reviewer role or higher.")
+			problemForbidden(w, r, "This review item needs the organization's security_reviewer role or higher.")
 			return storegen.ReviewItem{}, false
 		}
 	}
@@ -462,7 +462,7 @@ func (s *Server) SetFindingVerdict(w http.ResponseWriter, r *http.Request, id op
 			return
 		}
 		if agent.NamespaceKind == "org" && !s.isOrgReviewer(p, agent.NamespaceID) {
-			problemForbidden(w, r, "On an org BriefAgent, only that org's security reviewers may accept risk.")
+			problemForbidden(w, r, "On a BriefAgent in an org namespace, only that organization's security reviewers may accept risk.")
 			return
 		}
 	}
