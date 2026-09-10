@@ -56,7 +56,7 @@ func problemNotFound(w http.ResponseWriter, r *http.Request) {
 }
 
 func problemValidation(w http.ResponseWriter, r *http.Request, detail string, fields ...FieldError) {
-	writeProblem(w, r, http.StatusUnprocessableEntity, "validation", "Validation failed", detail, fields...)
+	writeProblem(w, r, http.StatusUnprocessableEntity, "validation", "Validation error", detail, fields...)
 }
 
 func problemBadRequest(w http.ResponseWriter, r *http.Request, detail string) {
@@ -68,7 +68,7 @@ func problemUnauthorized(w http.ResponseWriter, r *http.Request, detail string) 
 }
 
 func problemForbidden(w http.ResponseWriter, r *http.Request, detail string) {
-	writeProblem(w, r, http.StatusForbidden, "forbidden", "Forbidden", detail)
+	writeProblem(w, r, http.StatusForbidden, "forbidden", "Access denied", detail)
 }
 
 func problemConflict(w http.ResponseWriter, r *http.Request, detail string) {
@@ -80,7 +80,7 @@ func problemTooMany(w http.ResponseWriter, r *http.Request, detail string) {
 }
 
 func problemGone(w http.ResponseWriter, r *http.Request, detail string) {
-	writeProblem(w, r, http.StatusGone, "gone", "Gone", detail)
+	writeProblem(w, r, http.StatusGone, "gone", "No longer available", detail)
 }
 
 func problemUnavailable(w http.ResponseWriter, r *http.Request, detail string) {
