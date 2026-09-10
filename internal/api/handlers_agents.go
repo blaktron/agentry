@@ -126,7 +126,7 @@ func (s *Server) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, registry.ErrNotFound):
 			problemNotFound(w, r)
 		case errors.Is(err, auth.ErrForbidden):
-			problemForbidden(w, r, "Creating a BriefAgent here needs the namespace's owner, or an org owner or admin.")
+			problemForbidden(w, r, "Creating a BriefAgent here needs the namespace's owner, or an organization owner or admin.")
 		case errors.Is(err, auth.ErrUnauthorized):
 			problemUnauthorized(w, r, "")
 		case errors.Is(err, registry.ErrDenied):

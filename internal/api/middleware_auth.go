@@ -48,7 +48,7 @@ func (s *Server) principalMiddleware(next http.Handler) http.Handler {
 			if auth.IsPAT(tok) {
 				pp, err := s.resolvePAT(r, tok)
 				if err != nil {
-					problemUnauthorized(w, r, "This token is invalid or expired. Create a new token in your account settings.")
+					problemUnauthorized(w, r, "This token is invalid or expired. Create a new token in account settings.")
 					return
 				}
 				p = pp

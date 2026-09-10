@@ -280,7 +280,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 	userID, err := s.resolveSocialUser(r, id)
 	if err != nil {
 		if errors.Is(err, errExplicitLinkRequired) {
-			linkMsg := "An account already uses this email address. Sign in, then link " + name + " from your account settings."
+			linkMsg := "An account already uses this email address. Sign in, then link " + name + " from account settings."
 			if st.Next != "" {
 				browserFail(linkMsg)
 				return
@@ -515,7 +515,7 @@ func (s *Server) TotpChallenge(w http.ResponseWriter, r *http.Request) {
 		}); werr != nil {
 			s.log.Warn("audit totp challenge failure", "err", werr)
 		}
-		problemUnauthorized(w, r, "That code did not match. Try the current code from your authenticator.")
+		problemUnauthorized(w, r, "That code did not match. Try the current code from the authenticator app.")
 		return
 	}
 	s.issueSocialSession(w, r, user, blob.Provider, "", nil)

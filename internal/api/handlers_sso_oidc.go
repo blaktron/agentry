@@ -120,13 +120,13 @@ func (s *Server) OidcCallback(w http.ResponseWriter, r *http.Request, org OrgHan
 	claims, err := rp.Exchange(ctx, *params.Code, st.Verifier, st.Nonce)
 	if err != nil {
 		s.log.Warn("oidc callback rejected", "org", org, "err", err)
-		problemUnauthorized(w, r, "The code exchange with your IdP failed. Start sign-in again.")
+		problemUnauthorized(w, r, "The code exchange with the identity provider failed. Start sign-in again.")
 		return
 	}
 	// Respect email_verified (§12.4): an unverified email must not drive a
 	// verified-email JIT link.
 	if claims.Email != "" && !claims.EmailVerified {
-		problemUnauthorized(w, r, "Your IdP reports this email address as unverified. Verify it there, then sign in again.")
+		problemUnauthorized(w, r, "The identity provider reports this email address as unverified. Verify it there, then sign in again.")
 		return
 	}
 	s.establishSSOSession(w, r, orgRow, connID, "oidc", claims.Subject, claims.Email, "", nil)

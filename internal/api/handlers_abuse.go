@@ -41,7 +41,7 @@ func (s *Server) ReportAbuse(w http.ResponseWriter, r *http.Request, ns Namespac
 	}
 	detail := strings.TrimSpace(req.Detail)
 	if len(detail) < 10 || len(detail) > 4000 {
-		problemValidation(w, r, "Describe what you observed, in 10-4000 characters.")
+		problemValidation(w, r, "Describe what happened, in 10-4000 characters.")
 		return
 	}
 

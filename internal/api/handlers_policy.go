@@ -89,7 +89,7 @@ func (s *Server) SetOrgPolicy(w http.ResponseWriter, r *http.Request, org OrgHan
 	// error rather than a surprise.
 	baseline := s.baselinePolicy(r)
 	if scan.LoosensBaseline(baseline, orgPolicy) {
-		problemValidation(w, r, "An org policy may only tighten the platform baseline.")
+		problemValidation(w, r, "An organization's policy may only tighten the platform baseline.")
 		return
 	}
 

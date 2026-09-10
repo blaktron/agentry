@@ -64,7 +64,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 	}
 	if publishedCount > 0 && disposition == "" {
 		problemBadRequest(w, r,
-			fmt.Sprintf("This account has %d published public version(s). Pass publishedContent=yank to yank them, or publishedContent=transfer with transferOrg to hand them to an organization you administer.", publishedCount))
+			fmt.Sprintf("This account has %d published public version(s). Pass publishedContent=yank to yank them, or publishedContent=transfer with transferOrg to hand them to an organization this account administers.", publishedCount))
 		return
 	}
 	if disposition == "" {
@@ -89,7 +89,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 			orgHandle = strings.TrimSpace(*params.TransferOrg)
 		}
 		if orgHandle == "" {
-			problemBadRequest(w, r, "Add transferOrg=<org handle>, an organization you administer, to use publishedContent=transfer.")
+			problemBadRequest(w, r, "Add transferOrg=<org handle>, an organization this account administers, to use publishedContent=transfer.")
 			return
 		}
 		orgRow, ok := s.orgOrNotFound(w, r, orgHandle)
