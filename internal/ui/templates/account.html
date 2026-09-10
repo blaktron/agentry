@@ -13,7 +13,7 @@
 <section class="card">
 <h2>Password and two-factor authentication</h2>
 {{if .Directory}}{{with .Directory}}
-<p class="muted">Your password and authenticators are kept by the sign-in service. Each action opens one short step there and brings you back here.</p>
+<p class="muted">The sign-in service keeps your password and authenticators. Each action opens one short step there and brings you back here.</p>
 <p>
 {{if .PasswordChangeUrl}}<a class="button secondary" href="{{.PasswordChangeUrl}}">Change password</a>{{end}}
 {{if .TotpSetupUrl}}<a class="button secondary" href="{{.TotpSetupUrl}}">Add authenticator app</a>{{end}}
@@ -21,13 +21,13 @@
 </p>
 <h3>Enrolled authenticators</h3>
 {{if .DevicesError}}<p class="muted">{{.DevicesError}}</p>
-{{else if not .Devices}}<p class="muted">Not shown: this server has no directory admin access.</p>
-{{else if not (len .Devices)}}<p><span class="badge warn">none</span> No second factor is enrolled. Publishing publicly requires one.</p>
+{{else if not .Devices}}<p class="muted">This server has no directory admin access, so it cannot list your authenticators. The links above still work.</p>
+{{else if not (len .Devices)}}<p><span class="badge warn">none</span> No second factor is enrolled. Add an authenticator app or a security key above.</p>
 {{else}}<ul class="list">{{range .Devices}}<li><span class="badge">{{.Kind}}</span> {{.Name}}{{if .CreatedAt}} <span class="muted">added {{utc .CreatedAt}}</span>{{end}}
 {{if .ID}}<form method="post" action="/ui/account/directory/devices" class="inline"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="kind" value="{{.Kind}}"><input type="hidden" name="deviceId" value="{{.ID}}"><button type="submit" class="small">Remove</button></form>{{end}}</li>{{end}}</ul>{{end}}
 {{end}}{{else}}
 {{if $.User.TotpEnabled}}<p><span class="badge ok">enabled</span> TOTP is active on this account.</p>
-{{else}}<p class="muted">Two-factor authentication is not enrolled. Enrol it with the command line or the API (<code>POST /api/v1/auth/2fa/totp/setup</code>); publishing publicly requires it.</p>{{end}}
+{{else}}<p class="muted">Two-factor authentication is not enrolled. Enrol it through the API (<code>POST /api/v1/auth/2fa/totp/setup</code>); publishing a public BriefAgent requires it.</p>{{end}}
 {{end}}
 </section>
 {{end}}

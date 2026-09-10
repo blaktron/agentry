@@ -1,7 +1,7 @@
 {{define "content"}}
 <h1>SSH keys</h1>
 <section class="card">
-<p class="muted">For <code>git clone ssh://…</code> and pushes over SSH. A key is worth repository read/write and the release tag your role allows — never the API.</p>
+<p class="muted">For <code>git clone ssh://…</code> and pushes over SSH. A key is worth repository read/write and the release tag your role allows — never the API. An organization that enforces SSO takes pushes only over HTTPS with an org-bound token.</p>
 {{if not .Data}}<p class="muted">No SSH keys.</p>
 {{else}}<ul class="list">{{range .Data}}<li><strong>{{.Title}}</strong> <code>{{.KeyType}} {{.Fingerprint}}</code>{{if .LastUsedAt}} <span class="muted">last used {{utc .LastUsedAt}}</span>{{end}}
 <form method="post" action="/ui/account/ssh-keys" class="inline"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="action" value="remove"><input type="hidden" name="keyId" value="{{.ID}}"><button type="submit" class="small danger">Remove</button></form></li>{{end}}</ul>{{end}}
