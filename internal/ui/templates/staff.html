@@ -4,7 +4,7 @@
 {{if .Forbidden}}<p class="flash error">This account is not platform staff.</p>{{end}}
 <section class="card">
 <h2>Platform review queue ({{len .Queue}})</h2>
-{{if not .Queue}}<p class="muted">Empty.</p>{{else}}<ul class="list">{{range .Queue}}<li><a href="/ui/review/{{.ID}}"><strong>{{.Namespace}}/{{.Agent}}</strong> @{{.Version}}</a>{{if .CreatedAt}} <span class="muted">{{utc .CreatedAt}}</span>{{end}}</li>{{end}}</ul>{{end}}
+{{if not .Queue}}<p class="muted">Nothing awaits platform review.</p>{{else}}<ul class="list">{{range .Queue}}<li><a href="/ui/review/{{.ID}}"><strong>{{.Namespace}}/{{.Agent}}</strong> @{{.Version}}</a>{{if .CreatedAt}} <span class="muted">{{utc .CreatedAt}}</span>{{end}}</li>{{end}}</ul>{{end}}
 </section>
 <section class="card">
 <h2>Abuse reports</h2>
@@ -16,10 +16,11 @@
 <input name="resolution" placeholder="resolution" class="short"><button type="submit" class="small secondary">Update</button></form></li>{{end}}</ul>{{end}}
 </section>
 <section class="card">
-<h2>Quarantine, block, reinstate</h2>
+<h2>BriefAgent enforcement</h2>
+<p class="muted">Quarantine moves the latest published version to quarantined. Downloads of it answer 409, and the BriefAgent stays in search with the state on it. Block marks the BriefAgent blocked, moves its live versions with it, and drops it from search. Every download then answers 410 Gone. Reinstate walks both back: blocked to quarantined to published. The reason is recorded in the audit log, and returned with the version as its status reason.</p>
 <form method="post" action="/ui/staff/agent-action">
   <input type="hidden" name="_csrf" value="{{$.CSRF}}">
-  <label>Agent (namespace/name)<input name="ref" required placeholder="acme/support-bot"></label>
+  <label>BriefAgent (namespace/name)<input name="ref" required placeholder="acme/support-bot"></label>
   <label>Action<select name="action"><option value="quarantine">quarantine</option><option value="block">block</option><option value="reinstate">reinstate</option></select></label>
   <label>Reason<input name="reason" required></label>
   <button type="submit" class="danger">Apply</button>
@@ -28,6 +29,7 @@
 <section class="card">
 <h2>Ruleset releases</h2>
 {{if not .Releases}}<p class="muted">None recorded.</p>{{else}}<ul class="list">{{range .Releases}}<li><strong>{{.Semver}}</strong> <code>{{.BundleDigest}}</code>{{if .PublishedAt}} <span class="muted">{{utc .PublishedAt}}</span>{{end}}{{if .Notes}}<p class="muted">{{.Notes}}</p>{{end}}</li>{{end}}</ul>{{end}}
+<p class="muted">Leave the fields empty to record this server's own bundle. A new semver starts a rescan sweep over the published catalogue; re-recording one changes nothing.</p>
 <form method="post" action="/ui/staff/ruleset-release">
   <input type="hidden" name="_csrf" value="{{$.CSRF}}">
   <label>Semver<input name="semver" placeholder="1.4.0"></label>
