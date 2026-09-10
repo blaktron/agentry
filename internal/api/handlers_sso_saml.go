@@ -49,23 +49,23 @@ func (s *Server) SamlAcs(w http.ResponseWriter, r *http.Request, org OrgHandle) 
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		problemBadRequest(w, r, "invalid form body")
+		problemBadRequest(w, r, "The server could not parse the form body.")
 		return
 	}
 	samlResponse := r.PostFormValue("SAMLResponse")
 	if samlResponse == "" {
-		problemValidation(w, r, "SAMLResponse is required")
+		problemValidation(w, r, "The POST must carry a SAMLResponse form field.")
 		return
 	}
 	sp, connID, err := s.samlSPForOrg(r, orgRow)
 	if err != nil {
-		problemValidation(w, r, "SAML is not configured for this organization")
+		problemValidation(w, r, "This organization has no SAML connection enabled.")
 		return
 	}
 	res, err := sp.ParseAndValidate(r.Context(), samlResponse)
 	if err != nil {
 		s.log.Warn("saml acs rejected", "org", org, "err", err)
-		problemUnauthorized(w, r, "SAML assertion rejected")
+		problemUnauthorized(w, r, "The registry rejected the SAML assertion.")
 		return
 	}
 	displayName := ""
@@ -108,12 +108,12 @@ func (s *Server) samlSlo(w http.ResponseWriter, r *http.Request, org OrgHandle) 
 	}
 	sp, connID, err := s.samlSPForOrg(r, orgRow)
 	if err != nil {
-		problemValidation(w, r, "SAML is not configured for this organization")
+		problemValidation(w, r, "This organization has no SAML connection enabled.")
 		return
 	}
 	if r.Method == http.MethodPost {
 		if err := r.ParseForm(); err != nil {
-			problemBadRequest(w, r, "invalid form body")
+			problemBadRequest(w, r, "The server could not parse the form body.")
 			return
 		}
 	}
@@ -123,7 +123,7 @@ func (s *Server) samlSlo(w http.ResponseWriter, r *http.Request, org OrgHandle) 
 	if r.FormValue("SAMLResponse") != "" {
 		if err := sp.ValidateLogoutResponse(r.URL.RawQuery, r.PostFormValue("SAMLResponse")); err != nil {
 			s.log.Warn("saml slo response rejected", "org", org, "err", err)
-			problemUnauthorized(w, r, "SAML LogoutResponse rejected")
+			problemUnauthorized(w, r, "The registry rejected the SAML LogoutResponse.")
 			return
 		}
 		http.Redirect(w, r, s.webHomeURL(r), http.StatusSeeOther)
@@ -138,7 +138,7 @@ func (s *Server) samlSlo(w http.ResponseWriter, r *http.Request, org OrgHandle) 
 	}
 	if err != nil {
 		s.log.Warn("saml slo request rejected", "org", org, "err", err)
-		problemUnauthorized(w, r, "SAML LogoutRequest rejected")
+		problemUnauthorized(w, r, "The registry rejected the SAML LogoutRequest.")
 		return
 	}
 
@@ -181,7 +181,7 @@ func (s *Server) samlSlo(w http.ResponseWriter, r *http.Request, org OrgHandle) 
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("logged out\n"))
+	_, _ = w.Write([]byte("Signed out.\n"))
 }
 
 // webHomeURL is where a completed SP-initiated logout lands: the site's
