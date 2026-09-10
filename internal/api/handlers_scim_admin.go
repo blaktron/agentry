@@ -60,7 +60,7 @@ func (s *Server) CreateScimToken(w http.ResponseWriter, r *http.Request, org Org
 	var expiresAt *time.Time
 	if req.ExpiresInDays != nil {
 		if *req.ExpiresInDays < 1 || *req.ExpiresInDays > 730 {
-			problemValidation(w, r, "expiresInDays must be 1-730")
+			problemValidation(w, r, "Set expiresInDays to 1-730 days.")
 			return
 		}
 		t := time.Now().Add(time.Duration(*req.ExpiresInDays) * 24 * time.Hour)

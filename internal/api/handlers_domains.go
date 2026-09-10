@@ -66,7 +66,7 @@ func (s *Server) CreateDomainClaim(w http.ResponseWriter, r *http.Request, org O
 	}
 	domain := normalizeDomain(req.Domain)
 	if !validDomain(domain) {
-		problemValidation(w, r, "invalid domain")
+		problemValidation(w, r, "A domain must contain a dot, at most 253 characters, and only letters, digits and hyphens.")
 		return
 	}
 	token, err := auth.NewToken("")
@@ -125,7 +125,7 @@ func (s *Server) VerifyDomainClaim(w http.ResponseWriter, r *http.Request, org O
 	verified, err := dnsx.VerifyTXT(r.Context(), s.resolver, claim.Domain, claim.VerificationToken)
 	if err != nil {
 		s.log.Warn("domain verify lookup", "domain", domain, "err", err)
-		problemValidation(w, r, "DNS lookup failed: "+err.Error())
+		problemValidation(w, r, "The registry could not read the TXT record for this domain: "+err.Error())
 		return
 	}
 	if !verified {
