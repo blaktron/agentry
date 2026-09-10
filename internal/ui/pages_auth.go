@@ -69,7 +69,7 @@ func (h *handler) loginSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := h.call(r).do(http.MethodPost, "/auth/login", body)
 	if err != nil {
-		h.refuse(w, r, http.StatusBadGateway, "Sign-in unavailable", "The server could not be reached. Try again in a moment.")
+		h.refuse(w, r, http.StatusBadGateway, "Sign-in unavailable", notSent)
 		return
 	}
 	if !res.OK() {
@@ -135,7 +135,7 @@ func (h *handler) verifyEmail(w http.ResponseWriter, r *http.Request) {
 	res, err := h.call(r).do(http.MethodPost, "/auth/verify-email", map[string]string{"token": token})
 	switch {
 	case err != nil:
-		p.Error = "The server could not be reached. Try again in a moment."
+		p.Error = notSent
 		h.render(w, r, http.StatusBadGateway, "message", p)
 	case res.OK():
 		p.Flash = "Your email address is verified. You can sign in."
@@ -198,7 +198,7 @@ func (h *handler) authorizeApprove(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := h.call(r).do(http.MethodPost, "/user/tokens/desktop-grant", map[string]string{"state": d.State})
 	if err != nil || !res.OK() {
-		msg := "the server could not be reached"
+		msg := notSent
 		if err == nil {
 			msg = res.detail()
 		}
