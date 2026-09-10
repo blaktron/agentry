@@ -297,8 +297,12 @@ func (r renderer) quarantine(n QuarantineNotice) message {
 		// (handlers_version_files.go).
 		"What that means: the version no longer resolves for new installs, not\n" +
 		"even by exact version, and a download of it answers 409. Copies already\n" +
+		// One sweep can quarantine several versions of the same BriefAgent and
+		// send one of these for each, so "your other published versions still
+		// resolve" was a promise this mail cannot keep. Name the mechanism
+		// that would have taken the others instead.
 		"installed elsewhere are not reached by this change. Your other\n" +
-		"published versions still resolve.\n\n"
+		"published versions resolve unless a rescan quarantined them too.\n\n"
 	if n.Reason != "" {
 		body += "Reason recorded: " + n.Reason + "\n\n"
 	}
