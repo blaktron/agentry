@@ -350,7 +350,7 @@ func (s *Server) DownloadVersion(w http.ResponseWriter, r *http.Request, ns Name
 			"Trust & safety blocked this version. Downloads stay refused until platform staff reinstate it.")
 		return
 	case registry.StatusQuarantined:
-		problemConflict(w, r, "This version is quarantined for review. Downloads resume only if the review clears it.")
+		problemConflict(w, r, "This version is quarantined for review. Downloads resume once a reviewer decides.")
 		return
 	default:
 		problemNotFound(w, r)

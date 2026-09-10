@@ -41,7 +41,7 @@ func (s *Server) versionArchive(w http.ResponseWriter, r *http.Request, ns Names
 			"Trust & safety blocked this version. Its files stay unreadable until platform staff reinstate it.")
 		return nil, false
 	case registry.StatusQuarantined:
-		problemConflict(w, r, "This version is quarantined for review. Its files stay unreadable until the review clears it.")
+		problemConflict(w, r, "This version is quarantined for review. Its files stay unreadable until a reviewer decides.")
 		return nil, false
 	default:
 		problemNotFound(w, r)
