@@ -231,15 +231,16 @@ func TestRefusalsRenderInsideTheLayout(t *testing.T) {
 		t.Fatalf("reference page: %d %q", ok.Code, csp)
 	}
 	for _, tc := range []struct {
-		name   string
-		got    *httptest.ResponseRecorder
-		status int
-		reason string
+		name     string
+		got      *httptest.ResponseRecorder
+		status   int
+		reason   string
+		signedIn bool
 	}{
-		{"cross-origin post", raw(http.MethodPost, "/ui/authorize", "_csrf=csrf1&port=40123&state=abcdefghij", map[string]string{"Sec-Fetch-Site": "cross-site"}, sessCookie, csrfCookieV), http.StatusForbidden, "posted from another site"},
-		{"unparseable form", raw(http.MethodPost, "/ui/authorize", "%zz=1", nil, sessCookie, csrfCookieV), http.StatusBadRequest, "could not read this form"},
-		{"missing csrf field", raw(http.MethodPost, "/ui/authorize", "port=40123&state=abcdefghij", nil, sessCookie, csrfCookieV), http.StatusForbidden, "does not match your cookie"},
-		{"unknown path", raw(http.MethodGet, "/ui/nope", "", nil), http.StatusNotFound, "serves no page at this address"},
+		{"cross-origin post", raw(http.MethodPost, "/ui/authorize", "_csrf=csrf1&port=40123&state=abcdefghij", map[string]string{"Sec-Fetch-Site": "cross-site"}, sessCookie, csrfCookieV), http.StatusForbidden, "posted from another site", true},
+		{"unparseable form", raw(http.MethodPost, "/ui/authorize", "%zz=1", nil, sessCookie, csrfCookieV), http.StatusBadRequest, "could not read this form", true},
+		{"missing csrf field", raw(http.MethodPost, "/ui/authorize", "port=40123&state=abcdefghij", nil, sessCookie, csrfCookieV), http.StatusForbidden, "does not match your cookie", true},
+		{"unknown path", raw(http.MethodGet, "/ui/nope", "", nil), http.StatusNotFound, "serves no page at this address", false},
 	} {
 		body := tc.got.Body.String()
 		if tc.got.Code != tc.status {
@@ -257,6 +258,31 @@ func TestRefusalsRenderInsideTheLayout(t *testing.T) {
 		if got := tc.got.Header().Get("Content-Security-Policy"); got != csp {
 			t.Fatalf("%s: csp %q, want %q", tc.name, got, csp)
 		}
+		// A refusal is a page like any other, and §5b's no-store applies to it:
+		// nothing about a rejected form or a wrong address is cacheable, and a
+		// CDN in front must not rewrite it either.
+		if cc := tc.got.Header().Get("Cache-Control"); cc != "no-store, no-transform" {
+			t.Fatalf("%s: cache-control %q", tc.name, cc)
+		}
+		// No page here is a dead end: with no Referer to return to, the link is
+		// this surface's entrance.
+		if !strings.Contains(body, ">Go to the registry</a>") {
+			t.Fatalf("%s: no way back: %s", tc.name, body)
+		}
+		// A refusal is not a sign-out. With a session it keeps the section nav
+		// and Sign out; without one it carries neither.
+		chrome := strings.Contains(body, ">Sign out</button>") && strings.Contains(body, `class="sections"`)
+		if chrome != tc.signedIn {
+			t.Fatalf("%s: signed-in chrome %v, want %v: %s", tc.name, chrome, tc.signedIn, body)
+		}
+	}
+	// The way back is the Referer when it is a path on this origin (the test
+	// request's Host is example.com), and never an off-site one.
+	if body := raw(http.MethodGet, "/ui/nope", "", map[string]string{"Referer": "http://example.com/ui/account/tokens"}).Body.String(); !strings.Contains(body, `href="/ui/account/tokens"`) || !strings.Contains(body, ">Go back</a>") {
+		t.Fatalf("same-origin referer is not the way back: %s", body)
+	}
+	if body := raw(http.MethodGet, "/ui/nope", "", map[string]string{"Referer": "https://evil.example/x"}).Body.String(); strings.Contains(body, "evil.example") || !strings.Contains(body, ">Go to the registry</a>") {
+		t.Fatalf("off-site referer became the way back: %s", body)
 	}
 	// A registered path reached with the wrong method is still the mux's 405,
 	// not this surface's 404 page.

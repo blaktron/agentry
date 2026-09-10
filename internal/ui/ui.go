@@ -161,10 +161,39 @@ func (h *handler) pathHasOtherMethod(r *http.Request) bool {
 
 // refuse answers a request this surface will not act on with the message
 // page inside the layout, at the status the bare http.Error used to send.
-// The page carries no user: a refusal happens before any session lookup, and
-// the layout's nav and sign-out are the only parts that need one.
+// A refusal reaches a signed-in reader as often as a signed-out one — a stale
+// CSRF cookie, a mistyped path — so the page resolves the session like any
+// other and keeps the nav and Sign out where they were. currentUser is an
+// in-process API call and a nil result is fine: it renders the signed-out
+// layout. The one link is a way back, because a page with no controls at all
+// leaves the browser's Back button as the only exit.
 func (h *handler) refuse(w http.ResponseWriter, r *http.Request, status int, title, msg string) {
-	h.render(w, r, status, "message", page{Title: title, Error: msg})
+	link, text := h.wayBack(r)
+	h.render(w, r, status, "message", page{
+		Title: title,
+		Error: msg,
+		User:  h.currentUser(r),
+		Data:  map[string]string{"Link": link, "LinkText": text},
+	})
+}
+
+// wayBack is where a refusal's link points: the page the browser came from
+// when the Referer is a path on this origin, else this surface's entrance.
+// safeNext is the same admission rule the sign-in flow's next uses, so a
+// crafted Referer cannot turn this into an off-site link.
+func (h *handler) wayBack(r *http.Request) (string, string) {
+	if u, err := url.Parse(r.Header.Get("Referer")); err == nil {
+		host := r.Header.Get("X-Forwarded-Host")
+		if host == "" {
+			host = r.Host
+		}
+		if u.Host == "" || u.Host == host {
+			if p := safeNext(u.EscapedPath(), ""); p != "" {
+				return p, "Go back"
+			}
+		}
+	}
+	return "/ui/", "Go to the registry"
 }
 
 func (h *handler) serveCSS(w http.ResponseWriter, _ *http.Request) {
