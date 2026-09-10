@@ -60,6 +60,12 @@ func fakeAPI(t *testing.T) http.Handler {
 			_, _ = io.WriteString(w, `{"code":"agd_code","expiresAt":"2026-01-01T00:00:00Z"}`)
 		case "PATCH /api/v1/user":
 			_, _ = io.WriteString(w, `{"id":"u1"}`)
+		case "GET /api/v1/user/ssh-keys":
+			if !authed {
+				http.Error(w, `{"detail":"sign in"}`, http.StatusUnauthorized)
+				return
+			}
+			_, _ = io.WriteString(w, `[{"id":"k1","title":"laptop","keyType":"ssh-ed25519","fingerprint":"SHA256:abc","createdAt":"2026-01-01T00:00:00Z"}]`)
 		default:
 			http.Error(w, `{"detail":"no such fake route `+r.Method+` `+r.URL.Path+`"}`, http.StatusNotFound)
 		}
@@ -309,6 +315,31 @@ func TestAccountPagesAndTheDirectoryRedirect(t *testing.T) {
 	w = get(h, "/ui/account?error=%3Cb%3Ex%3C%2Fb%3E", sessCookie, csrfCookieV)
 	if strings.Contains(w.Body.String(), "<b>x</b>") || !strings.Contains(w.Body.String(), "&lt;b&gt;x&lt;/b&gt;") {
 		t.Fatalf("flash escaping: %s", w.Body.String())
+	}
+}
+
+// The SSH keys page: the only template no test executed, so a broken action
+// in it would have reached a reader first. It carries the key's identity and
+// the one claim the page makes about what a key is worth.
+func TestSSHKeysPageRendersTheKeyAndItsLimits(t *testing.T) {
+	h := newUI(t, Options{Brand: Brand{Name: "Acme Registry"}})
+	w := get(h, "/ui/account/ssh-keys", sessCookie, csrfCookieV)
+	body := w.Body.String()
+	if w.Code != http.StatusOK {
+		t.Fatalf("ssh keys: %d %s", w.Code, body)
+	}
+	for _, want := range []string{
+		"<strong>laptop</strong>",
+		"SHA256:abc",
+		"Public key",
+		"never the API",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("ssh keys page missing %q: %s", want, body)
+		}
+	}
+	if w := get(h, "/ui/account/ssh-keys"); w.Code != http.StatusSeeOther {
+		t.Fatalf("signed out: %d", w.Code)
 	}
 }
 
