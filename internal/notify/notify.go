@@ -370,7 +370,10 @@ func (r renderer) review(n ReviewNotice) message {
 }
 
 func (r renderer) advisory(n AdvisoryNotice) message {
-	body := "An advisory naming " + n.Agent + " is now public.\n\n" +
+	// Say it, then name it (plan §4.3): this mail is where an author meets
+	// the word "advisory" first.
+	body := "The registry published an advisory naming " + n.Agent + ". An advisory is\n" +
+		"the public record of a security problem in a published BriefAgent.\n\n" +
 		"Severity: " + severityLine(n.Severity) + "\n"
 	if n.Summary != "" {
 		body += "Summary: " + n.Summary + "\n"
@@ -378,8 +381,9 @@ func (r renderer) advisory(n AdvisoryNotice) message {
 	if u := firstNonEmpty(n.AdvisoryURL, r.link("/advisories")); u != "" {
 		body += "\n" + u + "\n"
 	}
-	body += "\nAdvisories are how installed copies learn about this: there is no\n" +
-		"mechanism that reaches them directly.\n"
+	// Same §7 fact as before, load-bearing half first.
+	body += "\nNothing in the registry reaches copies that are already installed.\n" +
+		"This advisory and its page are how a consumer finds out.\n"
 	return message{
 		Subject: r.registry + ": advisory published for " + n.Agent,
 		Body:    body + r.footer(),
@@ -387,8 +391,12 @@ func (r renderer) advisory(n AdvisoryNotice) message {
 }
 
 func (r renderer) mcpAlert(n MCPDependencyAlertNotice) message {
-	body := n.Agent + "@" + n.Version + " declares the MCP server " + n.Server +
-		", which now has a known vulnerability.\n\n" +
+	// The server ref runs to fifty characters or more, so it goes on a label
+	// line with the rest of the facts rather than inside a sentence that no
+	// wrap can keep readable.
+	body := n.Agent + "@" + n.Version + " declares an MCP server that now has a known\n" +
+		"vulnerability.\n\n" +
+		"Server: " + n.Server + "\n" +
 		"Severity: " + severityLine(n.Severity) + "\n"
 	if len(n.Advisories) > 0 {
 		body += "Advisories: " + strings.Join(n.Advisories, ", ") + "\n"
@@ -396,14 +404,16 @@ func (r renderer) mcpAlert(n MCPDependencyAlertNotice) message {
 	if len(n.FixedIn) > 0 {
 		body += "Fixed in: " + strings.Join(n.FixedIn, ", ") + "\n"
 	}
-	body += "\nThe published version stays installable, and its page and your\n" +
-		"dashboard now carry this alert. To clear it, publish a new version\n" +
-		"that pins a fixed server version, then yank the affected one.\n"
+	body += "\nThe version stays published and installable. The BriefAgent's page\n" +
+		"and your dashboard list this alert.\n\n" +
+		"To clear it, publish a new version that pins a fixed server version,\n" +
+		"then yank the affected one. The alert closes when the version leaves\n" +
+		"published.\n"
 	if u := firstNonEmpty(n.AgentURL, r.dashboard, r.link("/dashboard")); u != "" {
 		body += "\n" + u + "\n"
 	}
 	return message{
-		Subject: r.registry + ": " + n.Agent + "@" + n.Version + " uses a vulnerable MCP server (" + n.Severity + ")",
+		Subject: r.registry + ": " + n.Agent + "@" + n.Version + " uses a vulnerable MCP server (" + severityLine(n.Severity) + ")",
 		Body:    body + r.footer(),
 	}
 }
@@ -420,9 +430,17 @@ func (r renderer) invite(n InviteNotice) message {
 	if u := firstNonEmpty(n.URL, r.link("/orgs/"+n.Org)); u != "" {
 		body += "\n" + u + "\n"
 	}
-	body += "\nIf you did not expect this, tell the organisation's owners: org\n" +
-		"membership is granted by an admin, not accepted by you.\n"
-	return message{Subject: r.registry + ": you were added to " + n.Org, Body: body + r.footer()}
+	// There is no invite object in v1: the membership is committed before
+	// this mail is sent, so the role above is already in force. Saying so is
+	// the consequence the notice owes the reader; the mechanism it turns on
+	// is why there is nothing to accept.
+	body += "\nThe role above is already in force: org membership is granted by an\n" +
+		"admin, not offered and accepted. If you did not expect it, tell the\n" +
+		"organisation's owners.\n"
+	return message{
+		Subject: r.registry + ": you were added to the " + n.Org + " organisation",
+		Body:    body + r.footer(),
+	}
 }
 
 // severityLine renders a severity label, defaulting to something honest when
