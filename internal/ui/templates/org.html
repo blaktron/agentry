@@ -31,7 +31,7 @@
 </section>
 
 <section class="card"><h2>Policy</h2>
-<p class="muted">Organization policy may only tighten the platform baseline: the server refuses a document that loosens it. This page does not show the baseline; read it at <code>GET /api/v1/platform/policy</code>.</p>
+<p class="muted">Organization policy may only tighten the platform baseline. The server refuses a document that loosens <code>maxAutoPublishSeverity</code>, <code>wildcardEgress</code> or <code>requireHumanReview</code>; every other key it keeps at the stricter of the two values. This page does not show the baseline; read it at <code>GET /api/v1/platform/policy</code>.</p>
 <p class="muted">The server reads these keys: <code>requireHumanReview</code>, <code>blockedCapabilities</code>, <code>blockedMcpServers</code>, <code>allowedLicenses</code>, <code>maxAutoPublishSeverity</code>, <code>requireEvals</code>, <code>wildcardEgress</code>. It stores any other key and shows it here, but never enforces it.</p>
 <form method="post" action="/ui/orgs/{{.Handle}}"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="section" value="policy">
 <label>Policy JSON<textarea name="policy" rows="10" class="mono">{{.Policy}}</textarea></label><button type="submit">Save policy</button></form></section>
@@ -43,7 +43,7 @@
 <h3>SAML</h3><label>IdP metadata XML<textarea name="idpMetadataXml" rows="4" class="mono"></textarea></label><label class="check"><input type="checkbox" name="enabled" value="true"> Enabled</label><div><button type="submit" class="secondary">Save SAML</button></div></form>
 <form method="post" action="/ui/orgs/{{.Handle}}"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="section" value="sso"><input type="hidden" name="kind" value="oidc">
 <h3>OIDC</h3><label>Issuer<input name="issuer" value="{{.OIDCIssuer}}"></label><label>Client id<input name="clientId" value="{{.OIDCClient}}"></label><label>Client secret<input name="clientSecret" type="password" autocomplete="off" placeholder="empty clears the stored secret"></label><label class="check"><input type="checkbox" name="enabled" value="true"> Enabled</label><div><button type="submit" class="secondary">Save OIDC</button></div></form>
-<p class="muted">Saving replaces the whole connection with what this form sends, and the form starts empty on every load. Paste the metadata again, re-enter the client secret, and check Enabled to keep the connection on.</p>
+<p class="muted">Saving replaces the whole connection with what this form sends. The SAML metadata, the client secret and both Enabled boxes start empty on every load, whatever is stored: paste the metadata again, re-enter the secret, and check Enabled to keep the connection on.</p>
 <p class="muted">Your IdP fetches this organization's SP metadata from <code>/api/v1/orgs/&lt;handle&gt;/sso/saml/metadata</code>. Test checks the stored configuration and the IdP's discovery document; it never sends the client secret.</p>
 </section>
 
