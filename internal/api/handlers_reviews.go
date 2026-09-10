@@ -157,12 +157,12 @@ func (s *Server) ListReviewQueue(w http.ResponseWriter, r *http.Request, params 
 	switch params.Queue {
 	case "platform":
 		if !p.PlatformStaff {
-			problemForbidden(w, r, "platform review queue is staff-only")
+			problemForbidden(w, r, "The platform review queue is open to platform staff only.")
 			return
 		}
 	case "org":
 		if params.Org == nil {
-			problemValidation(w, r, "org required for the org queue")
+			problemValidation(w, r, "Name the org for the org queue.")
 			return
 		}
 		orgRow, ok := s.orgOrNotFound(w, r, *params.Org)
@@ -170,12 +170,12 @@ func (s *Server) ListReviewQueue(w http.ResponseWriter, r *http.Request, params 
 			return
 		}
 		if !s.isOrgReviewer(p, orgRow.ID) {
-			problemForbidden(w, r, "org security_reviewer role required")
+			problemForbidden(w, r, "The org queue needs the org's security_reviewer role or higher.")
 			return
 		}
 		qp.OrgID = &orgRow.ID
 	default:
-		problemValidation(w, r, "queue must be platform or org")
+		problemValidation(w, r, "The queue must be platform or org.")
 		return
 	}
 
@@ -210,12 +210,12 @@ func (s *Server) reviewItemAccess(w http.ResponseWriter, r *http.Request, id uui
 	switch ri.Queue {
 	case "platform":
 		if !p.PlatformStaff {
-			problemForbidden(w, r, "platform review is staff-only")
+			problemForbidden(w, r, "Platform review items are open to platform staff only.")
 			return storegen.ReviewItem{}, false
 		}
 	case "org":
 		if ri.OrgID == nil || !s.isOrgReviewer(p, *ri.OrgID) {
-			problemForbidden(w, r, "org security_reviewer role required")
+			problemForbidden(w, r, "This review item needs the org's security_reviewer role or higher.")
 			return storegen.ReviewItem{}, false
 		}
 	}
@@ -303,7 +303,7 @@ func (s *Server) DecideReviewItem(w http.ResponseWriter, r *http.Request, id ope
 		return
 	}
 	if ri.State != "pending" {
-		problemConflict(w, r, "review item already decided")
+		problemConflict(w, r, "A reviewer already decided this item.")
 		return
 	}
 	var req DecideReviewItemJSONRequestBody
@@ -312,7 +312,7 @@ func (s *Server) DecideReviewItem(w http.ResponseWriter, r *http.Request, id ope
 	}
 	rationale := strings.TrimSpace(req.Rationale)
 	if rationale == "" {
-		problemValidation(w, r, "rationale required")
+		problemValidation(w, r, "Give a rationale for the decision.")
 		return
 	}
 	p := principalFrom(r.Context())
@@ -324,7 +324,7 @@ func (s *Server) DecideReviewItem(w http.ResponseWriter, r *http.Request, id ope
 		return
 	}
 	if v.SubmittedBy == p.UserID {
-		problemForbidden(w, r, "authors cannot decide their own versions")
+		problemForbidden(w, r, "Authors cannot decide their own versions.")
 		return
 	}
 
@@ -425,7 +425,7 @@ func (s *Server) SetFindingVerdict(w http.ResponseWriter, r *http.Request, id op
 	ri, err := s.q().GetPendingReviewItemForVersion(r.Context(), run.VersionID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			problemConflict(w, r, "finding is not under active review")
+			problemConflict(w, r, "This finding is not under active review.")
 			return
 		}
 		problemInternal(w, r)
@@ -441,7 +441,7 @@ func (s *Server) SetFindingVerdict(w http.ResponseWriter, r *http.Request, id op
 	// accepted_risk only by org reviewers, only ≤ medium (§8.5).
 	if req.Verdict == "dismissed_accepted_risk" {
 		if scan.SeverityAtLeast(f.Severity, "high") {
-			problemForbidden(w, r, "accepted-risk dismissal is limited to severity medium and below")
+			problemForbidden(w, r, "Accepted-risk dismissal covers severity medium and below.")
 			return
 		}
 		// The actor half of §8.5 (DEV-034): on an org-namespace agent the
@@ -462,7 +462,7 @@ func (s *Server) SetFindingVerdict(w http.ResponseWriter, r *http.Request, id op
 			return
 		}
 		if agent.NamespaceKind == "org" && !s.isOrgReviewer(p, agent.NamespaceID) {
-			problemForbidden(w, r, "accepted-risk dismissal on an org-namespace agent is reserved to that org's security reviewers")
+			problemForbidden(w, r, "On an org BriefAgent, only that org's security reviewers may accept risk.")
 			return
 		}
 	}
