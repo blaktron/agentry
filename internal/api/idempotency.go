@@ -73,7 +73,7 @@ func (s *Server) beginIdempotent(w http.ResponseWriter, r *http.Request, endpoin
 		return &idempotency{}, false
 	}
 	if len(key) > idempotencyMaxLen {
-		problemValidation(w, r, "Idempotency-Key must be at most 255 characters")
+		problemValidation(w, r, "The Idempotency-Key must be at most 255 characters.")
 		return nil, true
 	}
 	p := principalFrom(r.Context())
@@ -84,7 +84,7 @@ func (s *Server) beginIdempotent(w http.ResponseWriter, r *http.Request, endpoin
 
 	hash, err := hashRequestBody(w, r)
 	if err != nil {
-		problemBadRequest(w, r, "could not read request body")
+		problemBadRequest(w, r, "Could not read the request body.")
 		return nil, true
 	}
 
@@ -103,11 +103,11 @@ func (s *Server) beginIdempotent(w http.ResponseWriter, r *http.Request, endpoin
 
 	// The key existed already.
 	if row.RequestHash != hash {
-		problemConflict(w, r, "this Idempotency-Key was already used with a different request body")
+		problemConflict(w, r, "This Idempotency-Key already carried a different request body.")
 		return nil, true
 	}
 	if row.ResponseStatus == nil {
-		problemConflict(w, r, "a request with this Idempotency-Key is still in flight")
+		problemConflict(w, r, "A request with this Idempotency-Key is still in flight. Retry when it finishes.")
 		return nil, true
 	}
 	w.Header().Set("Idempotency-Replayed", "true")
