@@ -75,12 +75,12 @@ func (s *Server) CreateRulesetRelease(w http.ResponseWriter, r *http.Request) {
 	}
 	if !reSemver.MatchString(semver) {
 		problemValidation(w, r, "The semver must be MAJOR.MINOR.PATCH.",
-			FieldError{Field: "semver", Message: "expected a semantic version"})
+			FieldError{Field: "semver", Message: "Must be a semantic version (MAJOR.MINOR.PATCH)."})
 		return
 	}
 	if digest == "" {
 		problemValidation(w, r, "Include a bundleDigest.",
-			FieldError{Field: "bundleDigest", Message: "expected sha256:<hex>"})
+			FieldError{Field: "bundleDigest", Message: "Must be sha256:<hex>."})
 		return
 	}
 

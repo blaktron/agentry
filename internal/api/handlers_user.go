@@ -217,7 +217,7 @@ func (s *Server) CreateToken(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(fields) > 0 {
-		problemValidation(w, r, "Token rejected. Fix the fields listed and try again.", fields...)
+		problemValidation(w, r, "The registry rejected the token. Each field error says what to fix.", fields...)
 		return
 	}
 
