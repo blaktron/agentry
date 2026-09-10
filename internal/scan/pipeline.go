@@ -737,7 +737,7 @@ func (p *Pipeline) FailToReview(ctx context.Context, v storegen.AgentVersion, ag
 	}); err != nil {
 		return fmt.Errorf("scan: create failure run: %w", err)
 	}
-	reason := "pipeline could not complete (" + kind + ")"
+	reason := "The pipeline could not complete this scan (" + kind + "), so the version went to human review."
 	finding := Finding{
 		Scanner: "S0/pipeline-error", Severity: SevMedium, Confidence: ConfHigh,
 		Title:  "Pipeline could not complete — routed to human review",
@@ -789,7 +789,7 @@ func (p *Pipeline) ReconcileStuckScans(ctx context.Context) (int, error) {
 			p.log.Error("scan: watchdog agent lookup", "version", v.ID, "err", err)
 			continue
 		}
-		cause := fmt.Errorf("version stayed in scanning past the %s cap (§7)", StuckScanCap)
+		cause := fmt.Errorf("this version stayed in scanning past the %s cap, so the watchdog routed it to human review", StuckScanCap)
 		if err := p.FailToReview(ctx, v, agent, "publish", "timeout", cause); err != nil {
 			p.log.Error("scan: watchdog could not fail version to review", "version", v.ID, "err", err)
 			continue
