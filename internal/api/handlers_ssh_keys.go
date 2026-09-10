@@ -64,16 +64,16 @@ func (s *Server) AddSshKey(w http.ResponseWriter, r *http.Request) {
 	var fields []FieldError
 	title := strings.TrimSpace(req.Title)
 	if title == "" || len(title) > 120 {
-		fields = append(fields, FieldError{Field: "title", Message: "must be 1-120 characters"})
+		fields = append(fields, FieldError{Field: "title", Message: "Must be 1-120 characters."})
 	}
 	keyType, canonical, fp, err := auth.ParseSSHPublicKey(req.PublicKey)
 	if err != nil {
-		fields = append(fields, FieldError{Field: "publicKey", Message: "not a valid OpenSSH public key line"})
+		fields = append(fields, FieldError{Field: "publicKey", Message: "Must be an OpenSSH public key line."})
 	} else if keyType == "ssh-dss" {
-		fields = append(fields, FieldError{Field: "publicKey", Message: "DSA keys are not accepted"})
+		fields = append(fields, FieldError{Field: "publicKey", Message: "This server does not accept DSA keys."})
 	}
 	if len(fields) > 0 {
-		problemValidation(w, r, "invalid ssh key", fields...)
+		problemValidation(w, r, "SSH key rejected. Fix the fields listed and try again.", fields...)
 		return
 	}
 	p := principalFrom(r.Context())
@@ -95,7 +95,7 @@ func (s *Server) AddSshKey(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			problemValidation(w, r, "invalid ssh key", FieldError{Field: "publicKey", Message: "this key is already registered"})
+			problemValidation(w, r, "SSH key rejected. Fix the fields listed and try again.", FieldError{Field: "publicKey", Message: "This key is already registered."})
 			return
 		}
 		s.log.Error("add ssh key", "err", err)

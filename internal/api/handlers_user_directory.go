@@ -64,7 +64,7 @@ func (s *Server) GetUserDirectory(w http.ResponseWriter, r *http.Request) {
 		devs, err := lister.DevicesByEmail(r.Context(), row.Email)
 		if err != nil {
 			s.log.Warn("user directory: devices", "err", err)
-			out.DevicesError = str("the directory did not answer; the links above still work")
+			out.DevicesError = str("The directory did not answer, so the authenticator list is missing. The links still work.")
 		} else {
 			list := make([]userDirectoryDevice, 0, len(devs))
 			for _, d := range devs {
@@ -96,7 +96,7 @@ func (s *Server) DeleteUserDirectoryDevice(w http.ResponseWriter, r *http.Reques
 	}
 	lister, ok := s.dirEraser.(directoryDevices)
 	if !ok || !s.cfg.Auth.ExternalOnly {
-		writeProblem(w, r, http.StatusNotFound, "not-found", "Not found", "this server has no directory admin access")
+		writeProblem(w, r, http.StatusNotFound, "not-found", "Not found", "This server has no directory admin access, so it cannot remove authenticators.")
 		return
 	}
 	p := principalFrom(r.Context())
@@ -108,11 +108,11 @@ func (s *Server) DeleteUserDirectoryDevice(w http.ResponseWriter, r *http.Reques
 	deleted, err := lister.DeleteDevice(r.Context(), row.Email, kind, deviceId)
 	if err != nil {
 		s.log.Warn("user directory: delete device", "err", err)
-		writeProblem(w, r, http.StatusBadGateway, "directory-unavailable", "Directory unavailable", "the directory did not answer; try again")
+		writeProblem(w, r, http.StatusBadGateway, "directory-unavailable", "Directory unavailable", "The directory did not answer. Try again.")
 		return
 	}
 	if !deleted {
-		writeProblem(w, r, http.StatusNotFound, "not-found", "Not found", "no such authenticator on this account")
+		writeProblem(w, r, http.StatusNotFound, "not-found", "Not found", "This account has no such authenticator.")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
