@@ -69,14 +69,14 @@ func (S1Inventory) Run(sc stageContext, in *Input) StageResult {
 			findings = append(findings, Finding{
 				Scanner: "S1/binary-executable", Severity: SevCritical, Confidence: ConfHigh,
 				Title: "Executable binary in package", FilePath: rel,
-				Detail:   map[string]any{"reason": "executables and shared libraries are blocked for all kinds in v1"},
+				Detail:   map[string]any{"reason": "executables and shared libraries are blocked for every agent kind in v1"},
 				Taxonomy: []string{"ASI05"},
 			})
 		case archive.IsArchiveData(data):
 			findings = append(findings, Finding{
 				Scanner: "S1/nested-archive", Severity: SevCritical, Confidence: ConfHigh,
 				Title: "Nested archive in package", FilePath: rel,
-				Detail:   map[string]any{"reason": "nested archives are not allowed (unpack depth > 1)"},
+				Detail:   map[string]any{"reason": "the pipeline unpacks one level only, so a nested archive's contents are never scanned"},
 				Taxonomy: []string{"ASI05"},
 			})
 		case archive.IsImagePath(rel):
@@ -327,7 +327,7 @@ func s1Frontmatter(in *Input) []Finding {
 			Title:    "Skill frontmatter description differs from the manifest summary",
 			FilePath: file.Path, LineStart: 1, LineEnd: 1,
 			Excerpt:  fm.Description,
-			Detail:   map[string]any{"summary": m.Summary, "reason": "the installed skill shows the frontmatter; the registry shows the summary (DEV-044)"},
+			Detail:   map[string]any{"summary": m.Summary, "reason": "the installed skill shows the frontmatter; the registry shows the summary"},
 			Taxonomy: []string{"LLM09"},
 		})
 	}

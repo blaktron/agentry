@@ -532,8 +532,8 @@ func (S5Judge) Run(sc stageContext, in *Input) StageResult {
 
 	var findings []Finding
 	catTitle := map[JudgeCategory]string{
-		CatInjection: "prompt injection / override", CatExfiltration: "data exfiltration",
-		CatUndeclaredCap: "undeclared capability described", CatDeception: "end-user deception",
+		CatInjection: "prompt-injection or instruction override", CatExfiltration: "data exfiltration",
+		CatUndeclaredCap: "capability described but not declared", CatDeception: "end-user deception",
 		CatObfuscation: "obfuscation indicators", CatDestructive: "destructive actions without confirmation",
 	}
 	for _, cat := range AllJudgeCategories() {
@@ -557,7 +557,7 @@ func (S5Judge) Run(sc stageContext, in *Input) StageResult {
 		findings = append(findings, Finding{
 			Scanner: "S5/manipulated-judge", Severity: SevHigh, Confidence: ConfMedium,
 			Title:    "Judge output shows manipulation symptoms — routing to human review",
-			Detail:   map[string]any{"reason": "instruction-following symptom in judge output (§8.4.3)"},
+			Detail:   map[string]any{"reason": "instruction-following symptom in judge output"},
 			Taxonomy: []string{"LLM01"},
 		})
 	}
