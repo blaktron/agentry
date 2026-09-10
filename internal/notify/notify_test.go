@@ -99,6 +99,16 @@ func TestNoMessageOverclaimsSafety(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	// The dependency alert is a rendered email like the rest and was outside
+	// this sweep until now: it is the one that talks about a vulnerability
+	// staying installable, which is the sentence most likely to drift.
+	if err := n.MCPDependencyAlert(ctx, MCPDependencyAlertNotice{
+		ToEmail: "user@example.test", Agent: "acme/widget", Version: "1.0.0",
+		Server: "npm:server-filesystem@1.2.3", Severity: "high",
+		Advisories: []string{"GHSA-1234-abcd-5678"}, FixedIn: []string{"1.2.4"},
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	banned := []string{"is safe", "safe to", "verified secure", "guaranteed", "no risk", "malware-free"}
 	for _, msg := range *sent {
@@ -109,8 +119,8 @@ func TestNoMessageOverclaimsSafety(t *testing.T) {
 			}
 		}
 	}
-	if len(*sent) != 7 {
-		t.Fatalf("sent %d messages, want 7", len(*sent))
+	if len(*sent) != 8 {
+		t.Fatalf("sent %d messages, want 8", len(*sent))
 	}
 }
 
@@ -136,6 +146,31 @@ func TestPublishNoticeSaysScannedNotSafe(t *testing.T) {
 
 // flatten collapses runs of whitespace so assertions survive line wrapping.
 func flatten(s string) string { return strings.Join(strings.Fields(s), " ") }
+
+// A reviewer rejecting an already-quarantined version yanks it, and the mail
+// that carries that word must say what a yank does — a yanked version is
+// still pinnable, which is the difference from the quarantine the author was
+// told about first.
+func TestYankNoticeSaysExactPinsStillResolve(t *testing.T) {
+	n, sent := capture(t)
+	if err := n.ReviewDecided(t.Context(), ReviewNotice{
+		ToEmail: "u@example.test", Agent: "acme/widget", Version: "1.0.0",
+		Decision: "yanked", Reviewer: "rev", Rationale: "finding confirmed",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	body := flatten((*sent)[0])
+	for _, want := range []string{
+		"was yanked",
+		"still resolves for an exact pin",
+		"no longer resolves for a range",
+		"a yank is permanent",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("yank notice does not say %q:\n%s", want, (*sent)[0])
+		}
+	}
+}
 
 func TestQuarantineNoticeIsHonestAboutInstalledCopies(t *testing.T) {
 	n, sent := capture(t)
@@ -264,11 +299,21 @@ func TestLogNotifierNeverFails(t *testing.T) {
 	}
 }
 
-// With no BaseURL the verification message must still be actionable.
+// With no BaseURL the verification message must still be actionable, and it
+// must describe what the recipient has: a code, not a link.
 func TestVerificationFallsBackToACodeWithoutABaseURL(t *testing.T) {
 	r := renderer{registry: "Agentry"}
 	m := r.verification("tok123")
 	if !strings.Contains(m.Body, "Verification code: tok123") {
 		t.Errorf("no usable token without a base URL:\n%s", m.Body)
+	}
+	if !strings.Contains(m.Body, "The code works once.") {
+		t.Errorf("code branch describes a link it did not send:\n%s", m.Body)
+	}
+	// The old copy promised "the address will not be used", which nothing in
+	// the server keeps: no job deletes an unconfirmed account, and a later
+	// org grant mails the address anyway. The mail states the gate instead.
+	if strings.Contains(m.Body, "will not be used") {
+		t.Errorf("verification mail promises the address goes unused:\n%s", m.Body)
 	}
 }
