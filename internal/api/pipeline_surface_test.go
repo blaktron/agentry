@@ -157,7 +157,7 @@ func TestUploadRejectsOversizedBodyAndRatioBomb(t *testing.T) {
 		if status == http.StatusAccepted {
 			t.Fatal("a zip bomb was unpacked and accepted")
 		}
-		if !strings.Contains(body, "archive rejected") {
+		if !strings.Contains(body, "The extractor rejected this archive") {
 			t.Fatalf("ratio bomb: got %d %s", status, body)
 		}
 	})
