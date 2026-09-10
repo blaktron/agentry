@@ -185,12 +185,12 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 	case "member":
 		handle := strings.TrimSpace(f("handle"))
 		if handle == "" {
-			back(w, r, backTo, "", "which member?")
+			back(w, r, backTo, "", "enter the member's handle")
 			return
 		}
 		if f("action") == "remove" {
 			res, err = c.do(http.MethodDelete, base+"/members/"+url.PathEscape(handle), nil)
-			ok = handle + " removed."
+			ok = handle + " removed. Their org-bound tokens stop working."
 		} else {
 			role := f("role")
 			if role == "" {
@@ -202,7 +202,7 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 	case "team":
 		slug := strings.TrimSpace(f("slug"))
 		if slug == "" {
-			back(w, r, backTo, "", "which team?")
+			back(w, r, backTo, "", "enter the team slug")
 			return
 		}
 		switch f("action") {
@@ -230,16 +230,16 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 	case "sso":
 		kind := f("kind")
 		if kind != "saml" && kind != "oidc" {
-			back(w, r, backTo, "", "which connection kind?")
+			back(w, r, backTo, "", "the connection kind must be saml or oidc")
 			return
 		}
 		switch f("action") {
 		case "test":
 			res, err = c.do(http.MethodPost, base+"/sso/connections/"+kind+"/test", nil)
-			ok = kind + " connection test started."
+			ok = kind + " connection checked. This page does not show the result."
 		case "delete":
 			res, err = c.do(http.MethodDelete, base+"/sso/connections/"+kind, nil)
-			ok = kind + " connection removed."
+			ok = kind + " connection removed. Sign-in through it stops; current sessions stand."
 		default:
 			cfg := map[string]string{}
 			if kind == "saml" {
@@ -257,7 +257,7 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 	case "scim":
 		if f("action") == "revoke" {
 			res, err = c.do(http.MethodDelete, base+"/scim/tokens/"+url.PathEscape(f("tokenId")), nil)
-			ok = "SCIM token revoked."
+			ok = "SCIM token revoked. It stops authenticating at the next request."
 		} else {
 			res, err = c.do(http.MethodPost, base+"/scim/tokens", map[string]any{})
 			if err == nil && res.OK() {
@@ -266,7 +266,7 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 				}
 				_ = res.decode(&created)
 				h.render(w, r, http.StatusOK, "showonce", page{Title: "SCIM token created", User: h.currentUser(r), Data: showOnceData{
-					Intro: "Copy the value below now. It is not stored and cannot be shown again.",
+					Intro: "Copy the value below now. It is not stored and cannot be shown again. Your IdP sends it as a bearer token to /scim/v2.",
 					Lines: []showOnceLine{{"SCIM bearer token", created.Token}},
 					Back:  backTo,
 				}})
@@ -276,12 +276,12 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 	case "domain":
 		domain := strings.ToLower(strings.TrimSpace(f("domain")))
 		if domain == "" {
-			back(w, r, backTo, "", "which domain?")
+			back(w, r, backTo, "", "enter the domain")
 			return
 		}
 		if f("action") == "verify" {
 			res, err = c.do(http.MethodPost, base+"/domain-claims/verify", map[string]string{"domain": domain})
-			ok = domain + " verified."
+			ok = domain + " verified. SSO can now link accounts with that email domain."
 		} else {
 			res, err = c.do(http.MethodPost, base+"/domain-claims", map[string]string{"domain": domain})
 			ok = domain + " claimed; add the DNS record shown and verify."
@@ -290,10 +290,10 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 		switch f("action") {
 		case "delete":
 			res, err = c.do(http.MethodDelete, base+"/webhooks/"+url.PathEscape(f("id")), nil)
-			ok = "Webhook deleted."
+			ok = "Webhook deleted. No further deliveries go to that endpoint."
 		case "ping":
 			res, err = c.do(http.MethodPost, base+"/webhooks/"+url.PathEscape(f("id"))+"/ping", nil)
-			ok = "Ping delivered."
+			ok = "Ping queued for delivery."
 		default:
 			events := r.PostForm["events"]
 			if len(events) == 0 {
@@ -310,7 +310,7 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 					created.Secret = "(not returned)"
 				}
 				h.render(w, r, http.StatusOK, "showonce", page{Title: "Webhook created", User: h.currentUser(r), Data: showOnceData{
-					Intro: "Copy the signing secret now. It is not stored and cannot be shown again; deliveries carry X-Agentry-Signature.",
+					Intro: "Copy the signing secret now. The server keeps it sealed and does not show it again, and signs every delivery with it under X-Agentry-Signature.",
 					Lines: []showOnceLine{{"Endpoint", strings.TrimSpace(f("url"))}, {"Signing secret", created.Secret}},
 					Back:  backTo,
 				}})
@@ -318,7 +318,7 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	default:
-		back(w, r, backTo, "", "unknown form")
+		back(w, r, backTo, "", "the form did not name a section")
 		return
 	}
 	if err != nil || !res.OK() {
