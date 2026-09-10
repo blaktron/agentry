@@ -82,7 +82,10 @@ type ReviewNotice struct {
 	ToEmail string
 	Agent   string
 	Version string
-	// Decision is the §7 outcome: published | rejected | needs_review.
+	// Decision is the §7 outcome the version reached: published | rejected |
+	// yanked | needs_review. `yanked` arrives when a reviewer rejects an
+	// already-quarantined version, which cannot go to `rejected` because that
+	// edge does not exist (internal/api/handlers_reviews.go).
 	Decision string
 	// Reviewer is the deciding reviewer's handle, when the decision was made
 	// by a human rather than by the automated gate.
@@ -327,12 +330,25 @@ func (r renderer) review(n ReviewNotice) message {
 			"not certify that nothing was missed.\n"
 	case "rejected":
 		headline = "rejected"
-		detail = "The version will not be published. Submitting a new version with the\n" +
-			"findings addressed starts a fresh scan.\n"
+		// `rejected` is terminal: registry.allowedTransitions gives it no
+		// outgoing edge, so "submit again" would be misleading about this
+		// version. A new version starts at submitted and walks the pipeline.
+		detail = "The version will not be published, and that decision is final for\n" +
+			"these bytes. A new version with the findings addressed goes through\n" +
+			"the pipeline from the start.\n"
+	case "yanked":
+		// Reachable: rejecting a review on a QUARANTINED version cannot go to
+		// `rejected` (the edge does not exist), so the API yanks instead and
+		// passes "yanked" here. Without this branch the author's only
+		// explanation was the headline.
+		headline = "yanked"
+		detail = "A yanked version still resolves for an exact pin, with a warning, so\n" +
+			"copies pinned to it keep working. It no longer resolves for a range,\n" +
+			"and a yank is permanent: the fix is a new version.\n"
 	case "needs_review":
 		headline = "held for review"
-		detail = "The automated gate could not decide, so a human reviewer has the\n" +
-			"version. No action is needed from you until they respond.\n"
+		detail = "The gate could not decide, so a human reviewer has the version.\n" +
+			"Nothing is needed from you until they decide.\n"
 	default:
 		headline = n.Decision
 		detail = ""
@@ -345,7 +361,7 @@ func (r renderer) review(n ReviewNotice) message {
 		body += "Rationale: " + n.Rationale + "\n"
 	}
 	if u := firstNonEmpty(n.ReportURL, r.link("/agents/"+n.Agent+"/versions/"+n.Version+"/report")); u != "" {
-		body += "\nFull report:\n" + u + "\n"
+		body += "\nReport card:\n" + u + "\n"
 	}
 	return message{
 		Subject: r.registry + ": " + n.Agent + " " + n.Version + " " + headline,
