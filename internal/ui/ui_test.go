@@ -10,18 +10,27 @@ import (
 	"testing"
 )
 
+// The one session and CSRF pair the fake authorizes; sessCookie and
+// csrfCookieV below carry them. A request without the session is signed out,
+// and a mutation without the header is refused — which is how the signed-out
+// and missing-token cases in this file are written.
+const (
+	fakeSession = "sess1"
+	fakeCSRF    = "csrf1"
+)
+
 // fakeAPI stands in for the server: it checks that the in-process call
 // carried the browser's session cookie (and the CSRF header on mutations)
 // and answers canned JSON.
-func fakeAPI(t *testing.T, session, csrf string) http.Handler {
+func fakeAPI(t *testing.T) http.Handler {
 	t.Helper()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotSession := ""
 		if c, err := r.Cookie("agentry_session"); err == nil {
 			gotSession = c.Value
 		}
-		authed := gotSession == session && session != ""
-		if r.Method != http.MethodGet && authed && r.Header.Get("X-Agentry-CSRF") != csrf {
+		authed := gotSession == fakeSession
+		if r.Method != http.MethodGet && authed && r.Header.Get("X-Agentry-CSRF") != fakeCSRF {
 			http.Error(w, `{"detail":"missing or invalid CSRF token"}`, http.StatusForbidden)
 			return
 		}
@@ -40,7 +49,7 @@ func fakeAPI(t *testing.T, session, csrf string) http.Handler {
 				http.Error(w, `{"type":"about:blank","detail":"invalid credentials"}`, http.StatusUnauthorized)
 				return
 			}
-			http.SetCookie(w, &http.Cookie{Name: "agentry_session", Value: "sess1", Path: "/", HttpOnly: true, MaxAge: 3600})
+			http.SetCookie(w, &http.Cookie{Name: "agentry_session", Value: fakeSession, Path: "/", HttpOnly: true, MaxAge: 3600})
 			_, _ = io.WriteString(w, `{"csrfToken":"csrf1","user":{"id":"u1","handle":"chris"}}`)
 		case "POST /api/v1/user/tokens/desktop-grant":
 			if !authed {
@@ -60,7 +69,7 @@ func fakeAPI(t *testing.T, session, csrf string) http.Handler {
 func newUI(t *testing.T, opt Options) http.Handler {
 	t.Helper()
 	if opt.API == nil {
-		opt.API = fakeAPI(t, "sess1", "csrf1")
+		opt.API = fakeAPI(t)
 	}
 	return New(opt)
 }
@@ -91,8 +100,8 @@ func post(h http.Handler, path string, form url.Values, hdr map[string]string, c
 }
 
 var (
-	sessCookie  = &http.Cookie{Name: "agentry_session", Value: "sess1"}
-	csrfCookieV = &http.Cookie{Name: "agentry_csrf", Value: "csrf1"}
+	sessCookie  = &http.Cookie{Name: "agentry_session", Value: fakeSession}
+	csrfCookieV = &http.Cookie{Name: "agentry_csrf", Value: fakeCSRF}
 )
 
 func TestAuthorizeNeedsASession(t *testing.T) {
@@ -281,7 +290,7 @@ func TestAccountPagesAndTheDirectoryRedirect(t *testing.T) {
 // its findings and file view, a decision — each refused before the API
 // when the form is cross-site or lacks the CSRF field.
 func TestReviewPages(t *testing.T) {
-	base := fakeAPI(t, "sess1", "csrf1")
+	base := fakeAPI(t)
 	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if c, err := r.Cookie("agentry_session"); err != nil || c.Value != "sess1" {
 			http.Error(w, `{"detail":"sign in"}`, http.StatusUnauthorized)
@@ -350,7 +359,7 @@ func TestReviewPages(t *testing.T) {
 // three read as sentences: the flash used to be built as action + "d.", which
 // said "blockd". An action the form does not offer never reaches the API.
 func TestStaffEnforcementFlashesNameTheConsequence(t *testing.T) {
-	base := fakeAPI(t, "sess1", "csrf1")
+	base := fakeAPI(t)
 	calls := 0
 	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/v1/platform/agents/acme/risky/") {
@@ -399,7 +408,7 @@ func TestStaffEnforcementFlashesNameTheConsequence(t *testing.T) {
 // data, a non-admin gets the members refusal as the page's own status, and
 // the policy form posts the parsed document.
 func TestOrgAdminPage(t *testing.T) {
-	base := fakeAPI(t, "sess1", "csrf1")
+	base := fakeAPI(t)
 	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if c, err := r.Cookie("agentry_session"); err != nil || c.Value != "sess1" {
 			http.Error(w, `{"detail":"sign in"}`, http.StatusUnauthorized)
