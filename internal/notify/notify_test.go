@@ -82,7 +82,10 @@ func TestNoMessageOverclaimsSafety(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	for _, d := range []string{"published", "rejected", "needs_review"} {
+	// Every decision the API passes here, `yanked` included: that branch is
+	// the one that describes a version staying installable, so it is the one
+	// most at risk of reassuring the author.
+	for _, d := range []string{"published", "rejected", "yanked", "needs_review"} {
 		if err := n.ReviewDecided(ctx, ReviewNotice{
 			ToEmail: "user@example.test", Agent: "acme/widget", Version: "1.0.0", Decision: d,
 		}); err != nil {
@@ -119,8 +122,8 @@ func TestNoMessageOverclaimsSafety(t *testing.T) {
 			}
 		}
 	}
-	if len(*sent) != 8 {
-		t.Fatalf("sent %d messages, want 8", len(*sent))
+	if len(*sent) != 9 {
+		t.Fatalf("sent %d messages, want 9", len(*sent))
 	}
 }
 
