@@ -89,7 +89,7 @@ func (h *handler) loginSubmit(w http.ResponseWriter, r *http.Request) {
 	_ = res.decode(&out)
 	sess := findSetCookie(res.Header, sessionCookie)
 	if sess == "" || cookieValueOf(sess) == "" || out.CsrfToken == "" {
-		back(w, r, "/ui/login", "", "sign-in succeeded but no session was issued")
+		back(w, r, "/ui/login", "", "Sign-in succeeded but no session was issued. You are not signed in.")
 		return
 	}
 	forwardCookies(w, res.Header)
@@ -213,7 +213,7 @@ func (h *handler) authorizeApprove(w http.ResponseWriter, r *http.Request) {
 		Code string `json:"code"`
 	}
 	if res.decode(&grant) != nil || grant.Code == "" {
-		back(w, r, "/ui/authorize?port="+strconv.Itoa(d.Port)+"&state="+url.QueryEscape(d.State), "", "no code was issued")
+		back(w, r, "/ui/authorize?port="+strconv.Itoa(d.Port)+"&state="+url.QueryEscape(d.State), "", "No code was issued. This device is not authorized.")
 		return
 	}
 	cb := url.URL{Scheme: "http", Host: "127.0.0.1:" + strconv.Itoa(d.Port), Path: "/callback"}

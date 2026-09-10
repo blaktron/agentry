@@ -463,7 +463,7 @@ func TestOrgAdminPage(t *testing.T) {
 		t.Fatalf("policy: %d %s", w.Code, w.Header().Get("Location"))
 	}
 	w = post(h, "/ui/orgs/acme", url.Values{"_csrf": {"csrf1"}, "section": {"policy"}, "policy": {`{not json`}}, nil, sessCookie, csrfCookieV)
-	if !strings.Contains(w.Header().Get("Location"), "error=the+policy+must+be+valid+JSON") {
+	if !strings.Contains(w.Header().Get("Location"), "error=The+policy+must+be+valid+JSON.") {
 		t.Fatalf("bad json: %s", w.Header().Get("Location"))
 	}
 	w = get(h, "/ui/orgs/other", sessCookie, csrfCookieV)
