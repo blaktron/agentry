@@ -96,7 +96,7 @@ type reviewData struct {
 	Files    []reviewFile
 	File     *reviewFile
 	Lines    []fileLine
-	Verdicts []string
+	Verdicts []verdictOption
 	Manifest string
 }
 
@@ -106,7 +106,22 @@ type fileLine struct {
 	Hit  bool
 }
 
-var verdicts = []string{"confirmed", "dismissed_false_positive", "dismissed_accepted_risk"}
+// verdictOption is one finding verdict as the page offers it: the API's value,
+// which is the enum SetFindingVerdict accepts and must not change, and a label
+// a reviewer can read. The select used to print the value as its own label, so
+// a reviewer chose between "dismissed_false_positive" and
+// "dismissed_accepted_risk". The accepted-risk label carries the ceiling the
+// API enforces (severity medium and below, §8.5).
+type verdictOption struct {
+	Value string
+	Label string
+}
+
+var verdicts = []verdictOption{
+	{"confirmed", "Confirmed"},
+	{"dismissed_false_positive", "False positive"},
+	{"dismissed_accepted_risk", "Accepted risk (medium and below)"},
+}
 
 func (h *handler) reviewItemPage(w http.ResponseWriter, r *http.Request) {
 	u := h.requireUser(w, r)
@@ -213,7 +228,7 @@ func (h *handler) reviewDecide(w http.ResponseWriter, r *http.Request) {
 	backTo := "/ui/review/" + url.PathEscape(id)
 	decision := r.PostFormValue("decision")
 	if decision != "approve" && decision != "reject" {
-		back(w, r, backTo, "", "decision must be approve or reject")
+		back(w, r, backTo, "", "Nothing was decided: the decision must be approve or reject.")
 		return
 	}
 	res, err := h.call(r).do(http.MethodPost, "/review-items/"+url.PathEscape(id)+"/decision", map[string]string{"decision": decision, "rationale": strings.TrimSpace(r.PostFormValue("rationale"))})
@@ -225,7 +240,7 @@ func (h *handler) reviewDecide(w http.ResponseWriter, r *http.Request) {
 		back(w, r, "/ui/review", "Approved. The version is publishing and signing now.", "")
 		return
 	}
-	back(w, r, "/ui/review", "Rejected.", "")
+	back(w, r, "/ui/review", "Rejected. This version will not publish.", "")
 }
 
 func (h *handler) findingVerdict(w http.ResponseWriter, r *http.Request) {
@@ -237,10 +252,10 @@ func (h *handler) findingVerdict(w http.ResponseWriter, r *http.Request) {
 	v := r.PostFormValue("verdict")
 	ok := false
 	for _, x := range verdicts {
-		ok = ok || x == v
+		ok = ok || x.Value == v
 	}
 	if !ok {
-		back(w, r, backTo, "", "pick a verdict")
+		back(w, r, backTo, "", "Nothing was recorded: that is not a verdict.")
 		return
 	}
 	res, err := h.call(r).do(http.MethodPost, "/findings/"+url.PathEscape(fid)+"/verdict", map[string]string{"verdict": v, "reason": strings.TrimSpace(r.PostFormValue("reason"))})
