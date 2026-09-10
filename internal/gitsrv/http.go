@@ -333,7 +333,7 @@ func (h *Handler) receivePack(w http.ResponseWriter, r *http.Request) {
 	if !res.OK {
 		h.mx.RecordGitOp(r.Context(), "receive-pack", "throttled", 0)
 		w.Header().Set("Retry-After", strconv.Itoa(int(res.Reset.Round(time.Second)/time.Second)))
-		http.Error(w, "push rate exceeded for this repository (§19: 60/h)", http.StatusTooManyRequests)
+		http.Error(w, "This repository is over its hourly push limit. Retry after the delay in the Retry-After header.", http.StatusTooManyRequests)
 		return
 	}
 	var cmds bytes.Buffer
