@@ -330,7 +330,7 @@ func (h *handler) staffAbuseTriage(w http.ResponseWriter, r *http.Request) {
 	}
 	id, state := r.PostFormValue("reportId"), r.PostFormValue("state")
 	if id == "" || (state != "triaged" && state != "actioned" && state != "dismissed") {
-		back(w, r, "/ui/staff", "", "which report, and to which state?")
+		back(w, r, "/ui/staff", "", "Nothing was recorded: pick a report and a triage state.")
 		return
 	}
 	res, err := h.call(r).do(http.MethodPost, "/platform/abuse-reports/"+url.PathEscape(id), map[string]string{"state": state, "resolution": strings.TrimSpace(r.PostFormValue("resolution"))})
@@ -338,7 +338,23 @@ func (h *handler) staffAbuseTriage(w http.ResponseWriter, r *http.Request) {
 		back(w, r, "/ui/staff", "", failMsg(res, err))
 		return
 	}
-	back(w, r, "/ui/staff", "Report "+state+".", "")
+	back(w, r, "/ui/staff", "Report marked "+state+".", "")
+}
+
+// agentActionDone is what a consumer meets after each enforcement action, and
+// it doubles as the set of actions the form may post. Read out of the handlers
+// rather than remembered: quarantine moves the latest published version and
+// only that one (internal/api/handlers_policy.go), whose downloads then answer
+// 409 (handlers_versions.go); block walks every live version to `blocked`, and
+// every download answers 410 Gone; search and browse exclude `blocked` and
+// nothing else (internal/store/queries/agents.sql), so a quarantined
+// BriefAgent stays listed with its state on it. The flash used to be built as
+// action + "d.", which said "blockd" and named the action rather than its
+// consequence.
+var agentActionDone = map[string]string{
+	"quarantine": "quarantined. Its latest published version answers 409 on download. The BriefAgent stays in search, carrying the quarantine state.",
+	"block":      "blocked. Every download for it answers 410 Gone.",
+	"reinstate":  "reinstated. Its versions are published again.",
 }
 
 func (h *handler) staffAgentAction(w http.ResponseWriter, r *http.Request) {
@@ -346,9 +362,10 @@ func (h *handler) staffAgentAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ref, action, reason := strings.TrimSpace(r.PostFormValue("ref")), r.PostFormValue("action"), strings.TrimSpace(r.PostFormValue("reason"))
-	ns, name, ok := strings.Cut(ref, "/")
-	if !ok || ns == "" || name == "" || (action != "quarantine" && action != "block" && action != "reinstate") || reason == "" {
-		back(w, r, "/ui/staff", "", "an agent as namespace/name, an action and a reason are all required")
+	ns, name, cut := strings.Cut(ref, "/")
+	done, known := agentActionDone[action]
+	if !cut || ns == "" || name == "" || !known || reason == "" {
+		back(w, r, "/ui/staff", "", "Nothing was done: a BriefAgent as namespace/name, an action and a reason are all required.")
 		return
 	}
 	res, err := h.call(r).do(http.MethodPost, "/platform/agents/"+url.PathEscape(ns)+"/"+url.PathEscape(name)+"/"+action, map[string]string{"reason": reason})
@@ -356,7 +373,7 @@ func (h *handler) staffAgentAction(w http.ResponseWriter, r *http.Request) {
 		back(w, r, "/ui/staff", "", failMsg(res, err))
 		return
 	}
-	back(w, r, "/ui/staff", ref+" "+action+"d.", "")
+	back(w, r, "/ui/staff", ref+" "+done, "")
 }
 
 func (h *handler) staffRulesetRelease(w http.ResponseWriter, r *http.Request) {
@@ -374,5 +391,13 @@ func (h *handler) staffRulesetRelease(w http.ResponseWriter, r *http.Request) {
 		back(w, r, "/ui/staff", "", failMsg(res, err))
 		return
 	}
-	back(w, r, "/ui/staff", "Ruleset release recorded.", "")
+	// 201 inserted a release and enqueued the rescan sweep; 200 is the row
+	// already on file, which changes nothing and starts no sweep
+	// (internal/api/handlers_ruleset.go). One flash for both claimed a record
+	// that had not happened.
+	if res.Status == http.StatusCreated {
+		back(w, r, "/ui/staff", "Ruleset release recorded. The rescan sweep will run.", "")
+		return
+	}
+	back(w, r, "/ui/staff", "That ruleset release was already recorded. Nothing changed.", "")
 }
