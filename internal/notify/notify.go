@@ -286,19 +286,30 @@ func (r renderer) quarantine(n QuarantineNotice) message {
 	// published version. Say what happened and what it means for installs;
 	// do not editorialise about severity beyond the label the scan assigned.
 	body := "A rescan of " + n.Agent + " " + n.Version + " under a newer ruleset produced a\n" +
-		severityLine(n.Severity) + " finding, and the version is now quarantined.\n\n" +
-		"What that means: the version no longer resolves for new installs and its\n" +
-		"download page carries a warning. Copies already installed elsewhere are\n" +
-		"not reached by this change.\n\n"
+		"finding at " + severityLine(n.Severity) + " severity. The version is now quarantined.\n\n" +
+		// The mechanisms, not a description of a page: a quarantined version
+		// is absent from the resolution set (versions.sql ListResolvableVersions
+		// selects published and yanked only), so an exact pin fails too —
+		// which is the difference from a yank — and a download answers 409
+		// (handlers_version_files.go).
+		"What that means: the version no longer resolves for new installs, not\n" +
+		"even by exact version, and a download of it answers 409. Copies already\n" +
+		"installed elsewhere are not reached by this change. Your other\n" +
+		"published versions still resolve.\n\n"
 	if n.Reason != "" {
 		body += "Reason recorded: " + n.Reason + "\n\n"
 	}
 	if u := firstNonEmpty(n.ReportURL, r.link("/agents/"+n.Agent+"/versions/"+n.Version+"/report")); u != "" {
-		body += "Full report (findings, ruleset version, scan date):\n" + u + "\n\n"
+		body += "Report card (findings, ruleset version, scan date):\n" + u + "\n\n"
 	}
-	body += "A platform reviewer will look at this. If you believe the finding is\n" +
-		"wrong, reply through the report page so the rationale is recorded with\n" +
-		"the version.\n"
+	// The old close told the author to "reply through the report page", a path
+	// that does not exist: there is no appeal endpoint, and the platform
+	// review queue is staff-only (handlers_reviews.go reviewItemAccess), so
+	// the author cannot even read the item. State the two outcomes a reviewer
+	// can reach from quarantined instead, and state the missing path plainly.
+	body += "A platform reviewer now has the version and can restore it to\n" +
+		"published or yank it. Their rationale is recorded with the version,\n" +
+		"and there is no way to contest a finding from the report card today.\n"
 	return message{
 		Subject: r.registry + ": " + n.Agent + " " + n.Version + " quarantined after rescan",
 		Body:    body + r.footer(),
