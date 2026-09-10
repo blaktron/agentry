@@ -1,8 +1,8 @@
 {{define "content"}}
 <h1>Organizations</h1>
 <section class="card">
-{{if not .Data}}<p class="muted">You administer no organization. Owners and admins see theirs here.</p>
+{{if not .Data}}<p class="muted">You administer no organization. Ask an owner to add you as an admin, or create one with <code>POST /api/v1/orgs</code>.</p>
 {{else}}<ul class="list">{{range .Data}}<li><a href="/ui/orgs/{{.Handle}}"><strong>{{.Handle}}</strong></a> <span class="badge">{{.Role}}</span></li>{{end}}</ul>{{end}}
-<p class="muted">Any organization's page is <code>/ui/orgs/&lt;handle&gt;</code>; the server decides what you may see there.</p>
+<p class="muted">This list holds the organizations you own or administer; membership alone does not appear here. Any organization's page is <code>/ui/orgs/&lt;handle&gt;</code>; the server decides what you may see there.</p>
 </section>
 {{end}}
