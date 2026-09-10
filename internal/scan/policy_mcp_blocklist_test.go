@@ -16,7 +16,7 @@ func TestBlockedMcpServersPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	issues := CheckSubmissionPolicy(pol, registry.PolicySubmission{ManifestJSON: manifest})
-	if len(issues) != 1 || !strings.Contains(issues[0].Error(), `"pypi:mcp-server-fetch" is blocked`) {
+	if len(issues) != 1 || !strings.Contains(issues[0].Error(), `blocks MCP server "pypi:mcp-server-fetch"`) {
 		t.Fatalf("issues: %v", issues)
 	}
 	// Globs and unions toward strict.

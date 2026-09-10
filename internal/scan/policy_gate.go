@@ -27,7 +27,7 @@ func (p *Pipeline) CheckSubmission(ctx context.Context, in registry.PolicySubmis
 	if err != nil {
 		// Fail closed: a policy we cannot read is not a policy we may skip.
 		p.log.Error("scan: submission policy unavailable", "err", err)
-		return []error{fmt.Errorf("policy could not be evaluated for this namespace; submission refused: %w", err)}
+		return []error{fmt.Errorf("the registry could not read this namespace's policy and refused the submission: %w", err)}
 	}
 	return CheckSubmissionPolicy(pol, in)
 }
@@ -51,7 +51,7 @@ func CheckSubmissionPolicy(pol Policy, in registry.PolicySubmission) []error {
 		sort.Strings(hit)
 		for _, c := range hit {
 			issues = append(issues, fmt.Errorf(
-				"capability %q is blocked by policy for this namespace (§8.6 blockedCapabilities)", c))
+				"this namespace's policy blocks capability %q (blockedCapabilities); remove it from the manifest", c))
 		}
 	}
 
@@ -63,7 +63,7 @@ func CheckSubmissionPolicy(pol Policy, in registry.PolicySubmission) []error {
 			for _, pat := range pol.BlockedMcpServers {
 				if ok, _ := path.Match(strings.TrimSpace(pat), srv); ok {
 					issues = append(issues, fmt.Errorf(
-						"MCP server %q is blocked by policy for this namespace (§8.6 blockedMcpServers: %s)", srv, pat))
+						"this namespace's policy blocks MCP server %q (blockedMcpServers pattern %s); remove it from the manifest", srv, pat))
 					break
 				}
 			}
@@ -72,14 +72,14 @@ func CheckSubmissionPolicy(pol Policy, in registry.PolicySubmission) []error {
 
 	if in.Public && len(pol.AllowedLicenses) > 0 && !licenseAllowed(pol.AllowedLicenses, in.License) {
 		issues = append(issues, fmt.Errorf(
-			"license %q is not in the allowed set for public publishes (%s) (§8.6 allowedLicenses)",
+			"license %q is not one this namespace allows for public publishes (allowedLicenses: %s)",
 			in.License, strings.Join(pol.AllowedLicenses, ", ")))
 	}
 
 	// requireEvals: "evals/ dir must exist and be non-empty" (§8.6).
 	if pol.RequireEvals && !hasEvals(in.Files) {
 		issues = append(issues, fmt.Errorf(
-			"policy requires an evals/ directory with at least one file (§8.6 requireEvals)"))
+			"add an evals/ directory with at least one file; this namespace's policy requires it (requireEvals)"))
 	}
 	return issues
 }

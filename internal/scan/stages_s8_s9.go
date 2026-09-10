@@ -108,7 +108,7 @@ func s8NameSimilarity(name string, popular []string) []Finding {
 			reported[pop] = true
 			findings = append(findings, Finding{
 				Scanner: "S8/name-confusable", Severity: SevMedium, Confidence: ConfMedium,
-				Title:    "Agent name confusable with popular agent: " + pop,
+				Title:    "Name confusable with a popular BriefAgent: " + pop,
 				Detail:   map[string]any{"resembles": pop, "skeleton": skel},
 				Taxonomy: []string{"LLM03"},
 			})
@@ -121,7 +121,7 @@ func s8NameSimilarity(name string, popular []string) []Finding {
 		reported[pop] = true
 		findings = append(findings, Finding{
 			Scanner: "S8/name-similar", Severity: SevMedium, Confidence: ConfLow,
-			Title: "Agent name is one small edit from popular agent: " + pop,
+			Title: "Name is one small edit from a popular BriefAgent: " + pop,
 			Detail: map[string]any{
 				"resembles": pop, "editDistance": d,
 				"normalizedDistance": fmt.Sprintf("%.3f", norm),
@@ -254,7 +254,7 @@ func s9ManifestDiff(in *Input) []Finding {
 			findings = append(findings, Finding{
 				Scanner: "S9/new-egress", Severity: SevMedium, Confidence: ConfHigh,
 				Title:    "New network egress host in this release: " + host,
-				Detail:   map[string]any{"host": host, "pattern": "clean-then-malicious diff (postmark-mcp)"},
+				Detail:   map[string]any{"host": host, "pattern": "new destination after clean releases (postmark-mcp)"},
 				Taxonomy: []string{"LLM03", "ASI04"},
 			})
 		}
@@ -308,7 +308,7 @@ func s9ContentDiff(in *Input, prevFiles []FileEntry, bump string) []Finding {
 			Detail: map[string]any{
 				"target": target, "kind": t.Kind, "bump": bump,
 				"declaredInManifest": declared[target],
-				"pattern":            "clean-then-malicious diff (postmark-mcp: 15 clean versions, then one BCC line)",
+				"pattern":            "new destination after clean releases (postmark-mcp: 15 clean versions, then one BCC line)",
 			},
 			Taxonomy: []string{"LLM03", "ASI04"},
 		})
@@ -403,7 +403,7 @@ func s9Escalate(sc stageContext, in *Input, prevFiles []FileEntry, current []Fin
 		}
 		findings = append(findings, Finding{
 			Scanner: "S9/escalated", Severity: SevHigh, Confidence: cf.Confidence,
-			Title:    "Escalated by release-diff: " + cf.Title,
+			Title:    "Release-diff raised the severity: " + cf.Title,
 			FilePath: cf.FilePath, LineStart: cf.LineStart, LineEnd: cf.LineEnd,
 			Detail: map[string]any{
 				"escalatedFrom": cf.Scanner, "bump": bump,
