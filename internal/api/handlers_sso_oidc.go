@@ -43,7 +43,7 @@ func (s *Server) OidcStart(w http.ResponseWriter, r *http.Request, org OrgHandle
 	ctx := s.oidcContext(r.Context())
 	rp, _, err := s.oidcRPForOrg(ctx, r, orgRow)
 	if err != nil {
-		problemValidation(w, r, "OIDC is not configured for this organization")
+		problemValidation(w, r, "This organization has no OIDC connection enabled.")
 		return
 	}
 	state, _ := auth.NewToken("")
@@ -81,52 +81,52 @@ func (s *Server) OidcCallback(w http.ResponseWriter, r *http.Request, org OrgHan
 	}
 	c, err := r.Cookie(oidcStateCookie)
 	if err != nil || c.Value == "" {
-		problemValidation(w, r, "missing OIDC state cookie")
+		problemValidation(w, r, "The OIDC state cookie is missing. Start sign-in again.")
 		return
 	}
 	sealed, err := base64.RawURLEncoding.DecodeString(c.Value)
 	if err != nil {
-		problemValidation(w, r, "invalid OIDC state")
+		problemValidation(w, r, "The OIDC state cookie could not be read. Start sign-in again.")
 		return
 	}
 	blob, err := s.sealer.Open(sealed)
 	if err != nil {
-		problemUnauthorized(w, r, "invalid OIDC state")
+		problemUnauthorized(w, r, "The OIDC state cookie could not be read. Start sign-in again.")
 		return
 	}
 	var st oidcState
 	if err := json.Unmarshal(blob, &st); err != nil {
-		problemUnauthorized(w, r, "invalid OIDC state")
+		problemUnauthorized(w, r, "The OIDC state cookie could not be read. Start sign-in again.")
 		return
 	}
 	// Clear the state cookie regardless of outcome (single use).
 	http.SetCookie(w, &http.Cookie{Name: oidcStateCookie, Value: "", Path: "/", MaxAge: -1})
 
 	if params.State == nil || *params.State != st.State || st.Org != orgRow.Handle {
-		problemUnauthorized(w, r, "OIDC state mismatch")
+		problemUnauthorized(w, r, "The OIDC state does not match this sign-in. Start again.")
 		return
 	}
 	if params.Code == nil || *params.Code == "" {
-		problemValidation(w, r, "missing authorization code")
+		problemValidation(w, r, "The IdP returned no authorization code. Start sign-in again.")
 		return
 	}
 
 	ctx := s.oidcContext(r.Context())
 	rp, connID, err := s.oidcRPForOrg(ctx, r, orgRow)
 	if err != nil {
-		problemValidation(w, r, "OIDC is not configured for this organization")
+		problemValidation(w, r, "This organization has no OIDC connection enabled.")
 		return
 	}
 	claims, err := rp.Exchange(ctx, *params.Code, st.Verifier, st.Nonce)
 	if err != nil {
 		s.log.Warn("oidc callback rejected", "org", org, "err", err)
-		problemUnauthorized(w, r, "OIDC login failed")
+		problemUnauthorized(w, r, "The code exchange with your IdP failed. Start sign-in again.")
 		return
 	}
 	// Respect email_verified (§12.4): an unverified email must not drive a
 	// verified-email JIT link.
 	if claims.Email != "" && !claims.EmailVerified {
-		problemUnauthorized(w, r, "IdP has not verified this email address")
+		problemUnauthorized(w, r, "Your IdP reports this email address as unverified. Verify it there, then sign in again.")
 		return
 	}
 	s.establishSSOSession(w, r, orgRow, connID, "oidc", claims.Subject, claims.Email, "", nil)
