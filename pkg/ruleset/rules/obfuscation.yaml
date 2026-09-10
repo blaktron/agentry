@@ -35,8 +35,8 @@ rules:
     description: >
       Frame claiming the true instructions are hidden, reversed, or encoded in
       another location (a comment, an image, base64) and must be recovered. The
-      visible text is written for whoever reviews the package and the hidden
-      text for the agent that runs it.
+      visible text is meant for whoever reviews the package and the hidden text
+      for the agent that runs it.
     references:
       - "OWASP LLM01: Prompt Injection"
       - "OWASP ASI06: Memory & Context Poisoning"
