@@ -264,6 +264,11 @@ func TestReviewPages(t *testing.T) {
 	if w.Code != http.StatusOK || !strings.Contains(body, "Prompt injection") || !strings.Contains(body, `id="L1" class="ln hit"`) || !strings.Contains(body, "second &lt;b&gt;line&lt;/b&gt;") || !strings.Contains(body, "name: risky") {
 		t.Fatalf("item: %d %s", w.Code, body)
 	}
+	// The verdict control offers labels; the values stay the API's enum.
+	if !strings.Contains(body, `<option value="dismissed_false_positive">False positive</option>`) ||
+		!strings.Contains(body, `<option value="dismissed_accepted_risk">Accepted risk (medium and below)</option>`) {
+		t.Fatalf("verdict options: %s", body)
+	}
 	w = post(h, "/ui/review/ri1/decision", url.Values{"_csrf": {"csrf1"}, "decision": {"approve"}, "rationale": {"looks fine"}}, nil, sessCookie, csrfCookieV)
 	if w.Code != http.StatusSeeOther || !strings.HasPrefix(w.Header().Get("Location"), "/ui/review?ok=Approved") {
 		t.Fatalf("decide: %d %s %s", w.Code, w.Header().Get("Location"), w.Body.String())
