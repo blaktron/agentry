@@ -234,7 +234,7 @@ func (s *Service) CreateAgent(ctx context.Context, p *auth.Principal, in CreateA
 		return Agent{}, auth.ErrUnauthorized
 	}
 	if !AgentNameRe.MatchString(in.Name) {
-		return Agent{}, fmt.Errorf("%w: invalid agent name", ErrDenied)
+		return Agent{}, fmt.Errorf("%w: the agent name must be 1-65 lowercase letters, digits and hyphens, starting and ending with a letter or digit", ErrDenied)
 	}
 	modes, err := normalizeModes(in.Modes)
 	if err != nil {

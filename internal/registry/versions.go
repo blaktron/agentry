@@ -490,7 +490,7 @@ func (s *Service) checkPublicPublish2FA(ctx context.Context, p *auth.Principal, 
 	// Native TOTP, or a second factor the directory service asserted at
 	// sign-in (users.idp_mfa_at, agentry#23): either is evidence.
 	if !u.TotpEnabled && u.IdpMfaAt == nil {
-		return fmt.Errorf("%w: a public namespace needs a second factor on the account — native TOTP, or one the sign-in provider asserts", ErrTwoFactorRequired)
+		return fmt.Errorf("%w: a public namespace needs two-factor authentication on the account — native TOTP, or a second factor the sign-in provider asserts", ErrTwoFactorRequired)
 	}
 	return nil
 }
