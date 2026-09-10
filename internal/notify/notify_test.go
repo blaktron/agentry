@@ -99,6 +99,16 @@ func TestNoMessageOverclaimsSafety(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	// The dependency alert is a rendered email like the rest and was outside
+	// this sweep until now: it is the one that talks about a vulnerability
+	// staying installable, which is the sentence most likely to drift.
+	if err := n.MCPDependencyAlert(ctx, MCPDependencyAlertNotice{
+		ToEmail: "user@example.test", Agent: "acme/widget", Version: "1.0.0",
+		Server: "npm:server-filesystem@1.2.3", Severity: "high",
+		Advisories: []string{"GHSA-1234-abcd-5678"}, FixedIn: []string{"1.2.4"},
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	banned := []string{"is safe", "safe to", "verified secure", "guaranteed", "no risk", "malware-free"}
 	for _, msg := range *sent {
@@ -109,8 +119,8 @@ func TestNoMessageOverclaimsSafety(t *testing.T) {
 			}
 		}
 	}
-	if len(*sent) != 7 {
-		t.Fatalf("sent %d messages, want 7", len(*sent))
+	if len(*sent) != 8 {
+		t.Fatalf("sent %d messages, want 8", len(*sent))
 	}
 }
 
