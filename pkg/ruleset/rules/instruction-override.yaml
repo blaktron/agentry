@@ -8,7 +8,9 @@ rules:
     confidence: high
     description: >
       Classic prompt-injection frame instructing the consuming model to
-      discard its prior instructions, system prompt, or safety rules.
+      discard its prior instructions, system prompt, or safety rules. Those
+      prior instructions are where the operator put the limits on what the
+      agent may do.
     references:
       - "OWASP LLM01: Prompt Injection"
       - "OWASP ASI06: Memory & Context Poisoning"
@@ -32,7 +34,9 @@ rules:
     description: >
       Injected fake role turn (System:/Assistant:) or persona-override frame
       ("you are now DAN", "pretend you have no restrictions") intended to seize
-      the privileged instruction channel of the consuming agent.
+      the privileged instruction channel of the consuming agent. A model that
+      reads package text as a system turn takes its orders from the package
+      instead of its operator.
     references:
       - "OWASP LLM01: Prompt Injection"
       - "OWASP ASI06: Memory & Context Poisoning"

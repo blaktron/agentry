@@ -9,7 +9,8 @@ rules:
     description: >
       Instruction to add, save, or persist content into the agent's memory,
       configuration, system prompt, or instruction files so it survives future
-      turns (memory/context poisoning).
+      turns (memory/context poisoning). Once the directive is in memory it
+      applies to sessions that never loaded this package.
     references:
       - "OWASP LLM01: Prompt Injection"
       - "OWASP ASI06: Memory & Context Poisoning"
@@ -33,7 +34,9 @@ rules:
     confidence: medium
     description: >
       Instruction to retain a directive permanently or across sessions, or a
-      "from now on, always ..." frame that establishes a standing behavior.
+      "from now on, always ..." frame that establishes a standing behavior. A
+      standing rule outlives the task that introduced it and the person who
+      read it.
     references:
       - "OWASP LLM01: Prompt Injection"
       - "OWASP ASI06: Memory & Context Poisoning"
