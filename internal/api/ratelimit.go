@@ -48,7 +48,7 @@ func (s *Server) allowLogin(w http.ResponseWriter, r *http.Request) bool {
 	res := s.limits.Allow("login", clientIP(r), s.classes.login, s.classes.loginBurst)
 	writeRateLimitHeaders(w, res)
 	if !res.OK {
-		problemTooMany(w, r, "try again later")
+		problemTooMany(w, r, "Too many sign-in and registration attempts. Wait for the Retry-After interval.")
 		return false
 	}
 	return true

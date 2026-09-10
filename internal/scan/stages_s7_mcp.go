@@ -146,7 +146,7 @@ func (s S7MCPServers) Run(sc stageContext, in *Input) StageResult {
 			Title: fmt.Sprintf("%d declared MCP server(s); no vulnerability database consulted", len(servers)),
 			Detail: map[string]any{
 				"servers": len(servers),
-				"reason":  "no OSV API configured (AGENTRY_SCAN_OSV_URL=none); the servers' known vulnerabilities were not checked",
+				"reason":  "no OSV API configured (AGENTRY_SCAN_OSV_URL=none), so the pipeline did not check these servers for known vulnerabilities",
 			},
 			Taxonomy: []string{"LLM03", "ASI04"},
 		})

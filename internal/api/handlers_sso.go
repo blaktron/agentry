@@ -84,7 +84,7 @@ func (s *Server) PutSsoConnection(w http.ResponseWriter, r *http.Request, org Or
 	}
 	k := string(kind)
 	if k != "saml" && k != "oidc" {
-		problemValidation(w, r, "kind must be saml or oidc")
+		problemValidation(w, r, "The connection kind must be saml or oidc.")
 		return
 	}
 	var req SsoConnectionInput
@@ -93,7 +93,7 @@ func (s *Server) PutSsoConnection(w http.ResponseWriter, r *http.Request, org Or
 	}
 	stored, verr := s.buildStoredSSOConfig(r, orgRow.Handle, k, req.Config)
 	if verr != nil {
-		problemValidation(w, r, verr.Error())
+		problemValidation(w, r, sentence(verr.Error()))
 		return
 	}
 	cfgJSON, err := json.Marshal(stored)
@@ -171,7 +171,7 @@ func (s *Server) buildStoredSSOConfig(r *http.Request, handle, kind string, in m
 		var c samlsp.Config
 		raw, _ := json.Marshal(in)
 		if err := json.Unmarshal(raw, &c); err != nil {
-			return nil, fmt.Errorf("invalid saml config: %w", err)
+			return nil, fmt.Errorf("the saml config could not be read: %w", err)
 		}
 		metadataURL, acsURL, _ := s.ssoURLs(r, handle)
 		if _, err := samlsp.New(c, metadataURL, acsURL, s.samlReplay); err != nil {
@@ -182,13 +182,13 @@ func (s *Server) buildStoredSSOConfig(r *http.Request, handle, kind string, in m
 		issuer, _ := in["issuer"].(string)
 		clientID, _ := in["clientId"].(string)
 		if issuer == "" || clientID == "" {
-			return nil, errors.New("oidc config requires issuer and clientId")
+			return nil, errors.New("an oidc connection needs an issuer and a clientId")
 		}
 		out := storedOIDCConfig{Issuer: issuer, ClientID: clientID}
 		if secret, _ := in["clientSecret"].(string); secret != "" {
 			sealed, err := s.sealer.Seal([]byte(secret))
 			if err != nil {
-				return nil, errors.New("failed to seal client secret")
+				return nil, errors.New("the server could not encrypt the client secret, and nothing was stored")
 			}
 			out.ClientSecretEnc = base64.StdEncoding.EncodeToString(sealed)
 		}
@@ -292,8 +292,8 @@ func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, org
 	if err != nil {
 		if errors.Is(err, errExplicitLinkRequired) {
 			writeProblem(w, r, http.StatusConflict, "sso-link-required",
-				"Account linking requires confirmation",
-				"an account with this email exists but the email domain is not org-verified (T-12); link it explicitly")
+				"Email address already in use",
+				"An account already uses this email address. This organization must verify the email domain before SSO can link them.")
 			return
 		}
 		s.log.Error("sso jit", "err", err)

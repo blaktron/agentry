@@ -48,12 +48,12 @@ func (s *Server) principalMiddleware(next http.Handler) http.Handler {
 			if auth.IsPAT(tok) {
 				pp, err := s.resolvePAT(r, tok)
 				if err != nil {
-					problemUnauthorized(w, r, "invalid or expired token")
+					problemUnauthorized(w, r, "This token is invalid or expired. Create a new token in account settings.")
 					return
 				}
 				p = pp
 			} else {
-				problemUnauthorized(w, r, "unrecognized bearer token")
+				problemUnauthorized(w, r, "The bearer token was not recognized.")
 				return
 			}
 		} else if c, err := r.Cookie(sessionCookieName); err == nil && c.Value != "" {
@@ -68,7 +68,7 @@ func (s *Server) principalMiddleware(next http.Handler) http.Handler {
 					if r.Header.Get(csrfHeader) == csrf && csrf != "" {
 						p = pp
 					} else {
-						problemForbidden(w, r, "missing or invalid CSRF token")
+						problemForbidden(w, r, "The CSRF token is missing or does not match this session. Reload the page and retry.")
 						return
 					}
 				}
@@ -89,9 +89,9 @@ func (s *Server) principalMiddleware(next http.Handler) http.Handler {
 		writeRateLimitHeaders(w, res)
 		if !res.OK {
 			if p.Anonymous {
-				problemTooMany(w, r, "anonymous rate limit exceeded")
+				problemTooMany(w, r, "Anonymous requests have used up their rate limit. Wait for the Retry-After interval, or sign in.")
 			} else {
-				problemTooMany(w, r, "rate limit exceeded")
+				problemTooMany(w, r, "This account has used up its rate limit. Wait for the Retry-After interval.")
 			}
 			return
 		}
@@ -200,15 +200,15 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, act auth.Acti
 	case nil:
 		// proceed to enforced-SSO gate below
 	case auth.ErrUnauthorized:
-		problemUnauthorized(w, r, "")
+		problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
 		return false
 	default:
-		problemForbidden(w, r, "")
+		problemForbidden(w, r, "This credential does not carry the role or scope this action needs.")
 		return false
 	}
 	if orgID != uuid.Nil && !p.Anonymous && !s.enforceSSO(r.Context(), p, orgID) {
 		writeProblem(w, r, http.StatusForbidden, "sso-required",
-			"SSO required", "this organization requires a fresh SSO session or an org-bound token")
+			"SSO required", "This organization requires a fresh SSO session or an org-bound token. Sign in through SSO again.")
 		return false
 	}
 	return true

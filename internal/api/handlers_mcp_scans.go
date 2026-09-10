@@ -103,7 +103,7 @@ func (s *Server) GetMcpServerScan(w http.ResponseWriter, r *http.Request, params
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			writeProblem(w, r, http.StatusNotFound, "not-found", "Not found", "no manifest has declared this server version yet")
+			writeProblem(w, r, http.StatusNotFound, "not-found", "Not found", "No manifest has declared this MCP server version yet.")
 			return
 		}
 		s.log.Error("mcp server scan: get", "err", err)

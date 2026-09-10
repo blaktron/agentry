@@ -28,7 +28,8 @@ func (s *Server) versionArchive(w http.ResponseWriter, r *http.Request, ns Names
 		return nil, false
 	}
 	if a.QuarantineState == "blocked" {
-		writeProblem(w, r, http.StatusGone, "blocked", "Agent blocked", "disabled by trust & safety (§7)")
+		writeProblem(w, r, http.StatusGone, "blocked", "Blocked BriefAgent",
+			"Trust & safety blocked this BriefAgent. This archive stays unavailable until platform staff reinstate it.")
 		return nil, false
 	}
 	switch registry.Status(v.Status) {
@@ -36,10 +37,11 @@ func (s *Server) versionArchive(w http.ResponseWriter, r *http.Request, ns Names
 	case registry.StatusYanked:
 		w.Header().Set("X-Agentry-Yanked", "true")
 	case registry.StatusBlocked:
-		writeProblem(w, r, http.StatusGone, "blocked", "Version blocked", "disabled by trust & safety (§7)")
+		writeProblem(w, r, http.StatusGone, "blocked", "Blocked version",
+			"Trust & safety blocked this version. This archive stays unavailable until platform staff reinstate it and a reviewer decides.")
 		return nil, false
 	case registry.StatusQuarantined:
-		problemConflict(w, r, "version is quarantined pending review (§8.7)")
+		problemConflict(w, r, "This version is quarantined for review. This archive stays unavailable until a reviewer decides.")
 		return nil, false
 	default:
 		problemNotFound(w, r)
@@ -89,7 +91,7 @@ func (s *Server) GetVersionFile(w http.ResponseWriter, r *http.Request, ns Names
 	}
 	want := path.Clean(strings.TrimPrefix(params.Path, "./"))
 	if want == "" || want == "." || strings.HasPrefix(want, "/") || strings.HasPrefix(want, "..") {
-		problemValidation(w, r, "invalid file path")
+		problemValidation(w, r, "The path must be relative and stay inside the archive.")
 		return
 	}
 	blob, ok := s.versionArchive(w, r, ns, name, version)

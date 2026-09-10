@@ -9,6 +9,8 @@ rules:
     description: >
       Instruction to decode an encoded blob (base64/rot13/hex) and then follow
       or execute the decoded content — a way to smuggle a payload past review.
+      A reviewer reading the file sees the blob; the agent sees the instruction
+      inside it.
     references:
       - "OWASP LLM01: Prompt Injection"
       - "OWASP ASI06: Memory & Context Poisoning"
@@ -32,7 +34,9 @@ rules:
     confidence: medium
     description: >
       Frame claiming the true instructions are hidden, reversed, or encoded in
-      another location (a comment, an image, base64) and must be recovered.
+      another location (a comment, an image, base64) and must be recovered. The
+      visible text is meant for whoever reviews the package and the hidden text
+      for the agent that runs it.
     references:
       - "OWASP LLM01: Prompt Injection"
       - "OWASP ASI06: Memory & Context Poisoning"

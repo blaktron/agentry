@@ -73,12 +73,12 @@ func (s *Server) SetOrgPolicy(w http.ResponseWriter, r *http.Request, org OrgHan
 	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
 	if err != nil {
-		problemBadRequest(w, r, "body too large")
+		problemBadRequest(w, r, "Could not read the policy document; it may be too large.")
 		return
 	}
 	orgPolicy, err := scan.ParsePolicy(body)
 	if err != nil {
-		problemValidation(w, r, err.Error())
+		problemValidation(w, r, sentence(err.Error()))
 		return
 	}
 
@@ -89,7 +89,7 @@ func (s *Server) SetOrgPolicy(w http.ResponseWriter, r *http.Request, org OrgHan
 	// error rather than a surprise.
 	baseline := s.baselinePolicy(r)
 	if scan.LoosensBaseline(baseline, orgPolicy) {
-		problemValidation(w, r, "org policy may only tighten the platform baseline (§8.6)")
+		problemValidation(w, r, "An organization's policy may only tighten the platform baseline.")
 		return
 	}
 
@@ -143,11 +143,11 @@ func (s *Server) PlatformAgentAction(w http.ResponseWriter, r *http.Request, ns 
 	}
 	p := principalFrom(r.Context())
 	if p.Anonymous {
-		problemUnauthorized(w, r, "")
+		problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
 		return
 	}
 	if !p.PlatformStaff {
-		problemForbidden(w, r, "platform trust & safety action requires staff")
+		problemForbidden(w, r, "Trust & safety actions are open to platform staff only.")
 		return
 	}
 	a, err := s.reg.Resolve(r.Context(), ns, name)
@@ -171,7 +171,7 @@ func (s *Server) PlatformAgentAction(w http.ResponseWriter, r *http.Request, ns 
 	case "reinstate":
 		auditAction, quarantineState = audit.ActionAgentReinstate, "none"
 	default:
-		problemValidation(w, r, "action must be quarantine, block, or reinstate")
+		problemValidation(w, r, "The action must be quarantine, block, or reinstate.")
 		return
 	}
 
@@ -243,7 +243,7 @@ func (s *Server) ListAdvisories(w http.ResponseWriter, r *http.Request, params L
 	}
 	ref, err := registry.ParseRef(*params.Affecting)
 	if err != nil {
-		problemValidation(w, r, err.Error())
+		problemValidation(w, r, sentence(err.Error()))
 		return
 	}
 	a, err := s.reg.Resolve(r.Context(), ref.Namespace, ref.Name)

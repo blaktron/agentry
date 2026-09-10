@@ -234,7 +234,7 @@ func (s *Service) CreateAgent(ctx context.Context, p *auth.Principal, in CreateA
 		return Agent{}, auth.ErrUnauthorized
 	}
 	if !AgentNameRe.MatchString(in.Name) {
-		return Agent{}, fmt.Errorf("%w: invalid agent name", ErrDenied)
+		return Agent{}, fmt.Errorf("%w: the agent name must be 1-65 lowercase letters, digits and hyphens, starting and ending with a letter or digit", ErrDenied)
 	}
 	modes, err := normalizeModes(in.Modes)
 	if err != nil {
@@ -243,7 +243,7 @@ func (s *Service) CreateAgent(ctx context.Context, p *auth.Principal, in CreateA
 	switch in.Visibility {
 	case "public", "private":
 	default:
-		return Agent{}, fmt.Errorf("%w: invalid visibility", ErrDenied)
+		return Agent{}, fmt.Errorf("%w: visibility must be public or private", ErrDenied)
 	}
 
 	q := s.st.Queries()
@@ -271,7 +271,7 @@ func (s *Service) CreateAgent(ctx context.Context, p *auth.Principal, in CreateA
 	// Publishing requires verified email (§19); creating an agent is the
 	// first step of that path, so gate here where the journey starts.
 	if !p.EmailVerified {
-		return Agent{}, fmt.Errorf("%w: email verification required", ErrDenied)
+		return Agent{}, fmt.Errorf("%w: verify this account's email address before creating a BriefAgent", ErrDenied)
 	}
 	lim, err := s.Entitlements().Limits(ctx, subject)
 	if err != nil {

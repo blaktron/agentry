@@ -409,7 +409,7 @@ func (s *Server) q() *storegen.Queries {
 // requireDB writes 503 and returns false when no database is configured.
 func (s *Server) requireDB(w http.ResponseWriter, r *http.Request) bool {
 	if s.st == nil {
-		problemUnavailable(w, r, "database not configured")
+		problemUnavailable(w, r, "The server has no database configured; this endpoint needs one.")
 		return false
 	}
 	return true
@@ -621,7 +621,7 @@ func NewHandlerWithGit(s *Server, mountGit func(*http.ServeMux)) http.Handler {
 		BaseURL:    "/api/v1",
 		BaseRouter: mux,
 		ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
-			problemBadRequest(w, r, err.Error())
+			problemBadRequest(w, r, sentence(err.Error()))
 		},
 		Middlewares: []MiddlewareFunc{s.principalMiddleware},
 	})
@@ -727,7 +727,7 @@ func readJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
-		problemBadRequest(w, r, "invalid JSON body: "+err.Error())
+		problemBadRequest(w, r, "Could not decode the request body: "+err.Error())
 		return false
 	}
 	return true

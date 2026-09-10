@@ -25,7 +25,7 @@ func (s *Server) ReportAbuse(w http.ResponseWriter, r *http.Request, ns Namespac
 	}
 	p := principalFrom(r.Context())
 	if p.Anonymous {
-		problemUnauthorized(w, r, "reporting requires an account so we can follow up")
+		problemUnauthorized(w, r, "Sign in before reporting. Trust & safety needs an account to follow up.")
 		return
 	}
 	// Public agents are reportable by anyone signed in; private ones only by
@@ -41,7 +41,7 @@ func (s *Server) ReportAbuse(w http.ResponseWriter, r *http.Request, ns Namespac
 	}
 	detail := strings.TrimSpace(req.Detail)
 	if len(detail) < 10 || len(detail) > 4000 {
-		problemValidation(w, r, "detail must be 10-4000 characters — tell us what you observed")
+		problemValidation(w, r, "Describe what happened, in 10-4000 characters.")
 		return
 	}
 
@@ -51,7 +51,7 @@ func (s *Server) ReportAbuse(w http.ResponseWriter, r *http.Request, ns Namespac
 		return
 	}
 	if recent >= maxReportsPerHour {
-		problemTooMany(w, r, "too many reports in the last hour")
+		problemTooMany(w, r, "This account filed too many reports in the last hour.")
 		return
 	}
 
@@ -59,7 +59,7 @@ func (s *Server) ReportAbuse(w http.ResponseWriter, r *http.Request, ns Namespac
 	if req.Version != nil && *req.Version != "" {
 		v, err := s.q().GetVersion(r.Context(), storegen.GetVersionParams{AgentID: a.ID, Version: *req.Version})
 		if err != nil {
-			problemValidation(w, r, "unknown version")
+			problemValidation(w, r, "This BriefAgent has no such version.")
 			return
 		}
 		versionID = &v.ID
@@ -89,11 +89,11 @@ func (s *Server) ReportAbuse(w http.ResponseWriter, r *http.Request, ns Namespac
 func (s *Server) requireStaff(w http.ResponseWriter, r *http.Request) bool {
 	p := principalFrom(r.Context())
 	if p.Anonymous {
-		problemUnauthorized(w, r, "")
+		problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
 		return false
 	}
 	if !p.PlatformStaff {
-		problemForbidden(w, r, "this action is platform-staff only")
+		problemForbidden(w, r, "This action is open to platform staff only.")
 		return false
 	}
 	return true
@@ -153,7 +153,7 @@ func (s *Server) TriageAbuseReport(w http.ResponseWriter, r *http.Request, id uu
 	}
 	resolution := strings.TrimSpace(req.Resolution)
 	if resolution == "" {
-		problemValidation(w, r, "resolution required — say what was decided and why")
+		problemValidation(w, r, "Say what was decided and why.")
 		return
 	}
 	p := principalFrom(r.Context())

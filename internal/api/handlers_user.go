@@ -65,14 +65,14 @@ func (s *Server) UpdateCurrentUser(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	ackOnly := req.CookieAck != nil && *req.CookieAck
 	if req.DisplayName == nil && !ackOnly {
-		problemValidation(w, r, "nothing to update")
+		problemValidation(w, r, "Nothing to update. Send displayName, cookieAck, or both.")
 		return
 	}
 	var name string
 	if req.DisplayName != nil {
 		name = strings.TrimSpace(*req.DisplayName)
 		if name == "" || len(name) > 120 {
-			problemValidation(w, r, "displayName must be 1-120 characters")
+			problemValidation(w, r, "The displayName field must be 1-120 characters.")
 			return
 		}
 	}
@@ -171,15 +171,15 @@ func (s *Server) CreateToken(w http.ResponseWriter, r *http.Request) {
 	var fields []FieldError
 	name := strings.TrimSpace(req.Name)
 	if name == "" || len(name) > 120 {
-		fields = append(fields, FieldError{Field: "name", Message: "must be 1-120 characters"})
+		fields = append(fields, FieldError{Field: "name", Message: "Must be 1-120 characters."})
 	}
 	if len(req.Scopes) == 0 {
-		fields = append(fields, FieldError{Field: "scopes", Message: "at least one scope required"})
+		fields = append(fields, FieldError{Field: "scopes", Message: "Name at least one scope."})
 	}
 	scopes := make([]string, 0, len(req.Scopes))
 	for _, sc := range req.Scopes {
 		if !auth.ValidScope(auth.Scope(sc)) {
-			fields = append(fields, FieldError{Field: "scopes", Message: "unknown scope " + string(sc)})
+			fields = append(fields, FieldError{Field: "scopes", Message: "Unknown scope " + string(sc) + "."})
 			continue
 		}
 		scopes = append(scopes, string(sc))
@@ -198,7 +198,7 @@ func (s *Server) CreateToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !p.SSOSatisfied(orgRow.ID, s.cfg.Auth.SSOMaxAge) {
-			problemForbidden(w, r, "org-bound tokens require a fresh SSO session for the org")
+			problemForbidden(w, r, "Org-bound tokens require a fresh SSO session for that organization. Sign in through SSO again.")
 			return
 		}
 		orgID = &orgRow.ID
@@ -209,15 +209,15 @@ func (s *Server) CreateToken(w http.ResponseWriter, r *http.Request) {
 	expiresAt := maxExpiry
 	if req.ExpiresAt != nil {
 		if req.ExpiresAt.After(maxExpiry) {
-			fields = append(fields, FieldError{Field: "expiresAt", Message: "exceeds maximum token lifetime"})
+			fields = append(fields, FieldError{Field: "expiresAt", Message: "Must be within the maximum token lifetime."})
 		} else if req.ExpiresAt.Before(time.Now()) {
-			fields = append(fields, FieldError{Field: "expiresAt", Message: "already expired"})
+			fields = append(fields, FieldError{Field: "expiresAt", Message: "Must be in the future."})
 		} else {
 			expiresAt = *req.ExpiresAt
 		}
 	}
 	if len(fields) > 0 {
-		problemValidation(w, r, "token rejected", fields...)
+		problemValidation(w, r, "The registry rejected the token. Each field error says what to fix.", fields...)
 		return
 	}
 
