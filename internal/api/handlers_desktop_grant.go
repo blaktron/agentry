@@ -48,7 +48,7 @@ func (s *Server) CreateDesktopGrant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !desktopStateRE.MatchString(req.State) {
-		problemValidation(w, r, "grant rejected", FieldError{Field: "state", Message: "must match [A-Za-z0-9_-]{8,128}"})
+		problemValidation(w, r, "Desktop grant rejected. Fix the fields listed and try again.", FieldError{Field: "state", Message: "Must match [A-Za-z0-9_-]{8,128} (letters, digits, hyphen and underscore)."})
 		return
 	}
 	p := principalFrom(r.Context())
@@ -88,7 +88,7 @@ func (s *Server) ExchangeDesktopCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Code == "" || !desktopStateRE.MatchString(req.State) {
-		problemForbidden(w, r, "invalid, expired, or already used sign-in code")
+		problemForbidden(w, r, "This sign-in code is invalid, expired, or already used. Start the sign-in again from the app.")
 		return
 	}
 	token, err := auth.NewToken(auth.PATPrefix)
@@ -121,7 +121,7 @@ func (s *Server) ExchangeDesktopCode(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			problemForbidden(w, r, "invalid, expired, or already used sign-in code")
+			problemForbidden(w, r, "This sign-in code is invalid, expired, or already used. Start the sign-in again from the app.")
 			return
 		}
 		s.log.Error("exchange desktop code", "err", err)
