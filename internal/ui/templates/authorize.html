@@ -4,8 +4,8 @@
 {{if .Valid}}
 <section class="card">
 <p>A program on <strong>this computer</strong> — the {{$.Brand.Name}} command line or desktop app — is asking for access as <strong>{{$.User.Handle}}</strong>.</p>
-<p>Approving hands the program listening on <code>127.0.0.1:{{.Port}}</code> a one-time code, which it exchanges for a personal access token within a minute. The token itself never appears in your browser, and nothing leaves this machine.</p>
-<p class="muted">Scopes: agent read/publish, repo read/write, profile. The token appears under Tokens and can be revoked there any time. If you did not just start a sign-in from the program, close this tab.</p>
+<p>Approving hands the program listening on <code>127.0.0.1:{{.Port}}</code> a one-time code, good for a minute. The program exchanges that code for a personal access token from its own process, so the token never appears in your browser.</p>
+<p class="muted">Scopes: agent:read, agent:publish, repo:read, repo:write, user:profile. The token appears under Tokens, where you can revoke it. If you did not just start a sign-in from the program, close this tab.</p>
 <form method="post" action="/ui/authorize">
   <input type="hidden" name="_csrf" value="{{$.CSRF}}">
   <input type="hidden" name="port" value="{{.Port}}">
@@ -16,7 +16,7 @@
 </section>
 {{else}}
 <section class="card">
-<p>This page is opened by the command line or the desktop app during sign-in, and this request is missing or malforms its callback parameters. Start the sign-in again from the program.</p>
+<p>This page opens when the command line or the desktop app starts a sign-in. This request's port or state is missing or malformed, so there is nothing to approve. Start the sign-in again from the program.</p>
 </section>
 {{end}}
 {{end}}
