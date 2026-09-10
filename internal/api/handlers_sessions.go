@@ -81,7 +81,7 @@ func (s *Server) RevokeUserSession(w http.ResponseWriter, r *http.Request, sessi
 	}
 	p := principalFrom(r.Context())
 	if p.Via != "session" {
-		problemForbidden(w, r, "managing sessions requires a session")
+		problemForbidden(w, r, "Managing sessions requires a session, not a token.")
 		return
 	}
 
@@ -134,7 +134,7 @@ func (s *Server) RevokeOtherUserSessions(w http.ResponseWriter, r *http.Request)
 	}
 	p := principalFrom(r.Context())
 	if p.Via != "session" {
-		problemForbidden(w, r, "managing sessions requires a session")
+		problemForbidden(w, r, "Managing sessions requires a session, not a token.")
 		return
 	}
 

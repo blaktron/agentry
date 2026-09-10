@@ -47,7 +47,7 @@ func (s *Server) checkPathScope(w http.ResponseWriter, r *http.Request, p *auth.
 			continue
 		}
 		if err := auth.Check(p, auth.Resource{}, sp.action); err != nil {
-			problemForbidden(w, r, "this token is missing the "+string(auth.ScopeReviewAct)+" scope (§12.3)")
+			problemForbidden(w, r, "This token is missing the "+string(auth.ScopeReviewAct)+" scope. Create a new token that carries it.")
 			return false
 		}
 	}
