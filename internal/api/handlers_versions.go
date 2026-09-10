@@ -90,16 +90,16 @@ func (s *Server) writeSubmitError(w http.ResponseWriter, r *http.Request, err er
 		for _, iss := range vErr.Issues {
 			fields = append(fields, FieldError{Field: "manifest", Message: iss.Error()})
 		}
-		problemValidation(w, r, "submission rejected", fields...)
+		problemValidation(w, r, "The registry rejected this submission. Each field error says what failed.", fields...)
 	case errors.Is(err, registry.ErrTwoFactorRequired):
-		problemForbidden(w, r, "enable two-factor authentication before publishing to a public namespace (§12.1, §19)")
+		problemForbidden(w, r, "Enable two-factor authentication before publishing to a public namespace.")
 	case errors.Is(err, registry.ErrScanNotScheduled):
 		// The version row exists and is in `scanning`; the watchdog will route
 		// it to review. Say so rather than implying nothing happened.
 		s.log.Error("submit version: scan not scheduled", "err", err)
 		writeProblem(w, r, http.StatusServiceUnavailable, "scan-not-scheduled",
-			"Scan could not be started",
-			"the version was recorded but its security scan could not be scheduled; it will be routed to human review")
+			"Scan not started",
+			"The registry recorded this version but could not schedule its scan. A watchdog routes it to review.")
 	case errors.Is(err, registry.ErrDenied):
 		problemValidation(w, r, err.Error())
 	case errors.Is(err, auth.ErrUnauthorized):
@@ -128,11 +128,11 @@ func (s *Server) SubmitVersion(w http.ResponseWriter, r *http.Request, ns Namesp
 	}
 	p := principalFrom(r.Context())
 	if !p.EmailVerified {
-		problemForbidden(w, r, "email verification required before publishing (§19)")
+		problemForbidden(w, r, "Verify this account's email address before publishing.")
 		return
 	}
 	if a.QuarantineState == "blocked" {
-		problemForbidden(w, r, "agent is blocked by trust & safety")
+		problemForbidden(w, r, "Trust & safety blocked this BriefAgent, so it cannot publish.")
 		return
 	}
 
@@ -148,7 +148,7 @@ func (s *Server) SubmitVersion(w http.ResponseWriter, r *http.Request, ns Namesp
 			return
 		}
 		if req.Tag == "" {
-			problemValidation(w, r, "tag required")
+			problemValidation(w, r, "Name the git tag to submit.")
 			return
 		}
 		version, err = s.reg.SubmitTag(r.Context(), p, a, req.Tag, auditEvent(r, audit.ActionVersionSubmit))
@@ -160,7 +160,7 @@ func (s *Server) SubmitVersion(w http.ResponseWriter, r *http.Request, ns Namesp
 		}
 
 	default:
-		problemBadRequest(w, r, "expected application/json {tag} or multipart/form-data archive upload")
+		problemBadRequest(w, r, "Send either application/json {tag} or a multipart/form-data archive upload.")
 		return
 	}
 	if err != nil {
@@ -185,10 +185,10 @@ func (s *Server) submitUpload(w http.ResponseWriter, r *http.Request, p *auth.Pr
 		if errors.As(err, &maxErr) {
 			writeProblem(w, r, http.StatusRequestEntityTooLarge, "upload-too-large",
 				"Upload too large",
-				fmt.Sprintf("release archives are capped at %d bytes (§19)", maxUploadBytes))
+				fmt.Sprintf("Release archives are capped at %d bytes.", maxUploadBytes))
 			return registry.Version{}, nil
 		}
-		problemValidation(w, r, "invalid multipart upload: "+err.Error())
+		problemValidation(w, r, "Could not read the multipart upload: "+err.Error())
 		return registry.Version{}, nil
 	}
 	defer func() {
@@ -198,7 +198,7 @@ func (s *Server) submitUpload(w http.ResponseWriter, r *http.Request, p *auth.Pr
 	}()
 	file, hdr, err := r.FormFile("archive")
 	if err != nil {
-		problemValidation(w, r, "archive part required")
+		problemValidation(w, r, "Include the archive part in the upload.")
 		return registry.Version{}, nil
 	}
 	defer func() { _ = file.Close() }()
@@ -215,7 +215,7 @@ func (s *Server) submitUpload(w http.ResponseWriter, r *http.Request, p *auth.Pr
 	// unpacked under weaker rules than the scanner would later apply to the
 	// very same bytes.
 	if err := scan.Extract(file, ws, hdr.Size, scan.DefaultLimits()); err != nil {
-		problemValidation(w, r, "archive rejected: "+err.Error())
+		problemValidation(w, r, "The extractor rejected this archive: "+err.Error())
 		return registry.Version{}, nil
 	}
 	// The server rebuilds the archive from this workspace and its own digest
@@ -304,7 +304,7 @@ func (s *Server) YankVersion(w http.ResponseWriter, r *http.Request, ns Namespac
 	}
 	reason := strings.TrimSpace(req.Reason)
 	if reason == "" || len(reason) > 500 {
-		problemValidation(w, r, "reason must be 1-500 characters")
+		problemValidation(w, r, "The yank reason must be 1-500 characters.")
 		return
 	}
 	e := auditEvent(r, audit.ActionVersionYank)
@@ -337,7 +337,8 @@ func (s *Server) DownloadVersion(w http.ResponseWriter, r *http.Request, ns Name
 	// return 410). Blocking walks the versions too; this catches the case
 	// where a scan finishes and publishes a version after the block landed.
 	if a.QuarantineState == "blocked" {
-		writeProblem(w, r, http.StatusGone, "blocked", "Agent blocked", "disabled by trust & safety (§7)")
+		writeProblem(w, r, http.StatusGone, "blocked", "Blocked BriefAgent",
+			"Trust & safety blocked this BriefAgent. Downloads stay refused until platform staff reinstate it.")
 		return
 	}
 	switch registry.Status(v.Status) {
@@ -345,10 +346,11 @@ func (s *Server) DownloadVersion(w http.ResponseWriter, r *http.Request, ns Name
 	case registry.StatusYanked:
 		w.Header().Set("X-Agentry-Yanked", "true")
 	case registry.StatusBlocked:
-		writeProblem(w, r, http.StatusGone, "blocked", "Version blocked", "disabled by trust & safety (§7)")
+		writeProblem(w, r, http.StatusGone, "blocked", "Blocked version",
+			"Trust & safety blocked this version. Downloads stay refused until platform staff reinstate it.")
 		return
 	case registry.StatusQuarantined:
-		problemConflict(w, r, "version is quarantined pending review (§8.7)")
+		problemConflict(w, r, "This version is quarantined for review. Downloads resume only if the review clears it.")
 		return
 	default:
 		problemNotFound(w, r)
@@ -403,7 +405,8 @@ func (s *Server) ResolveRef(w http.ResponseWriter, r *http.Request, params Resol
 	res, err := s.reg.ResolveVersion(r.Context(), a, ref.Range, channel)
 	if err != nil {
 		if errors.Is(err, registry.ErrBlocked) {
-			writeProblem(w, r, http.StatusGone, "blocked", "Agent blocked", "disabled by trust & safety (§7)")
+			writeProblem(w, r, http.StatusGone, "blocked", "Blocked BriefAgent",
+				"Trust & safety blocked this BriefAgent. Downloads stay refused until platform staff reinstate it.")
 			return
 		}
 		if errors.Is(err, registry.ErrNoMatch) {
