@@ -287,7 +287,7 @@ func validateClassification(s *issues, m *Manifest) {
 		switch m.Kind {
 		case v1KindSkill, v1KindPromptAgent:
 		case v1KindMCPServer:
-			s.errf("V1", "kind", "kind mcp-server is withdrawn (DEV-088): MCP server codebases are no longer BriefAgents; declare the servers an agent uses under capabilities.mcpServers instead")
+			s.errf("V1", "kind", "kind mcp-server is withdrawn: MCP server codebases are no longer BriefAgents; declare the servers an agent uses under capabilities.mcpServers instead")
 		case "":
 			s.errf("V1", "kind", "kind is required (skill | prompt-agent), or move to schemaVersion 2 and declare modes")
 		default:
@@ -347,7 +347,7 @@ func validateEntrypoints(s *issues, m *Manifest) {
 			s.errf("V1", "entrypoints.skill", "entrypoints.skill is a v1 field: name the file as entrypoints.instruction")
 		}
 		if ep.MCP != nil {
-			s.errf("V1", "entrypoints.mcp", "entrypoints.mcp belongs to the withdrawn mcp-server kind (DEV-088)")
+			s.errf("V1", "entrypoints.mcp", "entrypoints.mcp belongs to the withdrawn mcp-server kind")
 		}
 		if ep.Instruction != "" {
 			if err := checkRelFilePath(ep.Instruction); err != nil {
@@ -363,7 +363,7 @@ func validateEntrypoints(s *issues, m *Manifest) {
 		s.errf("V1", "entrypoints.skill", "kind skill requires entrypoints.skill")
 	}
 	if ep.MCP != nil {
-		s.errf("V1", "entrypoints.mcp", "entrypoints.mcp belongs to the withdrawn mcp-server kind (DEV-088)")
+		s.errf("V1", "entrypoints.mcp", "entrypoints.mcp belongs to the withdrawn mcp-server kind")
 	}
 	if ep.Skill != "" {
 		if err := checkRelFilePath(ep.Skill); err != nil {
