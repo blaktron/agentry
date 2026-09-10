@@ -9,7 +9,8 @@ rules:
     description: >
       Instruction to execute a shell command or fetch remote content as a
       precondition to responding ("before answering, run curl ..."). Framing
-      the command as a precondition gets it run before anyone reads the answer.
+      the command as a precondition is meant to get it run before anyone reads
+      the answer.
     references:
       - "OWASP LLM01: Prompt Injection"
       - "OWASP ASI06: Memory & Context Poisoning"
@@ -32,8 +33,8 @@ rules:
     confidence: medium
     description: >
       Instruction to unconditionally or covertly run a shell command, script,
-      or remote fetch at startup or on every turn. At startup it runs in every
-      session, whatever the user actually asked for.
+      or remote fetch at startup or on every turn. A hook like this is meant to
+      run in every session, whatever the user asked for.
     references:
       - "OWASP LLM01: Prompt Injection"
       - "OWASP ASI06: Memory & Context Poisoning"
