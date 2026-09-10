@@ -54,7 +54,7 @@ func (s *Server) CreateAuditExport(w http.ResponseWriter, r *http.Request, org O
 		return
 	}
 	if s.blobs == nil {
-		problemUnavailable(w, r, "object storage not configured")
+		problemUnavailable(w, r, "This deployment has no object storage configured, so audit exports cannot run.")
 		return
 	}
 	var req CreateAuditExportJSONBody
