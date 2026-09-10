@@ -65,7 +65,7 @@ func (s *Server) nativeCredsGone(w http.ResponseWriter, r *http.Request) bool {
 	if !s.cfg.Auth.ExternalOnly {
 		return false
 	}
-	problemGone(w, r, "credentials are managed by this deployment's directory service (DEV-057); sign in through "+s.paths.login(""))
+	problemGone(w, r, "This deployment's directory service manages credentials. Sign in at "+s.paths.login("")+".")
 	return true
 }
 
@@ -86,19 +86,19 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 
 	var fields []FieldError
 	if !reHandle.MatchString(req.Handle) {
-		fields = append(fields, FieldError{Field: "handle", Message: "must match ^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"})
+		fields = append(fields, FieldError{Field: "handle", Message: "Must match ^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$ (lowercase letters, digits and hyphens)."})
 	} else if handleReserved(req.Handle) {
-		fields = append(fields, FieldError{Field: "handle", Message: "reserved"})
+		fields = append(fields, FieldError{Field: "handle", Message: "This handle is reserved."})
 	}
 	email := strings.TrimSpace(string(req.Email))
 	if !strings.Contains(email, "@") || len(email) > 254 {
-		fields = append(fields, FieldError{Field: "email", Message: "invalid email"})
+		fields = append(fields, FieldError{Field: "email", Message: "Must contain @ and be 254 characters or fewer."})
 	}
 	if len(req.Password) < 10 || len(req.Password) > 256 {
-		fields = append(fields, FieldError{Field: "password", Message: "must be 10-256 characters"})
+		fields = append(fields, FieldError{Field: "password", Message: "Must be 10-256 characters."})
 	}
 	if len(fields) > 0 {
-		problemValidation(w, r, "registration rejected", fields...)
+		problemValidation(w, r, "Registration rejected. Fix the fields listed and try again.", fields...)
 		return
 	}
 
@@ -147,7 +147,7 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
-			problemConflict(w, r, "handle or email already in use")
+			problemConflict(w, r, "That handle or email address is already in use. Choose another.")
 			return
 		}
 		s.log.Error("register", "err", err)
@@ -199,7 +199,7 @@ func (s *Server) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			problemValidation(w, r, "invalid or expired verification token")
+			problemValidation(w, r, "This verification link is invalid or expired.")
 			return
 		}
 		s.log.Error("verify-email", "err", err)
@@ -236,7 +236,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		if err := s.auditW.Write(ctx, q, e); err != nil {
 			s.log.Warn("audit login_failed", "err", err)
 		}
-		problemUnauthorized(w, r, "invalid credentials")
+		problemUnauthorized(w, r, "These credentials do not match an active account.")
 	}
 
 	var (
@@ -261,7 +261,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 
 	if row.TotpEnabled {
 		if req.TotpCode == nil || *req.TotpCode == "" {
-			writeProblem(w, r, http.StatusUnauthorized, "totp-required", "TOTP code required", "supply totpCode")
+			writeProblem(w, r, http.StatusUnauthorized, "totp-required", "TOTP code required", "Send totpCode with the current code from your authenticator.")
 			return
 		}
 		secret, err := s.sealer.Open(row.TotpSecretEnc)
@@ -345,7 +345,7 @@ func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	if p.Via != "session" {
-		problemForbidden(w, r, "logout requires a session")
+		problemForbidden(w, r, "Signing out requires a session, not a token.")
 		return
 	}
 	// SP-initiated SAML Single Logout (§12.4, agentry#62): resolved before
@@ -427,7 +427,7 @@ func (s *Server) TotpVerify(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	row, err := s.q().GetUserByID(r.Context(), p.UserID)
 	if err != nil || len(row.TotpSecretEnc) == 0 {
-		problemValidation(w, r, "no TOTP enrollment in progress")
+		problemValidation(w, r, "No TOTP enrollment is in progress. Run the setup step first.")
 		return
 	}
 	secret, err := s.sealer.Open(row.TotpSecretEnc)
@@ -437,7 +437,7 @@ func (s *Server) TotpVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !auth.ValidateTOTP(req.Code, string(secret)) {
-		problemValidation(w, r, "invalid code")
+		problemValidation(w, r, "That code did not match. Try the current code from your authenticator.")
 		return
 	}
 	err = s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
