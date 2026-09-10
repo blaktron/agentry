@@ -153,8 +153,9 @@ func gitleaksErrorFinding(err error) Finding {
 	const stage, tool = "S2", "gitleaks"
 	return Finding{
 		Scanner: stage + "/tool-error", Severity: SevMedium, Confidence: ConfHigh,
-		Title:    tool + " did not complete; the built-in secret rules still ran",
-		Detail:   map[string]any{"tool": tool, "error": err.Error()},
+		Title: "Secret scan incomplete",
+		Detail: map[string]any{"tool": tool, "error": err.Error(),
+			"note": "The built-in secret rules still ran."},
 		Taxonomy: []string{"LLM03"},
 	}
 }

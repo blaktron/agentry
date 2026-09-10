@@ -403,7 +403,7 @@ func s9Escalate(sc stageContext, in *Input, prevFiles []FileEntry, current []Fin
 		}
 		findings = append(findings, Finding{
 			Scanner: "S9/escalated", Severity: SevHigh, Confidence: cf.Confidence,
-			Title:    "Release-diff raised the severity: " + cf.Title,
+			Title:    cf.Title + " — severity raised by the release diff",
 			FilePath: cf.FilePath, LineStart: cf.LineStart, LineEnd: cf.LineEnd,
 			Detail: map[string]any{
 				"escalatedFrom": cf.Scanner, "bump": bump,

@@ -68,7 +68,7 @@ func Evaluate(in GateInput) GateDecision {
 	// Critical (or S1 structural) ⇒ auto-reject (§8.5).
 	if worst == SevCritical {
 		return GateDecision{Outcome: OutcomeRejected, WorstSeverity: worst,
-			Reason: "critical finding: " + titleOf(worstFinding)}
+			Reason: "The gate rejected this version for a critical finding (" + titleOf(worstFinding) + ")."}
 	}
 
 	// Wildcard egress policy (§8.6).
@@ -76,25 +76,25 @@ func Evaluate(in GateInput) GateDecision {
 		switch in.Policy.WildcardEgress {
 		case "reject":
 			return GateDecision{Outcome: OutcomeRejected, WorstSeverity: worst,
-				Reason: "wildcard network egress rejected by policy"}
+				Reason: "Policy refuses wildcard network egress, so the gate rejected this version."}
 		case "review", "":
-			return review(in, worst, "wildcard network egress requires review")
+			return review(in, worst, "This version declares wildcard network egress, so the gate sent it to human review.")
 		}
 	}
 
 	// Judge/stage forced review (§8.4.6, fail-closed).
 	if in.JudgeForcesReview {
-		return review(in, maxSev(worst, SevMedium), "human review required (no automated judge or a stage failed closed)")
+		return review(in, maxSev(worst, SevMedium), "No automated judge ran, or a stage failed closed, so the gate sent this version to human review.")
 	}
 
 	// Policy requireHumanReview.
 	if mode, err := parseReviewMode(orNever(in.Policy.RequireHumanReview)); err == nil {
 		if mode.always {
-			return review(in, worst, "policy requires human review for all versions")
+			return review(in, worst, "Policy requires human review of every version, so the gate sent this one to a reviewer.")
 		}
 		for _, c := range mode.whenCapabilities {
 			if in.DeclaredCapabilities[c] {
-				return review(in, worst, "policy requires review for capability: "+c)
+				return review(in, worst, "Policy requires review of the capability "+c+", so the gate sent this version to a reviewer.")
 			}
 		}
 	}
@@ -106,9 +106,9 @@ func Evaluate(in GateInput) GateDecision {
 	}
 	switch {
 	case severityRank(worst) <= severityRank(maxAuto):
-		return GateDecision{Outcome: OutcomePublish, WorstSeverity: worst, Reason: "within auto-publish threshold"}
+		return GateDecision{Outcome: OutcomePublish, WorstSeverity: worst, Reason: "This version's findings are within the auto-publish threshold, so the gate published it."}
 	default:
-		return review(in, worst, "findings exceed auto-publish threshold ("+string(worst)+")")
+		return review(in, worst, "This version's findings exceed the auto-publish threshold ("+string(worst)+"), so the gate sent it to a reviewer.")
 	}
 }
 

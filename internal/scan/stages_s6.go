@@ -334,7 +334,7 @@ func (S6Scripts) Run(sc stageContext, in *Input) StageResult {
 		sort.Strings(unused)
 		findings = append(findings, Finding{
 			Scanner: "S6/declared-unused", Severity: SevLow, Confidence: ConfMedium,
-			Title:    "No script or instruction references these declared egress hosts",
+			Title:    "Nothing in the package references these declared egress hosts",
 			Detail:   map[string]any{"hosts": unused},
 			Taxonomy: []string{"ASI04"},
 		})
