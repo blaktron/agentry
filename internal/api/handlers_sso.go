@@ -93,7 +93,7 @@ func (s *Server) PutSsoConnection(w http.ResponseWriter, r *http.Request, org Or
 	}
 	stored, verr := s.buildStoredSSOConfig(r, orgRow.Handle, k, req.Config)
 	if verr != nil {
-		problemValidation(w, r, verr.Error())
+		problemValidation(w, r, sentence(verr.Error()))
 		return
 	}
 	cfgJSON, err := json.Marshal(stored)

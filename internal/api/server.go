@@ -621,7 +621,7 @@ func NewHandlerWithGit(s *Server, mountGit func(*http.ServeMux)) http.Handler {
 		BaseURL:    "/api/v1",
 		BaseRouter: mux,
 		ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
-			problemBadRequest(w, r, err.Error())
+			problemBadRequest(w, r, sentence(err.Error()))
 		},
 		Middlewares: []MiddlewareFunc{s.principalMiddleware},
 	})

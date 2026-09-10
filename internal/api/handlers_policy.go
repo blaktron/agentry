@@ -78,7 +78,7 @@ func (s *Server) SetOrgPolicy(w http.ResponseWriter, r *http.Request, org OrgHan
 	}
 	orgPolicy, err := scan.ParsePolicy(body)
 	if err != nil {
-		problemValidation(w, r, err.Error())
+		problemValidation(w, r, sentence(err.Error()))
 		return
 	}
 
@@ -243,7 +243,7 @@ func (s *Server) ListAdvisories(w http.ResponseWriter, r *http.Request, params L
 	}
 	ref, err := registry.ParseRef(*params.Affecting)
 	if err != nil {
-		problemValidation(w, r, err.Error())
+		problemValidation(w, r, sentence(err.Error()))
 		return
 	}
 	a, err := s.reg.Resolve(r.Context(), ref.Namespace, ref.Name)

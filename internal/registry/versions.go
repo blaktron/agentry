@@ -307,7 +307,7 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 	}
 	rawManifest, err := os.ReadFile(in.Workspace + "/agent.yaml") //nolint:gosec // server-created workspace
 	if err != nil {
-		return Version{}, &ErrValidation{Issues: []error{errors.New("agent.yaml missing from the submission")}}
+		return Version{}, &ErrValidation{Issues: []error{errors.New("the submission has no agent.yaml")}}
 	}
 	m, err := manifest.Parse(rawManifest)
 	if err != nil {

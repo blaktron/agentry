@@ -356,7 +356,7 @@ func (s *Server) DecideReviewItem(w http.ResponseWriter, r *http.Request, id ope
 		Rationale: rationale, DecidedBy: p.UserID, Audit: e,
 	}); err != nil {
 		if errors.Is(err, registry.ErrBadTransition) {
-			problemConflict(w, r, err.Error())
+			problemConflict(w, r, "This version's status changed while the item was open. The decision was not recorded.")
 			return
 		}
 		s.log.Error("review decision", "item", ri.ID, "err", err)
