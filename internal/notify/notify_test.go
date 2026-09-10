@@ -137,6 +137,31 @@ func TestPublishNoticeSaysScannedNotSafe(t *testing.T) {
 // flatten collapses runs of whitespace so assertions survive line wrapping.
 func flatten(s string) string { return strings.Join(strings.Fields(s), " ") }
 
+// A reviewer rejecting an already-quarantined version yanks it, and the mail
+// that carries that word must say what a yank does — a yanked version is
+// still pinnable, which is the difference from the quarantine the author was
+// told about first.
+func TestYankNoticeSaysExactPinsStillResolve(t *testing.T) {
+	n, sent := capture(t)
+	if err := n.ReviewDecided(t.Context(), ReviewNotice{
+		ToEmail: "u@example.test", Agent: "acme/widget", Version: "1.0.0",
+		Decision: "yanked", Reviewer: "rev", Rationale: "finding confirmed",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	body := flatten((*sent)[0])
+	for _, want := range []string{
+		"was yanked",
+		"still resolves for an exact pin",
+		"no longer resolves for a range",
+		"a yank is permanent",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("yank notice does not say %q:\n%s", want, (*sent)[0])
+		}
+	}
+}
+
 func TestQuarantineNoticeIsHonestAboutInstalledCopies(t *testing.T) {
 	n, sent := capture(t)
 	if err := n.AgentQuarantined(t.Context(), QuarantineNotice{
