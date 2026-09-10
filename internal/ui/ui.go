@@ -132,7 +132,39 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("Referrer-Policy", "no-referrer")
+	// A path no pattern claims gets this surface's own 404 page rather than
+	// the mux's bare text; a path that exists under another method keeps the
+	// mux's 405 and its Allow header.
+	if _, pat := h.mux.Handler(r); pat == "" && !h.pathHasOtherMethod(r) {
+		h.refuse(w, r, http.StatusNotFound, "No such page", "The registry serves no page at this address. Check the link you followed.")
+		return
+	}
 	h.mux.ServeHTTP(w, r)
+}
+
+// pathHasOtherMethod says whether some pattern claims this path under a
+// method other than the request's. Only GET and POST are ever registered
+// here, so probing those two settles it.
+func (h *handler) pathHasOtherMethod(r *http.Request) bool {
+	for _, m := range []string{http.MethodGet, http.MethodPost} {
+		if m == r.Method {
+			continue
+		}
+		probe := r.Clone(r.Context())
+		probe.Method = m
+		if _, pat := h.mux.Handler(probe); pat != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// refuse answers a request this surface will not act on with the message
+// page inside the layout, at the status the bare http.Error used to send.
+// The page carries no user: a refusal happens before any session lookup, and
+// the layout's nav and sign-out are the only parts that need one.
+func (h *handler) refuse(w http.ResponseWriter, r *http.Request, status int, title, msg string) {
+	h.render(w, r, status, "message", page{Title: title, Error: msg})
 }
 
 func (h *handler) serveCSS(w http.ResponseWriter, _ *http.Request) {
@@ -253,18 +285,29 @@ func sameOrigin(r *http.Request) bool {
 // (a double submit on top of the API's own header check).
 func (h *handler) acceptForm(w http.ResponseWriter, r *http.Request) bool {
 	if !sameOrigin(r) {
-		http.Error(w, "cross-origin form post rejected", http.StatusForbidden)
+		h.refuseCrossOrigin(w, r)
 		return false
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad form", http.StatusBadRequest)
+		h.refuseBadForm(w, r)
 		return false
 	}
 	if c := cookieValue(r, csrfCookie); c == "" || r.PostFormValue("_csrf") != c {
-		http.Error(w, "missing or invalid CSRF token", http.StatusForbidden)
+		h.refuse(w, r, http.StatusForbidden, "Form token mismatch", "The form's token does not match your cookie, so the registry refused it. Reload the page and sign in again if it keeps failing.")
 		return false
 	}
 	return true
+}
+
+// The two refusals the sign-in form shares with every other form: it posts
+// before there is a session to carry a CSRF token, so it checks these two
+// itself (pages_auth.go loginSubmit).
+func (h *handler) refuseCrossOrigin(w http.ResponseWriter, r *http.Request) {
+	h.refuse(w, r, http.StatusForbidden, "Form refused", "This form was posted from another site, so the registry refused it. Open the page again and submit it from here.")
+}
+
+func (h *handler) refuseBadForm(w http.ResponseWriter, r *http.Request) {
+	h.refuse(w, r, http.StatusBadRequest, "Unreadable form", "The registry could not read this form's fields, so nothing changed. Reload the page and submit it again.")
 }
 
 // back redirects to path with a flash (?ok= / ?error=), rendered as text by

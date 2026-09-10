@@ -184,14 +184,75 @@ func TestLoginMirrorsTheSessionOntoTheBrowser(t *testing.T) {
 
 func TestModeAuthorizeServesOnlyTheAuthorizePage(t *testing.T) {
 	h := newUI(t, Options{Mode: "authorize", SiteURL: "https://site.example"})
-	if w := get(h, "/ui/login"); w.Code != http.StatusNotFound {
-		t.Fatalf("login in authorize mode: %d", w.Code)
+	if w := get(h, "/ui/login"); w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), "serves no page at this address") {
+		t.Fatalf("login in authorize mode: %d %s", w.Code, w.Body.String())
 	}
 	if w := get(h, "/ui/account", sessCookie); w.Code != http.StatusNotFound {
 		t.Fatalf("account in authorize mode: %d", w.Code)
 	}
 	if w := get(h, "/ui/"); w.Code != http.StatusSeeOther || w.Header().Get("Location") != "https://site.example/" {
 		t.Fatalf("landing: %d %s", w.Code, w.Header().Get("Location"))
+	}
+}
+
+// The four refusals that used to answer as bare text: the same status codes,
+// now the message page inside the layout, carrying the reason and the same
+// CSP as any other page. A path that exists under another method keeps the
+// mux's 405.
+func TestRefusalsRenderInsideTheLayout(t *testing.T) {
+	h := newUI(t, Options{Brand: Brand{Name: "Acme Registry"}})
+	raw := func(method, path, body string, hdr map[string]string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		r.Header.Set("Sec-Fetch-Site", "same-origin")
+		for k, v := range hdr {
+			r.Header.Set(k, v)
+		}
+		for _, c := range cookies {
+			r.AddCookie(c)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	// The CSP every page carries, taken from a page that renders normally.
+	ok := get(h, "/ui/authorize?port=40123&state=abcdefghij", sessCookie, csrfCookieV)
+	csp := ok.Header().Get("Content-Security-Policy")
+	if ok.Code != http.StatusOK || !strings.Contains(csp, "default-src 'none'") {
+		t.Fatalf("reference page: %d %q", ok.Code, csp)
+	}
+	for _, tc := range []struct {
+		name   string
+		got    *httptest.ResponseRecorder
+		status int
+		reason string
+	}{
+		{"cross-origin post", raw(http.MethodPost, "/ui/authorize", "_csrf=csrf1&port=40123&state=abcdefghij", map[string]string{"Sec-Fetch-Site": "cross-site"}, sessCookie, csrfCookieV), http.StatusForbidden, "posted from another site"},
+		{"unparseable form", raw(http.MethodPost, "/ui/authorize", "%zz=1", nil, sessCookie, csrfCookieV), http.StatusBadRequest, "could not read this form"},
+		{"missing csrf field", raw(http.MethodPost, "/ui/authorize", "port=40123&state=abcdefghij", nil, sessCookie, csrfCookieV), http.StatusForbidden, "does not match your cookie"},
+		{"unknown path", raw(http.MethodGet, "/ui/nope", "", nil), http.StatusNotFound, "serves no page at this address"},
+	} {
+		body := tc.got.Body.String()
+		if tc.got.Code != tc.status {
+			t.Fatalf("%s: status %d, want %d", tc.name, tc.got.Code, tc.status)
+		}
+		if !strings.Contains(body, "<main>") || !strings.Contains(body, "Acme Registry") {
+			t.Fatalf("%s: not the layout: %s", tc.name, body)
+		}
+		if !strings.Contains(body, tc.reason) {
+			t.Fatalf("%s: reason %q missing: %s", tc.name, tc.reason, body)
+		}
+		if ct := tc.got.Header().Get("Content-Type"); ct != "text/html; charset=utf-8" {
+			t.Fatalf("%s: content-type %q", tc.name, ct)
+		}
+		if got := tc.got.Header().Get("Content-Security-Policy"); got != csp {
+			t.Fatalf("%s: csp %q, want %q", tc.name, got, csp)
+		}
+	}
+	// A registered path reached with the wrong method is still the mux's 405,
+	// not this surface's 404 page.
+	if w := raw(http.MethodGet, "/ui/logout", "", nil); w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("method mismatch: %d %s", w.Code, w.Body.String())
 	}
 }
 
