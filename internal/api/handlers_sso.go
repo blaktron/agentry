@@ -292,7 +292,7 @@ func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, org
 	if err != nil {
 		if errors.Is(err, errExplicitLinkRequired) {
 			writeProblem(w, r, http.StatusConflict, "sso-link-required",
-				"Account linking requires confirmation",
+				"Email address already in use",
 				"An account already uses this email address. This organization must verify the email domain before SSO can link them.")
 			return
 		}

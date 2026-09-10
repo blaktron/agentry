@@ -53,7 +53,7 @@ func (s *Server) principalMiddleware(next http.Handler) http.Handler {
 				}
 				p = pp
 			} else {
-				problemUnauthorized(w, r, "This bearer token is not an Agentry personal access token.")
+				problemUnauthorized(w, r, "The bearer token was not recognized.")
 				return
 			}
 		} else if c, err := r.Cookie(sessionCookieName); err == nil && c.Value != "" {

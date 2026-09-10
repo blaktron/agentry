@@ -103,9 +103,9 @@ func (s *Server) writeSubmitError(w http.ResponseWriter, r *http.Request, err er
 	case errors.Is(err, registry.ErrDenied):
 		problemValidation(w, r, sentence(err.Error()))
 	case errors.Is(err, auth.ErrUnauthorized):
-		problemUnauthorized(w, r, "")
+		problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
 	case errors.Is(err, auth.ErrForbidden):
-		problemForbidden(w, r, "")
+		problemForbidden(w, r, "This credential does not carry the role or scope this action needs.")
 	default:
 		s.log.Error("submit version", "err", err)
 		problemInternal(w, r)
@@ -347,7 +347,7 @@ func (s *Server) DownloadVersion(w http.ResponseWriter, r *http.Request, ns Name
 		w.Header().Set("X-Agentry-Yanked", "true")
 	case registry.StatusBlocked:
 		writeProblem(w, r, http.StatusGone, "blocked", "Blocked version",
-			"Trust & safety blocked this version. Downloads stay refused until platform staff reinstate it.")
+			"Trust & safety blocked this version. Downloads stay refused until platform staff reinstate it and a reviewer decides.")
 		return
 	case registry.StatusQuarantined:
 		problemConflict(w, r, "This version is quarantined for review. Downloads resume once a reviewer decides.")

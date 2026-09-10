@@ -65,7 +65,7 @@ func (s *Server) SamlAcs(w http.ResponseWriter, r *http.Request, org OrgHandle) 
 	res, err := sp.ParseAndValidate(r.Context(), samlResponse)
 	if err != nil {
 		s.log.Warn("saml acs rejected", "org", org, "err", err)
-		problemUnauthorized(w, r, "The registry rejected the SAML assertion.")
+		problemUnauthorized(w, r, "The registry rejected the SAML assertion. Start sign-in again.")
 		return
 	}
 	displayName := ""
