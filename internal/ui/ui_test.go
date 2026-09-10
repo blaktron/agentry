@@ -386,9 +386,9 @@ func TestStaffEnforcementFlashesNameTheConsequence(t *testing.T) {
 		return u.Query().Get("ok") + u.Query().Get("error")
 	}
 	for _, tc := range []struct{ action, want string }{
-		{"quarantine", "acme/risky quarantined. Its latest published version answers 409 on download. The BriefAgent stays in search, carrying the quarantine state."},
+		{"quarantine", "acme/risky quarantined. A published version under quarantine answers 409 on download; the BriefAgent stays in search, carrying the state."},
 		{"block", "acme/risky blocked. Every download for it answers 410 Gone."},
-		{"reinstate", "acme/risky reinstated. Its versions are published again."},
+		{"reinstate", "acme/risky reinstated. Quarantined and blocked versions are published again; yanked ones stay yanked."},
 	} {
 		w := post(h, "/ui/staff/agent-action", url.Values{"_csrf": {"csrf1"}, "ref": {"acme/risky"}, "action": {tc.action}, "reason": {"reported malware"}}, nil, sessCookie, csrfCookieV)
 		if w.Code != http.StatusSeeOther || flash(t, w) != tc.want {

@@ -352,17 +352,22 @@ func (h *handler) staffAbuseTriage(w http.ResponseWriter, r *http.Request) {
 // agentActionDone is what a consumer meets after each enforcement action, and
 // it doubles as the set of actions the form may post. Read out of the handlers
 // rather than remembered: quarantine moves the latest published version and
-// only that one (internal/api/handlers_policy.go), whose downloads then answer
-// 409 (handlers_versions.go); block walks every live version to `blocked`, and
-// every download answers 410 Gone; search and browse exclude `blocked` and
-// nothing else (internal/store/queries/agents.sql), so a quarantined
-// BriefAgent stays listed with its state on it. The flash used to be built as
-// action + "d.", which said "blockd" and named the action rather than its
-// consequence.
+// only that one, and only when there is one — an agent with nothing published
+// keeps the flag and moves no version, and a failed move is logged and still
+// answers 204 (internal/api/handlers_policy.go) — so the flash states what
+// quarantine does to a published version rather than asserting this call
+// moved one. A quarantined version's downloads answer 409
+// (handlers_versions.go, handlers_version_files.go); block walks every live
+// version to `blocked` and every download answers 410 Gone; search and browse
+// exclude `blocked` and nothing else (internal/store/queries/agents.sql), so a
+// quarantined BriefAgent stays listed with its state on it. Reinstate walks
+// blocked and quarantined versions back to published (internal/scan/worker.go)
+// and never touches a yanked one. The flash used to be built as action + "d.",
+// which said "blockd" and named the action rather than its consequence.
 var agentActionDone = map[string]string{
-	"quarantine": "quarantined. Its latest published version answers 409 on download. The BriefAgent stays in search, carrying the quarantine state.",
+	"quarantine": "quarantined. A published version under quarantine answers 409 on download; the BriefAgent stays in search, carrying the state.",
 	"block":      "blocked. Every download for it answers 410 Gone.",
-	"reinstate":  "reinstated. Its versions are published again.",
+	"reinstate":  "reinstated. Quarantined and blocked versions are published again; yanked ones stay yanked.",
 }
 
 func (h *handler) staffAgentAction(w http.ResponseWriter, r *http.Request) {
@@ -399,12 +404,13 @@ func (h *handler) staffRulesetRelease(w http.ResponseWriter, r *http.Request) {
 		back(w, r, "/ui/staff", "", failMsg(res, err))
 		return
 	}
-	// 201 inserted a release and enqueued the rescan sweep; 200 is the row
-	// already on file, which changes nothing and starts no sweep
-	// (internal/api/handlers_ruleset.go). One flash for both claimed a record
-	// that had not happened.
+	// 201 recorded a release; 200 is the row already on file, which changes
+	// nothing (internal/api/handlers_ruleset.go). One flash for both claimed a
+	// record that had not happened. The sweep is not in either flash: the API
+	// enqueues it only when the insert was genuinely new, and a 201 over an
+	// existing row (the upsert's other branch) starts none.
 	if res.Status == http.StatusCreated {
-		back(w, r, "/ui/staff", "Ruleset release recorded. The rescan sweep will run.", "")
+		back(w, r, "/ui/staff", "Ruleset release recorded.", "")
 		return
 	}
 	back(w, r, "/ui/staff", "That ruleset release was already recorded. Nothing changed.", "")
