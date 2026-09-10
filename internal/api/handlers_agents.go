@@ -130,7 +130,7 @@ func (s *Server) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, auth.ErrUnauthorized):
 			problemUnauthorized(w, r, "")
 		case errors.Is(err, registry.ErrDenied):
-			problemValidation(w, r, err.Error())
+			problemValidation(w, r, sentence(err.Error()))
 		case isUniqueViolation(err):
 			problemConflict(w, r, "This namespace already has a BriefAgent with that name.")
 		default:

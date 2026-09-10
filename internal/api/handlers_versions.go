@@ -88,7 +88,7 @@ func (s *Server) writeSubmitError(w http.ResponseWriter, r *http.Request, err er
 	case errors.As(err, &vErr):
 		fields := make([]FieldError, 0, len(vErr.Issues))
 		for _, iss := range vErr.Issues {
-			fields = append(fields, FieldError{Field: "manifest", Message: iss.Error()})
+			fields = append(fields, FieldError{Field: "manifest", Message: sentence(iss.Error())})
 		}
 		problemValidation(w, r, "The registry rejected this submission. Each field error says what failed.", fields...)
 	case errors.Is(err, registry.ErrTwoFactorRequired):
@@ -101,7 +101,7 @@ func (s *Server) writeSubmitError(w http.ResponseWriter, r *http.Request, err er
 			"Scan not started",
 			"The registry recorded this version but could not schedule its scan. A watchdog routes it to review.")
 	case errors.Is(err, registry.ErrDenied):
-		problemValidation(w, r, err.Error())
+		problemValidation(w, r, sentence(err.Error()))
 	case errors.Is(err, auth.ErrUnauthorized):
 		problemUnauthorized(w, r, "")
 	case errors.Is(err, auth.ErrForbidden):
@@ -313,7 +313,7 @@ func (s *Server) YankVersion(w http.ResponseWriter, r *http.Request, ns Namespac
 	}
 	if err := s.reg.Transition(r.Context(), v.ID, registry.StatusYanked, reason, e); err != nil {
 		if errors.Is(err, registry.ErrBadTransition) {
-			problemConflict(w, r, err.Error())
+			problemConflict(w, r, "Only a published or quarantined version can be yanked.")
 			return
 		}
 		s.log.Error("yank", "err", err)
@@ -391,7 +391,7 @@ func (s *Server) ResolveRef(w http.ResponseWriter, r *http.Request, params Resol
 	}
 	ref, err := registry.ParseRef(params.Ref)
 	if err != nil {
-		problemValidation(w, r, err.Error())
+		problemValidation(w, r, sentence(err.Error()))
 		return
 	}
 	a, _, ok := s.resolveAgentForAction(w, r, ref.Namespace, ref.Name, auth.ActAgentRead)
@@ -413,7 +413,7 @@ func (s *Server) ResolveRef(w http.ResponseWriter, r *http.Request, params Resol
 			problemNotFound(w, r)
 			return
 		}
-		problemValidation(w, r, err.Error())
+		problemValidation(w, r, sentence(err.Error()))
 		return
 	}
 	v := res.Version
