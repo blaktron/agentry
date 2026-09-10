@@ -247,11 +247,14 @@ func (r renderer) link(path string) string {
 	return strings.TrimSuffix(r.baseURL, "/") + path
 }
 
-// footer closes every message the same way: who sent it and that it is
-// automated. Kept short — a wall of legal boilerplate on a security notice
-// buries the part that matters.
+// footer closes every message the same way: who sent it, why it arrived and
+// that a reply goes nowhere. Kept short — a wall of legal boilerplate on a
+// security notice buries the part that matters. "the account it concerns" is
+// as far as one line can honestly go for seven different mails: the address
+// on the account is the only thing every one of them has in common.
 func (r renderer) footer() string {
-	return "\n--\n" + r.registry + " sent this automatically. Do not reply to this message.\n"
+	return "\n--\n" + r.registry + " sent this automatically to the address\n" +
+		"on the account it concerns. Do not reply to this message.\n"
 }
 
 func (r renderer) verification(token string) message {
@@ -260,13 +263,21 @@ func (r renderer) verification(token string) message {
 		url = r.verifyEmail(token)
 	}
 	body := "Confirm this address to finish setting up your " + r.registry + " account.\n\n"
+	// The old close promised "the address will not be used", which nothing in
+	// the server keeps: no job deletes an unconfirmed account, the row keeps
+	// the address, and a later membership grant mails it. What IS true is the
+	// gate — registry.CreateAgent refuses an unverified principal (§19) — so
+	// say that instead, and say it once rather than reassure.
+	once := "The link works once."
 	if url != "" {
 		body += url + "\n\n"
 	} else {
 		body += "Verification code: " + token + "\n\n"
+		once = "The code works once."
 	}
-	body += "If you did not create an account, ignore this message; the address\n" +
-		"will not be used.\n"
+	body += once + " Until this address is confirmed, the account cannot\n" +
+		"create a BriefAgent or publish a version.\n\n" +
+		"If you did not create this account, ignore this message.\n"
 	return message{Subject: r.registry + ": confirm your email address", Body: body + r.footer()}
 }
 
@@ -388,10 +399,12 @@ func (r renderer) invite(n InviteNotice) message {
 }
 
 // severityLine renders a severity label, defaulting to something honest when
-// the caller did not set one.
+// the caller did not set one. The default is a word rather than the old
+// "unspecified-severity" slug so it reads in both places it appears: after
+// "Severity: " and inside "a finding at … severity".
 func severityLine(s string) string {
 	if s == "" {
-		return "unspecified-severity"
+		return "unspecified"
 	}
 	return s
 }

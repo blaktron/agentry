@@ -264,11 +264,21 @@ func TestLogNotifierNeverFails(t *testing.T) {
 	}
 }
 
-// With no BaseURL the verification message must still be actionable.
+// With no BaseURL the verification message must still be actionable, and it
+// must describe what the recipient has: a code, not a link.
 func TestVerificationFallsBackToACodeWithoutABaseURL(t *testing.T) {
 	r := renderer{registry: "Agentry"}
 	m := r.verification("tok123")
 	if !strings.Contains(m.Body, "Verification code: tok123") {
 		t.Errorf("no usable token without a base URL:\n%s", m.Body)
+	}
+	if !strings.Contains(m.Body, "The code works once.") {
+		t.Errorf("code branch describes a link it did not send:\n%s", m.Body)
+	}
+	// The old copy promised "the address will not be used", which nothing in
+	// the server keeps: no job deletes an unconfirmed account, and a later
+	// org grant mails the address anyway. The mail states the gate instead.
+	if strings.Contains(m.Body, "will not be used") {
+		t.Errorf("verification mail promises the address goes unused:\n%s", m.Body)
 	}
 }
