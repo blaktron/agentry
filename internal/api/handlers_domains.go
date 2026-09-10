@@ -66,7 +66,7 @@ func (s *Server) CreateDomainClaim(w http.ResponseWriter, r *http.Request, org O
 	}
 	domain := normalizeDomain(req.Domain)
 	if !validDomain(domain) {
-		problemValidation(w, r, "A domain must contain a dot, at most 253 characters, and only letters, digits and hyphens.")
+		problemValidation(w, r, "A domain must contain a dot, use only letters, digits and hyphens, and be at most 253 characters.")
 		return
 	}
 	token, err := auth.NewToken("")

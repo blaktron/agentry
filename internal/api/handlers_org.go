@@ -83,7 +83,7 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !reHandle.MatchString(req.Handle) {
-		problemValidation(w, r, "An org handle is 1-39 lowercase letters, digits and hyphens, starting and ending alphanumeric.")
+		problemValidation(w, r, "An org handle is 1-39 lowercase letters, digits and hyphens, starting and ending with a letter or digit.")
 		return
 	}
 	if handleReserved(req.Handle) {
@@ -307,7 +307,7 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 			return
 		}
 		if n <= 1 {
-			problemValidation(w, r, "This organization must keep one owner. Make another member an owner first.")
+			problemValidation(w, r, "This organization must keep at least one owner. Make another member an owner first.")
 			return
 		}
 	}
@@ -386,7 +386,7 @@ func (s *Server) RemoveOrgMember(w http.ResponseWriter, r *http.Request, org Org
 			return
 		}
 		if n <= 1 {
-			problemValidation(w, r, "This organization must keep one owner. Make another member an owner first.")
+			problemValidation(w, r, "This organization must keep at least one owner. Make another member an owner first.")
 			return
 		}
 	}
@@ -456,7 +456,7 @@ func (s *Server) CreateTeam(w http.ResponseWriter, r *http.Request, org OrgHandl
 		return
 	}
 	if !reHandle.MatchString(req.Slug) {
-		problemValidation(w, r, "A team slug is 1-39 lowercase letters, digits and hyphens, starting and ending alphanumeric.")
+		problemValidation(w, r, "A team slug is 1-39 lowercase letters, digits and hyphens, starting and ending with a letter or digit.")
 		return
 	}
 	var created storegen.Team
