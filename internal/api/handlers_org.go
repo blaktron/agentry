@@ -83,16 +83,16 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !reHandle.MatchString(req.Handle) {
-		problemValidation(w, r, "invalid org handle")
+		problemValidation(w, r, "An org handle is 1-39 lowercase letters, digits and hyphens, starting and ending alphanumeric.")
 		return
 	}
 	if handleReserved(req.Handle) {
-		problemValidation(w, r, "reserved org handle")
+		problemValidation(w, r, "That org handle is reserved. Choose another.")
 		return
 	}
 	name := strings.TrimSpace(req.DisplayName)
 	if name == "" || len(name) > 120 {
-		problemValidation(w, r, "displayName must be 1-120 characters")
+		problemValidation(w, r, "Set displayName to 1-120 characters.")
 		return
 	}
 	p := principalFrom(r.Context())
@@ -116,7 +116,7 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
-			problemConflict(w, r, "handle already in use")
+			problemConflict(w, r, "That org handle is already in use. Choose another.")
 			return
 		}
 		s.log.Error("create org", "err", err)
@@ -168,14 +168,14 @@ func (s *Server) UpdateOrg(w http.ResponseWriter, r *http.Request, org OrgHandle
 		return
 	}
 	if req.DisplayName == nil && req.SsoRequired == nil {
-		problemValidation(w, r, "nothing to update")
+		problemValidation(w, r, "Send at least one of displayName or ssoRequired.")
 		return
 	}
 	name := ""
 	if req.DisplayName != nil {
 		name = strings.TrimSpace(*req.DisplayName)
 		if name == "" || len(name) > 120 {
-			problemValidation(w, r, "displayName must be 1-120 characters")
+			problemValidation(w, r, "Set displayName to 1-120 characters.")
 			return
 		}
 	}
@@ -184,7 +184,7 @@ func (s *Server) UpdateOrg(w http.ResponseWriter, r *http.Request, org OrgHandle
 	if req.SsoRequired != nil {
 		p := principalFrom(r.Context())
 		if auth.Check(p, auth.Resource{OrgID: row.ID}, auth.ActOrgSettingsManage) != nil {
-			problemForbidden(w, r, "changing ssoRequired requires owner")
+			problemForbidden(w, r, "Only an owner can change ssoRequired.")
 			return
 		}
 	}
@@ -287,7 +287,7 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 	switch requested {
 	case auth.RoleOwner, auth.RoleAdmin, auth.RoleSecurityReviewer, auth.RoleMember:
 	default:
-		problemValidation(w, r, "invalid role")
+		problemValidation(w, r, "Set role to owner, admin, member or security_reviewer.")
 		return
 	}
 
@@ -307,7 +307,7 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 			return
 		}
 		if n <= 1 {
-			problemValidation(w, r, "cannot demote the last owner")
+			problemValidation(w, r, "This organization must keep one owner. Make another member an owner first.")
 			return
 		}
 	}
@@ -386,7 +386,7 @@ func (s *Server) RemoveOrgMember(w http.ResponseWriter, r *http.Request, org Org
 			return
 		}
 		if n <= 1 {
-			problemValidation(w, r, "cannot remove the last owner")
+			problemValidation(w, r, "This organization must keep one owner. Make another member an owner first.")
 			return
 		}
 	}
@@ -456,7 +456,7 @@ func (s *Server) CreateTeam(w http.ResponseWriter, r *http.Request, org OrgHandl
 		return
 	}
 	if !reHandle.MatchString(req.Slug) {
-		problemValidation(w, r, "invalid team slug")
+		problemValidation(w, r, "A team slug is 1-39 lowercase letters, digits and hyphens, starting and ending alphanumeric.")
 		return
 	}
 	var created storegen.Team
@@ -474,7 +474,7 @@ func (s *Server) CreateTeam(w http.ResponseWriter, r *http.Request, org OrgHandl
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
-			problemConflict(w, r, "team slug already exists")
+			problemConflict(w, r, "That team slug is already taken in this organization. Choose another.")
 			return
 		}
 		s.log.Error("create team", "err", err)
@@ -571,7 +571,7 @@ func (s *Server) AddTeamMember(w http.ResponseWriter, r *http.Request, org OrgHa
 	}
 	// Team membership requires org membership (§4.1 model).
 	if _, err := s.q().GetMembership(r.Context(), storegen.GetMembershipParams{OrgID: orgRow.ID, UserID: target.ID}); err != nil {
-		problemValidation(w, r, "user is not an org member")
+		problemValidation(w, r, "Add this user to the organization before adding them to a team.")
 		return
 	}
 	err = s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
