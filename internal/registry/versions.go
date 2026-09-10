@@ -307,7 +307,7 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 	}
 	rawManifest, err := os.ReadFile(in.Workspace + "/agent.yaml") //nolint:gosec // server-created workspace
 	if err != nil {
-		return Version{}, &ErrValidation{Issues: []error{errors.New("agent.yaml missing (V1)")}}
+		return Version{}, &ErrValidation{Issues: []error{errors.New("agent.yaml missing from the submission")}}
 	}
 	m, err := manifest.Parse(rawManifest)
 	if err != nil {
@@ -440,7 +440,7 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 	})
 	if err != nil {
 		if isUniqueViolationErr(err) {
-			return Version{}, fmt.Errorf("%w: version %s already exists (immutable, §5.5)", ErrDenied, m.Version)
+			return Version{}, fmt.Errorf("%w: version %s already exists; versions are immutable", ErrDenied, m.Version)
 		}
 		return Version{}, err
 	}
@@ -490,7 +490,7 @@ func (s *Service) checkPublicPublish2FA(ctx context.Context, p *auth.Principal, 
 	// Native TOTP, or a second factor the directory service asserted at
 	// sign-in (users.idp_mfa_at, agentry#23): either is evidence.
 	if !u.TotpEnabled && u.IdpMfaAt == nil {
-		return fmt.Errorf("%w: two-factor authentication must be enabled before publishing to a public namespace (§12.1, §19) — enable it in Settings, or at your sign-in provider and sign in again", ErrTwoFactorRequired)
+		return fmt.Errorf("%w: a public namespace needs a second factor on the account — native TOTP, or one the sign-in provider asserts", ErrTwoFactorRequired)
 	}
 	return nil
 }
