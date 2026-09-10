@@ -55,11 +55,11 @@ func (h *handler) loginPage(w http.ResponseWriter, r *http.Request) {
 // the form posts need (agentry#77).
 func (h *handler) loginSubmit(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
-		http.Error(w, "cross-origin form post rejected", http.StatusForbidden)
+		h.refuseCrossOrigin(w, r)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad form", http.StatusBadRequest)
+		h.refuseBadForm(w, r)
 		return
 	}
 	next := safeNext(r.PostFormValue("next"), "/ui/account")
@@ -69,7 +69,7 @@ func (h *handler) loginSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := h.call(r).do(http.MethodPost, "/auth/login", body)
 	if err != nil {
-		http.Error(w, "sign-in failed", http.StatusBadGateway)
+		h.refuse(w, r, http.StatusBadGateway, "Sign-in unavailable", "The server could not be reached. Try again in a moment.")
 		return
 	}
 	if !res.OK() {
@@ -193,7 +193,7 @@ func (h *handler) authorizeApprove(w http.ResponseWriter, r *http.Request) {
 	}
 	d := parseAuthorizeParams(r.PostFormValue("port"), r.PostFormValue("state"))
 	if !d.Valid {
-		http.Error(w, "invalid device callback parameters", http.StatusBadRequest)
+		h.refuse(w, r, http.StatusBadRequest, "Invalid device request", "The port or state in this form is not valid. Start the sign-in again from the program.")
 		return
 	}
 	res, err := h.call(r).do(http.MethodPost, "/user/tokens/desktop-grant", map[string]string{"state": d.State})
