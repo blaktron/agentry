@@ -88,7 +88,7 @@ func (s *Server) CreateWebhook(w http.ResponseWriter, r *http.Request, org OrgHa
 		return
 	}
 	if fe := validateWebhookInput(req.Url, req.Events); fe != nil {
-		problemValidation(w, r, "Nothing was created; one webhook field is invalid.", *fe)
+		problemValidation(w, r, "The registry rejected the webhook endpoint. Each field error says what to fix.", *fe)
 		return
 	}
 	// §19 endpoint cap. Checked before minting a secret so a refused request
@@ -204,7 +204,7 @@ func (s *Server) UpdateWebhook(w http.ResponseWriter, r *http.Request, org OrgHa
 		active = *req.Active
 	}
 	if fe := validateWebhookInput(url, events); fe != nil {
-		problemValidation(w, r, "Nothing was changed; one webhook field is invalid.", *fe)
+		problemValidation(w, r, "The registry rejected the change. Each field error says what to fix.", *fe)
 		return
 	}
 	var updated storegen.WebhookEndpoint

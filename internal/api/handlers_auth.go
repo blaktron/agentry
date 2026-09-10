@@ -98,7 +98,7 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 		fields = append(fields, FieldError{Field: "password", Message: "Must be 10-256 characters."})
 	}
 	if len(fields) > 0 {
-		problemValidation(w, r, "Registration rejected. Fix the fields listed and try again.", fields...)
+		problemValidation(w, r, "The registry rejected the registration. Each field error says what to fix.", fields...)
 		return
 	}
 

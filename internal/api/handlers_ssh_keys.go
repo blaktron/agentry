@@ -73,7 +73,7 @@ func (s *Server) AddSshKey(w http.ResponseWriter, r *http.Request) {
 		fields = append(fields, FieldError{Field: "publicKey", Message: "This server does not accept DSA keys."})
 	}
 	if len(fields) > 0 {
-		problemValidation(w, r, "SSH key rejected. Fix the fields listed and try again.", fields...)
+		problemValidation(w, r, "The registry rejected the SSH key. Each field error says what to fix.", fields...)
 		return
 	}
 	p := principalFrom(r.Context())
@@ -95,7 +95,7 @@ func (s *Server) AddSshKey(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			problemValidation(w, r, "SSH key rejected. Fix the fields listed and try again.", FieldError{Field: "publicKey", Message: "This key is already registered."})
+			problemValidation(w, r, "The registry rejected the SSH key. Each field error says what to fix.", FieldError{Field: "publicKey", Message: "This key is already registered."})
 			return
 		}
 		s.log.Error("add ssh key", "err", err)

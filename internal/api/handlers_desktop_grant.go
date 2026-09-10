@@ -48,7 +48,7 @@ func (s *Server) CreateDesktopGrant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !desktopStateRE.MatchString(req.State) {
-		problemValidation(w, r, "Desktop grant rejected. Fix the fields listed and try again.", FieldError{Field: "state", Message: "Must match [A-Za-z0-9_-]{8,128} (letters, digits, hyphen and underscore)."})
+		problemValidation(w, r, "The registry rejected the desktop grant. Each field error says what to fix.", FieldError{Field: "state", Message: "Must match [A-Za-z0-9_-]{8,128} (letters, digits, hyphen and underscore)."})
 		return
 	}
 	p := principalFrom(r.Context())
