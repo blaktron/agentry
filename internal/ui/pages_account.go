@@ -254,9 +254,17 @@ func (h *handler) sessionsSubmit(w http.ResponseWriter, r *http.Request) {
 	back(w, r, "/ui/account/sessions", ok, "")
 }
 
+// failMsg is what a form says when the call behind it did not succeed. The
+// error branch is not a network failure: the API is dispatched in-process
+// (client.go — ServeHTTP cannot fail), so do() returns an error only when the
+// request could not be built at all, and then nothing was sent and nothing
+// changed. Every page says exactly that, in these words.
 func failMsg(res response, err error) string {
 	if err != nil {
-		return "the server could not be reached"
+		return notSent
 	}
 	return res.detail()
 }
+
+// notSent is the one copy for that branch, shared by every page.
+const notSent = "The request was not sent. Nothing changed."

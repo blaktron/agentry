@@ -82,7 +82,7 @@ func (h *handler) reviewQueue(w http.ResponseWriter, r *http.Request) {
 	res, err := h.call(r).do(http.MethodGet, path, nil)
 	switch {
 	case err != nil:
-		d.Error = "the server could not be reached"
+		d.Error = notSent
 	case res.OK():
 		_ = res.decode(&d.Items)
 	default:
@@ -132,7 +132,7 @@ func (h *handler) reviewItemPage(w http.ResponseWriter, r *http.Request) {
 	c := h.call(r)
 	res, err := c.do(http.MethodGet, "/review-items/"+url.PathEscape(id), nil)
 	if err != nil {
-		h.render(w, r, http.StatusBadGateway, "message", page{Title: "Review", User: u, Error: "the server could not be reached"})
+		h.render(w, r, http.StatusBadGateway, "message", page{Title: "Review", User: u, Error: notSent})
 		return
 	}
 	if !res.OK() {

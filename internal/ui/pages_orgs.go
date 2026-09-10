@@ -98,7 +98,7 @@ func (h *handler) orgPage(w http.ResponseWriter, r *http.Request) {
 	res, err := c.do(http.MethodGet, base, nil)
 	if err != nil || !res.OK() {
 		status := http.StatusBadGateway
-		msg := "the server could not be reached"
+		msg := notSent
 		if err == nil {
 			status, msg = res.Status, res.detail()
 		}
