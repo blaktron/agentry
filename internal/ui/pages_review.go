@@ -240,7 +240,15 @@ func (h *handler) reviewDecide(w http.ResponseWriter, r *http.Request) {
 		back(w, r, "/ui/review", "Approved. The version is publishing and signing now.", "")
 		return
 	}
-	back(w, r, "/ui/review", "Rejected. This version will not publish.", "")
+	// What a reject does depends on where the version was, and this page
+	// cannot see that: the API sends a pending version to `rejected`, but a
+	// QUARANTINED one to `yanked` instead — the rejected edge does not exist
+	// for it (internal/api/handlers_reviews.go) — and a yanked version still
+	// resolves for an exact pin (internal/registry/resolve.go). The rescan
+	// path files exactly those items, so "will not publish" was false for
+	// them. The flash says what the decision recorded and leaves publication
+	// to the version's own state (agentry#273 carries that seam).
+	back(w, r, "/ui/review", "Rejected. The decision and rationale are recorded with the version.", "")
 }
 
 func (h *handler) findingVerdict(w http.ResponseWriter, r *http.Request) {

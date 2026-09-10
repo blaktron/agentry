@@ -313,7 +313,7 @@ func TestReviewPages(t *testing.T) {
 			}
 			var body map[string]string
 			_ = json.NewDecoder(r.Body).Decode(&body)
-			if body["decision"] != "approve" || body["rationale"] != "looks fine" {
+			if (body["decision"] != "approve" && body["decision"] != "reject") || body["rationale"] != "looks fine" {
 				http.Error(w, `{"detail":"bad body"}`, http.StatusBadRequest)
 				return
 			}
@@ -342,6 +342,13 @@ func TestReviewPages(t *testing.T) {
 	w = post(h, "/ui/review/ri1/decision", url.Values{"_csrf": {"csrf1"}, "decision": {"approve"}, "rationale": {"looks fine"}}, nil, sessCookie, csrfCookieV)
 	if w.Code != http.StatusSeeOther || !strings.HasPrefix(w.Header().Get("Location"), "/ui/review?ok=Approved") {
 		t.Fatalf("decide: %d %s %s", w.Code, w.Header().Get("Location"), w.Body.String())
+	}
+	// A reject records a decision; whether the version ends at `rejected` or,
+	// if it was quarantined, at `yanked` is the API's to decide, and this page
+	// posts blind. The flash therefore claims nothing about publication.
+	w = post(h, "/ui/review/ri1/decision", url.Values{"_csrf": {"csrf1"}, "decision": {"reject"}, "rationale": {"looks fine"}}, nil, sessCookie, csrfCookieV)
+	if loc := w.Header().Get("Location"); w.Code != http.StatusSeeOther || loc != "/ui/review?ok=Rejected.+The+decision+and+rationale+are+recorded+with+the+version." {
+		t.Fatalf("reject: %d %s %s", w.Code, loc, w.Body.String())
 	}
 	w = post(h, "/ui/review/ri1/findings/f1/verdict", url.Values{"_csrf": {"csrf1"}, "verdict": {"dismissed_false_positive"}, "reason": {"fixture"}}, nil, sessCookie, csrfCookieV)
 	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/ui/review/ri1?ok=Verdict+recorded." {
