@@ -1,10 +1,14 @@
-# The posture sentences of the core's markdown, byte for byte (plan
-# front-end-voice-and-warmth §4.6, from a grep of this repository on
-# 2026-09-09).
+# The posture sentences of the core's markdown, its own pages and its
+# notifier, byte for byte (plan front-end-voice-and-warmth §4.6, from a grep
+# of this repository on 2026-09-09; the pages and the notifier added
+# 2026-09-10 with the M8 copy pass).
 #
 # Each line is `<file>[, <file>…] :: <sentence>`: the sentence must appear in
 # every file named, with whitespace normalised and entities resolved, because
-# markdown reflows a sentence across source lines. Nothing else is stripped —
+# markdown reflows a sentence across source lines. Any relative path works,
+# so a template or a Go file can be listed too — but the comparison is over
+# the source, so a sentence in Go must sit inside ONE string literal: the
+# `\n" +` between two of them is bytes the sentence would have to contain. Nothing else is stripped —
 # the emphasis markers, the colons and the quotation marks below are part of
 # the claim, so they are compared too.
 #
@@ -51,3 +55,12 @@ SECURITY.md :: Declared capabilities are not runtime-enforced.
 docs/trust.md :: Scanning happens at publication, not at push and not at run time.
 docs/trust.md :: The shipped scanners are good, not identical to the tools PLAN §8.3 names.
 docs/trust.md :: Review is human, and humans are the ones deciding.
+
+# 6. The pages and the mails that carry the same posture. Read by the reader,
+# not by a reviewer of the docs, and just as easy to soften into nothing.
+internal/ui/templates/review_item.html :: Authors cannot decide their own submissions. The server enforces this.
+internal/ui/templates/org.html :: Organization policy may only tighten the platform baseline.
+internal/ui/templates/sshkeys.html :: A key is worth repository read/write and the release tag your role allows — never the API.
+internal/notify/notify.go :: not certify that nothing was missed.
+internal/notify/notify.go :: are not reached by this change.
+internal/notify/notify.go :: Nothing in the registry reaches copies that are already installed.

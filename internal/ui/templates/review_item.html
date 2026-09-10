@@ -2,7 +2,7 @@
 {{with .Data}}
 <p><a href="/ui/review">&larr; Review queue</a></p>
 <h1>{{.Bundle.Item.Namespace}}/{{.Bundle.Item.Agent}} <span class="muted">@{{.Bundle.Item.Version}}</span> <span class="badge">{{.Bundle.Item.State}}</span></h1>
-{{if .Manifest}}<section class="card"><h2>Manifest</h2><pre class="secret">{{.Manifest}}</pre></section>{{end}}
+{{if .Manifest}}<section class="card"><h2>Manifest</h2><p class="muted">The keys a reviewer reads first; the whole file is in the Files listing below.</p><pre class="secret">{{.Manifest}}</pre></section>{{end}}
 <section class="card">
 <h2>Findings ({{len .Bundle.Findings}})</h2>
 {{if not .Bundle.Findings}}<p class="muted">No findings.</p>
@@ -13,7 +13,7 @@
 {{if .VerdictReason}}<p class="muted">{{.VerdictReason}}</p>{{end}}
 {{if .ID}}<form method="post" action="/ui/review/{{$.Data.Bundle.Item.ID}}/findings/{{.ID}}/verdict" class="row">
   <input type="hidden" name="_csrf" value="{{$.CSRF}}">
-  <select name="verdict">{{range $.Data.Verdicts}}<option value="{{.}}">{{.}}</option>{{end}}</select>
+  <select name="verdict">{{range $.Data.Verdicts}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</select>
   <input name="reason" placeholder="reason" class="short">
   <button type="submit" class="small secondary">Record verdict</button>
 </form>{{end}}
@@ -21,7 +21,7 @@
 </section>
 <section class="card">
 <h2>Files</h2>
-{{if not .Files}}<p class="muted">No file listing.</p>
+{{if not .Files}}<p class="muted">No file listing. Either this version's archive is not built yet, or the listing did not answer.</p>
 {{else}}<p class="files">{{range .Files}}<a href="/ui/review/{{$.Data.Bundle.Item.ID}}?file={{.Path}}"><code>{{.Path}}</code></a> <span class="muted">{{.Size}} B</span> · {{end}}</p>{{end}}
 {{with .File}}
 <h3>{{.Path}}{{if .Truncated}} <span class="badge warn">truncated</span>{{end}}</h3>
@@ -38,6 +38,8 @@
   <label>Rationale<textarea name="rationale" rows="3" required></textarea></label>
   <button type="submit" name="decision" value="approve">Approve and publish</button>
   <button type="submit" name="decision" value="reject" class="danger">Reject</button>
+  <p class="muted">The rationale is recorded in the audit log, and mailed to the author unless they switched these emails off.</p>
+  <p class="muted">Approving publishes and signs this version. Authors cannot decide their own submissions. The server enforces this.</p>
 </form>
 </section>
 {{end}}

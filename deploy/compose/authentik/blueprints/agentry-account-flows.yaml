@@ -209,7 +209,7 @@ entries:
       label: Username
       type: username
       required: true
-      placeholder: "lowercase, letters and digits — this becomes your registry handle"
+      placeholder: "your registry handle, in lowercase letters and digits"
       placeholder_expression: false
       order: 0
   - model: authentik_stages_prompt.prompt
@@ -221,7 +221,7 @@ entries:
       label: Display name
       type: text
       required: true
-      placeholder: "How you want to appear on the registry"
+      placeholder: "your name on the registry"
       placeholder_expression: false
       order: 1
   - model: authentik_stages_prompt.prompt
@@ -233,7 +233,7 @@ entries:
       label: Email
       type: email
       required: true
-      placeholder: "We send a confirmation link here"
+      placeholder: "where the confirmation link goes"
       placeholder_expression: false
       order: 2
 

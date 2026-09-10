@@ -8,6 +8,7 @@
 {{end}}
 {{if not .ExternalOnly}}
 <section class="card">
+<p>Signing in here creates a session for this browser; the command line and the desktop app use tokens instead.</p>
 <form method="post" action="/ui/login">
   <input type="hidden" name="next" value="{{.Next}}">
   <label>Handle or email<input name="login" value="{{.Login}}" required autocomplete="username"></label>
@@ -17,7 +18,7 @@
 </form>
 </section>
 {{else if not .Providers}}
-<p class="muted">Accounts on this registry live in a directory service, but no sign-in provider is configured. Ask the operator.</p>
+<p class="muted">Accounts on this registry live in a directory service, but the operator has not configured a sign-in provider. Ask the operator to add one.</p>
 {{end}}
 {{end}}
 {{end}}

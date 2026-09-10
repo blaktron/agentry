@@ -55,11 +55,11 @@ func (h *handler) loginPage(w http.ResponseWriter, r *http.Request) {
 // the form posts need (agentry#77).
 func (h *handler) loginSubmit(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
-		http.Error(w, "cross-origin form post rejected", http.StatusForbidden)
+		h.refuseCrossOrigin(w, r)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad form", http.StatusBadRequest)
+		h.refuseBadForm(w, r)
 		return
 	}
 	next := safeNext(r.PostFormValue("next"), "/ui/account")
@@ -69,7 +69,7 @@ func (h *handler) loginSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := h.call(r).do(http.MethodPost, "/auth/login", body)
 	if err != nil {
-		http.Error(w, "sign-in failed", http.StatusBadGateway)
+		h.refuse(w, r, http.StatusBadGateway, "Sign-in unavailable", notSent)
 		return
 	}
 	if !res.OK() {
@@ -89,7 +89,7 @@ func (h *handler) loginSubmit(w http.ResponseWriter, r *http.Request) {
 	_ = res.decode(&out)
 	sess := findSetCookie(res.Header, sessionCookie)
 	if sess == "" || cookieValueOf(sess) == "" || out.CsrfToken == "" {
-		back(w, r, "/ui/login", "", "sign-in succeeded but no session was issued")
+		back(w, r, "/ui/login", "", "Sign-in succeeded but no session was issued. You are not signed in.")
 		return
 	}
 	forwardCookies(w, res.Header)
@@ -135,7 +135,7 @@ func (h *handler) verifyEmail(w http.ResponseWriter, r *http.Request) {
 	res, err := h.call(r).do(http.MethodPost, "/auth/verify-email", map[string]string{"token": token})
 	switch {
 	case err != nil:
-		p.Error = "The server could not be reached. Try again in a moment."
+		p.Error = notSent
 		h.render(w, r, http.StatusBadGateway, "message", p)
 	case res.OK():
 		p.Flash = "Your email address is verified. You can sign in."
@@ -193,12 +193,12 @@ func (h *handler) authorizeApprove(w http.ResponseWriter, r *http.Request) {
 	}
 	d := parseAuthorizeParams(r.PostFormValue("port"), r.PostFormValue("state"))
 	if !d.Valid {
-		http.Error(w, "invalid device callback parameters", http.StatusBadRequest)
+		h.refuse(w, r, http.StatusBadRequest, "Invalid device request", "The port or state in this form is not valid. Start the sign-in again from the program.")
 		return
 	}
 	res, err := h.call(r).do(http.MethodPost, "/user/tokens/desktop-grant", map[string]string{"state": d.State})
 	if err != nil || !res.OK() {
-		msg := "the server could not be reached"
+		msg := notSent
 		if err == nil {
 			msg = res.detail()
 		}
@@ -213,7 +213,7 @@ func (h *handler) authorizeApprove(w http.ResponseWriter, r *http.Request) {
 		Code string `json:"code"`
 	}
 	if res.decode(&grant) != nil || grant.Code == "" {
-		back(w, r, "/ui/authorize?port="+strconv.Itoa(d.Port)+"&state="+url.QueryEscape(d.State), "", "no code was issued")
+		back(w, r, "/ui/authorize?port="+strconv.Itoa(d.Port)+"&state="+url.QueryEscape(d.State), "", "No code was issued. This device is not authorized.")
 		return
 	}
 	cb := url.URL{Scheme: "http", Host: "127.0.0.1:" + strconv.Itoa(d.Port), Path: "/callback"}

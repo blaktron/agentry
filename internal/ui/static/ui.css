@@ -1,46 +1,99 @@
 /* The core surface's one stylesheet (DEV-091). Plain on purpose: a brand
-   supplies its own through brand.cssURL, layered after this one. */
-:root { --ink: #1c1b18; --paper: #fbfaf7; --muted: #6b665c; --line: #d9d4c8; --accent: #2f6f5e; --accent-ink: #fff; --danger: #a33a2c; --warn: #8a6a00; }
-@media (prefers-color-scheme: dark) { :root { --ink: #ecebe6; --paper: #15171a; --muted: #a09b90; --line: #33373d; --accent: #5cc2a6; --accent-ink: #0d1412; } }
+   supplies its own through brand.cssURL, layered after this one.
+
+   The token names and values are the estate's design tokens, the same table
+   the site's app/globals.css carries. Only the colours are taken. There is no
+   web font, no JavaScript, no decoration and no radius scale here: the type
+   stacks stay the system ones and the radii stay the pixel values they were,
+   because these pages are deliberately plain (ARCHITECTURE §5b).
+
+   Every text pair below measures at least 4.5:1 against its own ground in its
+   own scheme. Severity is not carried by colour alone: critical is the one
+   solid chip, its text the page ground, and the severity word renders beside
+   every badge. */
+:root {
+  color-scheme: light dark;        /* so the UA's own form controls follow the tokens */
+  --color-bg: #faf6ee;             /* the page */
+  --color-fg: #231b12;             /* body text */
+  --color-muted: #66584a;          /* captions, secondary labels, line numbers */
+  --color-border: #e6dccb;         /* container hairlines: cards, rules, list rows */
+  --color-border-strong: #c4b59c;  /* control edges: inputs, secondary buttons, chips */
+  --color-accent: #0e7a63;         /* the one action colour */
+  --color-accent-fg: #ffffff;      /* text on an accent fill; flips with the scheme */
+  --color-ok: #116f34;
+  --color-sev-critical: #7f1d1d;
+  --color-sev-high: #b91c1c;
+  --color-sev-high-bg: #f5e5dd;    /* sev-high 8% into bg: the fill of a cited line */
+  --color-sev-medium: #9f4707;
+  --color-sev-low: #3f6b0c;
+  --color-sev-info: #475569;
+}
+/* Dark: the light ink pushed to a ground and the light paper pushed to text,
+   same hue family, roles swapped. Only the values move; every rule below is
+   written once. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #16110d;
+    --color-fg: #ece4d8;
+    --color-muted: #b3a48f;
+    --color-border: #33291f;
+    --color-border-strong: #4d3f31;
+    --color-accent: #4fd1b0;
+    --color-accent-fg: #16110d;    /* the accent fill flips, so its text does too */
+    --color-ok: #4ade80;
+    --color-sev-critical: #fca5a5;
+    --color-sev-high: #f87171;
+    --color-sev-high-bg: #3a201d;  /* sev-high 16% into bg */
+    --color-sev-medium: #fbbf24;
+    --color-sev-low: #a3e635;
+    --color-sev-info: #94a3b8;
+  }
+}
 * { box-sizing: border-box; }
-body { margin: 0; font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--paper); }
+body { margin: 0; font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--color-fg); background: var(--color-bg); }
 code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9em; }
-header.top { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--line); }
+header.top { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--color-border); }
 header.top .brand { display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 600; color: inherit; text-decoration: none; }
-header.top nav.user { display: flex; gap: 0.75rem; align-items: center; color: var(--muted); }
+header.top nav.user { display: flex; gap: 0.75rem; align-items: center; color: var(--color-muted); }
 main { max-width: 44rem; margin: 1.5rem auto; padding: 0 1.25rem; }
-footer { max-width: 44rem; margin: 2rem auto; padding: 0 1.25rem; color: var(--muted); font-size: 0.85rem; }
+footer { max-width: 44rem; margin: 2rem auto; padding: 0 1.25rem; color: var(--color-muted); font-size: 0.85rem; }
 footer a { color: inherit; }
-h1 { font-size: 1.35rem; margin: 0 0 1rem; } h2 { font-size: 1.05rem; margin: 0 0 0.5rem; } h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 1rem 0 0.25rem; }
-.card { border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
-.muted { color: var(--muted); }
+h1 { font-size: 1.35rem; margin: 0 0 1rem; } h2 { font-size: 1.05rem; margin: 0 0 0.5rem; } h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-muted); margin: 1rem 0 0.25rem; }
+.card { border: 1px solid var(--color-border); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+.muted { color: var(--color-muted); }
 nav.sections { display: flex; gap: 0.25rem; margin-bottom: 1rem; }
-nav.sections a { padding: 0.3rem 0.7rem; border: 1px solid var(--line); border-radius: 6px; color: inherit; text-decoration: none; }
-nav.sections a[aria-current="page"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+nav.sections a { padding: 0.3rem 0.7rem; border: 1px solid var(--color-border-strong); border-radius: 6px; color: inherit; text-decoration: none; }
+nav.sections a[aria-current="page"] { background: var(--color-accent); color: var(--color-accent-fg); border-color: var(--color-accent); }
 label { display: block; margin: 0.5rem 0; } label.check { display: inline-block; margin-right: 1rem; }
-input:not([type=checkbox]), textarea { display: block; width: 100%; margin-top: 0.2rem; padding: 0.4rem 0.5rem; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: inherit; font: inherit; }
-fieldset { border: 1px solid var(--line); border-radius: 6px; margin: 0.5rem 0; }
-button, a.button { display: inline-block; margin-top: 0.5rem; padding: 0.4rem 0.9rem; border: 1px solid var(--accent); border-radius: 6px; background: var(--accent); color: var(--accent-ink); font: inherit; cursor: pointer; text-decoration: none; }
-button.secondary, a.button.secondary { background: transparent; color: inherit; border-color: var(--line); }
-button.link { background: none; border: none; color: var(--accent); padding: 0; margin: 0; text-decoration: underline; }
+input:not([type=checkbox]), textarea { display: block; width: 100%; margin-top: 0.2rem; padding: 0.4rem 0.5rem; border: 1px solid var(--color-border-strong); border-radius: 6px; background: transparent; color: inherit; font: inherit; }
+fieldset { border: 1px solid var(--color-border); border-radius: 6px; margin: 0.5rem 0; }
+button, a.button { display: inline-block; margin-top: 0.5rem; padding: 0.4rem 0.9rem; border: 1px solid var(--color-accent); border-radius: 6px; background: var(--color-accent); color: var(--color-accent-fg); font: inherit; cursor: pointer; text-decoration: none; }
+button.secondary, a.button.secondary { background: transparent; color: inherit; border-color: var(--color-border-strong); }
+button.link { background: none; border: none; color: var(--color-accent); padding: 0; margin: 0; text-decoration: underline; }
 button.small { padding: 0.1rem 0.5rem; font-size: 0.85rem; margin: 0 0 0 0.5rem; }
-button.danger { background: transparent; color: var(--danger); border-color: var(--danger); }
+button.danger { background: transparent; color: var(--color-sev-high); border-color: var(--color-sev-high); }
 form.inline { display: inline; }
-ul.list { list-style: none; padding: 0; margin: 0; } ul.list li { padding: 0.4rem 0; border-top: 1px solid var(--line); }
-.badge { display: inline-block; padding: 0 0.4rem; border-radius: 4px; border: 1px solid var(--line); font-size: 0.8rem; }
-.badge.ok { border-color: var(--accent); color: var(--accent); } .badge.warn { border-color: var(--warn); color: var(--warn); }
-.flash { padding: 0.5rem 0.75rem; border-radius: 6px; border: 1px solid var(--accent); } .flash.error { border-color: var(--danger); color: var(--danger); }
-pre.secret { padding: 0.5rem; border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; user-select: all; }
+ul.list { list-style: none; padding: 0; margin: 0; } ul.list li { padding: 0.4rem 0; border-top: 1px solid var(--color-border); }
+.badge { display: inline-block; padding: 0 0.4rem; border-radius: 4px; border: 1px solid var(--color-border-strong); font-size: 0.8rem; }
+.badge.ok { border-color: var(--color-ok); color: var(--color-ok); } .badge.warn { border-color: var(--color-sev-medium); color: var(--color-sev-medium); }
+.flash { padding: 0.5rem 0.75rem; border-radius: 6px; border: 1px solid var(--color-accent); } .flash.error { border-color: var(--color-sev-high); color: var(--color-sev-high); }
+pre.secret { padding: 0.5rem; border: 1px solid var(--color-border); border-radius: 6px; overflow-x: auto; user-select: all; }
 .ua { display: inline-block; max-width: 22rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 /* review and staff */
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.5rem 0; }
 .row input.short, .row select, input.short { display: inline-block; width: auto; margin: 0; }
 .inline-label { display: inline-flex; align-items: center; gap: 0.3rem; margin: 0; }
-pre.code { padding: 0.5rem; border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; font-size: 0.85em; line-height: 1.4; }
-pre.code .ln { display: inline-block; width: 3.5em; text-align: right; color: var(--muted); user-select: none; }
-pre.code .ln.hit { background: var(--warn); color: #fff; border-radius: 3px; }
-pre.excerpt { padding: 0.3rem 0.5rem; border-left: 3px solid var(--line); margin: 0.3rem 0; white-space: pre-wrap; }
+pre.code { padding: 0.5rem; border: 1px solid var(--color-border); border-radius: 6px; overflow-x: auto; font-size: 0.85em; line-height: 1.4; }
+pre.code .ln { display: inline-block; width: 3.5em; text-align: right; color: var(--color-muted); user-select: none; }
+pre.code .ln.hit { background: var(--color-sev-high-bg); color: var(--color-sev-high); border-radius: 3px; }
+pre.excerpt { padding: 0.3rem 0.5rem; border-left: 3px solid var(--color-border-strong); margin: 0.3rem 0; white-space: pre-wrap; }
 .files a { margin-right: 0.2rem; }
-.badge.sev-critical, .badge.sev-high { border-color: var(--danger); color: var(--danger); }
-.badge.sev-medium { border-color: var(--warn); color: var(--warn); }
+/* Severity: critical is the one solid chip, so it differs from high in fill,
+   polarity and shade rather than by a shade of red. The two were the same
+   colour here until now, while the site kept them apart. */
+.badge.sev-critical { background: var(--color-sev-critical); border-color: var(--color-sev-critical); color: var(--color-bg); }
+.badge.sev-high { border-color: var(--color-sev-high); color: var(--color-sev-high); }
+.badge.sev-medium { border-color: var(--color-sev-medium); color: var(--color-sev-medium); }
+.badge.sev-low { border-color: var(--color-sev-low); color: var(--color-sev-low); }
+.badge.sev-info { border-color: var(--color-sev-info); color: var(--color-sev-info); }
 textarea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85em; }

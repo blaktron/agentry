@@ -66,7 +66,7 @@ func (h *handler) directoryDeviceRemove(w http.ResponseWriter, r *http.Request) 
 	}
 	kind, id := r.PostFormValue("kind"), r.PostFormValue("deviceId")
 	if kind == "" || id == "" {
-		back(w, r, "/ui/account", "", "which authenticator?")
+		back(w, r, "/ui/account", "", "The form did not say which authenticator to remove.")
 		return
 	}
 	res, err := h.call(r).do(http.MethodDelete, "/user/directory/devices/"+url.PathEscape(kind)+"/"+url.PathEscape(id), nil)
@@ -74,7 +74,7 @@ func (h *handler) directoryDeviceRemove(w http.ResponseWriter, r *http.Request) 
 		back(w, r, "/ui/account", "", failMsg(res, err))
 		return
 	}
-	back(w, r, "/ui/account", "Authenticator removed.", "")
+	back(w, r, "/ui/account", "Authenticator removed. Sign-in no longer accepts it.", "")
 }
 
 type token struct {
@@ -118,7 +118,7 @@ func (h *handler) tokensSubmit(w http.ResponseWriter, r *http.Request) {
 			back(w, r, "/ui/account/tokens", "", failMsg(res, err))
 			return
 		}
-		back(w, r, "/ui/account/tokens", "Token revoked.", "")
+		back(w, r, "/ui/account/tokens", "Token revoked. Calls with it fail now.", "")
 		return
 	}
 	name := strings.TrimSpace(r.PostFormValue("name"))
@@ -140,7 +140,7 @@ func (h *handler) tokensSubmit(w http.ResponseWriter, r *http.Request) {
 		Token string `json:"token"`
 	}
 	if res.decode(&created) != nil || created.Token == "" {
-		back(w, r, "/ui/account/tokens", "", "the token was created but not returned; revoke it and try again")
+		back(w, r, "/ui/account/tokens", "", "The token was created but not shown. Revoke it in the list and create another.")
 		return
 	}
 	// Shown once, never in a URL (the same rule as the site's show-once): the page is the
@@ -191,7 +191,7 @@ func (h *handler) sshKeysSubmit(w http.ResponseWriter, r *http.Request) {
 			back(w, r, "/ui/account/ssh-keys", "", failMsg(res, err))
 			return
 		}
-		back(w, r, "/ui/account/ssh-keys", "Key removed.", "")
+		back(w, r, "/ui/account/ssh-keys", "Key removed. Git over SSH refuses it now.", "")
 		return
 	}
 	title, key := strings.TrimSpace(r.PostFormValue("title")), strings.TrimSpace(r.PostFormValue("publicKey"))
@@ -242,10 +242,10 @@ func (h *handler) sessionsSubmit(w http.ResponseWriter, r *http.Request) {
 	)
 	if r.PostFormValue("action") == "revoke-others" {
 		res, err = c.do(http.MethodDelete, "/user/sessions", nil)
-		ok = "Every other session is signed out."
+		ok = "Every other session is signed out. This browser stays signed in."
 	} else {
 		res, err = c.do(http.MethodDelete, "/user/sessions/"+url.PathEscape(r.PostFormValue("sessionId")), nil)
-		ok = "Session revoked."
+		ok = "Session revoked. That browser is signed out now."
 	}
 	if err != nil || !res.OK() {
 		back(w, r, "/ui/account/sessions", "", failMsg(res, err))
@@ -254,9 +254,17 @@ func (h *handler) sessionsSubmit(w http.ResponseWriter, r *http.Request) {
 	back(w, r, "/ui/account/sessions", ok, "")
 }
 
+// failMsg is what a form says when the call behind it did not succeed. The
+// error branch is not a network failure: the API is dispatched in-process
+// (client.go — ServeHTTP cannot fail), so do() returns an error only when the
+// request could not be built at all, and then nothing was sent and nothing
+// changed. Every page says exactly that, in these words.
 func failMsg(res response, err error) string {
 	if err != nil {
-		return "the server could not be reached"
+		return notSent
 	}
 	return res.detail()
 }
+
+// notSent is the one copy for that branch, shared by every page.
+const notSent = "The request was not sent. Nothing changed."

@@ -82,7 +82,10 @@ type ReviewNotice struct {
 	ToEmail string
 	Agent   string
 	Version string
-	// Decision is the §7 outcome: published | rejected | needs_review.
+	// Decision is the §7 outcome the version reached: published | rejected |
+	// yanked | needs_review. `yanked` arrives when a reviewer rejects an
+	// already-quarantined version, which cannot go to `rejected` because that
+	// edge does not exist (internal/api/handlers_reviews.go).
 	Decision string
 	// Reviewer is the deciding reviewer's handle, when the decision was made
 	// by a human rather than by the automated gate.
@@ -247,11 +250,14 @@ func (r renderer) link(path string) string {
 	return strings.TrimSuffix(r.baseURL, "/") + path
 }
 
-// footer closes every message the same way: who sent it and that it is
-// automated. Kept short — a wall of legal boilerplate on a security notice
-// buries the part that matters.
+// footer closes every message the same way: who sent it, why it arrived and
+// that a reply goes nowhere. Kept short — a wall of legal boilerplate on a
+// security notice buries the part that matters. "the account it concerns" is
+// as far as one line can honestly go for seven different mails: the address
+// on the account is the only thing every one of them has in common.
 func (r renderer) footer() string {
-	return "\n--\n" + r.registry + " sent this automatically. Do not reply to this message.\n"
+	return "\n--\n" + r.registry + " sent this automatically to the address\n" +
+		"on the account it concerns. Do not reply to this message.\n"
 }
 
 func (r renderer) verification(token string) message {
@@ -260,13 +266,21 @@ func (r renderer) verification(token string) message {
 		url = r.verifyEmail(token)
 	}
 	body := "Confirm this address to finish setting up your " + r.registry + " account.\n\n"
+	// The old close promised "the address will not be used", which nothing in
+	// the server keeps: no job deletes an unconfirmed account, the row keeps
+	// the address, and a later membership grant mails it. What IS true is the
+	// gate — registry.CreateAgent refuses an unverified principal (§19) — so
+	// say that instead, and say it once rather than reassure.
+	once := "The link works once."
 	if url != "" {
 		body += url + "\n\n"
 	} else {
 		body += "Verification code: " + token + "\n\n"
+		once = "The code works once."
 	}
-	body += "If you did not create an account, ignore this message; the address\n" +
-		"will not be used.\n"
+	body += once + " Until this address is confirmed, the account cannot\n" +
+		"create a BriefAgent or publish a version.\n\n" +
+		"If you did not create this account, ignore this message.\n"
 	return message{Subject: r.registry + ": confirm your email address", Body: body + r.footer()}
 }
 
@@ -275,19 +289,34 @@ func (r renderer) quarantine(n QuarantineNotice) message {
 	// published version. Say what happened and what it means for installs;
 	// do not editorialise about severity beyond the label the scan assigned.
 	body := "A rescan of " + n.Agent + " " + n.Version + " under a newer ruleset produced a\n" +
-		severityLine(n.Severity) + " finding, and the version is now quarantined.\n\n" +
-		"What that means: the version no longer resolves for new installs and its\n" +
-		"download page carries a warning. Copies already installed elsewhere are\n" +
-		"not reached by this change.\n\n"
+		"finding at " + severityLine(n.Severity) + " severity. The version is now quarantined.\n\n" +
+		// The mechanisms, not a description of a page: a quarantined version
+		// is absent from the resolution set (versions.sql ListResolvableVersions
+		// selects published and yanked only), so an exact pin fails too —
+		// which is the difference from a yank — and a download answers 409
+		// (handlers_version_files.go).
+		"What that means: the version no longer resolves for new installs, not\n" +
+		"even by exact version, and a download of it answers 409. Copies already\n" +
+		// One sweep can quarantine several versions of the same BriefAgent and
+		// send one of these for each, so "your other published versions still
+		// resolve" was a promise this mail cannot keep. Name the mechanism
+		// that would have taken the others instead.
+		"installed elsewhere are not reached by this change. Your other\n" +
+		"published versions resolve unless a rescan quarantined them too.\n\n"
 	if n.Reason != "" {
 		body += "Reason recorded: " + n.Reason + "\n\n"
 	}
 	if u := firstNonEmpty(n.ReportURL, r.link("/agents/"+n.Agent+"/versions/"+n.Version+"/report")); u != "" {
-		body += "Full report (findings, ruleset version, scan date):\n" + u + "\n\n"
+		body += "Report card (findings, ruleset version, scan date):\n" + u + "\n\n"
 	}
-	body += "A platform reviewer will look at this. If you believe the finding is\n" +
-		"wrong, reply through the report page so the rationale is recorded with\n" +
-		"the version.\n"
+	// The old close told the author to "reply through the report page", a path
+	// that does not exist: there is no appeal endpoint, and the platform
+	// review queue is staff-only (handlers_reviews.go reviewItemAccess), so
+	// the author cannot even read the item. State the two outcomes a reviewer
+	// can reach from quarantined instead, and state the missing path plainly.
+	body += "A platform reviewer now has the version and can restore it to\n" +
+		"published or yank it. Their rationale is recorded with the version,\n" +
+		"and there is no way to contest a finding from the report card today.\n"
 	return message{
 		Subject: r.registry + ": " + n.Agent + " " + n.Version + " quarantined after rescan",
 		Body:    body + r.footer(),
@@ -305,12 +334,25 @@ func (r renderer) review(n ReviewNotice) message {
 			"not certify that nothing was missed.\n"
 	case "rejected":
 		headline = "rejected"
-		detail = "The version will not be published. Submitting a new version with the\n" +
-			"findings addressed starts a fresh scan.\n"
+		// `rejected` is terminal: registry.allowedTransitions gives it no
+		// outgoing edge, so "submit again" would be misleading about this
+		// version. A new version starts at submitted and walks the pipeline.
+		detail = "The version will not be published, and that decision is final for\n" +
+			"these bytes. A new version with the findings addressed goes through\n" +
+			"the pipeline from the start.\n"
+	case "yanked":
+		// Reachable: rejecting a review on a QUARANTINED version cannot go to
+		// `rejected` (the edge does not exist), so the API yanks instead and
+		// passes "yanked" here. Without this branch the author's only
+		// explanation was the headline.
+		headline = "yanked"
+		detail = "A yanked version still resolves for an exact pin, with a warning, so\n" +
+			"copies pinned to it keep working. It no longer resolves for a range,\n" +
+			"and a yank is permanent: the fix is a new version.\n"
 	case "needs_review":
 		headline = "held for review"
-		detail = "The automated gate could not decide, so a human reviewer has the\n" +
-			"version. No action is needed from you until they respond.\n"
+		detail = "The gate could not decide, so a human reviewer has the version.\n" +
+			"Nothing is needed from you until they decide.\n"
 	default:
 		headline = n.Decision
 		detail = ""
@@ -323,7 +365,7 @@ func (r renderer) review(n ReviewNotice) message {
 		body += "Rationale: " + n.Rationale + "\n"
 	}
 	if u := firstNonEmpty(n.ReportURL, r.link("/agents/"+n.Agent+"/versions/"+n.Version+"/report")); u != "" {
-		body += "\nFull report:\n" + u + "\n"
+		body += "\nReport card:\n" + u + "\n"
 	}
 	return message{
 		Subject: r.registry + ": " + n.Agent + " " + n.Version + " " + headline,
@@ -332,7 +374,10 @@ func (r renderer) review(n ReviewNotice) message {
 }
 
 func (r renderer) advisory(n AdvisoryNotice) message {
-	body := "An advisory naming " + n.Agent + " is now public.\n\n" +
+	// Say it, then name it (plan §4.3): this mail is where an author meets
+	// the word "advisory" first.
+	body := "The registry published an advisory naming " + n.Agent + ". An advisory is\n" +
+		"the public record of a security problem in a published BriefAgent.\n\n" +
 		"Severity: " + severityLine(n.Severity) + "\n"
 	if n.Summary != "" {
 		body += "Summary: " + n.Summary + "\n"
@@ -340,8 +385,9 @@ func (r renderer) advisory(n AdvisoryNotice) message {
 	if u := firstNonEmpty(n.AdvisoryURL, r.link("/advisories")); u != "" {
 		body += "\n" + u + "\n"
 	}
-	body += "\nAdvisories are how installed copies learn about this: there is no\n" +
-		"mechanism that reaches them directly.\n"
+	// Same §7 fact as before, load-bearing half first.
+	body += "\nNothing in the registry reaches copies that are already installed.\n" +
+		"This advisory and its page are how a consumer finds out.\n"
 	return message{
 		Subject: r.registry + ": advisory published for " + n.Agent,
 		Body:    body + r.footer(),
@@ -349,8 +395,12 @@ func (r renderer) advisory(n AdvisoryNotice) message {
 }
 
 func (r renderer) mcpAlert(n MCPDependencyAlertNotice) message {
-	body := n.Agent + "@" + n.Version + " declares the MCP server " + n.Server +
-		", which now has a known vulnerability.\n\n" +
+	// The server ref runs to fifty characters or more, so it goes on a label
+	// line with the rest of the facts rather than inside a sentence that no
+	// wrap can keep readable.
+	body := n.Agent + "@" + n.Version + " declares an MCP server that now has a known\n" +
+		"vulnerability.\n\n" +
+		"Server: " + n.Server + "\n" +
 		"Severity: " + severityLine(n.Severity) + "\n"
 	if len(n.Advisories) > 0 {
 		body += "Advisories: " + strings.Join(n.Advisories, ", ") + "\n"
@@ -358,20 +408,22 @@ func (r renderer) mcpAlert(n MCPDependencyAlertNotice) message {
 	if len(n.FixedIn) > 0 {
 		body += "Fixed in: " + strings.Join(n.FixedIn, ", ") + "\n"
 	}
-	body += "\nThe published version stays installable, and its page and your\n" +
-		"dashboard now carry this alert. To clear it, publish a new version\n" +
-		"that pins a fixed server version, then yank the affected one.\n"
+	body += "\nThe version stays published and installable. The BriefAgent's page\n" +
+		"and your dashboard list this alert.\n\n" +
+		"To clear it, publish a new version that pins a fixed server version,\n" +
+		"then yank the affected one. The alert closes when the version leaves\n" +
+		"published.\n"
 	if u := firstNonEmpty(n.AgentURL, r.dashboard, r.link("/dashboard")); u != "" {
 		body += "\n" + u + "\n"
 	}
 	return message{
-		Subject: r.registry + ": " + n.Agent + "@" + n.Version + " uses a vulnerable MCP server (" + n.Severity + ")",
+		Subject: r.registry + ": " + n.Agent + "@" + n.Version + " uses a vulnerable MCP server (" + severityLine(n.Severity) + ")",
 		Body:    body + r.footer(),
 	}
 }
 
 func (r renderer) invite(n InviteNotice) message {
-	body := "You were added to the " + n.Org + " organisation on " + r.registry + "."
+	body := "You were added to the " + n.Org + " organization on " + r.registry + "."
 	if n.InvitedBy != "" {
 		body += "\nAdded by: " + n.InvitedBy
 	}
@@ -382,16 +434,26 @@ func (r renderer) invite(n InviteNotice) message {
 	if u := firstNonEmpty(n.URL, r.link("/orgs/"+n.Org)); u != "" {
 		body += "\n" + u + "\n"
 	}
-	body += "\nIf you did not expect this, tell the organisation's owners: org\n" +
-		"membership is granted by an admin, not accepted by you.\n"
-	return message{Subject: r.registry + ": you were added to " + n.Org, Body: body + r.footer()}
+	// There is no invite object in v1: the membership is committed before
+	// this mail is sent, so the role above is already in force. Saying so is
+	// the consequence the notice owes the reader; the mechanism it turns on
+	// is why there is nothing to accept.
+	body += "\nThe role above is already in force: org membership is granted by an\n" +
+		"admin, not offered and accepted. If you did not expect it, tell the\n" +
+		"organization's owners.\n"
+	return message{
+		Subject: r.registry + ": you were added to the " + n.Org + " organization",
+		Body:    body + r.footer(),
+	}
 }
 
 // severityLine renders a severity label, defaulting to something honest when
-// the caller did not set one.
+// the caller did not set one. The default is a word rather than the old
+// "unspecified-severity" slug so it reads in both places it appears: after
+// "Severity: " and inside "a finding at … severity".
 func severityLine(s string) string {
 	if s == "" {
-		return "unspecified-severity"
+		return "unspecified"
 	}
 	return s
 }
