@@ -126,13 +126,13 @@ func (s *Server) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, registry.ErrNotFound):
 			problemNotFound(w, r)
 		case errors.Is(err, auth.ErrForbidden):
-			problemForbidden(w, r, "namespace access denied")
+			problemForbidden(w, r, "Creating a BriefAgent here needs the namespace's owner, or an org owner or admin.")
 		case errors.Is(err, auth.ErrUnauthorized):
 			problemUnauthorized(w, r, "")
 		case errors.Is(err, registry.ErrDenied):
 			problemValidation(w, r, err.Error())
 		case isUniqueViolation(err):
-			problemConflict(w, r, "agent name already exists in namespace")
+			problemConflict(w, r, "This namespace already has a BriefAgent with that name.")
 		default:
 			s.log.Error("create agent", "err", err)
 			problemInternal(w, r)
@@ -228,7 +228,7 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	if req.Summary != nil {
 		v := strings.TrimSpace(*req.Summary)
 		if len(v) > 140 {
-			problemValidation(w, r, "summary must be at most 140 characters")
+			problemValidation(w, r, "The summary must be at most 140 characters.")
 			return
 		}
 		params.Summary = &v
@@ -248,7 +248,7 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 		detail["allowForcePush"] = *req.AllowForcePush
 	}
 	if len(detail) == 0 {
-		problemValidation(w, r, "nothing to update")
+		problemValidation(w, r, "Send at least one field to update.")
 		return
 	}
 	err := s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
@@ -312,7 +312,7 @@ func (s *Server) SetAgentUserGrant(w http.ResponseWriter, r *http.Request, ns Na
 		return
 	}
 	if !auth.ValidAgentRole(auth.AgentRole(req.Role)) {
-		problemValidation(w, r, "invalid role")
+		problemValidation(w, r, "The role must be read, write, maintain, or publish.")
 		return
 	}
 	target, ok := s.userOrNotFound(w, r, handle)
@@ -396,7 +396,7 @@ func (s *Server) SetAgentTeamGrant(w http.ResponseWriter, r *http.Request, ns Na
 		return
 	}
 	if a.NamespaceKind != "org" {
-		problemValidation(w, r, "team grants apply to org agents only")
+		problemValidation(w, r, "Team grants apply only to BriefAgents in an org namespace.")
 		return
 	}
 	var req SetAgentTeamGrantJSONBody
@@ -404,7 +404,7 @@ func (s *Server) SetAgentTeamGrant(w http.ResponseWriter, r *http.Request, ns Na
 		return
 	}
 	if !auth.ValidAgentRole(auth.AgentRole(req.Role)) {
-		problemValidation(w, r, "invalid role")
+		problemValidation(w, r, "The role must be read, write, maintain, or publish.")
 		return
 	}
 	teamRow, err := s.q().GetTeam(r.Context(), storegen.GetTeamParams{OrgID: a.NamespaceID, Slug: team})
@@ -442,7 +442,7 @@ func (s *Server) RemoveAgentTeamGrant(w http.ResponseWriter, r *http.Request, ns
 		return
 	}
 	if a.NamespaceKind != "org" {
-		problemValidation(w, r, "team grants apply to org agents only")
+		problemValidation(w, r, "Team grants apply only to BriefAgents in an org namespace.")
 		return
 	}
 	teamRow, err := s.q().GetTeam(r.Context(), storegen.GetTeamParams{OrgID: a.NamespaceID, Slug: team})

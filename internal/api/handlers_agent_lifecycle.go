@@ -70,15 +70,15 @@ func (s *Server) DeleteAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	switch {
 	case blockers.VersionsPastSubmitted > 0:
 		problemConflict(w, r,
-			"this agent has version history and cannot be deleted — yank the versions instead (§5.5)")
+			"This BriefAgent has version history, so it cannot be deleted. Yank the versions instead.")
 		return
 	case blockers.Versions > 0:
 		problemConflict(w, r,
-			"a version submission is still in flight; delete is possible only before the first submission")
+			"A version submission is still in flight. Deleting works only before the first submission.")
 		return
 	case blockers.Advisories > 0 || blockers.AbuseReports > 0:
 		problemConflict(w, r,
-			"this agent has trust & safety records attached and cannot be deleted")
+			"This BriefAgent carries trust & safety records, so it cannot be deleted.")
 		return
 	}
 
