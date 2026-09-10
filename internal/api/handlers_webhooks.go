@@ -29,14 +29,14 @@ func webhookToAPI(row storegen.WebhookEndpoint) WebhookEndpoint {
 // validateWebhookInput checks the URL is https and every event is known (§9.3).
 func validateWebhookInput(url string, events []string) *FieldError {
 	if !strings.HasPrefix(strings.ToLower(url), "https://") {
-		return &FieldError{Field: "url", Message: "must be an https:// URL (§9.3)"}
+		return &FieldError{Field: "url", Message: "Must be an https:// URL."}
 	}
 	if len(events) == 0 {
-		return &FieldError{Field: "events", Message: "at least one event required"}
+		return &FieldError{Field: "events", Message: "Must list at least one event."}
 	}
 	for _, e := range events {
 		if !webhook.ValidEvent(e) {
-			return &FieldError{Field: "events", Message: "unknown event " + e}
+			return &FieldError{Field: "events", Message: "Lists an unknown event: " + e + "."}
 		}
 	}
 	return nil
@@ -88,7 +88,7 @@ func (s *Server) CreateWebhook(w http.ResponseWriter, r *http.Request, org OrgHa
 		return
 	}
 	if fe := validateWebhookInput(req.Url, req.Events); fe != nil {
-		problemValidation(w, r, "webhook rejected", *fe)
+		problemValidation(w, r, "The registry rejected the webhook endpoint. Each field error says what to fix.", *fe)
 		return
 	}
 	// §19 endpoint cap. Checked before minting a secret so a refused request
@@ -105,7 +105,7 @@ func (s *Server) CreateWebhook(w http.ResponseWriter, r *http.Request, org OrgHa
 	}
 	if existing >= lim.WebhookEndpoints {
 		problemConflict(w, r, fmt.Sprintf(
-			"this organization already has the maximum of %d webhook endpoints (§19)", lim.WebhookEndpoints))
+			"This organization already has the maximum of %d webhook endpoints. Delete one before adding another.", lim.WebhookEndpoints))
 		return
 	}
 	secret, err := auth.NewToken(webhookSecretPrefix)
@@ -204,7 +204,7 @@ func (s *Server) UpdateWebhook(w http.ResponseWriter, r *http.Request, org OrgHa
 		active = *req.Active
 	}
 	if fe := validateWebhookInput(url, events); fe != nil {
-		problemValidation(w, r, "webhook rejected", *fe)
+		problemValidation(w, r, "The registry rejected the change. Each field error says what to fix.", *fe)
 		return
 	}
 	var updated storegen.WebhookEndpoint
@@ -288,7 +288,7 @@ func (s *Server) PingWebhook(w http.ResponseWriter, r *http.Request, org OrgHand
 		return
 	}
 	if s.webhooks == nil {
-		problemUnavailable(w, r, "webhook delivery is not configured on this deployment")
+		problemUnavailable(w, r, "Webhook delivery is not configured on this deployment, so the ping was not sent.")
 		return
 	}
 	ik, handled := s.beginIdempotent(w, r, "POST /orgs/{org}/webhooks/{id}/ping")

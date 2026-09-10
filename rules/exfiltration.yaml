@@ -9,6 +9,8 @@ rules:
     description: >
       Instruction to transmit the conversation, context, or collected data to
       a network destination (URL/host) — the core data-exfiltration pattern.
+      The conversation usually holds more than the current task: earlier files,
+      pasted keys, whatever the agent read on the way.
     references:
       - "OWASP LLM01: Prompt Injection"
       - "OWASP ASI06: Memory & Context Poisoning"
@@ -32,6 +34,8 @@ rules:
     description: >
       Instruction to email, DM, or forward captured content to a specific
       address, or to beacon it to a remote/webhook endpoint the author controls.
+      Mail and webhooks are channels the agent uses legitimately, so the send
+      reads as ordinary work in any log that records it.
     references:
       - "OWASP LLM01: Prompt Injection"
       - "OWASP ASI06: Memory & Context Poisoning"

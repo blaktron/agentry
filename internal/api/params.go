@@ -90,7 +90,7 @@ func cursorParams(w http.ResponseWriter, r *http.Request, cursor *string) (*time
 	}
 	t, id, ok := decodeCursor(*cursor)
 	if !ok {
-		problemValidation(w, r, "invalid cursor")
+		problemValidation(w, r, "This cursor could not be read. Request the first page again.")
 		return nil, nil, false
 	}
 	return &t, &id, true

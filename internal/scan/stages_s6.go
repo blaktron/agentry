@@ -334,7 +334,7 @@ func (S6Scripts) Run(sc stageContext, in *Input) StageResult {
 		sort.Strings(unused)
 		findings = append(findings, Finding{
 			Scanner: "S6/declared-unused", Severity: SevLow, Confidence: ConfMedium,
-			Title:    "Declared egress hosts no script or instruction references",
+			Title:    "Nothing in the package references these declared egress hosts",
 			Detail:   map[string]any{"hosts": unused},
 			Taxonomy: []string{"ASI04"},
 		})
@@ -344,7 +344,7 @@ func (S6Scripts) Run(sc stageContext, in *Input) StageResult {
 	findings = append(findings, Finding{
 		Scanner: "S6/coverage", Severity: SevInfo, Confidence: ConfHigh,
 		Title:  fmt.Sprintf("S6 read %d script(s); %d file(s) in languages it does not cover", len(scanned), len(skipped)),
-		Detail: map[string]any{"scannedScripts": scanned, "skippedFiles": skipped, "checks": []string{"network vs egress (inside network calls)", "filesystem writes vs filesystem.write", "subprocesses vs exec", "environment reads vs secrets", "remote and obfuscated execution", "declared but unreferenced hosts"}},
+		Detail: map[string]any{"scannedScripts": scanned, "skippedFiles": skipped, "checks": []string{"network calls vs declared egress", "filesystem writes vs filesystem.write", "subprocesses vs exec", "environment reads vs secrets", "remote and obfuscated execution", "declared but unreferenced hosts"}},
 	})
 	return StageResult{Scanner: "S6", Findings: findings}
 }

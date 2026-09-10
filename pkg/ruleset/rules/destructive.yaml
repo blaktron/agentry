@@ -14,7 +14,9 @@ rules:
     description: >
       Directive to delete, wipe, or reset files, directories, volumes, or cloud
       resources en masse, including "restore to factory state" framings and
-      recursive force-removal of a root, home, or wildcard path.
+      recursive force-removal of a root, home, or wildcard path. An agent
+      holding shell or cloud credentials can carry this out in one turn, and
+      the registry cannot undo what it deletes.
     references:
       - "OWASP LLM01: Prompt Injection"
       - "OWASP ASI05: Unexpected Code Execution"
@@ -42,7 +44,8 @@ rules:
     description: >
       Directive to carry out a destructive operation while skipping the
       confirmation step, or to suppress the warning a user would otherwise see
-      before data is lost.
+      before data is lost. That confirmation is the last point at which a
+      person could stop the operation.
     references:
       - "OWASP LLM01: Prompt Injection"
       - "OWASP ASI05: Unexpected Code Execution"

@@ -49,7 +49,7 @@ func (s *Server) reviewArchive(w http.ResponseWriter, r *http.Request, id uuid.U
 		return nil, false
 	}
 	if v.ArchiveKey == nil {
-		problemConflict(w, r, "version has no archive yet")
+		problemConflict(w, r, "This version has no archive yet.")
 		return nil, false
 	}
 	blob, err := s.blobs.Get(r.Context(), *v.ArchiveKey)
@@ -131,7 +131,7 @@ func (s *Server) GetReviewFile(w http.ResponseWriter, r *http.Request, id openap
 	}
 	want := path.Clean(strings.TrimPrefix(params.Path, "./"))
 	if want == "" || want == "." || strings.HasPrefix(want, "/") || strings.HasPrefix(want, "..") {
-		problemValidation(w, r, "invalid file path")
+		problemValidation(w, r, "The path must be relative and stay inside the archive.")
 		return
 	}
 	blob, ok := s.reviewArchive(w, r, id)

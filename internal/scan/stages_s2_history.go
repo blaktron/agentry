@@ -42,7 +42,7 @@ func s2History(ctx context.Context, in *Input) (findings []Finding, ran bool) {
 			Scanner: "S2/history-not-scanned", Severity: SevInfo, Confidence: ConfLow,
 			Title: "Git history not scanned for secrets",
 			Detail: map[string]any{
-				"reason": "the scanning role has no repository access; only the tagged tree was scanned (§8.3)",
+				"reason": "the scanning role has no repository access; only the tagged tree was scanned",
 			},
 			Taxonomy: []string{"LLM03"},
 		}}, false
@@ -131,7 +131,7 @@ func scanHistoryPatch(r io.Reader) (findings []Finding, truncated bool, err erro
 			}
 			findings = append(findings, Finding{
 				Scanner: "S2/history-" + rule.id, Severity: rule.severity, Confidence: ConfHigh,
-				Title:    "Secret in git history: " + rule.id,
+				Title:    "Possible secret in git history: " + rule.id,
 				FilePath: file,
 				Excerpt:  redact(added),
 				Detail: map[string]any{

@@ -37,7 +37,7 @@ func (s *Server) CreateRulesetRelease(w http.ResponseWriter, r *http.Request) {
 
 	var req CreateRulesetReleaseJSONRequestBody
 	if err := readJSONOptional(r, &req); err != nil {
-		problemBadRequest(w, r, "invalid JSON body: "+err.Error())
+		problemBadRequest(w, r, "Could not parse the JSON body: "+err.Error())
 		return
 	}
 
@@ -74,13 +74,13 @@ func (s *Server) CreateRulesetRelease(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !reSemver.MatchString(semver) {
-		problemValidation(w, r, "semver must be MAJOR.MINOR.PATCH",
-			FieldError{Field: "semver", Message: "expected a semantic version"})
+		problemValidation(w, r, "The semver must be MAJOR.MINOR.PATCH.",
+			FieldError{Field: "semver", Message: "Must be a semantic version (MAJOR.MINOR.PATCH)."})
 		return
 	}
 	if digest == "" {
-		problemValidation(w, r, "bundleDigest is required",
-			FieldError{Field: "bundleDigest", Message: "expected sha256:<hex>"})
+		problemValidation(w, r, "Include a bundleDigest.",
+			FieldError{Field: "bundleDigest", Message: "Must be sha256:<hex>."})
 		return
 	}
 
@@ -124,7 +124,7 @@ func (s *Server) CreateRulesetRelease(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
-			problemConflict(w, r, "this ruleset semver is already registered")
+			problemConflict(w, r, "The registry already has this ruleset semver.")
 			return
 		}
 		s.log.Error("create ruleset release", "err", err)

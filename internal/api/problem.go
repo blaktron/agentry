@@ -6,6 +6,11 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
+	"unicode"
+	"unicode/utf8"
+
+	"github.com/blaktron/agentry/internal/registry"
 )
 
 // ProblemTypeBase prefixes stable problem type URIs. The domain is a
@@ -45,6 +50,33 @@ func writeProblem(w http.ResponseWriter, r *http.Request, status int, slug, titl
 	}
 }
 
+// sentence renders an error's text as a problem detail. Go errors are
+// lowercase fragments and never end in punctuation (ST1005), while a detail
+// is read verbatim as a sentence by the site's flash, the core's pages and
+// the CLI — so the two registers meet here, at the API boundary, rather than
+// in the packages that raise the error. It strips the domain sentinel's own
+// prefix (ErrDenied wraps its reason, so the reader would otherwise see
+// "registry: denied: …"), upper-cases the first rune, and ends the sentence.
+// An empty message stays empty: problemNotFound and problemInternal say
+// nothing on purpose.
+func sentence(s string) string {
+	s = strings.TrimSpace(s)
+	if rest, cut := strings.CutPrefix(s, registry.ErrDenied.Error()); cut {
+		s = strings.TrimSpace(strings.TrimPrefix(rest, ":"))
+	}
+	if s == "" {
+		return ""
+	}
+	if r, size := utf8.DecodeRuneInString(s); unicode.ToUpper(r) != r {
+		s = string(unicode.ToUpper(r)) + s[size:]
+	}
+	switch {
+	case strings.HasSuffix(s, "."), strings.HasSuffix(s, "!"), strings.HasSuffix(s, "?"):
+		return s
+	}
+	return s + "."
+}
+
 // Common problem writers. Add new slugs here, not inline in handlers.
 
 func problemInternal(w http.ResponseWriter, r *http.Request) {
@@ -56,7 +88,7 @@ func problemNotFound(w http.ResponseWriter, r *http.Request) {
 }
 
 func problemValidation(w http.ResponseWriter, r *http.Request, detail string, fields ...FieldError) {
-	writeProblem(w, r, http.StatusUnprocessableEntity, "validation", "Validation failed", detail, fields...)
+	writeProblem(w, r, http.StatusUnprocessableEntity, "validation", "Validation error", detail, fields...)
 }
 
 func problemBadRequest(w http.ResponseWriter, r *http.Request, detail string) {
@@ -68,7 +100,7 @@ func problemUnauthorized(w http.ResponseWriter, r *http.Request, detail string) 
 }
 
 func problemForbidden(w http.ResponseWriter, r *http.Request, detail string) {
-	writeProblem(w, r, http.StatusForbidden, "forbidden", "Forbidden", detail)
+	writeProblem(w, r, http.StatusForbidden, "forbidden", "Access denied", detail)
 }
 
 func problemConflict(w http.ResponseWriter, r *http.Request, detail string) {
@@ -80,7 +112,7 @@ func problemTooMany(w http.ResponseWriter, r *http.Request, detail string) {
 }
 
 func problemGone(w http.ResponseWriter, r *http.Request, detail string) {
-	writeProblem(w, r, http.StatusGone, "gone", "Gone", detail)
+	writeProblem(w, r, http.StatusGone, "gone", "No longer available", detail)
 }
 
 func problemUnavailable(w http.ResponseWriter, r *http.Request, detail string) {

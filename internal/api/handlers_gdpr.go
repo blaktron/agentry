@@ -36,7 +36,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 	}
 	p := principalFrom(r.Context())
 	if p.Via != "session" {
-		problemForbidden(w, r, "account deletion requires a session, not a token")
+		problemForbidden(w, r, "Deleting an account requires a session, not a token.")
 		return
 	}
 
@@ -64,7 +64,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 	}
 	if publishedCount > 0 && disposition == "" {
 		problemBadRequest(w, r,
-			fmt.Sprintf("this account has %d published public version(s); pass publishedContent=yank or transfer", publishedCount))
+			fmt.Sprintf("This account has %d published public version(s). Pass publishedContent=yank to yank them, or publishedContent=transfer with transferOrg to hand them to an organization this account administers.", publishedCount))
 		return
 	}
 	if disposition == "" {
@@ -89,7 +89,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 			orgHandle = strings.TrimSpace(*params.TransferOrg)
 		}
 		if orgHandle == "" {
-			problemBadRequest(w, r, "publishedContent=transfer requires transferOrg=<org handle>")
+			problemBadRequest(w, r, "Add transferOrg=<org handle>, an organization this account administers, to use publishedContent=transfer.")
 			return
 		}
 		orgRow, ok := s.orgOrNotFound(w, r, orgHandle)
@@ -101,14 +101,14 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		switch p.Role(orgRow.ID) {
 		case auth.RoleOwner, auth.RoleAdmin:
 		default:
-			problemForbidden(w, r, "you must be an owner or admin of "+orgRow.Handle+" to transfer agents into it")
+			problemForbidden(w, r, "Transferring BriefAgents into "+orgRow.Handle+" requires the owner or admin role there.")
 			return
 		}
 		transferOrgID = orgRow.ID
 		if err := s.transferAgents(r, agents, orgRow); err != nil {
 			if isUniqueViolation(err) {
 				problemConflict(w, r,
-					"an agent of the same name already exists in "+orgRow.Handle+"; rename it and retry")
+					"A BriefAgent of the same name already exists in "+orgRow.Handle+". Rename it and try again.")
 				return
 			}
 			s.log.Error("gdpr transfer", "err", err)

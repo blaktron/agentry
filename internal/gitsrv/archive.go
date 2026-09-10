@@ -114,7 +114,7 @@ func checkNoInfoAttributes(dir string) error {
 	if err != nil || st.Size() == 0 {
 		return nil
 	}
-	return fmt.Errorf("gitsrv: %s exists; release archives must not be filtered by gitattributes (§6.5) — remove it", p)
+	return fmt.Errorf("gitsrv: %s exists; release archives must not be filtered by gitattributes — remove it", p)
 }
 
 // verifyArchiveComplete asserts the tar holds every blob of the archived
@@ -151,7 +151,7 @@ func (s *RepoStore) verifyArchiveComplete(ctx context.Context, dir, commit strin
 	if len(missing) > 5 {
 		missing = append(missing[:5], "…")
 	}
-	return fmt.Errorf("gitsrv: git archive dropped %d path(s) of %s (%s): gitattributes filtering is not neutralized (§6.5)",
+	return fmt.Errorf("gitsrv: git archive dropped %d path(s) of %s (%s): a gitattributes filter is still in effect",
 		len(want), commit, strings.Join(missing, ", "))
 }
 

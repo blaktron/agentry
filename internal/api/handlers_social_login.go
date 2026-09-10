@@ -225,7 +225,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 			return
 		}
 		if c, err := r.Cookie(socialRestartCookie); err == nil && c.Value != "" {
-			http.Redirect(w, r, s.paths.login("sign-in could not complete — your browser is not keeping cookies for this site"), http.StatusSeeOther)
+			http.Redirect(w, r, s.paths.login("Sign-in could not complete: this browser is not keeping cookies for the site. Allow cookies and retry."), http.StatusSeeOther)
 			return
 		}
 		http.SetCookie(w, &http.Cookie{
@@ -247,11 +247,11 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 		return
 	}
 	if params.State == nil || *params.State != st.State {
-		restartOrFail(func() { problemUnauthorized(w, r, "login state mismatch") })
+		restartOrFail(func() { problemUnauthorized(w, r, "The sign-in state did not match. Start the sign-in again.") })
 		return
 	}
 	if params.Code == nil || *params.Code == "" {
-		problemValidation(w, r, "missing authorization code")
+		problemValidation(w, r, "The provider returned no authorization code. Start the sign-in again.")
 		return
 	}
 	rp, err := s.socialProvider(r, name)
@@ -270,23 +270,23 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 	if err != nil {
 		s.log.Warn("social login rejected", "provider", name, "err", err)
 		if st.Next != "" {
-			browserFail("sign-in with " + name + " failed; please try again")
+			browserFail("Sign-in with " + name + " failed. Try again.")
 			return
 		}
-		problemUnauthorized(w, r, "social login failed")
+		problemUnauthorized(w, r, "Sign-in with the provider failed. Try again.")
 		return
 	}
 
 	userID, err := s.resolveSocialUser(r, id)
 	if err != nil {
 		if errors.Is(err, errExplicitLinkRequired) {
-			linkMsg := "an account already uses this email address; sign in and link " + name + " from your account settings"
+			linkMsg := "An account already uses this email address. Sign in, then link " + name + " from account settings."
 			if st.Next != "" {
 				browserFail(linkMsg)
 				return
 			}
 			writeProblem(w, r, http.StatusConflict, "sso-link-required",
-				"Account linking requires confirmation", linkMsg)
+				"Email address already in use", linkMsg)
 			return
 		}
 		s.log.Error("social jit", "provider", name, "err", err)
@@ -313,10 +313,10 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 	}
 	if user.State != "active" {
 		if st.Next != "" {
-			browserFail("this account is not active")
+			browserFail("This account is not active.")
 			return
 		}
-		problemUnauthorized(w, r, "this account is not active")
+		problemUnauthorized(w, r, "This account is not active.")
 		return
 	}
 
@@ -346,20 +346,20 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 func (s *Server) peekSocialState(w http.ResponseWriter, r *http.Request, provider string) (st socialState, failure string, unauthorized bool) {
 	c, err := r.Cookie(socialStateCookie)
 	if err != nil || c.Value == "" {
-		return socialState{}, "missing login state cookie", false
+		return socialState{}, "The sign-in state cookie is missing. Start the sign-in again.", false
 	}
 	// Single use regardless of outcome.
 	http.SetCookie(w, &http.Cookie{Name: socialStateCookie, Value: "", Path: "/", MaxAge: -1})
 	sealed, err := base64.RawURLEncoding.DecodeString(c.Value)
 	if err != nil {
-		return socialState{}, "invalid login state", false
+		return socialState{}, "The sign-in state is invalid. Start the sign-in again.", false
 	}
 	blob, err := s.sealer.Open(sealed)
 	if err != nil {
-		return socialState{}, "invalid login state", true
+		return socialState{}, "The sign-in state is invalid. Start the sign-in again.", true
 	}
 	if err := json.Unmarshal(blob, &st); err != nil || st.Provider != provider {
-		return socialState{}, "invalid login state", true
+		return socialState{}, "The sign-in state is invalid. Start the sign-in again.", true
 	}
 	return st, "", false
 }
@@ -482,22 +482,22 @@ func (s *Server) TotpChallenge(w http.ResponseWriter, r *http.Request) {
 	}
 	sealed, err := base64.RawURLEncoding.DecodeString(req.Challenge)
 	if err != nil {
-		problemUnauthorized(w, r, "invalid challenge")
+		problemUnauthorized(w, r, "The two-factor challenge is invalid. Start the sign-in again.")
 		return
 	}
 	raw, err := s.sealer.Open(sealed)
 	if err != nil {
-		problemUnauthorized(w, r, "invalid challenge")
+		problemUnauthorized(w, r, "The two-factor challenge is invalid. Start the sign-in again.")
 		return
 	}
 	var blob totpChallengeBlob
 	if err := json.Unmarshal(raw, &blob); err != nil || time.Now().After(blob.ExpiresAt) {
-		problemUnauthorized(w, r, "challenge expired")
+		problemUnauthorized(w, r, "The two-factor challenge expired. Start the sign-in again.")
 		return
 	}
 	user, err := s.q().GetUserByID(r.Context(), blob.UserID)
 	if err != nil || user.State != "active" || !user.TotpEnabled {
-		problemUnauthorized(w, r, "invalid challenge")
+		problemUnauthorized(w, r, "The two-factor challenge is invalid. Start the sign-in again.")
 		return
 	}
 	secret, err := s.sealer.Open(user.TotpSecretEnc)
@@ -515,7 +515,7 @@ func (s *Server) TotpChallenge(w http.ResponseWriter, r *http.Request) {
 		}); werr != nil {
 			s.log.Warn("audit totp challenge failure", "err", werr)
 		}
-		problemUnauthorized(w, r, "invalid code")
+		problemUnauthorized(w, r, "That code did not match. Try the current code from the authenticator app.")
 		return
 	}
 	s.issueSocialSession(w, r, user, blob.Provider, "", nil)
