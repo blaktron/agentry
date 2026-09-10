@@ -141,7 +141,7 @@ func (h *handler) reviewItemPage(w http.ResponseWriter, r *http.Request) {
 	}
 	d := reviewData{Verdicts: verdicts}
 	if err := res.decode(&d.Bundle); err != nil {
-		h.render(w, r, http.StatusBadGateway, "message", page{Title: "Review", User: u, Error: "unreadable review item"})
+		h.render(w, r, http.StatusBadGateway, "message", page{Title: "Review", User: u, Error: "This review item could not be read."})
 		return
 	}
 	if fres, err := c.do(http.MethodGet, "/review-items/"+url.PathEscape(id)+"/files", nil); err == nil && fres.OK() {

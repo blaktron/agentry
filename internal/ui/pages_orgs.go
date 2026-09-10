@@ -185,7 +185,7 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 	case "member":
 		handle := strings.TrimSpace(f("handle"))
 		if handle == "" {
-			back(w, r, backTo, "", "enter the member's handle")
+			back(w, r, backTo, "", "Enter the member's handle.")
 			return
 		}
 		if f("action") == "remove" {
@@ -202,7 +202,7 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 	case "team":
 		slug := strings.TrimSpace(f("slug"))
 		if slug == "" {
-			back(w, r, backTo, "", "enter the team slug")
+			back(w, r, backTo, "", "Enter the team slug.")
 			return
 		}
 		switch f("action") {
@@ -222,7 +222,7 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 	case "policy":
 		var doc any
 		if json.Unmarshal([]byte(f("policy")), &doc) != nil {
-			back(w, r, backTo, "", "the policy must be valid JSON")
+			back(w, r, backTo, "", "The policy must be valid JSON.")
 			return
 		}
 		res, err = c.do(http.MethodPut, base+"/policy", doc)
@@ -230,7 +230,7 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 	case "sso":
 		kind := f("kind")
 		if kind != "saml" && kind != "oidc" {
-			back(w, r, backTo, "", "the connection kind must be saml or oidc")
+			back(w, r, backTo, "", "The connection kind must be saml or oidc.")
 			return
 		}
 		switch f("action") {
@@ -276,7 +276,7 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 	case "domain":
 		domain := strings.ToLower(strings.TrimSpace(f("domain")))
 		if domain == "" {
-			back(w, r, backTo, "", "enter the domain")
+			back(w, r, backTo, "", "Enter the domain.")
 			return
 		}
 		if f("action") == "verify" {
@@ -297,7 +297,7 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 		default:
 			events := r.PostForm["events"]
 			if len(events) == 0 {
-				back(w, r, backTo, "", "pick at least one event")
+				back(w, r, backTo, "", "Pick at least one event.")
 				return
 			}
 			res, err = c.do(http.MethodPost, base+"/webhooks", map[string]any{"url": strings.TrimSpace(f("url")), "events": events})
@@ -318,7 +318,7 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	default:
-		back(w, r, backTo, "", "the form did not name a section")
+		back(w, r, backTo, "", "The form did not name a section.")
 		return
 	}
 	if err != nil || !res.OK() {
