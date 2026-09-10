@@ -423,7 +423,7 @@ func (r renderer) mcpAlert(n MCPDependencyAlertNotice) message {
 }
 
 func (r renderer) invite(n InviteNotice) message {
-	body := "You were added to the " + n.Org + " organisation on " + r.registry + "."
+	body := "You were added to the " + n.Org + " organization on " + r.registry + "."
 	if n.InvitedBy != "" {
 		body += "\nAdded by: " + n.InvitedBy
 	}
@@ -440,9 +440,9 @@ func (r renderer) invite(n InviteNotice) message {
 	// is why there is nothing to accept.
 	body += "\nThe role above is already in force: org membership is granted by an\n" +
 		"admin, not offered and accepted. If you did not expect it, tell the\n" +
-		"organisation's owners.\n"
+		"organization's owners.\n"
 	return message{
-		Subject: r.registry + ": you were added to the " + n.Org + " organisation",
+		Subject: r.registry + ": you were added to the " + n.Org + " organization",
 		Body:    body + r.footer(),
 	}
 }
