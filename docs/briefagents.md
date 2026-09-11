@@ -258,10 +258,12 @@ package registries:
 ```yaml
 capabilities:
   mcpServers:
-    - npm: "@modelcontextprotocol/server-github"
-      version: 2026.1.2            # EXACT version — pinned to this release
-      tools: [list_issues]         # optional allowlist within the server
-      secrets: [GITHUB_PAT]        # env-var NAMES the server needs
+    - npm: github-mcp-server-js
+      version: 0.1.7               # EXACT version — pinned to this release
+      tools: [list_issues, get_issue]   # optional allowlist within the server
+      secrets: [GITHUB_TOKEN]      # env-var NAMES the server needs
+      env:
+        GITHUB_PERMISSION: read-only    # plain configuration, never a secret
       egress: [api.github.com]     # the server's own outbound needs
     - pypi: mcp-server-fetch
       version: 0.6.2
@@ -282,6 +284,24 @@ egress). Removing the agent removes the server configuration and keys by
 default; keeping them is an explicit option, and a kept configuration is
 reachable by nothing except a reinstall of the same digest. Full runtime
 mechanics: the [Runner reference](runner.md).
+
+**`env`** on a server entry is the plain configuration the server reads
+from its environment — a mode switch, a directory, a region — as opposed
+to a credential. Values are written in the manifest, so they are visible
+in the release diff, part of the release's archive digest like the pin,
+and shown to reviewers. The rules (a v2 field): at most 16 entries per
+server; names on the environment-variable grammar; values single-line
+strings of at most 512 characters with no control characters. A name that
+is also listed under `secrets` — the server's or the agent's — is refused:
+a value is either configuration in the contract or a secret from the
+profile, never both. `agent.yaml` is scanned like any other archived
+file, so a token in a shape the secret scanner recognises is a finding;
+that is a backstop, not a place to keep one. In the example above,
+`GITHUB_PERMISSION` comes from the manifest and `GITHUB_TOKEN` from the
+operator's profile. Delivery is the runner's half: the registry validates,
+stores and shows `env` today, and the runner release that compiles it into
+the server's gateway entry and shows it at install is tracked in
+agentry-cli#99.
 
 **Declared servers are scanned too.** At submission, stage S7 checks each
 declared package version against the OSV vulnerability database and reports

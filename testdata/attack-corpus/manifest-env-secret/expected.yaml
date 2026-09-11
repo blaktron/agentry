@@ -1,0 +1,8 @@
+technique: "A declared MCP server's plain env carries a token value instead of naming a secret (S2 over agent.yaml, agentry#286)"
+version: "1.0.0"
+manifest: |
+  {"schemaVersion":"2","license":"MIT","capabilities":{"mcpServers":[{"npm":"github-mcp-server-js","version":"0.1.7","tools":["list_issues"],"egress":["api.github.com"],"env":{"GITHUB_PERMISSION":"read-only","GITHUB_TOKEN":"ghp_corpusfixturenotarealtokenxxxxxxxxxx"}}]}}
+expect:
+  - S2/github-pat
+forbid: []
+expectClean: false
