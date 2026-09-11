@@ -378,6 +378,14 @@ type MCPServer struct {
 	// Egress lists the exact hosts THIS SERVER may reach ("*" allowed,
 	// policy-gated at run time like agent egress). Empty means none.
 	Egress []string `yaml:"egress,omitempty" json:"egress,omitempty"`
+	// Env is plain, non-secret configuration the server reads from its
+	// environment (v2, V5, DEV-098): at most MaxMCPServerEnv entries,
+	// env-grammar names, single-line values of at most MaxMCPServerEnvValue
+	// characters. A name that is also a declared secret — here or in
+	// capabilities.secrets — is an error: a value is either configuration
+	// in the contract or a secret from the profile, never both. Canonical
+	// JSON sorts the keys, so env rides the archive digest like the pin.
+	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
 }
 
 // SourceID returns the ecosystem-qualified package id ("npm:@scope/x" or

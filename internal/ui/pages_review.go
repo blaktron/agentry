@@ -3,6 +3,7 @@ package ui
 import (
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -205,9 +206,16 @@ func fmtAny(v any) string {
 		}
 		return strings.Join(parts, ", ")
 	case map[string]any:
+		// Sorted, so a declared server's env (or any object) reads the
+		// same on every render.
+		keys := make([]string, 0, len(t))
+		for k := range t {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
 		parts := make([]string, 0, len(t))
-		for k, e := range t {
-			parts = append(parts, k+"="+fmtAny(e))
+		for _, k := range keys {
+			parts = append(parts, k+"="+fmtAny(t[k]))
 		}
 		return "{" + strings.Join(parts, " ") + "}"
 	case float64:

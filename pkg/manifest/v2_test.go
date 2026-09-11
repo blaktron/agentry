@@ -7,6 +7,7 @@ package manifest
 import (
 	"encoding/json"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -440,5 +441,88 @@ func TestV2SchemaFileShape(t *testing.T) {
 	}
 	if len(ep.Properties) != 1 || ep.Properties["instruction"] == nil {
 		t.Fatalf("entrypoints must allow exactly instruction, got %v", ep.Properties)
+	}
+}
+
+// TestV2SchemaEnvShape pins the mcpServer.env schema beside the Go rules:
+// the count cap, the name grammar and the value limits are the constants
+// pkg/manifest enforces. (The secret/env collision is a cross-list rule
+// JSON schema cannot express; TestMCPServerEnvRefusals holds it.)
+func TestV2SchemaEnvShape(t *testing.T) {
+	raw, err := os.ReadFile("../../schemas/agent-manifest-2.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Defs struct {
+			MCPServer struct {
+				Properties struct {
+					Env struct {
+						Type          string `json:"type"`
+						MaxProperties int    `json:"maxProperties"`
+						PropertyNames struct {
+							Pattern string `json:"pattern"`
+						} `json:"propertyNames"`
+						AdditionalProperties struct {
+							Type      string `json:"type"`
+							MaxLength int    `json:"maxLength"`
+							Pattern   string `json:"pattern"`
+						} `json:"additionalProperties"`
+					} `json:"env"`
+				} `json:"properties"`
+			} `json:"mcpServer"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	env := schema.Defs.MCPServer.Properties.Env
+	if env.Type != "object" || env.MaxProperties != MaxMCPServerEnv {
+		t.Fatalf("env: type %q, maxProperties %d (want object, %d)", env.Type, env.MaxProperties, MaxMCPServerEnv)
+	}
+	if env.PropertyNames.Pattern != envNameRE.String() {
+		t.Fatalf("env name pattern %q != %s", env.PropertyNames.Pattern, envNameRE)
+	}
+	ap := env.AdditionalProperties
+	if ap.Type != "string" || ap.MaxLength != MaxMCPServerEnvValue {
+		t.Fatalf("env value: type %q, maxLength %d (want string, %d)", ap.Type, ap.MaxLength, MaxMCPServerEnvValue)
+	}
+	valueRE := regexp.MustCompile(ap.Pattern)
+	if !valueRE.MatchString("read-only") || valueRE.MatchString("a\nb") || valueRE.MatchString("a\tb") {
+		t.Fatalf("env value pattern %q does not refuse exactly the control characters", ap.Pattern)
+	}
+}
+
+// TestCanonicalJSONV2Env: a declared server's env is canonicalised with
+// sorted keys, whatever order the YAML wrote them in.
+func TestCanonicalJSONV2Env(t *testing.T) {
+	doc := `schemaVersion: "2"
+name: tiny
+namespace: acme
+modes: [autonomous]
+version: 0.1.0
+summary: "Tiny agent on a declared server"
+capabilities:
+  mcpServers:
+    - npm: github-mcp-server-js
+      version: 0.1.7
+      env:
+        LOGS_DIR: /tmp/logs
+        GITHUB_PERMISSION: read-only
+      tools: [list_issues]
+      secrets: [GITHUB_TOKEN]
+      egress: [api.github.com]
+publish:
+  include: [agent.yaml, AGENT.md]
+`
+	m := mustParse(t, doc)
+	wantClean(t, Validate(m))
+	got, err := CanonicalJSON(m)
+	if err != nil {
+		t.Fatalf("CanonicalJSON: %v", err)
+	}
+	want := `{"capabilities":{"mcpServers":[{"egress":["api.github.com"],"env":{"GITHUB_PERMISSION":"read-only","LOGS_DIR":"/tmp/logs"},"npm":"github-mcp-server-js","secrets":["GITHUB_TOKEN"],"tools":["list_issues"],"version":"0.1.7"}]},"modes":["autonomous"],"name":"tiny","namespace":"acme","publish":{"include":["agent.yaml","AGENT.md"]},"schemaVersion":"2","summary":"Tiny agent on a declared server","version":"0.1.0"}`
+	if string(got) != want {
+		t.Fatalf("canonical v2 env:\n got: %s\nwant: %s", got, want)
 	}
 }
