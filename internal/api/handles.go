@@ -1,11 +1,12 @@
 package api
 
-// reservedHandles are the names no user or organization may take because
-// they are root paths of this server or of the site that fronts it: a
-// handle is the first segment of `/<ns>/<name>` pages, and `ui` is the
-// server's own surface (DEV-091). The list is the union of both surfaces so
-// a handle stays valid whichever fronts a deployment.
-var reservedHandles = map[string]bool{
+// pathHandles are the names no user or organization may take because they
+// are root paths of this server or of the site that fronts it: a handle is
+// the first segment of `/<ns>/<name>` pages, and `ui` is the server's own
+// surface (DEV-091). The list is the union of both surfaces so a handle
+// stays valid whichever fronts a deployment. Nobody can create these, staff
+// included: an org named `ui` would shadow the server's own pages.
+var pathHandles = map[string]bool{
 	"ui": true, "api": true, "auth": true, "sso": true, "scim": true, "healthz": true, "readyz": true, "metrics": true,
 	"login": true, "logout": true, "signup": true, "settings": true, "dashboard": true, "search": true, "build": true,
 	"new": true, "review": true, "staff": true, "orgs": true, "tags": true, "trust": true, "advisories": true,
@@ -13,7 +14,28 @@ var reservedHandles = map[string]bool{
 	"cookies": true, "agent-template": true, "admin": true, "static": true, "img": true,
 }
 
-func handleReserved(h string) bool { return reservedHandles[h] }
+// firstPartyHandles are the product's own names, reserved so that nobody
+// on a public registry can pass their content off as first-party. Unlike
+// pathHandles they are meant to exist: platform staff may create an
+// organization with one of them — the `agentry` org that publishes the
+// example BriefAgents (agentry#285, DEV-098).
+var firstPartyHandles = map[string]bool{
+	"agentry": true, "secureagentry": true,
+}
+
+// handleReserved reports whether no sign-up may take h: a root path or a
+// first-party name. Sign-up has no staff.
+func handleReserved(h string) bool { return orgHandleReserved(h, false) }
+
+// orgHandleReserved reports whether the caller may not create an org named
+// h: a root path is refused for everyone, a first-party name for everyone
+// but platform staff.
+func orgHandleReserved(h string, staff bool) bool {
+	if pathHandles[h] {
+		return true
+	}
+	return firstPartyHandles[h] && !staff
+}
 
 // unreservedHandle returns h, or h with a numeric suffix when h is
 // reserved — for handles derived from an email or an IdP claim rather
