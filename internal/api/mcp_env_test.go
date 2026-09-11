@@ -1,10 +1,8 @@
 package api_test
 
 import (
-	"encoding/json"
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/config"
@@ -39,10 +37,10 @@ func TestVersionCapabilitiesCarryMCPServerEnv(t *testing.T) {
 		t.Fatalf("submit: %d %s", status, body)
 	}
 
-	// The capability block is written with the version row, before the
-	// pipeline decides anything; poll for the row rather than for a state.
+	// The capability block is written with the version row before the
+	// submission is accepted, so it is readable at once, whatever the
+	// pipeline later decides.
 	var v struct {
-		Status       string `json:"status"`
 		Capabilities struct {
 			MCPServers []struct {
 				NPM   string            `json:"npm"`
@@ -51,19 +49,7 @@ func TestVersionCapabilitiesCarryMCPServerEnv(t *testing.T) {
 			} `json:"mcpServers"`
 		} `json:"capabilities"`
 	}
-	deadline := time.Now().Add(20 * time.Second)
-	for {
-		res := env.do(anonymous, http.MethodGet, "/api/v1/agents/"+author+"/issue-digest/versions/1.0.0", nil)
-		ok := res.StatusCode == http.StatusOK
-		if ok {
-			_ = json.NewDecoder(res.Body).Decode(&v)
-		}
-		_ = res.Body.Close()
-		if ok || time.Now().After(deadline) {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/agents/"+author+"/issue-digest/versions/1.0.0", nil, &v, http.StatusOK)
 	if len(v.Capabilities.MCPServers) != 1 {
 		t.Fatalf("version capabilities: %+v", v)
 	}

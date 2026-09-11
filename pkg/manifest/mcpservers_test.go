@@ -232,7 +232,7 @@ func TestMCPServerEnvValid(t *testing.T) {
 func TestMCPServerEnvRefusals(t *testing.T) {
 	var tooMany strings.Builder
 	tooMany.WriteString("    - npm: server-x\n      version: 1.0.0\n      env:\n")
-	for i := 0; i <= MaxMCPServerEnv; i++ {
+	for i := 0; i <= MaxMCPServerEnvEntries; i++ {
 		fmt.Fprintf(&tooMany, "        KEY_%d: v\n", i)
 	}
 	cases := map[string]struct {

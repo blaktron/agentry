@@ -477,8 +477,8 @@ func TestV2SchemaEnvShape(t *testing.T) {
 		t.Fatal(err)
 	}
 	env := schema.Defs.MCPServer.Properties.Env
-	if env.Type != "object" || env.MaxProperties != MaxMCPServerEnv {
-		t.Fatalf("env: type %q, maxProperties %d (want object, %d)", env.Type, env.MaxProperties, MaxMCPServerEnv)
+	if env.Type != "object" || env.MaxProperties != MaxMCPServerEnvEntries {
+		t.Fatalf("env: type %q, maxProperties %d (want object, %d)", env.Type, env.MaxProperties, MaxMCPServerEnvEntries)
 	}
 	if env.PropertyNames.Pattern != envNameRE.String() {
 		t.Fatalf("env name pattern %q != %s", env.PropertyNames.Pattern, envNameRE)
