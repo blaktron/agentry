@@ -522,10 +522,7 @@ func validateCapabilities(s *issues, c Capabilities) {
 	}
 
 	for i, name := range c.Secrets {
-		if !envNameRE.MatchString(name) {
-			s.errf("V5", fmt.Sprintf("capabilities.secrets[%d]", i),
-				"%q is not a valid environment variable name (%s)", name, envNameRE)
-		}
+		checkEnvName(s, fmt.Sprintf("capabilities.secrets[%d]", i), name)
 	}
 
 	for i, da := range c.DataAccess {
@@ -542,11 +539,11 @@ func validateCapabilities(s *issues, c Capabilities) {
 // MaxMCPServers caps capabilities.mcpServers entries (V5).
 const MaxMCPServers = 8
 
-// MaxMCPServerEnv caps the plain env entries one declared server may
-// carry, and MaxMCPServerEnvValue the length of one value (V5, v2).
+// MaxMCPServerEnvEntries caps the plain env entries one declared server
+// may carry, and MaxMCPServerEnvValue the length of one value (V5, v2).
 const (
-	MaxMCPServerEnv      = 16
-	MaxMCPServerEnvValue = 512
+	MaxMCPServerEnvEntries = 16
+	MaxMCPServerEnvValue   = 512
 )
 
 // Package-name grammars. npm: optional @scope/ plus a lowercase name
@@ -630,10 +627,7 @@ func validateMCPServers(s *issues, m *Manifest) {
 			}
 		}
 		for j, name := range srv.Secrets {
-			if !envNameRE.MatchString(name) {
-				s.errf("V5", fmt.Sprintf("%s.secrets[%d]", p, j),
-					"%q is not a valid environment variable name (%s)", name, envNameRE)
-			}
+			checkEnvName(s, fmt.Sprintf("%s.secrets[%d]", p, j), name)
 		}
 		wildcardFlagged := false
 		for j, h := range srv.Egress {
@@ -649,27 +643,38 @@ func validateMCPServers(s *issues, m *Manifest) {
 				s.errf("V5", hp, "%q is not a valid DNS host name", h)
 			}
 		}
-		validateMCPServerEnv(s, p, m, srv, agentSecrets)
+		validateMCPServerEnv(s, p, m.Major(), srv, agentSecrets)
 	}
 }
 
+// checkEnvName is the one environment-variable grammar check shared by
+// the agent's secrets, a server's secrets and a server's env names; ok is
+// false when an issue was recorded.
+func checkEnvName(s *issues, p, name string) bool {
+	if envNameRE.MatchString(name) {
+		return true
+	}
+	s.errf("V5", p, "%q is not a valid environment variable name (%s)", name, envNameRE)
+	return false
+}
+
 // validateMCPServerEnv checks one server's plain env map: a v2 field of at
-// most MaxMCPServerEnv env-grammar names with single-line values of at most
-// MaxMCPServerEnvValue characters, none of which is also a declared secret.
-// The strict decoder has already refused a repeated key, so names are
-// unique by parse. Keys are visited in sorted order so the issue list is
-// deterministic.
-func validateMCPServerEnv(s *issues, p string, m *Manifest, srv MCPServer, agentSecrets map[string]bool) {
+// most MaxMCPServerEnvEntries env-grammar names with single-line values of
+// at most MaxMCPServerEnvValue characters, none of which is also a declared
+// secret. The strict decoder has already refused a repeated key, so names
+// are unique by parse. Keys are visited in sorted order so the issue list
+// is deterministic.
+func validateMCPServerEnv(s *issues, p string, major int, srv MCPServer, agentSecrets map[string]bool) {
 	if len(srv.Env) == 0 {
 		return
 	}
 	ep := p + ".env"
-	if m.Major() != 2 {
+	if major != 2 {
 		s.errf("V1", ep, "env is a v2 field; set schemaVersion: 2")
 		return
 	}
-	if len(srv.Env) > MaxMCPServerEnv {
-		s.errf("V5", ep, "at most %d env entries may be declared per server (got %d)", MaxMCPServerEnv, len(srv.Env))
+	if len(srv.Env) > MaxMCPServerEnvEntries {
+		s.errf("V5", ep, "at most %d env entries may be declared per server (got %d)", MaxMCPServerEnvEntries, len(srv.Env))
 	}
 	serverSecrets := make(map[string]bool, len(srv.Secrets))
 	for _, name := range srv.Secrets {
@@ -682,8 +687,7 @@ func validateMCPServerEnv(s *issues, p string, m *Manifest, srv MCPServer, agent
 	sort.Strings(names)
 	for _, name := range names {
 		np := ep + "." + name
-		if !envNameRE.MatchString(name) {
-			s.errf("V5", np, "%q is not a valid environment variable name (%s)", name, envNameRE)
+		if !checkEnvName(s, np, name) {
 			continue
 		}
 		if serverSecrets[name] || agentSecrets[name] {
