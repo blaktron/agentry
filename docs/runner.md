@@ -198,12 +198,17 @@ code in the builder, so it is refused unless the policy's
 `mcpRegistries.pypiAllowSourceDists: true` says otherwise. npm installs
 run with `--ignore-scripts`. At run time the per-run gateway loads exactly those
 servers — each with its declared tool filter, its own egress allowlist,
-and only its own secret values — alongside the agentry tools server. A
-server's plain `env` map (manifest v2; see the [BriefAgent
-reference](briefagents.md)) is validated and shown by the registry today
-and is not yet part of what the gateway passes to a server: compiling it
-into the catalog entry, with consent at install and the key names in the
-receipt, is agentry-cli#99.
+only its own secret values, and its plain `env` map (manifest v2; see the
+[BriefAgent reference](briefagents.md)) as the environment the server
+starts with — alongside the agentry tools server. A server's declared hosts
+are reached through the gateway's per-host TCP relays on its own relay
+network; nothing else resolves from the server. A changed `env` value is a
+change to the server: the install-state diff reports it and asks for
+consent again, and the receipt's server line names the `env` keys, never
+a value. The runner refuses an `env` value the gateway would rewrite (one
+holding `$NAME`, `${NAME}` or `{{…}}`), an empty one, or one carrying the
+run's `@@…@@` placeholder marker: a declared value is literal or it is not
+declared.
 
 **Known vulnerabilities.** Before a declared server is resolved, the runner
 asks the registry what its scan and daily sweep recorded for that exact
