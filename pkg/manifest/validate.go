@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -541,6 +542,13 @@ func validateCapabilities(s *issues, c Capabilities) {
 // MaxMCPServers caps capabilities.mcpServers entries (V5).
 const MaxMCPServers = 8
 
+// MaxMCPServerEnv caps the plain env entries one declared server may
+// carry, and MaxMCPServerEnvValue the length of one value (V5, v2).
+const (
+	MaxMCPServerEnv      = 16
+	MaxMCPServerEnvValue = 512
+)
+
 // Package-name grammars. npm: optional @scope/ plus a lowercase name
 // (npm forbids uppercase in new packages); PyPI: the PEP-503 normalized
 // form — validate/publish require the normalized name so one spelling
@@ -559,7 +567,7 @@ var (
 // (a range is an error — the pin rides the release archive, so a new agent
 // version is a new supply-chain decision by construction), single-token
 // tool names, env-grammar secret names, egress host grammar, no
-// duplicates, and runnable kinds only.
+// duplicates, runnable kinds only, and the plain env map (v2 only).
 func validateMCPServers(s *issues, m *Manifest) {
 	servers := m.Capabilities.MCPServers
 	if len(servers) == 0 {
@@ -567,6 +575,10 @@ func validateMCPServers(s *issues, m *Manifest) {
 	}
 	if len(servers) > MaxMCPServers {
 		s.errf("V5", "capabilities.mcpServers", "at most %d MCP servers may be declared (got %d)", MaxMCPServers, len(servers))
+	}
+	agentSecrets := make(map[string]bool, len(m.Capabilities.Secrets))
+	for _, name := range m.Capabilities.Secrets {
+		agentSecrets[name] = true
 	}
 	seen := map[string]bool{}
 	for i, srv := range servers {
@@ -635,6 +647,56 @@ func validateMCPServers(s *issues, m *Manifest) {
 			}
 			if !validDNSHost(h) {
 				s.errf("V5", hp, "%q is not a valid DNS host name", h)
+			}
+		}
+		validateMCPServerEnv(s, p, m, srv, agentSecrets)
+	}
+}
+
+// validateMCPServerEnv checks one server's plain env map: a v2 field of at
+// most MaxMCPServerEnv env-grammar names with single-line values of at most
+// MaxMCPServerEnvValue characters, none of which is also a declared secret.
+// The strict decoder has already refused a repeated key, so names are
+// unique by parse. Keys are visited in sorted order so the issue list is
+// deterministic.
+func validateMCPServerEnv(s *issues, p string, m *Manifest, srv MCPServer, agentSecrets map[string]bool) {
+	if len(srv.Env) == 0 {
+		return
+	}
+	ep := p + ".env"
+	if m.Major() != 2 {
+		s.errf("V1", ep, "env is a v2 field; set schemaVersion: 2")
+		return
+	}
+	if len(srv.Env) > MaxMCPServerEnv {
+		s.errf("V5", ep, "at most %d env entries may be declared per server (got %d)", MaxMCPServerEnv, len(srv.Env))
+	}
+	serverSecrets := make(map[string]bool, len(srv.Secrets))
+	for _, name := range srv.Secrets {
+		serverSecrets[name] = true
+	}
+	names := make([]string, 0, len(srv.Env))
+	for name := range srv.Env {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		np := ep + "." + name
+		if !envNameRE.MatchString(name) {
+			s.errf("V5", np, "%q is not a valid environment variable name (%s)", name, envNameRE)
+			continue
+		}
+		if serverSecrets[name] || agentSecrets[name] {
+			s.errf("V5", np, "%q is declared both as env and as a secret: configure it as a secret or as env, not both", name)
+		}
+		value := srv.Env[name]
+		if n := utf8.RuneCountInString(value); n > MaxMCPServerEnvValue {
+			s.errf("V5", np, "value must be at most %d characters (got %d)", MaxMCPServerEnvValue, n)
+		}
+		for _, r := range value {
+			if unicode.IsControl(r) {
+				s.errf("V5", np, "value must be a single line with no control characters")
+				break
 			}
 		}
 	}
