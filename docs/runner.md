@@ -198,7 +198,12 @@ code in the builder, so it is refused unless the policy's
 `mcpRegistries.pypiAllowSourceDists: true` says otherwise. npm installs
 run with `--ignore-scripts`. At run time the per-run gateway loads exactly those
 servers — each with its declared tool filter, its own egress allowlist,
-and only its own secret values — alongside the agentry tools server.
+and only its own secret values — alongside the agentry tools server. A
+server's plain `env` map (manifest v2; see the [BriefAgent
+reference](briefagents.md)) is validated and shown by the registry today
+and is not yet part of what the gateway passes to a server: compiling it
+into the catalog entry, with consent at install and the key names in the
+receipt, is agentry-cli#99.
 
 **Known vulnerabilities.** Before a declared server is resolved, the runner
 asks the registry what its scan and daily sweep recorded for that exact

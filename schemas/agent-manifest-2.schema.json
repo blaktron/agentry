@@ -263,7 +263,14 @@
         "version": { "type": "string", "minLength": 1, "description": "Exact version to install." },
         "tools": { "type": "array", "items": { "type": "string", "minLength": 1 } },
         "secrets": { "type": "array", "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" } },
-        "egress": { "type": "array", "items": { "$ref": "#/$defs/egressHost" } }
+        "egress": { "type": "array", "items": { "$ref": "#/$defs/egressHost" } },
+        "env": {
+          "type": "object",
+          "description": "Plain, non-secret configuration the server reads from its environment (DEV-098). A name that is also a declared secret is refused by pkg/manifest.",
+          "maxProperties": 16,
+          "propertyNames": { "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+          "additionalProperties": { "type": "string", "maxLength": 512, "pattern": "^[^\\p{Cc}]*$" }
+        }
       }
     },
     "intakeQuestion": {
