@@ -298,10 +298,12 @@ profile, never both. `agent.yaml` is scanned like any other archived
 file, so a token in a shape the secret scanner recognises is a finding;
 that is a backstop, not a place to keep one. In the example above,
 `GITHUB_PERMISSION` comes from the manifest and `GITHUB_TOKEN` from the
-operator's profile. Delivery is the runner's half: the registry validates,
-stores and shows `env` today, and the runner release that compiles it into
-the server's gateway entry and shows it at install is tracked in
-agentry-cli#99.
+operator's profile. The runner compiles `env` into the server's gateway
+entry as its plain environment, shows the pairs beside the server's secret
+names at install and asks for consent again when a value changes, and the
+receipt names the keys. Values are literal: one holding `$NAME`, `${NAME}`
+or `{{…}}` — shapes the gateway would rewrite — is refused at plan time,
+as is an empty one.
 
 **Declared servers are scanned too.** At submission, stage S7 checks each
 declared package version against the OSV vulnerability database and reports
