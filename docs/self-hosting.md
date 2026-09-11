@@ -802,12 +802,17 @@ source defaults apply.
 
 The script cross-compiles the CLI for macOS (arm64, amd64), Linux (amd64,
 arm64) and Windows (amd64) — it is pure Go — and builds the desktop app
-for the host's own platform when the GTK/WebKit dev headers are present
-(Linux only, today; macOS and Windows desktop builds need their own
-machines). It writes `SHA256SUMS` and `manifest.json`; the page renders
-from the manifest, shows every target on the release matrix, and marks the
-ones without an artifact as not yet available instead of linking to
-nothing. Point `AGENTRY_DOWNLOADS_DIR` in `.env` at the directory — the
+for Linux when the GTK/WebKit dev headers are present and for Windows when
+the Wails CLI is on `PATH`. The macOS desktop app cannot be built there:
+a Mac builds it (`scripts/build-darwin.sh` in the desktop repository,
+which produces a zip of the universal application bundle), and the script
+brings that zip in with `--import DIR` — every artifact in `DIR` is copied
+into the output before the checksums are written, so it is listed like the
+rest; a `SHA256SUMS` beside it, written by the Mac, is checked before the
+copy. It writes `SHA256SUMS` and `manifest.json`; the page renders from
+the manifest, shows every target on the release matrix, and marks the ones
+without an artifact as not yet available instead of linking to nothing.
+None of the desktop builds is code-signed yet; the page says so. Point `AGENTRY_DOWNLOADS_DIR` in `.env` at the directory — the
 edge serves it at `/downloads/`, and a site's `web` container reads the
 manifest from it — and re-create the `edge` service (and the site's `web`,
 when one is in front) once so the mount exists. Versions come from
