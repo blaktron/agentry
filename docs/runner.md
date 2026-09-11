@@ -248,6 +248,8 @@ Created on first use; `AGENTRY_RUNNER_HOME` moves the whole runner home.
 | `mcpRegistries.npm` / `mcpRegistries.pypi` | where declared `capabilities.mcpServers` resolve (defaults: registry.npmjs.org, pypi.org; point at private mirrors here) |
 | `mcpRegistries.pypiAllowSourceDists` | allow a PyPI MCP server to install from a source distribution (default false: wheels only, see below) |
 | `mcpServers.allowVulnerable` | let runs proceed when the registry reports a high or critical advisory for a declared server version (default false: refused, exit 11) |
+| `exec.packages` | the exec catalog: command name → apk package (optionally `=version`) the exec image installs for a BriefAgent that declares that command; a declared command with no entry is refused at plan time (exit 11) |
+| `exec.apkMirror` | the Alpine mirror the exec image build installs from (default: the runner image's own repositories) — egress of the image build only, over ordinary docker networking; a run's network posture is unchanged |
 | `harness.<adapter>.path` | the executable a host-run harness adapter uses instead of looking it up on `PATH` |
 | `harness.<adapter>.baseUrl` / `.model` / `.apiKeyEnv` | the model endpoint that adapter is given, in its own vendor's terms — a host-run harness speaks its vendor's API, which is not always the one `model.*` describes. The host must also be in `model.proxyAllow` or the run's proxy denies it (`agentry doctor --adapter <name>` says so before a run finds out). |
 | `images.nodeRuntime` / `images.pythonRuntime` | pinned runtime images that install and run declared npm/PyPI MCP servers |
@@ -274,13 +276,31 @@ Every claim above appears, mechanism named, in the run's
 versus declared.
 
 When a BriefAgent declares `exec: {commands: […]}`, its tools server runs in a
-per-BriefAgent **exec image** — the runner image with every executable deleted
-except the declared commands (and the runner binary that serves the tools),
-built once at install time from a one-line generated Dockerfile
-(`agentry-runner-exec:<version>-<hash>`). `run_command` is still gated by the
-argv0 allowlist and shim `PATH`; the image no longer contains anything
-else to run. A declared command the runner image never had is reported absent,
-as before.
+per-BriefAgent **exec image**: the runner image with the packages the
+operator's exec catalog maps those commands to installed, then every
+executable deleted except the declared commands (and the runner binary that
+serves the tools), built once at install time from a generated Dockerfile
+(`agentry-runner-exec:<version>-<hash>`; the hash covers the commands, the
+packages and the mirror, so a changed catalog entry is a new image).
+`run_command` is still gated by the argv0 allowlist and shim `PATH`; the
+image contains nothing else to run.
+
+The catalog is the operator's, not the manifest's — the same stance as
+`mcpRegistries`. Policy `exec.packages` maps a command name to the apk
+package that provides it on this machine, optionally pinned (`git: git`,
+`openssl: openssl=3.5.1-r0`; a busybox applet the runner image already has,
+such as `sort`, is catalogued as `busybox`). A manifest that declares a
+command the catalog does not carry is refused when the plan is compiled
+(exit 11, naming the command and the key), not reported absent at run time;
+`agentry doctor --local <dir>` says so first. The build records the versions
+apk resolved, and the run's receipt names them beside each command's package
+(`capabilities_enforced.exec`, "packages resolved at image build: …"). The
+default policy ships no entries: an operator opts in per tool, and an
+example's README says which entry it needs. Because git refuses a
+repository owned by another user as "dubious ownership", and a run's
+workspace and inputs are bind mounts owned by you read by root inside the
+container, an image that carries `git` sets `safe.directory` for the run's
+workspace and inputs mounts — exactly those paths, and the receipt says so.
 
 ## Harness adapters
 
