@@ -86,7 +86,8 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		problemValidation(w, r, "An org handle is 1-39 lowercase letters, digits and hyphens, starting and ending with a letter or digit.")
 		return
 	}
-	if handleReserved(req.Handle) {
+	p := principalFrom(r.Context())
+	if orgHandleReserved(req.Handle, p.PlatformStaff) {
 		problemValidation(w, r, "That org handle is reserved. Choose another.")
 		return
 	}
@@ -95,7 +96,6 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		problemValidation(w, r, "Set displayName to 1-120 characters.")
 		return
 	}
-	p := principalFrom(r.Context())
 	orgID := newUUID()
 	err := s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
 		if err := q.CreateHandle(r.Context(), storegen.CreateHandleParams{ID: orgID, Handle: req.Handle, Kind: "org"}); err != nil {
