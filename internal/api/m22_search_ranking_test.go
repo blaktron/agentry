@@ -345,3 +345,49 @@ func TestSearchOrderingIsStableAcrossPages(t *testing.T) {
 		t.Errorf("paging saw %d of 4 agents: %v", len(seen), seen)
 	}
 }
+
+// total is the hit count for the predicate before paging (agentry#290):
+// three agents under one handle, limit=2 → two hits and total 3; offset=2 →
+// one hit and total 3; a query matching one → total 1; a filter matching
+// none → total 0. Before this the handler never set it, and the desktop
+// printed "0 results" above a full list.
+func TestSearchTotalCountsBeforePaging(t *testing.T) {
+	env := newTestEnv(t)
+	owner := env.register("total-o")
+	env.verifyEmail(owner)
+	sess := env.login(owner)
+	// A token unique to this run in every summary, rather than the handle:
+	// the handle clause is trigram-fuzzy, so a query on "total-o<sfx>" would
+	// also count a previous run's "total-o<other sfx>" agents on a reused
+	// database.
+	all := "triune" + env.sfx
+	only := "quintessent" + env.sfx
+	env.publishSearchable(t, sess, owner, "total-a", "first of three "+all, "# a\n")
+	env.publishSearchable(t, sess, owner, "total-b", "second of three "+all+" "+only, "# b\n")
+	env.publishSearchable(t, sess, owner, "total-c", "third of three "+all, "# c\n")
+
+	page := func(query, extra string) (hits int, total int) {
+		t.Helper()
+		var out struct {
+			Results []searchHit `json:"results"`
+			Total   *int        `json:"total"`
+		}
+		env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+query+"&"+extra, nil, &out, http.StatusOK)
+		if out.Total == nil {
+			t.Fatalf("search %q %s: no total in the response", query, extra)
+		}
+		return len(out.Results), *out.Total
+	}
+	if h, n := page(all, "limit=2"); h != 2 || n != 3 {
+		t.Fatalf("limit=2: %d hits, total %d; want 2 and 3", h, n)
+	}
+	if h, n := page(all, "limit=2&offset=2"); h != 1 || n != 3 {
+		t.Fatalf("offset=2: %d hits, total %d; want 1 and 3 (paging must not move the total)", h, n)
+	}
+	if h, n := page(only, "limit=100"); h != 1 || n != 1 {
+		t.Fatalf("a term in one summary: %d hits, total %d; want 1 and 1", h, n)
+	}
+	if h, n := page(all, "limit=100&verified=true"); h != 0 || n != 0 {
+		t.Fatalf("verified=true on a user namespace: %d hits, total %d; want 0 and 0", h, n)
+	}
+}

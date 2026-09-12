@@ -1813,7 +1813,9 @@ type SearchResults struct {
 	// Facets Facet counts keyed by facet name then value.
 	Facets  *map[string]map[string]int `json:"facets,omitempty"`
 	Results []SearchHit                `json:"results"`
-	Total   *int                       `json:"total,omitempty"`
+
+	// Total The number of hits for this request's predicate (query, mode, capability, license, verified) before limit and offset — what "2 of 8 results" counts. Blocked and never-published agents are outside it, as they are outside the results.
+	Total *int `json:"total,omitempty"`
 }
 
 // SessionInfo defines model for SessionInfo.

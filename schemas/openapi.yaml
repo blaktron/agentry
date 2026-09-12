@@ -4234,6 +4234,11 @@ components:
               type: integer
         total:
           type: integer
+          description: >
+            The number of hits for this request's predicate (query, mode,
+            capability, license, verified) before limit and offset — what
+            "2 of 8 results" counts. Blocked and never-published agents are
+            outside it, as they are outside the results.
 
     SearchHit:
       type: object

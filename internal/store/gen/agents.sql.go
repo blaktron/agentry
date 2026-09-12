@@ -55,6 +55,78 @@ func (q *Queries) CountAgentsInNamespace(ctx context.Context, namespaceID uuid.U
 	return count, err
 }
 
+const countSearchAgents = `-- name: CountSearchAgents :one
+SELECT count(*)::bigint
+FROM agents a
+JOIN handles h ON h.id = a.namespace_id
+LEFT JOIN orgs o ON o.id = a.namespace_id
+LEFT JOIN agent_versions lv ON lv.id = a.latest_published_version_id
+WHERE a.visibility = 'public'
+  AND a.quarantine_state <> 'blocked'
+  -- Only agents with something installable: a public agent whose every
+  -- version is still in review (or which has none) is not a search result,
+  -- a trending row, or a tag entry yet — browsing surfaces what can be
+  -- installed, and "most installed" must not list the uninstallable.
+  AND a.latest_published_version_id IS NOT NULL
+  AND (
+    $1::text = ''
+    OR a.search_tsv @@ websearch_to_tsquery('english', $1::text)
+    OR a.name::text % $1::text
+    -- The namespace handle is not in search_tsv (§10.4 weights cover
+    -- name/summary/readme), but "search for acme" finding acme's agents is
+    -- table-stakes for a registry — the pre-FTS CLI stopgap behaved that
+    -- way, and m3-cli.sh publishes into a random namespace and then looks
+    -- itself up by handle.
+    OR h.handle = lower($1::text)::citext
+    OR h.handle::text % $1::text
+  )
+  -- mode= means "supports this run mode" (DEV-088): one of the array's values.
+  AND ($2::text IS NULL OR $2::text = ANY(a.modes))
+  -- capability= means "this agent actually asks for it", not merely "the key
+  -- is present": a manifest that says ` + "`" + `network: {egress: none}` + "`" + ` serializes
+  -- with the network key set, so key existence alone would match every agent
+  -- ever published. A capability counts when its value is not null/none/empty
+  -- and, for object-valued ones, when at least one member is not.
+  AND ($3::text IS NULL OR (
+        lv.capabilities IS NOT NULL
+        AND jsonb_exists(lv.capabilities, $3::text)
+        AND lv.capabilities -> $3::text
+            NOT IN ('"none"'::jsonb, 'null'::jsonb, '[]'::jsonb, '{}'::jsonb)
+        AND (jsonb_typeof(lv.capabilities -> $3::text) <> 'object'
+             OR EXISTS (
+               SELECT 1 FROM jsonb_each(lv.capabilities -> $3::text) AS cap_member(k, v)
+               WHERE cap_member.v NOT IN ('"none"'::jsonb, 'null'::jsonb, '[]'::jsonb, '{}'::jsonb)))))
+  AND ($4::text IS NULL
+       OR lower(lv.manifest ->> 'license') = lower($4::text))
+  AND ($5::boolean = false
+       OR (h.kind = 'org' AND o.verified_domain IS NOT NULL))
+`
+
+type CountSearchAgentsParams struct {
+	Query        string  `json:"query"`
+	Mode         *string `json:"mode"`
+	Capability   *string `json:"capability"`
+	License      *string `json:"license"`
+	VerifiedOnly bool    `json:"verified_only"`
+}
+
+// The number of hits SearchAgents would return for the same predicate before
+// LIMIT/OFFSET (agentry#290), so a client can say "2 of 8" truthfully. The
+// WHERE clause is SearchAgents' verbatim and the two must move together; the
+// installs join is absent because nothing in the predicate reads it.
+func (q *Queries) CountSearchAgents(ctx context.Context, arg CountSearchAgentsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchAgents,
+		arg.Query,
+		arg.Mode,
+		arg.Capability,
+		arg.License,
+		arg.VerifiedOnly,
+	)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createAgent = `-- name: CreateAgent :one
 INSERT INTO agents (id, namespace_id, name, visibility, repo_id, summary, modes)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
