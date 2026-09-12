@@ -17,8 +17,9 @@ Two flags are global to every command below.
 configured default, then the default baked into the binary: a build a
 registry serves under `/downloads/`, or one from a site's download page,
 points at that registry, and a source build falls back to
-`http://localhost:8080`. `--json` asks for machine-readable output where a
-command supports it: `info`, `search`, `verify`.
+`http://localhost:8080`. `--json` asks for machine-readable output on stdout
+where a command supports it; the shapes are listed under
+[Machine-readable output](#machine-readable-output).
 
 ### `agentry setup`
 
@@ -428,6 +429,52 @@ checks (`scripts/acceptance/runner-r2.sh`). Each script points
 `AGENTRY_CONFIG_DIR` and `AGENTRY_RUNNER_HOME` at its own throwaway
 directory, so the consent records `agentry run` writes never reach your
 `~/.config/agentry/installed.yaml`.
+
+## Machine-readable output
+
+A client that drives the CLI — the desktop app, the `agentry-mcp` server, a
+script — reads JSON, never prose. With the root `--json` flag a command
+prints one JSON document on stdout and keeps its narration on stderr; `run`
+takes `--output-format json` instead, because its stdout is the result. Each
+shape is a Go struct in `cmd/agentry` with a doc comment, and a test decodes
+it. Values that name a secret never appear: `setup` and `doctor` print the
+key variable's **name** only.
+
+| Command | Shape (top-level fields) |
+|---|---|
+| `search --json` | `results[]` (`namespace`, `name`, `modes`, `summary`, `installs30d`, `quarantineState`), `facets`, `total` |
+| `info ns/name --json` | `agent`, `latest` (the resolved version with its `capabilities` and `attestationUrl`) |
+| `verify ns/name@v --json` | `ref`, `version`, `registryDigest`, `computedDigest`, `digestMatch`, `attestation` (`state`, `detail`, `keyId`) |
+| `doctor --json` | `ref`, `checks[]` (`name`, `status` ok\|warn\|fail, `detail`); the report prints and the exit is 1 when a check fails |
+| `install ns/name --plan --json` | `ref`, `namespace`, `name`, `version`, `digest`, `modes`, `summary`, `yanked`, `contract` (the capabilities as canonical JSON), `contractDigest` (sha256 of exactly those bytes — the document is compact so they arrive unchanged), `attestation` verified\|unsigned\|mismatch\|unverifiable, `keyId`, `signed`, `installed` (`version`, `dir`, when a record exists), `diff` (`widened[]`, `narrowed[]`), `needsConfirmation`, `reason`, `target`, `dir`, `managed`, `refusal` (what an install would stop on: an attestation verdict, or unsigned without `--allow-unsigned`). Nothing is written; the exit is 0 whether or not an install would be refused |
+| `install ns/name --json` | `ref`, `namespace`, `name`, `version`, `digest`, `target`, `dir`, `managed`, `attestation`, `signed`, `contract`, `contractDigest`, `recorded` |
+| `uninstall ns/name [--plan] --json` | `ref`, `plan`, `installs[]`, `profiles[]`, `keptProfiles[]` (under `--keep-mcp`), `consentRecord` — with `--plan`, what would be removed and nothing removed |
+| `list --json` | `path` (the state file), `records[]` (each `installed.yaml` record plus `present`: its directory exists) |
+| `validate DIR --json` | `passed`, `manifest`, `issues[]` (`rule`, `severity`, `path`, `message`), `inventory[]`, `findings[]` (`ruleId`, `scanner`, `severity`, `confidence`, `title`, `filePath`, `lineStart`, `lineEnd`, `excerpt`, `detail`), `readErrors[]`, `fileCount`, `bundle`, `counts`, `strict`; the report prints and the exit is 1 when it failed |
+| `setup --json` | `policyPath`, `provider`, `model`, `apiKeyEnv` (a name), `baseUrl`, `images` ready\|skipped |
+| `run … --output-format json` | the result envelope: `status`, `exitCode` and `exitClass`, `error`, `runId`, `ref`, `digest`, `attestation`, `capabilities_enforced`, `harness`, `usage`, `result`, `outDir`, `resultFile`, `receipts` (`dir`, `runPlanSha256`) |
+| `--version` | `agentry version <v>` — a release version, or a git describe on a source build |
+
+One example, `install --plan --json` on a first install of a BriefAgent
+that declares egress, against a registry that publishes no attestation:
+
+```json
+{"ref":"acme/demo@1.0.0","namespace":"acme","name":"demo","version":"1.0.0","digest":"sha256:…","modes":["autonomous"],"contract":{"filesystem":{"read":"workspace"},"network":{"egress":["api.example.com"]}},"contractDigest":"sha256:…","attestation":"unsigned","signed":false,"diff":{},"needsConfirmation":true,"reason":"a first install of a BriefAgent that declares network egress or exec","target":"claude-skill","dir":"/home/me/.claude/skills/demo","managed":true,"refusal":"unsigned — registry offers no attestation for acme/demo@1.0.0 (…); re-run with --allow-unsigned to install it anyway"}
+```
+
+`--plan` adds no way past a gate: it reports what `--yes` and
+`--allow-unsigned` would be needed for, and a client that shows the contract
+and confirms against `contractDigest` is confirming exactly what it showed.
+Two facts a client should know: a plan against a registry whose signing keys
+are not yet pinned pins them on first use, as `verify` does — the one thing
+`--plan` writes; and a command that fails before its result exists (a digest
+mismatch, a refused attestation, a failed download) exits non-zero with the
+reason on stderr and no JSON on stdout — the exit class is the answer then.
+
+**Exit classes.** Every command exits with one of the §R8 classes, which
+`run`'s envelope names in `exitClass`: `0` ok, `1` cli, `2` usage, `10`
+verify, `11` policy, `12` compile, `13` gateway, `14` harness, `15` timeout,
+`16` budget, `17` outputSchema.
 
 ## The other commands
 
