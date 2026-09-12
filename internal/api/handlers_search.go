@@ -68,6 +68,18 @@ func (s *Server) SearchAgents(w http.ResponseWriter, r *http.Request, params Sea
 		problemInternal(w, r)
 		return
 	}
+	// total is the hit count for the same predicate before paging
+	// (agentry#290): without it every client that printed the count said
+	// "0 results" above a full list.
+	n, err := s.q().CountSearchAgents(r.Context(), storegen.CountSearchAgentsParams{
+		Query: qp.Query, Mode: qp.Mode, Capability: qp.Capability, License: qp.License, VerifiedOnly: qp.VerifiedOnly,
+	})
+	if err != nil {
+		s.log.Error("search: count", "err", err)
+		problemInternal(w, r)
+		return
+	}
+	total := int(n)
 	hits := make([]SearchHit, 0, len(rows))
 	for _, row := range rows {
 		installs := int(row.Installs)
@@ -98,7 +110,7 @@ func (s *Server) SearchAgents(w http.ResponseWriter, r *http.Request, params Sea
 		facets["license"] = licenses
 	}
 
-	writeJSON(w, http.StatusOK, SearchResults{Results: hits, Facets: &facets})
+	writeJSON(w, http.StatusOK, SearchResults{Results: hits, Facets: &facets, Total: &total})
 }
 
 // GetAgentReadme implements GET /agents/{ns}/{name}/readme (§10.3): the
