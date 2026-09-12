@@ -99,6 +99,19 @@ func (p webPaths) accountSettingsURL() string {
 	return p.abs("/ui/account/directory")
 }
 
+// reportCardURL is where an author is sent to read a version's report card
+// from a quarantine or review email (agentry#270). With a site it is the
+// site's version page, which carries the full report. The server's own
+// pages have no version page, so without a site the link is the API's
+// report resource — JSON, but reachable, which a page that does not exist
+// is not. "" when neither origin is configured.
+func (p webPaths) reportCardURL(agent, version string) string {
+	if p.site() {
+		return p.web + "/" + agent + "/versions/" + url.PathEscape(version)
+	}
+	return p.abs("/api/v1/agents/" + agent + "/versions/" + url.PathEscape(version) + "/report")
+}
+
 // authorizeURL is the device-authorize page a CLI or the desktop app opens
 // (DR-17, D-018). It is always the server's own page: the site links to it
 // rather than serving one. "" when the public origin is not configured.

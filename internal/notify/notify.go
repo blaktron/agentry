@@ -135,8 +135,9 @@ type Options struct {
 	Log      *slog.Logger
 	// Links are the browser destinations this deployment resolved (DEV-091):
 	// Dashboard is where "see your dashboard" points; VerifyEmail builds the
-	// address-verification link for a token. Unset falls back to the legacy
-	// site paths under BaseURL.
+	// address-verification link for a token; ReportCard builds the link to a
+	// version's report card for "namespace/name" and a version (agentry#270).
+	// Unset falls back to the site's own paths under BaseURL.
 	Links Links
 }
 
@@ -144,6 +145,7 @@ type Options struct {
 type Links struct {
 	Dashboard   string
 	VerifyEmail func(token string) string
+	ReportCard  func(agent, version string) string
 }
 
 // New builds the configured notifier.
@@ -162,6 +164,7 @@ func New(opt Options) (Notifier, error) {
 		}
 		n.render.dashboard = opt.Links.Dashboard
 		n.render.verifyEmail = opt.Links.VerifyEmail
+		n.render.reportCard = opt.Links.ReportCard
 		return n, nil
 	default:
 		return nil, fmt.Errorf("notify: unknown kind %q (want log|smtp)", opt.Kind)
@@ -241,12 +244,29 @@ type message struct {
 type renderer struct {
 	registry string
 	baseURL  string
-	// dashboard and verifyEmail are the browser destinations the server
-	// resolved for this deployment (a site in front of it, or its own /ui/
-	// pages — DEV-091); when unset the legacy site paths under baseURL are
-	// used, so a bare renderer still produces the same links as before.
+	// dashboard, verifyEmail and reportCard are the browser destinations the
+	// server resolved for this deployment (a site in front of it, or its own
+	// /ui/ pages — DEV-091); when unset the site's paths under baseURL are
+	// used, so a bare renderer still produces links of the same shape.
 	dashboard   string
 	verifyEmail func(token string) string
+	reportCard  func(agent, version string) string
+}
+
+// reportLink is the report-card link for a version: the caller's explicit
+// URL, else the deployment's resolved one, else the site's route shape under
+// baseURL — the path the site serves, which the old "/agents/…" fallback was
+// not (agentry#270).
+func (r renderer) reportLink(explicit, agent, version string) string {
+	if explicit != "" {
+		return explicit
+	}
+	if r.reportCard != nil {
+		if u := r.reportCard(agent, version); u != "" {
+			return u
+		}
+	}
+	return r.link("/" + agent + "/versions/" + version)
 }
 
 func (r renderer) link(path string) string {
@@ -312,7 +332,7 @@ func (r renderer) quarantine(n QuarantineNotice) message {
 	if n.Reason != "" {
 		body += "Reason recorded: " + n.Reason + "\n\n"
 	}
-	if u := firstNonEmpty(n.ReportURL, r.link("/agents/"+n.Agent+"/versions/"+n.Version+"/report")); u != "" {
+	if u := r.reportLink(n.ReportURL, n.Agent, n.Version); u != "" {
 		body += "Report card (findings, ruleset version, scan date):\n" + u + "\n\n"
 	}
 	// The old close told the author to "reply through the report page", a path
@@ -370,7 +390,7 @@ func (r renderer) review(n ReviewNotice) message {
 	if n.Rationale != "" {
 		body += "Rationale: " + n.Rationale + "\n"
 	}
-	if u := firstNonEmpty(n.ReportURL, r.link("/agents/"+n.Agent+"/versions/"+n.Version+"/report")); u != "" {
+	if u := r.reportLink(n.ReportURL, n.Agent, n.Version); u != "" {
 		body += "\nReport card:\n" + u + "\n"
 	}
 	return message{
