@@ -424,7 +424,10 @@ determinism checks (no docker), a live MCP-stdio exercise of the tools
 server, and — on a machine with a docker engine and the model key named by
 the operator policy's `apiKeyEnv` in the environment (`ANTHROPIC_API_KEY`
 when there is no policy yet) — the full end-to-end run with teardown leak
-checks (`scripts/acceptance/runner-r2.sh`).
+checks (`scripts/acceptance/runner-r2.sh`). Each script points
+`AGENTRY_CONFIG_DIR` and `AGENTRY_RUNNER_HOME` at its own throwaway
+directory, so the consent records `agentry run` writes never reach your
+`~/.config/agentry/installed.yaml`.
 
 ## The other commands
 
