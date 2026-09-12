@@ -1526,7 +1526,7 @@ type Meta struct {
 	// Extensions Names of the extensions this build mounts under `/api/v1/x/<name>/` (DEV-091, pkg/extension); absent on the core build.
 	Extensions *[]string `json:"extensions,omitempty"`
 
-	// Features Self-host feature flags: `judge`, `signing`, `redis`, `s3`, and `externalOnly` (accounts live in an external directory service; the native register/password/TOTP surface answers 410 — clients should not offer those forms).
+	// Features Self-host feature flags: `judge`, `signing`, `redis`, `s3`, `externalOnly` (accounts live in an external directory service; the native register/password/TOTP surface answers 410 — clients should not offer those forms) and `publicPublish2FA` (the server refuses a public publish from an account it holds no second-factor evidence for — an enrolled TOTP, or under `auth.requireIdpMFA` an IdP sign-in whose `amr` named a factor; false in dev mode and under `externalOnly` without `auth.requireIdpMFA` — a client states that requirement only when this is true).
 	Features map[string]bool `json:"features"`
 
 	// MinCLIVersion Oldest supported agentry CLI version (§11 distribution note).

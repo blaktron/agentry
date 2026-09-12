@@ -426,6 +426,11 @@ func (s *Server) GetMeta(w http.ResponseWriter, r *http.Request) {
 		// a directory service (DEV-057): the native credential surface is
 		// gone, so do not offer password or TOTP forms (agentry#21).
 		"externalOnly": s.cfg.Auth.ExternalOnly,
+		// publicPublish2FA says whether the §19 second-factor gate on public
+		// publishing is enforced here (publish_gate.go: off in dev mode, and
+		// off under externalOnly unless requireIdpMFA), so a front end states
+		// the requirement only where the server holds it (agentry#269).
+		"publicPublish2FA": publicPublish2FAEnabled(s.cfg),
 	}
 	meta := Meta{
 		Version:    version.Version,

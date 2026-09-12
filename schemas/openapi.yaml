@@ -3086,10 +3086,16 @@ components:
         features:
           type: object
           description: >
-            Self-host feature flags: `judge`, `signing`, `redis`, `s3`, and
+            Self-host feature flags: `judge`, `signing`, `redis`, `s3`,
             `externalOnly` (accounts live in an external directory service;
             the native register/password/TOTP surface answers 410 — clients
-            should not offer those forms).
+            should not offer those forms) and `publicPublish2FA` (the server
+            refuses a public publish from an account it holds no second-factor
+            evidence for — an enrolled TOTP, or under `auth.requireIdpMFA` an
+            IdP sign-in whose `amr` named a factor;
+            false in dev mode and under `externalOnly` without
+            `auth.requireIdpMFA` — a client states that requirement only
+            when this is true).
           additionalProperties:
             type: boolean
         minCLIVersion:
