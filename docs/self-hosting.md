@@ -198,6 +198,18 @@ clients pin it on first use. **Back this key up**: it is what makes your
 already-published attestations verifiable, and losing it means every installed
 copy stops verifying.
 
+With the compose stack, three lines in `.env` wire the key in without leaving
+dev mode (agentry#308): `AGENTRY_SIGNING_KIND=file`,
+`AGENTRY_SIGNING_KEY_FILE=/etc/agentry/signing-key.pem` and
+`AGENTRY_SIGNING_KEY_DIR=/path/to/the/directory/holding/signing-key.pem` (the
+host directory, mounted read-only at `/etc/agentry`). The server runs as uid
+65532 inside the container, so a `0600` key has to be owned by that uid
+(`chown 65532 signing-key.pem`) or the server refuses to start. Without
+these lines dev mode mints a key at every start, and an attestation stops
+verifying at the next restart — fine for a throwaway stack, not for one
+anyone installs from; and `kind: file` with no `keyFile` in dev mode is the
+same ephemeral key, not an error.
+
 Generate a sealing key:
 
 ```bash

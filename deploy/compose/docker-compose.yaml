@@ -299,11 +299,25 @@ services:
       # keep the transport reachable but unadvertised.
       AGENTRY_GIT_SSH_ADDR: ${AGENTRY_GIT_SSH_ADDR:-:2222}
       AGENTRY_GIT_SSH_PUBLIC_URL: ${AGENTRY_GIT_SSH_PUBLIC_URL:-}
+      # Release signing (agentry#308). Unset, dev mode signs with a key it
+      # mints at every start, and an attestation stops verifying at the
+      # next restart. A stable key: AGENTRY_SIGNING_KIND=file, the key at
+      # AGENTRY_SIGNING_KEY_FILE inside the container, and the host
+      # directory that holds it in AGENTRY_SIGNING_KEY_DIR (mounted
+      # read-only at /etc/agentry). Generate it as self-hosting.md says,
+      # 0600, and back it up: every attestation it signed verifies only
+      # against it.
+      AGENTRY_SIGNING_KIND: ${AGENTRY_SIGNING_KIND:-none}
+      AGENTRY_SIGNING_KEY_FILE: ${AGENTRY_SIGNING_KEY_FILE:-}
     ports:
       - "${AGENTRY_BIND:-127.0.0.1}:8080:8080"
       - "${AGENTRY_SSH_BIND:-0.0.0.0}:${AGENTRY_SSH_PORT:-2222}:2222"
     volumes:
       - gitdata:/data/git
+      # The signing key's directory when one is configured; an unset
+      # AGENTRY_SIGNING_KEY_DIR mounts the empty placeholder volume instead,
+      # so the same file works with and without a key.
+      - ${AGENTRY_SIGNING_KEY_DIR:-signing-placeholder}:/etc/agentry:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -374,6 +388,8 @@ volumes:
   gitdata:
   edgecache:
   redisdata:
+  # Mounted at /etc/agentry when no signing key directory is configured.
+  signing-placeholder:
   authentik-media:
   authentik-templates:
   downloads:
