@@ -69,21 +69,26 @@ var (
 )
 
 type orgData struct {
-	Org        orgInfo
-	Handle     string
-	Members    []orgMember
-	Teams      []team
-	Policy     string
-	SSO        []ssoConnection
-	SCIM       []scimToken
-	Domains    []domainClaim
-	Webhooks   []webhook
-	Roles      []string
-	Events     []string
-	Refused    string
-	SAMLMeta   string
-	OIDCIssuer string
-	OIDCClient string
+	Org     orgInfo
+	Handle  string
+	Members []orgMember
+	Teams   []team
+	Policy  string
+	SSO     []ssoConnection
+	// The stored state each SSO form reflects on load (agentry#272): before
+	// this the textarea and both Enabled boxes rendered empty, so a save
+	// silently disabled a connection unless the box was re-ticked.
+	SAMLMetadata string
+	SAMLEnabled  bool
+	OIDCEnabled  bool
+	SCIM         []scimToken
+	Domains      []domainClaim
+	Webhooks     []webhook
+	Roles        []string
+	Events       []string
+	Refused      string
+	OIDCIssuer   string
+	OIDCClient   string
 }
 
 func (h *handler) orgPage(w http.ResponseWriter, r *http.Request) {
@@ -135,9 +140,14 @@ func (h *handler) orgPage(w http.ResponseWriter, r *http.Request) {
 		if res, err := c.do(http.MethodGet, base+"/sso/connections", nil); err == nil && res.OK() {
 			_ = res.decode(&d.SSO)
 			for _, conn := range d.SSO {
-				if conn.Kind == "oidc" {
+				switch conn.Kind {
+				case "oidc":
 					d.OIDCIssuer, _ = conn.Config["issuer"].(string)
 					d.OIDCClient, _ = conn.Config["clientId"].(string)
+					d.OIDCEnabled = conn.Enabled
+				case "saml":
+					d.SAMLMetadata, _ = conn.Config["idpMetadataXml"].(string)
+					d.SAMLEnabled = conn.Enabled
 				}
 			}
 		}
@@ -235,8 +245,31 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 		}
 		switch f("action") {
 		case "test":
+			// The probe answers 200 whether it passed or failed (ok=false
+			// carries the reason), so the verdict is in the body, not the
+			// status (agentry#272).
 			res, err = c.do(http.MethodPost, base+"/sso/connections/"+kind+"/test", nil)
-			ok = kind + " connection checked. This page does not show the result."
+			if err == nil && res.OK() {
+				var probe struct {
+					OK       bool     `json:"ok"`
+					Summary  string   `json:"summary"`
+					Warnings []string `json:"warnings"`
+				}
+				if res.decode(&probe) != nil || probe.Summary == "" {
+					back(w, r, backTo, "", kind+" connection checked, but the result could not be read.")
+					return
+				}
+				msg := probe.Summary
+				if len(probe.Warnings) > 0 {
+					msg += " Warnings: " + strings.Join(probe.Warnings, "; ")
+				}
+				if !probe.OK {
+					back(w, r, backTo, "", msg)
+					return
+				}
+				back(w, r, backTo, msg, "")
+				return
+			}
 		case "delete":
 			res, err = c.do(http.MethodDelete, base+"/sso/connections/"+kind, nil)
 			ok = kind + " connection removed. Sign-in through it stops; current sessions stand."

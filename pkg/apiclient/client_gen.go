@@ -1875,7 +1875,7 @@ type SsoConnectionKind string
 
 // SsoConnectionInput defines model for SsoConnectionInput.
 type SsoConnectionInput struct {
-	// Config SAML (idpMetadataXml or idpEntityId+idpCertificatePem+idpSsoUrl) or OIDC (issuer, clientId, clientSecret) settings.
+	// Config SAML (idpMetadataXml or idpEntityId+idpCertificatePem+idpSsoUrl) or OIDC (issuer, clientId, clientSecret) settings. An OIDC save that omits clientSecret keeps the stored one; to drop the secret, delete the connection.
 	Config  map[string]interface{} `json:"config"`
 	Enabled bool                   `json:"enabled"`
 }

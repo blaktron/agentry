@@ -496,7 +496,14 @@ func TestOrgAdminPage(t *testing.T) {
 			_, _ = io.WriteString(w, `[{"user":{"handle":"pat"},"role":"member"}]`)
 		case "GET /api/v1/orgs/acme/policy":
 			_, _ = io.WriteString(w, `{"allowPrivateIps":false}`)
-		case "GET /api/v1/orgs/acme/sso/connections", "GET /api/v1/orgs/acme/scim/tokens", "GET /api/v1/orgs/acme/domain-claims", "GET /api/v1/orgs/acme/webhooks":
+		case "GET /api/v1/orgs/acme/sso/connections":
+			_, _ = io.WriteString(w, `[{"kind":"saml","enabled":true,"config":{"idpMetadataXml":"<EntityDescriptor/>"}},{"kind":"oidc","enabled":false,"config":{"issuer":"https://idp.example","clientId":"cid"}}]`)
+		case "POST /api/v1/orgs/acme/sso/connections/oidc/test":
+			// The probe is a 200 either way; the verdict is in the body.
+			_, _ = io.WriteString(w, `{"ok":false,"kind":"oidc","summary":"The discovery document could not be fetched.","checkedAt":"2026-09-12T00:00:00Z"}`)
+		case "POST /api/v1/orgs/acme/sso/connections/saml/test":
+			_, _ = io.WriteString(w, `{"ok":true,"kind":"saml","summary":"The IdP metadata parsed and the SP metadata is served.","warnings":["The IdP certificate expires in 20 days."],"checkedAt":"2026-09-12T00:00:00Z"}`)
+		case "GET /api/v1/orgs/acme/scim/tokens", "GET /api/v1/orgs/acme/domain-claims", "GET /api/v1/orgs/acme/webhooks":
 			_, _ = io.WriteString(w, `[]`)
 		case "PUT /api/v1/orgs/acme/policy":
 			var doc map[string]any
@@ -516,10 +523,27 @@ func TestOrgAdminPage(t *testing.T) {
 	h := New(Options{API: api})
 	w := get(h, "/ui/orgs/acme", sessCookie, csrfCookieV)
 	body := w.Body.String()
-	for _, want := range []string{"Acme Corp", "<strong>chris</strong>", "<strong>platform</strong>", `&#34;allowPrivateIps&#34;: false`, "Create webhook"} {
+	for _, want := range []string{"Acme Corp", "<strong>chris</strong>", "<strong>platform</strong>", `&#34;allowPrivateIps&#34;: false`, "Create webhook",
+		// agentry#272: the SSO forms reflect the stored state on load — the
+		// SAML metadata and its Enabled box, the OIDC fields with Enabled off.
+		`<textarea name="idpMetadataXml" rows="4" class="mono">&lt;EntityDescriptor/&gt;</textarea>`,
+		`<input type="checkbox" name="enabled" value="true" checked> Enabled</label><div><button type="submit" class="secondary">Save SAML</button>`,
+		`value="https://idp.example"`, `placeholder="blank keeps the stored secret"`,
+		`<input type="checkbox" name="enabled" value="true"> Enabled</label><div><button type="submit" class="secondary">Save OIDC</button>`,
+	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("org page missing %q: %d %s", want, w.Code, body)
 		}
+	}
+	// The probe's verdict reaches the flash: ok=false is the error flash with
+	// the summary, ok=true the success flash with the summary and warnings.
+	w = post(h, "/ui/orgs/acme", url.Values{"_csrf": {"csrf1"}, "section": {"sso"}, "kind": {"oidc"}, "action": {"test"}}, nil, sessCookie, csrfCookieV)
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/ui/orgs/acme?error=The+discovery+document+could+not+be+fetched." {
+		t.Fatalf("failed probe: %d %s", w.Code, w.Header().Get("Location"))
+	}
+	w = post(h, "/ui/orgs/acme", url.Values{"_csrf": {"csrf1"}, "section": {"sso"}, "kind": {"saml"}, "action": {"test"}}, nil, sessCookie, csrfCookieV)
+	if loc := w.Header().Get("Location"); w.Code != http.StatusSeeOther || loc != "/ui/orgs/acme?ok=The+IdP+metadata+parsed+and+the+SP+metadata+is+served.+Warnings%3A+The+IdP+certificate+expires+in+20+days." {
+		t.Fatalf("passed probe: %d %s", w.Code, loc)
 	}
 	w = post(h, "/ui/orgs/acme", url.Values{"_csrf": {"csrf1"}, "section": {"policy"}, "policy": {`{"allowPrivateIps": true}`}}, nil, sessCookie, csrfCookieV)
 	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/ui/orgs/acme?ok=Policy+saved." {

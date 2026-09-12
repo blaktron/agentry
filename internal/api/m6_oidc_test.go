@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -16,6 +18,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc/oidctest"
 
 	"github.com/blaktron/agentry/internal/api"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 // oidcEndpointIdP is a fake IdP whose /authorize records the nonce per code and
@@ -169,5 +172,71 @@ func TestOIDCEndpointFlow(t *testing.T) {
 	_ = who.Body.Close()
 	if who.StatusCode != http.StatusOK {
 		t.Fatalf("OIDC session GET /user: got %d want 200", who.StatusCode)
+	}
+}
+
+// A save that omits clientSecret keeps the sealed one; a save that carries a
+// new one replaces it (agentry#272). Before this the upsert replaced the whole
+// config, so an edit to any other field dropped the secret.
+func TestPutSsoConnectionKeepsSecretWhenOmitted(t *testing.T) {
+	env := newTestEnv(t)
+	owner := env.register("sso-keep-owner")
+	env.verifyEmail(owner)
+	sess := env.login(owner)
+	orgH := "ssokeep" + env.sfx
+	env.createOrg(sess, orgH)
+	path := "/api/v1/orgs/" + orgH + "/sso/connections/oidc"
+	stored := func() string {
+		t.Helper()
+		org, err := env.st.Queries().GetOrgByHandle(context.Background(), orgH)
+		if err != nil {
+			t.Fatal(err)
+		}
+		row, err := env.st.Queries().GetSSOConnection(context.Background(), storegen.GetSSOConnectionParams{OrgID: org.ID, Kind: "oidc"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var cfg struct {
+			ClientSecretEnc string `json:"clientSecretEnc"`
+			Issuer          string `json:"issuer"`
+		}
+		if err := json.Unmarshal(row.Config, &cfg); err != nil {
+			t.Fatal(err)
+		}
+		return cfg.Issuer + "|" + cfg.ClientSecretEnc
+	}
+
+	env.doJSON(sess, http.MethodPut, path, map[string]any{
+		"enabled": true, "config": map[string]any{"issuer": "https://idp.example", "clientId": "cid", "clientSecret": "first"},
+	}, nil, http.StatusOK)
+	first := stored()
+	if !strings.HasPrefix(first, "https://idp.example|") || strings.HasSuffix(first, "|") {
+		t.Fatalf("setup: no sealed secret stored: %q", first)
+	}
+
+	// Edit the issuer only: the sealed secret must travel with it.
+	env.doJSON(sess, http.MethodPut, path, map[string]any{
+		"enabled": true, "config": map[string]any{"issuer": "https://idp2.example", "clientId": "cid"},
+	}, nil, http.StatusOK)
+	if got := stored(); got != "https://idp2.example|"+strings.TrimPrefix(first, "https://idp.example|") {
+		t.Fatalf("secret dropped or changed on a save that omitted it: before %q after %q", first, got)
+	}
+
+	// A new secret replaces it.
+	env.doJSON(sess, http.MethodPut, path, map[string]any{
+		"enabled": true, "config": map[string]any{"issuer": "https://idp2.example", "clientId": "cid", "clientSecret": "second"},
+	}, nil, http.StatusOK)
+	if got := stored(); got == "https://idp2.example|"+strings.TrimPrefix(first, "https://idp.example|") {
+		t.Fatalf("a new secret did not replace the stored one: %q", got)
+	}
+
+	// The API never returns the sealed value.
+	var listed []map[string]any
+	env.doJSON(sess, http.MethodGet, "/api/v1/orgs/"+orgH+"/sso/connections", nil, &listed, http.StatusOK)
+	if len(listed) != 1 {
+		t.Fatalf("connections: %+v", listed)
+	}
+	if cfg, _ := listed[0]["config"].(map[string]any); cfg["clientSecretEnc"] != nil || cfg["clientSecret"] != nil {
+		t.Fatalf("secret leaked in the listing: %+v", cfg)
 	}
 }
