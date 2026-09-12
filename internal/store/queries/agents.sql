@@ -188,6 +188,56 @@ ORDER BY
   a.id DESC
 LIMIT $1 OFFSET $2;
 
+-- name: CountSearchAgents :one
+-- The number of hits SearchAgents would return for the same predicate before
+-- LIMIT/OFFSET (agentry#290), so a client can say "2 of 8" truthfully. The
+-- WHERE clause is SearchAgents' verbatim and the two must move together; the
+-- installs join is absent because nothing in the predicate reads it.
+SELECT count(*)::bigint
+FROM agents a
+JOIN handles h ON h.id = a.namespace_id
+LEFT JOIN orgs o ON o.id = a.namespace_id
+LEFT JOIN agent_versions lv ON lv.id = a.latest_published_version_id
+WHERE a.visibility = 'public'
+  AND a.quarantine_state <> 'blocked'
+  -- Only agents with something installable: a public agent whose every
+  -- version is still in review (or which has none) is not a search result,
+  -- a trending row, or a tag entry yet — browsing surfaces what can be
+  -- installed, and "most installed" must not list the uninstallable.
+  AND a.latest_published_version_id IS NOT NULL
+  AND (
+    sqlc.arg(query)::text = ''
+    OR a.search_tsv @@ websearch_to_tsquery('english', sqlc.arg(query)::text)
+    OR a.name::text % sqlc.arg(query)::text
+    -- The namespace handle is not in search_tsv (§10.4 weights cover
+    -- name/summary/readme), but "search for acme" finding acme's agents is
+    -- table-stakes for a registry — the pre-FTS CLI stopgap behaved that
+    -- way, and m3-cli.sh publishes into a random namespace and then looks
+    -- itself up by handle.
+    OR h.handle = lower(sqlc.arg(query)::text)::citext
+    OR h.handle::text % sqlc.arg(query)::text
+  )
+  -- mode= means "supports this run mode" (DEV-088): one of the array's values.
+  AND (sqlc.narg('mode')::text IS NULL OR sqlc.narg('mode')::text = ANY(a.modes))
+  -- capability= means "this agent actually asks for it", not merely "the key
+  -- is present": a manifest that says `network: {egress: none}` serializes
+  -- with the network key set, so key existence alone would match every agent
+  -- ever published. A capability counts when its value is not null/none/empty
+  -- and, for object-valued ones, when at least one member is not.
+  AND (sqlc.narg('capability')::text IS NULL OR (
+        lv.capabilities IS NOT NULL
+        AND jsonb_exists(lv.capabilities, sqlc.narg('capability')::text)
+        AND lv.capabilities -> sqlc.narg('capability')::text
+            NOT IN ('"none"'::jsonb, 'null'::jsonb, '[]'::jsonb, '{}'::jsonb)
+        AND (jsonb_typeof(lv.capabilities -> sqlc.narg('capability')::text) <> 'object'
+             OR EXISTS (
+               SELECT 1 FROM jsonb_each(lv.capabilities -> sqlc.narg('capability')::text) AS cap_member(k, v)
+               WHERE cap_member.v NOT IN ('"none"'::jsonb, 'null'::jsonb, '[]'::jsonb, '{}'::jsonb)))))
+  AND (sqlc.narg('license')::text IS NULL
+       OR lower(lv.manifest ->> 'license') = lower(sqlc.narg('license')::text))
+  AND (sqlc.arg(verified_only)::boolean = false
+       OR (h.kind = 'org' AND o.verified_domain IS NOT NULL));
+
 -- name: SearchFacetModes :many
 -- One row per run mode with the number of public, unblocked agents that
 -- support it; an agent supporting both counts under each.
