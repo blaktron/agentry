@@ -233,7 +233,7 @@ func (p *Pipeline) notifyMCPAlert(ctx context.Context, v storegen.AgentVersion, 
 		"agent": agent.Namespace + "/" + agent.Name, "version": v.Version, "server": server,
 		"severity": alert.Severity, "advisories": advisoryIDs, "fixedIn": fixed,
 	})
-	if p.notifier != nil && notify.AllowsEmail(ctx, q, v.SubmittedBy, notify.KindDependencyAlert) {
+	if p.notifier != nil && notify.AllowsEmail(ctx, q, p.log, v.SubmittedBy, notify.KindDependencyAlert) {
 		u, err := q.GetUserByID(ctx, v.SubmittedBy)
 		if err != nil {
 			p.log.Error("mcp sweep: load author for alert", "version", v.ID, "err", err)

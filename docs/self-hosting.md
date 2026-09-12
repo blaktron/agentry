@@ -363,6 +363,18 @@ domain. With no SMTP configured at all, email verification tokens are
 logged at debug level. That is usable for a single-operator instance, not
 for anything with real users.
 
+Whatever the transport, the registry mails only addresses it has verified:
+a user whose `email_verified_at` is unset (the verify-email link, an IdP's
+`email_verified` claim, or SCIM sets it) receives none of the notification
+mails, and the suppression is logged as `notify: suppressed, address not
+verified` with the user id (a user row that cannot be read is logged as
+`user row unreadable` at warn and treated the same way). The verification mail itself is the one
+exception, since it is how an address becomes verified. An account seeded
+by hand for automation or acceptance runs should either carry a real
+mailbox or have every `email_*` flag off in `user_notification_settings`
+(`PUT /user/notification-settings`): a verified stamp on an invented
+address is how a registry bounces mail from its own test data.
+
 ### Limits and quotas
 
 The §19 quotas are configuration (`limits.*`, or `AGENTRY_LIMITS_*` in the

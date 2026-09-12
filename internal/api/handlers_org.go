@@ -30,7 +30,7 @@ func (s *Server) orgOrNotFound(w http.ResponseWriter, r *http.Request, handle st
 // Best-effort: the membership is already committed, and a mail failure must
 // not turn a successful grant into a 500 the admin would retry.
 func (s *Server) notifyOrgInvite(ctx context.Context, org storegen.GetOrgByHandleRow, target storegen.GetUserByHandleRow, role, invitedBy string) {
-	if s.notifier == nil || !notify.AllowsEmail(ctx, s.q(), target.ID, notify.KindOrgInvite) {
+	if s.notifier == nil || !notify.AllowsEmail(ctx, s.q(), s.log, target.ID, notify.KindOrgInvite) {
 		return
 	}
 	if err := s.notifier.OrgInvite(ctx, notify.InviteNotice{

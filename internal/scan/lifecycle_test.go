@@ -1082,6 +1082,48 @@ func TestQuarantineNotifiesAuthorAndEmitsAdvisoryEvent(t *testing.T) {
 	}
 }
 
+// An author whose address is not verified hears nothing (agentry#299): the
+// quarantine and the advisory still land — they are the protective actions —
+// and the mail is the only thing withheld. Verification is cleared after the
+// publish because the publish gate needs it.
+func TestQuarantineWithholdsMailFromUnverifiedAuthor(t *testing.T) {
+	notifier := &recordingNotifier{}
+	e := newPipeEnv(t, func(d *scan.PipelineDeps) { d.Notifier = notifier })
+	ctx := context.Background()
+	u, _ := e.st.Queries().GetUserByID(ctx, e.owner)
+	sawAdvisory := false
+	e.reg.SetEventSink(func(_ context.Context, _ uuid.UUID, event string, _ map[string]any) {
+		if event == "advisory.published" {
+			sawAdvisory = true
+		}
+	})
+
+	armed := false
+	e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, laterRulesetProvider{armed: &armed}, nil))
+	v := e.publish("unverified", "public", benignFiles(u.Handle, "unverified", "1.0.0"))
+	if v.Status != "published" {
+		t.Fatalf("setup: status %s", v.Status)
+	}
+	if _, err := e.st.Pool().Exec(ctx, `UPDATE users SET email_verified_at = NULL WHERE id = $1`, e.owner); err != nil {
+		t.Fatal(err)
+	}
+
+	armed = true
+	if err := e.pipe.RescanSweep(ctx); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	after, err := e.st.Queries().GetVersionByID(ctx, v.ID)
+	if err != nil || after.Status != "quarantined" {
+		t.Fatalf("quarantine must still land: status %q err %v", after.Status, err)
+	}
+	if len(notifier.notices) != 0 {
+		t.Fatalf("mail went to an unverified address: %+v", notifier.notices)
+	}
+	if !sawAdvisory {
+		t.Fatal("the advisory must still be published when the mail is withheld")
+	}
+}
+
 // erroringJudge fails every adjudication, standing in for an unconfigured or
 // unreachable judge provider (§8.4.6: fail toward review, never toward skip).
 type erroringJudge struct{}
