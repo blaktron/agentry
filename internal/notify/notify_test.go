@@ -188,8 +188,48 @@ func TestQuarantineNoticeIsHonestAboutInstalledCopies(t *testing.T) {
 	if !strings.Contains(flatten(body), "are not reached by this change") {
 		t.Errorf("quarantine notice does not say installed copies are unaffected:\n%s", body)
 	}
-	if !strings.Contains(body, "https://registry.example/agents/acme/widget/versions/1.0.0/report") {
+	// agentry#270: the bare fallback is the site's route shape; the old
+	// "/agents/…/report" path existed nowhere.
+	if !strings.Contains(body, "https://registry.example/acme/widget/versions/1.0.0") {
 		t.Errorf("report link missing or wrong:\n%s", body)
+	}
+	if strings.Contains(body, "/agents/acme/widget") {
+		t.Errorf("report link still uses the dead /agents/… path:\n%s", body)
+	}
+}
+
+// With the deployment's resolved link (Options.Links.ReportCard, the DEV-091
+// seam) the quarantine and review mails carry it, and an explicit ReportURL
+// on the notice still wins.
+func TestReportCardLinkComesFromLinks(t *testing.T) {
+	n, sent := capture(t)
+	n.render.reportCard = func(agent, version string) string {
+		return "https://site.example/" + agent + "/versions/" + version
+	}
+	if err := n.AgentQuarantined(t.Context(), QuarantineNotice{
+		ToEmail: "u@example.test", Agent: "acme/widget", Version: "1.0.0", Severity: "high",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := n.ReviewDecided(t.Context(), ReviewNotice{
+		ToEmail: "u@example.test", Agent: "acme/widget", Version: "1.0.0", Decision: "rejected",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := n.ReviewDecided(t.Context(), ReviewNotice{
+		ToEmail: "u@example.test", Agent: "acme/widget", Version: "1.0.0", Decision: "published",
+		ReportURL: "https://elsewhere.example/r",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []string{
+		"https://site.example/acme/widget/versions/1.0.0",
+		"https://site.example/acme/widget/versions/1.0.0",
+		"https://elsewhere.example/r",
+	} {
+		if !strings.Contains((*sent)[i], want) {
+			t.Errorf("mail %d lacks %q:\n%s", i, want, (*sent)[i])
+		}
 	}
 }
 
