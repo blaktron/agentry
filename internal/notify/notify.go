@@ -5,6 +5,12 @@
 // speaks to mailpit on :1025 in the compose dev stack and to SES's SMTP
 // endpoint on AWS (§13.4).
 //
+// No notification goes to an address the registry has not verified: every
+// sender asks AllowsEmail (prefs.go) first, which refuses a user without
+// users.email_verified_at before it reads a single preference (agentry#299).
+// The verification mail is the one mail that does not ask, because it is
+// how an address becomes verified.
+//
 // Message bodies follow §1.6.3: they say what was found and what happens next.
 // Nothing here calls an agent safe, secure, or verified — scanning reduces
 // risk, it does not prove absence of it, and a notification is exactly where

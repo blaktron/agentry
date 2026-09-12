@@ -385,8 +385,8 @@ func (s *Server) notifyReviewDecided(ctx context.Context, v storegen.AgentVersio
 		s.log.Error("review notification: load agent", "version", v.ID, "err", err)
 		return
 	}
-	if !notify.AllowsEmail(ctx, s.q(), author.ID, notify.KindReviewDecision) {
-		return // the author switched these off (agentry#190)
+	if !notify.AllowsEmail(ctx, s.q(), s.log, author.ID, notify.KindReviewDecision) {
+		return // unverified address, or the author switched these off (#299, #190)
 	}
 	if err := s.notifier.ReviewDecided(ctx, notify.ReviewNotice{
 		ToEmail:   author.Email,
