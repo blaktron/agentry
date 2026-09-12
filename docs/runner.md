@@ -432,8 +432,10 @@ directory, so the consent records `agentry run` writes never reach your
 
 ## Machine-readable output
 
-A client that drives the CLI — the desktop app, the `agentry-mcp` server, a
-script — reads JSON, never prose. With the root `--json` flag a command
+A client that drives the CLI — the desktop app, the `agentry-mcp` server
+([from your own agent](agentry/mcp.md): Claude Code, Codex or any MCP host
+driving this CLI through its plan modes), a script — reads JSON, never
+prose. With the root `--json` flag a command
 prints one JSON document on stdout and keeps its narration on stderr; `run`
 takes `--output-format json` instead, because its stdout is the result. Each
 shape is a Go struct in `cmd/agentry` with a doc comment, and a test decodes
