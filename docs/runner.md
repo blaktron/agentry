@@ -452,6 +452,7 @@ key variable's **name** only.
 | `list --json` | `path` (the state file), `records[]` (each `installed.yaml` record plus `present`: its directory exists) |
 | `validate DIR --json` | `passed`, `manifest`, `issues[]` (`rule`, `severity`, `path`, `message`), `inventory[]`, `findings[]` (`ruleId`, `scanner`, `severity`, `confidence`, `title`, `filePath`, `lineStart`, `lineEnd`, `excerpt`, `detail`), `readErrors[]`, `fileCount`, `bundle`, `counts`, `strict`; the report prints and the exit is 1 when it failed |
 | `setup --json` | `policyPath`, `provider`, `model`, `apiKeyEnv` (a name), `baseUrl`, `images` ready\|skipped |
+| `run ns/name --plan --json` (or `--local DIR`) | the consent-free preview a client shows before a person consents: `ref`, `version`, `digest`, `mode`, `modes`, `plan` (the compiled plan, canonical — what a run would enforce), `planSha256` (the receipt's `runPlanSha256`, over the plan's canonical indented form — match it, do not re-derive it from the compact `plan` bytes), `contract`, `contractDigest`, `attestation` verified\|unsigned\|local\|mismatch\|unverifiable, `keyId`, `signed`, `installed`, `diff`, `needsConfirmation`, `reason`, `refusal`. Asks nothing, records nothing, materializes into a temp home; exit 0 whether or not a run would be refused (`--dry-run` is the plan for a person who consented on the terminal) |
 | `run … --output-format json` | the result envelope: `status`, `exitCode` and `exitClass`, `error`, `runId`, `ref`, `digest`, `attestation`, `capabilities_enforced`, `harness`, `usage`, `result`, `outDir`, `resultFile`, `receipts` (`dir`, `runPlanSha256`) |
 | `--version` | `agentry version <v>` — a release version, or a git describe on a source build |
 
@@ -474,7 +475,10 @@ reason on stderr and no JSON on stdout — the exit class is the answer then.
 **Exit classes.** Every command exits with one of the §R8 classes, which
 `run`'s envelope names in `exitClass`: `0` ok, `1` cli, `2` usage, `10`
 verify, `11` policy, `12` compile, `13` gateway, `14` harness, `15` timeout,
-`16` budget, `17` outputSchema.
+`16` budget, `17` outputSchema. An interrupted run (SIGINT, SIGTERM) tears
+down and writes its envelope with `error: interrupted` under `cli`, receipts
+kept; the unsigned gate asks for `--allow-unsigned` on every run of an
+unsigned or local release, a cached install included.
 
 ## The other commands
 
