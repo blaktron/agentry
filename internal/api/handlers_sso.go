@@ -91,7 +91,18 @@ func (s *Server) PutSsoConnection(w http.ResponseWriter, r *http.Request, org Or
 	if !readJSON(w, r, &req) {
 		return
 	}
-	stored, verr := s.buildStoredSSOConfig(r, orgRow.Handle, k, req.Config)
+	// The stored row, when there is one, so a save that omits the client
+	// secret keeps the sealed one (agentry#272): the upsert replaces the whole
+	// config, and before this an edit to any other field dropped the secret.
+	var prev []byte
+	if row, err := s.q().GetSSOConnection(r.Context(), storegen.GetSSOConnectionParams{OrgID: orgRow.ID, Kind: k}); err == nil {
+		prev = row.Config
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		s.log.Error("put sso connection: read current", "err", err)
+		problemInternal(w, r)
+		return
+	}
+	stored, verr := s.buildStoredSSOConfig(r, orgRow.Handle, k, req.Config, prev)
 	if verr != nil {
 		problemValidation(w, r, sentence(verr.Error()))
 		return
@@ -165,7 +176,9 @@ type storedOIDCConfig struct {
 // buildStoredSSOConfig validates the input config for a kind and returns the
 // JSON-serializable form to persist (OIDC secrets sealed; SAML validated by
 // constructing the SP).
-func (s *Server) buildStoredSSOConfig(r *http.Request, handle, kind string, in map[string]interface{}) (any, error) {
+// prev is the connection's current stored config, nil when there is none;
+// an OIDC save without a clientSecret carries the sealed one forward from it.
+func (s *Server) buildStoredSSOConfig(r *http.Request, handle, kind string, in map[string]interface{}, prev []byte) (any, error) {
 	switch kind {
 	case "saml":
 		var c samlsp.Config
@@ -191,6 +204,11 @@ func (s *Server) buildStoredSSOConfig(r *http.Request, handle, kind string, in m
 				return nil, errors.New("the server could not encrypt the client secret, and nothing was stored")
 			}
 			out.ClientSecretEnc = base64.StdEncoding.EncodeToString(sealed)
+		} else if prev != nil {
+			var cur storedOIDCConfig
+			if json.Unmarshal(prev, &cur) == nil {
+				out.ClientSecretEnc = cur.ClientSecretEnc
+			}
 		}
 		if scopes, ok := in["scopes"].([]interface{}); ok {
 			for _, v := range scopes {
