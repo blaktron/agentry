@@ -744,6 +744,9 @@ names a second factor — `mfa`, `otp`, `hwk`, `webauthn` and the like, never
 emits `amr` on its ID tokens; check one sign-in's token (or the
 `user.login` audit row) before enabling the flag, because with it on and a
 directory that never asserts a factor, nobody can publish publicly.
+Whichever way it is set, `GET /api/v1/meta` reports the gate's state as
+`features.publicPublish2FA`, which is what a front end reads before it
+tells anyone that publishing needs a second factor.
 
 The directory's flows are unbranded here and call the deployment
 `AGENTRY_BRAND_NAME`; a site that fronts the registry applies its own
