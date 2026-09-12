@@ -21,6 +21,7 @@ func TestWebPaths(t *testing.T) {
 		verify        string
 		account       string
 		authorize     string
+		report        string
 	}{
 		{
 			name:      "core alone, public origin known",
@@ -33,6 +34,7 @@ func TestWebPaths(t *testing.T) {
 			verify:    "https://reg.example/ui/verify-email?token=t%2F1",
 			account:   "https://reg.example/ui/account/directory",
 			authorize: "https://reg.example/ui/authorize",
+			report:    "https://reg.example/api/v1/agents/acme/widget/versions/1.0.0+build/report",
 		},
 		{
 			name:     "core alone, no public origin",
@@ -52,6 +54,7 @@ func TestWebPaths(t *testing.T) {
 			verify:    "https://site.example/auth/verify-email?token=t%2F1",
 			account:   "https://site.example/settings/authentication",
 			authorize: "https://reg.example/ui/authorize",
+			report:    "https://site.example/acme/widget/versions/1.0.0+build",
 		},
 	}
 	for _, c := range cases {
@@ -71,6 +74,7 @@ func TestWebPaths(t *testing.T) {
 			check("verifyEmailURL", p.verifyEmailURL("t/1"), c.verify)
 			check("accountSettingsURL", p.accountSettingsURL(), c.account)
 			check("authorizeURL", p.authorizeURL(), c.authorize)
+			check("reportCardURL", p.reportCardURL("acme/widget", "1.0.0+build"), c.report)
 		})
 	}
 }

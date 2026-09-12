@@ -106,7 +106,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		SMTP:     smtpOptions(cfg),
 		Log:      log,
 		Registry: cfg.DisplayName(),
-		Links:    notify.Links{Dashboard: paths.dashboardURL(), VerifyEmail: paths.verifyEmailURL},
+		Links:    notify.Links{Dashboard: paths.dashboardURL(), VerifyEmail: paths.verifyEmailURL, ReportCard: paths.reportCardURL},
 	})
 	if nerr != nil {
 		panic(nerr) // startup-time config failure, never mid-request
