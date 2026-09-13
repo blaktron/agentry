@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -195,5 +196,47 @@ func TestRequestIDReachesTheAuditRow(t *testing.T) {
 	}
 	if n != 1 {
 		t.Fatalf("audit rows carrying request_id %s: %d, want 1", id, n)
+	}
+}
+
+// A failed native sign-in is named (`auth.login_failed`) and, with the audit
+// mirror on, its audit event is a line too (`audit.user.login_failed`) — both
+// under the request's id, beside the access line. Needs the database; on the
+// dev host native sign-in answers 410 under the directory service (DEV-057),
+// so this test is where the criterion is proved.
+func TestFailedSignInIsNamedAndMirrored(t *testing.T) {
+	var buf bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(logx.New(logx.Options{W: &buf}))
+	t.Cleanup(func() { slog.SetDefault(old) })
+	env := newTestEnvCfg(t, func(c *config.Config) { c.Audit.StreamKind = "log" })
+	h := env.register("named")
+	res := env.do(anonymous, http.MethodPost, "/api/v1/auth/login", map[string]any{"login": h, "password": "wrong-password-x"})
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("wrong password: %d", res.StatusCode)
+	}
+	id := res.Header.Get("X-Request-Id")
+	events := map[string]map[string]any{}
+	for _, l := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+		var m map[string]any
+		if json.Unmarshal([]byte(l), &m) == nil && m["request_id"] == id {
+			if ev, _ := m["event"].(string); ev != "" {
+				events[ev] = m
+			}
+		}
+	}
+	for _, want := range []string{"http.request", "auth.login_failed", "audit.user.login_failed"} {
+		if events[want] == nil {
+			t.Errorf("no %s line under request %s; events seen: %v", want, id, events)
+		}
+	}
+	if l := events["auth.login_failed"]; l != nil && (l["user"] == nil || l["user"] == "00000000-0000-0000-0000-000000000000") {
+		t.Errorf("auth.login_failed should name the account the login matched: %v", l)
+	}
+	if l := events["audit.user.login_failed"]; l != nil {
+		if d, _ := l["detail"].(map[string]any); d == nil || d["login"] != h || d["request_id"] != id {
+			t.Errorf("the mirror carries the record's detail with the request id: %v", l["detail"])
+		}
 	}
 }
