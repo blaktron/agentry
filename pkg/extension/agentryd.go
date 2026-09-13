@@ -280,10 +280,14 @@ func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st 
 	// Enterprise async handlers (M6/WG-J): webhook delivery (§9.3) and audit
 	// export (§12.6).
 	srv.RegisterQueueHandlers(q)
-	// Extension jobs (DEV-091), on the queue each names.
+	// Extension jobs (DEV-091), on the queue each names; a periodic one is
+	// enqueued on its period like the core's own tickers (agentry#324).
 	for _, e := range exts {
 		for _, j := range e.Jobs() {
 			q.Register(j.Kind, j.Handler)
+			if j.Every > 0 {
+				go periodicTicker(ctx, q, j.Kind, j.Queue, j.Every, log)
+			}
 		}
 	}
 
@@ -293,6 +297,35 @@ func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st 
 	go reconcileTicker(ctx, q, log)
 	go mcpSweepTicker(ctx, q, log)
 	return q, nil
+}
+
+// auditWriterFunc adapts the server's audit closure to AuditWriter.
+type auditWriterFunc func(context.Context, audit.Event) error
+
+func (f auditWriterFunc) Write(ctx context.Context, e audit.Event) error { return f(ctx, e) }
+
+// periodicTicker enqueues an extension's periodic job once now and then on
+// its period; the queue's SKIP LOCKED claim makes one replica run each.
+func periodicTicker(ctx context.Context, q queue.Client, kind, queueName string, every time.Duration, log *slog.Logger) {
+	if queueName == "" {
+		queueName = "core"
+	}
+	enqueue := func() {
+		if _, err := q.Enqueue(ctx, kind, queueName, struct{}{}); err != nil {
+			log.Error("worker: enqueue extension job", "kind", kind, "err", err)
+		}
+	}
+	enqueue()
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			enqueue()
+		}
+	}
 }
 
 // reconcileWindow is how often the watchdog job is enqueued. Versions become
@@ -508,6 +541,10 @@ func hookCmd() *cobra.Command {
 // (migrateExtensions).
 func applyExtensions(srv *api.Server, exts []Extension) {
 	for _, e := range exts {
+		if b, ok := e.(Binds); ok {
+			pool, log, write := srv.ExtensionDeps()
+			b.Bind(Deps{DB: pool, Log: log.With("extension", e.Name()), Audit: auditWriterFunc(write)})
+		}
 		srv.RegisterExtension(e.Name(), e.Routes)
 		if u, ok := e.(Unthrottles); ok {
 			srv.SetExtensionUnthrottled(e.Name(), u.UnthrottledRoutes())

@@ -13,9 +13,15 @@ package extension
 import (
 	"context"
 	"io/fs"
+	"log/slog"
 	"net/http"
+	"strings"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/blaktron/agentry/internal/api"
+	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/entitlements"
 	"github.com/blaktron/agentry/internal/queue"
@@ -105,10 +111,61 @@ type Hooks struct {
 
 // Job is a queue handler the worker registers under Kind. Queue names the
 // queue it is claimed from ("core" unless the work is untrusted content).
+// A positive Every makes the worker enqueue Kind on that period, and once
+// at start-up, the way the core's own watchdog and sweep run (agentry#324);
+// across replicas exactly one claims each run.
 type Job struct {
 	Kind    string
 	Queue   string
 	Handler queue.Handler
+	Every   time.Duration
+}
+
+// Deps is what the core hands an extension at start-up (agentry#324), once
+// per process, before its routes mount and its jobs register: the pool the
+// core uses — the extension writes its own schema and reads core tables,
+// never alters them — the logger, and an audit writer whose Write lands
+// one event in its own transaction and refuses an action that was not
+// registered (RegisterAuditAction). DB is nil when the server runs without
+// a database (limited dev mode).
+type Deps struct {
+	DB    *pgxpool.Pool
+	Log   *slog.Logger
+	Audit AuditWriter
+}
+
+// AuditWriter writes one audit event; see Deps.
+type AuditWriter interface {
+	Write(ctx context.Context, e AuditEvent) error
+}
+
+// AuditEvent, AuditAction and ActorKind are the core's audit types.
+type (
+	AuditEvent  = audit.Event
+	AuditAction = audit.Action
+	ActorKind   = audit.ActorKind
+)
+
+// The actor kinds an extension's events carry.
+const (
+	ActorUser   = audit.ActorUser
+	ActorSystem = audit.ActorSystem
+)
+
+// Binds is the optional interface for an extension that needs Deps.
+type Binds interface {
+	Bind(Deps)
+}
+
+// RegisterAuditAction adds an extension's action to the audit catalog. The
+// action must be "<extension name>.<verb>" — the prefix is what keeps an
+// extension from shadowing a core action; a bare or foreign name panics at
+// start-up, where it is found.
+func RegisterAuditAction(extensionName string, a AuditAction) {
+	if !strings.HasPrefix(string(a), extensionName+".") || len(a) <= len(extensionName)+1 {
+		panic("extension: audit action " + string(a) + " must be prefixed " + extensionName + ".")
+	}
+	audit.Register(a)
 }
 
 // QueueJob is the job envelope a Handler receives.
