@@ -14,6 +14,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/logevent"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
@@ -230,6 +231,11 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	q := s.q()
 
 	deny := func(userID uuid.UUID) {
+		// Named for the log contract; the address and agent are on the
+		// access line under the same request id. The login as typed is on
+		// the audit row, not here (docs/logging.md: no addresses of people
+		// in a line the contract adds).
+		s.log.InfoContext(ctx, "login failed", logevent.AuthLoginFailed.Attr(), "user", userID)
 		e := auditEvent(r, audit.ActionUserLoginFailed)
 		e.Detail = map[string]any{"login": req.Login}
 		if userID != uuid.Nil {

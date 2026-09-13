@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -14,6 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/logevent"
 	"github.com/blaktron/agentry/internal/metrics"
 	"github.com/blaktron/agentry/internal/queue"
 	"github.com/blaktron/agentry/internal/ratelimit"
@@ -258,6 +260,15 @@ func (d *Dispatcher) deliver(ctx context.Context, job queue.Job) error {
 	if err != nil {
 		// Transport error incl. the SSRF guard blocking the address (T-08).
 		d.mx.RecordWebhookDelivery(ctx, "error")
+		var blocked *ErrBlockedAddress
+		if errors.As(err, &blocked) {
+			// Named for the log contract: a refused target is a signal the
+			// security dashboard watches, not a transport hiccup.
+			d.deps.Log.WarnContext(ctx, "webhook: target refused by the private-range guard", logevent.SSRFRefused.Attr(),
+				"org", row.OrgID, "delivery", args.DeliveryID, "endpoint", row.EndpointID, "host", blocked.Host)
+		}
+		d.deps.Log.InfoContext(ctx, "webhook: delivery failed", logevent.WebhookDelivered.Attr(), "outcome", "error",
+			"org", row.OrgID, "delivery", args.DeliveryID, "attempt", attempt, "err", err)
 		record(nil, err.Error(), nil, d.backoff(now, job.Attempt))
 		return fmt.Errorf("webhook: deliver %s: %w", args.DeliveryID, err)
 	}
@@ -266,10 +277,14 @@ func (d *Dispatcher) deliver(ctx context.Context, job queue.Job) error {
 	code := int32(resp.StatusCode)
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		d.mx.RecordWebhookDelivery(ctx, "ok")
+		d.deps.Log.InfoContext(ctx, "webhook: delivered", logevent.WebhookDelivered.Attr(), "outcome", "ok",
+			"org", row.OrgID, "delivery", args.DeliveryID, "attempt", attempt, "status", code)
 		record(&code, "", &now, nil)
 		return nil
 	}
 	d.mx.RecordWebhookDelivery(ctx, "error")
+	d.deps.Log.InfoContext(ctx, "webhook: delivery failed", logevent.WebhookDelivered.Attr(), "outcome", "error",
+		"org", row.OrgID, "delivery", args.DeliveryID, "attempt", attempt, "status", code)
 	// Non-2xx (incl. a 3xx we refuse to follow, T-08): retry.
 	record(&code, fmt.Sprintf("non-2xx status %d", resp.StatusCode), nil, d.backoff(now, job.Attempt))
 	return fmt.Errorf("webhook: deliver %s: status %d", args.DeliveryID, resp.StatusCode)

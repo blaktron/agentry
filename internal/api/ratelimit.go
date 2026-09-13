@@ -1,7 +1,6 @@
 package api
 
 import (
-	"github.com/blaktron/agentry/internal/auth"
 	"net"
 	"net/http"
 	"strconv"
@@ -10,7 +9,9 @@ import (
 
 	"golang.org/x/time/rate"
 
+	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/logevent"
 	"github.com/blaktron/agentry/internal/ratelimit"
 )
 
@@ -48,6 +49,7 @@ func (s *Server) allowLogin(w http.ResponseWriter, r *http.Request) bool {
 	res := s.limits.Allow("login", clientIP(r), s.classes.login, s.classes.loginBurst)
 	writeRateLimitHeaders(w, res)
 	if !res.OK {
+		s.rateLimited(r, "login")
 		problemTooMany(w, r, "Too many sign-in and registration attempts. Wait for the Retry-After interval.")
 		return false
 	}
@@ -70,6 +72,13 @@ func writeRateLimitHeaders(w http.ResponseWriter, res limitResult) {
 	if !res.OK {
 		h.Set("Retry-After", strconv.Itoa(reset))
 	}
+}
+
+// rateLimited names a refusal for the log contract (docs/logging.md):
+// `event=http.rate_limited` with the class that refused, on the request's
+// id; the address and the actor are on the request's access line.
+func (s *Server) rateLimited(r *http.Request, class string) {
+	s.log.InfoContext(r.Context(), "rate limited", logevent.HTTPRateLimited.Attr(), "class", class, "route", routeClass(r))
 }
 
 // clientIP is the caller's address as resolved once by withMiddleware, and

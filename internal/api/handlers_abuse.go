@@ -51,6 +51,7 @@ func (s *Server) ReportAbuse(w http.ResponseWriter, r *http.Request, ns Namespac
 		return
 	}
 	if recent >= maxReportsPerHour {
+		s.rateLimited(r, "abuse_reports")
 		problemTooMany(w, r, "This account filed too many reports in the last hour.")
 		return
 	}

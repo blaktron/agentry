@@ -20,6 +20,7 @@ import (
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/logevent"
 	"github.com/blaktron/agentry/internal/metrics"
 	"github.com/blaktron/agentry/internal/queue"
 	"github.com/blaktron/agentry/internal/ratelimit"
@@ -525,7 +526,8 @@ func (h *Handler) afterReceive(ctx context.Context, agent registry.Agent, princi
 				// receive-pack has already answered the client, so the pusher
 				// learns of it from the absent version, as with every other
 				// submission failure here (agentry#322 would move it earlier).
-				h.log.Warn("auto-publish submit", "tag", tag, "err", err)
+				h.log.WarnContext(ctx, "git: submission refused after tag push", logevent.GitPushRefused.Attr(),
+					"agent", agent.ID, "tag", tag, "err", err)
 			}
 		}
 	}
