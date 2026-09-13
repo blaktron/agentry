@@ -3,9 +3,19 @@ package extension
 import (
 	"context"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/blaktron/agentry/internal/api"
+	"github.com/blaktron/agentry/internal/audit"
+	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/queue"
 )
 
 // A minimal extension compiles against the interface using only the
@@ -41,11 +51,118 @@ func (admitAll) Admit(context.Context, Admission) (Ticket, *Refusal, error) {
 }
 func (admitAll) Void(context.Context, Ticket) error { return nil }
 
+func (b *bound) Bind(d Deps) { b.deps = d }
+
+type bound struct {
+	billingLike
+	deps Deps
+}
+
+func (bound) Name() string { return "bound" }
+
 var (
 	_ Extension   = billingLike{}
 	_ Admits      = billingLike{}
 	_ Unthrottles = billingLike{}
+	_ Binds       = (*bound)(nil)
 )
+
+// TestRegisterAuditActionKeepsTheExtensionPrefix: an extension may add its
+// own actions to the audit catalog, only under its own name, and never one
+// the catalog already holds.
+func TestRegisterAuditActionKeepsTheExtensionPrefix(t *testing.T) {
+	registerAuditAction("billing", "billing.tier_set")
+	for _, bad := range []AuditAction{"tier_set", "agent.update", "billing.", "billingx.tier_set", "billing.tier_set"} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("action %q was accepted", bad)
+				}
+			}()
+			registerAuditAction("billing", bad)
+		}()
+	}
+	// An extension named for a core prefix cannot take a core action over.
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Error("agent.update was registered by an extension named agent")
+			}
+		}()
+		registerAuditAction("agent", "agent.update")
+	}()
+}
+
+func (bound) AuditActions() []AuditAction { return []AuditAction{"bound.tier_set"} }
+
+// TestApplyExtensionsBindsAndRegistersActions: applyExtensions hands a
+// Binds extension its deps (a nil pool without a database, a logger, an
+// audit writer) and puts its audit actions in the catalog under its name,
+// before anything else of it is wired.
+func TestApplyExtensionsBindsAndRegistersActions(t *testing.T) {
+	ext := &bound{}
+	srv := api.New(config.Default(), nil, slog.New(slog.DiscardHandler))
+	applyExtensions(srv, []Extension{ext})
+	if ext.deps.Log == nil || ext.deps.Audit == nil {
+		t.Fatalf("Bind did not deliver the deps: %+v", ext.deps)
+	}
+	if ext.deps.DB != nil {
+		t.Fatal("a server without a database handed out a pool")
+	}
+	if !audit.Registered("bound.tier_set") {
+		t.Fatal("the extension's audit action is not in the catalog")
+	}
+	if err := ext.deps.Audit.Write(context.Background(), AuditEvent{Action: "bound.tier_set", ActorKind: ActorSystem}); err == nil {
+		t.Fatal("an audit write with no database must fail, not vanish")
+	}
+}
+
+// TestPeriodicTickerEnqueuesNowAndOnThePeriod pins the shape of Job.Every:
+// one enqueue at start-up, then one per period, until the context ends.
+func TestPeriodicTickerEnqueuesNowAndOnThePeriod(t *testing.T) {
+	q := &countingQueue{}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		periodicTicker(ctx, q, "probe.cycle", "", 20*time.Millisecond, slog.New(slog.DiscardHandler))
+		close(done)
+	}()
+	deadline := time.Now().Add(2 * time.Second)
+	for q.count() < 3 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	cancel()
+	<-done
+	if n := q.count(); n < 3 {
+		t.Fatalf("enqueued %d times in 2s at a 20ms period", n)
+	}
+	if k, qn := q.last(); k != "probe.cycle" || qn != "core" {
+		t.Fatalf("enqueued %s on %s; want probe.cycle on core", k, qn)
+	}
+}
+
+type countingQueue struct {
+	mu    sync.Mutex
+	n     int
+	kind  string
+	queue string
+}
+
+func (c *countingQueue) Enqueue(_ context.Context, kind, queueName string, _ any, _ ...queue.EnqueueOption) (uuid.UUID, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.n++
+	c.kind, c.queue = kind, queueName
+	return uuid.New(), nil
+}
+func (c *countingQueue) Register(string, queue.Handler)        {}
+func (c *countingQueue) Work(context.Context, ...string) error { return nil }
+func (c *countingQueue) count() int                            { c.mu.Lock(); defer c.mu.Unlock(); return c.n }
+func (c *countingQueue) last() (string, string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.kind, c.queue
+}
 
 func TestNoopSatisfiesTheInterface(t *testing.T) {
 	var e Extension = noop{}

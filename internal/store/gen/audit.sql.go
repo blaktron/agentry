@@ -308,7 +308,7 @@ func (q *Queries) ListPlatformAuditEvents(ctx context.Context, arg ListPlatformA
 
 const listUserActivity = `-- name: ListUserActivity :many
 SELECT a.id, a.occurred_at, a.action, a.detail, a.target_kind, a.target_id, a.actor_kind,
-       host(a.ip)::text AS ip, a.user_agent, v.version AS version
+       coalesce(host(a.ip), '')::text AS ip, a.user_agent, v.version AS version
 FROM audit_events a
 LEFT JOIN agent_versions v ON a.target_kind = 'agent_version' AND v.id = a.target_id
 WHERE a.actor_id = $2
@@ -342,6 +342,8 @@ type ListUserActivityRow struct {
 // GET /user/activity (agentry#192): the audit events the caller performed —
 // sign-ins, tokens and keys, profile changes, publishes, reviews — newest
 // first, keyset-paged like the agent feed.
+// ip is NULL for an event no request built (an extension's audited action,
+// agentry#324), which the feed shows as no address rather than failing.
 func (q *Queries) ListUserActivity(ctx context.Context, arg ListUserActivityParams) ([]ListUserActivityRow, error) {
 	rows, err := q.db.Query(ctx, listUserActivity,
 		arg.Limit,

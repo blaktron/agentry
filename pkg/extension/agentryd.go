@@ -20,6 +20,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/blaktron/agentry/internal/api"
+	"github.com/jackc/pgx/v5"
+
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/gitsrv"
@@ -280,10 +282,14 @@ func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st 
 	// Enterprise async handlers (M6/WG-J): webhook delivery (§9.3) and audit
 	// export (§12.6).
 	srv.RegisterQueueHandlers(q)
-	// Extension jobs (DEV-091), on the queue each names.
+	// Extension jobs (DEV-091), on the queue each names; a periodic one is
+	// enqueued on its period like the core's own tickers (agentry#324).
 	for _, e := range exts {
 		for _, j := range e.Jobs() {
 			q.Register(j.Kind, j.Handler)
+			if j.Every > 0 {
+				go periodicTicker(ctx, q, j.Kind, j.Queue, j.Every, log)
+			}
 		}
 	}
 
@@ -295,19 +301,32 @@ func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st 
 	return q, nil
 }
 
-// reconcileWindow is how often the watchdog job is enqueued. Versions become
-// eligible at the §7 30-minute cap, so checking every few minutes is prompt
-// without being chatty.
-const reconcileWindow = 5 * time.Minute
+// auditWriter adapts the server's audit closures to AuditWriter.
+type auditWriter struct {
+	write   func(context.Context, audit.Event) error
+	writeIn func(context.Context, pgx.Tx, audit.Event) error
+}
 
-func reconcileTicker(ctx context.Context, q queue.Client, log *slog.Logger) {
+func (w auditWriter) Write(ctx context.Context, e audit.Event) error { return w.write(ctx, e) }
+func (w auditWriter) WriteIn(ctx context.Context, tx pgx.Tx, e audit.Event) error {
+	return w.writeIn(ctx, tx, e)
+}
+
+// periodicTicker enqueues a job once now and then on its period. Every
+// replica running this enqueues on its own clock; the queue's claim runs
+// each row once, so the handler must tolerate a run that finds nothing to
+// do (the core's watchdog does; an extension's job must, Job.Every).
+func periodicTicker(ctx context.Context, q queue.Client, kind, queueName string, every time.Duration, log *slog.Logger) {
+	if queueName == "" {
+		queueName = "core"
+	}
 	enqueue := func() {
-		if _, err := q.Enqueue(ctx, scan.JobScanReconcile, "core", struct{}{}); err != nil {
-			log.Error("worker: enqueue scan reconcile", "err", err)
+		if _, err := q.Enqueue(ctx, kind, queueName, struct{}{}); err != nil {
+			log.Error("worker: enqueue extension job", "kind", kind, "err", err)
 		}
 	}
 	enqueue()
-	t := time.NewTicker(reconcileWindow)
+	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
 		select {
@@ -317,6 +336,15 @@ func reconcileTicker(ctx context.Context, q queue.Client, log *slog.Logger) {
 			enqueue()
 		}
 	}
+}
+
+// reconcileWindow is how often the watchdog job is enqueued. Versions become
+// eligible at the §7 30-minute cap, so checking every few minutes is prompt
+// without being chatty.
+const reconcileWindow = 5 * time.Minute
+
+func reconcileTicker(ctx context.Context, q queue.Client, log *slog.Logger) {
+	periodicTicker(ctx, q, scan.JobScanReconcile, "core", reconcileWindow, log)
 }
 
 // mcpSweepWindow is how often the MCP server vulnerability sweep is
@@ -508,6 +536,15 @@ func hookCmd() *cobra.Command {
 // (migrateExtensions).
 func applyExtensions(srv *api.Server, exts []Extension) {
 	for _, e := range exts {
+		if a, ok := e.(Audits); ok {
+			for _, act := range a.AuditActions() {
+				registerAuditAction(e.Name(), act)
+			}
+		}
+		if b, ok := e.(Binds); ok {
+			pool, log, write, writeIn := srv.ExtensionDeps()
+			b.Bind(Deps{DB: pool, Log: log.With("extension", e.Name()), Audit: auditWriter{write: write, writeIn: writeIn}})
+		}
 		srv.RegisterExtension(e.Name(), e.Routes)
 		if u, ok := e.(Unthrottles); ok {
 			srv.SetExtensionUnthrottled(e.Name(), u.UnthrottledRoutes())
@@ -516,8 +553,10 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 			srv.SetEntitlements(r)
 		}
 		if a, ok := e.(Admits); ok {
-			if adm := a.Admitter(); adm != nil {
-				srv.Reg().SetAdmitter(adm)
+			// No registry without a database (limited dev mode): nothing
+			// to admit into.
+			if adm, reg := a.Admitter(), srv.Reg(); adm != nil && reg != nil {
+				reg.SetAdmitter(adm)
 			}
 		}
 		if h := e.Hooks().Event; h != nil {
