@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/blaktron/agentry/internal/audit"
+	"github.com/blaktron/agentry/internal/logevent"
 	"github.com/blaktron/agentry/internal/metrics"
 	"github.com/blaktron/agentry/internal/notify"
 	"github.com/blaktron/agentry/internal/registry"
@@ -642,6 +643,16 @@ func (p *Pipeline) applyDecision(ctx context.Context, agent storegen.GetAgentByI
 		"findings": counts, "reason": result.Decision.Reason, "outcome": string(result.Decision.Outcome),
 	})
 	sysEvent := audit.Event{ActorKind: audit.ActorSystem}
+	// The gate's decision, named for the log contract (docs/logging.md):
+	// one line per verdict where it is acted on, and a second, `gate.error`,
+	// when the platform's own failure is what sent the version to review.
+	p.log.InfoContext(ctx, "gate: verdict", logevent.GateVerdict.Attr(),
+		"outcome", string(result.Decision.Outcome), "version", v.ID, "agent", agent.ID, "run", runID,
+		"worst_severity", string(result.Decision.WorstSeverity), "findings", len(result.Findings), "reason", result.Decision.Reason)
+	if len(result.Report.StageErrors) > 0 {
+		p.log.WarnContext(ctx, "gate: stage errors routed the version to review", logevent.GateError.Attr(),
+			"version", v.ID, "run", runID, "stage_errors", result.Report.StageErrors)
+	}
 	// §16.2 publish funnel: one verdict per version, recorded where the
 	// decision is acted on rather than where it is computed (the orchestrator
 	// can run more than once for a version — rescans, resumes).
@@ -752,6 +763,8 @@ func (p *Pipeline) FailToReview(ctx context.Context, v storegen.AgentVersion, ag
 		return fmt.Errorf("scan: create failure run: %w", err)
 	}
 	reason := "The pipeline could not complete this scan (" + kind + "), so the version went to human review."
+	p.log.WarnContext(ctx, "gate: pipeline failure routed the version to review", logevent.GateError.Attr(),
+		"version", v.ID, "agent", agent.ID, "run", runID, "kind", kind, "trigger", trigger, "err", cause)
 	finding := Finding{
 		Scanner: "S0/pipeline-error", Severity: SevMedium, Confidence: ConfHigh,
 		Title:  "Pipeline could not complete — routed to human review",

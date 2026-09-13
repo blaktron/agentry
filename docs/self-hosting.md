@@ -321,7 +321,7 @@ continuous NDJSON stream. It is **off by default**:
 
 ```yaml
 audit:
-  streamKind: file            # none (default) | file | s3
+  streamKind: file            # none (default) | file | log | s3
   streamDir: /var/lib/agentry/audit-stream
   streamFlush: 30s
   retentionDays: 400          # 0 disables pruning
@@ -333,6 +333,10 @@ Env: `AGENTRY_AUDIT_STREAM_KIND`, `AGENTRY_AUDIT_STREAM_DIR`,
 
 - `file` appends one `audit-YYYY-MM-DD.ndjson` per UTC day to `streamDir`.
   Rotate and ship those with whatever you already use.
+- `log` mirrors every event as one line on the server's own log,
+  `event=audit.<action>` ([the log contract](logging.md)), so it lands
+  wherever the server's lines are shipped — the log stack's `agentry-audit`
+  index, for one. It is a mirror: the row stays the record.
 - `s3` is **not implemented**. The constructor refuses at startup and names
   the bucket it was asked for, rather than silently dropping records
   (DEV-020). Use `file` plus your log shipper.
@@ -378,9 +382,11 @@ set) from `.env`, so switching both senders to a real provider is an `.env`
 edit plus recreating the `server` and `authentik-*` containers. With
 Postmark, the server token is both SMTP username and password, and until
 the account is approved it only delivers to recipients on the sending
-domain. With no SMTP configured at all, email verification tokens are
-logged at debug level. That is usable for a single-operator instance, not
-for anything with real users.
+domain. With no SMTP configured at all, the server logs that a verification
+mail would have gone and to which mailbox (the address masked) and never
+the token — [the log contract](logging.md) keeps every token out of every
+line — so an address cannot be verified without a sender: mailpit in the
+compose stack, or a real provider.
 
 Whatever the transport, the registry mails only addresses it has verified:
 a user whose `email_verified_at` is unset (the verify-email link, an IdP's
@@ -450,6 +456,38 @@ scrape over the cluster network only.
 
 `/healthz` (liveness) and `/readyz` (readiness, checks the database) are
 separate and are what your load balancer should use.
+
+### Logs
+
+The server writes one JSON object per line to stderr and nowhere else:
+[the log contract](logging.md) says what a line carries (one request id
+across the edge, the site and the server; an `event` name on every signal;
+the access line's fields), what is never in one (tokens, secrets, names,
+addresses of people, values above 4 KB), and how the audit mirror
+(`audit.streamKind: log`) works. The level is `log.level` /
+`AGENTRY_LOG_LEVEL`.
+
+The compose stack keeps every container's `json-file` log rotated (three
+files of 10 MB per container), so a stack without a log stack does not keep
+logs forever; `docker logs` is the reader.
+
+**The log stack** — the rsyslog collector, the OpenSearch store and
+OpenSearch Dashboards, from the `agentry-logging` repository — is an
+optional profile applied over this stack as two more compose files. Every
+container then ships its lines through Docker's `syslog` driver, over UDP
+to a loopback port, in non-blocking mode: shipping is best-effort by
+design. A collector that is slow, down or not yet up never stalls the
+registry and never stops a container from starting; the price, measured,
+is the lines sent while the collector was down, and about three in a
+hundred at ten thousand lines a second (nothing at the registry's own
+rates). The audit record does not depend on it. Retention is the stack's
+knobs — `AGENTRY_LOGS_RETENTION_DAYS` (30), `AGENTRY_ACCESS_RETENTION_DAYS`
+(14), `AGENTRY_AUDIT_INDEX_RETENTION_DAYS` (90) — while `audit_events`
+keeps its rows for `audit.retentionDays`; the store is the search copy.
+OpenSearch needs `vm.max_map_count` of at least 262144 on the host
+(Fedora ships more; Debian and Ubuntu ship 65530 and it refuses to start)
+and about 5.5 GB of disk for the images. The repository's README carries
+the rest.
 
 ### What the stack exposes
 
@@ -938,7 +976,7 @@ same authorization, hooks and quotas as HTTPS.
   user's role allows; it never reaches the API. There is no anonymous mode over SSH.
 - **Host key:** generated under the git data directory on first start
   (`ssh_host_ed25519_key`; `AGENTRY_GIT_SSH_HOST_KEY` points elsewhere). The SHA256
-  fingerprint is logged at startup (`git ssh listening … hostkey=…`) — publish it so users
+  fingerprint is logged at startup (`git ssh listening … hostkey_fingerprint=…`) — publish it so users
   can pin it in `known_hosts`.
 - **Advertising:** set `AGENTRY_GIT_SSH_PUBLIC_URL` (for example
   `ssh://git@git.example.com:2222`) and agent pages show the SSH clone URL next to HTTPS.

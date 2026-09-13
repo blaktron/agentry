@@ -414,7 +414,7 @@ type RedTeam struct {
 
 // Audit configures the §12.6 continuous audit stream and §4.3 retention.
 type Audit struct {
-	// StreamKind selects the NDJSON sink: none | file | s3.
+	// StreamKind selects the archive sink: none | file | log | s3.
 	StreamKind string `yaml:"streamKind"`
 	// StreamDir is the directory file-kind streams write daily files into.
 	StreamDir string `yaml:"streamDir"`
@@ -841,9 +841,9 @@ func (c Config) Validate() error {
 		}
 	}
 	switch c.Audit.StreamKind {
-	case "", "none", "file", "s3":
+	case "", "none", "file", "log", "s3":
 	default:
-		return fmt.Errorf("config: audit.streamKind must be none|file|s3, got %q", c.Audit.StreamKind)
+		return fmt.Errorf("config: audit.streamKind must be none|file|log|s3, got %q", c.Audit.StreamKind)
 	}
 	if c.Audit.StreamKind == "file" && c.Audit.StreamDir == "" {
 		return fmt.Errorf("config: audit.streamDir is required when audit.streamKind is file")

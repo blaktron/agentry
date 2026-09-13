@@ -681,6 +681,14 @@ func NewHandlerWithGit(s *Server, mountGit func(*http.ServeMux)) http.Handler {
 	return withMiddleware(root, s.log, s.Metrics, s.cfg.HTTP.TrustedProxies)
 }
 
+// WrapMiddleware puts h behind the always-on middleware stack — request id,
+// panic recovery, security headers, the access line, RED metrics — with this
+// server's logger, metrics and trusted-proxy depth. The split `git` role
+// mounts its bare mux through it so a git deployment logs like an api one.
+func (s *Server) WrapMiddleware(h http.Handler) http.Handler {
+	return withMiddleware(h, s.log, s.Metrics, s.cfg.HTTP.TrustedProxies)
+}
+
 func (s *Server) uiBrand() ui.Brand {
 	b := s.cfg.Brand
 	return ui.Brand{Name: s.cfg.DisplayName(), LogoURL: b.LogoURL, CSSURL: b.CSSURL, SupportEmail: b.SupportEmail, SecurityEmail: b.SecurityEmail, PrivacyURL: b.PrivacyURL, TermsURL: b.TermsURL}

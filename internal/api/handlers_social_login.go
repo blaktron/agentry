@@ -39,6 +39,7 @@ import (
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/auth/social"
 	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/logevent"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
@@ -268,7 +269,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 	}
 	id, err := rp.Exchange(r.Context(), *params.Code, st.Verifier, st.Nonce)
 	if err != nil {
-		s.log.Warn("social login rejected", "provider", name, "err", err)
+		s.log.WarnContext(r.Context(), "social login rejected", logevent.AuthSocialRejected.Attr(), "provider", name, "err", err)
 		if st.Next != "" {
 			browserFail("Sign-in with " + name + " failed. Try again.")
 			return
