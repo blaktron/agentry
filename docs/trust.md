@@ -3,9 +3,11 @@
 What Agentry checks before a version becomes installable, what its signature
 proves, and what none of it guarantees. This is the repository-side companion
 to the `/trust` page the hosted site serves; every registry publishes the same
-posture machine-readably — its live signing keys and the current ruleset
-version — at `/.well-known/agentry/registry.json`, and a site in front renders
-them.
+posture machine-readably — its live signing keys at
+`/.well-known/agentry/signing-keys.json`, the API, git and version
+endpoints at `/.well-known/agentry/registry.json`, and the current ruleset
+version on the rule bundle's headers (`/api/v1/ruleset-releases/latest/bundle`)
+— and a site in front renders them.
 
 ## The premise
 
@@ -115,8 +117,8 @@ The same holds for the MCP servers a BriefAgent declares. Every scanned
 server version is re-checked daily against the vulnerability database; a
 version that gains a high or critical advisory raises a **dependency
 alert** on each published BriefAgent version declaring it — shown on the
-agent page and the author's dashboard, mailed to the author, recorded in
-the audit trail, and sent to org webhooks as `agent.dependency_alert`. An
+agent page and the author's dashboard, mailed to the author once their
+address is verified, recorded in the audit trail, and sent to org webhooks as `agent.dependency_alert`. An
 alert is not an advisory: it says the dependency has a known fix to pin,
 and it closes when the affected version is yanked or the advisory is
 withdrawn.
