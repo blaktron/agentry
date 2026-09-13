@@ -19,6 +19,7 @@ import (
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/entitlements"
 	"github.com/blaktron/agentry/internal/queue"
+	"github.com/blaktron/agentry/internal/registry"
 )
 
 // Extension is what a closed build adds. Every method may return the zero
@@ -46,13 +47,42 @@ type Extension interface {
 	Jobs() []Job
 }
 
-// Resolver, Subject, Limits and Feature are the core's entitlements types.
+// Resolver, Subject, Limits, Features, Allowance and Feature are the
+// core's entitlements types. A resolver an extension supplies usually wraps
+// the core's (entitlements.NewConfigResolver) and answers Features by tier.
 type (
-	Resolver = entitlements.Resolver
-	Subject  = entitlements.Subject
-	Limits   = entitlements.Limits
-	Feature  = entitlements.Feature
+	Resolver  = entitlements.Resolver
+	Subject   = entitlements.Subject
+	Limits    = entitlements.Limits
+	Features  = entitlements.Features
+	Allowance = entitlements.Allowance
+	Feature   = entitlements.Feature
 )
+
+// The admission seam (plan subscription-tiers §5.1): an extension that
+// implements Admits is asked once per submission, after every core gate and
+// before anything is stored, and may refuse it. Optional — an extension
+// without it admits everything, and the core build has none.
+type Admits interface {
+	Admitter() Admitter
+}
+
+// Admitter, Admission, Ticket and Refusal are the core's admission types.
+type (
+	Admitter  = registry.Admitter
+	Admission = registry.Admission
+	Ticket    = registry.Ticket
+	Refusal   = registry.Refusal
+)
+
+// Unthrottles is the optional interface for an extension whose receiver of
+// signed callbacks must never be refused by the anonymous rate class (a
+// payment provider's webhook, plan subscription-tiers §5.5). The routes are
+// "METHOD /path" relative to the mount, exact; each still passes the
+// principal middleware and authorizes on its own signature.
+type Unthrottles interface {
+	UnthrottledRoutes() []string
+}
 
 // Principal is the resolved caller; Principal(ctx) reads it in a route.
 type Principal = auth.Principal

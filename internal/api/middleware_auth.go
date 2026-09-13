@@ -38,6 +38,20 @@ func principalFrom(ctx context.Context) *auth.Principal {
 // cookie (with CSRF enforcement on mutations), else anonymous. It also
 // applies the per-class rate limits (§19) so every /api/v1 route is covered.
 func (s *Server) principalMiddleware(next http.Handler) http.Handler {
+	return s.principalMiddlewareOpts(next, principalOpts{})
+}
+
+// principalOpts narrows what the middleware does for one mount.
+type principalOpts struct {
+	// unthrottled is a set of "METHOD /full/path" keys the anonymous rate
+	// class does not apply to (an extension's webhook receiver, whose only
+	// credential is a signature and whose sender must never be throttled
+	// into a lost event — plan subscription-tiers §5.5). The authed class
+	// and everything else still apply.
+	unthrottled map[string]bool
+}
+
+func (s *Server) principalMiddlewareOpts(next http.Handler, opts principalOpts) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := &auth.Principal{Anonymous: true}
 
@@ -81,12 +95,17 @@ func (s *Server) principalMiddleware(next http.Handler) http.Handler {
 		// every response, not only refusals, so a client can pace itself
 		// before it is throttled.
 		var res limitResult
-		if p.Anonymous {
+		switch {
+		case p.Anonymous && opts.unthrottled[r.Method+" "+r.URL.Path]:
+			res = limitResult{OK: true}
+		case p.Anonymous:
 			res = s.limits.Allow("anon", clientIP(r), s.classes.anon, s.classes.anonBurst)
-		} else {
+		default:
 			res = s.limits.Allow("authed", p.UserID.String(), s.classes.authed, s.classes.authedBurst)
 		}
-		writeRateLimitHeaders(w, res)
+		if res.Limit > 0 {
+			writeRateLimitHeaders(w, res)
+		}
 		if !res.OK {
 			if p.Anonymous {
 				problemTooMany(w, r, "Anonymous requests have used up their rate limit. Wait for the Retry-After interval, or sign in.")

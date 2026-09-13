@@ -28,6 +28,16 @@ human-facing reason; do not parse `title`. A `422` carries field-level
 validation errors; a `409` means the request conflicts with current state
 and the `detail` says how.
 
+Three problems exist only where a deployment runs an admission extension
+(the hosted product's subscription tiers); a core registry never answers
+them. `402 credits-exhausted` refuses a submission after every core check
+has passed and before anything is stored, and carries `balance` and
+`resetsAt` beside the standard members so a client can say when to retry.
+`503 admission-unavailable` means the check could not be reached; nothing
+was recorded. `422 private-agent-cap` refuses one more private agent in a
+namespace at its cap, on create and on a `PATCH` that turns an agent
+private; nothing already private is touched.
+
 ## Idempotency-Key
 
 Send `Idempotency-Key: <opaque string, ≤255 chars>` on a mutating POST and a

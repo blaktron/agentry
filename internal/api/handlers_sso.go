@@ -484,6 +484,12 @@ func (s *Server) resolveSSOUser(ctx context.Context, orgRow storegen.GetOrgByHan
 	if err != nil {
 		return uuid.Nil, err
 	}
+	// Every door that creates an account fires user.registered (see the
+	// social JIT path); an org's SSO is one of them.
+	s.fireEvent(ctx, Event{Kind: "user.registered", UserID: newUserID, OrgID: orgRow.ID, Payload: map[string]any{
+		"handle": handle, "email": email, "emailVerified": domainVerified && email != "",
+		"via": "sso", "provider": providerKind,
+	}})
 	return newUserID, nil
 }
 

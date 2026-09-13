@@ -509,8 +509,16 @@ func hookCmd() *cobra.Command {
 func applyExtensions(srv *api.Server, exts []Extension) {
 	for _, e := range exts {
 		srv.RegisterExtension(e.Name(), e.Routes)
+		if u, ok := e.(Unthrottles); ok {
+			srv.SetExtensionUnthrottled(e.Name(), u.UnthrottledRoutes())
+		}
 		if r := e.Entitlements(); r != nil {
 			srv.SetEntitlements(r)
+		}
+		if a, ok := e.(Admits); ok {
+			if adm := a.Admitter(); adm != nil {
+				srv.Reg().SetAdmitter(adm)
+			}
 		}
 		if h := e.Hooks().Event; h != nil {
 			srv.AddEventHook(h)

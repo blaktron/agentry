@@ -159,7 +159,9 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 		s.log.Warn("register: verification email", "err", err)
 	}
 
-	s.fireEvent(r.Context(), Event{Kind: "user.registered", UserID: created.ID, Payload: map[string]any{"handle": req.Handle, "email": email}})
+	s.fireEvent(r.Context(), Event{Kind: "user.registered", UserID: created.ID, Payload: map[string]any{
+		"handle": req.Handle, "email": email, "emailVerified": false, "via": "native",
+	}})
 	writeJSON(w, http.StatusCreated, User{
 		Id: created.ID, Handle: req.Handle, Email: created.Email,
 		DisplayName: created.DisplayName, EmailVerified: false,

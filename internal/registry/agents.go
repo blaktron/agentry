@@ -52,7 +52,9 @@ type Service struct {
 	ipClusterSecret []byte
 	// entitlements resolves the §19 quotas (§14.2). nil = shipped defaults.
 	entitlements entitlements.Resolver
-	log          *slog.Logger
+	// admitter is the admission seam (admission.go); nil admits everything.
+	admitter Admitter
+	log      *slog.Logger
 }
 
 // PolicyGate evaluates the §8.6 policy knobs that reject a submission before
@@ -285,6 +287,11 @@ func (s *Service) CreateAgent(ctx context.Context, p *auth.Principal, in CreateA
 	if n >= lim.AgentsPerNamespace {
 		return Agent{}, fmt.Errorf("%w: namespace agent quota reached", ErrDenied)
 	}
+	if in.Visibility == "private" {
+		if err := s.checkPrivateAgentCap(ctx, subject, ns.ID); err != nil {
+			return Agent{}, err
+		}
+	}
 
 	repoID := newUUID()
 	agentID := newUUID()
@@ -320,4 +327,39 @@ func newUUID() uuid.UUID {
 		panic(err)
 	}
 	return id
+}
+
+// ErrPrivateAgentCap reports that a namespace holds as many private agents
+// as its subscription tier allows (plan subscription-tiers §5.3). The API
+// answers 422 private-agent-cap. A cap never deletes: over it, nothing can
+// be added and nothing already private is touched.
+var ErrPrivateAgentCap = errors.New("registry: this namespace holds as many private agents as its tier allows")
+
+// CheckPrivateAgentCap is checkPrivateAgentCap for the handler that flips
+// an existing agent to private.
+func (s *Service) CheckPrivateAgentCap(ctx context.Context, a Agent) error {
+	return s.checkPrivateAgentCap(ctx, subjectFor(a), a.NamespaceID)
+}
+
+// checkPrivateAgentCap refuses one more private agent when the subject's
+// Features cap is reached. An unresolvable entitlement is not permission.
+func (s *Service) checkPrivateAgentCap(ctx context.Context, subject entitlements.Subject, nsID uuid.UUID) error {
+	f, err := s.Entitlements().Features(ctx, subject)
+	if err != nil {
+		return fmt.Errorf("registry: entitlements: %w", err)
+	}
+	if !f.PrivateAgents.Enabled {
+		return ErrPrivateAgentCap
+	}
+	if f.PrivateAgents.Max <= 0 {
+		return nil
+	}
+	n, err := s.st.Queries().CountPrivateAgentsInNamespace(ctx, nsID)
+	if err != nil {
+		return fmt.Errorf("registry: private agent count: %w", err)
+	}
+	if n >= f.PrivateAgents.Max {
+		return ErrPrivateAgentCap
+	}
+	return nil
 }

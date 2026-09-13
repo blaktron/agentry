@@ -17,9 +17,10 @@ info:
     documented bounds is clamped, never rejected.
 
 
-    Rate limits (§19) are reported on every response with
+    Rate limits (§19) are reported on every rate-limited response with
     `RateLimit-Limit`, `RateLimit-Remaining` and `RateLimit-Reset`
-    (plus `Retry-After` on 429).
+    (plus `Retry-After` on 429); an extension's signed-callback route that
+    opts out of the anonymous class carries none.
 
 
     Compatibility: 0.3.0 broke the additive-only rule once, deliberately
@@ -1188,6 +1189,13 @@ paths:
       operationId: createAgent
       tags: [agents]
       summary: Create an agent and its hosted git repository (§9.2).
+      description: >
+        A private agent counts against the namespace's private-agent cap
+        when the deployment's entitlements set one (the hosted product's
+        subscription tiers): at the cap the answer is `422` with the problem
+        type `private-agent-cap`, and the same on `PATCH` when an agent is
+        turned private. A core registry caps nothing. A cap never deletes
+        or hides an agent that is already private.
       requestBody:
         required: true
         content:
@@ -1201,6 +1209,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Agent"
+        "422":
+          description: >-
+            Validation, or `private-agent-cap` when the namespace holds as
+            many private agents as its tier allows (a core registry caps
+            nothing).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
         default:
           $ref: "#/components/responses/Problem"
     get:
@@ -1467,6 +1484,15 @@ paths:
         (tar.zst) submits a client-built package (cli-upload source; the
         server re-validates, re-packs deterministically, and compares
         digests: client packing is never trusted).
+
+        A deployment with an admission extension (the hosted product's
+        subscription tiers) may refuse a submission after every core check
+        has passed and before anything is stored: `402` with the problem
+        type `credits-exhausted` carries `balance` and `resetsAt` at the top
+        level of the problem body; `503 admission-unavailable` means the
+        check could not be reached and nothing was recorded. A core
+        registry never answers either. The gate's verdict never depends on
+        admission.
       parameters:
         - $ref: "#/components/parameters/Namespace"
         - $ref: "#/components/parameters/AgentName"
@@ -1499,6 +1525,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AgentVersion"
+        "402":
+          description: >-
+            Refused by the deployment's admission extension (problem type
+            `credits-exhausted`, with `balance` and `resetsAt`); nothing was
+            stored. Never answered by a core registry.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: >-
+            `scan-not-scheduled` (the version was recorded and a watchdog
+            routes it to review) or `admission-unavailable` (nothing was
+            recorded; retry).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
         default:
           $ref: "#/components/responses/Problem"
     get:

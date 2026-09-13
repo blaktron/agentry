@@ -103,12 +103,32 @@ const (
 	FeaturePriorityReview    Feature = "priority_review"
 )
 
+// Allowance is a feature with a cap: Enabled says whether the subject may
+// use it at all, Max how many it may hold (0 = no cap).
+type Allowance struct {
+	Enabled bool
+	Max     int64
+}
+
+// Features is what a subject may hold, as opposed to how fast it may act
+// (Limits): the caps a subscription tier sets (plan subscription-tiers
+// §5.3). The core resolver answers everything enabled with no cap; a
+// closed build's resolver answers by tier.
+type Features struct {
+	// PrivateAgents caps the private agents a personal namespace holds. A
+	// cap never deletes: over it, nothing can be added and nothing is lost.
+	PrivateAgents Allowance
+}
+
 // Resolver answers entitlement questions.
 type Resolver interface {
 	// Limits returns the quota set for a subject. An error means "unknown" —
 	// callers must fail closed rather than fall back to a default, or a
 	// Resolver outage would silently lift every quota at once.
 	Limits(ctx context.Context, s Subject) (Limits, error)
+	// Features returns the caps for a subject; an error means "unknown" and
+	// callers fail closed, as for Limits.
+	Features(ctx context.Context, s Subject) (Features, error)
 	// FeatureEnabled reports whether a feature is available to an org.
 	// uuid.Nil asks about a personal namespace.
 	FeatureEnabled(ctx context.Context, orgID uuid.UUID, f Feature) bool
@@ -155,6 +175,11 @@ func (r *ConfigResolver) Limits(_ context.Context, s Subject) (Limits, error) {
 			MaxTextBytes:      l.ArchiveMaxTextBytes,
 		},
 	}, nil
+}
+
+// Features implements Resolver: the OSS build caps nothing.
+func (r *ConfigResolver) Features(context.Context, Subject) (Features, error) {
+	return Features{PrivateAgents: Allowance{Enabled: true, Max: 0}}, nil
 }
 
 // FeatureEnabled implements Resolver: the OSS build ships everything on.

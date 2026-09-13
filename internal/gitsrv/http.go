@@ -521,6 +521,10 @@ func (h *Handler) afterReceive(ctx context.Context, agent registry.Agent, princi
 			}
 			e := audit.Event{Actor: principal.UserID, ActorKind: audit.ActorPAT}
 			if _, err := h.reg.SubmitTag(ctx, principal, agent, tag, e); err != nil {
+				// This includes an admission refusal (registry.ErrAdmissionRefused):
+				// receive-pack has already answered the client, so the pusher
+				// learns of it from the absent version, as with every other
+				// submission failure here (agentry#322 would move it earlier).
 				h.log.Warn("auto-publish submit", "tag", tag, "err", err)
 			}
 		}

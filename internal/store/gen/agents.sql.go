@@ -55,6 +55,19 @@ func (q *Queries) CountAgentsInNamespace(ctx context.Context, namespaceID uuid.U
 	return count, err
 }
 
+const countPrivateAgentsInNamespace = `-- name: CountPrivateAgentsInNamespace :one
+SELECT count(*) FROM agents WHERE namespace_id = $1 AND visibility = 'private'
+`
+
+// The private-agent cap a subscription tier sets (plan subscription-tiers
+// §5.3): what a namespace holds today, so one more can be refused.
+func (q *Queries) CountPrivateAgentsInNamespace(ctx context.Context, namespaceID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countPrivateAgentsInNamespace, namespaceID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countSearchAgents = `-- name: CountSearchAgents :one
 SELECT count(*)::bigint
 FROM agents a
