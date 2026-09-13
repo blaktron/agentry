@@ -59,27 +59,31 @@ problem, write a new forward migration. Never `goose down` in production.
 
 **Trigger:** page on queue age > 15 minutes, or versions sitting in `scanning`.
 
+The queue is River (`queue.driver: river`, the default) on the `river_job`
+table; the `jobs` table belongs to the legacy `pg` driver and is empty on a
+River deployment.
+
 1. Depth and age by queue:
    ```sql
-   select queue, state, count(*), min(run_at) from jobs group by 1,2;
+   select queue, state, count(*), min(scheduled_at) from river_job group by 1,2;
    ```
 2. Are workers alive? `agentryd worker` logs a `worker started` line and then
    claims jobs; no claims for minutes with `available` rows means the workers
    are gone, not slow. Restart them.
-3. Orphaned claims (a worker died holding jobs) self-heal after 30 minutes;
-   force it now:
-   ```sql
-   update jobs set state='available', locked_at=null
-   where state='running' and locked_at < now() - interval '5 minutes';
-   ```
+3. Orphaned claims (a worker died holding jobs): River's rescuer returns a
+   job whose worker stopped reporting to `available` on its own after the
+   rescue interval; a job stuck in `running` past that is one to look at,
+   not to edit.
 4. Poison job (same job failing repeatedly):
    ```sql
-   select id, kind, attempt, last_error from jobs where state='failed' order by finished_at desc limit 20;
+   select id, kind, attempt, errors from river_job where state='discarded' order by finalized_at desc limit 20;
    ```
-   Capture `last_error`, open a bug, then park it: `update jobs set state='failed' where id='…'`.
-   A parked scan job leaves its version in `scanning`. That is **fail-closed
-   and correct**; the version is not published. Re-run it after the fix with
-   a `manual` scan trigger rather than transitioning the version by hand.
+   Capture the last error, open a bug. A discarded scan job leaves its
+   version in `scanning`. That is **fail-closed and correct**; the version is
+   not published. The `scan.reconcile` job then moves any version older than
+   30 minutes in `scanning` to review with an `S0/pipeline-error` finding, so
+   a person decides; after the fix, re-submit the version rather than
+   transitioning it by hand.
 
 **Never** move a version to `published` in SQL to clear a backlog. The gate is
 the product.
@@ -105,11 +109,12 @@ working rather than as an incident of its own. (Sweeps used to need
 triggering by hand, which meant new detection sat unapplied; the 2026-08-29
 remediation fixed that.)
 
-S8's publisher-behaviour signal also covers **account age ×
-publish velocity** but does **not** correlate publisher IPs across accounts
-(the "or IP cluster" half of §8.3). The actual ClawHavoc incident (1,184 skills
-from 12 accounts) turned on exactly that axis, so step 1 below is manual work
-the scanner will not do for you.
+S8's publisher-behaviour signal covers **account age × publish velocity**
+and, since DEV-026.1, the **IP cluster** half of §8.3 (`S8/ip-cluster`: three
+or more accounts, or ten or more versions, publishing from one keyed IP hash
+within 24 hours). The actual ClawHavoc incident (1,184 skills from 12
+accounts) turned on that axis; the finding narrows step 1 below, it does not
+replace it.
 
 1. **Scope it before acting.** Find the cluster:
    ```sql
@@ -164,10 +169,13 @@ mismatch.
 
 1. Create the new key (your KMS or a new file key; on the hosted
    deployment the site's Terraform, `modules/kms`). Do not delete the old one.
-2. Publish both at `/.well-known/agentry/signing-keys.json` (new key first).
-   Clients now accept either.
-3. Point signing at the new key (`AGENTRY_SIGNING_KMS_KEY_ARN`), roll the
-   workers. New attestations use the new key; old ones still verify.
+2. Publish both at `/.well-known/agentry/signing-keys.json`: the active key
+   is listed first, and the old one goes under `signing.additionalKeys`
+   (YAML or the Helm values; there is no env form). Roll the api role, which
+   serves the document. Clients now accept either.
+3. Point signing at the new key (`AGENTRY_SIGNING_KMS_KEY_ARN`, or the file
+   key), roll the workers, which sign. New attestations use the new key; old
+   ones still verify.
 4. Leave the old key published for at least one CLI release cycle, then remove
    it from the key set. Keep the key material itself (old attestations must
    stay verifiable). **Never schedule deletion of a key that signed a

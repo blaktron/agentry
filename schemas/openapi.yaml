@@ -806,7 +806,7 @@ paths:
         A PAT is not a way to enumerate someone's browser sessions.
       responses:
         "200":
-          description: Active, unexpired, unrevoked sessions, newest first.
+          description: Active, unexpired, unrevoked sessions, most recently seen first.
           content:
             application/json:
               schema:
@@ -1699,6 +1699,7 @@ paths:
       operationId: streamVersionEvents
       tags: [versions]
       summary: Server-sent events for a version's pipeline progress (§11 "SSE/poll"; agentry#65).
+      security: []
       description: >
         Streams `event: status` messages (JSON: status, statusReason, the
         scan stages completed so far, done) whenever something changes,
@@ -2754,6 +2755,7 @@ paths:
       operationId: getMcpServerScan
       tags: [mcp-servers]
       summary: The registry's last vulnerability check of one MCP server package version (agentry#177).
+      security: []
       description: >-
         What S7 recorded for the exact package version: `safe` means no
         known advisories at `lastCheckedAt`, `vulnerable` lists them,
@@ -3359,13 +3361,16 @@ components:
         expiresAt:
           type: string
           format: date-time
-          description: Defaults to (and is capped at) the max PAT lifetime (§12.3).
+          description: >-
+            Defaults to the max PAT lifetime (§12.3); a later value is refused
+            with 422, not clamped.
         orgHandle:
           type: string
           description: >
             Bind the token to this org (§12.4). Requires the current session to
-            be SSO-fresh for the org; org-bound tokens are capped at 90 days and
-            are the only tokens accepted against an enforced-SSO org's resources.
+            be SSO-fresh for the org; org-bound tokens live at most 90 days (a
+            later expiresAt is refused with 422) and are the only tokens accepted
+            against an enforced-SSO org's resources.
 
     DesktopGrantRequest:
       type: object

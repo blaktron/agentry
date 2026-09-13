@@ -47,8 +47,8 @@ gate decides.
 
 ```bash
 # Author
-agentry init --kind=skill incident-summarizer
-agentry validate                 # the server's V-rules + S3/S4 scanners, offline
+agentry init --modes autonomous incident-summarizer
+agentry validate                 # the server's V-rules + S1/S3/S4 scanners, offline
 git push origin main && git tag v1.0.0 && git push origin v1.0.0
 
 # Consumer
@@ -78,13 +78,14 @@ object storage, mail, the directory service (authentik, with the account flows
 as blueprints), `agentryd`, and an nginx edge. The server's `/ui/` pages are
 the browser surface; `agentry login` and the desktop app open its
 `/ui/authorize` page to get their token, and everything else they do is the
-API. The Helm chart deploys the same shape.
+API. The Helm chart deploys the api, git and worker roles and expects
+Postgres, object storage, mail and the identity provider outside it.
 
 **Behind a front end.** A site in front sets `web.url` (where every redirect
 and email link the API writes should land), `ui.mode: authorize` (the server
 keeps only the device-authorize page), and the brand hooks (`brand.name`,
-`logoURL`, `cssURL`, `supportEmail`, `securityEmail`, also reported by
-`GET /api/v1/meta`). It talks to the same API under the same authorization
+`logoURL`, `cssURL`, `supportEmail`, `securityEmail`; `GET /api/v1/meta`
+reports the name, the logo and the support address). It talks to the same API under the same authorization
 matrix — a front end cannot do anything the API refuses. The hosted site is
 closed; another one can be built on exactly these hooks
 ([docs/self-hosting.md](docs/self-hosting.md), "Fronting it with a site").
@@ -118,8 +119,9 @@ The enterprise build is one such module; the core carries none.
 ## Documentation
 
 - [Trust and security model](docs/trust.md) — what the pipeline checks, what a
-  signature proves, and what none of it guarantees; the `/trust` page on any
-  running instance shows the same posture plus that instance's live signing keys
+  signature proves, and what none of it guarantees; a site in front renders
+  the same posture on its `/trust` page, and every instance publishes its live
+  signing keys at `/.well-known/agentry/signing-keys.json`
 - [Self-hosting](docs/self-hosting.md)
 - [Operational runbooks](docs/ops/runbooks.md)
 - [Contributing](CONTRIBUTING.md) — including the rules that actually matter (route authorization, scanner fixtures)
@@ -128,8 +130,9 @@ The enterprise build is one such module; the core carries none.
 
 ## Status
 
-Milestones **M0–M7** of the v1 plan are implemented, each with an automated
-acceptance script in `scripts/acceptance/`: scaffolding and CI (M0), identity
+Milestones **M0–M7** of the v1 plan are implemented, with automated
+acceptance scripts in `scripts/acceptance/` (`m0`–`m4`, `m6`, `m7`, and
+`ui.sh` for the core's own pages): scaffolding and CI (M0), identity
 and authorization (M1), git hosting (M2), the registry and publication state
 machine (M3), the security pipeline (M4), the web UI (M5 — since moved to the
 closed site repository; the core keeps its own `/ui/` pages), enterprise
