@@ -288,6 +288,13 @@ services:
       # the server honours it, so one id names a request on both hops
       # (docs/logging.md). Off, the server mints its own.
       AGENTRY_PROXY_REQUEST_ID: ${AGENTRY_PROXY_REQUEST_ID:-false}
+      # The log contract's knobs (docs/logging.md): the minimum level, and
+      # the audit archive stream — `log` mirrors every audit event as an
+      # event=audit.<action> line beside the row, which is what the log
+      # stack's agentry-audit index is fed from; `file` and `none` as in
+      # docs/self-hosting.md "Audit archive and retention".
+      AGENTRY_LOG_LEVEL: ${AGENTRY_LOG_LEVEL:-info}
+      AGENTRY_AUDIT_STREAM_KIND: ${AGENTRY_AUDIT_STREAM_KIND:-none}
       # Directory service (DEV-057): hand credentials to Authentik. When
       # AGENTRY_AUTH_EXTERNAL_ONLY=true the native register/password/TOTP
       # endpoints answer 410 and sign-in goes through the authentik provider.
