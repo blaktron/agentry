@@ -145,7 +145,7 @@ func (s *Server) fireEvent(ctx context.Context, ev Event) {
 		func() {
 			defer func() {
 				if rec := recover(); rec != nil {
-					s.log.Error("extension hook panicked", "event", ev.Kind, "panic", rec)
+					s.log.ErrorContext(ctx, "extension hook panicked", "event", ev.Kind, "panic", rec)
 				}
 			}()
 			h(ctx, ev)
@@ -158,7 +158,7 @@ func (s *Server) fireEvent(ctx context.Context, ev Event) {
 func (s *Server) emitOrgEvent(ctx context.Context, orgID uuid.UUID, kind string, payload map[string]any) {
 	if s.webhooks != nil {
 		if err := s.webhooks.Emit(ctx, orgID, kind, payload); err != nil {
-			s.log.Error("webhook emit", "event", kind, "err", err)
+			s.log.ErrorContext(ctx, "webhook emit", "event", kind, "err", err)
 		}
 	}
 	s.fireEvent(ctx, Event{Kind: kind, OrgID: orgID, Payload: payload})

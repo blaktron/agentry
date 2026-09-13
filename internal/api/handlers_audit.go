@@ -75,7 +75,7 @@ func (s *Server) ListOrgAudit(w http.ResponseWriter, r *http.Request, org OrgHan
 
 	rows, err := s.q().ListOrgAuditEvents(r.Context(), qp)
 	if err != nil {
-		s.log.Error("list audit", "err", err)
+		s.log.ErrorContext(r.Context(), "list audit", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -136,7 +136,7 @@ func (s *Server) ListPlatformAudit(w http.ResponseWriter, r *http.Request, param
 
 	rows, err := s.q().ListPlatformAuditEvents(r.Context(), qp)
 	if err != nil {
-		s.log.Error("list platform audit", "err", err)
+		s.log.ErrorContext(r.Context(), "list platform audit", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -150,7 +150,7 @@ func (s *Server) ListPlatformAudit(w http.ResponseWriter, r *http.Request, param
 	if err := s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
 		return s.auditW.Write(r.Context(), q, e)
 	}); err != nil {
-		s.log.Error("audit platform read", "err", err)
+		s.log.ErrorContext(r.Context(), "audit platform read", "err", err)
 		problemInternal(w, r)
 		return
 	}

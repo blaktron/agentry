@@ -61,7 +61,7 @@ func (s *Server) resolveAgentForAction(w http.ResponseWriter, r *http.Request, n
 		if errors.Is(err, registry.ErrNotFound) {
 			problemNotFound(w, r)
 		} else {
-			s.log.Error("agent resolve", "err", err)
+			s.log.ErrorContext(r.Context(), "agent resolve", "err", err)
 			problemInternal(w, r)
 		}
 		return registry.Agent{}, auth.AgentRoleNone, false
@@ -69,7 +69,7 @@ func (s *Server) resolveAgentForAction(w http.ResponseWriter, r *http.Request, n
 	p := principalFrom(r.Context())
 	role, err := s.reg.EffectiveRole(r.Context(), p, a)
 	if err != nil {
-		s.log.Error("agent role", "err", err)
+		s.log.ErrorContext(r.Context(), "agent role", "err", err)
 		problemInternal(w, r)
 		return registry.Agent{}, auth.AgentRoleNone, false
 	}
@@ -140,7 +140,7 @@ func (s *Server) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		case isUniqueViolation(err):
 			problemConflict(w, r, "This namespace already has a BriefAgent with that name.")
 		default:
-			s.log.Error("create agent", "err", err)
+			s.log.ErrorContext(r.Context(), "create agent", "err", err)
 			problemInternal(w, r)
 		}
 		return
@@ -178,7 +178,7 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, params ListA
 		Handle: params.Namespace, IncludePrivate: includePrivate,
 	})
 	if err != nil {
-		s.log.Error("list agents", "err", err)
+		s.log.ErrorContext(r.Context(), "list agents", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -249,7 +249,7 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 					problemPrivateAgentCap(w, r)
 					return
 				}
-				s.log.Error("update agent: private agent cap", "err", err)
+				s.log.ErrorContext(r.Context(), "update agent: private agent cap", "err", err)
 				problemInternal(w, r)
 				return
 			}
@@ -282,7 +282,7 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("update agent", "err", err)
+		s.log.ErrorContext(r.Context(), "update agent", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -305,7 +305,7 @@ func (s *Server) ListAgentGrants(w http.ResponseWriter, r *http.Request, ns Name
 	}
 	rows, err := s.q().ListAgentGrants(r.Context(), a.ID)
 	if err != nil {
-		s.log.Error("list grants", "err", err)
+		s.log.ErrorContext(r.Context(), "list grants", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -352,7 +352,7 @@ func (s *Server) SetAgentUserGrant(w http.ResponseWriter, r *http.Request, ns Na
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("set user grant", "err", err)
+		s.log.ErrorContext(r.Context(), "set user grant", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -391,7 +391,7 @@ func (s *Server) RemoveAgentUserGrant(w http.ResponseWriter, r *http.Request, ns
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("remove user grant", "err", err)
+		s.log.ErrorContext(r.Context(), "remove user grant", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -443,7 +443,7 @@ func (s *Server) SetAgentTeamGrant(w http.ResponseWriter, r *http.Request, ns Na
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("set team grant", "err", err)
+		s.log.ErrorContext(r.Context(), "set team grant", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -485,7 +485,7 @@ func (s *Server) RemoveAgentTeamGrant(w http.ResponseWriter, r *http.Request, ns
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("remove team grant", "err", err)
+		s.log.ErrorContext(r.Context(), "remove team grant", "err", err)
 		problemInternal(w, r)
 		return
 	}

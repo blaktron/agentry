@@ -30,7 +30,7 @@ func (s *Server) ListUserActivity(w http.ResponseWriter, r *http.Request, params
 		Limit: int32(limit), ActorID: &p.UserID, BeforeTime: before, BeforeID: beforeID,
 	})
 	if err != nil {
-		s.log.Error("user activity", "err", err)
+		s.log.ErrorContext(r.Context(), "user activity", "err", err)
 		problemInternal(w, r)
 		return
 	}

@@ -63,7 +63,7 @@ func (s *Server) GetUserDirectory(w http.ResponseWriter, r *http.Request) {
 		}
 		devs, err := lister.DevicesByEmail(r.Context(), row.Email)
 		if err != nil {
-			s.log.Warn("user directory: devices", "err", err)
+			s.log.WarnContext(r.Context(), "user directory: devices", "err", err)
 			out.DevicesError = str("The directory did not answer, so the authenticator list is missing. The links still work.")
 		} else {
 			list := make([]userDirectoryDevice, 0, len(devs))
@@ -107,7 +107,7 @@ func (s *Server) DeleteUserDirectoryDevice(w http.ResponseWriter, r *http.Reques
 	}
 	deleted, err := lister.DeleteDevice(r.Context(), row.Email, kind, deviceId)
 	if err != nil {
-		s.log.Warn("user directory: delete device", "err", err)
+		s.log.WarnContext(r.Context(), "user directory: delete device", "err", err)
 		writeProblem(w, r, http.StatusBadGateway, "directory-unavailable", "Directory unavailable", "The directory did not answer. Try again.")
 		return
 	}

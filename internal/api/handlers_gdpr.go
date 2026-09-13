@@ -111,7 +111,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 					"A BriefAgent of the same name already exists in "+orgRow.Handle+". Rename it and try again.")
 				return
 			}
-			s.log.Error("gdpr transfer", "err", err)
+			s.log.ErrorContext(r.Context(), "gdpr transfer", "err", err)
 			problemInternal(w, r)
 			return
 		}
@@ -156,7 +156,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 				e.Detail = map[string]any{"reason": "author account deleted"}
 				if err := s.reg.Transition(r.Context(), v.ID, registry.StatusYanked,
 					"author account deleted", e); err != nil {
-					s.log.Warn("gdpr yank", "version", v.ID, "err", err)
+					s.log.WarnContext(r.Context(), "gdpr yank", "version", v.ID, "err", err)
 				}
 			}
 		}
@@ -198,7 +198,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		return s.auditW.Write(r.Context(), tq, e)
 	})
 	if err != nil {
-		s.log.Error("gdpr delete", "err", err)
+		s.log.ErrorContext(r.Context(), "gdpr delete", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -232,7 +232,7 @@ func (s *Server) eraseDirectoryAccount(r *http.Request, userID uuid.UUID, email 
 		case err != nil:
 			outcome = "failed"
 			detail["error"] = err.Error()
-			s.log.Error("gdpr: directory erasure failed — finish by hand", "user", userID, "err", err)
+			s.log.ErrorContext(r.Context(), "gdpr: directory erasure failed — finish by hand", "user", userID, "err", err)
 		case deleted:
 			outcome = "deleted"
 		default:
@@ -245,7 +245,7 @@ func (s *Server) eraseDirectoryAccount(r *http.Request, userID uuid.UUID, email 
 	e.TargetKind, e.TargetID = "user", userID
 	e.Detail = detail
 	if err := s.auditW.Write(r.Context(), s.q(), e); err != nil {
-		s.log.Error("gdpr: audit directory erasure", "err", err)
+		s.log.ErrorContext(r.Context(), "gdpr: audit directory erasure", "err", err)
 	}
 }
 

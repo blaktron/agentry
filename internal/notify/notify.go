@@ -23,6 +23,8 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+
+	"github.com/blaktron/agentry/internal/logx"
 )
 
 // Notifier delivers transactional notifications. Every method returns an error
@@ -172,7 +174,10 @@ func New(opt Options) (Notifier, error) {
 }
 
 // LogNotifier writes notifications to the log (dev/self-host default until
-// SMTP is configured). Tokens intentionally appear ONLY at debug level.
+// SMTP is configured): that a mail would have gone, to which mailbox (the
+// address masked, docs/logging.md), about what. Never the verification
+// token — the log contract keeps every token out of every line, so an
+// address cannot be verified through this notifier; that takes a sender.
 type LogNotifier struct {
 	Log *slog.Logger
 }
@@ -186,9 +191,8 @@ func (n LogNotifier) logger() *slog.Logger {
 
 // EmailVerification implements Notifier.
 func (n LogNotifier) EmailVerification(_ context.Context, toEmail, token string) error {
-	log := n.logger()
-	log.Info("notify: email verification queued", "to", toEmail)
-	log.Debug("notify: email verification token (dev only)", "to", toEmail, "token", token)
+	_ = token // never logged (docs/logging.md)
+	n.logger().Info("notify: email verification not sent (no sender configured)", "to", logx.MaskEmail(toEmail))
 	return nil
 }
 
@@ -197,7 +201,7 @@ func (n LogNotifier) EmailVerification(_ context.Context, toEmail, token string)
 // supposed to hear about a quarantine.
 func (n LogNotifier) AgentQuarantined(_ context.Context, notice QuarantineNotice) error {
 	n.logger().Warn("notify: agent quarantined (author notification)",
-		"to", notice.ToEmail, "agent", notice.Agent, "version", notice.Version,
+		"to", logx.MaskEmail(notice.ToEmail), "agent", notice.Agent, "version", notice.Version,
 		"severity", notice.Severity, "reason", notice.Reason)
 	return nil
 }
@@ -205,7 +209,7 @@ func (n LogNotifier) AgentQuarantined(_ context.Context, notice QuarantineNotice
 // ReviewDecided implements Notifier.
 func (n LogNotifier) ReviewDecided(_ context.Context, notice ReviewNotice) error {
 	n.logger().Info("notify: review decided (author notification)",
-		"to", notice.ToEmail, "agent", notice.Agent, "version", notice.Version,
+		"to", logx.MaskEmail(notice.ToEmail), "agent", notice.Agent, "version", notice.Version,
 		"decision", notice.Decision, "reviewer", notice.Reviewer)
 	return nil
 }
@@ -213,14 +217,14 @@ func (n LogNotifier) ReviewDecided(_ context.Context, notice ReviewNotice) error
 // AdvisoryPublished implements Notifier.
 func (n LogNotifier) AdvisoryPublished(_ context.Context, notice AdvisoryNotice) error {
 	n.logger().Warn("notify: advisory published (author notification)",
-		"to", notice.ToEmail, "agent", notice.Agent, "severity", notice.Severity)
+		"to", logx.MaskEmail(notice.ToEmail), "agent", notice.Agent, "severity", notice.Severity)
 	return nil
 }
 
 // MCPDependencyAlert implements Notifier.
 func (n LogNotifier) MCPDependencyAlert(_ context.Context, notice MCPDependencyAlertNotice) error {
 	n.logger().Warn("notify: MCP dependency alert (author notification)",
-		"to", notice.ToEmail, "agent", notice.Agent, "version", notice.Version,
+		"to", logx.MaskEmail(notice.ToEmail), "agent", notice.Agent, "version", notice.Version,
 		"server", notice.Server, "severity", notice.Severity, "advisories", notice.Advisories)
 	return nil
 }
@@ -228,7 +232,7 @@ func (n LogNotifier) MCPDependencyAlert(_ context.Context, notice MCPDependencyA
 // OrgInvite implements Notifier.
 func (n LogNotifier) OrgInvite(_ context.Context, notice InviteNotice) error {
 	n.logger().Info("notify: org invite",
-		"to", notice.ToEmail, "org", notice.Org, "role", notice.Role)
+		"to", logx.MaskEmail(notice.ToEmail), "org", notice.Org, "role", notice.Role)
 	return nil
 }
 

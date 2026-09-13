@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/blaktron/agentry/internal/logevent"
 	"github.com/blaktron/agentry/internal/metrics"
 	"github.com/blaktron/agentry/pkg/rules"
 )
@@ -319,18 +320,37 @@ func (o *Orchestrator) runStage(sc stageContext, st Stage, in *Input) (res Stage
 	// error-rate alarm needs to hear about.
 	start := time.Now()
 	defer func() {
-		o.mx.RecordScanStage(sc.ctx, st.ID(), time.Since(start), len(res.Findings), res.Err)
+		elapsed := time.Since(start)
+		o.mx.RecordScanStage(sc.ctx, st.ID(), elapsed, len(res.Findings), res.Err)
+		// One line per stage, named for the log contract (docs/logging.md);
+		// the metric above is the count, this is the where and the why.
+		outcome := "ok"
+		if res.Err != nil {
+			outcome = "error"
+		}
+		stageAttrs := []any{logevent.ScanStage.Attr(), "stage", st.ID(), "outcome", outcome, "dur_ms", elapsed.Milliseconds(), "findings", len(res.Findings)}
+		if res.Err != nil {
+			stageAttrs = append(stageAttrs, "err", res.Err)
+		}
+		o.log.InfoContext(sc.ctx, "scan: stage finished", stageAttrs...)
 		// S7's "we did not check" outcomes are fail-open by design
-		// (DEV-026.3); count them where a dashboard can see them (agentry#33).
+		// (DEV-026.3); count them where a dashboard can see them (agentry#33)
+		// and name them in a line an alert can key on.
 		for _, f := range res.Findings {
+			var path string
+			var ev logevent.Event
 			switch f.Scanner {
 			case "S7/osv-not-checked":
-				o.mx.RecordFailOpen(sc.ctx, metrics.FailOpenOSVNotChecked)
+				path, ev = metrics.FailOpenOSVNotChecked, logevent.FailOpenOSVNotChecked
 			case "S7/osv-error":
-				o.mx.RecordFailOpen(sc.ctx, metrics.FailOpenOSVError)
+				path, ev = metrics.FailOpenOSVError, logevent.FailOpenOSVError
 			case "S2/history-not-scanned", "S2/history-error", "S2/history-truncated":
-				o.mx.RecordFailOpen(sc.ctx, metrics.FailOpenHistoryNotScanned)
+				path, ev = metrics.FailOpenHistoryNotScanned, logevent.FailOpenHistoryNotScanned
+			default:
+				continue
 			}
+			o.mx.RecordFailOpen(sc.ctx, path)
+			o.log.WarnContext(sc.ctx, "scan: fail-open outcome", ev.Attr(), "stage", st.ID(), "scanner", f.Scanner, "title", f.Title)
 		}
 	}()
 

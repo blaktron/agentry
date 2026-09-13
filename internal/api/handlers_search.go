@@ -64,7 +64,7 @@ func (s *Server) SearchAgents(w http.ResponseWriter, r *http.Request, params Sea
 	}
 	rows, err := s.q().SearchAgents(r.Context(), qp)
 	if err != nil {
-		s.log.Error("search", "err", err)
+		s.log.ErrorContext(r.Context(), "search", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -75,7 +75,7 @@ func (s *Server) SearchAgents(w http.ResponseWriter, r *http.Request, params Sea
 		Query: qp.Query, Mode: qp.Mode, Capability: qp.Capability, License: qp.License, VerifiedOnly: qp.VerifiedOnly,
 	})
 	if err != nil {
-		s.log.Error("search: count", "err", err)
+		s.log.ErrorContext(r.Context(), "search: count", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -157,7 +157,7 @@ func (s *Server) GetAgentReadme(w http.ResponseWriter, r *http.Request, ns Names
 			writeHTMLFragment(w, "")
 			return
 		}
-		s.log.Error("readme render", "err", err)
+		s.log.ErrorContext(r.Context(), "readme render", "err", err)
 		problemInternal(w, r)
 		return
 	}

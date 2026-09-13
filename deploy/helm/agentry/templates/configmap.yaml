@@ -20,6 +20,7 @@ data:
     http:
       addr: {{ .Values.config.http.addr | quote }}
       trustedProxies: {{ .Values.config.http.trustedProxies }}
+      proxyRequestID: {{ .Values.config.http.proxyRequestID }}
     database:
       migrateOnStart: {{ .Values.config.migrateOnStart }}
     log:

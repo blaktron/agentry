@@ -84,7 +84,7 @@ func (s *Server) CreateScimToken(w http.ResponseWriter, r *http.Request, org Org
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("create scim token", "err", err)
+		s.log.ErrorContext(r.Context(), "create scim token", "err", err)
 		problemInternal(w, r)
 		return
 	}

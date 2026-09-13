@@ -72,7 +72,7 @@ func writeProblemWith(w http.ResponseWriter, r *http.Request, status int, slug, 
 		}
 	}
 	if err := json.NewEncoder(w).Encode(out); err != nil {
-		slog.Warn("problem encode failed", "err", err)
+		slog.WarnContext(r.Context(), "problem encode failed", "err", err)
 	}
 }
 
