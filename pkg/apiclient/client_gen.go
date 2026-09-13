@@ -1361,11 +1361,11 @@ type CreateOrgRequest struct {
 
 // CreateTokenRequest defines model for CreateTokenRequest.
 type CreateTokenRequest struct {
-	// ExpiresAt Defaults to (and is capped at) the max PAT lifetime (§12.3).
+	// ExpiresAt Defaults to the max PAT lifetime (§12.3); a later value is refused with 422, not clamped.
 	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
 	Name      string     `json:"name"`
 
-	// OrgHandle Bind the token to this org (§12.4). Requires the current session to be SSO-fresh for the org; org-bound tokens are capped at 90 days and are the only tokens accepted against an enforced-SSO org's resources.
+	// OrgHandle Bind the token to this org (§12.4). Requires the current session to be SSO-fresh for the org; org-bound tokens live at most 90 days (a later expiresAt is refused with 422) and are the only tokens accepted against an enforced-SSO org's resources.
 	OrgHandle *string `json:"orgHandle,omitempty"`
 	Scopes    []Scope `json:"scopes"`
 }

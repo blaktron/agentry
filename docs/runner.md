@@ -111,8 +111,10 @@ print the enforced contract, `/finish` to end the session with the
 agent's final result (validated against `output.schema.json` like an
 autonomous result), `/quit` to abandon it, `/help`. The release's
 `interactive.opening` line starts the conversation when no task text was
-given. A permission request from inside the sandbox is always answered
-*deny*: nothing a user types can widen what the manifest declared. The
+given. A permission request from inside the sandbox is granted only for
+a tool the plan's gateway already serves, and refused for anything else
+(both recorded in the receipts): nothing a user types can widen what the
+manifest declared. The
 session is bounded by the policy's `sessions` block (idle timeout, wall
 time, user turns) on top of the cost and tool-call budgets, and its
 receipts add `transcript.md` and the intake answers. A release with one
@@ -386,6 +388,7 @@ honest about which half is which.
   reports/…              whatever the BriefAgent wrote via write_report
   receipts/
     events.ndjson        the raw harness event stream
+    agent-stderr.log     the harness process's stderr
     gateway.log          the gateway's own log, tool calls included
     proxy.log            the LLM egress proxy's decisions: one allow/deny line per CONNECT
     run-plan.json        the exact compiled plan that ran
@@ -404,8 +407,8 @@ Exit codes: `0` ok · `1` other CLI error · `2` usage · `10` verify failed ·
 The [desktop app](https://github.com/blaktron/agentry-desktop) mirrors
 the registry (browse, report cards, the MCP servers & tools section) and
 drives the same runner packages as the CLI: one-click setup with the
-provider table (including a prerequisites installer for docker and the
-MCP gateway), guided profile configuration and intake questions as forms,
+provider table (including a prerequisites installer for the docker engine
+on Linux), guided profile configuration and intake questions as forms,
 and in-app runs with task input, file/folder pickers for `/inputs` and the
 output folder, a keep-profile toggle, a live log stream, and the result
 envelope. An interactive release opens as a chat in the same run panel,
@@ -426,9 +429,9 @@ server, and — on a machine with a docker engine and the model key named by
 the operator policy's `apiKeyEnv` in the environment (`ANTHROPIC_API_KEY`
 when there is no policy yet) — the full end-to-end run with teardown leak
 checks (`scripts/acceptance/runner-r2.sh`). Each script points
-`AGENTRY_CONFIG_DIR` and `AGENTRY_RUNNER_HOME` at its own throwaway
-directory, so the consent records `agentry run` writes never reach your
-`~/.config/agentry/installed.yaml`.
+`AGENTRY_CONFIG_DIR` (r0 and r2 the runner home as well) at its own
+throwaway directory, so the consent records `agentry run` writes never
+reach your `~/.config/agentry/installed.yaml`.
 
 ## Machine-readable output
 
@@ -445,8 +448,8 @@ key variable's **name** only.
 | Command | Shape (top-level fields) |
 |---|---|
 | `search --json` | `results[]` (`namespace`, `name`, `modes`, `summary`, `installs30d`, `quarantineState`), `facets`, `total` |
-| `info ns/name --json` | `agent`, `latest` (the resolved version with its `capabilities` and `attestationUrl`) |
-| `verify ns/name@v --json` | `ref`, `version`, `registryDigest`, `computedDigest`, `digestMatch`, `attestation` (`state`, `detail`, `keyId`) |
+| `info ns/name --json` | `agent`, `latest` (the resolved release: `manifest` — the capabilities live under it — `digest`, `attestationUrl`, `yanked`, …), or `latestError` when the resolve itself failed |
+| `verify ns/name@v --json` | `ref`, `version`, `registryDigest`, `computedDigest`, `digestMatch`, `yanked`, `attestation` (`state`, `detail`, `keyId`) |
 | `doctor --json` | `ref`, `checks[]` (`name`, `status` ok\|warn\|fail, `detail`); the report prints and the exit is 1 when a check fails |
 | `install ns/name --plan --json` | `ref`, `namespace`, `name`, `version`, `digest`, `modes`, `summary`, `yanked`, `contract` (the capabilities as canonical JSON), `contractDigest` (sha256 of exactly those bytes — the document is compact so they arrive unchanged), `attestation` verified\|unsigned\|mismatch\|unverifiable, `keyId`, `signed`, `installed` (`version`, `dir`, when a record exists), `diff` (`widened[]`, `narrowed[]`), `needsConfirmation`, `reason`, `target`, `dir`, `managed`, `refusal` (what an install would stop on: an attestation verdict, or unsigned without `--allow-unsigned`). Nothing is written; the exit is 0 whether or not an install would be refused |
 | `install ns/name --json` | `ref`, `namespace`, `name`, `version`, `digest`, `target`, `dir`, `managed`, `attestation`, `signed`, `contract`, `contractDigest`, `recorded` |
@@ -455,7 +458,7 @@ key variable's **name** only.
 | `validate DIR --json` | `passed`, `manifest`, `issues[]` (`rule`, `severity`, `path`, `message`), `inventory[]`, `findings[]` (`ruleId`, `scanner`, `severity`, `confidence`, `title`, `filePath`, `lineStart`, `lineEnd`, `excerpt`, `detail`), `readErrors[]`, `fileCount`, `bundle`, `counts`, `strict`; the report prints and the exit is 1 when it failed |
 | `setup --json` | `policyPath`, `provider`, `model`, `apiKeyEnv` (a name), `baseUrl`, `images` ready\|skipped |
 | `run ns/name --plan --json` (or `--local DIR`) | the consent-free preview a client shows before a person consents: `ref`, `version`, `digest`, `mode`, `modes`, `plan` (the compiled plan, canonical — what a run would enforce), `planSha256` (the receipt's `runPlanSha256`, over the plan's canonical indented form — match it, do not re-derive it from the compact `plan` bytes), `contract`, `contractDigest`, `attestation` verified\|unsigned\|local\|mismatch\|unverifiable, `keyId`, `signed`, `installed`, `diff`, `needsConfirmation`, `reason`, `refusal`. Asks nothing, records nothing, materializes into a temp home; exit 0 whether or not a run would be refused (`--dry-run` is the plan for a person who consented on the terminal) |
-| `run … --output-format json` | the result envelope: `status`, `exitCode` and `exitClass`, `error`, `runId`, `ref`, `digest`, `attestation`, `capabilities_enforced`, `harness`, `usage`, `result`, `outDir`, `resultFile`, `receipts` (`dir`, `runPlanSha256`) |
+| `run … --output-format json` | the result envelope: `agentry` (`run/v1`), `status`, `exitCode` and `exitClass`, `error`, `runId`, `ref`, `digest`, `attestation`, `capabilities_enforced`, `harness`, `usage`, `result`, `outDir`, `resultFile`, `receipts` (`dir`, `runPlanSha256`) |
 | `--version` | `agentry version <v>` — a release version, or a git describe on a source build |
 
 One example, `install --plan --json` on a first install of a BriefAgent
@@ -491,7 +494,8 @@ page covers authoring and publishing in depth.
 |---|---|
 | `agentry login [--browser \| --paste]` | signs in to a registry: the browser flow hands the CLI a one-time code on a loopback listener and the CLI exchanges it for a scoped token from its own process; `--paste` reads a token from stdin for machines without a browser. Signing in also pins the registry's signing keys (TOFU) |
 | `agentry init [--from PATH]` | scaffolds a workspace, or imports a `SKILL.md` or an MCP registry `server.json` |
-| `agentry validate DIR` | the registry's manifest rules and offline scanners (V1–V9, S1/S3/S4) |
+| `agentry validate DIR` | the registry's manifest rules and offline scanners (V1–V10, S1/S3/S4) |
+| `agentry list` | every install record in `installed.yaml` — the embedded installs and the runner consents — with whether each directory is still present (`--json`) |
 | `agentry info ns/name` / `agentry search` | a BriefAgent's page and capability contract; full-text search with the mode, capability, license and verified-org facets (`--json` on both) |
 | `agentry verify ns/name@version` | digest and DSSE attestation check against the pinned keys — an exit code for CI |
 | `agentry publish` | submits a workspace and follows the pipeline's event stream to the verdict |

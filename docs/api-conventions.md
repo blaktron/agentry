@@ -56,7 +56,9 @@ Semantics:
 
 ## Pagination
 
-List endpoints are cursor-paginated. Pass `limit`, and follow the cursor:
+The audit, advisory and activity lists are cursor-paginated: pass `limit`,
+and follow the cursor. `/search` is offset-paged (`offset`, `limit`, with
+`total` in the response) so a page can be addressed directly.
 
 ```http
 GET /api/v1/orgs/acme/audit?limit=100
@@ -74,8 +76,9 @@ GET /api/v1/orgs/acme/audit?limit=100
 
 ## Limits are clamped, not rejected
 
-`limit=0`, `limit=100000` and a negative `offset` are **clamped to the
-endpoint's valid range** and the request succeeds. You will not get a `400`
+`limit=100000` and a negative `offset` are **clamped to the endpoint's
+valid range** and the request succeeds; `limit=0` (or any value under 1)
+gets the endpoint's default. You will not get a `400`
 for asking for too much; you will get the maximum. Read the length of what
 came back rather than assuming you got what you asked for. Each endpoint's
 default and ceiling are in the OpenAPI document.
@@ -142,8 +145,8 @@ against:
 
 ## Account erasure (GDPR)
 
-`DELETE /user` (§12.7) requires an explicit decision about published content
-whenever the account has any:
+`POST /user/delete` (§12.7) requires an explicit decision about published
+content whenever the account has any:
 
 - **`publishedContent` is required** (`yank` or `transfer`), and a request
   without it gets `400` naming the count of published public versions. There

@@ -208,9 +208,10 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 		stageErrs = append(stageErrs, "S1: "+s1.Err.Error())
 	}
 
-	// S2–S5 and S8 in parallel (S9 needs the others' findings; run it after).
-	// S6 was a code-kind stage, withdrawn with the kind (DEV-088); S7 is
-	// back as the declared-MCP-server vulnerability check (agentry#177).
+	// S2–S8 in parallel (S9 needs the others' findings; run it after).
+	// S6 is the support-script check — shell, Python and JS in the package
+	// against the manifest's egress, writes, secrets and exec (DEV-094) —
+	// and S7 the declared-MCP-server vulnerability check (agentry#177).
 	parallel := []Stage{
 		S2Secrets{Gitleaks: o.tools.Gitleaks},
 		S3S4Content{},
