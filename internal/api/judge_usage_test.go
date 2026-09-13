@@ -32,13 +32,22 @@ func TestReportShowsJudgeUsageToStaffOnly(t *testing.T) {
 	}
 	env.waitStatus(author, "measured", "1.0.0", "published")
 
-	// The static judge reports no usage, so the run has NULLs; the counts
-	// a live provider would have written are set here, and the columns
-	// existing at all is part of what this proves.
+	// The static judge reports no usage, so the run holds NULL — unknown,
+	// not zero. The counts a live provider would have written are set
+	// afterwards; the columns existing at all is part of what this proves.
+	runFor := `SELECT v.id FROM agent_versions v JOIN agents a ON a.id = v.agent_id
+	           JOIN handles h ON h.id = a.namespace_id WHERE h.handle = $1 AND a.name = 'measured'`
+	var promptNull, completionNull bool
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT judge_prompt_tokens IS NULL, judge_completion_tokens IS NULL FROM scan_runs WHERE version_id = (`+runFor+`)`, author,
+	).Scan(&promptNull, &completionNull); err != nil {
+		t.Fatal(err)
+	}
+	if !promptNull || !completionNull {
+		t.Fatal("the static judge must leave the token columns NULL, not zero")
+	}
 	if _, err := env.st.Pool().Exec(context.Background(),
-		`UPDATE scan_runs SET judge_prompt_tokens = 812, judge_completion_tokens = 97
-		 WHERE version_id = (SELECT v.id FROM agent_versions v JOIN agents a ON a.id = v.agent_id
-		                     JOIN handles h ON h.id = a.namespace_id WHERE h.handle = $1 AND a.name = 'measured')`, author); err != nil {
+		`UPDATE scan_runs SET judge_prompt_tokens = 812, judge_completion_tokens = 97 WHERE version_id = (`+runFor+`)`, author); err != nil {
 		t.Fatal(err)
 	}
 

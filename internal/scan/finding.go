@@ -105,8 +105,7 @@ type StageResult struct {
 	// judge adjudicated with (§8.4.4, recorded on the scan run).
 	PromptHash string
 	// JudgeUsage is set by S5: the token use the provider reported, nil
-	// when it reported none (recorded on the scan run, plan
-	// subscription-tiers §10).
+	// when it reported none.
 	JudgeUsage *JudgeUsage
 }
 

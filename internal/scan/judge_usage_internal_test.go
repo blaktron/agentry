@@ -2,8 +2,8 @@ package scan
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -33,11 +33,16 @@ func TestJudgeUsageReachesTheRunAndNotTheReport(t *testing.T) {
 		t.Fatalf("S5 must lift the judge's usage onto its result, got %+v", res.JudgeUsage)
 	}
 
-	raw, err := json.Marshal(Report{SchemaVersion: "1", JudgeModel: "m"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(strings.ToLower(string(raw)), "usage") || strings.Contains(string(raw), "token") {
-		t.Fatalf("the signed report must not carry token use: %s", raw)
+	usageType := reflect.TypeOf(JudgeUsage{})
+	rt := reflect.TypeOf(Report{})
+	for i := 0; i < rt.NumField(); i++ {
+		f := rt.Field(i)
+		ft := f.Type
+		if ft.Kind() == reflect.Pointer {
+			ft = ft.Elem()
+		}
+		if ft == usageType || strings.Contains(strings.ToLower(f.Name), "usage") {
+			t.Fatalf("Report.%s would put token use into the signed report", f.Name)
+		}
 	}
 }

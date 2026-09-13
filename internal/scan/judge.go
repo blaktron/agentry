@@ -52,7 +52,7 @@ type JudgeVerdict struct {
 	PromptHash string `json:"promptHash"`
 	// Usage is the token count the provider's response reported, or nil
 	// when it reported none (the static and classifier judges, an endpoint
-	// that omits it). Recorded on the scan run, never in the signed report.
+	// that omits it).
 	Usage *JudgeUsage `json:"usage,omitempty"`
 }
 
