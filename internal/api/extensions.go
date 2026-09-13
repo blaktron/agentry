@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"regexp"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -30,9 +31,12 @@ type Event struct {
 var reExtensionName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
 
 type extensionMount struct {
-	name   string
-	routes func(*http.ServeMux)
+	name        string
+	routes      func(*http.ServeMux)
+	unthrottled map[string]bool
 }
+
+var reUnthrottledRoute = regexp.MustCompile(`^(GET|POST|PUT|PATCH|DELETE) /[A-Za-z0-9_./-]*$`)
 
 // RegisterExtension mounts routes under /api/v1/x/<name>/ when the handler
 // is built (NewHandler); the mux the callback receives is rooted there, so
@@ -56,6 +60,45 @@ func (s *Server) RegisterExtension(name string, routes func(*http.ServeMux)) {
 // a slow hook slows the request, so hooks should hand real work to a job.
 func (s *Server) AddEventHook(h func(ctx context.Context, ev Event)) {
 	s.eventHooks = append(s.eventHooks, h)
+}
+
+// SetExtensionUnthrottled names the routes of a mounted extension the
+// anonymous rate class does not apply to: "METHOD /path", relative to the
+// mount, exact (no wildcards — the seam is narrow on purpose). Only an
+// extension's own receiver of signed callbacks belongs here (plan
+// subscription-tiers §5.5); the route still passes the principal middleware
+// and declares its own authorization. Panics on a malformed pattern or an
+// unknown extension, at start-up, where it is found.
+func (s *Server) SetExtensionUnthrottled(name string, routes []string) {
+	for i := range s.extensions {
+		if s.extensions[i].name != name {
+			continue
+		}
+		m := make(map[string]bool, len(routes))
+		for _, rt := range routes {
+			if !reUnthrottledRoute.MatchString(rt) {
+				panic("api: extension " + name + ": unthrottled route must be \"METHOD /path\", got " + rt)
+			}
+			m[rt] = true
+		}
+		s.extensions[i].unthrottled = m
+		return
+	}
+	panic("api: extension not registered: " + name)
+}
+
+// ExtensionUnthrottled lists the unthrottled routes of every extension, as
+// "METHOD /api/v1/x/<name>/…" keys, so an extension's own route-table test
+// can assert exactly which of its routes escape the anonymous class.
+func (s *Server) ExtensionUnthrottled() map[string]bool {
+	out := map[string]bool{}
+	for _, m := range s.extensions {
+		for rt := range m.unthrottled {
+			method, path, _ := strings.Cut(rt, " ")
+			out[method+" /api/v1/x/"+m.name+path] = true
+		}
+	}
+	return out
 }
 
 // ExtensionNames lists the mounted extensions in registration order.
@@ -99,6 +142,13 @@ func (s *Server) mountExtensions(mux *http.ServeMux) {
 		sub := http.NewServeMux()
 		m.routes(sub)
 		prefix := "/api/v1/x/" + m.name
-		mux.Handle(prefix+"/", s.principalMiddleware(http.StripPrefix(prefix, sub)))
+		// The middleware sees the full path (its scope families key on it),
+		// so the extension's relative keys are prefixed here.
+		unthrottled := make(map[string]bool, len(m.unthrottled))
+		for rt := range m.unthrottled {
+			method, path, _ := strings.Cut(rt, " ")
+			unthrottled[method+" "+prefix+path] = true
+		}
+		mux.Handle(prefix+"/", s.principalMiddlewareOpts(http.StripPrefix(prefix, sub), principalOpts{unthrottled: unthrottled}))
 	}
 }

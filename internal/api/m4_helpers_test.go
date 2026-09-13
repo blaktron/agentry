@@ -24,6 +24,18 @@ func (env *testEnv) uploadVersionCLI(ns, name, pat string, files map[string]stri
 // (Idempotency-Key in the replay tests).
 func (env *testEnv) uploadVersionCLIWithHeaders(ns, name, pat string, files map[string]string, headers map[string]string) (int, string) {
 	env.t.Helper()
+	return env.uploadVersionCLIFull(ns, name, pat, files, headers, "")
+}
+
+// uploadVersionCLIWithDigest claims a digest of the caller's choosing, for
+// the tests that need the server-built digest to disagree with it.
+func (env *testEnv) uploadVersionCLIWithDigest(ns, name, pat string, files map[string]string, digest string) (int, string) {
+	env.t.Helper()
+	return env.uploadVersionCLIFull(ns, name, pat, files, nil, digest)
+}
+
+func (env *testEnv) uploadVersionCLIFull(ns, name, pat string, files map[string]string, headers map[string]string, claimedDigest string) (int, string) {
+	env.t.Helper()
 	ws := env.t.TempDir()
 	for path, content := range files {
 		full := filepath.Join(ws, path)
@@ -57,7 +69,10 @@ func (env *testEnv) uploadVersionCLIWithHeaders(ns, name, pat string, files map[
 	mw := multipart.NewWriter(&body)
 	part, _ := mw.CreateFormFile("archive", "a.tar.zst")
 	_, _ = part.Write(archive.Bytes())
-	_ = mw.WriteField("digest", info.Digest)
+	if claimedDigest == "" {
+		claimedDigest = info.Digest
+	}
+	_ = mw.WriteField("digest", claimedDigest)
 	_ = mw.Close()
 
 	req, _ := http.NewRequest(http.MethodPost, env.srv.URL+"/api/v1/agents/"+ns+"/"+name+"/versions", &body)
