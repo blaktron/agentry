@@ -174,9 +174,12 @@ func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *
 		agent = registry.Agent{}
 	}
 	if agent.ID == [16]byte{} {
-		// Unknown path: 404 for anonymous+public probing parity, 404 for
-		// authed too (nothing to leak — path simply doesn't exist).
-		if principal.Anonymous && act != auth.ActAgentRepoRead {
+		// Unknown path. An anonymous client gets the same 401 a private
+		// repo gives it (below), so the two cannot be told apart by
+		// probing (agentry#313) — and a git client that does hold
+		// credentials sends them on that 401 and gets its real answer. A
+		// signed-in caller gets 404: nothing to leak, the path is not there.
+		if principal.Anonymous {
 			return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusUnauthorized, "unauthorized"}
 		}
 		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusNotFound, "not found"}
@@ -198,12 +201,13 @@ func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *
 	res := auth.AgentResource{Public: agent.Visibility == "public", EffectiveRole: role}
 	if err := auth.CheckAgent(principal, res, act); err != nil {
 		if principal.Anonymous {
+			// The credential prompt; the same answer an unknown path gives.
 			return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusUnauthorized, "unauthorized"}
 		}
-		// Hide private repos from unauthorized principals (§6.4 table
-		// implies existence-privacy for read; write denial on a repo
-		// you can read is a plain 403).
-		if act == auth.ActAgentRepoRead {
+		// A signed-in caller who cannot read the repo gets a missing
+		// path's 404 whatever they tried (existence privacy, §6.4;
+		// agentry#313); a write denied on a repo they can read is a 403.
+		if auth.CheckAgent(principal, res, auth.ActAgentRepoRead) != nil {
 			return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusNotFound, "not found"}
 		}
 		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusForbidden, "forbidden"}
