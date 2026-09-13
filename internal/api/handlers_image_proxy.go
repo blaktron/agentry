@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"image"
 	"image/gif"
 	"image/jpeg"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blaktron/agentry/internal/logevent"
 	"github.com/blaktron/agentry/internal/webhook"
 )
 
@@ -104,6 +106,10 @@ func (s *Server) serveImageProxy(w http.ResponseWriter, r *http.Request) {
 	req.Header.Set("Accept", "image/png, image/jpeg, image/gif")
 	res, err := s.imageProxyClient().Do(req)
 	if err != nil {
+		var blocked *webhook.ErrBlockedAddress
+		if errors.As(err, &blocked) {
+			s.log.WarnContext(r.Context(), "image proxy: target refused by the private-range guard", logevent.SSRFRefused.Attr(), "host", blocked.Host)
+		}
 		http.Error(w, "image unavailable", http.StatusBadGateway)
 		return
 	}

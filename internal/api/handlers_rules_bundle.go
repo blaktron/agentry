@@ -37,7 +37,7 @@ import (
 func (s *Server) GetLatestRulesetBundle(w http.ResponseWriter, r *http.Request) {
 	bundle, err := ruleset.Load()
 	if err != nil {
-		s.log.Error("ruleset load", "err", err)
+		s.log.ErrorContext(r.Context(), "ruleset load", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -53,7 +53,7 @@ func (s *Server) GetLatestRulesetBundle(w http.ResponseWriter, r *http.Request) 
 		switch {
 		case rerr == nil:
 			if normalizeDigest(row.BundleDigest) != digest {
-				s.log.Error("ruleset digest mismatch", "semver", semver,
+				s.log.ErrorContext(r.Context(), "ruleset digest mismatch", "semver", semver,
 					"embedded", digest, "recorded", row.BundleDigest)
 				problemInternal(w, r)
 				return
@@ -62,7 +62,7 @@ func (s *Server) GetLatestRulesetBundle(w http.ResponseWriter, r *http.Request) 
 			// Not registered (dev instance, or boot registration skipped).
 			// The bundle's own digest is still a sound pin over these bytes.
 		default:
-			s.log.Error("ruleset release lookup", "err", rerr)
+			s.log.ErrorContext(r.Context(), "ruleset release lookup", "err", rerr)
 			problemInternal(w, r)
 			return
 		}
@@ -70,7 +70,7 @@ func (s *Server) GetLatestRulesetBundle(w http.ResponseWriter, r *http.Request) 
 
 	data, err := bundle.Tar()
 	if err != nil {
-		s.log.Error("ruleset tar", "err", err)
+		s.log.ErrorContext(r.Context(), "ruleset tar", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -86,7 +86,7 @@ func (s *Server) GetLatestRulesetBundle(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusOK)
 	if r.Method != http.MethodHead {
 		if _, werr := w.Write(data); werr != nil {
-			s.log.Warn("ruleset bundle write", "err", werr)
+			s.log.WarnContext(r.Context(), "ruleset bundle write", "err", werr)
 		}
 	}
 }
@@ -122,7 +122,7 @@ func (s *Server) GetLatestRulesetAttestation(w http.ResponseWriter, r *http.Requ
 	}
 	bundle, err := ruleset.Load()
 	if err != nil {
-		s.log.Error("ruleset load", "err", err)
+		s.log.ErrorContext(r.Context(), "ruleset load", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -133,7 +133,7 @@ func (s *Server) GetLatestRulesetAttestation(w http.ResponseWriter, r *http.Requ
 	if rulesetAttestationCache.body == nil || rulesetAttestationCache.digest != digest || rulesetAttestationCache.keyID != s.signer.KeyID() {
 		env, err := s.signer.Sign(attest.BuildRulesetStatement(s.cfg.BaseURL, bundle.Version(), digest))
 		if err != nil {
-			s.log.Error("ruleset attestation sign", "err", err)
+			s.log.ErrorContext(r.Context(), "ruleset attestation sign", "err", err)
 			problemInternal(w, r)
 			return
 		}

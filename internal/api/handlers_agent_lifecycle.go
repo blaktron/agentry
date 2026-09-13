@@ -63,7 +63,7 @@ func (s *Server) DeleteAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	}
 	blockers, err := s.q().CountAgentDeleteBlockers(r.Context(), a.ID)
 	if err != nil {
-		s.log.Error("agent delete blockers", "err", err)
+		s.log.ErrorContext(r.Context(), "agent delete blockers", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -101,7 +101,7 @@ func (s *Server) DeleteAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 		return q.DeleteRepoByID(r.Context(), repoID)
 	})
 	if err != nil {
-		s.log.Error("delete agent", "err", err)
+		s.log.ErrorContext(r.Context(), "delete agent", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -154,7 +154,7 @@ func (s *Server) ListAgentActivity(w http.ResponseWriter, r *http.Request, ns Na
 	}
 	rows, err := s.q().ListAgentActivity(r.Context(), qp)
 	if err != nil {
-		s.log.Error("agent activity", "err", err)
+		s.log.ErrorContext(r.Context(), "agent activity", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -219,7 +219,7 @@ func (s *Server) ListAgentsByTag(w http.ResponseWriter, r *http.Request, tag str
 		Tag: normalized, Limit: int32(limit), BeforeTime: before, BeforeID: beforeID,
 	})
 	if err != nil {
-		s.log.Error("tag listing", "err", err)
+		s.log.ErrorContext(r.Context(), "tag listing", "err", err)
 		problemInternal(w, r)
 		return
 	}

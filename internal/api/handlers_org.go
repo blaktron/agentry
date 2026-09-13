@@ -39,7 +39,7 @@ func (s *Server) notifyOrgInvite(ctx context.Context, org storegen.GetOrgByHandl
 		Role:      role,
 		InvitedBy: invitedBy,
 	}); err != nil {
-		s.log.Error("org invite notification", "org", org.ID, "user", target.ID, "err", err)
+		s.log.ErrorContext(ctx, "org invite notification", "org", org.ID, "user", target.ID, "err", err)
 	}
 }
 
@@ -119,7 +119,7 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 			problemConflict(w, r, "That org handle is already in use. Choose another.")
 			return
 		}
-		s.log.Error("create org", "err", err)
+		s.log.ErrorContext(r.Context(), "create org", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -208,7 +208,7 @@ func (s *Server) UpdateOrg(w http.ResponseWriter, r *http.Request, org OrgHandle
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("update org", "err", err)
+		s.log.ErrorContext(r.Context(), "update org", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -234,7 +234,7 @@ func (s *Server) ListOrgMembers(w http.ResponseWriter, r *http.Request, org OrgH
 	}
 	rows, err := s.q().ListOrgMembers(r.Context(), row.ID)
 	if err != nil {
-		s.log.Error("list members", "err", err)
+		s.log.ErrorContext(r.Context(), "list members", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -325,7 +325,7 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("set member", "err", err)
+		s.log.ErrorContext(r.Context(), "set member", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -406,7 +406,7 @@ func (s *Server) RemoveOrgMember(w http.ResponseWriter, r *http.Request, org Org
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("remove member", "err", err)
+		s.log.ErrorContext(r.Context(), "remove member", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -477,7 +477,7 @@ func (s *Server) CreateTeam(w http.ResponseWriter, r *http.Request, org OrgHandl
 			problemConflict(w, r, "That team slug is already taken in this organization. Choose another.")
 			return
 		}
-		s.log.Error("create team", "err", err)
+		s.log.ErrorContext(r.Context(), "create team", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -512,7 +512,7 @@ func (s *Server) DeleteTeam(w http.ResponseWriter, r *http.Request, org OrgHandl
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("delete team", "err", err)
+		s.log.ErrorContext(r.Context(), "delete team", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -585,7 +585,7 @@ func (s *Server) AddTeamMember(w http.ResponseWriter, r *http.Request, org OrgHa
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("add team member", "err", err)
+		s.log.ErrorContext(r.Context(), "add team member", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -630,7 +630,7 @@ func (s *Server) RemoveTeamMember(w http.ResponseWriter, r *http.Request, org Or
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("remove team member", "err", err)
+		s.log.ErrorContext(r.Context(), "remove team member", "err", err)
 		problemInternal(w, r)
 		return
 	}

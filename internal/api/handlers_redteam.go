@@ -39,7 +39,7 @@ func (s *Server) registerRedTeam(q queue.Client) {
 	defer cancel()
 	pending, err := s.q().CountPendingJobsOfKind(ctx, jobRedTeam)
 	if err != nil {
-		s.log.Warn("redteam: could not check for a pending run", "err", err)
+		s.log.WarnContext(ctx, "redteam: could not check for a pending run", "err", err)
 		return
 	}
 	if pending > 0 {
@@ -47,7 +47,7 @@ func (s *Server) registerRedTeam(q queue.Client) {
 	}
 	if _, err := q.Enqueue(ctx, jobRedTeam, "core", struct{}{},
 		queue.WithDelay(5*time.Minute), queue.WithMaxAttempts(2)); err != nil {
-		s.log.Warn("redteam: seed enqueue", "err", err)
+		s.log.WarnContext(ctx, "redteam: seed enqueue", "err", err)
 	}
 }
 
@@ -69,7 +69,7 @@ func (s *Server) runRedTeam(ctx context.Context, _ queue.Job) error {
 	}
 	dir, err := redteam.FindCorpus(s.cfg.RedTeam.CorpusDir)
 	if err != nil {
-		s.log.Warn("redteam: skipped", "err", err)
+		s.log.WarnContext(ctx, "redteam: skipped", "err", err)
 		return nil
 	}
 	rep, err := redteam.Run(bundle, dir)
@@ -91,7 +91,7 @@ func (s *Server) runRedTeam(ctx context.Context, _ queue.Job) error {
 	}); err != nil {
 		return err
 	}
-	s.log.Info("redteam: report stored", "ruleset", rep.RulesetSemver, "fixtures", rep.Fixtures, "cases", rep.Cases, "evaded", rep.Evaded)
+	s.log.InfoContext(ctx, "redteam: report stored", "ruleset", rep.RulesetSemver, "fixtures", rep.Fixtures, "cases", rep.Cases, "evaded", rep.Evaded)
 	return nil
 }
 
@@ -101,7 +101,7 @@ func (s *Server) scheduleNextRedTeam(ctx context.Context) {
 	}
 	if _, err := s.jobs.Enqueue(ctx, jobRedTeam, "core", struct{}{},
 		queue.WithDelay(s.cfg.RedTeam.Interval), queue.WithMaxAttempts(2)); err != nil {
-		s.log.Warn("redteam: reschedule", "err", err)
+		s.log.WarnContext(ctx, "redteam: reschedule", "err", err)
 	}
 }
 
@@ -116,7 +116,7 @@ func (s *Server) ListRedTeamReports(w http.ResponseWriter, r *http.Request, para
 	limit := clampLimit(params.Limit, 10, 50)
 	rows, err := s.q().ListRedTeamReports(r.Context(), int32(limit)) //nolint:gosec // clamped
 	if err != nil {
-		s.log.Error("list redteam reports", "err", err)
+		s.log.ErrorContext(r.Context(), "list redteam reports", "err", err)
 		problemInternal(w, r)
 		return
 	}

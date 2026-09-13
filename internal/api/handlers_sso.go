@@ -98,7 +98,7 @@ func (s *Server) PutSsoConnection(w http.ResponseWriter, r *http.Request, org Or
 	if row, err := s.q().GetSSOConnection(r.Context(), storegen.GetSSOConnectionParams{OrgID: orgRow.ID, Kind: k}); err == nil {
 		prev = row.Config
 	} else if !errors.Is(err, pgx.ErrNoRows) {
-		s.log.Error("put sso connection: read current", "err", err)
+		s.log.ErrorContext(r.Context(), "put sso connection: read current", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -128,7 +128,7 @@ func (s *Server) PutSsoConnection(w http.ResponseWriter, r *http.Request, org Or
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("put sso connection", "err", err)
+		s.log.ErrorContext(r.Context(), "put sso connection", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -314,7 +314,7 @@ func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, org
 				"An account already uses this email address. This organization must verify the email domain before SSO can link them.")
 			return
 		}
-		s.log.Error("sso jit", "err", err)
+		s.log.ErrorContext(r.Context(), "sso jit", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -371,7 +371,7 @@ func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, org
 		return s.auditW.Write(ctx, q, e)
 	})
 	if err != nil {
-		s.log.Error("sso session", "err", err)
+		s.log.ErrorContext(r.Context(), "sso session", "err", err)
 		problemInternal(w, r)
 		return
 	}

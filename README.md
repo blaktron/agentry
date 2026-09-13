@@ -123,6 +123,7 @@ The enterprise build is one such module; the core carries none.
   the same posture on its `/trust` page, and every instance publishes its live
   signing keys at `/.well-known/agentry/signing-keys.json`
 - [Self-hosting](docs/self-hosting.md)
+- [The log contract](docs/logging.md) — what a line carries, what is never in one, the `event` names a dashboard keys on
 - [Operational runbooks](docs/ops/runbooks.md)
 - [Contributing](CONTRIBUTING.md) — including the rules that actually matter (route authorization, scanner fixtures)
 - [Reporting a vulnerability](SECURITY.md)

@@ -64,7 +64,7 @@ func (s *Server) SamlAcs(w http.ResponseWriter, r *http.Request, org OrgHandle) 
 	}
 	res, err := sp.ParseAndValidate(r.Context(), samlResponse)
 	if err != nil {
-		s.log.Warn("saml acs rejected", "org", org, "err", err)
+		s.log.WarnContext(r.Context(), "saml acs rejected", "org", org, "err", err)
 		problemUnauthorized(w, r, "The registry rejected the SAML assertion. Start sign-in again.")
 		return
 	}
@@ -122,7 +122,7 @@ func (s *Server) samlSlo(w http.ResponseWriter, r *http.Request, org OrgHandle) 
 	// The IdP answering our own LogoutRequest.
 	if r.FormValue("SAMLResponse") != "" {
 		if err := sp.ValidateLogoutResponse(r.URL.RawQuery, r.PostFormValue("SAMLResponse")); err != nil {
-			s.log.Warn("saml slo response rejected", "org", org, "err", err)
+			s.log.WarnContext(r.Context(), "saml slo response rejected", "org", org, "err", err)
 			problemUnauthorized(w, r, "The registry rejected the SAML LogoutResponse.")
 			return
 		}
@@ -137,7 +137,7 @@ func (s *Server) samlSlo(w http.ResponseWriter, r *http.Request, org OrgHandle) 
 		info, err = sp.ParseLogoutRequestRedirect(r.URL.RawQuery)
 	}
 	if err != nil {
-		s.log.Warn("saml slo request rejected", "org", org, "err", err)
+		s.log.WarnContext(r.Context(), "saml slo request rejected", "org", org, "err", err)
 		problemUnauthorized(w, r, "The registry rejected the SAML LogoutRequest.")
 		return
 	}
@@ -164,11 +164,11 @@ func (s *Server) samlSlo(w http.ResponseWriter, r *http.Request, org OrgHandle) 
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("saml slo revoke", "err", err)
+		s.log.ErrorContext(r.Context(), "saml slo revoke", "err", err)
 		problemInternal(w, r)
 		return
 	}
-	s.log.Info("saml slo: sessions revoked", "org", org, "sessions", revoked)
+	s.log.InfoContext(r.Context(), "saml slo: sessions revoked", "org", org, "sessions", revoked)
 	// Clear this browser's cookie too: the request may arrive front-channel
 	// through the user's own browser.
 	http.SetCookie(w, &http.Cookie{

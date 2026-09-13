@@ -282,6 +282,12 @@ services:
       # browsers accept (docs/self-hosting.md "Running behind a proxy").
       AGENTRY_TRUSTED_PROXIES: ${AGENTRY_TRUSTED_PROXIES:-0}
       AGENTRY_AUTH_COOKIE_SECURE: ${AGENTRY_COOKIE_SECURE:-false}
+      # The edge SETS X-Request-Id on every request it forwards (its config
+      # does, and so must a site's edge config in front of this server);
+      # with AGENTRY_PROXY_REQUEST_ID=true beside AGENTRY_TRUSTED_PROXIES=1
+      # the server honours it, so one id names a request on both hops
+      # (docs/logging.md). Off, the server mints its own.
+      AGENTRY_PROXY_REQUEST_ID: ${AGENTRY_PROXY_REQUEST_ID:-false}
       # Directory service (DEV-057): hand credentials to Authentik. When
       # AGENTRY_AUTH_EXTERNAL_ONLY=true the native register/password/TOTP
       # endpoints answer 410 and sign-in goes through the authentik provider.

@@ -90,7 +90,7 @@ func (s *Server) CreateDomainClaim(w http.ResponseWriter, r *http.Request, org O
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("create domain claim", "err", err)
+		s.log.ErrorContext(r.Context(), "create domain claim", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -124,7 +124,7 @@ func (s *Server) VerifyDomainClaim(w http.ResponseWriter, r *http.Request, org O
 	}
 	verified, err := dnsx.VerifyTXT(r.Context(), s.resolver, claim.Domain, claim.VerificationToken)
 	if err != nil {
-		s.log.Warn("domain verify lookup", "domain", domain, "err", err)
+		s.log.WarnContext(r.Context(), "domain verify lookup", "domain", domain, "err", err)
 		problemValidation(w, r, "The registry could not read the TXT record for this domain: "+err.Error())
 		return
 	}

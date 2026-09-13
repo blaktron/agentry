@@ -17,6 +17,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
 // RequestIDKey is the attribute every line written under a request carries.
@@ -29,17 +30,29 @@ const RequestIDKey = "request_id"
 // of its fields.
 const MaxStringLen = 4096
 
+// MaxStackLen is the bound for a `stack` attribute: a panic's stack is the
+// one value worth most of the line, and 8 KB beside a 4 KB panic value and
+// the line's other fields still stays under Docker's split.
+const MaxStackLen = 8192
+
+// stackKey is the attribute a panic's stack trace is written under.
+const stackKey = "stack"
+
 // Redacted replaces a value under a secret-named key.
 const Redacted = "[redacted]"
 
 // truncatedMarker follows a value cut at MaxStringLen.
 const truncatedMarker = "…[truncated]"
 
-// tokenRE matches every token kind the registry mints (internal/auth:
-// `agy_` PATs, `agys_` sessions, `agyv_` verification tokens, each followed
-// by 52 lowercase base32 characters). The 12-character display prefix a PAT
-// is identified by is shorter than this and stays.
-var tokenRE = regexp.MustCompile(`(?i)\bagy[sv]?_[a-z2-7]{52}\b`)
+// tokenRE matches every token the registry mints through auth.NewToken: 52
+// lowercase base32 characters, with or without a kind prefix — `agy_` PATs,
+// `agys_` sessions, `agyv_` verification tokens, `agyscim_` SCIM tokens,
+// `agd_` desktop grants, `whsec_` webhook secrets, `csrf_` CSRF tokens, and
+// the bare form used for OIDC state and nonce and domain verification. The
+// 12-character display prefix a PAT is identified by is shorter than this
+// and stays. A 52-character run of [a-z2-7] is nothing else in practice: a
+// hex digest has a 0, 1, 8 or 9 in every such window.
+var tokenRE = regexp.MustCompile(`(?i)\b(?:agy[a-z]*_|agd_|whsec_|csrf_)?[a-z2-7]{52}\b`)
 
 // tokenDisplayLen mirrors auth.PATDisplayPrefixLen: what survives a mask so
 // an incident can still be traced to the credential.
@@ -156,6 +169,9 @@ func Sanitize(_ []string, a slog.Attr) slog.Attr {
 	if isSecretKey(a.Key) {
 		return slog.String(a.Key, Redacted)
 	}
+	if a.Key == stackKey && a.Value.Kind() == slog.KindString {
+		return slog.String(a.Key, truncate(MaskTokens(a.Value.String()), MaxStackLen))
+	}
 	a.Value = sanitizeValue(a.Value)
 	return a
 }
@@ -237,12 +253,18 @@ func sanitizeAny(x any) any {
 	}
 }
 
-func sanitizeString(s string) string {
-	s = MaskTokens(s)
-	if len(s) > MaxStringLen {
-		s = s[:MaxStringLen] + truncatedMarker
+func sanitizeString(s string) string { return truncate(MaskTokens(s), MaxStringLen) }
+
+// truncate cuts s at max bytes on a rune boundary and marks the cut.
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
 	}
-	return s
+	cut := max
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + truncatedMarker
 }
 
 // MaskEmail keeps the first character of the local part and the domain:
@@ -259,7 +281,7 @@ func MaskEmail(addr string) string {
 // MaskTokens replaces every token-shaped substring with its display prefix
 // and a marker. Exported for the tests of things that must never log one.
 func MaskTokens(s string) string {
-	if !strings.Contains(strings.ToLower(s), "agy") {
+	if len(s) < 52 {
 		return s
 	}
 	return tokenRE.ReplaceAllStringFunc(s, func(m string) string {

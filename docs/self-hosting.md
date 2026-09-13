@@ -460,9 +460,10 @@ separate and are what your load balancer should use.
 ### Logs
 
 The server writes one JSON object per line to stderr and nowhere else:
-[the log contract](logging.md) says what a line carries (one request id
-across the edge, the site and the server; an `event` name on every signal;
-the access line's fields), what is never in one (tokens, secrets, names,
+[the log contract](logging.md) says what a line carries (one request id on
+every line and audit row of a request, and the same id on the edge once
+`AGENTRY_PROXY_REQUEST_ID` is on; an `event` name on every signal; the
+access line's fields), what is never in one (tokens, secrets, names,
 addresses of people, values above 4 KB), and how the audit mirror
 (`audit.streamKind: log`) works. The level is `log.level` /
 `AGENTRY_LOG_LEVEL`.
@@ -483,7 +484,8 @@ hundred at ten thousand lines a second (nothing at the registry's own
 rates). The audit record does not depend on it. Retention is the stack's
 knobs — `AGENTRY_LOGS_RETENTION_DAYS` (30), `AGENTRY_ACCESS_RETENTION_DAYS`
 (14), `AGENTRY_AUDIT_INDEX_RETENTION_DAYS` (90) — while `audit_events`
-keeps its rows for `audit.retentionDays`; the store is the search copy.
+keeps its rows for `audit.retentionDays`: Postgres is the audit record and
+the store is the search copy.
 OpenSearch needs `vm.max_map_count` of at least 262144 on the host
 (Fedora ships more; Debian and Ubuntu ship 65530 and it refuses to start)
 and about 5.5 GB of disk for the images. The repository's README carries
@@ -556,6 +558,15 @@ http:
 ```
 
 Env: `AGENTRY_TRUSTED_PROXIES` (an integer hop count, not a CIDR list).
+
+`http.proxyRequestID: true` (`AGENTRY_PROXY_REQUEST_ID=true`) additionally
+says the hop in front **sets** `X-Request-Id` on every request it forwards
+— the compose edge does (`proxy_set_header X-Request-Id $request_id`); an
+ALB does not — so the server honours it and one id names a request on both
+hops ([the log contract](logging.md)). Off, the default, the server mints
+its own and ignores the header. Never turn it on for a hop that merely
+forwards the header: that would let a client choose the id stamped on its
+lines and audit rows.
 
 `X-Forwarded-For` is honoured **only** up to that many proxy hops: behind
 CloudFront → ALB set `2`; behind a single load balancer set `1`. Leave it at

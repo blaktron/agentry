@@ -30,7 +30,7 @@ func (s *Server) ListSshKeys(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	rows, err := s.q().ListSSHKeys(r.Context(), p.UserID)
 	if err != nil {
-		s.log.Error("list ssh keys", "err", err)
+		s.log.ErrorContext(r.Context(), "list ssh keys", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -98,7 +98,7 @@ func (s *Server) AddSshKey(w http.ResponseWriter, r *http.Request) {
 			problemValidation(w, r, "The registry rejected the SSH key. Each field error says what to fix.", FieldError{Field: "publicKey", Message: "This key is already registered."})
 			return
 		}
-		s.log.Error("add ssh key", "err", err)
+		s.log.ErrorContext(r.Context(), "add ssh key", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -129,7 +129,7 @@ func (s *Server) RemoveSshKey(w http.ResponseWriter, r *http.Request, keyID open
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("remove ssh key", "err", err)
+		s.log.ErrorContext(r.Context(), "remove ssh key", "err", err)
 		problemInternal(w, r)
 		return
 	}

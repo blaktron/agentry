@@ -59,7 +59,7 @@ func (s *Server) CreateRulesetRelease(w http.ResponseWriter, r *http.Request) {
 	if semver == "" || digest == "" {
 		bundle, err := ruleset.Load()
 		if err != nil {
-			s.log.Error("ruleset load", "err", err)
+			s.log.ErrorContext(r.Context(), "ruleset load", "err", err)
 			problemInternal(w, r)
 			return
 		}
@@ -93,7 +93,7 @@ func (s *Server) CreateRulesetRelease(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, out)
 		return
 	} else if !errors.Is(err, pgx.ErrNoRows) {
-		s.log.Error("ruleset lookup", "err", err)
+		s.log.ErrorContext(r.Context(), "ruleset lookup", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -127,7 +127,7 @@ func (s *Server) CreateRulesetRelease(w http.ResponseWriter, r *http.Request) {
 			problemConflict(w, r, "The registry already has this ruleset semver.")
 			return
 		}
-		s.log.Error("create ruleset release", "err", err)
+		s.log.ErrorContext(r.Context(), "create ruleset release", "err", err)
 		problemInternal(w, r)
 		return
 	}

@@ -119,7 +119,7 @@ func (s *Server) OidcCallback(w http.ResponseWriter, r *http.Request, org OrgHan
 	}
 	claims, err := rp.Exchange(ctx, *params.Code, st.Verifier, st.Nonce)
 	if err != nil {
-		s.log.Warn("oidc callback rejected", "org", org, "err", err)
+		s.log.WarnContext(r.Context(), "oidc callback rejected", "org", org, "err", err)
 		problemUnauthorized(w, r, "The code exchange with the identity provider failed. Start sign-in again.")
 		return
 	}

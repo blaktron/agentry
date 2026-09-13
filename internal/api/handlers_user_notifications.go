@@ -25,7 +25,7 @@ func (s *Server) GetUserNotificationSettings(w http.ResponseWriter, r *http.Requ
 	p := principalFrom(r.Context())
 	row, err := notify.Settings(r.Context(), s.q(), p.UserID)
 	if err != nil {
-		s.log.Error("notification settings: read", "user", p.UserID, "err", err)
+		s.log.ErrorContext(r.Context(), "notification settings: read", "user", p.UserID, "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -57,7 +57,7 @@ func (s *Server) UpdateUserNotificationSettings(w http.ResponseWriter, r *http.R
 		WebDependencyAlerts:   req.Web.DependencyAlerts,
 	})
 	if err != nil {
-		s.log.Error("notification settings: write", "user", p.UserID, "err", err)
+		s.log.ErrorContext(r.Context(), "notification settings: write", "user", p.UserID, "err", err)
 		problemInternal(w, r)
 		return
 	}

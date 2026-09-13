@@ -135,7 +135,7 @@ func (s *Server) CreateWebhook(w http.ResponseWriter, r *http.Request, org OrgHa
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("create webhook", "err", err)
+		s.log.ErrorContext(r.Context(), "create webhook", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -304,7 +304,7 @@ func (s *Server) PingWebhook(w http.ResponseWriter, r *http.Request, org OrgHand
 		"requestedBy": p.Handle,
 	})
 	if err != nil {
-		s.log.Error("webhook ping", "err", err, "endpoint", ep.ID)
+		s.log.ErrorContext(r.Context(), "webhook ping", "err", err, "endpoint", ep.ID)
 		problemInternal(w, r)
 		return
 	}
@@ -315,7 +315,7 @@ func (s *Server) PingWebhook(w http.ResponseWriter, r *http.Request, org OrgHand
 		e.Detail = map[string]any{"deliveryId": delivery.ID.String()}
 		return s.auditW.Write(r.Context(), q, e)
 	}); err != nil {
-		s.log.Error("webhook ping audit", "err", err)
+		s.log.ErrorContext(r.Context(), "webhook ping audit", "err", err)
 	}
 	out := deliveryToAPI(delivery)
 	ik.complete(r, http.StatusAccepted, out)
