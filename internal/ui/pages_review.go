@@ -50,11 +50,13 @@ type reviewBundle struct {
 // findings: which judge ran and, for platform staff, what it cost in tokens
 // (the API sends judgeUsage to staff only).
 type reviewReport struct {
-	JudgeModel string `json:"judgeModel"`
-	JudgeUsage *struct {
-		PromptTokens     int `json:"promptTokens"`
-		CompletionTokens int `json:"completionTokens"`
-	} `json:"judgeUsage"`
+	JudgeModel string      `json:"judgeModel"`
+	JudgeUsage *judgeUsage `json:"judgeUsage"`
+}
+
+type judgeUsage struct {
+	PromptTokens     int `json:"promptTokens"`
+	CompletionTokens int `json:"completionTokens"`
 }
 
 type reviewFile struct {
