@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
@@ -383,6 +384,27 @@ func TestGitConformance(t *testing.T) {
 		out, err := gitRun(t, dst, "clone", env.cloneURL("priv-agent", ""), "c")
 		if err == nil {
 			t.Fatalf("anonymous private clone must fail:\n%s", out)
+		}
+	})
+
+	t.Run("anonymous cannot tell a private repo from a missing one", func(t *testing.T) {
+		// agentry#313: the info/refs probe is what a scanner would use.
+		// Both answers are the credential prompt, byte for byte the same
+		// status, so the name leaks nothing; a reader's credentials on
+		// that 401 get the real answer.
+		probe := func(agent string) int {
+			res, err := http.Get(env.cloneURL(agent, "") + "/info/refs?service=git-upload-pack")
+			if err != nil {
+				t.Fatal(err)
+			}
+			_ = res.Body.Close()
+			return res.StatusCode
+		}
+		if got := probe("priv-agent"); got != http.StatusUnauthorized {
+			t.Fatalf("private: got %d want 401", got)
+		}
+		if got := probe("no-such-agent"); got != http.StatusUnauthorized {
+			t.Fatalf("unknown: got %d want 401 (the same as private)", got)
 		}
 	})
 
