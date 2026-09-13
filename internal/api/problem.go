@@ -143,13 +143,14 @@ func problemGone(w http.ResponseWriter, r *http.Request, detail string) {
 
 // problemAdmissionRefused answers a registry admission refusal (plan
 // subscription-tiers §5.1) with the refusal's own status and slug — 402
-// credits-exhausted from the billing extension — and its fields at top
-// level. A refusal without a status is a 402: the request was well formed
-// and authorized, and only the account's allowance stood in its way.
+// credits-exhausted from the billing extension, which says so explicitly —
+// and its fields at top level. A refusal that names no status is a 403
+// admission-refused: "payment required" is a claim an extension makes,
+// never a default.
 func problemAdmissionRefused(w http.ResponseWriter, r *http.Request, ref registry.Refusal) {
 	status, slug, title := ref.Status, ref.Slug, ref.Title
 	if status == 0 {
-		status = http.StatusPaymentRequired
+		status = http.StatusForbidden
 	}
 	if slug == "" {
 		slug = "admission-refused"

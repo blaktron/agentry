@@ -356,10 +356,11 @@ func TestExtensionRouteRateClassOptOut(t *testing.T) {
 	}
 }
 
-// TestScanCompletedFlagsPipelineError: a stage error routes the version to
-// review and the scan.completed event says so, which is what an extension
-// that charged for the submission refunds on.
-func TestScanCompletedFlagsPipelineError(t *testing.T) {
+// TestScanCompletedNamesTheVersionAndOutcome: scan.completed carries the
+// version id and the gate's outcome so an extension can tie it to the
+// admission ticket's version. The pipeline-error flag lives on the
+// transition event (TestPipelineErrorFlagsTheTransition in internal/scan).
+func TestScanCompletedNamesTheVersionAndOutcome(t *testing.T) {
 	var mu sync.Mutex
 	var completed []map[string]any
 	env := newTestEnvWith(t, func(s *api.Server) {
@@ -380,7 +381,7 @@ func TestScanCompletedFlagsPipelineError(t *testing.T) {
 	env.waitStatus(author, "clean", "1.0.0", "published")
 	mu.Lock()
 	defer mu.Unlock()
-	if len(completed) != 1 || completed[0]["pipelineError"] != nil || completed[0]["outcome"] != "published" || completed[0]["versionId"] == nil {
-		t.Fatalf("a clean scan must not flag a pipeline error and must name the outcome and version: %+v", completed)
+	if len(completed) != 1 || completed[0]["outcome"] != "published" || completed[0]["versionId"] == nil {
+		t.Fatalf("scan.completed must name the outcome and the version: %+v", completed)
 	}
 }

@@ -17,9 +17,10 @@ info:
     documented bounds is clamped, never rejected.
 
 
-    Rate limits (§19) are reported on every response with
+    Rate limits (§19) are reported on every rate-limited response with
     `RateLimit-Limit`, `RateLimit-Remaining` and `RateLimit-Reset`
-    (plus `Retry-After` on 429).
+    (plus `Retry-After` on 429); an extension's signed-callback route that
+    opts out of the anonymous class carries none.
 
 
     Compatibility: 0.3.0 broke the additive-only rule once, deliberately
@@ -1208,6 +1209,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Agent"
+        "422":
+          description: >-
+            Validation, or `private-agent-cap` when the namespace holds as
+            many private agents as its tier allows (a core registry caps
+            nothing).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
         default:
           $ref: "#/components/responses/Problem"
     get:
@@ -1515,6 +1525,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AgentVersion"
+        "402":
+          description: >-
+            Refused by the deployment's admission extension (problem type
+            `credits-exhausted`, with `balance` and `resetsAt`); nothing was
+            stored. Never answered by a core registry.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: >-
+            `scan-not-scheduled` (the version was recorded and a watchdog
+            routes it to review) or `admission-unavailable` (nothing was
+            recorded; retry).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
         default:
           $ref: "#/components/responses/Problem"
     get:

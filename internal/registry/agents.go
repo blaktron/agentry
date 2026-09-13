@@ -336,13 +336,9 @@ func newUUID() uuid.UUID {
 var ErrPrivateAgentCap = errors.New("registry: this namespace holds as many private agents as its tier allows")
 
 // CheckPrivateAgentCap is checkPrivateAgentCap for the handler that flips
-// an existing agent to private: the namespace is looked up by id.
-func (s *Service) CheckPrivateAgentCap(ctx context.Context, nsID uuid.UUID, nsKind string) error {
-	subject := entitlements.ForUser(nsID)
-	if nsKind == "org" {
-		subject = entitlements.ForOrg(nsID)
-	}
-	return s.checkPrivateAgentCap(ctx, subject, nsID)
+// an existing agent to private.
+func (s *Service) CheckPrivateAgentCap(ctx context.Context, a Agent) error {
+	return s.checkPrivateAgentCap(ctx, subjectFor(a), a.NamespaceID)
 }
 
 // checkPrivateAgentCap refuses one more private agent when the subject's

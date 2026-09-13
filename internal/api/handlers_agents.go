@@ -244,7 +244,7 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 		if v == "private" && a.Visibility != "private" {
 			// Turning an agent private holds one more private agent, which
 			// the namespace's tier may cap (plan subscription-tiers §5.3).
-			if err := s.reg.CheckPrivateAgentCap(r.Context(), a.NamespaceID, a.NamespaceKind); err != nil {
+			if err := s.reg.CheckPrivateAgentCap(r.Context(), a); err != nil {
 				if errors.Is(err, registry.ErrPrivateAgentCap) {
 					problemPrivateAgentCap(w, r)
 					return

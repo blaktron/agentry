@@ -452,10 +452,13 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 	}
 	// The same event the native register handler fires: an extension that
 	// provisions something per account (a subscription tier's allowance)
-	// hears every new account, however it arrived (plan subscription-tiers
-	// §5.2; under externalOnly this is the only path that creates one).
+	// hears every new account, whichever door created it (plan
+	// subscription-tiers §5.2; under externalOnly this is the door). The
+	// email is the IdP's assertion and emailVerified says whether it was
+	// asserted verified — a hook must not mail an unverified one.
 	s.fireEvent(r.Context(), Event{Kind: "user.registered", UserID: newUserID, Payload: map[string]any{
-		"handle": handle, "email": email, "via": "social", "provider": id.Provider,
+		"handle": handle, "email": email, "emailVerified": id.EmailVerified && id.Email != "",
+		"via": "social", "provider": id.Provider,
 	}})
 	return newUserID, nil
 }
