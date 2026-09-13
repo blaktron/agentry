@@ -370,6 +370,22 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 		}
 	}
 
+	// Admission (admission.go): after every core gate, before anything is
+	// stored. From here on, a failure hands the ticket back.
+	ticket, err := s.admit(ctx, Admission{
+		Kind: AdmissionKindVersionSubmit, Subject: subjectFor(a), Submitter: p.UserID,
+		AgentID: a.ID, Visibility: a.Visibility, Source: in.Source,
+	})
+	if err != nil {
+		return Version{}, err
+	}
+	admitted := false
+	defer func() {
+		if !admitted {
+			s.void(ctx, ticket)
+		}
+	}()
+
 	// Deterministic archive from the allowlist (§6.5 steps 2–3).
 	include := manifest.ResolveInclude(m.Publish.Include, files)
 	// Stage through a temp buffer file: the key depends on the digest.
@@ -444,6 +460,7 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 		}
 		return Version{}, err
 	}
+	admitted = true // the row is committed; the ticket is spent
 
 	// Enter the machine (§7): submitted → scanning, then hand off.
 	sysEvent := actorEvent
@@ -452,9 +469,16 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 	}
 	// §9.3 catalog (agentry#56): the submission itself is an event, before
 	// any scan outcome.
-	s.EmitAgentEvent(ctx, a.ID, "version.submitted", map[string]any{
+	submitted := map[string]any{
 		"version": m.Version, "source": in.Source, "channel": string(m.EffectiveChannel()),
-	})
+	}
+	if ticket.ID != "" {
+		// The admission ticket lets the Admitter tie its debit to the
+		// version the core created for it (plan subscription-tiers §5.1).
+		submitted["admissionTicket"] = ticket.ID
+		submitted["versionId"] = versionID.String()
+	}
+	s.EmitAgentEvent(ctx, a.ID, "version.submitted", submitted)
 	if s.pipeline != nil {
 		if perr := s.pipeline.VersionSubmitted(ctx, versionID); perr != nil {
 			// The version row is committed and sitting in `scanning`; there is

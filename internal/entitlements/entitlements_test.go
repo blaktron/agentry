@@ -96,6 +96,21 @@ func TestOSSResolverEnablesEveryFeature(t *testing.T) {
 	}
 }
 
+// The core resolver caps nothing: a self-hosted registry has no tiers, so
+// private agents are enabled with no maximum for users and orgs alike.
+func TestOSSResolverCapsNothing(t *testing.T) {
+	r := Default()
+	for _, s := range []Subject{ForUser(uuid.New()), ForOrg(uuid.New()), {}} {
+		f, err := r.Features(t.Context(), s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !f.PrivateAgents.Enabled || f.PrivateAgents.Max != 0 {
+			t.Errorf("subject %+v: private agents %+v, want enabled and uncapped", s, f.PrivateAgents)
+		}
+	}
+}
+
 // The interface must be satisfiable by an overlay implementation.
 var _ Resolver = (*ConfigResolver)(nil)
 
@@ -106,6 +121,9 @@ type stubResolver struct {
 }
 
 func (s stubResolver) Limits(context.Context, Subject) (Limits, error) { return s.limits, nil }
+func (s stubResolver) Features(context.Context, Subject) (Features, error) {
+	return Features{PrivateAgents: Allowance{Enabled: true}}, nil
+}
 func (s stubResolver) FeatureEnabled(_ context.Context, _ uuid.UUID, f Feature) bool {
 	return !s.off[f]
 }

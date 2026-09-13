@@ -2649,12 +2649,16 @@ type ClientInterface interface {
 
 	// CreateAgentWithBody Create an agent and its hosted git repository (§9.2).
 	//
+	// A private agent counts against the namespace's private-agent cap when the deployment's entitlements set one (the hosted product's subscription tiers): at the cap the answer is `422` with the problem type `private-agent-cap`, and the same on `PATCH` when an agent is turned private. A core registry caps nothing. A cap never deletes or hides an agent that is already private.
+	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /agents (the `CreateAgent` operationId).
 	CreateAgentWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateAgent Create an agent and its hosted git repository (§9.2).
+	//
+	// A private agent counts against the namespace's private-agent cap when the deployment's entitlements set one (the hosted product's subscription tiers): at the cap the answer is `422` with the problem type `private-agent-cap`, and the same on `PATCH` when an agent is turned private. A core registry caps nothing. A cap never deletes or hides an agent that is already private.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2773,6 +2777,7 @@ type ClientInterface interface {
 	// SubmitVersionWithBody Submit a version for publication (§7 state machine entry).
 	//
 	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+	// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance` and `resetsAt` at the top level of the problem body; `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers either. The gate's verdict never depends on admission.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2782,6 +2787,7 @@ type ClientInterface interface {
 	// SubmitVersion Submit a version for publication (§7 state machine entry).
 	//
 	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+	// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance` and `resetsAt` at the top level of the problem body; `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers either. The gate's verdict never depends on admission.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -3695,6 +3701,8 @@ func (c *Client) ListAgents(ctx context.Context, params *ListAgentsParams, reqEd
 
 // CreateAgentWithBody Create an agent and its hosted git repository (§9.2).
 //
+// A private agent counts against the namespace's private-agent cap when the deployment's entitlements set one (the hosted product's subscription tiers): at the cap the answer is `422` with the problem type `private-agent-cap`, and the same on `PATCH` when an agent is turned private. A core registry caps nothing. A cap never deletes or hides an agent that is already private.
+//
 // Takes any type of body and a specified content type.
 //
 // Corresponds with POST /agents (the `CreateAgent` operationId).
@@ -3711,6 +3719,8 @@ func (c *Client) CreateAgentWithBody(ctx context.Context, contentType string, bo
 }
 
 // CreateAgent Create an agent and its hosted git repository (§9.2).
+//
+// A private agent counts against the namespace's private-agent cap when the deployment's entitlements set one (the hosted product's subscription tiers): at the cap the answer is `422` with the problem type `private-agent-cap`, and the same on `PATCH` when an agent is turned private. A core registry caps nothing. A cap never deletes or hides an agent that is already private.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -4009,6 +4019,7 @@ func (c *Client) ListVersions(ctx context.Context, ns Namespace, name AgentName,
 // SubmitVersionWithBody Submit a version for publication (§7 state machine entry).
 //
 // Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance` and `resetsAt` at the top level of the problem body; `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers either. The gate's verdict never depends on admission.
 //
 // Takes any type of body and a specified content type.
 //
@@ -4028,6 +4039,7 @@ func (c *Client) SubmitVersionWithBody(ctx context.Context, ns Namespace, name A
 // SubmitVersion Submit a version for publication (§7 state machine entry).
 //
 // Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance` and `resetsAt` at the top level of the problem body; `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers either. The gate's verdict never depends on admission.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -11807,12 +11819,16 @@ type ClientWithResponsesInterface interface {
 
 	// CreateAgentWithBodyWithResponse Create an agent and its hosted git repository (§9.2).
 	//
+	// A private agent counts against the namespace's private-agent cap when the deployment's entitlements set one (the hosted product's subscription tiers): at the cap the answer is `422` with the problem type `private-agent-cap`, and the same on `PATCH` when an agent is turned private. A core registry caps nothing. A cap never deletes or hides an agent that is already private.
+	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /agents (the `CreateAgent` operationId).
 	CreateAgentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAgentResponse, error)
 
 	// CreateAgentWithResponse Create an agent and its hosted git repository (§9.2).
+	//
+	// A private agent counts against the namespace's private-agent cap when the deployment's entitlements set one (the hosted product's subscription tiers): at the cap the answer is `422` with the problem type `private-agent-cap`, and the same on `PATCH` when an agent is turned private. A core registry caps nothing. A cap never deletes or hides an agent that is already private.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11949,6 +11965,7 @@ type ClientWithResponsesInterface interface {
 	// SubmitVersionWithBodyWithResponse Submit a version for publication (§7 state machine entry).
 	//
 	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+	// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance` and `resetsAt` at the top level of the problem body; `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers either. The gate's verdict never depends on admission.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11958,6 +11975,7 @@ type ClientWithResponsesInterface interface {
 	// SubmitVersionWithResponse Submit a version for publication (§7 state machine entry).
 	//
 	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+	// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance` and `resetsAt` at the top level of the problem body; `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers either. The gate's verdict never depends on admission.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -18528,6 +18546,8 @@ func (c *ClientWithResponses) ListAgentsWithResponse(ctx context.Context, params
 
 // CreateAgentWithBodyWithResponse Create an agent and its hosted git repository (§9.2).
 //
+// A private agent counts against the namespace's private-agent cap when the deployment's entitlements set one (the hosted product's subscription tiers): at the cap the answer is `422` with the problem type `private-agent-cap`, and the same on `PATCH` when an agent is turned private. A core registry caps nothing. A cap never deletes or hides an agent that is already private.
+//
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /agents (the `CreateAgent` operationId).
@@ -18540,6 +18560,8 @@ func (c *ClientWithResponses) CreateAgentWithBodyWithResponse(ctx context.Contex
 }
 
 // CreateAgentWithResponse Create an agent and its hosted git repository (§9.2).
+//
+// A private agent counts against the namespace's private-agent cap when the deployment's entitlements set one (the hosted product's subscription tiers): at the cap the answer is `422` with the problem type `private-agent-cap`, and the same on `PATCH` when an agent is turned private. A core registry caps nothing. A cap never deletes or hides an agent that is already private.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -18784,6 +18806,7 @@ func (c *ClientWithResponses) ListVersionsWithResponse(ctx context.Context, ns N
 // SubmitVersionWithBodyWithResponse Submit a version for publication (§7 state machine entry).
 //
 // Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance` and `resetsAt` at the top level of the problem body; `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers either. The gate's verdict never depends on admission.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -18799,6 +18822,7 @@ func (c *ClientWithResponses) SubmitVersionWithBodyWithResponse(ctx context.Cont
 // SubmitVersionWithResponse Submit a version for publication (§7 state machine entry).
 //
 // Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance` and `resetsAt` at the top level of the problem body; `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers either. The gate's verdict never depends on admission.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

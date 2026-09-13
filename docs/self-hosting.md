@@ -990,6 +990,12 @@ proof that the API is enough.
 
 A closed build can also extend the server itself: `pkg/extension` lets an
 outside Go module mount routes under `/api/v1/x/<name>/`, run its own
-migrations in its own schema, replace the entitlements resolver, subscribe to
+migrations in its own schema, replace the entitlements resolver (limits and
+the caps `Features` answers, such as a private-agent cap), subscribe to
 committed events and add worker jobs, with `GET /api/v1/meta` listing what is
-loaded. The core carries no extension and behaves identically with none.
+loaded. An extension may also admit or refuse a submission after every core
+check and before anything is stored (`Admits`), and name a route of its own
+the anonymous rate class skips (`Unthrottles`: a payment provider's signed
+webhook). The core carries no extension and behaves identically with none:
+a self-hosted registry has no subscription tiers, caps nothing, and never
+answers `402`.

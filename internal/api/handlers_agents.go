@@ -133,6 +133,8 @@ func (s *Server) CreateAgent(w http.ResponseWriter, r *http.Request) {
 			problemForbidden(w, r, "Creating a BriefAgent here needs the namespace's owner, or an organization owner or admin.")
 		case errors.Is(err, auth.ErrUnauthorized):
 			problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
+		case errors.Is(err, registry.ErrPrivateAgentCap):
+			problemPrivateAgentCap(w, r)
 		case errors.Is(err, registry.ErrDenied):
 			problemValidation(w, r, sentence(err.Error()))
 		case isUniqueViolation(err):
@@ -239,6 +241,19 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	}
 	if req.Visibility != nil {
 		v := string(*req.Visibility)
+		if v == "private" && a.Visibility != "private" {
+			// Turning an agent private holds one more private agent, which
+			// the namespace's tier may cap (plan subscription-tiers §5.3).
+			if err := s.reg.CheckPrivateAgentCap(r.Context(), a.NamespaceID, a.NamespaceKind); err != nil {
+				if errors.Is(err, registry.ErrPrivateAgentCap) {
+					problemPrivateAgentCap(w, r)
+					return
+				}
+				s.log.Error("update agent: private agent cap", "err", err)
+				problemInternal(w, r)
+				return
+			}
+		}
 		params.Visibility = &v
 		detail["visibility"] = v
 	}

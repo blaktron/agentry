@@ -24,6 +24,29 @@ func (noop) Jobs() []Job            { return nil }
 
 var _ Extension = noop{}
 
+// billingLike is the shape the billing extension takes (plan
+// subscription-tiers §5.1, §5.5): the optional seams, satisfied with the
+// aliases alone. It must compile; the behaviour is the API's tests.
+type billingLike struct{ noop }
+
+func (billingLike) Admitter() Admitter {
+	return admitAll{}
+}
+func (billingLike) UnthrottledRoutes() []string { return []string{"POST /webhooks/pay"} }
+
+type admitAll struct{}
+
+func (admitAll) Admit(context.Context, Admission) (Ticket, *Refusal, error) {
+	return Ticket{ID: "t"}, nil, nil
+}
+func (admitAll) Void(context.Context, Ticket) error { return nil }
+
+var (
+	_ Extension   = billingLike{}
+	_ Admits      = billingLike{}
+	_ Unthrottles = billingLike{}
+)
+
 func TestNoopSatisfiesTheInterface(t *testing.T) {
 	var e Extension = noop{}
 	if e.Name() != "noop" || e.Migrations() != nil || e.Entitlements() != nil || e.Hooks().Event == nil {
