@@ -2,13 +2,18 @@ package api
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 // The extension seam (DEV-091, pkg/extension): a closed build mounts routes
@@ -99,6 +104,24 @@ func (s *Server) ExtensionUnthrottled() map[string]bool {
 		}
 	}
 	return out
+}
+
+// ExtensionDeps is what an extension gets to work with (pkg/extension.Deps,
+// agentry#324): the pool the core uses, the logger, and an audit writer
+// that lands an event in its own transaction. nil pool when the server
+// runs without a database (limited dev mode).
+func (s *Server) ExtensionDeps() (*pgxpool.Pool, *slog.Logger, func(context.Context, audit.Event) error) {
+	var pool *pgxpool.Pool
+	if s.st != nil {
+		pool = s.st.Pool()
+	}
+	write := func(ctx context.Context, e audit.Event) error {
+		if s.st == nil {
+			return errors.New("api: no database for the audit event")
+		}
+		return s.st.WithTx(ctx, func(q *storegen.Queries) error { return s.auditW.Write(ctx, q, e) })
+	}
+	return pool, s.log, write
 }
 
 // ExtensionNames lists the mounted extensions in registration order.

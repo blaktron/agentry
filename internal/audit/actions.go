@@ -3,6 +3,8 @@
 // every event in the partitioned audit_events table.
 package audit
 
+import "sync"
+
 // Action identifies an auditable action. Every mutating API call, auth event,
 // and state-machine transition writes exactly one (§12.6).
 type Action string
@@ -126,6 +128,19 @@ func init() {
 // Registered reports whether a is in the catalog. The writer refuses
 // unregistered actions so ad-hoc strings can't leak into the log.
 func Registered(a Action) bool {
+	registryMu.RLock()
+	defer registryMu.RUnlock()
 	_, ok := registry[a]
 	return ok
+}
+
+var registryMu sync.RWMutex
+
+// Register adds an action to the catalog at start-up: an extension's own
+// actions (pkg/extension.RegisterAuditAction), which must carry the
+// extension's name as their prefix so they cannot shadow a core action.
+func Register(a Action) {
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	registry[a] = struct{}{}
 }

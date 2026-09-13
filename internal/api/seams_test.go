@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/blaktron/agentry/internal/api"
+	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/entitlements"
 	"github.com/blaktron/agentry/internal/registry"
@@ -383,5 +384,54 @@ func TestScanCompletedNamesTheVersionAndOutcome(t *testing.T) {
 	defer mu.Unlock()
 	if len(completed) != 1 || completed[0]["outcome"] != "published" || completed[0]["versionId"] == nil {
 		t.Fatalf("scan.completed must name the outcome and the version: %+v", completed)
+	}
+}
+
+// TestBoundExtensionWritesItsOwnAuditAction: the deps an extension is
+// handed (agentry#324) let it write an audit event under an action of its
+// own name, and the person's activity feed shows it like any other; an
+// action outside the extension's name is refused.
+func TestBoundExtensionWritesItsOwnAuditAction(t *testing.T) {
+	audit.Register("probe.tier_set")
+	var write func(context.Context, audit.Event) error
+	env := newTestEnvWith(t, func(s *api.Server) {
+		s.RegisterExtension("probe", func(*http.ServeMux) {})
+		_, _, write = s.ExtensionDeps()
+	})
+	u := env.register("bound-user")
+	env.verifyEmail(u)
+	sess := env.login(u)
+	var me struct {
+		Id uuid.UUID `json:"id"`
+	}
+	env.doJSON(sess, http.MethodGet, "/api/v1/user", nil, &me, http.StatusOK)
+
+	if err := write(context.Background(), audit.Event{
+		Actor: me.Id, ActorKind: audit.ActorUser, Action: "probe.tier_set",
+		TargetKind: "user", TargetID: me.Id, Detail: map[string]any{"tier": "pro"},
+	}); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if err := write(context.Background(), audit.Event{
+		Actor: me.Id, ActorKind: audit.ActorUser, Action: "probe.unregistered", TargetKind: "user", TargetID: me.Id,
+	}); err == nil {
+		t.Fatal("an unregistered action was written")
+	}
+
+	var page struct {
+		Events []struct {
+			Action string         `json:"action"`
+			Detail map[string]any `json:"detail"`
+		} `json:"events"`
+	}
+	env.doJSON(sess, http.MethodGet, "/api/v1/user/activity", nil, &page, http.StatusOK)
+	var seen bool
+	for _, e := range page.Events {
+		if e.Action == "probe.tier_set" && e.Detail["tier"] == "pro" {
+			seen = true
+		}
+	}
+	if !seen {
+		t.Fatalf("the extension's event is not on the activity feed: %+v", page.Events)
 	}
 }
