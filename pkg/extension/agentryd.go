@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -52,13 +53,25 @@ func rootCmd(exts []Extension) *cobra.Command {
 
 	for _, role := range []string{"api", "git", "worker", "all"} {
 		role := role
-		root.AddCommand(&cobra.Command{
+		var queues string
+		cmd := &cobra.Command{
 			Use:   role,
 			Short: "run the " + role + " role",
 			RunE: func(cmd *cobra.Command, _ []string) error {
-				return Run(cmd.Context(), cfgPath, role, exts...)
+				qs, err := parseQueues(queues)
+				if err != nil {
+					return err
+				}
+				return RunWith(cmd.Context(), cfgPath, role, Options{Queues: qs}, exts...)
 			},
-		})
+		}
+		if role == "worker" {
+			// The §13.3 SaaS split runs the sandbox queue on its own task
+			// profile (no egress); a worker deployment names the queue it
+			// drains. The default drains both, the self-host shape.
+			cmd.Flags().StringVar(&queues, "queues", "", "comma-separated queues to drain: core, sandbox (default: both)")
+		}
+		root.AddCommand(cmd)
 	}
 
 	root.AddCommand(hookCmd())
@@ -83,6 +96,46 @@ func rootCmd(exts []Extension) *cobra.Command {
 
 // Run is one role of agentryd until ctx ends.
 func Run(ctx context.Context, cfgPath, role string, exts ...Extension) error {
+	return RunWith(ctx, cfgPath, role, Options{}, exts...)
+}
+
+// Options are the per-invocation choices a role takes beside its config.
+type Options struct {
+	// Queues are the queues a worker drains (core, sandbox); nil means both.
+	Queues []string
+}
+
+// parseQueues reads the worker's --queues flag: a comma-separated subset of
+// the queues that exist. A name that is not a queue — "judge" among them,
+// since S5 runs inside the scan DAG and has no queue of its own — is an
+// error rather than a worker that drains nothing.
+func parseQueues(flag string) ([]string, error) {
+	if strings.TrimSpace(flag) == "" {
+		return nil, nil
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, part := range strings.Split(flag, ",") {
+		q := strings.TrimSpace(part)
+		if q == "" {
+			continue
+		}
+		if !slices.Contains(workerQueues, q) {
+			return nil, fmt.Errorf("--queues: %q is not a queue (the queues are %s)", q, strings.Join(workerQueues, ", "))
+		}
+		if !seen[q] {
+			seen[q] = true
+			out = append(out, q)
+		}
+	}
+	if len(out) == 0 {
+		return nil, errors.New("--queues names no queue")
+	}
+	return out, nil
+}
+
+// RunWith is Run with Options.
+func RunWith(ctx context.Context, cfgPath, role string, opts Options, exts ...Extension) error {
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
 		return err
@@ -153,7 +206,7 @@ func Run(ctx context.Context, cfgPath, role string, exts ...Extension) error {
 	case "api", "git", "all":
 		return serveHTTP(ctx, cfg, st, log, role, mx, exts)
 	case "worker":
-		return runWorker(ctx, cfg, st, log, mx, exts)
+		return runWorker(ctx, cfg, st, log, mx, exts, opts.Queues)
 	default:
 		return fmt.Errorf("unknown role %q", role)
 	}
@@ -162,7 +215,7 @@ func Run(ctx context.Context, cfgPath, role string, exts ...Extension) error {
 // runWorker runs the async scan/notification worker (§8.2, §13.3). It wires
 // the pipeline's job handlers onto the Postgres queue and works the sandbox
 // and core queues until the context is cancelled.
-func runWorker(ctx context.Context, cfg config.Config, st *store.Store, log *slog.Logger, mx *metrics.Metrics, exts []Extension) error {
+func runWorker(ctx context.Context, cfg config.Config, st *store.Store, log *slog.Logger, mx *metrics.Metrics, exts []Extension, queues []string) error {
 	if st == nil {
 		return errors.New("the worker role requires a database")
 	}
@@ -184,9 +237,13 @@ func runWorker(ctx context.Context, cfg config.Config, st *store.Store, log *slo
 	// (scans — §8.2's untrusted-content task profile). There is no "judge"
 	// queue: S5 runs inside the orchestrator's DAG, and §8.4's separate task
 	// profile for it is a deployment boundary, not a second queue. Working a
-	// queue nothing enqueues to only burns claim attempts.
-	log.Info("worker started", "queues", "core,sandbox")
-	return q.Work(ctx, workerQueues...)
+	// queue nothing enqueues to only burns claim attempts. --queues narrows
+	// the set for the split deployment (§13.3).
+	if len(queues) == 0 {
+		queues = workerQueues
+	}
+	log.Info("worker started", "queues", strings.Join(queues, ","))
+	return q.Work(ctx, queues...)
 }
 
 // workerQueues are the queues a worker drains.
