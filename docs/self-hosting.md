@@ -23,10 +23,16 @@ front of this same server; a registry does not need one, and
 
 ```bash
 git clone https://github.com/blaktron/agentry.git
-cd agentry
-docker compose -f deploy/compose/docker-compose.yaml up -d   # postgres, minio, mailpit
-docker compose -f deploy/compose/docker-compose.yaml --profile server up -d
+cd agentry/deploy/compose
+printf 'AUTHENTIK_SECRET_KEY=%s\n' "$(openssl rand -base64 48)" >> .env
+mkdir -p edge/certs                # edge.crt + edge.key for the edge (self-signed is fine locally),
+                                   # or point AGENTRY_EDGE_CERT_DIR at yours
+docker compose up -d               # postgres, minio, mailpit, authentik
+docker compose --profile server up -d
 ```
+
+The stack refuses to start without `AUTHENTIK_SECRET_KEY` in `.env`, and
+the edge needs its certificate pair; both are one-time.
 
 The server's own pages are at http://localhost:8080/ui/ — sign-in, your
 account, tokens and SSH keys, the review queue, the staff console and
@@ -219,8 +225,9 @@ openssl rand -base64 32
 ### Object storage and KMS signing
 
 `storage.kind: local` keeps release archives on disk under `storage.localDir`.
-The quickstart uses it, and a single-node deployment can keep using it
-indefinitely; archives are content-addressed and write-once.
+The source quickstart uses it (the compose stack uses `s3` against its
+MinIO), and a single-node deployment can keep using it indefinitely;
+archives are content-addressed and write-once.
 
 For S3, and for signing with a KMS key instead of a file:
 
@@ -384,13 +391,13 @@ verified` with the user id (a user row that cannot be read is logged as
 exception, since it is how an address becomes verified. An account seeded
 by hand for automation or acceptance runs should either carry a real
 mailbox or have every `email_*` flag off in `user_notification_settings`
-(`PUT /user/notification-settings`): a verified stamp on an invented
+(`PUT /user/notifications`): a verified stamp on an invented
 address is how a registry bounces mail from its own test data.
 
 ### Limits and quotas
 
-The §19 quotas are configuration (`limits.*`, or `AGENTRY_LIMITS_*` in the
-environment) and an organization on a larger plan can be raised above them
+The §19 quotas are configuration (`limits.*`; the rate limits also as
+`AGENTRY_LIMITS_*` in the environment, the repository quotas in YAML only) and an organization on a larger plan can be raised above them
 through the entitlements resolver. The defaults:
 
 | Key | Default | What |
@@ -459,7 +466,9 @@ plain `"5432:5432"` on a machine with a public address is Postgres — with
 the compose file's development password — on the internet. The stack
 therefore publishes every service **except the edge** on `AGENTRY_BIND`,
 default `127.0.0.1`: Postgres (5432), MinIO (9000/9001), mailpit
-(1025/8025) and agentryd (8080). A site overlay publishes its own services
+(1025/8025) and agentryd (8080) — and the git SSH port (2222) on its own
+`AGENTRY_SSH_BIND`, default all interfaces, since that one is meant to be
+reached. A site overlay publishes its own services
 the same way. The acceptance
 scripts, `agentry` on the host, and the quickstart above all use
 `localhost`, so nothing changes for them.
@@ -724,15 +733,16 @@ login, email-verify, and TOTP endpoints answer 410 Gone, and the web
 login page offers the directory service only. Turning the flag off (the
 default) restores the native flows — nothing was removed.
 
-**Account erasure spans both systems.** `DELETE /user` pseudonymizes the
+**Account erasure spans both systems.** `POST /user/delete` pseudonymizes the
 registry account (§12.7); the sign-in account — email, display name,
 password hash — lives in authentik. Set `AGENTRY_IDP_ADMIN_URL` (the API
 origin as the server reaches it: `http://authentik-server:9000` on the
 compose stack) and `AGENTRY_IDP_ADMIN_TOKEN` (an authentik API token with
 rights over users; the bootstrap token works) and erasure also deletes the
 directory account with the same email — never a superuser or a service
-account. The outcome is recorded on the `user.delete` audit event
-(`directoryErasure`: `deleted`, `not-found`, `failed`, or `not-configured`);
+account. The outcome is recorded as its own `user.directory_erase` audit
+event (`deleted`, `not-found`, `failed`, or `not-configured`), beside the
+`user.delete` event;
 a failure does not undo the registry erasure and is logged for the
 operator to finish by hand. Leave the variables unset and the privacy
 policy's promise that deletion removes personal information is one you

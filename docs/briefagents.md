@@ -32,7 +32,7 @@ prints the hints.
 
 ```bash
 agentry setup                                        # one-time: LLM provider + the docker MCP gateway
-agentry validate .                                   # the registry's checks, offline
+agentry validate .                                   # the manifest rules and the offline scanners (S1/S3/S4)
 agentry run --local . --dry-run --allow-unsigned     # the compiled enforcement plan
 echo "task" | agentry run --local . --allow-unsigned --out ./agentry-out
 agentry publish                                      # scanned, signed, immutable
@@ -96,7 +96,7 @@ missing one refuses the run (exit 11) rather than degrading.
 my-briefagent/
 ├── agent.yaml                  # the manifest (required)
 ├── AGENT.md                    # the instruction file (entrypoints.instruction)
-├── README.md                   # rendered on the BriefAgent's registry page
+├── README.md                   # rendered on the registry page; required for public publication
 ├── LICENSE                     # required for public publication
 └── output.schema.json          # optional: structured-output contract
 ```
@@ -115,12 +115,12 @@ only a v2 manifest can declare `interactive`.
 | Field | Required | Meaning and rules |
 |---|---|---|
 | `schemaVersion` | yes | the manifest schema major: `"2"` (v1 is read, not written) |
-| `name` | yes | lowercase `[a-z0-9-]`, ≤64 chars, starts/ends alphanumeric; unique within the namespace |
+| `name` | yes | lowercase `[a-z0-9-]`, ≤65 chars, starts/ends alphanumeric; unique within the namespace |
 | `namespace` | yes | the publishing handle (a user or org), lowercase `[a-z0-9-]`, ≤39 chars |
 | `modes` | yes | the run modes the release supports: `[autonomous]`, `[interactive]`, or both (section below) |
 | `version` | yes | strict semver without a leading `v`; equals the git tag when publishing from a tag; must exceed every existing version on its channel |
 | `summary` | yes | one plain-text line, ≤140 characters |
-| `license` | public publish | SPDX identifier or expression (`MIT OR Apache-2.0`) matching the LICENSE file |
+| `license` | public publish | SPDX identifier or expression (`MIT OR Apache-2.0`); a `LICENSE` file must be present (its text is not compared) |
 | `authors` | no | `[{name, email?}, …]` |
 | `homepage` | no | informational URL |
 | `tags` | no | lowercase `[a-z0-9-]` search facets |
@@ -133,7 +133,7 @@ release declares the set of run modes it supports:
 | Mode | What a run is | Status |
 |---|---|---|
 | `autonomous` | starts from its files — after the up-front questions, if any, and MCP profile authentication — does the job, writes its output and receipts, and ends | this is `agentry run` today |
-| `interactive` | starts from the same plan and controls, but the run is a conversation: in the CLI a chat in the terminal (`agentry run --mode interactive`), in the desktop the run panel's chat. The agent can ask for information as the work reveals the need; you can answer and drop files into the read-only inputs folder (`/add PATH`), then `/finish` for the final result. You **cannot** give it more access than the manifest declares — the capability contract, the gateway and the egress allowlist are exactly those of an autonomous run of the same release, and a permission request from inside the sandbox is always refused | `agentry run --mode interactive`; a release with one mode runs in it, one with both is asked on a terminal and runs autonomous otherwise |
+| `interactive` | starts from the same plan and controls, but the run is a conversation: in the CLI a chat in the terminal (`agentry run --mode interactive`), in the desktop the run panel's chat. The agent can ask for information as the work reveals the need; you can answer and drop files into the read-only inputs folder (`/add PATH`), then `/finish` for the final result. You **cannot** give it more access than the manifest declares — the capability contract, the gateway and the egress allowlist are exactly those of an autonomous run of the same release, and a permission request from inside the sandbox is granted only for a tool the plan already serves, refused otherwise | `agentry run --mode interactive`; a release with one mode runs in it, one with both is asked on a terminal and runs autonomous otherwise |
 
 The instruction is one file:
 
@@ -170,7 +170,7 @@ intake:
 |---|---|
 | `id` | `[a-z0-9_]{1,64}`, unique within the manifest |
 | `prompt` | required |
-| `type` | `text`, `secret` (injected as a run-scoped secret, never written as text or recorded), `choice` (needs `choices`), `file` (a host path the runner stages into the inputs folder) |
+| `type` | `text`, `secret` (injected as a run-scoped secret, never written as text or recorded; the upper-cased id must be listed under `capabilities.secrets`, or the run refuses it), `choice` (needs `choices`), `file` (a host path the runner stages into the inputs folder) |
 | `choices` | only with `type: choice` |
 | at most 20 questions | |
 
@@ -200,7 +200,8 @@ hints: validation warns, and they never apply.
 ### `capabilities`: the security contract
 
 Closed vocabulary. Omitted or empty means a **pure-text BriefAgent**
-(its only run-time tool is `write_report`). The registry scans releases
+(its run-time tools are `write_report` and the read-only `list_inputs` /
+`read_input`, nothing else). The registry scans releases
 against these declarations, an install prompts on them (egress/exec need
 typed consent; a widened contract re-asks on upgrade), and the runner
 turns each line into a concrete control. The same contract covers support
@@ -425,7 +426,10 @@ it; and the **desktop app**'s Build tab does the same from a form. Repos hosted 
 a release tag (the agent's auto-publish-tags setting). Whichever door,
 the submission is identical server-side: manifest validation, content
 scanning against the declared capabilities, human review where findings
-demand it, and DSSE signing. Published releases are immutable and content-addressed. The
+demand it, and DSSE signing. A publish to a public namespace needs a
+second factor on the account (a TOTP app, or an identity provider that
+did MFA) when the registry has that on — `/meta` reports it as
+`features.publicPublish2FA`. Published releases are immutable and content-addressed. The
 language rule applies to BriefAgents as it does to everything here: a
 release is *scanned, with N findings, signed*, never "safe". Declare the
 least you need and the whole chain stays reviewable.

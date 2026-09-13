@@ -19,10 +19,10 @@ curl localhost:8080/api/v1/meta
 
 | Command | What |
 |---|---|
-| `make check` | the CI gate: generated-code drift, lint, tests, build |
+| `make check` | the CI gate: generated-code drift, the embedded rule bundle in sync, lint, tests, build |
 | `make generate` | regenerate the OpenAPI server and Go client, and sqlc, after editing `schemas/` or `internal/store/queries/` |
 | `make test` | Go tests; DB tests need `AGENTRY_TEST_DATABASE_URL` (`./scripts/dev/pg.sh test-url`) |
-| `./scripts/acceptance/m0.sh` | milestone acceptance scripts (one per milestone) |
+| `./scripts/acceptance/m0.sh` | milestone acceptance scripts (`m0`–`m4`, `m6`, `m7`) |
 | `./scripts/acceptance/ui.sh` | the server's own `/ui/` pages: sign-in, account, a token, a device authorize and its exchange, sign-out — with curl, no browser |
 
 ## The server's own pages
@@ -51,15 +51,17 @@ runner, Go), [agentry-desktop](https://github.com/blaktron/agentry-desktop)
 (the MkDocs and Redoc machinery that builds the docs site from this
 repository's `docs/` and the site's pages, and the developers site from
 `schemas/openapi.yaml`), [agentry-mcp](https://github.com/blaktron/agentry-mcp)
-(an MCP server that lets an agent host use the registry's API; regenerated
-from the spec), and [agentry-examples](https://github.com/blaktron/agentry-examples).
+(an MCP server that drives the installed `agentry` CLI so Claude Code,
+Codex or any MCP host can search, install, run and hold a session with
+BriefAgents; the earlier registry-API server is parked inside it as
+`secureagentry-mcp/`), and [agentry-examples](https://github.com/blaktron/agentry-examples).
 Two more are closed: `agentry-web` (the hosted site, a Next.js front end
 that runs in front of this server) and `agentry-enterprise` (a Go module
 that builds the hosted server on `pkg/extension`). Each has a `make check`
 that is its CI gate. A change to the API contract is made in
 `schemas/openapi.yaml` first, then regenerated into the server and the Go
-client here, and from the published spec into the CLI, agentry-mcp and the
-site's own types.
+client here (`pkg/apiclient`, which the CLI imports), and from the
+published spec into the site's own types.
 
 ## Until the repositories are public
 
