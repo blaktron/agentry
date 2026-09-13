@@ -5,6 +5,7 @@
 {{if .Manifest}}<section class="card"><h2>Manifest</h2><p class="muted">The keys a reviewer reads first; the whole file is in the Files listing below.</p><pre class="secret">{{.Manifest}}</pre></section>{{end}}
 <section class="card">
 <h2>Findings ({{len .Bundle.Findings}})</h2>
+{{with .Bundle.Report}}{{if .JudgeModel}}<p class="muted">Judge: {{.JudgeModel}}{{with .JudgeUsage}} · {{.PromptTokens}} prompt tokens, {{.CompletionTokens}} completion tokens{{end}}</p>{{end}}{{end}}
 {{if not .Bundle.Findings}}<p class="muted">No findings.</p>
 {{else}}<ul class="list">{{range .Bundle.Findings}}<li>
 <span class="badge sev-{{.Severity}}">{{.Severity}}</span> <strong>{{.Title}}</strong> <span class="muted">{{.Scanner}} · {{.Confidence}} confidence · {{.Verdict}}</span>

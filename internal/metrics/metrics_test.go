@@ -45,7 +45,7 @@ func TestInstrumentNamesMatchTerraform(t *testing.T) {
 	m.RecordVerdict(ctx, VerdictClean)
 	m.RecordVerdict(ctx, VerdictReview)
 	m.RecordVerdict(ctx, VerdictBlocked)
-	m.RecordJudgeCost(ctx, 1.5)
+	m.RecordJudgeTokens(ctx, 800, 90)
 	m.RecordGitOp(ctx, "upload-pack", "ok", time.Second)
 	m.RecordGitConcurrency(ctx, "upload-pack", 2)
 	m.RecordGitCloneFirstByte(ctx, 300*time.Millisecond)
@@ -59,7 +59,7 @@ func TestInstrumentNamesMatchTerraform(t *testing.T) {
 		"ScanStageErrors", "ScanStageRuns", "ScanStageDurationSeconds", "ScanStageHits",
 		"GitCloneFirstByteSeconds", "GitOpConcurrency",
 		"PublishSubmitted", "PublishVerdictClean", "PublishVerdictReview", "PublishVerdictBlocked",
-		"JudgeCostCents",
+		"JudgeTokens",
 		"HttpRequests", "HttpRequestDurationSeconds", "WebhookDeliveries",
 		"FailOpenEvents",
 	} {
@@ -158,7 +158,7 @@ func TestNilMetricsIsANoOp(t *testing.T) {
 	m.RecordScanStage(ctx, "S1", time.Second, 1, nil)
 	m.RecordPublishSubmitted(ctx)
 	m.RecordVerdict(ctx, VerdictClean)
-	m.RecordJudgeCost(ctx, 1)
+	m.RecordJudgeTokens(ctx, 1, 1)
 	m.RecordGitOp(ctx, "upload-pack", "ok", time.Second)
 	m.RecordGitConcurrency(ctx, "upload-pack", 1)
 	m.RecordGitCloneFirstByte(ctx, time.Second)

@@ -86,7 +86,7 @@ type Metrics struct {
 
 	publishSubmitted metric.Int64Counter
 	publishVerdicts  map[string]metric.Int64Counter
-	judgeCostCents   metric.Float64Counter
+	judgeTokens      metric.Int64Counter
 
 	gitOps            metric.Int64Counter
 	gitOpDuration     metric.Float64Histogram
@@ -181,11 +181,6 @@ func (m *Metrics) instrument(meter metric.Meter) error {
 		errs = append(errs, err)
 		return c
 	}
-	f64c := func(name, desc, unit string) metric.Float64Counter {
-		c, err := meter.Float64Counter(name, metric.WithDescription(desc), metric.WithUnit(unit))
-		errs = append(errs, err)
-		return c
-	}
 	f64h := func(name, desc string) metric.Float64Histogram {
 		h, err := meter.Float64Histogram(name, metric.WithDescription(desc), metric.WithUnit("s"))
 		errs = append(errs, err)
@@ -229,7 +224,7 @@ func (m *Metrics) instrument(meter metric.Meter) error {
 		VerdictReview:  i64c("PublishVerdictReview", "Versions whose pipeline verdict was needs_review."),
 		VerdictBlocked: i64c("PublishVerdictBlocked", "Versions whose pipeline verdict was blocked."),
 	}
-	m.judgeCostCents = f64c("JudgeCostCents", "Cumulative S5 judge spend, in cents.", "{cent}")
+	m.judgeTokens = i64c("JudgeTokens", "S5 judge token use as the provider reported it, by kind (prompt|completion).")
 
 	// git (§16.2 git dashboard; first-byte carries the §16.1 p95 < 2s SLO).
 	m.gitOps = i64c("GitOps", "git smart-HTTP operations by op and outcome.")
@@ -395,12 +390,16 @@ func (m *Metrics) RecordVerdict(ctx context.Context, verdict string) {
 	}
 }
 
-// RecordJudgeCost adds to the §16.2 judge cost counter.
-func (m *Metrics) RecordJudgeCost(ctx context.Context, cents float64) {
-	if m == nil || cents <= 0 {
+// RecordJudgeTokens counts one adjudication's token use by kind. It
+// replaces the judge-cost counter that nothing ever fed: the price per
+// token is the operator's to apply to these counts (plan subscription-tiers
+// §10), and a count is what every provider actually reports.
+func (m *Metrics) RecordJudgeTokens(ctx context.Context, prompt, completion int) {
+	if m == nil {
 		return
 	}
-	m.judgeCostCents.Add(ctx, cents)
+	m.judgeTokens.Add(ctx, int64(prompt), metric.WithAttributes(attribute.String("kind", "prompt")))
+	m.judgeTokens.Add(ctx, int64(completion), metric.WithAttributes(attribute.String("kind", "completion")))
 }
 
 // RecordGitOp records a completed git smart-HTTP operation.

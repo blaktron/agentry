@@ -43,6 +43,20 @@ type reviewBundle struct {
 	Item     reviewItem     `json:"item"`
 	Findings []finding      `json:"findings"`
 	Manifest map[string]any `json:"manifest"`
+	Report   *reviewReport  `json:"report"`
+}
+
+// reviewReport is the slice of the scan report the page shows beside the
+// findings: which judge ran and, for platform staff, what it cost in tokens
+// (the API sends judgeUsage to staff only).
+type reviewReport struct {
+	JudgeModel string      `json:"judgeModel"`
+	JudgeUsage *judgeUsage `json:"judgeUsage"`
+}
+
+type judgeUsage struct {
+	PromptTokens     int `json:"promptTokens"`
+	CompletionTokens int `json:"completionTokens"`
 }
 
 type reviewFile struct {

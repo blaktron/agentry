@@ -358,7 +358,7 @@ func TestReviewPages(t *testing.T) {
 		case r.Method == "GET" && r.URL.Path == "/api/v1/review-queue":
 			_, _ = io.WriteString(w, `[{"id":"ri1","queue":"platform","state":"pending","version":"1.0.0","agent":"risky","namespace":"acme"}]`)
 		case r.Method == "GET" && r.URL.Path == "/api/v1/review-items/ri1":
-			_, _ = io.WriteString(w, `{"item":{"id":"ri1","queue":"platform","state":"pending","version":"1.0.0","agent":"risky","namespace":"acme"},"findings":[{"id":"f1","scanner":"S1","severity":"high","confidence":"high","title":"Prompt injection","filePath":"SKILL.md","lineStart":1,"verdict":"open"}],"manifest":{"name":"risky","modes":["autonomous"],"capabilities":{"mcpServers":[{"npm":"github-mcp-server-js","version":"0.1.7","tools":["list_issues"],"secrets":["GITHUB_TOKEN"],"env":{"LOGS_DIR":"/tmp/logs","GITHUB_PERMISSION":"read-only"}}]}}}`)
+			_, _ = io.WriteString(w, `{"item":{"id":"ri1","queue":"platform","state":"pending","version":"1.0.0","agent":"risky","namespace":"acme"},"findings":[{"id":"f1","scanner":"S1","severity":"high","confidence":"high","title":"Prompt injection","filePath":"SKILL.md","lineStart":1,"verdict":"open"}],"manifest":{"name":"risky","modes":["autonomous"],"capabilities":{"mcpServers":[{"npm":"github-mcp-server-js","version":"0.1.7","tools":["list_issues"],"secrets":["GITHUB_TOKEN"],"env":{"LOGS_DIR":"/tmp/logs","GITHUB_PERMISSION":"read-only"}}]}},"report":{"judgeModel":"qwen-test","judgeUsage":{"promptTokens":812,"completionTokens":97}}}`)
 		case r.Method == "GET" && r.URL.Path == "/api/v1/review-items/ri1/files":
 			_, _ = io.WriteString(w, `{"files":[{"path":"SKILL.md","size":12,"binary":false,"truncated":false}]}`)
 		case r.Method == "GET" && r.URL.Path == "/api/v1/review-items/ri1/file":
@@ -396,6 +396,11 @@ func TestReviewPages(t *testing.T) {
 	// (agentry#286); the order is fixed so the page never shuffles.
 	if !strings.Contains(body, `capabilities: {mcpServers={env={GITHUB_PERMISSION=read-only LOGS_DIR=/tmp/logs} npm=github-mcp-server-js secrets=GITHUB_TOKEN tools=list_issues version=0.1.7}}`) {
 		t.Fatalf("manifest summary lacks the server's env beside its tools: %s", body)
+	}
+	// The judge line names the model and, when the API sent it (platform
+	// staff), what the adjudication cost in tokens (agentry#318).
+	if !strings.Contains(body, "Judge: qwen-test · 812 prompt tokens, 97 completion tokens") {
+		t.Fatalf("review page lacks the judge usage line: %s", body)
 	}
 	// The verdict control offers labels; the values stay the API's enum.
 	if !strings.Contains(body, `<option value="dismissed_false_positive">False positive</option>`) ||
