@@ -2623,7 +2623,7 @@ type ClientInterface interface {
 
 	// ListAdvisories Published advisories — for one agent, or the global feed (§8.7).
 	//
-	// With `affecting`, the advisories against that agent (newest first). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
+	// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's owners and admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
 	//
 	// Corresponds with GET /advisories (the `ListAdvisories` operationId).
 	ListAdvisories(ctx context.Context, params *ListAdvisoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2660,6 +2660,8 @@ type ClientInterface interface {
 	DeleteAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAgent Agent metadata (public agents readable by anyone).
+	//
+	// A public agent is readable by anyone. A private agent is readable by its owner, the owning org's owners and admins, and anyone holding a grant on it; every other caller, anonymous included, gets the 404 a missing name gets — never a 401 or 403 that would confirm the name exists. The same rule holds on every route under `/agents/{ns}/{name}` (agentry#313).
 	//
 	// Corresponds with GET /agents/{ns}/{name} (the `GetAgent` operationId).
 	GetAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3637,7 +3639,7 @@ type ClientInterface interface {
 
 // ListAdvisories Published advisories — for one agent, or the global feed (§8.7).
 //
-// With `affecting`, the advisories against that agent (newest first). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
+// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's owners and admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
 //
 // Corresponds with GET /advisories (the `ListAdvisories` operationId).
 func (c *Client) ListAdvisories(ctx context.Context, params *ListAdvisoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -3734,6 +3736,8 @@ func (c *Client) DeleteAgent(ctx context.Context, ns Namespace, name AgentName, 
 }
 
 // GetAgent Agent metadata (public agents readable by anyone).
+//
+// A public agent is readable by anyone. A private agent is readable by its owner, the owning org's owners and admins, and anyone holding a grant on it; every other caller, anonymous included, gets the 404 a missing name gets — never a 401 or 403 that would confirm the name exists. The same rule holds on every route under `/agents/{ns}/{name}` (agentry#313).
 //
 // Corresponds with GET /agents/{ns}/{name} (the `GetAgent` operationId).
 func (c *Client) GetAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -11771,7 +11775,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListAdvisoriesWithResponse Published advisories — for one agent, or the global feed (§8.7).
 	//
-	// With `affecting`, the advisories against that agent (newest first). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
+	// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's owners and admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -11816,6 +11820,8 @@ type ClientWithResponsesInterface interface {
 	DeleteAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*DeleteAgentResponse, error)
 
 	// GetAgentWithResponse Agent metadata (public agents readable by anyone).
+	//
+	// A public agent is readable by anyone. A private agent is readable by its owner, the owning org's owners and admins, and anyone holding a grant on it; every other caller, anonymous included, gets the 404 a missing name gets — never a 401 or 403 that would confirm the name exists. The same rule holds on every route under `/agents/{ns}/{name}` (agentry#313).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -18472,7 +18478,7 @@ func (r GetUserProfileResponse) ContentType() string {
 
 // ListAdvisoriesWithResponse Published advisories — for one agent, or the global feed (§8.7).
 //
-// With `affecting`, the advisories against that agent (newest first). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
+// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's owners and admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -18553,6 +18559,8 @@ func (c *ClientWithResponses) DeleteAgentWithResponse(ctx context.Context, ns Na
 }
 
 // GetAgentWithResponse Agent metadata (public agents readable by anyone).
+//
+// A public agent is readable by anyone. A private agent is readable by its owner, the owning org's owners and admins, and anyone holding a grant on it; every other caller, anonymous included, gets the 404 a missing name gets — never a 401 or 403 that would confirm the name exists. The same rule holds on every route under `/agents/{ns}/{name}` (agentry#313).
 //
 // Returns a wrapper object for the known response body format(s).
 //

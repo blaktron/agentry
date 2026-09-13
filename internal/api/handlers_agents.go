@@ -76,11 +76,15 @@ func (s *Server) resolveAgentForAction(w http.ResponseWriter, r *http.Request, n
 	res := auth.AgentResource{Public: a.Visibility == "public", EffectiveRole: role}
 	if err := auth.CheckAgent(p, res, act); err != nil {
 		switch {
+		case act == auth.ActAgentRead || auth.CheckAgent(p, res, auth.ActAgentRead) != nil:
+			// A caller who cannot read the agent — anonymous or signed in
+			// without a role on it — gets the answer a missing name gets,
+			// so a private agent's existence is not discoverable by
+			// probing (agentry#313, operator rule 2026-09-13). This comes
+			// before the 401, which would itself say the name exists.
+			problemNotFound(w, r)
 		case errors.Is(err, auth.ErrUnauthorized):
 			problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
-		case act == auth.ActAgentRead || auth.CheckAgent(p, res, auth.ActAgentRead) != nil:
-			// Caller cannot even read the agent: hide its existence.
-			problemNotFound(w, r)
 		default:
 			problemForbidden(w, r, "This credential does not carry the role or scope this action needs.")
 		}
@@ -156,17 +160,16 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, params ListA
 		return
 	}
 	p := principalFrom(r.Context())
-	// Private agents appear only for namespace insiders; per-agent grant
-	// visibility in listings lands with search (M5) — conservative for now.
+	// Private agents appear only for callers the by-name route would let
+	// read them by namespace alone — the owning user, or an owner or admin
+	// of the owning org (the §12.2 namespace-derived role; a plain member
+	// has no role on an agent without a grant) — so a listing never names
+	// an agent its reader could not open (agentry#313). Per-agent grant
+	// holders are not in the listing either: conservative.
 	includePrivate := false
 	if !p.Anonymous {
 		if h, err := s.q().GetHandle(r.Context(), params.Namespace); err == nil {
-			switch h.Kind {
-			case "user":
-				includePrivate = h.ID == p.UserID
-			case "org":
-				includePrivate = p.Role(h.ID) != auth.RoleNone
-			}
+			includePrivate = auth.NamespaceDerivedAgentRole(p, h.Kind, h.ID, p.Role(h.ID)) != auth.AgentRoleNone
 		}
 	}
 	rows, err := s.q().ListAgentsByNamespace(r.Context(), storegen.ListAgentsByNamespaceParams{

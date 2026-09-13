@@ -1231,6 +1231,13 @@ paths:
       operationId: getAgent
       tags: [agents]
       summary: Agent metadata (public agents readable by anyone).
+      description: >-
+        A public agent is readable by anyone. A private agent is readable by
+        its owner, the owning org's owners and admins, and anyone holding a
+        grant on it; every other caller, anonymous included, gets the 404 a
+        missing name gets — never a 401 or 403 that would confirm the name
+        exists. The same rule holds on every route under `/agents/{ns}/{name}`
+        (agentry#313).
       security: []
       parameters:
         - $ref: "#/components/parameters/Namespace"
@@ -2794,7 +2801,12 @@ paths:
       tags: [platform]
       summary: Published advisories — for one agent, or the global feed (§8.7).
       description: >
-        With `affecting`, the advisories against that agent (newest first).
+        With `affecting`, the advisories against that agent (newest first),
+        under the agent's own read rule: a private agent's advisories are
+        its readers' (the owning user, the owning org's owners and admins,
+        and anyone holding a grant on the agent), and anyone else —
+        anonymous or signed in — gets the 404 a missing name gets, so the
+        agent's existence is not discoverable here (agentry#313).
         Without it, the global feed: every published advisory against a
         public agent, newest first, keyset-paged with `cursor`/`limit` and a
         `Link: rel="next"` header (§9.1). Each item carries `agent`

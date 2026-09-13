@@ -246,9 +246,10 @@ func (s *Server) ListAdvisories(w http.ResponseWriter, r *http.Request, params L
 		problemValidation(w, r, sentence(err.Error()))
 		return
 	}
-	a, err := s.reg.Resolve(r.Context(), ref.Namespace, ref.Name)
-	if err != nil {
-		problemNotFound(w, r)
+	// The same read gate as the agent page: a private agent's advisories
+	// are its readers' (agentry#313); anyone else gets a missing name's 404.
+	a, _, ok := s.resolveAgentForAction(w, r, ref.Namespace, ref.Name, auth.ActAgentRead)
+	if !ok {
 		return
 	}
 	rows, err := s.q().ListAdvisoriesForAgent(r.Context(), a.ID)
