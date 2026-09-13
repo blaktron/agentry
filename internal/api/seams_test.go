@@ -396,7 +396,7 @@ func TestBoundExtensionWritesItsOwnAuditAction(t *testing.T) {
 	var write func(context.Context, audit.Event) error
 	env := newTestEnvWith(t, func(s *api.Server) {
 		s.RegisterExtension("probe", func(*http.ServeMux) {})
-		_, _, write = s.ExtensionDeps()
+		_, _, write, _ = s.ExtensionDeps()
 	})
 	u := env.register("bound-user")
 	env.verifyEmail(u)

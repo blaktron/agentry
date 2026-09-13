@@ -137,10 +137,15 @@ func Registered(a Action) bool {
 var registryMu sync.RWMutex
 
 // Register adds an action to the catalog at start-up: an extension's own
-// actions (pkg/extension.RegisterAuditAction), which must carry the
-// extension's name as their prefix so they cannot shadow a core action.
-func Register(a Action) {
+// actions (pkg/extension.RegisterAuditAction). It reports false, and adds
+// nothing, when the action is already in the catalog — an extension can
+// never take over a core action.
+func Register(a Action) bool {
 	registryMu.Lock()
 	defer registryMu.Unlock()
+	if _, exists := registry[a]; exists {
+		return false
+	}
 	registry[a] = struct{}{}
+	return true
 }

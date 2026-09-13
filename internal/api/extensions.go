@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/blaktron/agentry/internal/audit"
@@ -110,7 +111,7 @@ func (s *Server) ExtensionUnthrottled() map[string]bool {
 // agentry#324): the pool the core uses, the logger, and an audit writer
 // that lands an event in its own transaction. nil pool when the server
 // runs without a database (limited dev mode).
-func (s *Server) ExtensionDeps() (*pgxpool.Pool, *slog.Logger, func(context.Context, audit.Event) error) {
+func (s *Server) ExtensionDeps() (*pgxpool.Pool, *slog.Logger, func(context.Context, audit.Event) error, func(context.Context, pgx.Tx, audit.Event) error) {
 	var pool *pgxpool.Pool
 	if s.st != nil {
 		pool = s.st.Pool()
@@ -121,7 +122,10 @@ func (s *Server) ExtensionDeps() (*pgxpool.Pool, *slog.Logger, func(context.Cont
 		}
 		return s.st.WithTx(ctx, func(q *storegen.Queries) error { return s.auditW.Write(ctx, q, e) })
 	}
-	return pool, s.log, write
+	writeIn := func(ctx context.Context, tx pgx.Tx, e audit.Event) error {
+		return s.auditW.Write(ctx, storegen.New(tx), e)
+	}
+	return pool, s.log, write, writeIn
 }
 
 // ExtensionNames lists the mounted extensions in registration order.
