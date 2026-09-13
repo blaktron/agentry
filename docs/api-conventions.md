@@ -78,7 +78,9 @@ GET /api/v1/orgs/acme/audit?limit=100
 
 `limit=100000` and a negative `offset` are **clamped to the endpoint's
 valid range** and the request succeeds; `limit=0` (or any value under 1)
-gets the endpoint's default. You will not get a `400`
+gets the endpoint's default, and an `offset` past 10000 is capped there —
+paging that deep is a crawler's, not a reader's; the cursor-paged lists have
+no such cap. You will not get a `400`
 for asking for too much; you will get the maximum. Read the length of what
 came back rather than assuming you got what you asked for. Each endpoint's
 default and ceiling are in the OpenAPI document.
