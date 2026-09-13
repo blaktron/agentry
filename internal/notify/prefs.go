@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/blaktron/agentry/internal/logevent"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
@@ -93,11 +94,11 @@ func AllowsEmail(ctx context.Context, q *storegen.Queries, log *slog.Logger, use
 	}
 	u, err := q.GetUserByID(ctx, userID)
 	if err != nil {
-		log.Warn("notify: suppressed, user row unreadable", "user", userID, "kind", kind, "err", err)
+		log.WarnContext(ctx, "notify: suppressed, user row unreadable", logevent.MailSuppressed.Attr(), "user", userID, "kind", kind, "err", err)
 		return false
 	}
 	if u.EmailVerifiedAt == nil {
-		log.Info("notify: suppressed, address not verified", "user", userID, "kind", kind)
+		log.InfoContext(ctx, "notify: suppressed, address not verified", logevent.MailSuppressed.Attr(), "user", userID, "kind", kind)
 		return false
 	}
 	row, err := Settings(ctx, q, userID)

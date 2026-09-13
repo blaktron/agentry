@@ -3,6 +3,7 @@ package audit
 // The §12.6 continuous NDJSON archive.
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -12,6 +13,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/logx"
 )
 
 func TestFileStreamWritesNDJSON(t *testing.T) {
@@ -158,4 +162,49 @@ func TestWriterStreamDefaultsToNop(t *testing.T) {
 	if _, ok := w.Stream().(NopStream); !ok {
 		t.Fatal("SetStream(nil) must fall back to the no-op sink")
 	}
+}
+
+// The `log` kind mirrors a record as one line named audit.<action> with the
+// record's fields — including the three the file archive omits — and the
+// detail walked by the contract's sanitiser; the row write path is untouched
+// (Write still inserts first, see TestAuditCoverage in internal/api).
+func TestLogStreamMirrorsRecordAsLine(t *testing.T) {
+	var buf bytes.Buffer
+	log := logx.New(logx.Options{W: &buf})
+	st := NewStream("log", "", "", time.Second, log)
+	if _, ok := st.(LogStream); !ok {
+		t.Fatalf(`kind "log" must yield a LogStream, got %T`, st)
+	}
+	actor, org := uuid.New(), uuid.New()
+	tok, _ := auth.NewToken(auth.PATPrefix)
+	st.Append(Record{
+		ID: uuid.New(), OccurredAt: time.Now().UTC(), ActorID: &actor, ActorKind: string(ActorUser),
+		OrgID: &org, Action: string(ActionUserLogin), TargetKind: "user", TargetID: &actor,
+		Detail: json.RawMessage(`{"via":"password","token":"` + tok + `","note":"x ` + tok + `"}`),
+		IP:     "203.0.113.7", UserAgent: "curl/8", RequestID: "req-0123456789",
+	})
+	var m map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &m); err != nil {
+		t.Fatalf("not one JSON line: %v: %s", err, buf.String())
+	}
+	want := map[string]string{
+		"event": "audit.user.login", "actor": actor.String(), "org": org.String(), "actor_kind": "user",
+		"target_kind": "user", "client_ip": "203.0.113.7", "user_agent": "curl/8", "request_id": "req-0123456789",
+	}
+	for k, v := range want {
+		if m[k] != v {
+			t.Errorf("%s = %v, want %q", k, m[k], v)
+		}
+	}
+	d, _ := m["detail"].(map[string]any)
+	if d["via"] != "password" {
+		t.Errorf("detail not carried as an object: %v", m["detail"])
+	}
+	if d["token"] != logx.Redacted || strings.Contains(buf.String(), tok) {
+		t.Errorf("a token in the detail reached the line: %s", buf.String())
+	}
+	if err := st.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	_ = st.Close()
 }

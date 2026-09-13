@@ -39,6 +39,7 @@ import (
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/auth/social"
 	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/logevent"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
@@ -268,7 +269,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 	}
 	id, err := rp.Exchange(r.Context(), *params.Code, st.Verifier, st.Nonce)
 	if err != nil {
-		s.log.Warn("social login rejected", "provider", name, "err", err)
+		s.log.WarnContext(r.Context(), "social login rejected", logevent.AuthSocialRejected.Attr(), "provider", name, "err", err)
 		if st.Next != "" {
 			browserFail("Sign-in with " + name + " failed. Try again.")
 			return
@@ -289,7 +290,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 				"Email address already in use", linkMsg)
 			return
 		}
-		s.log.Error("social jit", "provider", name, "err", err)
+		s.log.ErrorContext(r.Context(), "social jit", "provider", name, "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -297,7 +298,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 	// `amr` named a second factor, so record it on the account.
 	if id.MFAAsserted() {
 		if err := s.q().SetUserIdPMFA(r.Context(), userID); err != nil {
-			s.log.Warn("social login: record idp mfa", "err", err)
+			s.log.WarnContext(r.Context(), "social login: record idp mfa", "err", err)
 		}
 	}
 	// Platform staff follows directory group membership (agentry#51):
@@ -512,7 +513,7 @@ func (s *Server) TotpChallenge(w http.ResponseWriter, r *http.Request) {
 	}
 	secret, err := s.sealer.Open(user.TotpSecretEnc)
 	if err != nil {
-		s.log.Error("totp challenge: unseal", "err", err)
+		s.log.ErrorContext(r.Context(), "totp challenge: unseal", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -523,7 +524,7 @@ func (s *Server) TotpChallenge(w http.ResponseWriter, r *http.Request) {
 		if werr := s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
 			return s.auditW.Write(r.Context(), q, e)
 		}); werr != nil {
-			s.log.Warn("audit totp challenge failure", "err", werr)
+			s.log.WarnContext(r.Context(), "audit totp challenge failure", "err", werr)
 		}
 		problemUnauthorized(w, r, "That code did not match. Try the current code from the authenticator app.")
 		return
@@ -576,7 +577,7 @@ func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user
 		return s.auditW.Write(ctx, q, e)
 	})
 	if err != nil {
-		s.log.Error("social session", "err", err)
+		s.log.ErrorContext(r.Context(), "social session", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -641,6 +642,6 @@ func (s *Server) syncPlatformStaff(r *http.Request, userID uuid.UUID, groups []s
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("social login: platform staff sync", "err", err, "user", userID)
+		s.log.ErrorContext(r.Context(), "social login: platform staff sync", "err", err, "user", userID)
 	}
 }

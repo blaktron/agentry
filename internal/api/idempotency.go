@@ -93,7 +93,7 @@ func (s *Server) beginIdempotent(w http.ResponseWriter, r *http.Request, endpoin
 		ExpiresAt: time.Now().Add(idempotencyTTL),
 	})
 	if err != nil {
-		s.log.Error("idempotency claim", "err", err, "endpoint", endpoint)
+		s.log.ErrorContext(r.Context(), "idempotency claim", "err", err, "endpoint", endpoint)
 		problemInternal(w, r)
 		return nil, true
 	}
@@ -144,7 +144,7 @@ func (ik *idempotency) complete(r *http.Request, status int, body any) {
 	}); err != nil {
 		// A lost record only costs a client its replay; it never affects the
 		// mutation, which already committed.
-		ik.srv.log.Warn("idempotency record", "err", err, "endpoint", ik.endpoint)
+		ik.srv.log.WarnContext(r.Context(), "idempotency record", "err", err, "endpoint", ik.endpoint)
 	}
 }
 
@@ -162,7 +162,7 @@ func (ik *idempotency) abandon(r *http.Request) {
 	if err := ik.srv.q().ReleaseIdempotencyKey(ctx, storegen.ReleaseIdempotencyKeyParams{
 		UserID: ik.userID, Endpoint: ik.endpoint, Key: ik.key,
 	}); err != nil {
-		ik.srv.log.Warn("idempotency release", "err", err, "endpoint", ik.endpoint)
+		ik.srv.log.WarnContext(ctx, "idempotency release", "err", err, "endpoint", ik.endpoint)
 	}
 }
 

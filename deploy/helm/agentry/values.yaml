@@ -37,6 +37,13 @@ config:
     # CDN → ingress set 2. Setting this HIGHER than the real hop count lets
     # callers pick their own rate-limit bucket, so it must match exactly.
     trustedProxies: 0
+    # true only when the hop in front SETS X-Request-Id on every request
+    # (an nginx ingress with `proxy_set_header X-Request-Id $request_id`
+    # does; an ALB does not): the server then honours it and one id names a
+    # request on both hops (docs/logging.md). A hop that merely forwards the
+    # header would let a client choose its id, so this is never inferred
+    # from the hop count.
+    proxyRequestID: false
   auth:
     cookieSecure: true
     sessionTTL: 24h

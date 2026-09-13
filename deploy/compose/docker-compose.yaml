@@ -26,8 +26,20 @@
 # the connector dials the edge over the compose network, so the edge can
 # be bound the same way (docs/self-hosting.md, "Cloudflare Tunnel").
 
+# Logs. Every service keeps Docker's json-file driver, rotated (three files
+# of 10 MB per container), so a stack without the log stack does not keep
+# logs forever; `docker logs` is the reader. The log stack (agentry-logging)
+# replaces this block per service with the syslog driver from its own
+# overlay — docs/self-hosting.md, "Logs".
+x-logging: &rotated
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres:
+    logging: *rotated
     image: postgres:16
     restart: unless-stopped
     environment:
@@ -45,6 +57,7 @@ services:
       retries: 10
 
   minio:
+    logging: *rotated
     image: minio/minio:latest
     restart: unless-stopped
     command: server /data --console-address ":9001"
@@ -63,6 +76,7 @@ services:
       retries: 5
 
   mailpit:
+    logging: *rotated
     image: axllent/mailpit:latest
     restart: unless-stopped
     ports:
@@ -76,6 +90,7 @@ services:
   # scripts/dev/authentik-bootstrap.sh (idempotent, uses the bootstrap
   # token). The edge serves it as auth.* and on :8443.
   redis:
+    logging: *rotated
     profiles: ["server"]
     image: redis:7-alpine
     restart: unless-stopped
@@ -90,6 +105,7 @@ services:
 
   # One-shot: authentik wants its own database in the shared postgres.
   authentik-db-init:
+    logging: *rotated
     profiles: ["server"]
     image: postgres:16
     depends_on:
@@ -103,6 +119,7 @@ services:
         psql -h postgres -U agentry -d agentry_dev -c "CREATE DATABASE authentik"
 
   authentik-server:
+    logging: *rotated
     profiles: ["server"]
     # Pinned by tag AND digest (2026.8.0, released 2026-08-18). Bump both
     # together; the digest is what makes the pin a supply-chain fact.
@@ -171,6 +188,7 @@ services:
         condition: service_completed_successfully
 
   authentik-worker:
+    logging: *rotated
     profiles: ["server"]
     # Pinned by tag AND digest (2026.8.0, released 2026-08-18). Bump both
     # together; the digest is what makes the pin a supply-chain fact.
@@ -196,6 +214,7 @@ services:
   # create its bucket on demand (write-once semantics assume it exists, as in
   # SaaS where terraform owns it). Idempotent: `mb --ignore-existing`.
   minio-init:
+    logging: *rotated
     profiles: ["server"]
     image: minio/mc:latest
     depends_on:
@@ -209,6 +228,7 @@ services:
   # Optional: containerized agentryd (self-host trial). Build locally:
   #   docker compose -f deploy/compose/docker-compose.yaml --profile server up
   server:
+    logging: *rotated
     profiles: ["server"]
     restart: unless-stopped
     build:
@@ -262,6 +282,12 @@ services:
       # browsers accept (docs/self-hosting.md "Running behind a proxy").
       AGENTRY_TRUSTED_PROXIES: ${AGENTRY_TRUSTED_PROXIES:-0}
       AGENTRY_AUTH_COOKIE_SECURE: ${AGENTRY_COOKIE_SECURE:-false}
+      # The edge SETS X-Request-Id on every request it forwards (its config
+      # does, and so must a site's edge config in front of this server);
+      # with AGENTRY_PROXY_REQUEST_ID=true beside AGENTRY_TRUSTED_PROXIES=1
+      # the server honours it, so one id names a request on both hops
+      # (docs/logging.md). Off, the server mints its own.
+      AGENTRY_PROXY_REQUEST_ID: ${AGENTRY_PROXY_REQUEST_ID:-false}
       # Directory service (DEV-057): hand credentials to Authentik. When
       # AGENTRY_AUTH_EXTERNAL_ONLY=true the native register/password/TOTP
       # endpoints answer 410 and sign-in goes through the authentik provider.
@@ -337,6 +363,7 @@ services:
   # otherwise a self-signed pair bootstraps the stack. Once the edge is the
   # entry point, set AGENTRY_PUBLIC_URL to its https origin.
   edge:
+    logging: *rotated
     profiles: ["server"]
     image: nginx:1.27-alpine
     restart: unless-stopped
@@ -368,6 +395,7 @@ services:
   # variable — never as a command-line argument, so it is not in `ps`, the
   # container's inspect output, or this file. Pinned by tag AND digest.
   cloudflared:
+    logging: *rotated
     profiles: ["tunnel"]
     image: cloudflare/cloudflared:2026.8.3@sha256:51c9cefcb4569df44e1ad403ab1d3d8065aa8e84339bcfc6aee75502e1140339
     restart: unless-stopped

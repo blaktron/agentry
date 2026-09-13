@@ -29,6 +29,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/blaktron/agentry/internal/logevent"
+	"github.com/blaktron/agentry/internal/logx"
 )
 
 // Stream is the NDJSON archive sink.
@@ -43,7 +46,10 @@ type Stream interface {
 }
 
 // Record is one NDJSON line. Field names match the API's AuditEvent shape so
-// the archive and the API describe events identically.
+// the archive and the API describe events identically. The three fields the
+// API does not carry — the caller's address and agent, and the request the
+// event happened in — are on the row and reach the `log` sink; the file
+// archive keeps the API's shape.
 type Record struct {
 	ID         uuid.UUID       `json:"id"`
 	OccurredAt time.Time       `json:"occurredAt"`
@@ -54,6 +60,9 @@ type Record struct {
 	TargetKind string          `json:"targetKind,omitempty"`
 	TargetID   *uuid.UUID      `json:"targetId,omitempty"`
 	Detail     json.RawMessage `json:"detail,omitempty"`
+	IP         string          `json:"-"`
+	UserAgent  string          `json:"-"`
+	RequestID  string          `json:"-"`
 }
 
 // NewStream builds the configured sink (§12.6). An unconfigured or
@@ -66,6 +75,8 @@ func NewStream(kind, dir, s3Bucket string, flush time.Duration, log *slog.Logger
 	switch kind {
 	case "", "none":
 		return NopStream{}
+	case "log":
+		return NewLogStream(log)
 	case "file":
 		st, err := NewFileStream(dir, flush, log)
 		if err != nil {
@@ -83,6 +94,72 @@ func NewStream(kind, dir, s3Bucket string, flush time.Duration, log *slog.Logger
 		return NopStream{}
 	}
 }
+
+// LogStream mirrors every record as one line on the server's logger —
+// `event=audit.<action>` with the record's fields — so an audit event is
+// searchable wherever the server's lines are shipped (plan log-stack.md §5.4,
+// DEV-020 addendum). It is a mirror: the row in audit_events remains the
+// record, and the file archive keeps its own shape. The write is
+// synchronous — one line on stderr, microseconds — so there is no buffer and
+// therefore no drop path of its own; what happens to the line after that is
+// the log shipping's business, which is best-effort by design.
+type LogStream struct{ log *slog.Logger }
+
+// NewLogStream builds the mirror on log (nil means the default logger).
+func NewLogStream(log *slog.Logger) LogStream {
+	if log == nil {
+		log = slog.Default()
+	}
+	return LogStream{log: log}
+}
+
+// Append implements Stream.
+func (ls LogStream) Append(rec Record) {
+	attrs := []slog.Attr{
+		logevent.Audit(rec.Action).Attr(),
+		slog.String("audit_id", rec.ID.String()),
+		slog.Time("occurred_at", rec.OccurredAt),
+		slog.String("actor_kind", rec.ActorKind),
+	}
+	if rec.ActorID != nil {
+		attrs = append(attrs, slog.String("actor", rec.ActorID.String()))
+	}
+	if rec.OrgID != nil {
+		attrs = append(attrs, slog.String("org", rec.OrgID.String()))
+	}
+	if rec.TargetKind != "" {
+		attrs = append(attrs, slog.String("target_kind", rec.TargetKind))
+	}
+	if rec.TargetID != nil {
+		attrs = append(attrs, slog.String("target_id", rec.TargetID.String()))
+	}
+	if rec.IP != "" {
+		attrs = append(attrs, slog.String("client_ip", rec.IP))
+	}
+	if rec.UserAgent != "" {
+		attrs = append(attrs, slog.String("user_agent", rec.UserAgent))
+	}
+	if rec.RequestID != "" {
+		attrs = append(attrs, slog.String(logx.RequestIDKey, rec.RequestID))
+	}
+	if len(rec.Detail) > 0 && string(rec.Detail) != "{}" {
+		// As an object, so the contract's sanitiser walks it; the raw text
+		// only if the record's own JSON does not parse.
+		var detail map[string]any
+		if err := json.Unmarshal(rec.Detail, &detail); err == nil {
+			attrs = append(attrs, slog.Any("detail", detail))
+		} else {
+			attrs = append(attrs, slog.String("detail", string(rec.Detail)))
+		}
+	}
+	ls.log.LogAttrs(context.Background(), slog.LevelInfo, "audit", attrs...)
+}
+
+// Flush implements Stream: every line is written as it is appended.
+func (LogStream) Flush(context.Context) error { return nil }
+
+// Close implements Stream.
+func (LogStream) Close() error { return nil }
 
 // NopStream discards records (archiving disabled).
 type NopStream struct{}
@@ -156,7 +233,7 @@ func (fs *FileStream) Append(rec Record) {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 	if len(fs.buf) >= fileStreamBufferMax {
-		fs.log.Error("audit stream: buffer full, dropping record", "action", rec.Action, "id", rec.ID)
+		fs.log.Error("audit stream: buffer full, dropping record", logevent.FailOpenAuditStreamDrop.Attr(), "action", rec.Action, "id", rec.ID)
 		if fs.OnDrop != nil {
 			fs.OnDrop()
 		}

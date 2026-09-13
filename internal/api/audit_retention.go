@@ -55,7 +55,7 @@ func (s *Server) registerAuditRetention(q queue.Client) {
 	defer cancel()
 	pending, err := s.q().CountPendingJobsOfKind(ctx, jobAuditPrune)
 	if err != nil {
-		s.log.Warn("audit retention: could not check for a pending sweep", "err", err)
+		s.log.WarnContext(ctx, "audit retention: could not check for a pending sweep", "err", err)
 		return
 	}
 	if pending > 0 {
@@ -64,7 +64,7 @@ func (s *Server) registerAuditRetention(q queue.Client) {
 	if _, err := q.Enqueue(ctx, jobAuditPrune, "core",
 		auditPruneArgs{RetentionDays: s.cfg.Audit.RetentionDays},
 		queue.WithDelay(time.Hour), queue.WithMaxAttempts(3)); err != nil {
-		s.log.Warn("audit retention: seed enqueue", "err", err)
+		s.log.WarnContext(ctx, "audit retention: seed enqueue", "err", err)
 	}
 }
 
@@ -91,7 +91,7 @@ func (s *Server) runAuditPrune(ctx context.Context, job queue.Job) error {
 	if dropped == 0 {
 		return nil
 	}
-	s.log.Info("audit retention: partitions dropped", "count", dropped, "retention_days", days)
+	s.log.InfoContext(ctx, "audit retention: partitions dropped", "count", dropped, "retention_days", days)
 	// The prune is itself an auditable act on the audit log (§12.6).
 	return s.st.WithTx(ctx, func(q *storegen.Queries) error {
 		return s.auditW.Write(ctx, q, audit.Event{
@@ -113,6 +113,6 @@ func (s *Server) scheduleNextAuditPrune(ctx context.Context) {
 	if _, err := s.jobs.Enqueue(ctx, jobAuditPrune, "core",
 		auditPruneArgs{RetentionDays: s.cfg.Audit.RetentionDays},
 		queue.WithDelay(auditPruneInterval), queue.WithMaxAttempts(3)); err != nil {
-		s.log.Warn("audit retention: reschedule", "err", err)
+		s.log.WarnContext(ctx, "audit retention: reschedule", "err", err)
 	}
 }

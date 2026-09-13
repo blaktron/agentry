@@ -51,6 +51,7 @@ func (s *Server) ReportAbuse(w http.ResponseWriter, r *http.Request, ns Namespac
 		return
 	}
 	if recent >= maxReportsPerHour {
+		s.rateLimited(r, "abuse_reports")
 		problemTooMany(w, r, "This account filed too many reports in the last hour.")
 		return
 	}
@@ -78,7 +79,7 @@ func (s *Server) ReportAbuse(w http.ResponseWriter, r *http.Request, ns Namespac
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("abuse report", "err", err)
+		s.log.ErrorContext(r.Context(), "abuse report", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -169,7 +170,7 @@ func (s *Server) TriageAbuseReport(w http.ResponseWriter, r *http.Request, id uu
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("abuse triage", "err", err)
+		s.log.ErrorContext(r.Context(), "abuse triage", "err", err)
 		problemInternal(w, r)
 		return
 	}

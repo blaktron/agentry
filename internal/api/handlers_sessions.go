@@ -44,7 +44,7 @@ func (s *Server) ListUserSessions(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := s.q().ListActiveUserSessions(r.Context(), p.UserID)
 	if err != nil {
-		s.log.Error("list sessions", "err", err)
+		s.log.ErrorContext(r.Context(), "list sessions", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -106,7 +106,7 @@ func (s *Server) RevokeUserSession(w http.ResponseWriter, r *http.Request, sessi
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("revoke session", "err", err)
+		s.log.ErrorContext(r.Context(), "revoke session", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -151,7 +151,7 @@ func (s *Server) RevokeOtherUserSessions(w http.ResponseWriter, r *http.Request)
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("revoke other sessions", "err", err)
+		s.log.ErrorContext(r.Context(), "revoke other sessions", "err", err)
 		problemInternal(w, r)
 		return
 	}

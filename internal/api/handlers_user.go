@@ -92,7 +92,7 @@ func (s *Server) UpdateCurrentUser(w http.ResponseWriter, r *http.Request) {
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("user update", "err", err)
+		s.log.ErrorContext(r.Context(), "user update", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -126,7 +126,7 @@ func (s *Server) ListTokens(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	rows, err := s.q().ListPATs(r.Context(), p.UserID)
 	if err != nil {
-		s.log.Error("list tokens", "err", err)
+		s.log.ErrorContext(r.Context(), "list tokens", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -243,7 +243,7 @@ func (s *Server) CreateToken(w http.ResponseWriter, r *http.Request) {
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("create token", "err", err)
+		s.log.ErrorContext(r.Context(), "create token", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -283,7 +283,7 @@ func (s *Server) RevokeToken(w http.ResponseWriter, r *http.Request, tokenID ope
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("revoke token", "err", err)
+		s.log.ErrorContext(r.Context(), "revoke token", "err", err)
 		problemInternal(w, r)
 		return
 	}

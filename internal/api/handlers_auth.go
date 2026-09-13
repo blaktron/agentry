@@ -14,6 +14,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/logevent"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
@@ -104,7 +105,7 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 
 	hash, err := auth.HashPassword(req.Password)
 	if err != nil {
-		s.log.Error("register: hash", "err", err)
+		s.log.ErrorContext(r.Context(), "register: hash", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -150,13 +151,13 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 			problemConflict(w, r, "That handle or email address is already in use. Choose another.")
 			return
 		}
-		s.log.Error("register", "err", err)
+		s.log.ErrorContext(r.Context(), "register", "err", err)
 		problemInternal(w, r)
 		return
 	}
 
 	if err := s.notifier.EmailVerification(r.Context(), email, verifyToken); err != nil {
-		s.log.Warn("register: verification email", "err", err)
+		s.log.WarnContext(r.Context(), "register: verification email", "err", err)
 	}
 
 	s.fireEvent(r.Context(), Event{Kind: "user.registered", UserID: created.ID, Payload: map[string]any{
@@ -204,7 +205,7 @@ func (s *Server) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 			problemValidation(w, r, "This verification link is invalid or expired.")
 			return
 		}
-		s.log.Error("verify-email", "err", err)
+		s.log.ErrorContext(r.Context(), "verify-email", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -230,13 +231,18 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	q := s.q()
 
 	deny := func(userID uuid.UUID) {
+		// Named for the log contract; the address and agent are on the
+		// access line under the same request id. The login as typed is on
+		// the audit row, not here (docs/logging.md: no addresses of people
+		// in a line the contract adds).
+		s.log.InfoContext(ctx, "login failed", logevent.AuthLoginFailed.Attr(), "user", userID)
 		e := auditEvent(r, audit.ActionUserLoginFailed)
 		e.Detail = map[string]any{"login": req.Login}
 		if userID != uuid.Nil {
 			e.Actor, e.ActorKind = userID, audit.ActorUser
 		}
 		if err := s.auditW.Write(ctx, q, e); err != nil {
-			s.log.Warn("audit login_failed", "err", err)
+			s.log.WarnContext(r.Context(), "audit login_failed", "err", err)
 		}
 		problemUnauthorized(w, r, "These credentials do not match an active account.")
 	}
@@ -268,7 +274,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		}
 		secret, err := s.sealer.Open(row.TotpSecretEnc)
 		if err != nil {
-			s.log.Error("login: unseal totp", "err", err)
+			s.log.ErrorContext(r.Context(), "login: unseal totp", "err", err)
 			problemInternal(w, r)
 			return
 		}
@@ -313,7 +319,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		return s.auditW.Write(ctx, q, e)
 	})
 	if err != nil {
-		s.log.Error("login: session", "err", err)
+		s.log.ErrorContext(r.Context(), "login: session", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -362,7 +368,7 @@ func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("logout", "err", err)
+		s.log.ErrorContext(r.Context(), "logout", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -391,18 +397,18 @@ func (s *Server) TotpSetup(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	secret, url, err := auth.GenerateTOTP(s.cfg.DisplayName(), p.Handle)
 	if err != nil {
-		s.log.Error("totp setup", "err", err)
+		s.log.ErrorContext(r.Context(), "totp setup", "err", err)
 		problemInternal(w, r)
 		return
 	}
 	sealed, err := s.sealer.Seal([]byte(secret))
 	if err != nil {
-		s.log.Error("totp seal", "err", err)
+		s.log.ErrorContext(r.Context(), "totp seal", "err", err)
 		problemInternal(w, r)
 		return
 	}
 	if err := s.q().SetUserTOTPSecret(r.Context(), storegen.SetUserTOTPSecretParams{ID: p.UserID, TotpSecretEnc: sealed}); err != nil {
-		s.log.Error("totp store", "err", err)
+		s.log.ErrorContext(r.Context(), "totp store", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -434,7 +440,7 @@ func (s *Server) TotpVerify(w http.ResponseWriter, r *http.Request) {
 	}
 	secret, err := s.sealer.Open(row.TotpSecretEnc)
 	if err != nil {
-		s.log.Error("totp verify unseal", "err", err)
+		s.log.ErrorContext(r.Context(), "totp verify unseal", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -451,7 +457,7 @@ func (s *Server) TotpVerify(w http.ResponseWriter, r *http.Request) {
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("totp enable", "err", err)
+		s.log.ErrorContext(r.Context(), "totp enable", "err", err)
 		problemInternal(w, r)
 		return
 	}

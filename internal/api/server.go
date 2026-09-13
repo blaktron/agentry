@@ -406,7 +406,7 @@ func (s *Server) emitAgentEvent(ctx context.Context, agentID uuid.UUID, event st
 		return
 	}
 	if err := s.webhooks.Emit(ctx, orgID, event, payload); err != nil {
-		s.log.Error("webhook emit", "event", event, "err", err)
+		s.log.ErrorContext(ctx, "webhook emit", "event", event, "err", err)
 	}
 	s.fireEvent(ctx, Event{Kind: event, OrgID: orgID, AgentID: agentID, Payload: payload})
 }
@@ -675,10 +675,18 @@ func NewHandlerWithGit(s *Server, mountGit func(*http.ServeMux)) http.Handler {
 			}
 			apiHandler.ServeHTTP(w, r)
 		})
-		final = withMiddleware(root, s.log, s.Metrics, s.cfg.HTTP.TrustedProxies)
+		final = withMiddleware(root, s.log, s.Metrics, s.cfg.HTTP.TrustedProxies, s.cfg.HTTP.ProxyRequestID)
 		return final
 	}
-	return withMiddleware(root, s.log, s.Metrics, s.cfg.HTTP.TrustedProxies)
+	return withMiddleware(root, s.log, s.Metrics, s.cfg.HTTP.TrustedProxies, s.cfg.HTTP.ProxyRequestID)
+}
+
+// WrapMiddleware puts h behind the always-on middleware stack — request id,
+// panic recovery, security headers, the access line, RED metrics — with this
+// server's logger, metrics and trusted-proxy depth. The split `git` role
+// mounts its bare mux through it so a git deployment logs like an api one.
+func (s *Server) WrapMiddleware(h http.Handler) http.Handler {
+	return withMiddleware(h, s.log, s.Metrics, s.cfg.HTTP.TrustedProxies, s.cfg.HTTP.ProxyRequestID)
 }
 
 func (s *Server) uiBrand() ui.Brand {

@@ -108,8 +108,10 @@ func (s *Server) principalMiddlewareOpts(next http.Handler, opts principalOpts) 
 		}
 		if !res.OK {
 			if p.Anonymous {
+				s.rateLimited(r, "anon")
 				problemTooMany(w, r, "Anonymous requests have used up their rate limit. Wait for the Retry-After interval, or sign in.")
 			} else {
+				s.rateLimited(r, "authed")
 				problemTooMany(w, r, "This account has used up its rate limit. Wait for the Retry-After interval.")
 			}
 			return

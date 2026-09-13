@@ -97,14 +97,14 @@ func (s *Server) writeSubmitError(w http.ResponseWriter, r *http.Request, err er
 	case errors.Is(err, registry.ErrScanNotScheduled):
 		// The version row exists and is in `scanning`; the watchdog will route
 		// it to review. Say so rather than implying nothing happened.
-		s.log.Error("submit version: scan not scheduled", "err", err)
+		s.log.ErrorContext(r.Context(), "submit version: scan not scheduled", "err", err)
 		writeProblem(w, r, http.StatusServiceUnavailable, "scan-not-scheduled",
 			"Scan not started",
 			"The registry recorded this version but could not schedule its scan. A watchdog routes it to review.")
 	case errors.As(err, &refused):
 		problemAdmissionRefused(w, r, refused.Refusal)
 	case errors.Is(err, registry.ErrAdmissionUnavailable):
-		s.log.Error("submit version: admission unavailable", "err", err)
+		s.log.ErrorContext(r.Context(), "submit version: admission unavailable", "err", err)
 		writeProblem(w, r, http.StatusServiceUnavailable, "admission-unavailable",
 			"Submission not admitted",
 			"The registry could not check whether this account may submit. Nothing was recorded; retry shortly.")
@@ -115,7 +115,7 @@ func (s *Server) writeSubmitError(w http.ResponseWriter, r *http.Request, err er
 	case errors.Is(err, auth.ErrForbidden):
 		problemForbidden(w, r, "This credential does not carry the role or scope this action needs.")
 	default:
-		s.log.Error("submit version", "err", err)
+		s.log.ErrorContext(r.Context(), "submit version", "err", err)
 		problemInternal(w, r)
 	}
 }
@@ -324,7 +324,7 @@ func (s *Server) YankVersion(w http.ResponseWriter, r *http.Request, ns Namespac
 			problemConflict(w, r, "Only a published or quarantined version can be yanked.")
 			return
 		}
-		s.log.Error("yank", "err", err)
+		s.log.ErrorContext(r.Context(), "yank", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -371,14 +371,14 @@ func (s *Server) DownloadVersion(w http.ResponseWriter, r *http.Request, ns Name
 
 	blob, err := s.blobs.Get(r.Context(), *v.ArchiveKey)
 	if err != nil {
-		s.log.Error("download", "err", err)
+		s.log.ErrorContext(r.Context(), "download", "err", err)
 		problemInternal(w, r)
 		return
 	}
 	defer func() { _ = blob.Close() }()
 
 	if err := s.q().BumpDownloadStat(r.Context(), storegen.BumpDownloadStatParams{AgentID: a.ID, VersionID: v.ID}); err != nil {
-		s.log.Warn("install count", "err", err)
+		s.log.WarnContext(r.Context(), "install count", "err", err)
 	}
 
 	w.Header().Set("Content-Type", "application/zstd")
@@ -430,7 +430,7 @@ func (s *Server) ResolveRef(w http.ResponseWriter, r *http.Request, params Resol
 	// round-trip through the API (§9.4 step 4).
 	if r.Header.Get("X-Agentry-Install") == "1" {
 		if err := s.q().BumpDownloadStat(r.Context(), storegen.BumpDownloadStatParams{AgentID: a.ID, VersionID: v.ID}); err != nil {
-			s.log.Warn("install count", "err", err)
+			s.log.WarnContext(r.Context(), "install count", "err", err)
 		}
 	}
 
@@ -456,7 +456,7 @@ func (s *Server) ResolveRef(w http.ResponseWriter, r *http.Request, params Resol
 		u := fmt.Sprintf("%s/api/v1/agents/%s/%s/versions/%s/attestation", base, ref.Namespace, ref.Name, v.Version)
 		out.AttestationUrl = &u
 	} else if !errors.Is(err, pgx.ErrNoRows) {
-		s.log.Warn("resolve: attestation lookup", "err", err)
+		s.log.WarnContext(r.Context(), "resolve: attestation lookup", "err", err)
 	}
 	writeJSON(w, http.StatusOK, out)
 }

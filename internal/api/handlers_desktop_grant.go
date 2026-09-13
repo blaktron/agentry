@@ -65,7 +65,7 @@ func (s *Server) CreateDesktopGrant(w http.ResponseWriter, r *http.Request) {
 		Scopes: desktopScopes, Name: name, ExpiresAt: expires,
 	})
 	if err != nil {
-		s.log.Error("create desktop grant", "err", err)
+		s.log.ErrorContext(r.Context(), "create desktop grant", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -124,7 +124,7 @@ func (s *Server) ExchangeDesktopCode(w http.ResponseWriter, r *http.Request) {
 			problemForbidden(w, r, "This sign-in code is invalid, expired, or already used. Start the sign-in again from the app.")
 			return
 		}
-		s.log.Error("exchange desktop code", "err", err)
+		s.log.ErrorContext(r.Context(), "exchange desktop code", "err", err)
 		problemInternal(w, r)
 		return
 	}

@@ -53,7 +53,7 @@ func (s *Server) versionArchive(w http.ResponseWriter, r *http.Request, ns Names
 	}
 	blob, err := s.blobs.Get(r.Context(), *v.ArchiveKey)
 	if err != nil {
-		s.log.Error("version archive fetch", "err", err)
+		s.log.ErrorContext(r.Context(), "version archive fetch", "err", err)
 		problemInternal(w, r)
 		return nil, false
 	}
@@ -77,7 +77,7 @@ func (s *Server) ListVersionFiles(w http.ResponseWriter, r *http.Request, ns Nam
 		return true, nil
 	})
 	if err != nil {
-		s.log.Error("version archive walk", "err", err)
+		s.log.ErrorContext(r.Context(), "version archive walk", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -121,7 +121,7 @@ func (s *Server) GetVersionFile(w http.ResponseWriter, r *http.Request, ns Names
 		return false, nil
 	})
 	if err != nil {
-		s.log.Error("version archive read", "err", err)
+		s.log.ErrorContext(r.Context(), "version archive read", "err", err)
 		problemInternal(w, r)
 		return
 	}

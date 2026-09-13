@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
@@ -25,6 +26,7 @@ import (
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/gitsrv"
+	"github.com/blaktron/agentry/internal/logx"
 	"github.com/blaktron/agentry/internal/metrics"
 	"github.com/blaktron/agentry/internal/queue"
 	"github.com/blaktron/agentry/internal/scan"
@@ -142,8 +144,12 @@ func RunWith(ctx context.Context, cfgPath, role string, opts Options, exts ...Ex
 	if err != nil {
 		return err
 	}
-	log := newLogger(cfg.Log.Level)
-	log.Info("starting agentryd", "role", role, "version", version.Version, "env", cfg.Env)
+	// The contract's logger (docs/logging.md): JSON on stderr, the service,
+	// role and version on every line, the request id from the context,
+	// tokens and secrets masked before a line is written.
+	log := logx.New(logx.Options{Level: cfg.Log.Level, Service: filepath.Base(os.Args[0]), Role: role, Version: version.Version})
+	slog.SetDefault(log)
+	log.Info("starting agentryd", "env", cfg.Env)
 
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -408,23 +414,6 @@ func serveHTTP(ctx context.Context, cfg config.Config, st *store.Store, log *slo
 	}
 }
 
-func newLogger(level string) *slog.Logger {
-	var lvl slog.Level
-	switch level {
-	case "debug":
-		lvl = slog.LevelDebug
-	case "warn":
-		lvl = slog.LevelWarn
-	case "error":
-		lvl = slog.LevelError
-	default:
-		lvl = slog.LevelInfo
-	}
-	log := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: lvl}))
-	slog.SetDefault(log)
-	return log
-}
-
 // buildHandler assembles the HTTP surface for a role: api routes, git
 // smart-HTTP routes, or both (`all`, the self-host default). The returned
 // close function releases the background goroutines the handler's components
@@ -470,7 +459,10 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 			if err != nil {
 				return nil, nil, err
 			}
-			log.Info("git ssh listening", "addr", sshSrv.Addr().String(), "hostkey", sshSrv.HostKeyFingerprint())
+			// The fingerprint is what a self-hoster publishes for their users
+			// (self-hosting.md); named so the contract's redaction of
+			// secret-shaped keys leaves it readable.
+			log.Info("git ssh listening", "addr", sshSrv.Addr().String(), "hostkey_fingerprint", sshSrv.HostKeyFingerprint())
 			go func() {
 				if err := sshSrv.Serve(ctx); err != nil {
 					log.Error("git ssh server", "err", err)
@@ -490,7 +482,9 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 			// first-byte SLI (§16.1) needs scraping.
 			mux.Handle("GET /metrics", mx.Handler())
 			git.Mount(mux)
-			return mux, closeAll, nil
+			// The same middleware stack as the api role: a git deployment
+			// gets request ids and the access line too (docs/logging.md).
+			return s.WrapMiddleware(mux), closeAll, nil
 		}
 
 		// §2.4: `all` runs EVERY role in-process. Without this the

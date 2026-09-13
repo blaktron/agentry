@@ -20,6 +20,7 @@ import (
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/logevent"
 	"github.com/blaktron/agentry/internal/metrics"
 	"github.com/blaktron/agentry/internal/queue"
 	"github.com/blaktron/agentry/internal/ratelimit"
@@ -188,14 +189,14 @@ func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *
 	// Lazy bare-repo init (§13.3: only the git role mounts repo storage).
 	if _, statErr := os.Stat(h.repos.Path(agent.RepoID)); statErr != nil {
 		if err := h.repos.InitBare(ctx, agent.RepoID, agent.DefaultBranch); err != nil {
-			h.log.Error("lazy repo init", "err", err)
+			h.log.ErrorContext(ctx, "lazy repo init", "err", err)
 			return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusInternalServerError, "internal error"}
 		}
 	}
 
 	role, err := h.reg.EffectiveRole(ctx, principal, agent)
 	if err != nil {
-		h.log.Error("git effective role", "err", err)
+		h.log.ErrorContext(ctx, "git effective role", "err", err)
 		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusInternalServerError, "internal error"}
 	}
 	res := auth.AgentResource{Public: agent.Visibility == "public", EffectiveRole: role}
@@ -217,7 +218,7 @@ func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *
 	// additionally require an org-bound PAT.
 	allowed, err := h.ssoAllows(ctx, principal, agent, act)
 	if err != nil {
-		h.log.Error("git sso gate", "err", err)
+		h.log.ErrorContext(ctx, "git sso gate", "err", err)
 		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusInternalServerError, "internal error"}
 	}
 	if !allowed {
@@ -295,7 +296,7 @@ func (h *Handler) infoRefs(w http.ResponseWriter, r *http.Request) {
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := h.runLimited(ctx, agent.RepoID, cmd); err != nil {
-		h.log.Error("info/refs", "err", err, "stderr", stderr.String())
+		h.log.ErrorContext(r.Context(), "info/refs", "err", err, "stderr", stderr.String())
 		http.Error(w, "git error", http.StatusInternalServerError)
 		return
 	}
@@ -336,6 +337,7 @@ func (h *Handler) receivePack(w http.ResponseWriter, r *http.Request) {
 		ratelimit.PerHour(h.pushesPerHour()), h.pushesPerHour())
 	if !res.OK {
 		h.mx.RecordGitOp(r.Context(), "receive-pack", "throttled", 0)
+		h.log.InfoContext(r.Context(), "rate limited", logevent.HTTPRateLimited.Attr(), "class", "push", "agent", agent.ID)
 		w.Header().Set("Retry-After", strconv.Itoa(int(res.Reset.Round(time.Second)/time.Second)))
 		http.Error(w, "This repository is over its hourly push limit. Retry after the delay in the Retry-After header.", http.StatusTooManyRequests)
 		return
@@ -401,7 +403,7 @@ func (h *Handler) rpc(w http.ResponseWriter, r *http.Request, agent registry.Age
 	defer release()
 	if err := cmd.Start(); err != nil {
 		outcome = "error"
-		h.log.Error("git start", "service", service, "err", err)
+		h.log.ErrorContext(r.Context(), "git start", "service", service, "err", err)
 		http.Error(w, "git error", http.StatusInternalServerError)
 		return
 	}
@@ -421,7 +423,7 @@ func (h *Handler) rpc(w http.ResponseWriter, r *http.Request, agent registry.Age
 		outcome = "error"
 		// Headers are already sent; the pkt-line stream carries the error
 		// report to the client. Log for operators.
-		h.log.Warn("git rpc exit", "service", service, "err", err, "stderr", stderr.String())
+		h.log.WarnContext(r.Context(), "git rpc exit", "service", service, "err", err, "stderr", stderr.String())
 		return
 	}
 
@@ -490,19 +492,19 @@ func (h *Handler) afterReceive(ctx context.Context, agent registry.Agent, princi
 	enqueued := false
 	if h.queue != nil {
 		if _, err := h.queue.Enqueue(ctx, KindRepoPushed, "core", args); err != nil {
-			h.log.Error("post-receive enqueue", "err", err)
+			h.log.ErrorContext(ctx, "post-receive enqueue", "err", err)
 		} else {
 			enqueued = true
 			// Housekeeping later, when the burst is over (agentry#55).
 			if _, err := h.queue.Enqueue(ctx, KindRepoGC, "core", RepoGCArgs{RepoID: agent.RepoID}, queue.WithDelay(gcDelay)); err != nil {
-				h.log.Warn("post-receive gc enqueue", "err", err)
+				h.log.WarnContext(ctx, "post-receive gc enqueue", "err", err)
 			}
 		}
 	}
 	if !enqueued {
 		bk := &PushBookkeeper{st: h.st, repos: h.repos, aud: h.aud, log: h.log, diskUsage: h.diskUsage}
 		if err := bk.Run(ctx, args); err != nil {
-			h.log.Error("post-receive bookkeeping", "err", err)
+			h.log.ErrorContext(ctx, "post-receive bookkeeping", "err", err)
 		}
 	}
 	if h.PostReceive != nil {
@@ -525,7 +527,8 @@ func (h *Handler) afterReceive(ctx context.Context, agent registry.Agent, princi
 				// receive-pack has already answered the client, so the pusher
 				// learns of it from the absent version, as with every other
 				// submission failure here (agentry#322 would move it earlier).
-				h.log.Warn("auto-publish submit", "tag", tag, "err", err)
+				h.log.WarnContext(ctx, "auto-publish refused", logevent.GitPushRefused.Attr(),
+					"agent", agent.ID, "tag", tag, "err", err)
 			}
 		}
 	}
@@ -545,7 +548,7 @@ func (h *Handler) acceptedRefs(ctx context.Context, agent registry.Agent, want [
 	}
 	have, err := h.repos.RefsAt(ctx, agent.RepoID, names)
 	if err != nil {
-		h.log.Error("post-receive ref verify", "err", err)
+		h.log.ErrorContext(ctx, "post-receive ref verify", "err", err)
 		return nil
 	}
 	accepted := make([]RefUpdate, 0, len(want))
@@ -583,7 +586,7 @@ func (h *Handler) gitEnvFor(ctx context.Context, gitProtocol string, agent regis
 		// a lookup failure denies the stricter permission, never grants it.
 		allowed, err := h.ssoAllows(ctx, principal, agent, auth.ActAgentPublish)
 		if err != nil {
-			h.log.Error("git sso gate (publish)", "err", err)
+			h.log.ErrorContext(ctx, "git sso gate (publish)", "err", err)
 		}
 		canPublish = allowed && err == nil
 	}

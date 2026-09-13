@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/blaktron/agentry/internal/logx"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
@@ -89,6 +90,22 @@ func (w *Writer) Write(ctx context.Context, q *storegen.Queries, e Event) error 
 		return err
 	}
 
+	// The request the event happened in (docs/logging.md): the same id the
+	// request's log lines carry, so a row and its lines find each other.
+	reqID := logx.RequestIDFrom(ctx)
+	if reqID != "" {
+		// A copy: the map is the caller's, and a caller-supplied request_id
+		// is not ours to overwrite.
+		detail := make(map[string]any, len(e.Detail)+1)
+		for k, v := range e.Detail {
+			detail[k] = v
+		}
+		if _, set := detail["request_id"]; !set {
+			detail["request_id"] = reqID
+		}
+		e.Detail = detail
+	}
+
 	detail, err := json.Marshal(e.Detail)
 	if err != nil {
 		return fmt.Errorf("audit: detail marshal: %w", err)
@@ -136,11 +153,16 @@ func (w *Writer) Write(ctx context.Context, q *storegen.Queries, e Event) error 
 	// Archive copy (§12.6). Queued only after the row is written, so the
 	// stream never gets an event the database refused. Best-effort by
 	// design — see the stream.go package comment.
-	w.Stream().Append(Record{
+	rec := Record{
 		ID: id, OccurredAt: now, ActorID: params.ActorID, ActorKind: string(e.ActorKind),
 		OrgID: params.OrgID, Action: string(e.Action), TargetKind: e.TargetKind,
 		TargetID: params.TargetID, Detail: detail,
-	})
+		UserAgent: e.UserAgent, RequestID: reqID,
+	}
+	if e.IP.IsValid() {
+		rec.IP = e.IP.String()
+	}
+	w.Stream().Append(rec)
 	return nil
 }
 
