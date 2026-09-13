@@ -994,8 +994,10 @@ migrations in its own schema, replace the entitlements resolver (limits and
 the caps `Features` answers, such as a private-agent cap), subscribe to
 committed events and add worker jobs, with `GET /api/v1/meta` listing what is
 loaded. An extension may also admit or refuse a submission after every core
-check and before anything is stored (`Admits`), and name a route of its own
+check and before anything is stored (`Admits`), name a route of its own
 the anonymous rate class skips (`Unthrottles`: a payment provider's signed
-webhook). The core carries no extension and behaves identically with none:
+webhook), receive the database pool, the logger and an audit writer at
+start-up (`Binds`), run a job on a period, and register audit actions under
+its own name. The core carries no extension and behaves identically with none:
 a self-hosted registry has no subscription tiers, caps nothing, and never
 answers `402`.

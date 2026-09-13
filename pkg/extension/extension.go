@@ -13,9 +13,17 @@ package extension
 import (
 	"context"
 	"io/fs"
+	"log/slog"
 	"net/http"
+	"regexp"
+	"strings"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/blaktron/agentry/internal/api"
+	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/entitlements"
 	"github.com/blaktron/agentry/internal/queue"
@@ -105,11 +113,88 @@ type Hooks struct {
 
 // Job is a queue handler the worker registers under Kind. Queue names the
 // queue it is claimed from ("core" unless the work is untrusted content).
+// A positive Every makes the worker enqueue Kind on that period, and once
+// at start-up, the way the core's own watchdog and sweep run (agentry#324).
+// Every worker replica enqueues on its own clock and the queue's claim
+// runs each row once, so the handler must be idempotent — a cycle closer
+// that finds nothing to close does nothing.
 type Job struct {
 	Kind    string
 	Queue   string
 	Handler queue.Handler
+	Every   time.Duration
 }
+
+// Deps is what the core hands an extension at start-up (agentry#324), once
+// per process, before its routes mount and its jobs register. DB is the
+// pool the core uses, under the core's own database role: the convention
+// — not yet enforced by a role or a grant — is that an extension writes
+// only its own schema (ent_<name>) and reads core tables, never alters
+// them; the seam test of the closed build is where that is proven. Log is
+// tagged with the extension's name. Audit writes the extension's events
+// through the core's writer (the month partition, the archive stream, the
+// refusal of an unregistered action); the event's actor kind, IP and user
+// agent are the extension's to fill, since no request built it. DB is nil
+// when the server runs without a database (limited dev mode).
+type Deps struct {
+	DB    *pgxpool.Pool
+	Log   *slog.Logger
+	Audit AuditWriter
+}
+
+// AuditWriter writes one audit event; see Deps. Write lands it in a
+// transaction of its own; WriteIn joins the caller's, so a mutation and its
+// audit row commit or roll back together, as the core's own do.
+type AuditWriter interface {
+	Write(ctx context.Context, e AuditEvent) error
+	WriteIn(ctx context.Context, tx pgx.Tx, e AuditEvent) error
+}
+
+// AuditEvent, AuditAction and ActorKind are the core's audit types.
+type (
+	AuditEvent  = audit.Event
+	AuditAction = audit.Action
+	ActorKind   = audit.ActorKind
+)
+
+// The actor kinds an extension's events carry.
+const (
+	ActorUser   = audit.ActorUser
+	ActorPAT    = audit.ActorPAT
+	ActorSystem = audit.ActorSystem
+)
+
+// Binds is the optional interface for an extension that needs Deps.
+type Binds interface {
+	Bind(Deps)
+}
+
+// Audits is the optional interface for an extension that writes audit
+// events of its own: the actions it names are added to the catalog at
+// start-up under the extension's own name, "<name>.<verb>", so a Deps.Audit
+// write of any of them is accepted.
+type Audits interface {
+	AuditActions() []AuditAction
+}
+
+// registerAuditAction adds an extension's action to the audit catalog. The
+// action must be "<extension name>.<verb>" with a valid extension name, and
+// must not already be in the catalog, so an extension can neither shadow
+// a core action nor register one under another name; a violation panics
+// at start-up, where it is found.
+func registerAuditAction(extensionName string, a AuditAction) {
+	if !reExtensionName.MatchString(extensionName) {
+		panic("extension: audit action " + string(a) + ": invalid extension name " + extensionName)
+	}
+	if !strings.HasPrefix(string(a), extensionName+".") || len(a) <= len(extensionName)+1 {
+		panic("extension: audit action " + string(a) + " must be prefixed " + extensionName + ".")
+	}
+	if !audit.Register(a) {
+		panic("extension: audit action " + string(a) + " is already in the catalog")
+	}
+}
+
+var reExtensionName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
 
 // QueueJob is the job envelope a Handler receives.
 type QueueJob = queue.Job

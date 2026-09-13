@@ -68,8 +68,10 @@ SELECT audit_prune_partitions($1::date)::int AS dropped;
 -- GET /user/activity (agentry#192): the audit events the caller performed —
 -- sign-ins, tokens and keys, profile changes, publishes, reviews — newest
 -- first, keyset-paged like the agent feed.
+-- ip is NULL for an event no request built (an extension's audited action,
+-- agentry#324), which the feed shows as no address rather than failing.
 SELECT a.id, a.occurred_at, a.action, a.detail, a.target_kind, a.target_id, a.actor_kind,
-       host(a.ip)::text AS ip, a.user_agent, v.version AS version
+       coalesce(host(a.ip), '')::text AS ip, a.user_agent, v.version AS version
 FROM audit_events a
 LEFT JOIN agent_versions v ON a.target_kind = 'agent_version' AND v.id = a.target_id
 WHERE a.actor_id = sqlc.arg(actor_id)
