@@ -67,8 +67,10 @@ type Server struct {
 	// jobs is the enqueue-side queue client (webhook deliveries, audit
 	// exports). The worker role drains it; nil without a database.
 	jobs queue.Client
-	// ents resolves the §19 quotas (§14.2 seam).
-	ents entitlements.Resolver
+	// ents resolves the §19 quotas (§14.2 seam); coreEnts is the
+	// config-driven one, kept for an extension's resolver to wrap.
+	ents     entitlements.Resolver
+	coreEnts entitlements.Resolver
 	// mx is the §16.2 instrument set; nil is a working no-op.
 	mx *metrics.Metrics
 	// oidcHTTPClient, when set, is the HTTP client OIDC discovery/JWKS/token
@@ -124,6 +126,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		classes:  classesFromConfig(cfg.Limits),
 		ents:     entitlements.NewConfigResolver(cfg.Limits),
 	}
+	srv.coreEnts = srv.ents
 	if fs, ok := auditStream.(*audit.FileStream); ok {
 		// A dropped archive record is a deliberate fail-open (DEV-020);
 		// count it so the choice stays visible (agentry#33). Metrics are
@@ -287,6 +290,16 @@ func (s *Server) entitlements() entitlements.Resolver {
 		return entitlements.Default()
 	}
 	return s.ents
+}
+
+// CoreEntitlements is the resolver built from configuration, whatever an
+// extension later replaced it with: what an extension's resolver wraps
+// (agentry#326).
+func (s *Server) CoreEntitlements() entitlements.Resolver {
+	if s.coreEnts == nil {
+		return entitlements.Default()
+	}
+	return s.coreEnts
 }
 
 // SetEntitlements swaps the quota resolver (the SaaS overlay, and tests).
