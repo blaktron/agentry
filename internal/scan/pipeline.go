@@ -593,6 +593,12 @@ func (p *Pipeline) finishRun(ctx context.Context, runID uuid.UUID, result RunRes
 	if result.JudgePromptHash != "" {
 		promptHash = &result.JudgePromptHash
 	}
+	var promptTokens, completionTokens *int32
+	if u := result.JudgeUsage; u != nil {
+		pt, ct := int32(u.PromptTokens), int32(u.CompletionTokens) //nolint:gosec // a judge reply is bounded well below MaxInt32
+		promptTokens, completionTokens = &pt, &ct
+		p.mx.RecordJudgeTokens(ctx, u.PromptTokens, u.CompletionTokens)
+	}
 	return p.st.WithTx(ctx, func(q *storegen.Queries) error {
 		// The S0/pipeline-error finding is added by S10 while assembling the
 		// report, not by any stage, so no per-stage write covers it. It is
@@ -613,7 +619,7 @@ func (p *Pipeline) finishRun(ctx context.Context, runID uuid.UUID, result RunRes
 		}
 		return q.FinishScanRun(ctx, storegen.FinishScanRunParams{
 			ID: runID, Status: status, ReportDigest: strptr(result.ReportDigest),
-			JudgePromptHash: promptHash,
+			JudgePromptHash: promptHash, JudgePromptTokens: promptTokens, JudgeCompletionTokens: completionTokens,
 		})
 	})
 }

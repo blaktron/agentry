@@ -4090,6 +4090,8 @@ components:
           type: string
         judgeModel:
           type: string
+        judgeUsage:
+          $ref: "#/components/schemas/JudgeUsage"
         scanStatus:
           type: string
         finishedAt:
@@ -4104,6 +4106,21 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ScanFinding"
+
+    JudgeUsage:
+      type: object
+      description: >-
+        The token use the LLM judge's provider reported for this scan run —
+        what the review cost, as measured. Present for platform staff only,
+        and absent when the provider reported none (the static and
+        classifier judges, an endpoint without a usage block); absent means
+        unknown, not zero. Not part of the signed report.
+      required: [promptTokens, completionTokens]
+      properties:
+        promptTokens:
+          type: integer
+        completionTokens:
+          type: integer
 
     ReviewItem:
       type: object

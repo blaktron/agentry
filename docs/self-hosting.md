@@ -917,7 +917,10 @@ Running your own registry means you own the trust decisions:
 - who has platform-staff rights (they can quarantine, block, and read
   everything on your instance);
 - whether an LLM judge is configured, and therefore whether adjudication is
-  automated or entirely human;
+  automated or entirely human. A configured judge's token use is recorded on
+  each scan run as the provider reported it and shown to platform staff on
+  the report (`judgeUsage`); it is a measurement of cost, kept out of the
+  signed report;
 - keeping the ruleset current; a scanner from a year ago is a scanner that
   has not seen this year's techniques.
 

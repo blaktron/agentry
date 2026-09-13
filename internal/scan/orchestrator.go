@@ -146,6 +146,11 @@ type RunResult struct {
 	// JudgePromptHash identifies the rubric/prompt version S5 adjudicated
 	// with (§8.4.4: recorded per run for reproducibility and appeals).
 	JudgePromptHash string
+	// JudgeUsage is the token use S5's provider reported, nil when unknown.
+	// It is recorded on the scan run and is deliberately absent from Report:
+	// the report digest is the signed subject and must not vary with a
+	// count that differs between two runs of the same bytes.
+	JudgeUsage *JudgeUsage
 	// Fatal is set when the run could not produce a usable result at all —
 	// today, only a report that will not serialize, which would otherwise
 	// yield an empty report digest and carry that emptiness into a SIGNED
@@ -233,10 +238,14 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 
 	judgeForcesReview := o.judge.RequiresHumanReview()
 	judgePromptHash := ""
+	var judgeUsage *JudgeUsage
 	for _, r := range results {
 		allFindings = append(allFindings, r.Findings...)
 		if r.Scanner == "S5" && r.PromptHash != "" {
 			judgePromptHash = r.PromptHash
+		}
+		if r.Scanner == "S5" && r.JudgeUsage != nil {
+			judgeUsage = r.JudgeUsage
 		}
 		if r.Err != nil {
 			stageErrs = append(stageErrs, r.Scanner+": "+r.Err.Error())
@@ -285,7 +294,7 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 	out := RunResult{
 		Report: report, ReportDigest: digest,
 		Findings: allFindings, Decision: decision, JudgeModel: o.judge.Name(),
-		JudgePromptHash: judgePromptHash, Ran: ran, Skipped: skipped,
+		JudgePromptHash: judgePromptHash, JudgeUsage: judgeUsage, Ran: ran, Skipped: skipped,
 	}
 	if digestErr != nil {
 		// The digest is the subject of the DSSE attestation (§8.8). An empty

@@ -50,6 +50,20 @@ type JudgeVerdict struct {
 	// Model and PromptHash record reproducibility (§8.4.4).
 	Model      string `json:"model"`
 	PromptHash string `json:"promptHash"`
+	// Usage is the token count the provider's response reported, or nil
+	// when it reported none (the static and classifier judges, an endpoint
+	// that omits it). Recorded on the scan run, never in the signed report.
+	Usage *JudgeUsage `json:"usage,omitempty"`
+}
+
+// JudgeUsage is what one adjudication cost in tokens, as the provider
+// reported it: the measurement behind pricing a submission (plan
+// subscription-tiers §10). It is operational data about a run, not part of
+// the verdict, so it lives on scan_runs and stays out of the S10 report
+// whose digest is signed.
+type JudgeUsage struct {
+	PromptTokens     int `json:"promptTokens"`
+	CompletionTokens int `json:"completionTokens"`
 }
 
 // JudgeProvider is the D-13 provider interface.
@@ -389,7 +403,7 @@ func (j *HTTPJudge) Judge(ctx context.Context, content JudgeContent) (JudgeVerdi
 		return JudgeVerdict{}, fmt.Errorf("scan: judge endpoint returned %d: %s", resp.StatusCode, snippet)
 	}
 
-	text, err := judgeResponseText(j.protocol, raw)
+	text, usage, err := judgeResponse(j.protocol, raw)
 	if err != nil {
 		return JudgeVerdict{}, fmt.Errorf("scan: judge response: %w", err)
 	}
@@ -404,6 +418,7 @@ func (j *HTTPJudge) Judge(ctx context.Context, content JudgeContent) (JudgeVerdi
 	}
 	verdict.Model = j.model
 	verdict.PromptHash = j.promptHash
+	verdict.Usage = usage
 	return verdict, nil
 }
 
@@ -417,18 +432,23 @@ func judgePrompt(content JudgeContent) string {
 	return fmt.Sprintf(judgePromptTemplate, string(content.ManifestJSON), files.String())
 }
 
-// judgeResponseText extracts the assistant text from either wire protocol's
-// response envelope.
-func judgeResponseText(protocol string, raw []byte) (string, error) {
+// judgeResponse extracts the assistant text and the reported token use from
+// either wire protocol's response envelope. Usage is nil when the envelope
+// carries none: the count is unknown, not zero.
+func judgeResponse(protocol string, raw []byte) (string, *JudgeUsage, error) {
 	if protocol == "anthropic" {
 		var r struct {
 			Content []struct {
 				Type string `json:"type"`
 				Text string `json:"text"`
 			} `json:"content"`
+			Usage *struct {
+				InputTokens  int `json:"input_tokens"`
+				OutputTokens int `json:"output_tokens"`
+			} `json:"usage"`
 		}
 		if err := json.Unmarshal(raw, &r); err != nil {
-			return "", err
+			return "", nil, err
 		}
 		var sb strings.Builder
 		for _, c := range r.Content {
@@ -436,7 +456,11 @@ func judgeResponseText(protocol string, raw []byte) (string, error) {
 				sb.WriteString(c.Text)
 			}
 		}
-		return sb.String(), nil
+		var usage *JudgeUsage
+		if r.Usage != nil {
+			usage = &JudgeUsage{PromptTokens: r.Usage.InputTokens, CompletionTokens: r.Usage.OutputTokens}
+		}
+		return sb.String(), usage, nil
 	}
 	var r struct {
 		Choices []struct {
@@ -444,14 +468,22 @@ func judgeResponseText(protocol string, raw []byte) (string, error) {
 				Content string `json:"content"`
 			} `json:"message"`
 		} `json:"choices"`
+		Usage *struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+		} `json:"usage"`
 	}
 	if err := json.Unmarshal(raw, &r); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if len(r.Choices) == 0 {
-		return "", errors.New("scan: judge response carries no choices")
+		return "", nil, errors.New("scan: judge response carries no choices")
 	}
-	return r.Choices[0].Message.Content, nil
+	var usage *JudgeUsage
+	if r.Usage != nil {
+		usage = &JudgeUsage{PromptTokens: r.Usage.PromptTokens, CompletionTokens: r.Usage.CompletionTokens}
+	}
+	return r.Choices[0].Message.Content, usage, nil
 }
 
 // parseJudgeJSON turns the model's JSON verdict into a JudgeVerdict,
@@ -561,7 +593,7 @@ func (S5Judge) Run(sc stageContext, in *Input) StageResult {
 			Taxonomy: []string{"LLM01"},
 		})
 	}
-	return StageResult{Scanner: "S5", Findings: findings, PromptHash: promptHash}
+	return StageResult{Scanner: "S5", Findings: findings, PromptHash: promptHash, JudgeUsage: verdict.Usage}
 }
 
 func isProse(path string) bool {
