@@ -97,16 +97,36 @@ var ErrScanNotScheduled = errors.New("registry: version recorded but its scan co
 // TransitionResult describes a committed §7 transition. Event is the §9.3
 // webhook name for the edge, or "" when the edge has no external event.
 type TransitionResult struct {
-	AgentID uuid.UUID
-	Version string
-	From    Status
-	To      Status
-	Event   string
+	AgentID   uuid.UUID
+	VersionID uuid.UUID
+	Version   string
+	From      Status
+	To        Status
+	Reason    string
+	Event     string
+	// Cause is what the pipeline said about a transition it made (zero for
+	// every other actor), carried onto the event.
+	Cause TransitionCause
+}
+
+// TransitionCause is the pipeline's account of a transition it made. A
+// PipelineError is the platform's own fault — a stage error, a fatal
+// report, a scan that never finished — routing the version to review with
+// an S0/pipeline-error finding; an extension that charged for the
+// submission refunds on it (plan subscription-tiers §5.4).
+type TransitionCause struct {
+	PipelineError bool
+	ScanRunID     uuid.UUID
 }
 
 // Transition moves a version to a new status with full §7 enforcement:
 // row lock, edge validation, audit, and latest-published maintenance.
 func (s *Service) Transition(ctx context.Context, versionID uuid.UUID, to Status, reason string, actorEvent audit.Event) error {
+	return s.TransitionWith(ctx, versionID, to, reason, actorEvent, TransitionCause{})
+}
+
+// TransitionWith is Transition with the pipeline's cause on the event.
+func (s *Service) TransitionWith(ctx context.Context, versionID uuid.UUID, to Status, reason string, actorEvent audit.Event, cause TransitionCause) error {
 	var res TransitionResult
 	err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
 		var terr error
@@ -116,6 +136,7 @@ func (s *Service) Transition(ctx context.Context, versionID uuid.UUID, to Status
 	if err != nil {
 		return err
 	}
+	res.Cause = cause
 	s.EmitTransition(ctx, res)
 	return nil
 }
@@ -132,7 +153,7 @@ func (s *Service) TransitionInTx(ctx context.Context, q *storegen.Queries, versi
 	}
 	from := Status(row.Status)
 	res := TransitionResult{
-		AgentID: row.AgentID, Version: row.Version, From: from, To: to,
+		AgentID: row.AgentID, VersionID: row.ID, Version: row.Version, From: from, To: to, Reason: reason,
 		Event: transitionEvent(from, to),
 	}
 	if !transitionAllowed(from, to) {
@@ -205,9 +226,15 @@ func (s *Service) EmitTransition(ctx context.Context, res TransitionResult) {
 	if s.eventSink == nil || res.Event == "" {
 		return
 	}
-	s.eventSink(ctx, res.AgentID, res.Event, map[string]any{
-		"version": res.Version, "from": string(res.From), "to": string(res.To),
-	})
+	payload := map[string]any{
+		"version": res.Version, "versionId": res.VersionID.String(),
+		"from": string(res.From), "to": string(res.To), "reason": res.Reason,
+	}
+	if res.Cause.PipelineError {
+		payload["pipelineError"] = true
+		payload["scanRunId"] = res.Cause.ScanRunID.String()
+	}
+	s.eventSink(ctx, res.AgentID, res.Event, payload)
 }
 
 // EmitAgentEvent publishes a non-transition agent event (§9.3) — today the

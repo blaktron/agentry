@@ -88,7 +88,8 @@ func (s *Server) SetExtensionUnthrottled(name string, routes []string) {
 }
 
 // ExtensionUnthrottled lists the unthrottled routes of every extension, as
-// "/api/v1/x/<name>/…" keys, for the route-table tests.
+// "METHOD /api/v1/x/<name>/…" keys, so an extension's own route-table test
+// can assert exactly which of its routes escape the anonymous class.
 func (s *Server) ExtensionUnthrottled() map[string]bool {
 	out := map[string]bool{}
 	for _, m := range s.extensions {

@@ -637,17 +637,10 @@ func (p *Pipeline) applyDecision(ctx context.Context, agent storegen.GetAgentByI
 	for _, f := range result.Findings {
 		counts[string(f.Severity)]++
 	}
-	completed := map[string]any{
+	p.reg.EmitAgentEvent(ctx, agent.ID, webhook.EventScanCompleted, map[string]any{
 		"version": v.Version, "versionId": v.ID.String(), "runId": runID.String(), "reportDigest": result.ReportDigest,
 		"findings": counts, "reason": result.Decision.Reason, "outcome": string(result.Decision.Outcome),
-	}
-	if len(result.Report.StageErrors) > 0 {
-		// A stage error is the platform's own fault (S0/pipeline-error routes
-		// the version to review); an extension that charged for the
-		// submission refunds on this flag (plan subscription-tiers §5.4).
-		completed["pipelineError"] = true
-	}
-	p.reg.EmitAgentEvent(ctx, agent.ID, webhook.EventScanCompleted, completed)
+	})
 	sysEvent := audit.Event{ActorKind: audit.ActorSystem}
 	// §16.2 publish funnel: one verdict per version, recorded where the
 	// decision is acted on rather than where it is computed (the orchestrator
@@ -667,7 +660,11 @@ func (p *Pipeline) applyDecision(ctx context.Context, agent storegen.GetAgentByI
 
 	case OutcomeNeedsReview:
 		p.mx.RecordVerdict(ctx, metrics.VerdictReview)
-		if err := p.reg.Transition(ctx, v.ID, registry.StatusNeedsReview, result.Decision.Reason, sysEvent); err != nil {
+		// A stage error is the platform's own fault: the transition says so
+		// (registry.TransitionCause), which is what an extension that
+		// charged for the submission refunds on.
+		cause := registry.TransitionCause{PipelineError: len(result.Report.StageErrors) > 0, ScanRunID: runID}
+		if err := p.reg.TransitionWith(ctx, v.ID, registry.StatusNeedsReview, result.Decision.Reason, sysEvent, cause); err != nil {
 			return err
 		}
 		return p.st.WithTx(ctx, func(q *storegen.Queries) error {
@@ -772,8 +769,9 @@ func (p *Pipeline) FailToReview(ctx context.Context, v storegen.AgentVersion, ag
 	// Only versions still in flight move; a rescan failure must not drag a
 	// published version backwards.
 	if registry.Status(v.Status) == registry.StatusScanning {
-		if err := p.reg.Transition(ctx, v.ID, registry.StatusNeedsReview, reason,
-			audit.Event{ActorKind: audit.ActorSystem}); err != nil {
+		if err := p.reg.TransitionWith(ctx, v.ID, registry.StatusNeedsReview, reason,
+			audit.Event{ActorKind: audit.ActorSystem},
+			registry.TransitionCause{PipelineError: true, ScanRunID: runID}); err != nil {
 			return err
 		}
 	}

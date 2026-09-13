@@ -229,6 +229,11 @@ func (s *Server) scimProvisionUser(ctx context.Context, orgID uuid.UUID, email, 
 	if err != nil {
 		return uuid.Nil, err
 	}
+	// Every door that creates an account fires user.registered (see the
+	// social JIT path); SCIM provisioning is one of them.
+	s.fireEvent(ctx, Event{Kind: "user.registered", UserID: userID, OrgID: orgID, Payload: map[string]any{
+		"handle": handle, "email": email, "emailVerified": true, "via": "scim",
+	}})
 	return userID, nil
 }
 

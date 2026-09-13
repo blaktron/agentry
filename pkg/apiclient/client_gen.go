@@ -13135,6 +13135,8 @@ type CreateAgentResponse struct {
 	HTTPResponse *http.Response
 	// JSON201 the response for an HTTP 201 `application/json` response
 	JSON201 *Agent
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
 	ApplicationproblemJSONDefault *Problem
 }
@@ -13142,6 +13144,11 @@ type CreateAgentResponse struct {
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
 func (r CreateAgentResponse) GetJSON201() *Agent {
 	return r.JSON201
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r CreateAgentResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
 }
 
 // GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
@@ -13758,6 +13765,10 @@ type SubmitVersionResponse struct {
 	HTTPResponse *http.Response
 	// JSON202 the response for an HTTP 202 `application/json` response
 	JSON202 *AgentVersion
+	// ApplicationproblemJSON402 the response for an HTTP 402 `application/problem+json` response
+	ApplicationproblemJSON402 *Problem
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Problem
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
 	ApplicationproblemJSONDefault *Problem
 }
@@ -13765,6 +13776,16 @@ type SubmitVersionResponse struct {
 // GetJSON202 returns the response for an HTTP 202 `application/json` response
 func (r SubmitVersionResponse) GetJSON202() *AgentVersion {
 	return r.JSON202
+}
+
+// GetApplicationproblemJSON402 returns the response for an HTTP 402 `application/problem+json` response
+func (r SubmitVersionResponse) GetApplicationproblemJSON402() *Problem {
+	return r.ApplicationproblemJSON402
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r SubmitVersionResponse) GetApplicationproblemJSON503() *Problem {
+	return r.ApplicationproblemJSON503
 }
 
 // GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
@@ -20744,6 +20765,13 @@ func ParseCreateAgentResponse(rsp *http.Response) (*CreateAgentResponse, error) 
 		}
 		response.JSON201 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -21177,6 +21205,20 @@ func ParseSubmitVersionResponse(rsp *http.Response) (*SubmitVersionResponse, err
 			return nil, err
 		}
 		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 402:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON402 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
