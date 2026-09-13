@@ -20,6 +20,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/blaktron/agentry/internal/api"
+	"github.com/jackc/pgx/v5"
+
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/gitsrv"
@@ -299,13 +301,21 @@ func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st 
 	return q, nil
 }
 
-// auditWriterFunc adapts the server's audit closure to AuditWriter.
-type auditWriterFunc func(context.Context, audit.Event) error
+// auditWriter adapts the server's audit closures to AuditWriter.
+type auditWriter struct {
+	write   func(context.Context, audit.Event) error
+	writeIn func(context.Context, pgx.Tx, audit.Event) error
+}
 
-func (f auditWriterFunc) Write(ctx context.Context, e audit.Event) error { return f(ctx, e) }
+func (w auditWriter) Write(ctx context.Context, e audit.Event) error { return w.write(ctx, e) }
+func (w auditWriter) WriteIn(ctx context.Context, tx pgx.Tx, e audit.Event) error {
+	return w.writeIn(ctx, tx, e)
+}
 
-// periodicTicker enqueues an extension's periodic job once now and then on
-// its period; the queue's SKIP LOCKED claim makes one replica run each.
+// periodicTicker enqueues a job once now and then on its period. Every
+// replica running this enqueues on its own clock; the queue's claim runs
+// each row once, so the handler must tolerate a run that finds nothing to
+// do (the core's watchdog does; an extension's job must, Job.Every).
 func periodicTicker(ctx context.Context, q queue.Client, kind, queueName string, every time.Duration, log *slog.Logger) {
 	if queueName == "" {
 		queueName = "core"
@@ -334,22 +344,7 @@ func periodicTicker(ctx context.Context, q queue.Client, kind, queueName string,
 const reconcileWindow = 5 * time.Minute
 
 func reconcileTicker(ctx context.Context, q queue.Client, log *slog.Logger) {
-	enqueue := func() {
-		if _, err := q.Enqueue(ctx, scan.JobScanReconcile, "core", struct{}{}); err != nil {
-			log.Error("worker: enqueue scan reconcile", "err", err)
-		}
-	}
-	enqueue()
-	t := time.NewTicker(reconcileWindow)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			enqueue()
-		}
-	}
+	periodicTicker(ctx, q, scan.JobScanReconcile, "core", reconcileWindow, log)
 }
 
 // mcpSweepWindow is how often the MCP server vulnerability sweep is
@@ -541,9 +536,14 @@ func hookCmd() *cobra.Command {
 // (migrateExtensions).
 func applyExtensions(srv *api.Server, exts []Extension) {
 	for _, e := range exts {
+		if a, ok := e.(Audits); ok {
+			for _, act := range a.AuditActions() {
+				registerAuditAction(e.Name(), act)
+			}
+		}
 		if b, ok := e.(Binds); ok {
-			pool, log, write := srv.ExtensionDeps()
-			b.Bind(Deps{DB: pool, Log: log.With("extension", e.Name()), Audit: auditWriterFunc(write)})
+			pool, log, write, writeIn := srv.ExtensionDeps()
+			b.Bind(Deps{DB: pool, Log: log.With("extension", e.Name()), Audit: auditWriter{write: write, writeIn: writeIn}})
 		}
 		srv.RegisterExtension(e.Name(), e.Routes)
 		if u, ok := e.(Unthrottles); ok {
@@ -553,8 +553,10 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 			srv.SetEntitlements(r)
 		}
 		if a, ok := e.(Admits); ok {
-			if adm := a.Admitter(); adm != nil {
-				srv.Reg().SetAdmitter(adm)
+			// No registry without a database (limited dev mode): nothing
+			// to admit into.
+			if adm, reg := a.Admitter(), srv.Reg(); adm != nil && reg != nil {
+				reg.SetAdmitter(adm)
 			}
 		}
 		if h := e.Hooks().Event; h != nil {
