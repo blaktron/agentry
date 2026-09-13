@@ -450,6 +450,13 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 	if err != nil {
 		return uuid.Nil, err
 	}
+	// The same event the native register handler fires: an extension that
+	// provisions something per account (a subscription tier's allowance)
+	// hears every new account, however it arrived (plan subscription-tiers
+	// §5.2; under externalOnly this is the only path that creates one).
+	s.fireEvent(r.Context(), Event{Kind: "user.registered", UserID: newUserID, Payload: map[string]any{
+		"handle": handle, "email": email, "via": "social", "provider": id.Provider,
+	}})
 	return newUserID, nil
 }
 

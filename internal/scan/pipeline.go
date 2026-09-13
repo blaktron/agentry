@@ -637,10 +637,17 @@ func (p *Pipeline) applyDecision(ctx context.Context, agent storegen.GetAgentByI
 	for _, f := range result.Findings {
 		counts[string(f.Severity)]++
 	}
-	p.reg.EmitAgentEvent(ctx, agent.ID, webhook.EventScanCompleted, map[string]any{
-		"version": v.Version, "runId": runID.String(), "reportDigest": result.ReportDigest,
-		"findings": counts, "reason": result.Decision.Reason,
-	})
+	completed := map[string]any{
+		"version": v.Version, "versionId": v.ID.String(), "runId": runID.String(), "reportDigest": result.ReportDigest,
+		"findings": counts, "reason": result.Decision.Reason, "outcome": string(result.Decision.Outcome),
+	}
+	if len(result.Report.StageErrors) > 0 {
+		// A stage error is the platform's own fault (S0/pipeline-error routes
+		// the version to review); an extension that charged for the
+		// submission refunds on this flag (plan subscription-tiers §5.4).
+		completed["pipelineError"] = true
+	}
+	p.reg.EmitAgentEvent(ctx, agent.ID, webhook.EventScanCompleted, completed)
 	sysEvent := audit.Event{ActorKind: audit.ActorSystem}
 	// §16.2 publish funnel: one verdict per version, recorded where the
 	// decision is acted on rather than where it is computed (the orchestrator

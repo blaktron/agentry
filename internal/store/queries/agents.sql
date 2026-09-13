@@ -41,6 +41,11 @@ ORDER BY a.name;
 -- name: CountAgentsInNamespace :one
 SELECT count(*) FROM agents WHERE namespace_id = $1;
 
+-- The private-agent cap a subscription tier sets (plan subscription-tiers
+-- §5.3): what a namespace holds today, so one more can be refused.
+-- name: CountPrivateAgentsInNamespace :one
+SELECT count(*) FROM agents WHERE namespace_id = $1 AND visibility = 'private';
+
 -- name: UpsertAgentUserGrant :exec
 INSERT INTO agent_user_grants (agent_id, user_id, role) VALUES ($1, $2, $3)
 ON CONFLICT (agent_id, user_id) DO UPDATE SET role = EXCLUDED.role, updated_at = now();

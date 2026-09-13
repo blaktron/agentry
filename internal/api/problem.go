@@ -34,6 +34,15 @@ type problemBody struct {
 }
 
 func writeProblem(w http.ResponseWriter, r *http.Request, status int, slug, title, detail string, fields ...FieldError) {
+	writeProblemWith(w, r, status, slug, title, detail, nil, fields...)
+}
+
+// writeProblemWith is writeProblem with RFC 9457 extension members: ext's
+// keys land at the top level of the body beside the standard ones (an
+// admission refusal's balance and reset date, say), so a client can render
+// its own sentence without parsing detail. Standard members win a
+// collision.
+func writeProblemWith(w http.ResponseWriter, r *http.Request, status int, slug, title, detail string, ext map[string]any, fields ...FieldError) {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
@@ -45,7 +54,24 @@ func writeProblem(w http.ResponseWriter, r *http.Request, status int, slug, titl
 		Instance: r.URL.Path,
 		Errors:   fields,
 	}
-	if err := json.NewEncoder(w).Encode(body); err != nil {
+	var out any = body
+	if len(ext) > 0 {
+		m := make(map[string]any, len(ext)+6)
+		for k, v := range ext {
+			m[k] = v
+		}
+		raw, err := json.Marshal(body)
+		if err == nil {
+			var std map[string]any
+			if json.Unmarshal(raw, &std) == nil {
+				for k, v := range std {
+					m[k] = v
+				}
+				out = m
+			}
+		}
+	}
+	if err := json.NewEncoder(w).Encode(out); err != nil {
 		slog.Warn("problem encode failed", "err", err)
 	}
 }
@@ -113,6 +139,34 @@ func problemTooMany(w http.ResponseWriter, r *http.Request, detail string) {
 
 func problemGone(w http.ResponseWriter, r *http.Request, detail string) {
 	writeProblem(w, r, http.StatusGone, "gone", "No longer available", detail)
+}
+
+// problemAdmissionRefused answers a registry admission refusal (plan
+// subscription-tiers §5.1) with the refusal's own status and slug — 402
+// credits-exhausted from the billing extension — and its fields at top
+// level. A refusal without a status is a 402: the request was well formed
+// and authorized, and only the account's allowance stood in its way.
+func problemAdmissionRefused(w http.ResponseWriter, r *http.Request, ref registry.Refusal) {
+	status, slug, title := ref.Status, ref.Slug, ref.Title
+	if status == 0 {
+		status = http.StatusPaymentRequired
+	}
+	if slug == "" {
+		slug = "admission-refused"
+	}
+	if title == "" {
+		title = "Submission refused"
+	}
+	writeProblemWith(w, r, status, slug, title, sentence(ref.Detail), ref.Fields)
+}
+
+// problemPrivateAgentCap answers the namespace's private-agent cap (plan
+// subscription-tiers §5.3): a 422 with its own slug, so a client can offer
+// the upgrade rather than a generic validation message.
+func problemPrivateAgentCap(w http.ResponseWriter, r *http.Request) {
+	writeProblem(w, r, http.StatusUnprocessableEntity, "private-agent-cap",
+		"Private agent cap reached",
+		"This namespace holds as many private agents as its subscription tier allows. Make one public, or upgrade the account.")
 }
 
 func problemUnavailable(w http.ResponseWriter, r *http.Request, detail string) {

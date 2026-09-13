@@ -84,6 +84,7 @@ func versionToAPI(v registry.Version) AgentVersion {
 // writeSubmitError maps registry submission errors onto problems.
 func (s *Server) writeSubmitError(w http.ResponseWriter, r *http.Request, err error) {
 	var vErr *registry.ErrValidation
+	var refused *registry.ErrAdmissionRefused
 	switch {
 	case errors.As(err, &vErr):
 		fields := make([]FieldError, 0, len(vErr.Issues))
@@ -100,6 +101,13 @@ func (s *Server) writeSubmitError(w http.ResponseWriter, r *http.Request, err er
 		writeProblem(w, r, http.StatusServiceUnavailable, "scan-not-scheduled",
 			"Scan not started",
 			"The registry recorded this version but could not schedule its scan. A watchdog routes it to review.")
+	case errors.As(err, &refused):
+		problemAdmissionRefused(w, r, refused.Refusal)
+	case errors.Is(err, registry.ErrAdmissionUnavailable):
+		s.log.Error("submit version: admission unavailable", "err", err)
+		writeProblem(w, r, http.StatusServiceUnavailable, "admission-unavailable",
+			"Submission not admitted",
+			"The registry could not check whether this account may submit. Nothing was recorded; retry shortly.")
 	case errors.Is(err, registry.ErrDenied):
 		problemValidation(w, r, sentence(err.Error()))
 	case errors.Is(err, auth.ErrUnauthorized):
