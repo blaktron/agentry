@@ -230,3 +230,49 @@ func TestNewJudgeProviderSelection(t *testing.T) {
 		t.Fatal("classifier without a base url must be a build error")
 	}
 }
+
+// The judge's token use is what a review costs (plan subscription-tiers §10):
+// each wire protocol reports it in its own envelope, and a response without
+// it leaves Usage nil rather than zero, so "unknown" and "free" never blur.
+func TestHTTPJudgeRecordsUsage(t *testing.T) {
+	cases := []struct {
+		name, provider string
+		body           map[string]any
+		want           *JudgeUsage
+	}{
+		{"openai", "openai", map[string]any{
+			"choices": []map[string]any{{"message": map[string]any{"content": testVerdictJSON}}},
+			"usage":   map[string]any{"prompt_tokens": 812, "completion_tokens": 97, "total_tokens": 909},
+		}, &JudgeUsage{PromptTokens: 812, CompletionTokens: 97}},
+		{"anthropic", "anthropic", map[string]any{
+			"content": []map[string]any{{"type": "text", "text": testVerdictJSON}},
+			"usage":   map[string]any{"input_tokens": 640, "output_tokens": 55},
+		}, &JudgeUsage{PromptTokens: 640, CompletionTokens: 55}},
+		{"openai without usage", "openai", map[string]any{
+			"choices": []map[string]any{{"message": map[string]any{"content": testVerdictJSON}}},
+		}, nil},
+		{"anthropic without usage", "anthropic", map[string]any{
+			"content": []map[string]any{{"type": "text", "text": testVerdictJSON}},
+		}, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(tc.body)
+			}))
+			defer srv.Close()
+			j := NewHTTPJudge(JudgeConfig{Provider: tc.provider, BaseURL: srv.URL, APIKey: "k"})
+			v, err := j.Judge(context.Background(), judgeTestContent())
+			if err != nil {
+				t.Fatalf("judge: %v", err)
+			}
+			switch {
+			case tc.want == nil && v.Usage != nil:
+				t.Fatalf("usage must be nil when the response reports none, got %+v", *v.Usage)
+			case tc.want != nil && (v.Usage == nil || *v.Usage != *tc.want):
+				t.Fatalf("usage: got %+v want %+v", v.Usage, tc.want)
+			}
+		})
+	}
+}

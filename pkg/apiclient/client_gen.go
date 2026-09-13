@@ -1447,6 +1447,12 @@ type EmailNotificationSettings struct {
 	ReviewDecisions bool `json:"reviewDecisions"`
 }
 
+// JudgeUsage The token use the LLM judge's provider reported for this scan run — what the review cost, as measured. Present for platform staff only, and absent when the provider reported none (the static and classifier judges, an endpoint without a usage block); absent means unknown, not zero. Not part of the signed report.
+type JudgeUsage struct {
+	CompletionTokens int `json:"completionTokens"`
+	PromptTokens     int `json:"promptTokens"`
+}
+
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
 	// Login Handle or email.
@@ -1763,8 +1769,11 @@ type ScanReport struct {
 	Findings      []ScanFinding   `json:"findings"`
 
 	// FinishedAt When this scan run completed: the date the report describes.
-	FinishedAt     *time.Time          `json:"finishedAt,omitempty"`
-	JudgeModel     *string             `json:"judgeModel,omitempty"`
+	FinishedAt *time.Time `json:"finishedAt,omitempty"`
+	JudgeModel *string    `json:"judgeModel,omitempty"`
+
+	// JudgeUsage The token use the LLM judge's provider reported for this scan run — what the review cost, as measured. Present for platform staff only, and absent when the provider reported none (the static and classifier judges, an endpoint without a usage block); absent means unknown, not zero. Not part of the signed report.
+	JudgeUsage     *JudgeUsage         `json:"judgeUsage,omitempty"`
 	ReportDigest   *string             `json:"reportDigest,omitempty"`
 	RulesetVersion *string             `json:"rulesetVersion,omitempty"`
 	ScanRunId      *openapi_types.UUID `json:"scanRunId,omitempty"`
