@@ -30,10 +30,14 @@ RETURNING *;
 -- judge_prompt_hash is written here rather than at CreateScanRun: the run row
 -- must exist before stages run (stage results reference it), and S5 only
 -- reports which rubric version it used once it has run (§8.4.4).
+-- The judge's token use is written the same way: known only once S5 ran,
+-- NULL when the provider reported none.
 -- name: FinishScanRun :exec
 UPDATE scan_runs
 SET status = $2, finished_at = now(), report_digest = $3,
-    judge_prompt_hash = coalesce(sqlc.narg('judge_prompt_hash'), judge_prompt_hash)
+    judge_prompt_hash = coalesce(sqlc.narg('judge_prompt_hash'), judge_prompt_hash),
+    judge_prompt_tokens = coalesce(sqlc.narg('judge_prompt_tokens'), judge_prompt_tokens),
+    judge_completion_tokens = coalesce(sqlc.narg('judge_completion_tokens'), judge_completion_tokens)
 WHERE id = $1;
 
 -- name: GetScanRun :one

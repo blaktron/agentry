@@ -81,6 +81,16 @@ func (s *Server) scanReportFrom(r *http.Request, run storegen.ScanRun, versionSt
 	if run.JudgeModel != nil {
 		rep.JudgeModel = run.JudgeModel
 	}
+	// What the review cost is the platform's measurement, not part of the
+	// public verdict: staff read it, everyone else sees the same report as
+	// before (plan subscription-tiers §10).
+	if p := principalFrom(r.Context()); p != nil && p.PlatformStaff &&
+		run.JudgePromptTokens != nil && run.JudgeCompletionTokens != nil {
+		rep.JudgeUsage = &JudgeUsage{
+			PromptTokens:     int(*run.JudgePromptTokens),
+			CompletionTokens: int(*run.JudgeCompletionTokens),
+		}
+	}
 	if run.FinishedAt != nil {
 		rep.FinishedAt = run.FinishedAt
 	}

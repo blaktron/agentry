@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
 )
@@ -76,5 +77,26 @@ func TestBedrockJudgeFailsClosed(t *testing.T) {
 		if err == nil {
 			t.Fatalf("%s: expected an error", name)
 		}
+	}
+}
+
+// Converse reports token use in its own Usage block; the judge records it,
+// and a reply without one records nothing rather than zero.
+func TestBedrockJudgeRecordsUsage(t *testing.T) {
+	out := converseText(testVerdictJSON)
+	out.Usage = &types.TokenUsage{InputTokens: aws.Int32(700), OutputTokens: aws.Int32(60)}
+	v, err := newBedrockJudge(&fakeConverse{out: out}, "").Judge(context.Background(), judgeTestContent())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Usage == nil || v.Usage.PromptTokens != 700 || v.Usage.CompletionTokens != 60 {
+		t.Fatalf("usage: %+v", v.Usage)
+	}
+	v, err = newBedrockJudge(&fakeConverse{out: converseText(testVerdictJSON)}, "").Judge(context.Background(), judgeTestContent())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Usage != nil {
+		t.Fatalf("usage must be nil without a Usage block, got %+v", *v.Usage)
 	}
 }

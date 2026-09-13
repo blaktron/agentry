@@ -255,7 +255,7 @@ func (q *Queries) CreateRulesetRelease(ctx context.Context, arg CreateRulesetRel
 const createScanRun = `-- name: CreateScanRun :one
 INSERT INTO scan_runs (id, version_id, trigger, ruleset_release_id, policy_snapshot, judge_model, judge_prompt_hash, status)
 VALUES ($1, $2, $3, $4, $5, $6, $7, 'running')
-RETURNING id, version_id, trigger, ruleset_release_id, policy_snapshot, judge_model, judge_prompt_hash, status, started_at, finished_at, report_digest
+RETURNING id, version_id, trigger, ruleset_release_id, policy_snapshot, judge_model, judge_prompt_hash, status, started_at, finished_at, report_digest, judge_prompt_tokens, judge_completion_tokens
 `
 
 type CreateScanRunParams struct {
@@ -291,6 +291,8 @@ func (q *Queries) CreateScanRun(ctx context.Context, arg CreateScanRunParams) (S
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.ReportDigest,
+		&i.JudgePromptTokens,
+		&i.JudgeCompletionTokens,
 	)
 	return i, err
 }
@@ -338,26 +340,34 @@ func (q *Queries) DeleteFindingsForScanner(ctx context.Context, arg DeleteFindin
 const finishScanRun = `-- name: FinishScanRun :exec
 UPDATE scan_runs
 SET status = $2, finished_at = now(), report_digest = $3,
-    judge_prompt_hash = coalesce($4, judge_prompt_hash)
+    judge_prompt_hash = coalesce($4, judge_prompt_hash),
+    judge_prompt_tokens = coalesce($5, judge_prompt_tokens),
+    judge_completion_tokens = coalesce($6, judge_completion_tokens)
 WHERE id = $1
 `
 
 type FinishScanRunParams struct {
-	ID              uuid.UUID `json:"id"`
-	Status          string    `json:"status"`
-	ReportDigest    *string   `json:"report_digest"`
-	JudgePromptHash *string   `json:"judge_prompt_hash"`
+	ID                    uuid.UUID `json:"id"`
+	Status                string    `json:"status"`
+	ReportDigest          *string   `json:"report_digest"`
+	JudgePromptHash       *string   `json:"judge_prompt_hash"`
+	JudgePromptTokens     *int32    `json:"judge_prompt_tokens"`
+	JudgeCompletionTokens *int32    `json:"judge_completion_tokens"`
 }
 
 // judge_prompt_hash is written here rather than at CreateScanRun: the run row
 // must exist before stages run (stage results reference it), and S5 only
 // reports which rubric version it used once it has run (§8.4.4).
+// The judge's token use is written the same way: known only once S5 ran,
+// NULL when the provider reported none.
 func (q *Queries) FinishScanRun(ctx context.Context, arg FinishScanRunParams) error {
 	_, err := q.db.Exec(ctx, finishScanRun,
 		arg.ID,
 		arg.Status,
 		arg.ReportDigest,
 		arg.JudgePromptHash,
+		arg.JudgePromptTokens,
+		arg.JudgeCompletionTokens,
 	)
 	return err
 }
@@ -687,7 +697,7 @@ func (q *Queries) GetScanResultCache(ctx context.Context, arg GetScanResultCache
 }
 
 const getScanRun = `-- name: GetScanRun :one
-SELECT id, version_id, trigger, ruleset_release_id, policy_snapshot, judge_model, judge_prompt_hash, status, started_at, finished_at, report_digest FROM scan_runs WHERE id = $1
+SELECT id, version_id, trigger, ruleset_release_id, policy_snapshot, judge_model, judge_prompt_hash, status, started_at, finished_at, report_digest, judge_prompt_tokens, judge_completion_tokens FROM scan_runs WHERE id = $1
 `
 
 func (q *Queries) GetScanRun(ctx context.Context, id uuid.UUID) (ScanRun, error) {
@@ -705,6 +715,8 @@ func (q *Queries) GetScanRun(ctx context.Context, id uuid.UUID) (ScanRun, error)
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.ReportDigest,
+		&i.JudgePromptTokens,
+		&i.JudgeCompletionTokens,
 	)
 	return i, err
 }
@@ -783,7 +795,7 @@ func (q *Queries) LatestRuleset(ctx context.Context) (RulesetRelease, error) {
 }
 
 const latestScanRunForVersion = `-- name: LatestScanRunForVersion :one
-SELECT id, version_id, trigger, ruleset_release_id, policy_snapshot, judge_model, judge_prompt_hash, status, started_at, finished_at, report_digest FROM scan_runs WHERE version_id = $1 ORDER BY started_at DESC LIMIT 1
+SELECT id, version_id, trigger, ruleset_release_id, policy_snapshot, judge_model, judge_prompt_hash, status, started_at, finished_at, report_digest, judge_prompt_tokens, judge_completion_tokens FROM scan_runs WHERE version_id = $1 ORDER BY started_at DESC LIMIT 1
 `
 
 func (q *Queries) LatestScanRunForVersion(ctx context.Context, versionID uuid.UUID) (ScanRun, error) {
@@ -801,6 +813,8 @@ func (q *Queries) LatestScanRunForVersion(ctx context.Context, versionID uuid.UU
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.ReportDigest,
+		&i.JudgePromptTokens,
+		&i.JudgeCompletionTokens,
 	)
 	return i, err
 }
@@ -1294,7 +1308,7 @@ func (q *Queries) ListStuckScanningVersions(ctx context.Context, arg ListStuckSc
 }
 
 const runningScanRunForVersion = `-- name: RunningScanRunForVersion :one
-SELECT id, version_id, trigger, ruleset_release_id, policy_snapshot, judge_model, judge_prompt_hash, status, started_at, finished_at, report_digest FROM scan_runs
+SELECT id, version_id, trigger, ruleset_release_id, policy_snapshot, judge_model, judge_prompt_hash, status, started_at, finished_at, report_digest, judge_prompt_tokens, judge_completion_tokens FROM scan_runs
 WHERE version_id = $1 AND trigger = $2 AND status = 'running'
 ORDER BY started_at DESC LIMIT 1
 `
@@ -1319,6 +1333,8 @@ func (q *Queries) RunningScanRunForVersion(ctx context.Context, arg RunningScanR
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.ReportDigest,
+		&i.JudgePromptTokens,
+		&i.JudgeCompletionTokens,
 	)
 	return i, err
 }

@@ -101,6 +101,9 @@ func (j *BedrockJudge) Judge(ctx context.Context, content JudgeContent) (JudgeVe
 	}
 	verdict.Model = j.model
 	verdict.PromptHash = j.promptHash
+	if out.Usage != nil && out.Usage.InputTokens != nil && out.Usage.OutputTokens != nil {
+		verdict.Usage = &JudgeUsage{PromptTokens: int(*out.Usage.InputTokens), CompletionTokens: int(*out.Usage.OutputTokens)}
+	}
 	return verdict, nil
 }
 

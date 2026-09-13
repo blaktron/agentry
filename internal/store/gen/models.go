@@ -365,17 +365,19 @@ type ScanResultCache struct {
 }
 
 type ScanRun struct {
-	ID               uuid.UUID  `json:"id"`
-	VersionID        uuid.UUID  `json:"version_id"`
-	Trigger          string     `json:"trigger"`
-	RulesetReleaseID uuid.UUID  `json:"ruleset_release_id"`
-	PolicySnapshot   []byte     `json:"policy_snapshot"`
-	JudgeModel       *string    `json:"judge_model"`
-	JudgePromptHash  *string    `json:"judge_prompt_hash"`
-	Status           string     `json:"status"`
-	StartedAt        time.Time  `json:"started_at"`
-	FinishedAt       *time.Time `json:"finished_at"`
-	ReportDigest     *string    `json:"report_digest"`
+	ID                    uuid.UUID  `json:"id"`
+	VersionID             uuid.UUID  `json:"version_id"`
+	Trigger               string     `json:"trigger"`
+	RulesetReleaseID      uuid.UUID  `json:"ruleset_release_id"`
+	PolicySnapshot        []byte     `json:"policy_snapshot"`
+	JudgeModel            *string    `json:"judge_model"`
+	JudgePromptHash       *string    `json:"judge_prompt_hash"`
+	Status                string     `json:"status"`
+	StartedAt             time.Time  `json:"started_at"`
+	FinishedAt            *time.Time `json:"finished_at"`
+	ReportDigest          *string    `json:"report_digest"`
+	JudgePromptTokens     *int32     `json:"judge_prompt_tokens"`
+	JudgeCompletionTokens *int32     `json:"judge_completion_tokens"`
 }
 
 type ScanStageResult struct {
