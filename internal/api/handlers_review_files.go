@@ -54,7 +54,7 @@ func (s *Server) reviewArchive(w http.ResponseWriter, r *http.Request, id uuid.U
 	}
 	blob, err := s.blobs.Get(r.Context(), *v.ArchiveKey)
 	if err != nil {
-		s.log.Error("review archive fetch", "err", err)
+		s.log.ErrorContext(r.Context(), "review archive fetch", "err", err)
 		problemInternal(w, r)
 		return nil, false
 	}
@@ -117,7 +117,7 @@ func (s *Server) ListReviewFiles(w http.ResponseWriter, r *http.Request, id open
 		return true, nil
 	})
 	if err != nil {
-		s.log.Error("review archive walk", "err", err)
+		s.log.ErrorContext(r.Context(), "review archive walk", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -161,7 +161,7 @@ func (s *Server) GetReviewFile(w http.ResponseWriter, r *http.Request, id openap
 		return false, nil
 	})
 	if err != nil {
-		s.log.Error("review archive read", "err", err)
+		s.log.ErrorContext(r.Context(), "review archive read", "err", err)
 		problemInternal(w, r)
 		return
 	}

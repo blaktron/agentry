@@ -29,7 +29,7 @@ func (s *Server) ListUserDependencyAlerts(w http.ResponseWriter, r *http.Request
 	p := principalFrom(r.Context())
 	rows, err := s.q().ListOpenMCPDependencyAlertsForSubmitter(r.Context(), p.UserID)
 	if err != nil {
-		s.log.Error("dependency alerts: list", "err", err)
+		s.log.ErrorContext(r.Context(), "dependency alerts: list", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -58,7 +58,7 @@ func (s *Server) ListUserDependencyAlerts(w http.ResponseWriter, r *http.Request
 func (s *Server) dependencyAlertsForAgent(r *http.Request, agentID uuid.UUID, name string) []DependencyAlert {
 	rows, err := s.q().ListOpenMCPDependencyAlertsForAgent(r.Context(), agentID)
 	if err != nil {
-		s.log.Error("dependency alerts: agent", "agent", agentID, "err", err)
+		s.log.ErrorContext(r.Context(), "dependency alerts: agent", "agent", agentID, "err", err)
 		return nil
 	}
 	out := make([]DependencyAlert, 0, len(rows))
@@ -106,7 +106,7 @@ func (s *Server) GetMcpServerScan(w http.ResponseWriter, r *http.Request, params
 			writeProblem(w, r, http.StatusNotFound, "not-found", "Not found", "No manifest has declared this MCP server version yet.")
 			return
 		}
-		s.log.Error("mcp server scan: get", "err", err)
+		s.log.ErrorContext(r.Context(), "mcp server scan: get", "err", err)
 		problemInternal(w, r)
 		return
 	}

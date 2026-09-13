@@ -94,10 +94,16 @@ func (w *Writer) Write(ctx context.Context, q *storegen.Queries, e Event) error 
 	// request's log lines carry, so a row and its lines find each other.
 	reqID := logx.RequestIDFrom(ctx)
 	if reqID != "" {
-		if e.Detail == nil {
-			e.Detail = map[string]any{}
+		// A copy: the map is the caller's, and a caller-supplied request_id
+		// is not ours to overwrite.
+		detail := make(map[string]any, len(e.Detail)+1)
+		for k, v := range e.Detail {
+			detail[k] = v
 		}
-		e.Detail["request_id"] = reqID
+		if _, set := detail["request_id"]; !set {
+			detail["request_id"] = reqID
+		}
+		e.Detail = detail
 	}
 
 	detail, err := json.Marshal(e.Detail)

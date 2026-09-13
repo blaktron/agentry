@@ -16,7 +16,7 @@ line carries:
 | Field | Meaning |
 |---|---|
 | `time`, `level`, `msg` | when, at what level (`DEBUG`, `INFO`, `WARN`, `ERROR`), and the line's own words |
-| `service` | the binary's name: `agentryd` or `secureagentryd` |
+| `service` | the binary's name as invoked: `agentryd` or `secureagentryd` |
 | `role` | the role this process runs: `all`, `api`, `git` or `worker` |
 | `version` | the build |
 | `request_id` | on every line written inside a request (see below); absent outside one |
@@ -35,17 +35,20 @@ Every request the server handles has one id, returned to the caller as
 `X-Request-Id` and carried on every line the request writes — the access
 line, a handler's warning, the panic line — and on the audit row of any
 mutation the request made (`detail.request_id`). A row and its lines find
-each other by it, and one browser request keeps one id from the edge,
-through the site, to the server.
+each other by it.
 
-The server mints the id (16 hex characters) unless the request arrived
-through a **proxy hop the server is configured to believe**
-(`http.trustedProxies` ≥ 1, the same setting that decides whether
-`X-Forwarded-For` is believed) and carries an `X-Request-Id` matching
-`^[A-Za-z0-9-]{8,64}$`; then that id is honoured.
-An id from a direct client is ignored — anyone can send the header, and
-honouring it would let a caller stamp its own id onto the server's lines
-and audit rows.
+The server mints the id (16 hex characters). It honours an inbound
+`X-Request-Id` instead — so that one id names a request on the proxy in
+front and on the server — only when the operator has said that **the hop
+in front sets the header on every request it forwards**
+(`http.proxyRequestID: true` / `AGENTRY_PROXY_REQUEST_ID=true`, which
+itself needs `http.trustedProxies` ≥ 1) and the value matches
+`^[A-Za-z0-9-]{8,64}$`. The hop count alone is not enough: anyone can send
+the header, and a proxy that merely forwards it would let a caller stamp
+its own id onto the server's lines and audit rows. The compose stack's
+headless edge sets it (`proxy_set_header X-Request-Id $request_id`); a
+site's edge config in front of the server must do the same before the flag
+is turned on there.
 
 ## The access line
 
@@ -112,11 +115,13 @@ drop accounting.
   ending in `token`, `secret`, `password`, `passwd`, `authorization`,
   `cookie`, `api_key`, `private_key`, `signing_key`, `secret_key`,
   `access_key`, `client_secret` or `credential(s)` becomes `[redacted]`,
-  and any token the registry minted — `agy_` PATs, `agys_` sessions,
-  `agyv_` verification tokens, each followed by 52 base32 characters — is
-  masked wherever it appears (in a message, a value, an error, a nested
-  object), keeping its 12-character display prefix so an incident still
-  traces to the credential. Masked, not dropped: the line about the incident
+  and any token the registry minted — 52 base32 characters, with the kind's
+  prefix (`agy_` PATs, `agys_` sessions, `agyv_` verification tokens,
+  `agyscim_` SCIM tokens, `agd_` desktop grants, `whsec_` webhook secrets,
+  `csrf_` CSRF tokens) or bare (OIDC state and nonce, domain verification)
+  — is masked wherever it appears (in a message, a value, an error, a
+  nested object), keeping its 12-character display prefix so an incident
+  still traces to the credential. Masked, not dropped: the line about the incident
   is worth more than the value it would have leaked. The collector applies
   the same token pattern again as a second net.
 - **A person's name or email address.** Lines carry opaque principal ids.
@@ -126,7 +131,8 @@ drop accounting.
   token; an address cannot be verified through it. Use a sender.
 - **A value above 4 KB.** Docker splits a line above 16 KB into pieces that
   are no longer JSON and cannot be reassembled, so every string value is cut
-  at 4,096 bytes with a `…[truncated]` marker.
+  at 4,096 bytes (on a character boundary) with a `…[truncated]` marker; a
+  panic's `stack` keeps 8 KB, the one value worth most of a line.
 - **The probes.** No access line for `/healthz`, `/readyz` or `/metrics`.
 
 The client address is in a line (`client_ip`) for as long as the lines are

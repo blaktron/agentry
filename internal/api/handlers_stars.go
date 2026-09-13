@@ -39,7 +39,7 @@ func (s *Server) StarAgent(w http.ResponseWriter, r *http.Request, ns Namespace,
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("star agent", "err", err)
+		s.log.ErrorContext(r.Context(), "star agent", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -73,7 +73,7 @@ func (s *Server) UnstarAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("unstar agent", "err", err)
+		s.log.ErrorContext(r.Context(), "unstar agent", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -94,13 +94,13 @@ func (s *Server) GetAgentStats(w http.ResponseWriter, r *http.Request, ns Namesp
 	}
 	stars, err := s.q().CountAgentStars(r.Context(), a.ID)
 	if err != nil {
-		s.log.Error("agent stars", "err", err)
+		s.log.ErrorContext(r.Context(), "agent stars", "err", err)
 		problemInternal(w, r)
 		return
 	}
 	counts, err := s.q().GetAgentInstallCounts(r.Context(), a.ID)
 	if err != nil {
-		s.log.Error("agent installs", "err", err)
+		s.log.ErrorContext(r.Context(), "agent installs", "err", err)
 		problemInternal(w, r)
 		return
 	}

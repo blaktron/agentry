@@ -56,7 +56,10 @@ func TestRequestIDStampedFromContext(t *testing.T) {
 // Every token kind the registry mints is masked wherever it appears: as a
 // value, inside a message, inside an error, inside a nested map.
 func TestTokensAreMaskedEverywhere(t *testing.T) {
-	kinds := map[string]string{"pat": auth.PATPrefix, "session": auth.SessionPrefix, "verification": auth.VerificationPrefix}
+	kinds := map[string]string{
+		"pat": auth.PATPrefix, "session": auth.SessionPrefix, "verification": auth.VerificationPrefix,
+		"scim": "agyscim_", "desktop grant": "agd_", "webhook secret": "whsec_", "csrf": "csrf_", "bare (oidc state, domain verification)": "",
+	}
 	for name, prefix := range kinds {
 		tok, err := auth.NewToken(prefix)
 		if err != nil {
@@ -117,7 +120,8 @@ func TestSecretNamedKeysAreRedacted(t *testing.T) {
 }
 
 // A string above MaxStringLen is cut so the whole line stays below Docker's
-// 16 KB split; the marker says it was.
+// 16 KB split; the marker says it was; the cut lands on a rune boundary; a
+// panic's stack gets more room than any other value.
 func TestLongValuesAreTruncated(t *testing.T) {
 	var buf bytes.Buffer
 	log := logx.New(logx.Options{W: &buf})
@@ -130,6 +134,25 @@ func TestLongValuesAreTruncated(t *testing.T) {
 	v := m["v"].(string)
 	if len(v) != logx.MaxStringLen+len("…[truncated]") || !strings.HasSuffix(v, "…[truncated]") {
 		t.Fatalf("v = %d bytes, suffix %q", len(v), v[len(v)-14:])
+	}
+
+	// The panic line's shape: the stack keeps more than any other value and
+	// the line still fits.
+	buf.Reset()
+	log.Error("panic in handler", "path", "/api/v1/x", "panic", big, "stack", strings.Repeat("s", 20000))
+	if buf.Len() > 16*1024 {
+		t.Fatalf("panic line is %d bytes; Docker splits above 16384", buf.Len())
+	}
+	if st := line(t, &buf)["stack"].(string); len(st) != logx.MaxStackLen+len("…[truncated]") {
+		t.Fatalf("stack = %d bytes, want the stack bound", len(st))
+	}
+
+	buf.Reset()
+	multibyte := strings.Repeat("é", 3000) // 6000 bytes; 4096 is not a rune boundary
+	log.Info("x", "v", multibyte)
+	got := line(t, &buf)["v"].(string)
+	if strings.ContainsRune(got, '\uFFFD') || !strings.HasSuffix(got, "…[truncated]") {
+		t.Fatalf("truncation split a rune: %q", got[len(got)-20:])
 	}
 }
 

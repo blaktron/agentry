@@ -105,7 +105,7 @@ func (s *Server) SetOrgPolicy(w http.ResponseWriter, r *http.Request, org OrgHan
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("set org policy", "err", err)
+		s.log.ErrorContext(r.Context(), "set org policy", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -187,7 +187,7 @@ func (s *Server) PlatformAgentAction(w http.ResponseWriter, r *http.Request, ns 
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("platform action", "err", err)
+		s.log.ErrorContext(r.Context(), "platform action", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -207,7 +207,7 @@ func (s *Server) PlatformAgentAction(w http.ResponseWriter, r *http.Request, ns 
 	case "quarantine":
 		if a.LatestPublishedVersionID != nil {
 			if qerr := s.pipeline.Quarantine(r.Context(), *a.LatestPublishedVersionID, reason, sysEvent); qerr != nil {
-				s.log.Error("platform quarantine", "agent", a.ID, "err", qerr)
+				s.log.ErrorContext(r.Context(), "platform quarantine", "agent", a.ID, "err", qerr)
 			} else {
 				moved = 1
 			}
@@ -220,11 +220,11 @@ func (s *Server) PlatformAgentAction(w http.ResponseWriter, r *http.Request, ns 
 	if err != nil {
 		// The agent flag committed; the version walk did not finish. Report
 		// it rather than returning 204 for a half-applied T&S action.
-		s.log.Error("platform action version walk", "action", action, "agent", a.ID, "err", err)
+		s.log.ErrorContext(r.Context(), "platform action version walk", "action", action, "agent", a.ID, "err", err)
 		problemInternal(w, r)
 		return
 	}
-	s.log.Info("platform trust & safety action", "action", action,
+	s.log.InfoContext(r.Context(), "platform trust & safety action", "action", action,
 		"agent", ns+"/"+name, "versions", moved)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -293,7 +293,7 @@ func (s *Server) listAdvisoryFeed(w http.ResponseWriter, r *http.Request, params
 		Limit: int32(limit), BeforeTime: before, BeforeID: beforeID,
 	})
 	if err != nil {
-		s.log.Error("advisory feed", "err", err)
+		s.log.ErrorContext(r.Context(), "advisory feed", "err", err)
 		problemInternal(w, r)
 		return
 	}

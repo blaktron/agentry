@@ -19,10 +19,11 @@ import (
 // database: what the access line carries, when the probes are skipped, and
 // when an inbound X-Request-Id is honoured.
 
-func contractServer(t *testing.T, trustedProxies int) (*httptest.Server, *bytes.Buffer) {
+func contractServer(t *testing.T, trustedProxies int, proxyRequestID bool) (*httptest.Server, *bytes.Buffer) {
 	t.Helper()
 	cfg := config.Default()
 	cfg.HTTP.TrustedProxies = trustedProxies
+	cfg.HTTP.ProxyRequestID = proxyRequestID
 	var buf bytes.Buffer
 	log := logx.New(logx.Options{W: &buf, Service: "agentryd", Role: "api", Version: "test"})
 	srv := httptest.NewServer(api.NewHandler(api.New(cfg, nil, log)))
@@ -61,7 +62,7 @@ func get(t *testing.T, url string, headers map[string]string) *http.Response {
 var mintedID = regexp.MustCompile(`^[0-9a-f]{16}$`)
 
 func TestAccessLineCarriesTheContract(t *testing.T) {
-	srv, buf := contractServer(t, 0)
+	srv, buf := contractServer(t, 0, false)
 	res := get(t, srv.URL+"/api/v1/meta", nil)
 	id := res.Header.Get("X-Request-Id")
 	if !mintedID.MatchString(id) {
@@ -94,7 +95,7 @@ func TestAccessLineCarriesTheContract(t *testing.T) {
 
 // The probes are polled every few seconds; they are not access-logged.
 func TestProbesAreNotAccessLogged(t *testing.T) {
-	srv, buf := contractServer(t, 0)
+	srv, buf := contractServer(t, 0, false)
 	for _, p := range []string{"/healthz", "/readyz", "/metrics"} {
 		buf.Reset()
 		get(t, srv.URL+p, nil)
@@ -104,26 +105,32 @@ func TestProbesAreNotAccessLogged(t *testing.T) {
 	}
 }
 
-// An inbound X-Request-Id is honoured exactly as far as the client address is
-// (D19): only through a trusted proxy hop, and only when well-formed.
-func TestInboundRequestIDHonouredOnlyFromATrustedHop(t *testing.T) {
+// An inbound X-Request-Id is honoured only when the operator has said the
+// hop in front sets it (http.proxyRequestID) on top of a trusted hop count —
+// a hop that merely forwards the header would let a client choose its own
+// id — and only when well-formed (D19).
+func TestInboundRequestIDHonouredOnlyWhenTheHopSetsIt(t *testing.T) {
 	const edgeID = "5f3a9c0e1b2d4f6a8c0e2b4d6f8a0c1e" // nginx's $request_id shape
 	cases := []struct {
 		name    string
 		trusted int
+		proxyID bool
 		header  string
 		honour  bool
 	}{
-		{"direct client with a header: minted", 0, edgeID, false},
-		{"trusted hop, well-formed: honoured", 1, edgeID, true},
-		{"trusted hop, malformed: minted", 1, "not an id!", false},
-		{"trusted hop, too short: minted", 1, "abc", false},
-		{"trusted hop, too long: minted", 1, strings.Repeat("a", 65), false},
-		{"trusted hop, no header: minted", 1, "", false},
+		{"direct client with a header: minted", 0, false, edgeID, false},
+		{"trusted hop that only forwards the header: minted", 1, false, edgeID, false},
+		{"flag without a hop count: minted", 0, true, edgeID, false},
+		{"hop that sets it, well-formed: honoured", 1, true, edgeID, true},
+		{"hop that sets it, hyphenated id: honoured", 1, true, "edge-00112233445566778899", true},
+		{"hop that sets it, malformed: minted", 1, true, "not an id!", false},
+		{"hop that sets it, too short: minted", 1, true, "abc", false},
+		{"hop that sets it, too long: minted", 1, true, strings.Repeat("a", 65), false},
+		{"hop that sets it, no header: minted", 1, true, "", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			srv, buf := contractServer(t, c.trusted)
+			srv, buf := contractServer(t, c.trusted, c.proxyID)
 			h := map[string]string{}
 			if c.header != "" {
 				h["X-Request-Id"] = c.header
@@ -168,7 +175,7 @@ func TestWrapMiddlewareGivesABareMuxTheContract(t *testing.T) {
 // carries the same id in its detail that the request's lines carry, so a row
 // and its lines find each other. Needs the database (the row is the record).
 func TestRequestIDReachesTheAuditRow(t *testing.T) {
-	env := newTestEnvCfg(t, func(c *config.Config) { c.HTTP.TrustedProxies = 1 })
+	env := newTestEnvCfg(t, func(c *config.Config) { c.HTTP.TrustedProxies = 1; c.HTTP.ProxyRequestID = true })
 	h := env.register("reqid")
 	sess := env.login(h)
 	const id = "edge-00112233445566778899aabbccddeeff"
@@ -178,7 +185,7 @@ func TestRequestIDReachesTheAuditRow(t *testing.T) {
 		t.Fatalf("PATCH /user: %d", res.StatusCode)
 	}
 	if got := res.Header.Get("X-Request-Id"); got != id {
-		t.Fatalf("response id %q, want the honoured %q (one trusted hop)", got, id)
+		t.Fatalf("response id %q, want the honoured %q (one hop that sets it)", got, id)
 	}
 	var n int
 	err := env.st.Pool().QueryRow(context.Background(),

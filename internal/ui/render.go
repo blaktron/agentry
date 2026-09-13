@@ -120,7 +120,7 @@ func loadTemplates() (templates, error) {
 func (h *handler) render(w http.ResponseWriter, r *http.Request, status int, name string, p page) {
 	t, ok := h.tmpl[name]
 	if !ok {
-		h.log.Error("ui: no template", "name", name)
+		h.log.ErrorContext(r.Context(), "ui: no template", "name", name)
 		http.Error(w, "page missing", http.StatusInternalServerError)
 		return
 	}
@@ -152,6 +152,6 @@ func (h *handler) render(w http.ResponseWriter, r *http.Request, status int, nam
 	w.Header().Set("Content-Security-Policy", h.csp)
 	w.WriteHeader(status)
 	if err := t.ExecuteTemplate(w, "layout", p); err != nil {
-		h.log.Error("ui: render", "name", name, "err", err)
+		h.log.ErrorContext(r.Context(), "ui: render", "name", name, "err", err)
 	}
 }

@@ -73,6 +73,10 @@ func TestValidateGuards(t *testing.T) {
 		{"bad env", func(c *Config) { c.Env = "yolo" }},
 		{"bad storage", func(c *Config) { c.Storage.Kind = "ftp" }},
 		{"bad judge", func(c *Config) { c.Judge.Provider = "gpt" }},
+		// Honouring an inbound request id needs a hop that sets it; the flag
+		// without a hop count is a contradiction, not a default.
+		{"proxyRequestID without a hop", func(c *Config) { c.HTTP.ProxyRequestID = true; c.HTTP.TrustedProxies = 0 }},
+		{"bad audit stream kind", func(c *Config) { c.Audit.StreamKind = "kafka" }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

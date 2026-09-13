@@ -66,6 +66,13 @@ type HTTP struct {
 	// callers the ability to choose their own rate-limit bucket, so it must
 	// match the deployment exactly (§19, §13.5).
 	TrustedProxies int `yaml:"trustedProxies"`
+	// ProxyRequestID says the hop in front SETS X-Request-Id on every request
+	// it forwards (the compose edge does; an ALB does not), so an inbound id
+	// is honoured (docs/logging.md). Off (the default) means the server mints
+	// its own and ignores the header. A trusted hop count is not enough on
+	// its own: a hop that forwards the header without overwriting it lets
+	// any client choose the id stamped on its lines and audit rows.
+	ProxyRequestID bool `yaml:"proxyRequestID"`
 }
 
 // Database configures the PostgreSQL system of record (D-03).
@@ -700,6 +707,9 @@ func applyEnv(c *Config) error {
 	if err := dur("AGENTRY_METRICS_QUEUE_SAMPLE_INTERVAL", &c.Telemetry.QueueSampleInterval); err != nil {
 		return err
 	}
+	if err := boolean("AGENTRY_PROXY_REQUEST_ID", &c.HTTP.ProxyRequestID); err != nil {
+		return err
+	}
 	if err := integer("AGENTRY_TRUSTED_PROXIES", &c.HTTP.TrustedProxies); err != nil {
 		return err
 	}
@@ -877,6 +887,9 @@ func (c Config) Validate() error {
 		if err := validateWindow(where, k.NotBefore, k.NotAfter); err != nil {
 			return err
 		}
+	}
+	if c.HTTP.ProxyRequestID && c.HTTP.TrustedProxies < 1 {
+		return fmt.Errorf("config: http.proxyRequestID needs http.trustedProxies >= 1 (a hop that sets the header must exist)")
 	}
 	if c.HTTP.TrustedProxies < 0 {
 		return fmt.Errorf("config: http.trustedProxies must be >= 0")

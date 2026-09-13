@@ -116,7 +116,7 @@ func (s *Server) GetVersionReport(w http.ResponseWriter, r *http.Request, ns Nam
 		// both told the reader "nothing was found" when the truth was "we
 		// could not look" — the exact claim §1.6.3 forbids.
 		if !errors.Is(err, pgx.ErrNoRows) {
-			s.log.Error("version report: load scan run", "version", v.ID, "err", err)
+			s.log.ErrorContext(r.Context(), "version report: load scan run", "version", v.ID, "err", err)
 			problemInternal(w, r)
 			return
 		}
@@ -125,7 +125,7 @@ func (s *Server) GetVersionReport(w http.ResponseWriter, r *http.Request, ns Nam
 	}
 	rep, err := s.scanReportFrom(r, run, v.Status)
 	if err != nil {
-		s.log.Error("version report: findings", "run", run.ID, "err", err)
+		s.log.ErrorContext(r.Context(), "version report: findings", "run", run.ID, "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -286,7 +286,7 @@ func (s *Server) GetReviewItem(w http.ResponseWriter, r *http.Request, id openap
 		// than quietly rendering an empty list.
 		rep, rerr := s.scanReportFrom(r, run, v.Status)
 		if rerr != nil {
-			s.log.Error("review bundle: findings", "run", run.ID, "err", rerr)
+			s.log.ErrorContext(r.Context(), "review bundle: findings", "run", run.ID, "err", rerr)
 			problemInternal(w, r)
 			return
 		}
@@ -295,7 +295,7 @@ func (s *Server) GetReviewItem(w http.ResponseWriter, r *http.Request, id openap
 	case errors.Is(err, pgx.ErrNoRows):
 		// No run yet; the bundle carries the manifest and diff baseline only.
 	default:
-		s.log.Error("review bundle: load scan run", "item", id, "err", err)
+		s.log.ErrorContext(r.Context(), "review bundle: load scan run", "item", id, "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -369,7 +369,7 @@ func (s *Server) DecideReviewItem(w http.ResponseWriter, r *http.Request, id ope
 			problemConflict(w, r, "This version's status changed while the item was open. The decision was not recorded.")
 			return
 		}
-		s.log.Error("review decision", "item", ri.ID, "err", err)
+		s.log.ErrorContext(r.Context(), "review decision", "item", ri.ID, "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -387,12 +387,12 @@ func (s *Server) notifyReviewDecided(ctx context.Context, v storegen.AgentVersio
 	}
 	author, err := s.q().GetUserByID(ctx, v.SubmittedBy)
 	if err != nil {
-		s.log.Error("review notification: load author", "version", v.ID, "err", err)
+		s.log.ErrorContext(ctx, "review notification: load author", "version", v.ID, "err", err)
 		return
 	}
 	agent, err := s.q().GetAgentByID(ctx, v.AgentID)
 	if err != nil {
-		s.log.Error("review notification: load agent", "version", v.ID, "err", err)
+		s.log.ErrorContext(ctx, "review notification: load agent", "version", v.ID, "err", err)
 		return
 	}
 	if !notify.AllowsEmail(ctx, s.q(), s.log, author.ID, notify.KindReviewDecision) {
@@ -406,7 +406,7 @@ func (s *Server) notifyReviewDecided(ctx context.Context, v storegen.AgentVersio
 		Reviewer:  reviewer,
 		Rationale: rationale,
 	}); err != nil {
-		s.log.Error("review notification", "version", v.ID, "err", err)
+		s.log.ErrorContext(ctx, "review notification", "version", v.ID, "err", err)
 	}
 }
 

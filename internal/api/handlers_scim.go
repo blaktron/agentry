@@ -182,7 +182,7 @@ func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request, sc scimC
 	}
 	userID, err := s.scimProvisionUser(r.Context(), sc.orgID, email, displayName)
 	if err != nil {
-		s.log.Error("scim create user", "err", err)
+		s.log.ErrorContext(r.Context(), "scim create user", "err", err)
 		scimError(w, http.StatusInternalServerError, "provisioning failed")
 		return
 	}
@@ -293,7 +293,7 @@ func (s *Server) scimPatchUser(w http.ResponseWriter, r *http.Request, sc scimCt
 	setActive, active := patchActiveValue(patch)
 	if setActive && !active {
 		if err := s.scimDeactivate(r.Context(), sc.orgID, id); err != nil {
-			s.log.Error("scim deactivate", "err", err)
+			s.log.ErrorContext(r.Context(), "scim deactivate", "err", err)
 			scimError(w, http.StatusInternalServerError, "deactivate failed")
 			return
 		}
@@ -331,7 +331,7 @@ func (s *Server) scimPutUser(w http.ResponseWriter, r *http.Request, sc scimCtx)
 	// and DELETE — drop the membership, revoke org-bound PATs, kill sessions.
 	if !in.Active {
 		if err := s.scimDeactivate(r.Context(), sc.orgID, id); err != nil {
-			s.log.Error("scim put deactivate", "err", err)
+			s.log.ErrorContext(r.Context(), "scim put deactivate", "err", err)
 			scimError(w, http.StatusInternalServerError, "deactivate failed")
 			return
 		}
@@ -369,7 +369,7 @@ func (s *Server) scimPutUser(w http.ResponseWriter, r *http.Request, sc scimCtx)
 		return s.auditW.Write(r.Context(), q, s.scimEvent(sc.orgID, audit.ActionSCIMUserProvision, "user", id))
 	})
 	if err != nil {
-		s.log.Error("scim put user", "err", err)
+		s.log.ErrorContext(r.Context(), "scim put user", "err", err)
 		scimError(w, http.StatusInternalServerError, "update failed")
 		return
 	}
@@ -464,7 +464,7 @@ func (s *Server) scimCreateGroup(w http.ResponseWriter, r *http.Request, sc scim
 	// had been synced when the team was empty.
 	if len(in.Members) > 0 {
 		if err := s.scimReplaceMembers(r.Context(), sc.orgID, teamID, in.Members); err != nil {
-			s.log.Error("scim group create: member sync", "err", err, "team", teamID)
+			s.log.ErrorContext(r.Context(), "scim group create: member sync", "err", err, "team", teamID)
 			scimError(w, http.StatusInternalServerError, "group created but member sync failed; retry")
 			return
 		}
@@ -570,13 +570,13 @@ func (s *Server) scimPatchGroup(w http.ResponseWriter, r *http.Request, sc scimC
 			}
 		}
 		if err != nil {
-			s.log.Error("scim group patch: member sync", "err", err, "team", t.ID, "op", op.Op)
+			s.log.ErrorContext(r.Context(), "scim group patch: member sync", "err", err, "team", t.ID, "op", op.Op)
 			scimError(w, http.StatusInternalServerError, "group membership sync failed; retry")
 			return
 		}
 	}
 	if err := s.auditW.Write(r.Context(), s.q(), s.scimEvent(sc.orgID, audit.ActionSCIMGroupSync, "team", t.ID)); err != nil {
-		s.log.Error("scim group patch: audit", "err", err, "team", t.ID)
+		s.log.ErrorContext(r.Context(), "scim group patch: audit", "err", err, "team", t.ID)
 		scimError(w, http.StatusInternalServerError, "group synced but not audited; retry")
 		return
 	}

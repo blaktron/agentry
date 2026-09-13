@@ -328,8 +328,11 @@ func (o *Orchestrator) runStage(sc stageContext, st Stage, in *Input) (res Stage
 		if res.Err != nil {
 			outcome = "error"
 		}
-		o.log.InfoContext(sc.ctx, "scan: stage finished", logevent.ScanStage.Attr(),
-			"stage", st.ID(), "outcome", outcome, "dur_ms", elapsed.Milliseconds(), "findings", len(res.Findings), "err", res.Err)
+		stageAttrs := []any{logevent.ScanStage.Attr(), "stage", st.ID(), "outcome", outcome, "dur_ms", elapsed.Milliseconds(), "findings", len(res.Findings)}
+		if res.Err != nil {
+			stageAttrs = append(stageAttrs, "err", res.Err)
+		}
+		o.log.InfoContext(sc.ctx, "scan: stage finished", stageAttrs...)
 		// S7's "we did not check" outcomes are fail-open by design
 		// (DEV-026.3); count them where a dashboard can see them (agentry#33)
 		// and name them in a line an alert can key on.

@@ -77,13 +77,13 @@ func (s *Server) CreateAuditExport(w http.ResponseWriter, r *http.Request, org O
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		s.log.Error("create audit export", "err", err)
+		s.log.ErrorContext(r.Context(), "create audit export", "err", err)
 		problemInternal(w, r)
 		return
 	}
 	if s.jobs != nil {
 		if _, err := s.jobs.Enqueue(r.Context(), jobAuditExport, "core", auditExportArgs{ExportID: id}); err != nil {
-			s.log.Error("enqueue audit export", "err", err)
+			s.log.ErrorContext(r.Context(), "enqueue audit export", "err", err)
 		}
 	}
 	writeJSON(w, http.StatusAccepted, auditExportToAPI(created))
