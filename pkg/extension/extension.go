@@ -59,12 +59,19 @@ type Extension interface {
 // core's entitlements types. A resolver an extension supplies usually wraps
 // the core's (entitlements.NewConfigResolver) and answers Features by tier.
 type (
-	Resolver  = entitlements.Resolver
-	Subject   = entitlements.Subject
-	Limits    = entitlements.Limits
-	Features  = entitlements.Features
-	Allowance = entitlements.Allowance
-	Feature   = entitlements.Feature
+	Resolver      = entitlements.Resolver
+	Subject       = entitlements.Subject
+	NamespaceKind = entitlements.NamespaceKind
+	Limits        = entitlements.Limits
+	Features      = entitlements.Features
+	Allowance     = entitlements.Allowance
+	Feature       = entitlements.Feature
+)
+
+// The two namespace kinds a Subject carries.
+const (
+	NamespaceUser = entitlements.NamespaceUser
+	NamespaceOrg  = entitlements.NamespaceOrg
 )
 
 // The admission seam (plan subscription-tiers §5.1): an extension that
@@ -140,6 +147,10 @@ type Deps struct {
 	DB    *pgxpool.Pool
 	Log   *slog.Logger
 	Audit AuditWriter
+	// Entitlements is the resolver the server uses with no extension —
+	// the deployment's configured limits — for an extension's own resolver
+	// to embed and answer Features over (agentry#326).
+	Entitlements Resolver
 }
 
 // AuditWriter writes one audit event; see Deps. Write lands it in a

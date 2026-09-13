@@ -60,6 +60,18 @@ type bound struct {
 
 func (bound) Name() string { return "bound" }
 
+// tiered is the shape a closed resolver takes: the core's, with Features
+// answered by the extension. It must compile against the aliases alone.
+type tiered struct {
+	Resolver
+}
+
+func (tiered) Features(context.Context, Subject) (Features, error) {
+	return Features{PrivateAgents: Allowance{Enabled: true, Max: 10}}, nil
+}
+
+var _ Resolver = tiered{}
+
 var (
 	_ Extension   = billingLike{}
 	_ Admits      = billingLike{}
@@ -103,8 +115,11 @@ func TestApplyExtensionsBindsAndRegistersActions(t *testing.T) {
 	ext := &bound{}
 	srv := api.New(config.Default(), nil, slog.New(slog.DiscardHandler))
 	applyExtensions(srv, []Extension{ext})
-	if ext.deps.Log == nil || ext.deps.Audit == nil {
+	if ext.deps.Log == nil || ext.deps.Audit == nil || ext.deps.Entitlements == nil {
 		t.Fatalf("Bind did not deliver the deps: %+v", ext.deps)
+	}
+	if f, err := ext.deps.Entitlements.Features(context.Background(), Subject{Kind: NamespaceUser}); err != nil || f.PrivateAgents.Max != 0 {
+		t.Fatalf("the core resolver must be the configured, uncapped one: %+v %v", f, err)
 	}
 	if ext.deps.DB != nil {
 		t.Fatal("a server without a database handed out a pool")
