@@ -470,7 +470,12 @@ addresses of people, values above 4 KB), and how the audit mirror
 
 The compose stack keeps every container's `json-file` log rotated (three
 files of 10 MB per container), so a stack without a log stack does not keep
-logs forever; `docker logs` is the reader.
+logs forever; `docker logs` is the reader. The edge writes its access line
+as JSON too — `event=http.access`, the `request_id` it minted and passed
+upstream, the client address, method, path (never the query string),
+status, bytes, timings, host, user agent — so with
+`AGENTRY_PROXY_REQUEST_ID=true` one id names a request on the edge's line
+and on every line and audit row the server writes for it.
 
 **The log stack** — the rsyslog collector, the OpenSearch store and
 OpenSearch Dashboards, from the `agentry-logging` repository — is an
