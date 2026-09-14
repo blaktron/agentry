@@ -16,10 +16,32 @@ import (
 	"github.com/blaktron/agentry/internal/webhook"
 )
 
-// orgOrNotFound resolves an org handle or writes 404.
+// lookupFailed writes the problem for a handle lookup that did not yield an
+// active row, and reports whether it wrote one. A missing row is 404; a
+// query error is 500, logged — never 404, because a client that takes 404 as
+// "this handle is nobody's" (the site's namespace rule, agentry-web#35) must
+// be able to mean it (agentry#261). The caller decides the inactive case.
+func (s *Server) lookupFailed(w http.ResponseWriter, r *http.Request, what string, err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		problemNotFound(w, r)
+		return true
+	}
+	s.log.ErrorContext(r.Context(), what+" lookup", "err", err)
+	problemInternal(w, r)
+	return true
+}
+
+// orgOrNotFound resolves an org handle or writes the problem: 404 for a
+// handle no active organisation holds, 500 for a lookup that failed.
 func (s *Server) orgOrNotFound(w http.ResponseWriter, r *http.Request, handle string) (storegen.GetOrgByHandleRow, bool) {
 	row, err := s.q().GetOrgByHandle(r.Context(), handle)
-	if err != nil || row.State != "active" {
+	if s.lookupFailed(w, r, "org", err) {
+		return storegen.GetOrgByHandleRow{}, false
+	}
+	if row.State != "active" {
 		problemNotFound(w, r)
 		return storegen.GetOrgByHandleRow{}, false
 	}
@@ -43,10 +65,14 @@ func (s *Server) notifyOrgInvite(ctx context.Context, org storegen.GetOrgByHandl
 	}
 }
 
-// userOrNotFound resolves a user handle or writes 404.
+// userOrNotFound resolves a user handle or writes the problem: 404 for a
+// handle no active account holds, 500 for a lookup that failed.
 func (s *Server) userOrNotFound(w http.ResponseWriter, r *http.Request, handle string) (storegen.GetUserByHandleRow, bool) {
 	row, err := s.q().GetUserByHandle(r.Context(), handle)
-	if err != nil || row.State != "active" {
+	if s.lookupFailed(w, r, "user", err) {
+		return storegen.GetUserByHandleRow{}, false
+	}
+	if row.State != "active" {
 		problemNotFound(w, r)
 		return storegen.GetUserByHandleRow{}, false
 	}
