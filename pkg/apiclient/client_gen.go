@@ -1719,6 +1719,9 @@ type ReviewItem struct {
 	Queue     ReviewItemQueue    `json:"queue"`
 	State     ReviewItemState    `json:"state"`
 	Version   string             `json:"version"`
+
+	// VersionStatus Publication state machine states (§7). `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change (DEV-046).
+	VersionStatus *VersionStatus `json:"versionStatus,omitempty"`
 }
 
 // ReviewItemQueue defines model for ReviewItem.Queue.
