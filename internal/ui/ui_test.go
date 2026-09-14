@@ -404,10 +404,16 @@ func TestSSHKeysPageRendersTheKeyAndItsLimits(t *testing.T) {
 	}
 }
 
-// The operator pages act through the same client: the queue, an item with
-// its findings and file view, a decision — each refused before the API
-// when the form is cross-site or lacks the CSRF field.
-func TestReviewPages(t *testing.T) {
+// reviewFake is what the review fake varies: the version status it
+// reports on ri1 (agentry#273).
+type reviewFake struct{ versionStatus string }
+
+// reviewAPI fakes the review endpoints for ri1 on top of fakeAPI.
+func reviewAPI(t *testing.T, f *reviewFake) http.Handler {
+	t.Helper()
+	if f == nil {
+		f = &reviewFake{versionStatus: "needs_review"}
+	}
 	base := fakeAPI(t)
 	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if c, err := r.Cookie("agentry_session"); err != nil || c.Value != "sess1" {
@@ -419,7 +425,7 @@ func TestReviewPages(t *testing.T) {
 		case r.Method == "GET" && r.URL.Path == "/api/v1/review-queue":
 			_, _ = io.WriteString(w, `[{"id":"ri1","queue":"platform","state":"pending","version":"1.0.0","agent":"risky","namespace":"acme"}]`)
 		case r.Method == "GET" && r.URL.Path == "/api/v1/review-items/ri1":
-			_, _ = io.WriteString(w, `{"item":{"id":"ri1","queue":"platform","state":"pending","version":"1.0.0","agent":"risky","namespace":"acme"},"findings":[{"id":"f1","scanner":"S1","severity":"high","confidence":"high","title":"Prompt injection","filePath":"SKILL.md","lineStart":1,"verdict":"open"}],"manifest":{"name":"risky","modes":["autonomous"],"capabilities":{"mcpServers":[{"npm":"github-mcp-server-js","version":"0.1.7","tools":["list_issues"],"secrets":["GITHUB_TOKEN"],"env":{"LOGS_DIR":"/tmp/logs","GITHUB_PERMISSION":"read-only"}}]}},"report":{"judgeModel":"qwen-test","judgeUsage":{"promptTokens":812,"completionTokens":97}}}`)
+			_, _ = io.WriteString(w, `{"item":{"id":"ri1","queue":"platform","state":"pending","version":"1.0.0","versionStatus":"`+f.versionStatus+`","agent":"risky","namespace":"acme"},"findings":[{"id":"f1","scanner":"S1","severity":"high","confidence":"high","title":"Prompt injection","filePath":"SKILL.md","lineStart":1,"verdict":"open"}],"manifest":{"name":"risky","modes":["autonomous"],"capabilities":{"mcpServers":[{"npm":"github-mcp-server-js","version":"0.1.7","tools":["list_issues"],"secrets":["GITHUB_TOKEN"],"env":{"LOGS_DIR":"/tmp/logs","GITHUB_PERMISSION":"read-only"}}]}},"report":{"judgeModel":"qwen-test","judgeUsage":{"promptTokens":812,"completionTokens":97}}}`)
 		case r.Method == "GET" && r.URL.Path == "/api/v1/review-items/ri1/files":
 			_, _ = io.WriteString(w, `{"files":[{"path":"SKILL.md","size":12,"binary":false,"truncated":false}]}`)
 		case r.Method == "GET" && r.URL.Path == "/api/v1/review-items/ri1/file":
@@ -442,7 +448,14 @@ func TestReviewPages(t *testing.T) {
 			base.ServeHTTP(w, r)
 		}
 	})
-	h := New(Options{API: api})
+	return api
+}
+
+// The operator pages act through the same client: the queue, an item with
+// its findings and file view, a decision — each refused before the API
+// when the form is cross-site or lacks the CSRF field.
+func TestReviewPages(t *testing.T) {
+	h := New(Options{API: reviewAPI(t, nil)})
 	w := get(h, "/ui/review", sessCookie, csrfCookieV)
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "acme/risky") {
 		t.Fatalf("queue: %d %s", w.Code, w.Body.String())
@@ -469,14 +482,14 @@ func TestReviewPages(t *testing.T) {
 		t.Fatalf("verdict options: %s", body)
 	}
 	w = post(h, "/ui/review/ri1/decision", url.Values{"_csrf": {"csrf1"}, "decision": {"approve"}, "rationale": {"looks fine"}}, nil, sessCookie, csrfCookieV)
-	if loc, okMsg, _ := redirectedTo(t, w); w.Code != http.StatusSeeOther || loc != "/ui/review" || !strings.HasPrefix(okMsg, "Approved") {
+	if loc, okMsg, _ := redirectedTo(t, w); w.Code != http.StatusSeeOther || loc != "/ui/review" || okMsg != "Approved. The version is published and signed." {
 		t.Fatalf("decide: %d %s %q %s", w.Code, loc, okMsg, w.Body.String())
 	}
-	// A reject records a decision; whether the version ends at `rejected` or,
-	// if it was quarantined, at `yanked` is the API's to decide, and this page
-	// posts blind. The flash therefore claims nothing about publication.
+	// A needs_review version rejected will not publish; the item said which
+	// status the version was in (agentry#273; the quarantined branches are
+	// TestReviewDecisionFlashNamesTheConsequence).
 	w = post(h, "/ui/review/ri1/decision", url.Values{"_csrf": {"csrf1"}, "decision": {"reject"}, "rationale": {"looks fine"}}, nil, sessCookie, csrfCookieV)
-	if loc, okMsg, _ := redirectedTo(t, w); w.Code != http.StatusSeeOther || loc != "/ui/review" || okMsg != "Rejected. The decision and rationale are recorded with the version." {
+	if loc, okMsg, _ := redirectedTo(t, w); w.Code != http.StatusSeeOther || loc != "/ui/review" || okMsg != "Rejected. This version will not publish." {
 		t.Fatalf("reject: %d %s %q %s", w.Code, loc, okMsg, w.Body.String())
 	}
 	w = post(h, "/ui/review/ri1/findings/f1/verdict", url.Values{"_csrf": {"csrf1"}, "verdict": {"dismissed_false_positive"}, "reason": {"fixture"}}, nil, sessCookie, csrfCookieV)
@@ -700,5 +713,51 @@ func TestLoginPageIsTheOneThatReadsAnErrorFromTheURL(t *testing.T) {
 	one.(*handler).setFlash(rec, "", "Sign-in succeeded but no session was issued. You are not signed in.")
 	if w := get(one, "/ui/login", rec.Result().Cookies()[0]); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "no session was issued") {
 		t.Fatalf("one directory, a flash: %d %s", w.Code, w.Body.String())
+	}
+}
+
+// TestReviewDecisionFlashNamesTheConsequence (agentry#273): the decision
+// flash says what the §7 state machine does to the version it decided —
+// a quarantined version is public, so approve publishes it again and
+// reject yanks it — and when the item could not be read before the
+// decision, the flash records the decision and claims nothing more. The
+// item page tells the reviewer beforehand.
+func TestReviewDecisionFlashNamesTheConsequence(t *testing.T) {
+	f := &reviewFake{versionStatus: "quarantined"}
+	h := newUI(t, Options{API: reviewAPI(t, f)})
+	if body := get(h, "/ui/review/ri1", sessCookie, csrfCookieV).Body.String(); !strings.Contains(body, `<span class="badge warn">version quarantined</span>`) || !strings.Contains(body, "reject yanks it") {
+		t.Fatalf("item page does not say the version is quarantined:\n%s", body)
+	}
+	for _, tc := range []struct{ status, decision, want string }{
+		{"quarantined", "reject", "Rejected. The version was published, then quarantined, so it is yanked: an exact pin still resolves it, nothing else does."},
+		{"quarantined", "approve", "Approved. The version was published, then quarantined; it is published and signed again."},
+		{"needs_review", "reject", "Rejected. This version will not publish."},
+		{"needs_review", "approve", "Approved. The version is published and signed."},
+		{"", "reject", "Rejected. The decision and rationale are recorded with the version."},
+	} {
+		f.versionStatus = tc.status
+		w := post(h, "/ui/review/ri1/decision", url.Values{"_csrf": {"csrf1"}, "decision": {tc.decision}, "rationale": {"looks fine"}}, nil, sessCookie, csrfCookieV)
+		if loc, okMsg, _ := redirectedTo(t, w); w.Code != http.StatusSeeOther || loc != "/ui/review" || okMsg != tc.want {
+			t.Errorf("%s %s: %d %s %q", tc.status, tc.decision, w.Code, loc, okMsg)
+		}
+	}
+	f.versionStatus = ""
+	if body := get(h, "/ui/review/ri1", sessCookie, csrfCookieV).Body.String(); strings.Contains(body, "version </span>") {
+		t.Fatalf("an unknown status renders an empty badge:\n%s", body)
+	}
+	// A status the page could not read before the decision — the item
+	// read refused — leaves the bare record, whatever the decision did.
+	f.versionStatus = "quarantined"
+	inner := reviewAPI(t, f)
+	blind := newUI(t, Options{API: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v1/review-items/ri1" {
+			http.Error(w, `{"detail":"not now"}`, http.StatusServiceUnavailable)
+			return
+		}
+		inner.ServeHTTP(w, r)
+	})})
+	w := post(blind, "/ui/review/ri1/decision", url.Values{"_csrf": {"csrf1"}, "decision": {"reject"}, "rationale": {"looks fine"}}, nil, sessCookie, csrfCookieV)
+	if _, okMsg, _ := redirectedTo(t, w); okMsg != "Rejected. The decision and rationale are recorded with the version." {
+		t.Errorf("unread status: %q", okMsg)
 	}
 }

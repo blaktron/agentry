@@ -595,7 +595,7 @@ func (q *Queries) GetReviewItem(ctx context.Context, id uuid.UUID) (ReviewItem, 
 }
 
 const getReviewItemDetail = `-- name: GetReviewItemDetail :one
-SELECT ri.id, ri.version_id, ri.queue, ri.org_id, ri.state, ri.decided_by, ri.decided_at, ri.rationale, ri.created_at, av.version, a.name AS agent_name, h.handle AS namespace
+SELECT ri.id, ri.version_id, ri.queue, ri.org_id, ri.state, ri.decided_by, ri.decided_at, ri.rationale, ri.created_at, av.version, av.status AS version_status, a.name AS agent_name, h.handle AS namespace
 FROM review_items ri
 JOIN agent_versions av ON av.id = ri.version_id
 JOIN agents a ON a.id = av.agent_id
@@ -604,18 +604,19 @@ WHERE ri.id = $1
 `
 
 type GetReviewItemDetailRow struct {
-	ID        uuid.UUID  `json:"id"`
-	VersionID uuid.UUID  `json:"version_id"`
-	Queue     string     `json:"queue"`
-	OrgID     *uuid.UUID `json:"org_id"`
-	State     string     `json:"state"`
-	DecidedBy *uuid.UUID `json:"decided_by"`
-	DecidedAt *time.Time `json:"decided_at"`
-	Rationale *string    `json:"rationale"`
-	CreatedAt time.Time  `json:"created_at"`
-	Version   string     `json:"version"`
-	AgentName string     `json:"agent_name"`
-	Namespace string     `json:"namespace"`
+	ID            uuid.UUID  `json:"id"`
+	VersionID     uuid.UUID  `json:"version_id"`
+	Queue         string     `json:"queue"`
+	OrgID         *uuid.UUID `json:"org_id"`
+	State         string     `json:"state"`
+	DecidedBy     *uuid.UUID `json:"decided_by"`
+	DecidedAt     *time.Time `json:"decided_at"`
+	Rationale     *string    `json:"rationale"`
+	CreatedAt     time.Time  `json:"created_at"`
+	Version       string     `json:"version"`
+	VersionStatus string     `json:"version_status"`
+	AgentName     string     `json:"agent_name"`
+	Namespace     string     `json:"namespace"`
 }
 
 func (q *Queries) GetReviewItemDetail(ctx context.Context, id uuid.UUID) (GetReviewItemDetailRow, error) {
@@ -632,6 +633,7 @@ func (q *Queries) GetReviewItemDetail(ctx context.Context, id uuid.UUID) (GetRev
 		&i.Rationale,
 		&i.CreatedAt,
 		&i.Version,
+		&i.VersionStatus,
 		&i.AgentName,
 		&i.Namespace,
 	)
@@ -1124,7 +1126,7 @@ func (q *Queries) ListPublishedVersionsForRescan(ctx context.Context, arg ListPu
 }
 
 const listReviewQueue = `-- name: ListReviewQueue :many
-SELECT ri.id, ri.version_id, ri.queue, ri.org_id, ri.state, ri.decided_by, ri.decided_at, ri.rationale, ri.created_at, av.version, a.name AS agent_name, h.handle AS namespace
+SELECT ri.id, ri.version_id, ri.queue, ri.org_id, ri.state, ri.decided_by, ri.decided_at, ri.rationale, ri.created_at, av.version, av.status AS version_status, a.name AS agent_name, h.handle AS namespace
 FROM review_items ri
 JOIN agent_versions av ON av.id = ri.version_id
 JOIN agents a ON a.id = av.agent_id
@@ -1143,18 +1145,19 @@ type ListReviewQueueParams struct {
 }
 
 type ListReviewQueueRow struct {
-	ID        uuid.UUID  `json:"id"`
-	VersionID uuid.UUID  `json:"version_id"`
-	Queue     string     `json:"queue"`
-	OrgID     *uuid.UUID `json:"org_id"`
-	State     string     `json:"state"`
-	DecidedBy *uuid.UUID `json:"decided_by"`
-	DecidedAt *time.Time `json:"decided_at"`
-	Rationale *string    `json:"rationale"`
-	CreatedAt time.Time  `json:"created_at"`
-	Version   string     `json:"version"`
-	AgentName string     `json:"agent_name"`
-	Namespace string     `json:"namespace"`
+	ID            uuid.UUID  `json:"id"`
+	VersionID     uuid.UUID  `json:"version_id"`
+	Queue         string     `json:"queue"`
+	OrgID         *uuid.UUID `json:"org_id"`
+	State         string     `json:"state"`
+	DecidedBy     *uuid.UUID `json:"decided_by"`
+	DecidedAt     *time.Time `json:"decided_at"`
+	Rationale     *string    `json:"rationale"`
+	CreatedAt     time.Time  `json:"created_at"`
+	Version       string     `json:"version"`
+	VersionStatus string     `json:"version_status"`
+	AgentName     string     `json:"agent_name"`
+	Namespace     string     `json:"namespace"`
 }
 
 func (q *Queries) ListReviewQueue(ctx context.Context, arg ListReviewQueueParams) ([]ListReviewQueueRow, error) {
@@ -1177,6 +1180,7 @@ func (q *Queries) ListReviewQueue(ctx context.Context, arg ListReviewQueueParams
 			&i.Rationale,
 			&i.CreatedAt,
 			&i.Version,
+			&i.VersionStatus,
 			&i.AgentName,
 			&i.Namespace,
 		); err != nil {
