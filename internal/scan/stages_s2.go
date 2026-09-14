@@ -10,8 +10,10 @@ import (
 
 // S2 — Secrets (§8.3). Native high-signal secret detection over the archive
 // (git-history scanning is the git-tag add-on, deferred per DEV-006). The
-// mandatory `agy_` PAT rule (D-22) is included. A gitleaks/trufflehog
-// external adapter can replace this behind the same Stage interface.
+// mandatory `agy_` PAT rule (D-22) is included, and the manifest's declared
+// env values are read as values (stages_s2_manifest.go). A
+// gitleaks/trufflehog external adapter can replace this behind the same
+// Stage interface.
 type S2Secrets struct {
 	// Gitleaks, when set, execs the real tool after the native ruleset and
 	// folds its report in (DEV-006 production upgrade, agentry#40).
@@ -84,6 +86,7 @@ func (s S2Secrets) Run(sc stageContext, in *Input) StageResult {
 			}
 		}
 	}
+	findings = append(findings, s2ManifestEnv(in, lineSeen)...)
 	if s.Gitleaks != nil && in.Dir != "" {
 		findings = append(findings, runGitleaks(sc.Context(), s.Gitleaks, in.Dir, lineSeen)...)
 	}

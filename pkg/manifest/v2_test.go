@@ -340,6 +340,24 @@ func TestInstructionCandidates(t *testing.T) {
 	}
 }
 
+// TestV2AgentYAMLInclusionRefused: a v2 manifest — here one declaring a
+// server env — whose publish.include does not match agent.yaml is refused
+// at validation (V4, agentry#288): the runner reads the manifest from the
+// installed tree and S2 scans the archive's files, so the archive carries
+// its own contract. The same manifest with agent.yaml included is clean.
+func TestV2AgentYAMLInclusionRefused(t *testing.T) {
+	m := validV2Manifest(t)
+	m.Capabilities.MCPServers = []MCPServer{{NPM: "github-mcp-server-js", Version: "0.1.7", Env: map[string]string{"GITHUB_PERMISSION": "read-only"}}}
+	m.Publish.Include = []string{"README.md", "AGENT.md", "prompts/**", "LICENSE"}
+	errs := ValidateInContext(m, v2Context())
+	wantIssue(t, errs, "V4", SeverityError, "publish.include")
+	if got := blockingText(Blocking(errs)); !strings.Contains(got, "agent.yaml is not matched by publish.include") {
+		t.Fatalf("expected the blocking V4 issue naming agent.yaml, got:%s", got)
+	}
+	m.Publish.Include = append([]string{"agent.yaml"}, m.Publish.Include...)
+	wantClean(t, ValidateInContext(m, v2Context()))
+}
+
 // TestV2InstructionMustShip: V4 requires the instruction file — named or
 // the default — to exist and to be matched by publish.include.
 func TestV2InstructionMustShip(t *testing.T) {
