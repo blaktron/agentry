@@ -1,0 +1,10 @@
+technique: "Benign twin: long configuration values under plain keys — a URL, a path, a timezone, a model name, a timestamp, a digest, a number, a mode, an id — and a credential named under secrets"
+version: "1.0.0"
+manifest: |
+  {"schemaVersion":"2","license":"MIT","capabilities":{"mcpServers":[{"npm":"github-mcp-server-js","version":"0.1.7","tools":["list_issues"],"secrets":["GITHUB_TOKEN"],"egress":["api.github.com"],"env":{"GITHUB_PERMISSION":"read-only","GITHUB_API_URL":"https://api.github.com/graphql","LOGS_DIR":"/var/lib/agentry/cache/issue-digest/logs","TZ":"America/Los_Angeles","MODEL":"claude-sonnet-5-20260514","SINCE":"2026-09-14T00:00:00Z","IMAGE_DIGEST":"sha256:ec62905f587d96dfd00710de3a9cbe8bde00212850f6524532fc1be2ac9d4421","TOKEN_BUDGET":"120000","AUTH_MODE":"oauth-device-flow","RUN_ID":"01a0a055-be73-77f3-9757-271d173115ce"}}]}}
+expect: []
+forbid:
+  - S2/env-secret-name
+  - S2/env-token-value
+  - S2/generic-assignment
+expectClean: true

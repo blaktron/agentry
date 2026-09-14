@@ -96,6 +96,19 @@ S4 (injection signature families, one per §8.3 S4 family):
 `s4-credential-harvest`, `s4-persistence`, `s4-obfuscation`. The seventh
 family, `destructive`, is covered by the Amazon Q pair above.
 
+S2 over the manifest (a declared MCP server's plain `env`, DEV-098;
+agentry#286, agentry#288): `manifest-env-secret` (a prefixed token under a
+credential-named key: the line rule and the name finding),
+`manifest-env-token-unquoted` (an unquoted value no prefix rule knows under a
+credential-named key: both manifest-pass findings), `manifest-env-token-plain-key`
+(a bare hex token under a plainly named key: the value finding only), and the
+benign twins `manifest-env-secret-benign` (the credential named under
+`secrets`) and `manifest-env-config-benign` (long configuration values — a
+URL, a path, a timezone, a model name, a timestamp, a digest, a number, a
+mode, an id — under plain keys). The two token fixtures cannot carry a
+self-evident placeholder, since the shape is what the rule reads; their
+values were generated for the corpus.
+
 ## Rules for extending the corpus
 
 1. Every new S4 rule ships with corpus additions — a match fixture and a

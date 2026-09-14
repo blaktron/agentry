@@ -1,0 +1,9 @@
+technique: "A declared server's env carries an unquoted token under a credential-named key, in a shape no prefix rule knows (S2's manifest pass, agentry#288). The value is token-shaped by construction, so it cannot be a self-evident placeholder; it was generated for the corpus and is no credential."
+version: "1.0.0"
+manifest: |
+  {"schemaVersion":"2","license":"MIT","capabilities":{"mcpServers":[{"npm":"github-mcp-server-js","version":"0.1.7","tools":["list_issues"],"egress":["api.github.com"],"env":{"GITHUB_PERMISSION":"read-only","OPENAI_API_KEY":"sk-proj-72s8FYVEEdGBOTbDNWDl7EkFSZu8LWWhZ6xuiz9Mxl6EEQA1"}}]}}
+expect:
+  - S2/env-secret-name
+  - S2/env-token-value
+forbid: []
+expectClean: false
