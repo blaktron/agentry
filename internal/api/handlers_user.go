@@ -107,9 +107,8 @@ func (s *Server) GetUserProfile(w http.ResponseWriter, r *http.Request, handle H
 	if !s.requireDB(w, r) {
 		return
 	}
-	row, err := s.q().GetUserByHandle(r.Context(), handle)
-	if err != nil || row.State != "active" {
-		problemNotFound(w, r)
+	row, ok := s.userOrNotFound(w, r, handle)
+	if !ok {
 		return
 	}
 	writeJSON(w, http.StatusOK, PublicUser{Handle: row.Handle, DisplayName: row.DisplayName})

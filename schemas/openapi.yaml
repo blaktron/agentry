@@ -513,6 +513,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PublicUser"
+        "404":
+          description: >-
+            No active account holds this handle. Only that: a lookup that
+            failed answers 500, so a client may take this as absence.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "500":
+          description: The lookup failed; the handle may or may not exist. Retry.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
         default:
           $ref: "#/components/responses/Problem"
 
@@ -956,6 +970,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Org"
+        "404":
+          description: >-
+            No active organisation holds this handle. Only that: a lookup that
+            failed answers 500, so a client may take this as absence.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "500":
+          description: The lookup failed; the handle may or may not exist. Retry.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
         default:
           $ref: "#/components/responses/Problem"
     patch:
