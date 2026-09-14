@@ -445,9 +445,10 @@ func TestV2SchemaFileShape(t *testing.T) {
 }
 
 // TestV2SchemaEnvShape pins the mcpServer.env schema beside the Go rules:
-// the count cap, the name grammar and the value limits are the constants
-// pkg/manifest enforces. (The secret/env collision is a cross-list rule
-// JSON schema cannot express; TestMCPServerEnvRefusals holds it.)
+// the count cap, the name grammar, the value limits and the literal-value
+// rule (agentry#291) are the constants and expressions pkg/manifest
+// enforces. (The secret/env collision is a cross-list rule JSON schema
+// cannot express; TestMCPServerEnvRefusals holds it.)
 func TestV2SchemaEnvShape(t *testing.T) {
 	raw, err := os.ReadFile("../../schemas/agent-manifest-2.schema.json")
 	if err != nil {
@@ -467,6 +468,14 @@ func TestV2SchemaEnvShape(t *testing.T) {
 							Type      string `json:"type"`
 							MaxLength int    `json:"maxLength"`
 							Pattern   string `json:"pattern"`
+							Not       struct {
+								AnyOf []struct {
+									Pattern string `json:"pattern"`
+									AllOf   []struct {
+										Pattern string `json:"pattern"`
+									} `json:"allOf"`
+								} `json:"anyOf"`
+							} `json:"not"`
 						} `json:"additionalProperties"`
 					} `json:"env"`
 				} `json:"properties"`
@@ -490,6 +499,29 @@ func TestV2SchemaEnvShape(t *testing.T) {
 	valueRE := regexp.MustCompile(ap.Pattern)
 	if !valueRE.MatchString("read-only") || valueRE.MatchString("a\nb") || valueRE.MatchString("a\tb") {
 		t.Fatalf("env value pattern %q does not refuse exactly the control characters", ap.Pattern)
+	}
+	// The literal-value rule: `not: {anyOf: [expansion, allOf: [{{, }}]]}`
+	// is the schema's spelling of LiteralEnvValue.
+	refused := ap.Not.AnyOf
+	if len(refused) != 2 || refused[0].Pattern != envExpandRE.String() || len(refused[1].AllOf) != 2 {
+		t.Fatalf("env value not/anyOf = %+v (want [%s, allOf [{{ }}]])", refused, envExpandRE)
+	}
+	openRE, closeRE := regexp.MustCompile(refused[1].AllOf[0].Pattern), regexp.MustCompile(refused[1].AllOf[1].Pattern)
+	schemaAccepts := func(v string) bool {
+		if !valueRE.MatchString(v) || envExpandRE.MatchString(v) {
+			return false
+		}
+		return !openRE.MatchString(v) || !closeRE.MatchString(v)
+	}
+	for _, v := range []string{"$B", "${B}", "$$", "x{{y}}z", "}}x{{"} {
+		if schemaAccepts(v) || LiteralEnvValue(v) {
+			t.Fatalf("env value %q: schema accepts %v, Go accepts %v (want both refused)", v, schemaAccepts(v), LiteralEnvValue(v))
+		}
+	}
+	for _, v := range []string{"50$", "a {b} c", "{{", "read-only", ""} {
+		if !schemaAccepts(v) || !LiteralEnvValue(v) {
+			t.Fatalf("env value %q: schema accepts %v, Go accepts %v (want both accepted)", v, schemaAccepts(v), LiteralEnvValue(v))
+		}
 	}
 }
 
