@@ -29,7 +29,7 @@ Ten stages run against those bytes:
 | | |
 |---|---|
 | **S1** | Inventory and hygiene: safe unpack, content-sniffed types, archive anomalies, binaries |
-| **S2** | Secrets, including Agentry's own `agy_` token format; on a git-tag publish also the added lines of every commit reachable from the tag, so a key committed and later removed still surfaces |
+| **S2** | Secrets, including Agentry's own `agy_` token format, and the values a declared MCP server's `env` carries in the manifest; on a git-tag publish also the added lines of every commit reachable from the tag, so a key committed and later removed still surfaces |
 | **S3** | Hidden and obfuscated content: zero-width and bidi characters, Unicode tag blocks, confusables, private-use codepoints, HTML comments, CSS-hidden text, data URIs, entropy-gated encoded blobs |
 | **S4** | Prompt-injection signatures: instruction override, exfiltration, tool coercion, credential harvesting, persistence, obfuscation |
 | **S5** | LLM adjudication against a fixed rubric, with no tools; a judge showing signs of manipulation is itself a finding. The judge is an Anthropic-, OpenAI-compatible or Bedrock model, or a PromptGuard-class classifier that scores only the injection axis and therefore always routes to human review |

@@ -6,4 +6,6 @@ expect: []
 forbid:
   - S2/github-pat
   - S2/generic-assignment
+  - S2/env-secret-name
+  - S2/env-token-value
 expectClean: true

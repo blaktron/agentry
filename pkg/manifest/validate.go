@@ -938,8 +938,16 @@ func resolveInclude(s *issues, m *Manifest, files []FileInfo) []FileInfo {
 	if len(resolved) == 0 {
 		s.errf("V4", "publish.include", "include patterns resolve to zero files")
 	}
+	// A v2 manifest ships in its own archive: the runner reads agent.yaml
+	// from the installed tree and S2 scans the archive's files, so a
+	// release without it could neither run nor have its declared values
+	// scanned (agentry#288). The v1 reading path keeps the warning.
 	if len(resolved) > 0 && !seen["agent.yaml"] {
-		s.warnf("V4", "publish.include", "agent.yaml is not included in the release archive")
+		if m.Major() == 2 {
+			s.errf("V4", "publish.include", "agent.yaml is not matched by publish.include; the manifest must ship in the release archive")
+		} else {
+			s.warnf("V4", "publish.include", "agent.yaml is not included in the release archive")
+		}
 	}
 	return resolved
 }

@@ -296,8 +296,13 @@ strings of at most 512 characters with no control characters. A name that
 is also listed under `secrets` — the server's or the agent's — is refused:
 a value is either configuration in the contract or a secret from the
 profile, never both. `agent.yaml` is scanned like any other archived
-file, so a token in a shape the secret scanner recognises is a finding;
-that is a backstop, not a place to keep one. In the example above,
+file, and the secret scanner also reads the `env` values themselves, out
+of the manifest the registry stores, whatever the YAML's spelling: a key
+named like a credential (`…_TOKEN`, `…_SECRET`, `…_PASSWORD`,
+`…_API_KEY`) carrying a value of eight or more characters, or a
+token-shaped value under any key, is a medium finding, which the default
+gate sends to review. Both are a backstop, not a place to keep one. In
+the example above,
 `GITHUB_PERMISSION` comes from the manifest and `GITHUB_TOKEN` from the
 operator's profile. The runner compiles `env` into the server's gateway
 entry as its plain environment, shows the pairs beside the server's secret
@@ -328,7 +333,7 @@ recorded and displayed, not auto-installed.
 
 | Field | Meaning |
 |---|---|
-| `publish.include` | **required**; the release archive allowlist of glob patterns (`path.Match` segments; a whole segment `**` matches any depth). Nothing outside it ships |
+| `publish.include` | **required**; the release archive allowlist of glob patterns (`path.Match` segments; a whole segment `**` matches any depth). Nothing outside it ships, and a v2 manifest must match `agent.yaml` itself: the runner reads the manifest from the installed archive |
 | `publish.channel` | `stable` (default) or `beta` |
 
 ## What a BriefAgent gets at run time
