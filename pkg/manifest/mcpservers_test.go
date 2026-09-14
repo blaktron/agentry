@@ -271,6 +271,29 @@ func TestMCPServerEnvRefusals(t *testing.T) {
       version: 1.0.0
       env: {SHARED_TOKEN: plain}
 `, "configure it as a secret or as env, not both"},
+		// The gateway would expand these against the server's environment
+		// or evaluate them as a template (agentry#291); the path names the
+		// entry and the key.
+		"dollar name": {
+			`    - npm: server-x
+      version: 1.0.0
+      env: {A: "$B"}
+`, "capabilities.mcpServers[0].env.A: value contains a $"},
+		"dollar brace name": {
+			`    - npm: server-x
+      version: 1.0.0
+      env: {A: "${B}"}
+`, "capabilities.mcpServers[0].env.A: value contains a $"},
+		"dollar special parameter": {
+			`    - npm: server-x
+      version: 1.0.0
+      env: {A: "$$"}
+`, "capabilities.mcpServers[0].env.A: value contains a $"},
+		"template": {
+			`    - npm: server-x
+      version: 1.0.0
+      env: {A: "x{{y}}z"}
+`, "capabilities.mcpServers[0].env.A: value contains a $ the runner's gateway would expand, or a {{ }} template; declare a literal value"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -279,6 +302,18 @@ func TestMCPServerEnvRefusals(t *testing.T) {
 				t.Fatalf("expected a blocking issue containing %q, got:\n%s", tc.want, text)
 			}
 		})
+	}
+}
+
+// TestMCPServerEnvLiteralShapes: a `$` that nothing would expand and a
+// single brace pair are literal and pass (agentry#291).
+func TestMCPServerEnvLiteralShapes(t *testing.T) {
+	doc := mcpManifestV2(`    - npm: server-x
+      version: 1.0.0
+      env: {PRICE: "50$", NOTE: "a {b} c"}
+`)
+	if blocking := Blocking(issuesFor(t, doc)); len(blocking) > 0 {
+		t.Fatalf("literal values rejected: %v", blocking)
 	}
 }
 

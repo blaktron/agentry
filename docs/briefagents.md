@@ -302,9 +302,14 @@ that is a backstop, not a place to keep one. In the example above,
 operator's profile. The runner compiles `env` into the server's gateway
 entry as its plain environment, shows the pairs beside the server's secret
 names at install and asks for consent again when a value changes, and the
-receipt names the keys. Values are literal: one holding `$NAME`, `${NAME}`
-or `{{…}}` — shapes the gateway would rewrite — is refused at plan time,
-as is an empty one.
+receipt names the keys. Values are literal: the gateway would expand a
+`$` followed by a name character, `{` or a shell parameter character
+(`$NAME`, `${NAME}`, `$$`) against the server's environment, secrets
+included, and evaluate a value holding both `{{` and `}}` as a template,
+so `agentry validate` and submission refuse those shapes (V5, "declare a
+literal value"); a trailing `$` or a single brace pair is literal and
+passes. The runner refuses the same shapes at plan time, and with them an
+empty value and the `@@` marker of its own run placeholders.
 
 **Declared servers are scanned too.** At submission, stage S7 checks each
 declared package version against the OSV vulnerability database and reports
