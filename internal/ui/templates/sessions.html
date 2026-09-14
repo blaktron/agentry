@@ -1,10 +1,11 @@
 {{define "content"}}
 <h1>Sessions</h1>
 <section class="card">
-{{if not .Data}}<p class="muted">No sessions are recorded.</p>
-{{else}}<ul class="list">{{range .Data}}<li>{{if .Current}}<span class="badge ok">this browser</span> {{end}}<span class="muted">started {{utc .CreatedAt}}{{if .LastSeenAt}} · last seen {{utc .LastSeenAt}}{{end}}</span> <code>{{.IP}}</code> <span class="muted ua">{{.UserAgent}}</span>
+{{if .Data.LoadError}}<p class="flash error">{{.Data.LoadError}}</p>
+{{else if not .Data.Sessions}}<p class="muted">No sessions are recorded.</p>
+{{else}}<ul class="list">{{range .Data.Sessions}}<li>{{if .Current}}<span class="badge ok">this browser</span> {{end}}<span class="muted">started {{utc .CreatedAt}}{{if .LastSeenAt}} · last seen {{utc .LastSeenAt}}{{end}}</span> <code>{{.IP}}</code> <span class="muted ua">{{.UserAgent}}</span>
 {{if not .Current}}<form method="post" action="/ui/account/sessions" class="inline"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="action" value="revoke"><input type="hidden" name="sessionId" value="{{.ID}}"><button type="submit" class="small danger">Revoke</button></form>{{end}}</li>{{end}}</ul>
-{{if gt (len .Data) 1}}<form method="post" action="/ui/account/sessions"><input type="hidden" name="_csrf" value="{{.CSRF}}"><input type="hidden" name="action" value="revoke-others"><button type="submit" class="danger">Sign out everywhere else</button></form>{{end}}
+{{if gt (len .Data.Sessions) 1}}<form method="post" action="/ui/account/sessions"><input type="hidden" name="_csrf" value="{{.CSRF}}"><input type="hidden" name="action" value="revoke-others"><button type="submit" class="danger">Sign out everywhere else</button></form>{{end}}
 <p class="muted">Revoking a session invalidates its cookie immediately. It does not revoke personal access tokens.</p>{{end}}
 </section>
 {{end}}

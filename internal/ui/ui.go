@@ -11,6 +11,8 @@
 package ui
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -339,19 +341,55 @@ func (h *handler) refuseBadForm(w http.ResponseWriter, r *http.Request) {
 	h.refuse(w, r, http.StatusBadRequest, "Unreadable form", "The registry could not read this form's fields, so nothing changed. Reload the page and submit it again.")
 }
 
-// back redirects to path with a flash (?ok= / ?error=), rendered as text by
-// the page, never as HTML.
-func back(w http.ResponseWriter, r *http.Request, path string, ok, errMsg string) {
-	u := url.URL{Path: path}
-	q := url.Values{}
-	if ok != "" {
-		q.Set("ok", ok)
+// back redirects to path with a flash. The flash rides in a short-lived
+// cookie the next render reads and clears, never in the URL: a `?ok=` a
+// page honoured let any address choose the page's notice, on the
+// registry's own domain (agentry#271). The cookie keeps a server-produced
+// message that is not a fixed string — an SSO probe's summary, an IdP's
+// warning — without a whitelist. Rendered as text by the page, never as
+// HTML.
+func (h *handler) back(w http.ResponseWriter, r *http.Request, path string, ok, errMsg string) {
+	h.setFlash(w, ok, errMsg)
+	http.Redirect(w, r, path, http.StatusSeeOther)
+}
+
+// flashCookie carries one page's notice from a redirect to the render
+// that follows it, scoped to the UI and gone within a minute or on first
+// read.
+const flashCookie = "agentry_flash"
+
+type flash struct {
+	OK    string `json:"ok,omitempty"`
+	Error string `json:"error,omitempty"`
+}
+
+func (h *handler) setFlash(w http.ResponseWriter, ok, errMsg string) {
+	if ok == "" && errMsg == "" {
+		return
 	}
-	if errMsg != "" {
-		q.Set("error", errMsg)
+	b, _ := json.Marshal(flash{OK: ok, Error: errMsg})
+	http.SetCookie(w, &http.Cookie{Name: flashCookie, Value: base64.RawURLEncoding.EncodeToString(b),
+		Path: "/ui", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: h.opt.CookieSecure, MaxAge: 60})
+}
+
+// takeFlash reads the flash cookie the request carries, if any, and
+// clears it; a cookie that does not decode is cleared and ignored.
+func (h *handler) takeFlash(w http.ResponseWriter, r *http.Request) (flash, bool) {
+	c, err := r.Cookie(flashCookie)
+	if err != nil {
+		return flash{}, false
 	}
-	u.RawQuery = q.Encode()
-	http.Redirect(w, r, u.String(), http.StatusSeeOther)
+	http.SetCookie(w, &http.Cookie{Name: flashCookie, Value: "", Path: "/ui", HttpOnly: true,
+		SameSite: http.SameSiteLaxMode, Secure: h.opt.CookieSecure, MaxAge: -1})
+	b, err := base64.RawURLEncoding.DecodeString(c.Value)
+	if err != nil {
+		return flash{}, false
+	}
+	var f flash
+	if json.Unmarshal(b, &f) != nil {
+		return flash{}, false
+	}
+	return f, true
 }
 
 // safeNext admits only a path-absolute reference on this origin, the same

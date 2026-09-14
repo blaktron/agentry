@@ -1,6 +1,8 @@
 package api_test
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -61,14 +63,14 @@ func TestCoreUIReviewAndStaff(t *testing.T) {
 	}
 	if fid != "" {
 		res := postForm("/ui/review/"+itemID+"/findings/"+fid+"/verdict", url.Values{"verdict": {"dismissed_false_positive"}, "reason": {"fixture text"}})
-		if res.StatusCode != http.StatusSeeOther || !strings.Contains(res.Header.Get("Location"), "ok=Verdict") {
-			t.Fatalf("verdict: %d %s", res.StatusCode, res.Header.Get("Location"))
+		if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/ui/review/"+itemID || !strings.Contains(uiFlash(res), "Verdict") {
+			t.Fatalf("verdict: %d %s %q", res.StatusCode, res.Header.Get("Location"), uiFlash(res))
 		}
 	}
 	res := postForm("/ui/review/"+itemID+"/decision", url.Values{"decision": {"approve"}, "rationale": {"reviewed in the core UI"}})
-	if res.StatusCode != http.StatusSeeOther || !strings.HasPrefix(res.Header.Get("Location"), "/ui/review?ok=Approved") {
+	if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/ui/review" || !strings.HasPrefix(uiFlash(res), "Approved") {
 		b, _ := io.ReadAll(res.Body)
-		t.Fatalf("decision: %d %s %s", res.StatusCode, res.Header.Get("Location"), b)
+		t.Fatalf("decision: %d %s %q %s", res.StatusCode, res.Header.Get("Location"), uiFlash(res), b)
 	}
 	env.waitStatus(author, "risky", "1.0.0", "published")
 
@@ -87,4 +89,22 @@ func TestCoreUIReviewAndStaff(t *testing.T) {
 	if r2.StatusCode != http.StatusForbidden || !strings.Contains(string(b2), "not platform staff") {
 		t.Fatalf("author on staff page: %d %s", r2.StatusCode, b2)
 	}
+}
+
+// uiFlash decodes the notice a UI redirect left in its flash cookie
+// (internal/ui back, agentry#271): the ok and error texts joined.
+func uiFlash(res *http.Response) string {
+	for _, c := range res.Cookies() {
+		if c.Name != "agentry_flash" || c.MaxAge < 0 {
+			continue
+		}
+		b, err := base64.RawURLEncoding.DecodeString(c.Value)
+		if err != nil {
+			return ""
+		}
+		var f struct{ OK, Error string }
+		_ = json.Unmarshal(b, &f)
+		return f.OK + f.Error
+	}
+	return ""
 }
