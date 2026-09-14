@@ -266,10 +266,15 @@
         "egress": { "type": "array", "items": { "$ref": "#/$defs/egressHost" } },
         "env": {
           "type": "object",
-          "description": "Plain, non-secret configuration the server reads from its environment (DEV-098). A name that is also a declared secret is refused by pkg/manifest.",
+          "description": "Plain, non-secret configuration the server reads from its environment (DEV-098). A name that is also a declared secret is refused by pkg/manifest. Values are literal: one the runner's gateway would rewrite — a `$` followed by a name character, `{` or a special shell parameter, or a `{{…}}` template — is refused (agentry#291).",
           "maxProperties": 16,
           "propertyNames": { "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
-          "additionalProperties": { "type": "string", "maxLength": 512, "pattern": "^[^\\p{Cc}]*$" }
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 512,
+            "pattern": "^[^\\p{Cc}]*$",
+            "not": { "anyOf": [ { "pattern": "\\$[A-Za-z0-9_{*#@!?$-]" }, { "allOf": [ { "pattern": "\\{\\{" }, { "pattern": "\\}\\}" } ] } ] }
+          }
         }
       }
     },
