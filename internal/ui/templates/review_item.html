@@ -1,7 +1,7 @@
 {{define "content"}}
 {{with .Data}}
 <p><a href="/ui/review">&larr; Review queue</a></p>
-<h1>{{.Bundle.Item.Namespace}}/{{.Bundle.Item.Agent}} <span class="muted">@{{.Bundle.Item.Version}}</span> <span class="badge">{{.Bundle.Item.State}}</span></h1>
+<h1>{{.Bundle.Item.Namespace}}/{{.Bundle.Item.Agent}} <span class="muted">@{{.Bundle.Item.Version}}</span> <span class="badge">{{.Bundle.Item.State}}</span>{{if .Bundle.Item.VersionStatus}} <span class="badge{{if eq .Bundle.Item.VersionStatus "quarantined"}} warn{{end}}">version {{.Bundle.Item.VersionStatus}}</span>{{end}}</h1>
 {{if .Manifest}}<section class="card"><h2>Manifest</h2><p class="muted">The keys a reviewer reads first; the whole file is in the Files listing below.</p><pre class="secret">{{.Manifest}}</pre></section>{{end}}
 <section class="card">
 <h2>Findings ({{len .Bundle.Findings}})</h2>
@@ -39,6 +39,7 @@
   <label>Rationale<textarea name="rationale" rows="3" required></textarea></label>
   <button type="submit" name="decision" value="approve">Approve and publish</button>
   <button type="submit" name="decision" value="reject" class="danger">Reject</button>
+  {{if eq .Bundle.Item.VersionStatus "quarantined"}}<p class="muted">This version was published, then quarantined: visible, not installable. Approve publishes and signs it again; reject yanks it — an exact pin still resolves a yanked version, nothing else does.</p>{{end}}
   <p class="muted">The rationale is recorded in the audit log, and mailed to the author unless they switched these emails off.</p>
   <p class="muted">Approving publishes and signs this version. Authors cannot decide their own submissions. The server enforces this.</p>
 </form>

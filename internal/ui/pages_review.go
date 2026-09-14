@@ -23,6 +23,9 @@ type reviewItem struct {
 	Agent     string     `json:"agent"`
 	Namespace string     `json:"namespace"`
 	CreatedAt *time.Time `json:"createdAt"`
+	// VersionStatus is the version's own status (§7) when the item was
+	// read: what a decision does depends on it (agentry#273).
+	VersionStatus string `json:"versionStatus"`
 }
 
 type finding struct {
@@ -253,24 +256,48 @@ func (h *handler) reviewDecide(w http.ResponseWriter, r *http.Request) {
 		h.back(w, r, backTo, "", "Nothing was decided: the decision must be approve or reject.")
 		return
 	}
-	res, err := h.call(r).do(http.MethodPost, "/review-items/"+url.PathEscape(id)+"/decision", map[string]string{"decision": decision, "rationale": strings.TrimSpace(r.PostFormValue("rationale"))})
+	// What a decision does depends on where the version is
+	// (internal/api/handlers_reviews.go DecideReviewItem), so the item's
+	// versionStatus (agentry#273) is read before the decision and the
+	// flash names the consequence; a read that failed leaves the flash
+	// with what the decision recorded and nothing it cannot know.
+	c := h.call(r)
+	status := ""
+	if res, err := c.do(http.MethodGet, "/review-items/"+url.PathEscape(id), nil); err == nil && res.OK() {
+		var b reviewBundle
+		if res.decode(&b) == nil {
+			status = b.Item.VersionStatus
+		}
+	}
+	res, err := c.do(http.MethodPost, "/review-items/"+url.PathEscape(id)+"/decision", map[string]string{"decision": decision, "rationale": strings.TrimSpace(r.PostFormValue("rationale"))})
 	if err != nil || !res.OK() {
 		h.back(w, r, backTo, "", failMsg(res, err))
 		return
 	}
-	if decision == "approve" {
-		h.back(w, r, "/ui/review", "Approved. The version is publishing and signing now.", "")
-		return
+	h.back(w, r, "/ui/review", decisionDone(decision, status), "")
+}
+
+// decisionDone is the flash for a recorded decision: the consequence the
+// §7 state machine gives it, branched on the version's status before the
+// decision, or the bare record when that status was not read. An approve
+// publishes and signs in the decision's own transaction
+// (internal/scan/pipeline.go DecideReview), so it is past tense by the
+// time the flash shows; a quarantined version was published, then
+// quarantined (visible, not installable — docs/trust.md), and a reject
+// yanks it rather than the rejected edge that does not exist for it.
+func decisionDone(decision, status string) string {
+	quarantined := status == "quarantined"
+	switch {
+	case decision == "approve" && quarantined:
+		return "Approved. The version was published, then quarantined; it is published and signed again."
+	case decision == "approve":
+		return "Approved. The version is published and signed."
+	case quarantined:
+		return "Rejected. The version was published, then quarantined, so it is yanked: an exact pin still resolves it, nothing else does."
+	case status == "":
+		return "Rejected. The decision and rationale are recorded with the version."
 	}
-	// What a reject does depends on where the version was, and this page
-	// cannot see that: the API sends a pending version to `rejected`, but a
-	// QUARANTINED one to `yanked` instead — the rejected edge does not exist
-	// for it (internal/api/handlers_reviews.go) — and a yanked version still
-	// resolves for an exact pin (internal/registry/resolve.go). The rescan
-	// path files exactly those items, so "will not publish" was false for
-	// them. The flash says what the decision recorded and leaves publication
-	// to the version's own state (agentry#273 carries that seam).
-	h.back(w, r, "/ui/review", "Rejected. The decision and rationale are recorded with the version.", "")
+	return "Rejected. This version will not publish."
 }
 
 func (h *handler) findingVerdict(w http.ResponseWriter, r *http.Request) {

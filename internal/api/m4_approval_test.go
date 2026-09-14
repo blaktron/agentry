@@ -62,18 +62,33 @@ func TestReviewApprovalFlow(t *testing.T) {
 	// across every test in the run (one migrated DB, no per-test cleanup), so
 	// blindly taking the last row grabs another test's item.
 	var queue []struct {
-		Id        string `json:"id"`
-		Namespace string `json:"namespace"`
+		Id            string `json:"id"`
+		Namespace     string `json:"namespace"`
+		VersionStatus string `json:"versionStatus"`
 	}
 	env.doJSON(staffSess, http.MethodGet, "/api/v1/review-queue?queue=platform&limit=100", nil, &queue, http.StatusOK)
 	itemID := ""
 	for _, it := range queue {
 		if it.Namespace == author {
 			itemID = it.Id
+			// The item carries the version's own status (agentry#273), so a
+			// client can say what a decision will do to it.
+			if it.VersionStatus != "needs_review" {
+				t.Fatalf("queue item versionStatus = %q, want needs_review", it.VersionStatus)
+			}
 		}
 	}
 	if itemID == "" {
 		t.Fatal("no platform review item created for this author")
+	}
+	var bundle struct {
+		Item struct {
+			VersionStatus string `json:"versionStatus"`
+		} `json:"item"`
+	}
+	env.doJSON(staffSess, http.MethodGet, "/api/v1/review-items/"+itemID, nil, &bundle, http.StatusOK)
+	if bundle.Item.VersionStatus != "needs_review" {
+		t.Fatalf("bundle item versionStatus = %q, want needs_review", bundle.Item.VersionStatus)
 	}
 
 	// Author cannot decide their own version (§12.2) — even as staff would,
