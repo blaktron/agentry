@@ -41,13 +41,22 @@ func (h *handler) loginPage(w http.ResponseWriter, r *http.Request) {
 	for _, p := range h.opt.Providers {
 		d.ProviderHref[p.ID] = "/api/v1/auth/oidc/" + p.ID + "/start?next=" + url.QueryEscape(next)
 	}
+	// The signed-out entrance is the one page another component addresses
+	// with a message: on a headless deployment the API's social-login
+	// callback sends a failed sign-in here as ?error= (internal/api
+	// webPaths.login), as the site's /login reads it. Honoured on this
+	// page alone, as text; every other notice rides the flash cookie
+	// (agentry#271).
+	pg := page{Title: "Sign in", Data: d, Error: r.URL.Query().Get("error")}
 	// One directory and nothing else: the directory IS the way in, so go
-	// there directly unless the page has something to say (agentry#164).
-	if h.opt.ExternalOnly && len(h.opt.Providers) == 1 && r.URL.Query().Get("error") == "" && r.URL.Query().Get("ok") == "" {
+	// there directly unless the page has something to show (agentry#164):
+	// that message, or a notice a redirect left for this render.
+	_, hasFlash := r.Cookie(flashCookie)
+	if h.opt.ExternalOnly && len(h.opt.Providers) == 1 && pg.Error == "" && hasFlash != nil {
 		http.Redirect(w, r, d.ProviderHref[h.opt.Providers[0].ID], http.StatusSeeOther)
 		return
 	}
-	h.render(w, r, http.StatusOK, "login", page{Title: "Sign in", Data: d})
+	h.render(w, r, http.StatusOK, "login", pg)
 }
 
 // loginSubmit posts the native credentials to POST /auth/login in-process
@@ -76,9 +85,9 @@ func (h *handler) loginSubmit(w http.ResponseWriter, r *http.Request) {
 		q := url.Values{"next": {next}, "login": {body["login"]}}
 		if strings.HasSuffix(res.problemType(), "totp-required") {
 			q.Set("totp", "1")
-			q.Set("error", "Enter your two-factor code.")
+			h.setFlash(w, "", "Enter your two-factor code.")
 		} else {
-			q.Set("error", res.detail())
+			h.setFlash(w, "", res.detail())
 		}
 		http.Redirect(w, r, "/ui/login?"+q.Encode(), http.StatusSeeOther)
 		return
@@ -89,7 +98,7 @@ func (h *handler) loginSubmit(w http.ResponseWriter, r *http.Request) {
 	_ = res.decode(&out)
 	sess := findSetCookie(res.Header, sessionCookie)
 	if sess == "" || cookieValueOf(sess) == "" || out.CsrfToken == "" {
-		back(w, r, "/ui/login", "", "Sign-in succeeded but no session was issued. You are not signed in.")
+		h.back(w, r, "/ui/login", "", "Sign-in succeeded but no session was issued. You are not signed in.")
 		return
 	}
 	forwardCookies(w, res.Header)
@@ -206,14 +215,14 @@ func (h *handler) authorizeApprove(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, h.loginURL("/ui/authorize?port="+strconv.Itoa(d.Port)+"&state="+url.QueryEscape(d.State)), http.StatusSeeOther)
 			return
 		}
-		back(w, r, "/ui/authorize?port="+strconv.Itoa(d.Port)+"&state="+url.QueryEscape(d.State), "", msg)
+		h.back(w, r, "/ui/authorize?port="+strconv.Itoa(d.Port)+"&state="+url.QueryEscape(d.State), "", msg)
 		return
 	}
 	var grant struct {
 		Code string `json:"code"`
 	}
 	if res.decode(&grant) != nil || grant.Code == "" {
-		back(w, r, "/ui/authorize?port="+strconv.Itoa(d.Port)+"&state="+url.QueryEscape(d.State), "", "No code was issued. This device is not authorized.")
+		h.back(w, r, "/ui/authorize?port="+strconv.Itoa(d.Port)+"&state="+url.QueryEscape(d.State), "", "No code was issued. This device is not authorized.")
 		return
 	}
 	cb := url.URL{Scheme: "http", Host: "127.0.0.1:" + strconv.Itoa(d.Port), Path: "/callback"}
