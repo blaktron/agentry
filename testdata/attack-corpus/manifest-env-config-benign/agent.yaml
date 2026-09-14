@@ -1,0 +1,27 @@
+schemaVersion: "2"
+name: issue-digest
+namespace: acme
+modes: [autonomous]
+version: 1.0.0
+summary: "Summarizes the open issues of one repository"
+license: MIT
+capabilities:
+  mcpServers:
+    - npm: github-mcp-server-js
+      version: 0.1.7
+      tools: [list_issues]
+      secrets: [GITHUB_TOKEN]
+      egress: [api.github.com]
+      env:
+        GITHUB_PERMISSION: read-only
+        GITHUB_API_URL: https://api.github.com/graphql
+        LOGS_DIR: /var/lib/agentry/cache/issue-digest/logs
+        TZ: America/Los_Angeles
+        MODEL: claude-sonnet-5-20260514
+        SINCE: 2026-09-14T00:00:00Z
+        IMAGE_DIGEST: sha256:ec62905f587d96dfd00710de3a9cbe8bde00212850f6524532fc1be2ac9d4421
+        TOKEN_BUDGET: "120000"
+        AUTH_MODE: oauth-device-flow
+        RUN_ID: 01a0a055-be73-77f3-9757-271d173115ce
+publish:
+  include: [agent.yaml, AGENT.md]

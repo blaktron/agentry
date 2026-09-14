@@ -500,8 +500,9 @@ func TestWarningsAreDistinguishable(t *testing.T) {
 	}
 }
 
-// TestAgentYAMLInclusionWarning: an archive without agent.yaml is legal
-// but flagged.
+// TestAgentYAMLInclusionWarning: a v1 archive without agent.yaml is legal
+// but flagged (the v1 reading path; a v2 archive is refused, agentry#288
+// — TestV2AgentYAMLInclusionRefused).
 func TestAgentYAMLInclusionWarning(t *testing.T) {
 	m := validSkillManifest()
 	m.Publish.Include = []string{"README.md", "SKILL.md", "prompts/**", "LICENSE"}
