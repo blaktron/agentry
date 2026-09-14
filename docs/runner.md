@@ -397,6 +397,14 @@ honest about which half is which.
     transcript.md        the conversation, for an interactive session
 ```
 
+Every file under `receipts/`, the result text and the envelope's error
+have the run's secret values masked to `[redacted]` before they are
+written: the gateway token, every resolved secret (the agent's and the
+declared servers'), the model API key. A value shorter than eight
+characters is not masked — it is a switch, not a credential. The masking
+matches values as they were resolved; an encoded copy (base64, URL-escaped)
+is not recognised.
+
 Exit codes: `0` ok · `1` other CLI error · `2` usage · `10` verify failed ·
 `11` refused by policy / missing secret · `12` not compilable/runnable ·
 `13` gateway or docker environment · `14` the BriefAgent failed ·
