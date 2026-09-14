@@ -12,7 +12,8 @@
 {{with .Data}}
 <section class="card">
 <h2>Password and two-factor authentication</h2>
-{{if .Directory}}{{with .Directory}}
+{{if .DirectoryError}}<p class="flash error">{{.DirectoryError}}</p>
+{{else if .Directory}}{{with .Directory}}
 <p class="muted">The sign-in service keeps your password and authenticators. Each action opens one short step there and brings you back here. Where this registry requires a second factor before a public publish, enrol one there and sign in again.</p>
 <p>
 {{if .PasswordChangeUrl}}<a class="button secondary" href="{{.PasswordChangeUrl}}">Change password</a>{{end}}

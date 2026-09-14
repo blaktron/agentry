@@ -129,11 +129,15 @@ func (h *handler) render(w http.ResponseWriter, r *http.Request, status int, nam
 	p.Site = h.opt.SiteURL != ""
 	p.Path = r.URL.Path
 	p.CSRF = cookieValue(r, csrfCookie)
-	if p.Flash == "" {
-		p.Flash = r.URL.Query().Get("ok")
-	}
-	if p.Error == "" {
-		p.Error = r.URL.Query().Get("error")
+	// The notice a redirect left for this render (ui.go back); a page's
+	// own Flash or Error wins over it.
+	if f, ok := h.takeFlash(w, r); ok {
+		if p.Flash == "" {
+			p.Flash = f.OK
+		}
+		if p.Error == "" {
+			p.Error = f.Error
+		}
 	}
 	p.LogoURL = h.opt.Brand.LogoURL
 	p.CSSURL = h.opt.Brand.CSSURL
