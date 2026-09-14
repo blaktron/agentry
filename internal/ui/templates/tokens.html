@@ -2,7 +2,8 @@
 <h1>Personal access tokens</h1>
 {{with .Data}}
 <section class="card">
-{{if not .Tokens}}<p class="muted">No tokens. <code>agentry login</code> signs in through the browser and mints its own; create one here only for scripts.</p>
+{{if .LoadError}}<p class="flash error">{{.LoadError}}</p>
+{{else if not .Tokens}}<p class="muted">No tokens. <code>agentry login</code> signs in through the browser and mints its own; create one here only for scripts.</p>
 {{else}}<ul class="list">{{range .Tokens}}<li><strong>{{.Name}}</strong> <code>{{join .Scopes " "}}</code>{{if .LastUsedAt}} <span class="muted">last used {{utc .LastUsedAt}}</span>{{end}}
 <form method="post" action="/ui/account/tokens" class="inline"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="action" value="revoke"><input type="hidden" name="tokenId" value="{{.ID}}"><button type="submit" class="small danger">Revoke</button></form></li>{{end}}</ul>{{end}}
 </section>

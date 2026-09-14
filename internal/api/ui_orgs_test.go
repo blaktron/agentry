@@ -53,7 +53,7 @@ func TestCoreUIOrgAdmin(t *testing.T) {
 		t.Fatalf("org page: %d %s", code, body)
 	}
 	res := postForm(url.Values{"section": {"team"}, "slug": {"platform"}})
-	if res.StatusCode != http.StatusSeeOther || !strings.Contains(res.Header.Get("Location"), "ok=Team+platform+created") {
+	if res.StatusCode != http.StatusSeeOther || !strings.Contains(uiFlash(res), "Team platform created") {
 		b, _ := io.ReadAll(res.Body)
 		t.Fatalf("team: %d %s %s", res.StatusCode, res.Header.Get("Location"), b)
 	}
@@ -67,7 +67,7 @@ func TestCoreUIOrgAdmin(t *testing.T) {
 		t.Fatalf("no policy textarea")
 	}
 	res = postForm(url.Values{"section": {"policy"}, "policy": {`{"mcpServers": {"allowVulnerable": false}}`}})
-	if res.StatusCode != http.StatusSeeOther || !strings.Contains(res.Header.Get("Location"), "ok=Policy+saved") {
+	if res.StatusCode != http.StatusSeeOther || !strings.Contains(uiFlash(res), "Policy saved") {
 		b, _ := io.ReadAll(res.Body)
 		t.Fatalf("policy: %d %s %s", res.StatusCode, res.Header.Get("Location"), b)
 	}

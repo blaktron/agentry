@@ -27,7 +27,11 @@ type directoryInfo struct {
 
 type accountData struct {
 	Directory *directoryInfo
-	Support   string
+	// DirectoryError is set when the directory read failed: the page says
+	// it could not look rather than rendering the non-directory account
+	// (agentry#271).
+	DirectoryError string
+	Support        string
 }
 
 func (h *handler) accountPage(w http.ResponseWriter, r *http.Request) {
@@ -37,7 +41,10 @@ func (h *handler) accountPage(w http.ResponseWriter, r *http.Request) {
 	}
 	d := accountData{Support: h.opt.Brand.SupportEmail}
 	if h.opt.ExternalOnly {
-		if res, err := h.call(r).do(http.MethodGet, "/user/directory", nil); err == nil && res.OK() {
+		res, err := h.call(r).do(http.MethodGet, "/user/directory", nil)
+		if err != nil || !res.OK() {
+			d.DirectoryError = readFailed("the password and authenticator links", res, err)
+		} else {
 			var dir directoryInfo
 			if res.decode(&dir) == nil {
 				d.Directory = &dir
@@ -54,10 +61,10 @@ func (h *handler) accountSave(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.PostFormValue("displayName"))
 	res, err := h.call(r).do(http.MethodPatch, "/user", map[string]string{"displayName": name})
 	if err != nil || !res.OK() {
-		back(w, r, "/ui/account", "", failMsg(res, err))
+		h.back(w, r, "/ui/account", "", failMsg(res, err))
 		return
 	}
-	back(w, r, "/ui/account", "Profile saved.", "")
+	h.back(w, r, "/ui/account", "Profile saved.", "")
 }
 
 func (h *handler) directoryDeviceRemove(w http.ResponseWriter, r *http.Request) {
@@ -66,15 +73,15 @@ func (h *handler) directoryDeviceRemove(w http.ResponseWriter, r *http.Request) 
 	}
 	kind, id := r.PostFormValue("kind"), r.PostFormValue("deviceId")
 	if kind == "" || id == "" {
-		back(w, r, "/ui/account", "", "The form did not say which authenticator to remove.")
+		h.back(w, r, "/ui/account", "", "The form did not say which authenticator to remove.")
 		return
 	}
 	res, err := h.call(r).do(http.MethodDelete, "/user/directory/devices/"+url.PathEscape(kind)+"/"+url.PathEscape(id), nil)
 	if err != nil || !res.OK() {
-		back(w, r, "/ui/account", "", failMsg(res, err))
+		h.back(w, r, "/ui/account", "", failMsg(res, err))
 		return
 	}
-	back(w, r, "/ui/account", "Authenticator removed. Sign-in no longer accepts it.", "")
+	h.back(w, r, "/ui/account", "Authenticator removed. Sign-in no longer accepts it.", "")
 }
 
 type token struct {
@@ -92,6 +99,19 @@ var scopes = []string{"agent:read", "agent:publish", "repo:read", "repo:write", 
 type tokensData struct {
 	Tokens []token
 	Scopes []string
+	// LoadError is the readFailed notice when the list could not be read;
+	// the empty state is for an answered-empty list only (agentry#271).
+	LoadError string
+}
+
+type sshKeysData struct {
+	Keys      []sshKey
+	LoadError string
+}
+
+type sessionsData struct {
+	Sessions  []session
+	LoadError string
 }
 
 func (h *handler) tokensPage(w http.ResponseWriter, r *http.Request) {
@@ -99,11 +119,14 @@ func (h *handler) tokensPage(w http.ResponseWriter, r *http.Request) {
 	if u == nil {
 		return
 	}
-	var list []token
-	if res, err := h.call(r).do(http.MethodGet, "/user/tokens", nil); err == nil && res.OK() {
-		_ = res.decode(&list)
+	d := tokensData{Scopes: scopes}
+	res, err := h.call(r).do(http.MethodGet, "/user/tokens", nil)
+	if err != nil || !res.OK() {
+		d.LoadError = readFailed("your tokens", res, err)
+	} else {
+		_ = res.decode(&d.Tokens)
 	}
-	h.render(w, r, http.StatusOK, "tokens", page{Title: "Personal access tokens", User: u, Data: tokensData{Tokens: list, Scopes: scopes}})
+	h.render(w, r, http.StatusOK, "tokens", page{Title: "Personal access tokens", User: u, Data: d})
 }
 
 func (h *handler) tokensSubmit(w http.ResponseWriter, r *http.Request) {
@@ -115,32 +138,32 @@ func (h *handler) tokensSubmit(w http.ResponseWriter, r *http.Request) {
 		id := r.PostFormValue("tokenId")
 		res, err := c.do(http.MethodDelete, "/user/tokens/"+url.PathEscape(id), nil)
 		if err != nil || !res.OK() {
-			back(w, r, "/ui/account/tokens", "", failMsg(res, err))
+			h.back(w, r, "/ui/account/tokens", "", failMsg(res, err))
 			return
 		}
-		back(w, r, "/ui/account/tokens", "Token revoked. Calls with it fail now.", "")
+		h.back(w, r, "/ui/account/tokens", "Token revoked. Calls with it fail now.", "")
 		return
 	}
 	name := strings.TrimSpace(r.PostFormValue("name"))
 	sc := r.PostForm["scopes"]
 	if name == "" {
-		back(w, r, "/ui/account/tokens", "", "A token needs a name.")
+		h.back(w, r, "/ui/account/tokens", "", "A token needs a name.")
 		return
 	}
 	if len(sc) == 0 {
-		back(w, r, "/ui/account/tokens", "", "Pick at least one scope.")
+		h.back(w, r, "/ui/account/tokens", "", "Pick at least one scope.")
 		return
 	}
 	res, err := c.do(http.MethodPost, "/user/tokens", map[string]any{"name": name, "scopes": sc})
 	if err != nil || !res.OK() {
-		back(w, r, "/ui/account/tokens", "", failMsg(res, err))
+		h.back(w, r, "/ui/account/tokens", "", failMsg(res, err))
 		return
 	}
 	var created struct {
 		Token string `json:"token"`
 	}
 	if res.decode(&created) != nil || created.Token == "" {
-		back(w, r, "/ui/account/tokens", "", "The token was created but not shown. Revoke it in the list and create another.")
+		h.back(w, r, "/ui/account/tokens", "", "The token was created but not shown. Revoke it in the list and create another.")
 		return
 	}
 	// Shown once, never in a URL (the same rule as the site's show-once): the page is the
@@ -173,11 +196,14 @@ func (h *handler) sshKeysPage(w http.ResponseWriter, r *http.Request) {
 	if u == nil {
 		return
 	}
-	var list []sshKey
-	if res, err := h.call(r).do(http.MethodGet, "/user/ssh-keys", nil); err == nil && res.OK() {
-		_ = res.decode(&list)
+	var d sshKeysData
+	res, err := h.call(r).do(http.MethodGet, "/user/ssh-keys", nil)
+	if err != nil || !res.OK() {
+		d.LoadError = readFailed("your SSH keys", res, err)
+	} else {
+		_ = res.decode(&d.Keys)
 	}
-	h.render(w, r, http.StatusOK, "sshkeys", page{Title: "SSH keys", User: u, Data: list})
+	h.render(w, r, http.StatusOK, "sshkeys", page{Title: "SSH keys", User: u, Data: d})
 }
 
 func (h *handler) sshKeysSubmit(w http.ResponseWriter, r *http.Request) {
@@ -188,23 +214,23 @@ func (h *handler) sshKeysSubmit(w http.ResponseWriter, r *http.Request) {
 	if r.PostFormValue("action") == "remove" {
 		res, err := c.do(http.MethodDelete, "/user/ssh-keys/"+url.PathEscape(r.PostFormValue("keyId")), nil)
 		if err != nil || !res.OK() {
-			back(w, r, "/ui/account/ssh-keys", "", failMsg(res, err))
+			h.back(w, r, "/ui/account/ssh-keys", "", failMsg(res, err))
 			return
 		}
-		back(w, r, "/ui/account/ssh-keys", "Key removed. Git over SSH refuses it now.", "")
+		h.back(w, r, "/ui/account/ssh-keys", "Key removed. Git over SSH refuses it now.", "")
 		return
 	}
 	title, key := strings.TrimSpace(r.PostFormValue("title")), strings.TrimSpace(r.PostFormValue("publicKey"))
 	if title == "" || key == "" {
-		back(w, r, "/ui/account/ssh-keys", "", "A key needs a title and the public key.")
+		h.back(w, r, "/ui/account/ssh-keys", "", "A key needs a title and the public key.")
 		return
 	}
 	res, err := c.do(http.MethodPost, "/user/ssh-keys", map[string]string{"title": title, "publicKey": key})
 	if err != nil || !res.OK() {
-		back(w, r, "/ui/account/ssh-keys", "", failMsg(res, err))
+		h.back(w, r, "/ui/account/ssh-keys", "", failMsg(res, err))
 		return
 	}
-	back(w, r, "/ui/account/ssh-keys", "Key added.", "")
+	h.back(w, r, "/ui/account/ssh-keys", "Key added.", "")
 }
 
 type session struct {
@@ -221,13 +247,18 @@ func (h *handler) sessionsPage(w http.ResponseWriter, r *http.Request) {
 	if u == nil {
 		return
 	}
-	var out struct {
-		Sessions []session `json:"sessions"`
-	}
-	if res, err := h.call(r).do(http.MethodGet, "/user/sessions", nil); err == nil && res.OK() {
+	var d sessionsData
+	res, err := h.call(r).do(http.MethodGet, "/user/sessions", nil)
+	if err != nil || !res.OK() {
+		d.LoadError = readFailed("your sessions", res, err)
+	} else {
+		var out struct {
+			Sessions []session `json:"sessions"`
+		}
 		_ = res.decode(&out)
+		d.Sessions = out.Sessions
 	}
-	h.render(w, r, http.StatusOK, "sessions", page{Title: "Sessions", User: u, Data: out.Sessions})
+	h.render(w, r, http.StatusOK, "sessions", page{Title: "Sessions", User: u, Data: d})
 }
 
 func (h *handler) sessionsSubmit(w http.ResponseWriter, r *http.Request) {
@@ -248,10 +279,10 @@ func (h *handler) sessionsSubmit(w http.ResponseWriter, r *http.Request) {
 		ok = "Session revoked. That browser is signed out now."
 	}
 	if err != nil || !res.OK() {
-		back(w, r, "/ui/account/sessions", "", failMsg(res, err))
+		h.back(w, r, "/ui/account/sessions", "", failMsg(res, err))
 		return
 	}
-	back(w, r, "/ui/account/sessions", ok, "")
+	h.back(w, r, "/ui/account/sessions", ok, "")
 }
 
 // failMsg is what a form says when the call behind it did not succeed. The
@@ -264,6 +295,18 @@ func failMsg(res response, err error) string {
 		return notSent
 	}
 	return res.detail()
+}
+
+// readFailed is the notice a page shows when a read failed: the page
+// could not look, which is not the same as nothing being there
+// (agentry#271). The empty state is rendered only on an answered-empty
+// read. A problem detail is a sentence of its own (internal/api
+// problem.go), so it stands between the lead and the advice.
+func readFailed(what string, res response, err error) string {
+	if err != nil {
+		return "The registry could not fetch " + what + ": the request was not sent. Reload to try again."
+	}
+	return "The registry could not fetch " + what + ". " + res.detail() + " Reload to try again."
 }
 
 // notSent is the one copy for that branch, shared by every page.

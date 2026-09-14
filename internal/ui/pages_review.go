@@ -250,16 +250,16 @@ func (h *handler) reviewDecide(w http.ResponseWriter, r *http.Request) {
 	backTo := "/ui/review/" + url.PathEscape(id)
 	decision := r.PostFormValue("decision")
 	if decision != "approve" && decision != "reject" {
-		back(w, r, backTo, "", "Nothing was decided: the decision must be approve or reject.")
+		h.back(w, r, backTo, "", "Nothing was decided: the decision must be approve or reject.")
 		return
 	}
 	res, err := h.call(r).do(http.MethodPost, "/review-items/"+url.PathEscape(id)+"/decision", map[string]string{"decision": decision, "rationale": strings.TrimSpace(r.PostFormValue("rationale"))})
 	if err != nil || !res.OK() {
-		back(w, r, backTo, "", failMsg(res, err))
+		h.back(w, r, backTo, "", failMsg(res, err))
 		return
 	}
 	if decision == "approve" {
-		back(w, r, "/ui/review", "Approved. The version is publishing and signing now.", "")
+		h.back(w, r, "/ui/review", "Approved. The version is publishing and signing now.", "")
 		return
 	}
 	// What a reject does depends on where the version was, and this page
@@ -270,7 +270,7 @@ func (h *handler) reviewDecide(w http.ResponseWriter, r *http.Request) {
 	// path files exactly those items, so "will not publish" was false for
 	// them. The flash says what the decision recorded and leaves publication
 	// to the version's own state (agentry#273 carries that seam).
-	back(w, r, "/ui/review", "Rejected. The decision and rationale are recorded with the version.", "")
+	h.back(w, r, "/ui/review", "Rejected. The decision and rationale are recorded with the version.", "")
 }
 
 func (h *handler) findingVerdict(w http.ResponseWriter, r *http.Request) {
@@ -285,15 +285,15 @@ func (h *handler) findingVerdict(w http.ResponseWriter, r *http.Request) {
 		ok = ok || x.Value == v
 	}
 	if !ok {
-		back(w, r, backTo, "", "Nothing was recorded: that is not a verdict.")
+		h.back(w, r, backTo, "", "Nothing was recorded: that is not a verdict.")
 		return
 	}
 	res, err := h.call(r).do(http.MethodPost, "/findings/"+url.PathEscape(fid)+"/verdict", map[string]string{"verdict": v, "reason": strings.TrimSpace(r.PostFormValue("reason"))})
 	if err != nil || !res.OK() {
-		back(w, r, backTo, "", failMsg(res, err))
+		h.back(w, r, backTo, "", failMsg(res, err))
 		return
 	}
-	back(w, r, backTo, "Verdict recorded.", "")
+	h.back(w, r, backTo, "Verdict recorded.", "")
 }
 
 type abuseReport struct {
@@ -360,15 +360,15 @@ func (h *handler) staffAbuseTriage(w http.ResponseWriter, r *http.Request) {
 	}
 	id, state := r.PostFormValue("reportId"), r.PostFormValue("state")
 	if id == "" || (state != "triaged" && state != "actioned" && state != "dismissed") {
-		back(w, r, "/ui/staff", "", "Nothing was recorded: pick a report and a triage state.")
+		h.back(w, r, "/ui/staff", "", "Nothing was recorded: pick a report and a triage state.")
 		return
 	}
 	res, err := h.call(r).do(http.MethodPost, "/platform/abuse-reports/"+url.PathEscape(id), map[string]string{"state": state, "resolution": strings.TrimSpace(r.PostFormValue("resolution"))})
 	if err != nil || !res.OK() {
-		back(w, r, "/ui/staff", "", failMsg(res, err))
+		h.back(w, r, "/ui/staff", "", failMsg(res, err))
 		return
 	}
-	back(w, r, "/ui/staff", "Report marked "+state+".", "")
+	h.back(w, r, "/ui/staff", "Report marked "+state+".", "")
 }
 
 // agentActionDone is what a consumer meets after each enforcement action, and
@@ -400,15 +400,15 @@ func (h *handler) staffAgentAction(w http.ResponseWriter, r *http.Request) {
 	ns, name, cut := strings.Cut(ref, "/")
 	done, known := agentActionDone[action]
 	if !cut || ns == "" || name == "" || !known || reason == "" {
-		back(w, r, "/ui/staff", "", "Nothing was done: a BriefAgent as namespace/name, an action and a reason are all required.")
+		h.back(w, r, "/ui/staff", "", "Nothing was done: a BriefAgent as namespace/name, an action and a reason are all required.")
 		return
 	}
 	res, err := h.call(r).do(http.MethodPost, "/platform/agents/"+url.PathEscape(ns)+"/"+url.PathEscape(name)+"/"+action, map[string]string{"reason": reason})
 	if err != nil || !res.OK() {
-		back(w, r, "/ui/staff", "", failMsg(res, err))
+		h.back(w, r, "/ui/staff", "", failMsg(res, err))
 		return
 	}
-	back(w, r, "/ui/staff", ref+" "+done, "")
+	h.back(w, r, "/ui/staff", ref+" "+done, "")
 }
 
 func (h *handler) staffRulesetRelease(w http.ResponseWriter, r *http.Request) {
@@ -423,7 +423,7 @@ func (h *handler) staffRulesetRelease(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := h.call(r).do(http.MethodPost, "/platform/ruleset-releases", body)
 	if err != nil || !res.OK() {
-		back(w, r, "/ui/staff", "", failMsg(res, err))
+		h.back(w, r, "/ui/staff", "", failMsg(res, err))
 		return
 	}
 	// 201 recorded a release; 200 is the row already on file, which changes
@@ -432,8 +432,8 @@ func (h *handler) staffRulesetRelease(w http.ResponseWriter, r *http.Request) {
 	// enqueues it only when the insert was genuinely new, and a 201 over an
 	// existing row (the upsert's other branch) starts none.
 	if res.Status == http.StatusCreated {
-		back(w, r, "/ui/staff", "Ruleset release recorded.", "")
+		h.back(w, r, "/ui/staff", "Ruleset release recorded.", "")
 		return
 	}
-	back(w, r, "/ui/staff", "That ruleset release was already recorded. Nothing changed.", "")
+	h.back(w, r, "/ui/staff", "That ruleset release was already recorded. Nothing changed.", "")
 }
