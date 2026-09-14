@@ -546,6 +546,27 @@ const (
 	MaxMCPServerEnvValue   = 512
 )
 
+// envExpandRE matches what the runner's gateway would rewrite in a declared
+// env value: a `$` followed by a name character, `{` or a special shell
+// parameter — the shapes os.Expand substitutes. docker/mcp-gateway (the
+// runner's pin) expands those against the server container's environment,
+// the server's secrets included, so `LOGS_DIR: $GITHUB_TOKEN` would copy a
+// secret into a plain variable (agentry-cli#99). V5 refuses them at
+// validation so an author learns at `agentry validate`, not at first run
+// (agentry#291); the runner's compile.envExpandRE is this expression.
+var envExpandRE = regexp.MustCompile(`\$[A-Za-z0-9_{*#@!?$-]`)
+
+// LiteralEnvValue reports whether a declared env value would reach the
+// server as written: no `$` the gateway would expand and no `{{…}}` it
+// would evaluate as a template. Exported so the runner's plan-time check
+// is this rule and not a copy of it.
+func LiteralEnvValue(v string) bool {
+	if envExpandRE.MatchString(v) {
+		return false
+	}
+	return !strings.Contains(v, "{{") || !strings.Contains(v, "}}")
+}
+
 // Package-name grammars. npm: optional @scope/ plus a lowercase name
 // (npm forbids uppercase in new packages); PyPI: the PEP-503 normalized
 // form — validate/publish require the normalized name so one spelling
@@ -658,10 +679,10 @@ func checkEnvName(s *issues, p, name string) bool {
 	return false
 }
 
-// validateMCPServerEnv checks one server's plain env map: a v2 field of at
-// most MaxMCPServerEnvEntries env-grammar names with single-line values of
-// at most MaxMCPServerEnvValue characters, none of which is also a declared
-// secret. The strict decoder has already refused a repeated key, so names
+// validateMCPServerEnv checks one server's plain env map: a v2 field of
+// at most MaxMCPServerEnvEntries env-grammar names with single-line
+// literal values of at most MaxMCPServerEnvValue characters, none of
+// which is also a declared secret. The strict decoder has already refused a repeated key, so names
 // are unique by parse. Keys are visited in sorted order so the issue list
 // is deterministic.
 func validateMCPServerEnv(s *issues, p string, major int, srv MCPServer, agentSecrets map[string]bool) {
@@ -702,6 +723,9 @@ func validateMCPServerEnv(s *issues, p string, major int, srv MCPServer, agentSe
 				s.errf("V5", np, "value must be a single line with no control characters")
 				break
 			}
+		}
+		if !LiteralEnvValue(value) {
+			s.errf("V5", np, "value contains a $ the runner's gateway would expand, or a {{ }} template; declare a literal value")
 		}
 	}
 }
