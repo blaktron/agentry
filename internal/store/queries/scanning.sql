@@ -86,7 +86,7 @@ RETURNING *;
 SELECT * FROM review_items WHERE id = $1;
 
 -- name: GetReviewItemDetail :one
-SELECT ri.*, av.version, a.name AS agent_name, h.handle AS namespace
+SELECT ri.*, av.version, av.status AS version_status, a.name AS agent_name, h.handle AS namespace
 FROM review_items ri
 JOIN agent_versions av ON av.id = ri.version_id
 JOIN agents a ON a.id = av.agent_id
@@ -100,7 +100,7 @@ SELECT * FROM review_items WHERE version_id = $1 AND state = 'pending';
 UPDATE review_items SET state = $2, decided_by = $3, decided_at = now(), rationale = $4 WHERE id = $1;
 
 -- name: ListReviewQueue :many
-SELECT ri.*, av.version, a.name AS agent_name, h.handle AS namespace
+SELECT ri.*, av.version, av.status AS version_status, a.name AS agent_name, h.handle AS namespace
 FROM review_items ri
 JOIN agent_versions av ON av.id = ri.version_id
 JOIN agents a ON a.id = av.agent_id

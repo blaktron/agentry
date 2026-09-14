@@ -4209,6 +4209,13 @@ components:
           enum: [pending, approved, rejected]
         version:
           type: string
+        # The version's own status when the item was read (§7), so a client
+        # can say what a decision will do: a needs_review version rejected
+        # goes to rejected, a quarantined one — public, under re-review —
+        # is yanked instead, the rejected edge not existing for it
+        # (agentry#273).
+        versionStatus:
+          $ref: "#/components/schemas/VersionStatus"
         agent:
           type: string
         namespace:

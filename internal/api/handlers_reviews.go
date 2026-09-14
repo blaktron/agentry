@@ -196,9 +196,10 @@ func (s *Server) ListReviewQueue(w http.ResponseWriter, r *http.Request, params 
 	}
 	out := make([]ReviewItem, 0, len(rows))
 	for _, ri := range rows {
+		vs := VersionStatus(ri.VersionStatus)
 		out = append(out, ReviewItem{
 			Id: ri.ID, Queue: ReviewItemQueue(ri.Queue), State: ReviewItemState(ri.State),
-			Version: ri.Version, Agent: ri.AgentName, Namespace: ri.Namespace,
+			Version: ri.Version, VersionStatus: &vs, Agent: ri.AgentName, Namespace: ri.Namespace,
 			CreatedAt: &ri.CreatedAt,
 		})
 	}
@@ -249,10 +250,11 @@ func (s *Server) GetReviewItem(w http.ResponseWriter, r *http.Request, id openap
 		problemInternal(w, r)
 		return
 	}
+	vs := VersionStatus(ri.VersionStatus)
 	bundle := ReviewBundle{
 		Item: ReviewItem{
 			Id: ri.ID, Queue: ReviewItemQueue(ri.Queue), State: ReviewItemState(ri.State),
-			Namespace: ri.Namespace, Agent: ri.AgentName, Version: ri.Version,
+			Namespace: ri.Namespace, Agent: ri.AgentName, Version: ri.Version, VersionStatus: &vs,
 			CreatedAt: &ri.CreatedAt,
 		},
 		Findings: []ScanFinding{},
