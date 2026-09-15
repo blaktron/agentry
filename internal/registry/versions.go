@@ -72,6 +72,12 @@ func transitionAllowed(from, to Status) bool {
 // ErrBadTransition reports a §7 state-machine violation.
 var ErrBadTransition = errors.New("registry: illegal state transition")
 
+// ErrVersionMoved reports that a transition's precondition failed: the
+// version was no longer in the state the caller decided from (a decision
+// reached late, after the watchdog routed the version to review —
+// agentry#343). The caller's decision is stale, not wrong; it stops.
+var ErrVersionMoved = errors.New("registry: version moved before the transition")
+
 // Version aliases the row type.
 type Version = storegen.AgentVersion
 
@@ -127,8 +133,30 @@ func (s *Service) Transition(ctx context.Context, versionID uuid.UUID, to Status
 
 // TransitionWith is Transition with the pipeline's cause on the event.
 func (s *Service) TransitionWith(ctx context.Context, versionID uuid.UUID, to Status, reason string, actorEvent audit.Event, cause TransitionCause) error {
+	return s.transitionWith(ctx, versionID, "", to, reason, actorEvent, cause)
+}
+
+// TransitionFrom is TransitionWith with a precondition: the version must
+// still be in `from` under the row lock, or nothing moves and
+// ErrVersionMoved says so. A decision made about a version in one state
+// must not be applied to it in another — a scan's verdict reaching a
+// version the watchdog has since handed to a reviewer (agentry#343).
+func (s *Service) TransitionFrom(ctx context.Context, versionID uuid.UUID, from, to Status, reason string, actorEvent audit.Event, cause TransitionCause) error {
+	return s.transitionWith(ctx, versionID, from, to, reason, actorEvent, cause)
+}
+
+func (s *Service) transitionWith(ctx context.Context, versionID uuid.UUID, expectFrom, to Status, reason string, actorEvent audit.Event, cause TransitionCause) error {
 	var res TransitionResult
 	err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
+		if expectFrom != "" {
+			row, err := q.GetVersionForUpdate(ctx, versionID)
+			if err != nil {
+				return fmt.Errorf("registry: lock version: %w", err)
+			}
+			if Status(row.Status) != expectFrom {
+				return fmt.Errorf("%w: %s is %s, the decision was made from %s", ErrVersionMoved, row.Version, row.Status, expectFrom)
+			}
+		}
 		var terr error
 		res, terr = s.TransitionInTx(ctx, q, versionID, to, reason, actorEvent)
 		return terr

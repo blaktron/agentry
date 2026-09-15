@@ -656,18 +656,33 @@ func (p *Pipeline) applyDecision(ctx context.Context, agent storegen.GetAgentByI
 	// §16.2 publish funnel: one verdict per version, recorded where the
 	// decision is acted on rather than where it is computed (the orchestrator
 	// can run more than once for a version — rescans, resumes).
+	// The verdict applies to the version the scan was of — one still in
+	// `scanning`. A scan that outlived the watchdog's cap finds its version
+	// already handed to a reviewer (needs_review, a review item filed, the
+	// author told); its late verdict must not publish or reject over that,
+	// so every transition here holds the row and requires `scanning`
+	// (registry.TransitionFrom, agentry#343). A moved version keeps its
+	// run and its findings on record and gets nothing else from this call.
+	moved := func(err error) error {
+		if errors.Is(err, registry.ErrVersionMoved) {
+			p.log.WarnContext(ctx, "gate: verdict reached a version that had moved; not applied",
+				"version", v.ID, "agent", agent.ID, "run", runID, "outcome", string(result.Decision.Outcome), "err", err)
+			return nil
+		}
+		return err
+	}
 	switch result.Decision.Outcome {
 	case OutcomePublish:
 		p.mx.RecordVerdict(ctx, metrics.VerdictClean)
-		if err := p.reg.Transition(ctx, v.ID, registry.StatusPublished, result.Decision.Reason, sysEvent); err != nil {
-			return err
+		if err := p.reg.TransitionFrom(ctx, v.ID, registry.StatusScanning, registry.StatusPublished, result.Decision.Reason, sysEvent, registry.TransitionCause{}); err != nil {
+			return moved(err)
 		}
 		p.indexReadme(ctx, agent.ID, v)
 		return p.sign(ctx, p.st.Queries(), agent, v, runID, result.ReportDigest, result.JudgeModel, policyVer)
 
 	case OutcomeRejected:
 		p.mx.RecordVerdict(ctx, metrics.VerdictBlocked)
-		return p.reg.Transition(ctx, v.ID, registry.StatusRejected, result.Decision.Reason, sysEvent)
+		return moved(p.reg.TransitionFrom(ctx, v.ID, registry.StatusScanning, registry.StatusRejected, result.Decision.Reason, sysEvent, registry.TransitionCause{}))
 
 	case OutcomeNeedsReview:
 		p.mx.RecordVerdict(ctx, metrics.VerdictReview)
@@ -675,8 +690,8 @@ func (p *Pipeline) applyDecision(ctx context.Context, agent storegen.GetAgentByI
 		// (registry.TransitionCause), which is what an extension that
 		// charged for the submission refunds on.
 		cause := registry.TransitionCause{PipelineError: len(result.Report.StageErrors) > 0, ScanRunID: runID}
-		if err := p.reg.TransitionWith(ctx, v.ID, registry.StatusNeedsReview, result.Decision.Reason, sysEvent, cause); err != nil {
-			return err
+		if err := p.reg.TransitionFrom(ctx, v.ID, registry.StatusScanning, registry.StatusNeedsReview, result.Decision.Reason, sysEvent, cause); err != nil {
+			return moved(err)
 		}
 		if err := p.st.WithTx(ctx, func(q *storegen.Queries) error {
 			return createReviewItem(ctx, q, v.ID, agent, result.Decision.Queue)
@@ -819,14 +834,24 @@ func (p *Pipeline) FailToReview(ctx context.Context, v storegen.AgentVersion, ag
 
 	// Only versions still in flight move; a rescan failure must not drag a
 	// published version backwards.
+	// The row is held for the check (registry.TransitionFrom): a version
+	// another route moved first — the watchdog, or a verdict that landed
+	// while this was under way — stays where that route put it, and this
+	// call still files the run's finding (agentry#343).
 	held := false
 	if registry.Status(v.Status) == registry.StatusScanning {
-		if err := p.reg.TransitionWith(ctx, v.ID, registry.StatusNeedsReview, reason,
+		err := p.reg.TransitionFrom(ctx, v.ID, registry.StatusScanning, registry.StatusNeedsReview, reason,
 			audit.Event{ActorKind: audit.ActorSystem},
-			registry.TransitionCause{PipelineError: true, ScanRunID: runID}); err != nil {
+			registry.TransitionCause{PipelineError: true, ScanRunID: runID})
+		switch {
+		case errors.Is(err, registry.ErrVersionMoved):
+			p.log.WarnContext(ctx, "gate: pipeline failure reached a version that had moved; not re-routed",
+				"version", v.ID, "run", runID, "err", err)
+		case err != nil:
 			return err
+		default:
+			held = true
 		}
-		held = true
 	}
 	queue := "platform"
 	if agent.NamespaceKind == "org" {
