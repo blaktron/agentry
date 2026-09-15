@@ -303,6 +303,81 @@ func TestHeldForReviewAndAdvisoryRangeReachTheAuthor(t *testing.T) {
 	}
 }
 
+// watchdogMidScanJudge does, on the first scan of version 1.0.1 while it
+// is still `scanning`, what the §7 watchdog does to a scan that outlived
+// its cap — ages the row and runs ReconcileStuckScans, moving the version
+// to review — then scores nothing, so the scan's own verdict is "publish"
+// (agentry#343). It keys on the version string so it need not be handed
+// an id it cannot know before the row exists.
+type watchdogMidScanJudge struct {
+	e     *pipeEnv
+	fired *bool
+}
+
+func (watchdogMidScanJudge) Name() string              { return "watchdog-mid-scan" }
+func (watchdogMidScanJudge) RequiresHumanReview() bool { return false }
+func (j watchdogMidScanJudge) Judge(ctx context.Context, _ scan.JudgeContent) (scan.JudgeVerdict, error) {
+	v := scan.JudgeVerdict{Scores: map[scan.JudgeCategory]int{}, Excerpts: map[scan.JudgeCategory]string{}, Model: "watchdog-mid-scan"}
+	if *j.fired {
+		return v, nil
+	}
+	var id uuid.UUID
+	if err := j.e.st.Pool().QueryRow(ctx,
+		`SELECT id FROM agent_versions WHERE version = '1.0.1' AND status = 'scanning' ORDER BY created_at DESC LIMIT 1`).Scan(&id); err != nil {
+		return v, nil // not the 1.0.1 scan (the agent's first version): score nothing
+	}
+	*j.fired = true
+	if _, err := j.e.st.Pool().Exec(ctx,
+		`UPDATE agent_versions SET updated_at = now() - interval '2 hours' WHERE id = $1 AND status = 'scanning'`, id); err != nil {
+		return v, err
+	}
+	if _, err := j.e.pipe.ReconcileStuckScans(ctx); err != nil {
+		return v, err
+	}
+	return v, nil
+}
+
+// TestLateVerdictDoesNotPublishOverAWatchdogHold (agentry#343): a scan
+// that outlives the watchdog's cap finds its version handed to a
+// reviewer; its late "publish" verdict must not move the version, the
+// review item stays pending, nothing is signed, and the author was told
+// once that the version is held.
+func TestLateVerdictDoesNotPublishOverAWatchdogHold(t *testing.T) {
+	notifier := &recordingNotifier{}
+	e := newPipeEnv(t, func(d *scan.PipelineDeps) { d.Notifier = notifier })
+	ctx := context.Background()
+	u, _ := e.st.Queries().GetUserByID(ctx, e.owner)
+
+	fired := false
+	e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, watchdogMidScanJudge{e: e, fired: &fired}, nil))
+	first := e.publish("late", "public", benignFiles(u.Handle, "late", "1.0.0"))
+	if first.Status != "published" {
+		t.Fatalf("first version status = %s, want published", first.Status)
+	}
+	v := e.publishExisting("late", benignFiles(u.Handle, "late", "1.0.1"))
+	if !fired {
+		t.Fatal("the watchdog never ran mid-scan; the test proves nothing")
+	}
+	if v.Status != string(registry.StatusNeedsReview) {
+		t.Fatalf("status = %s, want needs_review: the late verdict published over the watchdog's hold", v.Status)
+	}
+	if _, err := e.st.Queries().GetPendingReviewItemForVersion(ctx, v.ID); err != nil {
+		t.Fatalf("the review item is gone: %v", err)
+	}
+	if _, err := e.st.Queries().GetAttestation(ctx, v.ID); err == nil {
+		t.Fatal("a held version was signed")
+	}
+	held := 0
+	for _, n := range notifier.reviews {
+		if n.Version == "1.0.1" && n.Decision == "needs_review" {
+			held++
+		}
+	}
+	if held != 1 {
+		t.Fatalf("held-for-review notices for 1.0.1 = %d, want 1: %+v", held, notifier.reviews)
+	}
+}
+
 // TestWatchdogRoutesStuckScanToReview pins the §7 timeout rule: a version whose
 // scan job died terminally must not sit in `scanning` forever. It goes to
 // needs_review with an S0/pipeline-error finding — "never silently publish on
