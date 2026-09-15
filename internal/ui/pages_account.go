@@ -32,6 +32,26 @@ type accountData struct {
 	// (agentry#271).
 	DirectoryError string
 	Support        string
+	// Notifications is the person's mail and in-app switches (agentry#190),
+	// shown and set here so the mails' footer has a page to name
+	// (agentry#274); NotificationsError says the read failed.
+	Notifications      *notificationSettings
+	NotificationsError string
+}
+
+// notificationSettings is the API's NotificationSettings, the five mail
+// switches and the one in-app switch.
+type notificationSettings struct {
+	Email struct {
+		DependencyAlerts bool `json:"dependencyAlerts"`
+		Quarantine       bool `json:"quarantine"`
+		ReviewDecisions  bool `json:"reviewDecisions"`
+		Advisories       bool `json:"advisories"`
+		OrgInvites       bool `json:"orgInvites"`
+	} `json:"email"`
+	Web struct {
+		DependencyAlerts bool `json:"dependencyAlerts"`
+	} `json:"web"`
 }
 
 func (h *handler) accountPage(w http.ResponseWriter, r *http.Request) {
@@ -40,6 +60,14 @@ func (h *handler) accountPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d := accountData{Support: h.opt.Brand.SupportEmail}
+	if res, err := h.call(r).do(http.MethodGet, "/user/notifications", nil); err != nil || !res.OK() {
+		d.NotificationsError = readFailed("your notification settings", res, err)
+	} else {
+		var ns notificationSettings
+		if res.decode(&ns) == nil {
+			d.Notifications = &ns
+		}
+	}
 	if h.opt.ExternalOnly {
 		res, err := h.call(r).do(http.MethodGet, "/user/directory", nil)
 		if err != nil || !res.OK() {
@@ -112,6 +140,29 @@ type sshKeysData struct {
 type sessionsData struct {
 	Sessions  []session
 	LoadError string
+}
+
+// notificationsSave replaces the person's notification settings from the
+// form: a box unticked is a switch off, so the whole set is sent, as the
+// API's PUT expects.
+func (h *handler) notificationsSave(w http.ResponseWriter, r *http.Request) {
+	if !h.acceptForm(w, r) {
+		return
+	}
+	on := func(field string) bool { return r.PostFormValue(field) == "true" }
+	var ns notificationSettings
+	ns.Email.DependencyAlerts = on("email.dependencyAlerts")
+	ns.Email.Quarantine = on("email.quarantine")
+	ns.Email.ReviewDecisions = on("email.reviewDecisions")
+	ns.Email.Advisories = on("email.advisories")
+	ns.Email.OrgInvites = on("email.orgInvites")
+	ns.Web.DependencyAlerts = on("web.dependencyAlerts")
+	res, err := h.call(r).do(http.MethodPut, "/user/notifications", ns)
+	if err != nil || !res.OK() {
+		h.back(w, r, "/ui/account", "", failMsg(res, err))
+		return
+	}
+	h.back(w, r, "/ui/account", "Notification settings saved.", "")
 }
 
 func (h *handler) tokensPage(w http.ResponseWriter, r *http.Request) {

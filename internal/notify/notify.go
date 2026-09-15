@@ -109,6 +109,9 @@ type AdvisoryNotice struct {
 	Agent    string
 	Severity string
 	Summary  string
+	// AffectedVersions is the range the advisory names, as stored — the
+	// fact a consumer needs first (agentry#274).
+	AffectedVersions string
 	// AdvisoryURL is the public advisory page.
 	AdvisoryURL string
 }
@@ -148,6 +151,9 @@ type Links struct {
 	Dashboard   string
 	VerifyEmail func(token string) string
 	ReportCard  func(agent, version string) string
+	// Settings is the page where a person switches these mails on and off
+	// (agentry#274): the footer names it, so a reader knows where to go.
+	Settings string
 }
 
 // New builds the configured notifier.
@@ -167,6 +173,7 @@ func New(opt Options) (Notifier, error) {
 		n.render.dashboard = opt.Links.Dashboard
 		n.render.verifyEmail = opt.Links.VerifyEmail
 		n.render.reportCard = opt.Links.ReportCard
+		n.render.settings = opt.Links.Settings
 		return n, nil
 	default:
 		return nil, fmt.Errorf("notify: unknown kind %q (want log|smtp)", opt.Kind)
@@ -255,6 +262,7 @@ type renderer struct {
 	dashboard   string
 	verifyEmail func(token string) string
 	reportCard  func(agent, version string) string
+	settings    string
 }
 
 // reportLink is the report-card link for a version: the caller's explicit
@@ -286,8 +294,15 @@ func (r renderer) link(path string) string {
 // as far as one line can honestly go for seven different mails: the address
 // on the account is the only thing every one of them has in common.
 func (r renderer) footer() string {
-	return "\n--\n" + r.registry + " sent this automatically to the address\n" +
+	f := "\n--\n" + r.registry + " sent this automatically to the address\n" +
 		"on the account it concerns. Do not reply to this message.\n"
+	// Most of these mails can be switched off; the page that does it is
+	// named on every one, since the reader of a mail they did not want is
+	// the reader who needs the line (agentry#274).
+	if u := firstNonEmpty(r.settings, r.link("/settings")); u != "" {
+		f += "Which of these mails you receive is set in your settings:\n" + u + "\n"
+	}
+	return f
 }
 
 func (r renderer) verification(token string) message {
@@ -380,9 +395,13 @@ func (r renderer) review(n ReviewNotice) message {
 			"copies pinned to it keep working. It no longer resolves for a range,\n" +
 			"and a yank is permanent: the fix is a new version.\n"
 	case "needs_review":
+		// Reachable: the pipeline sends this when its gate holds a fresh
+		// submission for a human (internal/scan/pipeline.go, agentry#274) —
+		// the one outcome an author would otherwise learn only by looking.
 		headline = "held for review"
-		detail = "The gate could not decide, so a human reviewer has the version.\n" +
-			"Nothing is needed from you until they decide.\n"
+		detail = "The gate did not clear it, so a human reviewer has the version.\n" +
+			"Nothing is needed from you until they decide; you will get a mail\n" +
+			"when they do.\n"
 	default:
 		headline = n.Decision
 		detail = ""
@@ -409,6 +428,9 @@ func (r renderer) advisory(n AdvisoryNotice) message {
 	body := "The registry published an advisory naming " + n.Agent + ". An advisory is\n" +
 		"the public record of a security problem in a published BriefAgent.\n\n" +
 		"Severity: " + severityLine(n.Severity) + "\n"
+	if n.AffectedVersions != "" {
+		body += "Affected versions: " + n.AffectedVersions + "\n"
+	}
 	if n.Summary != "" {
 		body += "Summary: " + n.Summary + "\n"
 	}
