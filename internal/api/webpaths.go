@@ -69,6 +69,16 @@ func (p webPaths) dashboardURL() string {
 	return p.abs("/ui/account")
 }
 
+// settingsURL is the page where a person switches the registry's mails on
+// and off: the site's settings page, or this server's account page, which
+// carries the same switches (agentry#274).
+func (p webPaths) settingsURL() string {
+	if p.site() {
+		return p.web + "/settings"
+	}
+	return p.abs("/ui/account")
+}
+
 // homeURL is where sign-out ends; "" when neither a site nor a public
 // origin is configured.
 func (p webPaths) homeURL() string {

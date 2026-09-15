@@ -1443,7 +1443,7 @@ type EmailNotificationSettings struct {
 	// Quarantine A published version was quarantined by a rescan.
 	Quarantine bool `json:"quarantine"`
 
-	// ReviewDecisions A reviewer decided one of the person's submissions.
+	// ReviewDecisions A reviewer decided one of the person's submissions, or the gate held one for review.
 	ReviewDecisions bool `json:"reviewDecisions"`
 }
 
