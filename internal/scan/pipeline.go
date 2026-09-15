@@ -678,11 +678,49 @@ func (p *Pipeline) applyDecision(ctx context.Context, agent storegen.GetAgentByI
 		if err := p.reg.TransitionWith(ctx, v.ID, registry.StatusNeedsReview, result.Decision.Reason, sysEvent, cause); err != nil {
 			return err
 		}
-		return p.st.WithTx(ctx, func(q *storegen.Queries) error {
+		if err := p.st.WithTx(ctx, func(q *storegen.Queries) error {
 			return createReviewItem(ctx, q, v.ID, agent, result.Decision.Queue)
-		})
+		}); err != nil {
+			return err
+		}
+		p.notifyHeldForReview(ctx, agent, v, result.Decision.Reason)
+		return nil
 	}
 	return nil
+}
+
+// notifyHeldForReview tells a version's author the gate held it for a
+// human (§8.7; agentry#274): the one outcome an author would otherwise
+// learn only by looking. Sent on a fresh submission's transition to
+// needs_review — the gate's own verdict and the pipeline-error route
+// alike — never on a rescan, whose review item concerns a version the
+// author already has published. Best-effort, like the decision mail: the
+// review item is the record, and it is already written.
+func (p *Pipeline) notifyHeldForReview(ctx context.Context, agent storegen.GetAgentByIDRow, v storegen.AgentVersion, reason string) {
+	if p.notifier == nil {
+		return
+	}
+	q := p.st.Queries()
+	author, err := q.GetUserByID(ctx, v.SubmittedBy)
+	if err != nil {
+		p.log.Error("held-for-review notification: load author", "version", v.ID, "err", err)
+		return
+	}
+	if !notify.AllowsEmail(ctx, q, p.log, author.ID, notify.KindReviewDecision) {
+		return // unverified address, or the author switched review mails off (#299, #190)
+	}
+	// The transition's reason rides as the rationale: the gate's verdict
+	// ("wildcard egress: review"), or what stopped the scan, which is what
+	// happened rather than a gate that could not decide.
+	if err := p.notifier.ReviewDecided(ctx, notify.ReviewNotice{
+		ToEmail:   author.Email,
+		Agent:     agent.Namespace + "/" + agent.Name,
+		Version:   v.Version,
+		Decision:  string(registry.StatusNeedsReview),
+		Rationale: reason,
+	}); err != nil {
+		p.log.Error("held-for-review notification", "version", v.ID, "err", err)
+	}
 }
 
 // indexReadme denormalizes the just-published version's README onto the agent
@@ -781,20 +819,28 @@ func (p *Pipeline) FailToReview(ctx context.Context, v storegen.AgentVersion, ag
 
 	// Only versions still in flight move; a rescan failure must not drag a
 	// published version backwards.
+	held := false
 	if registry.Status(v.Status) == registry.StatusScanning {
 		if err := p.reg.TransitionWith(ctx, v.ID, registry.StatusNeedsReview, reason,
 			audit.Event{ActorKind: audit.ActorSystem},
 			registry.TransitionCause{PipelineError: true, ScanRunID: runID}); err != nil {
 			return err
 		}
+		held = true
 	}
 	queue := "platform"
 	if agent.NamespaceKind == "org" {
 		queue = "org"
 	}
-	return p.st.WithTx(ctx, func(tx *storegen.Queries) error {
+	if err := p.st.WithTx(ctx, func(tx *storegen.Queries) error {
 		return createReviewItem(ctx, tx, v.ID, agent, queue)
-	})
+	}); err != nil {
+		return err
+	}
+	if held {
+		p.notifyHeldForReview(ctx, agent, v, reason)
+	}
+	return nil
 }
 
 // ReconcileStuckScans is the §7 watchdog: versions that entered `scanning`
@@ -1029,7 +1075,7 @@ func (p *Pipeline) PublishAdvisory(ctx context.Context, agentID uuid.UUID, affec
 		"advisoryId": adv.ID.String(), "affectedVersions": affected,
 		"severity": severity, "summary": summary,
 	})
-	p.notifyAdvisoryPublished(ctx, agentID, severity, summary)
+	p.notifyAdvisoryPublished(ctx, agentID, affected, severity, summary)
 	return nil
 }
 
@@ -1040,7 +1086,7 @@ func (p *Pipeline) PublishAdvisory(ctx context.Context, agentID uuid.UUID, affec
 // §7 is explicit that installed copies are never reached, so the advisory and
 // this mail ARE the notification path — which is why a failure here is logged
 // at error rather than swallowed.
-func (p *Pipeline) notifyAdvisoryPublished(ctx context.Context, agentID uuid.UUID, severity, summary string) {
+func (p *Pipeline) notifyAdvisoryPublished(ctx context.Context, agentID uuid.UUID, affected, severity, summary string) {
 	if p.notifier == nil {
 		return
 	}
@@ -1069,10 +1115,11 @@ func (p *Pipeline) notifyAdvisoryPublished(ctx context.Context, agentID uuid.UUI
 		return // unverified address, or the author switched these off (#299, #190)
 	}
 	if err := p.notifier.AdvisoryPublished(ctx, notify.AdvisoryNotice{
-		ToEmail:  u.Email,
-		Agent:    agent.Namespace + "/" + agent.Name,
-		Severity: severity,
-		Summary:  summary,
+		ToEmail:          u.Email,
+		Agent:            agent.Namespace + "/" + agent.Name,
+		Severity:         severity,
+		Summary:          summary,
+		AffectedVersions: affected,
 	}); err != nil {
 		p.log.Error("advisory notification", "agent", agentID, "err", err)
 	}

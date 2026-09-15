@@ -268,6 +268,41 @@ func TestPersonalNamespaceReviewGoesToPlatformQueue(t *testing.T) {
 
 // --------------------------------------------- B-06 stuck scans and hand-offs
 
+// TestHeldForReviewAndAdvisoryRangeReachTheAuthor (agentry#274): a fresh
+// submission the gate holds sends its author the needs_review notice —
+// the one outcome they would otherwise learn only by looking — and a
+// published advisory's mail carries the range it names.
+func TestHeldForReviewAndAdvisoryRangeReachTheAuthor(t *testing.T) {
+	notifier := &recordingNotifier{}
+	e := newPipeEnv(t, func(d *scan.PipelineDeps) { d.Notifier = notifier })
+	ctx := context.Background()
+	u, _ := e.st.Queries().GetUserByID(ctx, e.owner)
+
+	files := benignFiles(u.Handle, "held", "1.0.0")
+	files["agent.yaml"] = wildcardEgressManifest(u.Handle, "held", "1.0.0")
+	v := e.publish("held", "private", files)
+	if v.Status != "needs_review" {
+		t.Fatalf("status = %s, want needs_review", v.Status)
+	}
+	if len(notifier.reviews) != 1 {
+		t.Fatalf("held-for-review notices = %d, want 1: %+v", len(notifier.reviews), notifier.reviews)
+	}
+	if n := notifier.reviews[0]; n.ToEmail != u.Email || n.Decision != "needs_review" || n.Version != "1.0.0" || n.Agent != u.Handle+"/held" || n.Reviewer != "" {
+		t.Fatalf("notice = %+v", n)
+	}
+
+	clean := e.publish("advised", "public", benignFiles(u.Handle, "advised", "1.0.0"))
+	if clean.Status != "published" {
+		t.Fatalf("status = %s, want published", clean.Status)
+	}
+	if err := e.pipe.PublishAdvisory(ctx, clean.AgentID, "<1.0.1", "high", "leaks the token", ""); err != nil {
+		t.Fatal(err)
+	}
+	if len(notifier.advisories) != 1 || notifier.advisories[0].AffectedVersions != "<1.0.1" || notifier.advisories[0].ToEmail != u.Email {
+		t.Fatalf("advisory notices = %+v, want one naming <1.0.1", notifier.advisories)
+	}
+}
+
 // TestWatchdogRoutesStuckScanToReview pins the §7 timeout rule: a version whose
 // scan job died terminally must not sit in `scanning` forever. It goes to
 // needs_review with an S0/pipeline-error finding — "never silently publish on
