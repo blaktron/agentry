@@ -384,12 +384,20 @@ own when the author yanks the version or the advisory is withdrawn.
    remote-code-execution advisory that a BriefAgent runs against its declared
    secrets may deserve quarantine of the affected versions (runbook 4) and an
    advisory; an alert alone is right for the ordinary case. The runner
-   already refuses to install a server the registry marks high/critical, so
-   new runs do not get it; copies already installed keep running it.
+   refuses to *run* a BriefAgent whose declared server the registry marks
+   high or critical — the check is `agentry run`'s, before the plan
+   executes, and the receipt's vulnerability line says what it found — unless
+   the person passes `--allow-vulnerable-mcp` or the operator policy sets
+   `mcpServers.allowVulnerable`, either of which the receipt names
+   (`agentry-cli`: `vulnerabilityVerdict` in `cmd/agentry/cmd_run_mcp.go`,
+   `VulnStatus.Refuses` in `pkg/runner/mcpinstall/vulncheck.go`; `agentry
+   doctor` warns on the same status). The install step itself is not
+   refused, and copies already installed keep the server until their next
+   run meets the check.
 4. **Watch the sweep itself.** `McpSweepRuns{outcome="error"}` or a
-   `mcp sweep: vulnerability lookup failed` line means the database was
-   unreachable: rows keep their last answer and are retried tomorrow; check
-   egress from the worker to `AGENTRY_SCAN_OSV_URL`.
+   `mcp sweep: vulnerability lookup failed for a batch` line means the
+   database was unreachable: rows keep their last answer and are retried
+   tomorrow; check egress from the worker to `AGENTRY_SCAN_OSV_URL`.
 5. **Tell people once.** Authors already got one mail per alert; a status
    note is for consumers, who see the alert on the agent page but get no
    mail.
