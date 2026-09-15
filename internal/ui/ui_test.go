@@ -61,6 +61,17 @@ func fakeAPI(t *testing.T) http.Handler {
 			_, _ = io.WriteString(w, `{"code":"agd_code","expiresAt":"2026-01-01T00:00:00Z"}`)
 		case "PATCH /api/v1/user":
 			_, _ = io.WriteString(w, `{"id":"u1"}`)
+		case "GET /api/v1/user/notifications":
+			if !authed {
+				http.Error(w, `{"detail":"sign in"}`, http.StatusUnauthorized)
+				return
+			}
+			_, _ = io.WriteString(w, `{"email":{"dependencyAlerts":true,"quarantine":true,"reviewDecisions":false,"advisories":true,"orgInvites":true},"web":{"dependencyAlerts":true}}`)
+		case "PUT /api/v1/user/notifications":
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			b, _ := json.Marshal(body)
+			_, _ = w.Write(b)
 		case "GET /api/v1/user/ssh-keys":
 			if !authed {
 				http.Error(w, `{"detail":"sign in"}`, http.StatusUnauthorized)
@@ -644,7 +655,7 @@ func TestAccountPagesTellCouldNotLookFromEmpty(t *testing.T) {
 	var status int
 	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method + " " + r.URL.Path {
-		case "GET /api/v1/user/tokens", "GET /api/v1/user/ssh-keys", "GET /api/v1/user/sessions", "GET /api/v1/user/directory":
+		case "GET /api/v1/user/tokens", "GET /api/v1/user/ssh-keys", "GET /api/v1/user/sessions", "GET /api/v1/user/directory", "GET /api/v1/user/notifications":
 			w.Header().Set("Content-Type", "application/json")
 			if status == http.StatusOK {
 				w.WriteHeader(http.StatusOK)
@@ -653,6 +664,8 @@ func TestAccountPagesTellCouldNotLookFromEmpty(t *testing.T) {
 					_, _ = io.WriteString(w, `{"sessions":[]}`)
 				case "/api/v1/user/directory":
 					_, _ = io.WriteString(w, `{"passwordChangeUrl":"https://idp.example/password"}`)
+				case "/api/v1/user/notifications":
+					_, _ = io.WriteString(w, `{"email":{"dependencyAlerts":true,"quarantine":true,"reviewDecisions":true,"advisories":true,"orgInvites":true},"web":{"dependencyAlerts":true}}`)
 				default:
 					_, _ = io.WriteString(w, `[]`)
 				}
@@ -669,6 +682,7 @@ func TestAccountPagesTellCouldNotLookFromEmpty(t *testing.T) {
 		{"/ui/account/ssh-keys", "your SSH keys", "No SSH keys."},
 		{"/ui/account/sessions", "your sessions", "No sessions are recorded."},
 		{"/ui/account", "the password and authenticator links", "Change password"},
+		{"/ui/account", "your notification settings", "Save notifications"},
 	}
 	status = http.StatusInternalServerError
 	for _, pg := range pages {
@@ -759,5 +773,40 @@ func TestReviewDecisionFlashNamesTheConsequence(t *testing.T) {
 	w := post(blind, "/ui/review/ri1/decision", url.Values{"_csrf": {"csrf1"}, "decision": {"reject"}, "rationale": {"looks fine"}}, nil, sessCookie, csrfCookieV)
 	if _, okMsg, _ := redirectedTo(t, w); okMsg != "Rejected. The decision and rationale are recorded with the version." {
 		t.Errorf("unread status: %q", okMsg)
+	}
+}
+
+// TestAccountNotificationSettings (agentry#274): the account page shows
+// the person's mail and in-app switches as the API reports them, and the
+// form sends the whole set back — an unticked box is a switch off — then
+// flashes the save.
+func TestAccountNotificationSettings(t *testing.T) {
+	h := newUI(t, Options{})
+	body := get(h, "/ui/account", sessCookie, csrfCookieV).Body.String()
+	if !strings.Contains(body, `name="email.advisories" value="true" checked`) || !strings.Contains(body, `name="email.reviewDecisions" value="true">`) || !strings.Contains(body, `name="web.dependencyAlerts" value="true" checked`) {
+		t.Fatalf("the switches do not follow the API:\n%s", body)
+	}
+	var sent string
+	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == "/api/v1/user/notifications" {
+			b, _ := io.ReadAll(r.Body)
+			sent = string(b)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write(b)
+			return
+		}
+		fakeAPI(t).ServeHTTP(w, r)
+	})
+	h = New(Options{API: api})
+	w := post(h, "/ui/account/notifications", url.Values{"_csrf": {"csrf1"}, "email.advisories": {"true"}, "web.dependencyAlerts": {"true"}}, nil, sessCookie, csrfCookieV)
+	if loc, okMsg, _ := redirectedTo(t, w); w.Code != http.StatusSeeOther || loc != "/ui/account" || okMsg != "Notification settings saved." {
+		t.Fatalf("save: %d %s %q", w.Code, loc, okMsg)
+	}
+	var got notificationSettings
+	if err := json.Unmarshal([]byte(sent), &got); err != nil {
+		t.Fatalf("sent %q: %v", sent, err)
+	}
+	if !got.Email.Advisories || got.Email.DependencyAlerts || got.Email.Quarantine || got.Email.ReviewDecisions || got.Email.OrgInvites || !got.Web.DependencyAlerts {
+		t.Errorf("sent settings = %+v (unticked boxes must be off)", got)
 	}
 }

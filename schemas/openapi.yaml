@@ -3847,7 +3847,7 @@ components:
           description: A published version was quarantined by a rescan.
         reviewDecisions:
           type: boolean
-          description: A reviewer decided one of the person's submissions.
+          description: A reviewer decided one of the person's submissions, or the gate held one for review.
         advisories:
           type: boolean
           description: An advisory naming one of the person's BriefAgents was published.

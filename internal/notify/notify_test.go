@@ -360,3 +360,33 @@ func TestVerificationFallsBackToACodeWithoutABaseURL(t *testing.T) {
 		t.Errorf("verification mail promises the address goes unused:\n%s", m.Body)
 	}
 }
+
+// TestAdvisoryNamesItsRangeAndTheFooterNamesTheSettingsPage (agentry#274):
+// the advisory mail carries the range the advisory names, and every mail's
+// footer names the page where these mails are switched on and off.
+func TestAdvisoryNamesItsRangeAndTheFooterNamesTheSettingsPage(t *testing.T) {
+	n, sent := capture(t)
+	n.render.settings = "https://site.example/settings"
+	if err := n.AdvisoryPublished(t.Context(), AdvisoryNotice{
+		ToEmail: "u@example.test", Agent: "acme/widget", Severity: "high",
+		Summary: "leaks the token", AffectedVersions: "<1.0.1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := n.ReviewDecided(t.Context(), ReviewNotice{
+		ToEmail: "u@example.test", Agent: "acme/widget", Version: "1.0.0", Decision: "needs_review",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains((*sent)[0], "Affected versions: <1.0.1") {
+		t.Errorf("advisory mail lacks the range:\n%s", (*sent)[0])
+	}
+	for i, m := range *sent {
+		if !strings.Contains(m, "set in your settings:\r\nhttps://site.example/settings") {
+			t.Errorf("mail %d's footer does not name the settings page:\n%s", i, m)
+		}
+	}
+	if !strings.Contains((*sent)[1], "held for review") || !strings.Contains((*sent)[1], "you will get a mail") {
+		t.Errorf("held-for-review mail:\n%s", (*sent)[1])
+	}
+}

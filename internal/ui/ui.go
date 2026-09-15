@@ -108,6 +108,7 @@ func New(opt Options) http.Handler {
 		m.HandleFunc("GET /ui/account", h.accountPage)
 		m.HandleFunc("GET /ui/account/directory", h.accountPage)
 		m.HandleFunc("POST /ui/account", h.accountSave)
+		m.HandleFunc("POST /ui/account/notifications", h.notificationsSave)
 		m.HandleFunc("POST /ui/account/directory/devices", h.directoryDeviceRemove)
 		m.HandleFunc("GET /ui/account/tokens", h.tokensPage)
 		m.HandleFunc("POST /ui/account/tokens", h.tokensSubmit)
