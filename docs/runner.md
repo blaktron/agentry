@@ -205,7 +205,16 @@ only its own secret values, and its plain `env` map (manifest v2; see the
 [BriefAgent reference](briefagents.md)) as the environment the server
 starts with — alongside the agentry tools server. A server's declared hosts
 are reached through the gateway's per-host TCP relays on its own relay
-network; nothing else resolves from the server. A changed `env` value is a
+network; nothing else resolves from the server. That network has one fixed
+name for every gateway on the docker host (the pinned docker/mcp-gateway
+offers no other), so the runner refuses to share it: a run whose declared
+servers need relays does not start (exit 13) while another gateway's relay
+sidecars are on it — another run of `agentry`, or the user's own
+`docker mcp gateway` — and the relays its gateway started are removed at
+teardown by the names the gateway's log gave them. The check is made as
+the run starts: a gateway started during the run is not refused. Two
+BriefAgents with declared egress therefore run one at a time on a host. A
+changed `env` value is a
 change to the server: the install-state diff reports it and asks for
 consent again, and the receipt's server line names the `env` keys, never
 a value. The runner refuses an `env` value the gateway would rewrite (one
