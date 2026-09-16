@@ -2,7 +2,9 @@
 
 The complete operator reference for running BriefAgents: every command,
 flag, file, and enforcement mechanism. The [BriefAgents](briefagents.md)
-page explains the package format; this page is the runtime side. The
+page explains the package format; this page is the runtime side, and
+[Hosted runs](hosted-runs.md) is the same runner driven on a deployment's
+own machine, with caps and credits, instead of yours. The
 as-built architecture is
 [ARCHITECTURE.md](https://github.com/blaktron/agentry-notes/blob/main/ARCHITECTURE.md)
 §6 in agentry-notes; the original runner design records are archived there
@@ -270,9 +272,57 @@ Created on first use; `AGENTRY_RUNNER_HOME` moves the whole runner home.
 | `harness.<adapter>.path` | the executable a host-run harness adapter uses instead of looking it up on `PATH` |
 | `harness.<adapter>.baseUrl` / `.model` / `.apiKeyEnv` | the model endpoint that adapter is given, in its own vendor's terms — a host-run harness speaks its vendor's API, which is not always the one `model.*` describes. The host must also be in `model.proxyAllow` or the run's proxy denies it (`agentry doctor --adapter <name>` says so before a run finds out). |
 | `images.nodeRuntime` / `images.pythonRuntime` | pinned runtime images that install and run declared npm/PyPI MCP servers |
+| `docker.runtime` | the daemon-registered OCI runtime the containers holding the BriefAgent's code are created with (unset: the daemon's default) — below |
 
 The policy participates in the plan hash: editing it invalidates cached
 plans, which recompile on next use.
+
+### The OCI runtime (`docker.runtime`)
+
+```yaml
+docker:
+  runtime: runsc
+```
+
+`docker.runtime` names a runtime the docker daemon has registered — gVisor's
+`runsc`, or any name `docker run --runtime` takes — and the runner creates the
+containers that hold **the BriefAgent's code** with it: the agent container,
+an interactive session's agent and the one-shot that gives it the session
+store, and the MCP server installer that builds a declared server's dependency
+closure. Unset, the shipped default, every container takes the daemon's own
+default and the receipt says nothing about a runtime.
+
+What keeps the daemon's default, measured on a live run rather than assumed
+(DR-23): the runner's own llm-proxy, gateway and probe, and everything the
+gateway launches itself — the tools server, the declared MCP servers, and the
+per-host relays. Two mechanisms are why. A sandboxed runtime's own network
+stack does not reach docker's embedded DNS at `127.0.0.11`, so the run
+network's two aliases (`gateway`, `llm-proxy`) are pinned into the sandboxed
+agent's `/etc/hosts` from the containers' addresses instead of being resolved;
+and the gateway is the one container that drives the host's docker socket,
+which a sandboxed runtime allows only with `--host-uds`, while the pinned
+docker/mcp-gateway release offers no runtime option for what it launches. The
+knob covers the stranger's code, and the receipt claims no more ground than
+that.
+
+A set runtime is enforced, not preferred. Before anything is pulled or
+started, `agentry run` asks the daemon which runtimes it has and stops the run
+when the named one is absent (exit 13, naming the one wanted and the ones
+present); it never falls back to another, because a run that quietly landed on
+`runc` after asking for `runsc` would carry a receipt claiming an isolation it
+did not have. `agentry doctor` reports the same check as `docker:runtime` —
+ok when the daemon has the runtime, fail with the same two lists and the fix
+when it does not.
+
+The runtime is part of the compiled plan, so changing it recompiles rather
+than reinterpreting a cached plan, and `capabilities_enforced.runtime` in the
+receipt carries the sentence the plan compiled — for `runsc`:
+
+> `runsc: the agent container — the BriefAgent's code — and the MCP server installer are created with docker --runtime runsc, the run network's aliases pinned into the agent's /etc/hosts; the runner's own llm-proxy, gateway and probe, and what the gateway launches itself (the tools server, the declared MCP servers), take the daemon's default runtime`
+
+Hosted runs are why the knob exists: the platform's run worker renders
+`docker.runtime: runsc` into the policy of every run it drives. That side is
+[Hosted runs](hosted-runs.md).
 
 ## What a run enforces
 

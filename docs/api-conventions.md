@@ -205,7 +205,8 @@ scopes:
 `run:read` and `run:write` are consumed only by a registry that mounts the
 runs extension (`GET /meta` lists it); on a registry without it a token
 carrying only these two is refused everywhere a token without the right
-scope is. The desktop app's sign-in grant asks for a fixed set
+scope is. [Hosted runs](hosted-runs.md) is what those routes do, route by
+route. The desktop app's sign-in grant asks for a fixed set
 (`agent:read`, `agent:publish`, `repo:read`, `repo:write`, `user:profile`).
 
 ## Native credentials vs an external directory
