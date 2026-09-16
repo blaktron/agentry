@@ -3646,7 +3646,7 @@ type ClientInterface interface {
 
 	// CreateDesktopGrantWithBody Record a one-time grant for the desktop app's browser sign-in.
 	//
-	// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+	// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -3655,7 +3655,7 @@ type ClientInterface interface {
 
 	// CreateDesktopGrant Record a one-time grant for the desktop app's browser sign-in.
 	//
-	// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+	// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -6178,7 +6178,7 @@ func (c *Client) CreateToken(ctx context.Context, body CreateTokenJSONRequestBod
 
 // CreateDesktopGrantWithBody Record a one-time grant for the desktop app's browser sign-in.
 //
-// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
 //
 // Takes any type of body and a specified content type.
 //
@@ -6197,7 +6197,7 @@ func (c *Client) CreateDesktopGrantWithBody(ctx context.Context, contentType str
 
 // CreateDesktopGrant Record a one-time grant for the desktop app's browser sign-in.
 //
-// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -12976,7 +12976,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreateDesktopGrantWithBodyWithResponse Record a one-time grant for the desktop app's browser sign-in.
 	//
-	// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+	// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12985,7 +12985,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreateDesktopGrantWithResponse Record a one-time grant for the desktop app's browser sign-in.
 	//
-	// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+	// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -20640,7 +20640,7 @@ func (c *ClientWithResponses) CreateTokenWithResponse(ctx context.Context, body 
 
 // CreateDesktopGrantWithBodyWithResponse Record a one-time grant for the desktop app's browser sign-in.
 //
-// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -20655,7 +20655,7 @@ func (c *ClientWithResponses) CreateDesktopGrantWithBodyWithResponse(ctx context
 
 // CreateDesktopGrantWithResponse Record a one-time grant for the desktop app's browser sign-in.
 //
-// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile).
+// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

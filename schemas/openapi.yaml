@@ -724,7 +724,7 @@ paths:
         exchanges the code at `POST /auth/desktop/exchange` from its own
         process, so the PAT never travels in a URL (DEV-058 hardening,
         agentry#19). The grant's scopes are fixed to the desktop set
-        (agent:read, agent:publish, repo:read, repo:write, user:profile).
+        (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
       requestBody:
         required: true
         content:
