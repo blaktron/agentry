@@ -158,3 +158,29 @@ func TestCheckPATScopes(t *testing.T) {
 		t.Fatal("scope cannot exceed role")
 	}
 }
+
+// The hosted-run scopes (agentry#348): valid, in the enumeration, flat, and
+// mapped to no core action — a token carrying only them unlocks nothing
+// in the core.
+func TestRunScopesAreValidFlatAndUnlockNoCoreAction(t *testing.T) {
+	for _, s := range []Scope{ScopeRunRead, ScopeRunWrite} {
+		if !ValidScope(s) {
+			t.Errorf("%s is not a valid scope", s)
+		}
+		found := false
+		for _, v := range AllScopes() {
+			found = found || v == s
+		}
+		if !found {
+			t.Errorf("%s is not enumerated", s)
+		}
+	}
+	if HasScope([]string{"run:read"}, ScopeRunWrite) || HasScope([]string{"run:write"}, ScopeRunRead) {
+		t.Fatal("one run scope implied the other; the list is flat")
+	}
+	for act, sc := range scopeFor {
+		if sc == ScopeRunRead || sc == ScopeRunWrite {
+			t.Errorf("core action %v is unlocked by %s", act, sc)
+		}
+	}
+}

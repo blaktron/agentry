@@ -534,6 +534,8 @@ const (
 	RepoRead     Scope = "repo:read"
 	RepoWrite    Scope = "repo:write"
 	ReviewAct    Scope = "review:act"
+	RunRead      Scope = "run:read"
+	RunWrite     Scope = "run:write"
 	UserProfile  Scope = "user:profile"
 )
 
@@ -553,6 +555,10 @@ func (e Scope) Valid() bool {
 	case RepoWrite:
 		return true
 	case ReviewAct:
+		return true
+	case RunRead:
+		return true
+	case RunWrite:
 		return true
 	case UserProfile:
 		return true
@@ -1583,8 +1589,8 @@ type Pat struct {
 	OrgHandle *string `json:"orgHandle,omitempty"`
 
 	// Prefix First 12 characters, for display and lookup (§4.2 pats).
-	Prefix string  `json:"prefix"`
-	Scopes []Scope `json:"scopes"`
+	Prefix string         `json:"prefix"`
+	Scopes []ScopeGranted `json:"scopes"`
 }
 
 // PatCreated defines model for PatCreated.
@@ -1599,8 +1605,8 @@ type PatCreated struct {
 	OrgHandle *string `json:"orgHandle,omitempty"`
 
 	// Prefix First 12 characters, for display and lookup (§4.2 pats).
-	Prefix string  `json:"prefix"`
-	Scopes []Scope `json:"scopes"`
+	Prefix string         `json:"prefix"`
+	Scopes []ScopeGranted `json:"scopes"`
 
 	// Token The full secret. Shown exactly once.
 	Token string `json:"token"`
@@ -1802,8 +1808,20 @@ type ScimTokenCreated struct {
 	Token string `json:"token"`
 }
 
-// Scope PAT scopes (§12.3).
+// Scope PAT scopes (§12.3). A token can do only what its scopes allow; a
+// session acts with the account's full authority. `run:write` lets a
+// token start, feed and cancel a hosted run of a BriefAgent and
+// `run:read` lets it read a run, its log and its artefacts — both are
+// consumed only by a registry that mounts the runs extension, and
+// unlock nothing on one that does not.
 type Scope string
+
+// ScopeGranted A scope as it appears on a token the registry reports back (the
+// token list, a newly minted token, the desktop exchange). The set is
+// the one `Scope` accepts and grows by addition, so it is declared
+// extensible: a client keeps a value it does not know as the string
+// it is rather than failing on it.
+type ScopeGranted = string
 
 // SearchHit defines model for SearchHit.
 type SearchHit struct {

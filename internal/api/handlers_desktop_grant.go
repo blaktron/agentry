@@ -128,10 +128,7 @@ func (s *Server) ExchangeDesktopCode(w http.ResponseWriter, r *http.Request) {
 		problemInternal(w, r)
 		return
 	}
-	respScopes := make([]Scope, 0, len(created.Scopes))
-	for _, sc := range created.Scopes {
-		respScopes = append(respScopes, Scope(sc))
-	}
+	respScopes := append([]ScopeGranted(nil), created.Scopes...)
 	writeJSON(w, http.StatusCreated, PatCreated{
 		Id: created.ID, Name: created.Name, Prefix: created.TokenPrefix,
 		Scopes: respScopes, ExpiresAt: created.ExpiresAt,
