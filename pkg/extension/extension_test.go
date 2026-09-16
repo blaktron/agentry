@@ -124,6 +124,9 @@ func TestApplyExtensionsBindsAndRegistersActions(t *testing.T) {
 	if ext.deps.DB != nil {
 		t.Fatal("a server without a database handed out a pool")
 	}
+	if ext.deps.Blobs != nil {
+		t.Fatal("a server without a database handed out an object store")
+	}
 	if !audit.Registered("bound.tier_set") {
 		t.Fatal("the extension's audit action is not in the catalog")
 	}
@@ -218,5 +221,24 @@ func TestParseQueues(t *testing.T) {
 		if strings.Join(got, ",") != strings.Join(c.want, ",") {
 			t.Fatalf("%q: got %v want %v", c.in, got, c.want)
 		}
+	}
+}
+
+// ScopeAllows is how an extension route requires a hosted-run scope
+// through the seam alone (agentry#348): nobody anonymous; a session,
+// which has the account's full authority; a PAT only with the scope.
+func TestScopeAllows(t *testing.T) {
+	if ScopeAllows(nil, ScopeRunWrite) || ScopeAllows(&Principal{Anonymous: true}, ScopeRunWrite) {
+		t.Fatal("an anonymous caller passed")
+	}
+	if !ScopeAllows(&Principal{Via: "session"}, ScopeRunWrite) {
+		t.Fatal("a session was refused; it carries the account's full authority")
+	}
+	pat := &Principal{Via: "pat", Scopes: []string{"run:read", "agent:read"}}
+	if !ScopeAllows(pat, ScopeRunRead) {
+		t.Fatal("a PAT carrying run:read was refused")
+	}
+	if ScopeAllows(pat, ScopeRunWrite) {
+		t.Fatal("a PAT without run:write passed; the list is flat")
 	}
 }

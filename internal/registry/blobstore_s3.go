@@ -23,6 +23,7 @@ type S3API interface {
 	PutObject(ctx context.Context, in *s3.PutObjectInput, opts ...func(*s3.Options)) (*s3.PutObjectOutput, error)
 	GetObject(ctx context.Context, in *s3.GetObjectInput, opts ...func(*s3.Options)) (*s3.GetObjectOutput, error)
 	HeadObject(ctx context.Context, in *s3.HeadObjectInput, opts ...func(*s3.Options)) (*s3.HeadObjectOutput, error)
+	DeleteObject(ctx context.Context, in *s3.DeleteObjectInput, opts ...func(*s3.Options)) (*s3.DeleteObjectOutput, error)
 }
 
 // S3Options configures the S3-backed BlobStore.
@@ -165,6 +166,19 @@ func (s *S3Store) Exists(ctx context.Context, key string) (bool, error) {
 		return false, nil
 	}
 	return false, fmt.Errorf("blobstore: head %s: %w", key, err)
+}
+
+// Delete implements BlobStore. S3 answers a delete of a missing key with
+// success, which is the contract.
+func (s *S3Store) Delete(ctx context.Context, key string) error {
+	_, err := s.api.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(s.objectKey(key)),
+	})
+	if err != nil && !isNotFound(err) {
+		return fmt.Errorf("blobstore: delete %s: %w", key, err)
+	}
+	return nil
 }
 
 func isNotFound(err error) bool {

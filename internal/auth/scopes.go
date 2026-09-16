@@ -15,6 +15,14 @@ const (
 	ScopeReviewAct    Scope = "review:act"
 	ScopeAuditRead    Scope = "audit:read"
 	ScopeUserProfile  Scope = "user:profile"
+	// The hosted-run scopes (plans/hosted-runs.md §6, agentry#348): a
+	// token that may start, cancel and feed a hosted run of a BriefAgent
+	// (run:write) or read a run, its log and its artefacts (run:read).
+	// No core route consumes them; the runs extension of the closed build
+	// requires them through pkg/extension, so a registry without it treats
+	// a token carrying only these as a token with no scope at all.
+	ScopeRunRead  Scope = "run:read"
+	ScopeRunWrite Scope = "run:write"
 )
 
 // AllScopes enumerates every valid scope (validation, docs, UI).
@@ -22,6 +30,7 @@ func AllScopes() []Scope {
 	return []Scope{
 		ScopeRepoRead, ScopeRepoWrite, ScopeAgentPublish, ScopeAgentRead,
 		ScopeOrgAdmin, ScopeReviewAct, ScopeAuditRead, ScopeUserProfile,
+		ScopeRunRead, ScopeRunWrite,
 	}
 }
 

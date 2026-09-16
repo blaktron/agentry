@@ -17,6 +17,9 @@ type BlobStore interface {
 	Put(ctx context.Context, key string, r io.Reader) error
 	Get(ctx context.Context, key string) (io.ReadCloser, error)
 	Exists(ctx context.Context, key string) (bool, error)
+	// Delete removes an object; a key that is not there is not an error,
+	// so a sweep that runs twice is a sweep that ran (agentry#348).
+	Delete(ctx context.Context, key string) error
 }
 
 // ArchiveKey computes the content-addressed storage key for a digest
@@ -89,6 +92,18 @@ func (l *LocalFS) Get(ctx context.Context, key string) (io.ReadCloser, error) {
 		return nil, fmt.Errorf("blobstore: %w", err)
 	}
 	return f, nil
+}
+
+// Delete implements BlobStore.
+func (l *LocalFS) Delete(ctx context.Context, key string) error {
+	path, err := l.path(key)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("blobstore: delete %s: %w", key, err)
+	}
+	return nil
 }
 
 // Exists implements BlobStore.
