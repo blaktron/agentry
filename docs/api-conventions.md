@@ -207,7 +207,7 @@ runs extension (`GET /meta` lists it); on a registry without it a token
 carrying only these two is refused everywhere a token without the right
 scope is. [Hosted runs](hosted-runs.md) is what those routes do, route by
 route. The desktop app's sign-in grant asks for a fixed set
-(`agent:read`, `agent:publish`, `repo:read`, `repo:write`, `user:profile`).
+(`agent:read`, `agent:publish`, `repo:read`, `repo:write`, `user:profile`, `run:read`, `run:write`).
 
 ## Native credentials vs an external directory
 
