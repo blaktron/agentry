@@ -41,6 +41,11 @@ curl -fsS -b "$JAR" "$BASE/ui/account" | grep -q "$HANDLE" && echo "account page
 curl -fsS -b "$JAR" -H 'Sec-Fetch-Site: same-origin' --data-urlencode "_csrf=$(csrf)" --data-urlencode "action=create" \
   --data-urlencode "name=acceptance" --data-urlencode "scopes=agent:read" "$BASE/ui/account/tokens" | grep -q "agy_" && echo "token shown once: OK"
 curl -fsS -b "$JAR" "$BASE/ui/account/tokens" | grep -q "acceptance" && echo "token listed: OK"
+# The hosted-run scopes are on the form and travel to the token (agentry#348).
+curl -fsS -b "$JAR" "$BASE/ui/account/tokens" | grep -q 'value="run:write"' && echo "run scopes offered: OK"
+curl -fsS -b "$JAR" -H 'Sec-Fetch-Site: same-origin' --data-urlencode "_csrf=$(csrf)" --data-urlencode "action=create" \
+  --data-urlencode "name=acceptance-run" --data-urlencode "scopes=run:read" --data-urlencode "scopes=run:write" "$BASE/ui/account/tokens" | grep -q "agy_" && echo "run-scoped token shown once: OK"
+curl -fsS -b "$JAR" "$BASE/ui/account/tokens" | grep -q "run:read run:write" && echo "run-scoped token listed with its scopes: OK"
 STATE="state_$SFX$SFX"
 curl -fsS -b "$JAR" "$BASE/ui/authorize?port=40123&state=$STATE" | grep -q "127.0.0.1:40123" && echo "authorize page: OK"
 cb=$(curl -sS -o /dev/null -w '%{redirect_url}' -b "$JAR" -H 'Sec-Fetch-Site: same-origin' --data-urlencode "_csrf=$(csrf)" \

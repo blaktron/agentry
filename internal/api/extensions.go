@@ -14,6 +14,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/registry"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
@@ -127,6 +128,11 @@ func (s *Server) ExtensionDeps() (*pgxpool.Pool, *slog.Logger, func(context.Cont
 	}
 	return pool, s.log, write, writeIn
 }
+
+// Blobs is the deployment's object store for pkg/extension.Deps
+// (agentry#348): nil when the server was built without a database, the
+// way ExtensionDeps' pool is.
+func (s *Server) Blobs() registry.BlobStore { return s.blobs }
 
 // ExtensionNames lists the mounted extensions in registration order.
 func (s *Server) ExtensionNames() []string {

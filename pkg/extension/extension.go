@@ -102,6 +102,34 @@ type Unthrottles interface {
 // Principal is the resolved caller; Principal(ctx) reads it in a route.
 type Principal = auth.Principal
 
+// Scope is a PAT scope as the core spells it; the two an extension may
+// require are the hosted-run scopes (agentry#348). A session carries no
+// scopes and the account's full authority; a PAT carries what it was
+// minted with, flat — no scope implies another.
+type Scope = auth.Scope
+
+// The scopes an extension route may require.
+const (
+	ScopeRunRead  = auth.ScopeRunRead
+	ScopeRunWrite = auth.ScopeRunWrite
+)
+
+// ScopeAllows is how the core reads a scope for a route: an anonymous
+// caller never passes; a session passes, having the account's full
+// authority (the route still checks who the account is); a PAT passes
+// only when it was minted with the scope. An extension route calls this
+// with the principal and the scope it requires and refuses on false.
+func ScopeAllows(p *Principal, s Scope) bool {
+	switch {
+	case p == nil || p.Anonymous:
+		return false
+	case p.Via == "pat":
+		return auth.HasScope(p.Scopes, s)
+	default:
+		return true
+	}
+}
+
 // Principal returns the caller the server resolved for this request:
 // Anonymous when none.
 func PrincipalFromContext(ctx context.Context) *Principal { return api.PrincipalFrom(ctx) }
@@ -147,11 +175,21 @@ type Deps struct {
 	DB    *pgxpool.Pool
 	Log   *slog.Logger
 	Audit AuditWriter
+	// Blobs is the deployment's object storage — the archive store the
+	// core runs on (a local directory or S3) — for an extension to keep
+	// its own objects under its own key prefix (agentry#348: a hosted
+	// run's inputs, outputs and receipts). nil when the server runs
+	// without a database, as DB is.
+	Blobs BlobStore
 	// Entitlements is the resolver the server uses with no extension —
 	// the deployment's configured limits — for an extension's own resolver
 	// to embed and answer Features over (agentry#326).
 	Entitlements Resolver
 }
+
+// BlobStore is the core's object store: put (write-once per key, so an
+// extension keys its objects uniquely), get, exists, delete.
+type BlobStore = registry.BlobStore
 
 // AuditWriter writes one audit event; see Deps. Write lands it in a
 // transaction of its own; WriteIn joins the caller's, so a mutation and its

@@ -74,6 +74,13 @@ func (f *fakeS3) HeadObject(_ context.Context, in *s3.HeadObjectInput, _ ...func
 	return &s3.HeadObjectOutput{}, nil
 }
 
+func (f *fakeS3) DeleteObject(_ context.Context, in *s3.DeleteObjectInput, _ ...func(*s3.Options)) (*s3.DeleteObjectOutput, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.objects, *in.Key)
+	return &s3.DeleteObjectOutput{}, nil
+}
+
 // statusErr builds the smithy response error shape the SDK returns when no
 // modeled type matches — which is exactly how 412 and 501 arrive.
 func statusErr(code string, status int) error {
@@ -260,3 +267,22 @@ func keysOf(f *fakeS3) []string {
 
 var _ S3API = (*fakeS3)(nil)
 var _ = aws.String
+
+// Delete removes the object and a second delete is not an error (a sweep
+// that runs twice is a sweep that ran).
+func TestS3StoreDeleteIsIdempotent(t *testing.T) {
+	f := newFakeS3()
+	st := NewS3WithAPI(f, "bucket", "x/")
+	if err := st.Put(t.Context(), "runs/a/b", strings.NewReader("payload")); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Delete(t.Context(), "runs/a/b"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if ok, _ := st.Exists(t.Context(), "runs/a/b"); ok {
+		t.Fatal("the object survived its delete")
+	}
+	if err := st.Delete(t.Context(), "runs/a/b"); err != nil {
+		t.Fatalf("a second Delete is an error: %v", err)
+	}
+}
