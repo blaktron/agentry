@@ -14,6 +14,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/audit"
+	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/entitlements"
 	"github.com/blaktron/agentry/internal/registry"
@@ -433,5 +434,108 @@ func TestBoundExtensionWritesItsOwnAuditAction(t *testing.T) {
 	}
 	if !seen {
 		t.Fatalf("the extension's event is not on the activity feed: %+v", page.Events)
+	}
+}
+
+// TestRunScopesReachAnExtensionRoute (agentry#348): a PAT minted with the
+// hosted-run scopes carries them on the resolved principal, so an
+// extension route can require one — a token without it is refused, one
+// with it passes, a session passes — while no core route is unlocked by
+// them: a token carrying only the two is refused where the matrix refuses
+// a token without the right scope.
+func TestRunScopesReachAnExtensionRoute(t *testing.T) {
+	env := newTestEnvWith(t, func(s *api.Server) {
+		s.RegisterExtension("probe", func(mux *http.ServeMux) {
+			mux.HandleFunc("POST /runs", func(w http.ResponseWriter, r *http.Request) {
+				p := api.PrincipalFrom(r.Context())
+				if p == nil || p.Anonymous || (p.Via == "pat" && !auth.HasScope(p.Scopes, auth.ScopeRunWrite)) {
+					w.WriteHeader(http.StatusForbidden)
+					return
+				}
+				w.WriteHeader(http.StatusNoContent)
+			})
+		})
+	})
+	u := env.register("runner")
+	env.verifyEmail(u)
+	sess := env.login(u)
+	_, runTok := env.mintPAT(sess, "run-only", "run:read", "run:write")
+	_, otherTok := env.mintPAT(sess, "no-run", "repo:read", "agent:read")
+	hit := func(c caller) int {
+		res := env.do(c, http.MethodPost, "/api/v1/x/probe/runs", nil)
+		_ = res.Body.Close()
+		return res.StatusCode
+	}
+	if got := hit(caller{name: "run-pat", pat: runTok}); got != http.StatusNoContent {
+		t.Fatalf("a PAT with run:write was refused by the extension route: %d", got)
+	}
+	if got := hit(caller{name: "other-pat", pat: otherTok}); got != http.StatusForbidden {
+		t.Fatalf("a PAT without run:write passed the extension route: %d", got)
+	}
+	if got := hit(sess); got != http.StatusNoContent {
+		t.Fatalf("a session was refused by the extension route: %d", got)
+	}
+	if got := hit(anonymous); got != http.StatusForbidden {
+		t.Fatalf("an anonymous caller passed the extension route: %d", got)
+	}
+	// The token lists its scopes as minted.
+	var tokens []struct {
+		Name   string   `json:"name"`
+		Scopes []string `json:"scopes"`
+	}
+	env.doJSON(sess, http.MethodGet, "/api/v1/user/tokens", nil, &tokens, http.StatusOK)
+	seen := false
+	for _, tk := range tokens {
+		if tk.Name == "run-only" {
+			seen = strings.Join(tk.Scopes, " ") == "run:read run:write"
+		}
+	}
+	if !seen {
+		t.Fatalf("the minted token does not list run:read run:write: %+v", tokens)
+	}
+	// Inert in the core: the run-only token is refused where a token
+	// without the right scope is refused.
+	for _, path := range []string{"/api/v1/user", "/api/v1/user/tokens"} {
+		res := env.do(caller{name: "run-pat", pat: runTok}, http.MethodGet, path, nil)
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusForbidden {
+			t.Errorf("a token carrying only the run scopes reached %s: %d", path, res.StatusCode)
+		}
+	}
+}
+
+// TestDepsBlobsIsTheDeploymentStore (agentry#348): the store the core runs
+// on reaches an extension through Deps, and an object put under the
+// extension's own prefix reads back, exists, and goes away on delete.
+func TestDepsBlobsIsTheDeploymentStore(t *testing.T) {
+	var srv *api.Server
+	dir := t.TempDir()
+	_ = newTestEnvCfg(t, func(cfg *config.Config) { cfg.Storage.LocalDir = dir }, func(s *api.Server) { srv = s })
+	blobs := srv.Blobs()
+	if blobs == nil {
+		t.Fatal("a server with a database and local storage handed out no object store")
+	}
+	ctx := context.Background()
+	key := "x/probe/runs/acct/run-1/result.json"
+	if err := blobs.Put(ctx, key, strings.NewReader(`{"ok":true}`)); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if ok, err := blobs.Exists(ctx, key); err != nil || !ok {
+		t.Fatalf("Exists = %v, %v", ok, err)
+	}
+	rc, err := blobs.Get(ctx, key)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	b, _ := io.ReadAll(rc)
+	_ = rc.Close()
+	if string(b) != `{"ok":true}` {
+		t.Fatalf("Get = %q", b)
+	}
+	if err := blobs.Delete(ctx, key); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if ok, _ := blobs.Exists(ctx, key); ok {
+		t.Fatal("the object survived its delete")
 	}
 }

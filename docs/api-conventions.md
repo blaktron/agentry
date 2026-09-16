@@ -181,6 +181,33 @@ will not let go. Agents carrying advisories or abuse reports are also
 refused; those are trust & safety records that outlive an author's wish to
 remove the agent (DEV-021).
 
+## Personal access tokens and their scopes
+
+A personal access token (`POST /user/tokens`, or the Tokens page under the
+account) is a least-privilege credential: it can do only what its scopes
+allow, and the list is flat — no scope implies another. A browser session
+carries the account's full authority instead and is gated by CSRF. The
+scopes:
+
+| Scope | What a token with it may do |
+| --- | --- |
+| `agent:read` | read BriefAgents, versions, reports and search |
+| `agent:publish` | create BriefAgents and submit versions |
+| `repo:read` | fetch from a BriefAgent's git repository |
+| `repo:write` | push to a BriefAgent's git repository |
+| `user:profile` | read and change the account's own settings, tokens, keys and sessions |
+| `org:admin` | manage an organization's members, teams and settings |
+| `review:act` | work the review queue and record decisions (platform staff or a security reviewer) |
+| `audit:read` | read an organization's audit log |
+| `run:read` | read a hosted run of a BriefAgent, its log and its artefacts |
+| `run:write` | start, feed and cancel a hosted run of a BriefAgent |
+
+`run:read` and `run:write` are consumed only by a registry that mounts the
+runs extension (`GET /meta` lists it); on a registry without it a token
+carrying only these two is refused everywhere a token without the right
+scope is. The desktop app's sign-in grant asks for a fixed set
+(`agent:read`, `agent:publish`, `repo:read`, `repo:write`, `user:profile`).
+
 ## Native credentials vs an external directory
 
 A deployment can hand its account directory to an external IdP
