@@ -3406,7 +3406,7 @@ components:
         scopes:
           type: array
           items:
-            $ref: "#/components/schemas/Scope"
+            $ref: "#/components/schemas/ScopeGranted"
         orgHandle:
           type: string
           description: Set when org-bound (enforced SSO, §12.4).
@@ -3496,6 +3496,26 @@ components:
         consumed only by a registry that mounts the runs extension, and
         unlock nothing on one that does not.
       enum:
+        - repo:read
+        - repo:write
+        - agent:publish
+        - agent:read
+        - org:admin
+        - review:act
+        - audit:read
+        - user:profile
+        - run:read
+        - run:write
+
+    ScopeGranted:
+      type: string
+      description: |
+        A scope as it appears on a token the registry reports back (the
+        token list, a newly minted token, the desktop exchange). The set is
+        the one `Scope` accepts and grows by addition, so it is declared
+        extensible: a client keeps a value it does not know as the string
+        it is rather than failing on it.
+      x-extensible-enum:
         - repo:read
         - repo:write
         - agent:publish

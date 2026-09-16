@@ -137,10 +137,7 @@ func (s *Server) ListTokens(w http.ResponseWriter, r *http.Request) {
 }
 
 func patToAPI(row storegen.ListPATsRow) Pat {
-	scopes := make([]Scope, 0, len(row.Scopes))
-	for _, sc := range row.Scopes {
-		scopes = append(scopes, Scope(sc))
-	}
+	scopes := append([]ScopeGranted(nil), row.Scopes...)
 	p := Pat{
 		Id: row.ID, Name: row.Name, Prefix: row.TokenPrefix,
 		Scopes: scopes, ExpiresAt: row.ExpiresAt, CreatedAt: row.CreatedAt,
@@ -247,10 +244,7 @@ func (s *Server) CreateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respScopes := make([]Scope, 0, len(created.Scopes))
-	for _, sc := range created.Scopes {
-		respScopes = append(respScopes, Scope(sc))
-	}
+	respScopes := append([]ScopeGranted(nil), created.Scopes...)
 	writeJSON(w, http.StatusCreated, PatCreated{
 		Id: created.ID, Name: created.Name, Prefix: created.TokenPrefix,
 		Scopes: respScopes, ExpiresAt: created.ExpiresAt,
