@@ -54,13 +54,22 @@ func TestDesktopGrantExchange(t *testing.T) {
 		t.Fatal("exchange returned no token")
 	}
 	scopes, _ := pat["scopes"].([]any)
-	if len(scopes) != 5 {
-		t.Fatalf("desktop PAT scopes = %v, want the five desktop scopes", scopes)
+	if len(scopes) != 7 {
+		t.Fatalf("desktop PAT scopes = %v, want the seven desktop scopes", scopes)
 	}
+	has := map[string]bool{}
 	for _, sc := range scopes {
 		if sc == "review:act" || sc == "org:admin" {
 			t.Fatalf("desktop PAT carries %v", sc)
 		}
+		if s, ok := sc.(string); ok {
+			has[s] = true
+		}
+	}
+	// The hosted-run scopes ride on the desktop grant (agentry#353): In
+	// Agentry on RunPanel creates and reads runs with this token.
+	if !has["run:read"] || !has["run:write"] {
+		t.Fatalf("desktop PAT lacks the hosted-run scopes: %v", scopes)
 	}
 	// The PAT authenticates.
 	var me struct {
