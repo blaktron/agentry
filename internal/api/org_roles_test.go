@@ -46,9 +46,7 @@ func TestLastAdminCannotBeRemoved(t *testing.T) {
 	env.createOrg(admin, orgH)
 
 	otherH := env.register("la-other")
-	env.verifyEmail(otherH)
-	env.doJSON(admin, http.MethodPut, "/api/v1/orgs/"+orgH+"/members/"+otherH,
-		map[string]any{"role": "member"}, nil, http.StatusOK)
+	env.joinOrg(admin, orgH, otherH, "member")
 
 	var members []struct {
 		User struct {
@@ -98,10 +96,11 @@ func TestLastAdminCannotBeRemoved(t *testing.T) {
 	env.doJSON(other, http.MethodDelete, "/api/v1/orgs/"+orgH+"/members/"+otherH, nil, nil, http.StatusNoContent)
 
 	// An erased admin keeps a membership row but cannot act: with the
-	// second admin erased, the first is again the last.
+	// second admin erased, the first is again the last. The second
+	// membership is seeded rather than re-invited — the subject here is
+	// what the count does with an erased account, not the door.
 	admin = env.login(adminH)
-	env.doJSON(admin, http.MethodPut, "/api/v1/orgs/"+orgH+"/members/"+otherH,
-		map[string]any{"role": "admin"}, nil, http.StatusOK)
+	env.seedMembership(orgH, otherH, "admin", "active")
 	if _, err := env.st.Pool().Exec(context.Background(),
 		`UPDATE users SET state = 'deleted' WHERE id = (SELECT id FROM handles WHERE handle = $1)`, otherH); err != nil {
 		t.Fatal(err)
@@ -139,6 +138,8 @@ func TestSecurityReviewerIsFirstPartyOnly(t *testing.T) {
 	// The first-party org: created here by staff, or already present from an
 	// earlier run over the same database (the handle is fixed by design), in
 	// which case this run's staff account is seeded as one of its admins.
+	// (The refusals above needed no membership: an unassignable role is
+	// refused before the handler asks who the target is.)
 	res = env.do(staff, http.MethodPost, "/api/v1/orgs", map[string]any{"handle": "secureagentry", "displayName": "SecureAgentry"})
 	code, slug, _ := problemOf(t, res)
 	switch {
@@ -157,6 +158,7 @@ func TestSecurityReviewerIsFirstPartyOnly(t *testing.T) {
 	var m struct {
 		Role string `json:"role"`
 	}
+	env.joinOrg(staff, "secureagentry", memberH, "member")
 	env.doJSON(staff, http.MethodPut, "/api/v1/orgs/secureagentry/members/"+memberH,
 		map[string]any{"role": "security_reviewer"}, &m, http.StatusOK)
 	if m.Role != "security_reviewer" {
@@ -259,7 +261,10 @@ func TestSCIMCannotDeactivateTheLastAdmin(t *testing.T) {
 		`SELECT handle FROM handles WHERE id = $1`, created.ID).Scan(&carolH); err != nil {
 		t.Fatal(err)
 	}
-	env.doJSON(admin, http.MethodPut, "/api/v1/orgs/"+orgH+"/members/"+carolH, map[string]any{"role": "admin"}, nil, http.StatusOK)
+	// SCIM provisioned her as pending; approving is what gives her the seat
+	// and the role (agentry#361).
+	env.doJSON(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/members/"+carolH+"/approve",
+		map[string]any{"role": "admin"}, nil, http.StatusOK)
 	env.doJSON(admin, http.MethodDelete, "/api/v1/orgs/"+orgH+"/members/"+adminH, nil, nil, http.StatusNoContent)
 
 	for _, tc := range []struct {
@@ -313,9 +318,9 @@ func TestLastAdminGuardHoldsUnderConcurrentDemotions(t *testing.T) {
 	env.verifyEmail(aH)
 	a := env.login(aH)
 	bH := env.register("cc-b")
-	env.verifyEmail(bH)
 	orgH := "ccorg" + env.sfx
 	env.createOrg(a, orgH)
+	env.joinOrg(a, orgH, bH, "member")
 	env.doJSON(a, http.MethodPut, "/api/v1/orgs/"+orgH+"/members/"+bH, map[string]any{"role": "admin"}, nil, http.StatusOK)
 	b := env.login(bH)
 

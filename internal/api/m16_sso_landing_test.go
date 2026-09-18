@@ -91,6 +91,8 @@ func TestSSOLandingStartsSPInitiatedSAML(t *testing.T) {
 	metadataURL := env.srv.URL + "/api/v1/orgs/" + orgH + "/sso/saml/metadata"
 	acsURL := env.srv.URL + "/api/v1/orgs/" + orgH + "/sso/saml/acs"
 	nameID := "spi-user-" + env.sfx + "@acme.example"
+	// The organization's SSO signs in its members (agentry#361).
+	env.seedMembership(orgH, env.registerEmail("spi-member", nameID), "member", "active")
 
 	// An assertion naming a DIFFERENT request is refused, even though it is
 	// correctly signed, addressed and in-window: that is the response-stealing

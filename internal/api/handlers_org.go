@@ -188,7 +188,11 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := orgToAPI(row, true)
-	s.fireEvent(r.Context(), Event{Kind: "org.created", OrgID: out.Id, Payload: map[string]any{"org": out.Handle}})
+	// The creator rides on the event (agentry#361): the extension that
+	// opens the organization's billing row needs to know whose it is, and
+	// the org's only member at this moment is the person who made it.
+	s.fireEvent(r.Context(), Event{Kind: "org.created", OrgID: out.Id, UserID: p.UserID,
+		Payload: map[string]any{"org": out.Handle, "creator": p.Handle}})
 	ik.complete(r, http.StatusCreated, out)
 	writeJSON(w, http.StatusCreated, out)
 }

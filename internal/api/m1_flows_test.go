@@ -137,7 +137,7 @@ func TestAuditCoverage(t *testing.T) {
 	orgH := "aorg" + env.sfx
 	env.doJSON(sess, http.MethodPost, "/api/v1/orgs", map[string]any{"handle": orgH, "displayName": "A"}, nil, http.StatusCreated)
 	member := env.register("aud2")
-	env.doJSON(sess, http.MethodPut, "/api/v1/orgs/"+orgH+"/members/"+member, map[string]any{"role": "member"}, nil, http.StatusOK)
+	env.joinOrg(sess, orgH, member, "member")
 	env.doJSON(sess, http.MethodPost, "/api/v1/orgs/"+orgH+"/teams", map[string]any{"slug": "audit-team"}, nil, http.StatusCreated)
 	env.doJSON(sess, http.MethodPut, "/api/v1/orgs/"+orgH+"/teams/audit-team/members/"+member, nil, nil, http.StatusNoContent)
 	env.doJSON(sess, http.MethodDelete, "/api/v1/orgs/"+orgH+"/teams/audit-team/members/"+member, nil, nil, http.StatusNoContent)

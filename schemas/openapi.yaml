@@ -1674,10 +1674,15 @@ paths:
         A deployment with an admission extension (the hosted product's
         subscription tiers) may refuse a submission after every core check
         has passed and before anything is stored: `402` with the problem
-        type `credits-exhausted` carries `balance` and `resetsAt` at the top
-        level of the problem body; `503 admission-unavailable` means the
-        check could not be reached and nothing was recorded. A core
-        registry never answers either. The gate's verdict never depends on
+        type `credits-exhausted` carries `balance`, `resetsAt` and
+        `account` — the handle whose balance is short, which is the
+        submitter's own or, for a member of a paid organization, the
+        organization's — at the top level of the problem body.
+        `402 subscription-inactive` refuses one whose payer is an
+        organization that is awaiting payment or has lapsed, and carries
+        `account` the same way. `503 admission-unavailable` means the check
+        could not be reached and nothing was recorded. A core registry
+        never answers any of them. The gate's verdict never depends on
         admission.
       parameters:
         - $ref: "#/components/parameters/Namespace"
@@ -1714,7 +1719,8 @@ paths:
         "402":
           description: >-
             Refused by the deployment's admission extension (problem type
-            `credits-exhausted`, with `balance` and `resetsAt`); nothing was
+            `credits-exhausted` with `balance`, `resetsAt` and `account`,
+            or `subscription-inactive` with `account`); nothing was
             stored. Never answered by a core registry.
           content:
             application/problem+json:
