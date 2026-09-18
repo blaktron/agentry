@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -184,6 +185,26 @@ func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *
 			return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusUnauthorized, "unauthorized"}
 		}
 		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusNotFound, "not found"}
+	}
+
+	// The owning organization's state (agentry#363): the same gate the
+	// API consults. Suspended is an unknown path — anonymous gets the
+	// credential prompt, a signed-in caller 404 — and the decommission
+	// hold takes reads only.
+	if err := h.reg.OrgGateFor(ctx, agent, act); err != nil {
+		var gate *registry.OrgGateError
+		switch {
+		case errors.As(err, &gate) && gate.Absent():
+			if principal.Anonymous {
+				return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusUnauthorized, "unauthorized"}
+			}
+			return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusNotFound, "not found"}
+		case errors.As(err, &gate):
+			return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusForbidden, "forbidden: this organization is being decommissioned and its repositories are read-only"}
+		default:
+			h.log.ErrorContext(ctx, "git org gate", "err", err)
+			return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusInternalServerError, "internal error"}
+		}
 	}
 
 	// Lazy bare-repo init (§13.3: only the git role mounts repo storage).

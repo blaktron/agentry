@@ -49,6 +49,46 @@ func TestCoreUIOrgAdmin(t *testing.T) {
 	if code, body := getPage("/ui/orgs"); code != http.StatusOK || !strings.Contains(body, org) {
 		t.Fatalf("orgs index: %d %s", code, body)
 	}
+	// A second person creates an organization through the form (agentry#363):
+	// the page posts in-process, lands on the new organization, and a
+	// refusal — here the handle just taken — renders as the page's notice.
+	maker := env.register("uiorg-mk")
+	env.verifyEmail(maker)
+	mk := env.login(maker)
+	jarM, _ := cookiejar.New(nil)
+	jarM.SetCookies(base, []*http.Cookie{{Name: "agentry_session", Value: mk.session}, {Name: "agentry_csrf", Value: mk.csrf}})
+	mkClient := &http.Client{Jar: jarM, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	postCreate := func(handle string) *http.Response {
+		t.Helper()
+		form := url.Values{"_csrf": {mk.csrf}, "handle": {handle}, "displayName": {"Made in the form"}}
+		req, _ := http.NewRequest(http.MethodPost, env.srv.URL+"/ui/orgs", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Sec-Fetch-Site", "same-origin")
+		res, err := mkClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res
+	}
+	made := "uiorg-made" + env.sfx
+	res0 := postCreate(made)
+	if res0.StatusCode != http.StatusSeeOther || res0.Header.Get("Location") != "/ui/orgs/"+made || !strings.Contains(uiFlash(res0), made+" created") {
+		b, _ := io.ReadAll(res0.Body)
+		t.Fatalf("create form: %d %s %s %q", res0.StatusCode, res0.Header.Get("Location"), b, uiFlash(res0))
+	}
+	res0 = postCreate(org)
+	if res0.StatusCode != http.StatusSeeOther || res0.Header.Get("Location") != "/ui/orgs" || !strings.Contains(uiFlash(res0), "already a member") {
+		t.Fatalf("create form refusal: %d %s %q", res0.StatusCode, res0.Header.Get("Location"), uiFlash(res0))
+	}
+	if r, err := mkClient.Get(env.srv.URL + "/ui/orgs/" + made); err != nil || r.StatusCode != http.StatusOK {
+		t.Fatalf("the made org's page: %v %v", r, err)
+	} else {
+		b, _ := io.ReadAll(r.Body)
+		_ = r.Body.Close()
+		if !strings.Contains(string(b), "Made in the form") || !strings.Contains(string(b), `value="decommission"`) {
+			t.Fatalf("the made org's page: %s", b)
+		}
+	}
 	if code, body := getPage("/ui/orgs/" + org); code != http.StatusOK || !strings.Contains(body, "UI Org") || !strings.Contains(body, "<strong>"+owner+"</strong>") {
 		t.Fatalf("org page: %d %s", code, body)
 	}

@@ -521,41 +521,6 @@ func (q *Queries) GetIdentityBySubject(ctx context.Context, arg GetIdentityBySub
 	return i, err
 }
 
-const getOrgByVerifiedDomain = `-- name: GetOrgByVerifiedDomain :one
-SELECT o.id, o.display_name, o.sso_required, o.verified_domain, o.state, o.created_at, o.updated_at, o.created_by, o.activated_at, h.handle FROM orgs o JOIN handles h ON h.id = o.id WHERE o.verified_domain = $1
-`
-
-type GetOrgByVerifiedDomainRow struct {
-	ID             uuid.UUID  `json:"id"`
-	DisplayName    string     `json:"display_name"`
-	SsoRequired    bool       `json:"sso_required"`
-	VerifiedDomain *string    `json:"verified_domain"`
-	State          string     `json:"state"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
-	CreatedBy      *uuid.UUID `json:"created_by"`
-	ActivatedAt    *time.Time `json:"activated_at"`
-	Handle         string     `json:"handle"`
-}
-
-func (q *Queries) GetOrgByVerifiedDomain(ctx context.Context, verifiedDomain *string) (GetOrgByVerifiedDomainRow, error) {
-	row := q.db.QueryRow(ctx, getOrgByVerifiedDomain, verifiedDomain)
-	var i GetOrgByVerifiedDomainRow
-	err := row.Scan(
-		&i.ID,
-		&i.DisplayName,
-		&i.SsoRequired,
-		&i.VerifiedDomain,
-		&i.State,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.CreatedBy,
-		&i.ActivatedAt,
-		&i.Handle,
-	)
-	return i, err
-}
-
 const getSCIMTokenByHash = `-- name: GetSCIMTokenByHash :one
 SELECT id, org_id, token_sha256, expires_at, revoked_at, created_at FROM scim_tokens
 WHERE token_sha256 = $1 AND revoked_at IS NULL
@@ -1168,20 +1133,6 @@ type SetOrgSSORequiredParams struct {
 // ============================ Enforced SSO ============================
 func (q *Queries) SetOrgSSORequired(ctx context.Context, arg SetOrgSSORequiredParams) error {
 	_, err := q.db.Exec(ctx, setOrgSSORequired, arg.ID, arg.SsoRequired)
-	return err
-}
-
-const setOrgVerifiedDomain = `-- name: SetOrgVerifiedDomain :exec
-UPDATE orgs SET verified_domain = $2, updated_at = now() WHERE id = $1
-`
-
-type SetOrgVerifiedDomainParams struct {
-	ID             uuid.UUID `json:"id"`
-	VerifiedDomain *string   `json:"verified_domain"`
-}
-
-func (q *Queries) SetOrgVerifiedDomain(ctx context.Context, arg SetOrgVerifiedDomainParams) error {
-	_, err := q.db.Exec(ctx, setOrgVerifiedDomain, arg.ID, arg.VerifiedDomain)
 	return err
 }
 

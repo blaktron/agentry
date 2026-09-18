@@ -269,6 +269,12 @@ func (s *Service) CreateAgent(ctx context.Context, p *auth.Principal, in CreateA
 			return Agent{}, auth.ErrForbidden
 		}
 	case "org":
+		// Nothing is added to an organization that is suspended or in its
+		// decommission hold (agentry#363) — asked first, so a suspended
+		// organization is as absent to a stranger as to a member.
+		if err := s.OrgGate(ctx, ns.ID, auth.ActAgentCreate); err != nil {
+			return Agent{}, err
+		}
 		// The namespace-derived role is the one rule: whoever may release
 		// an agent here may make one here.
 		derived := auth.NamespaceDerivedAgentRole(p, ns.Kind, ns.ID, p.Role(ns.ID))
@@ -353,12 +359,27 @@ var ErrPrivateAgentCap = errors.New("registry: this namespace holds as many priv
 // CheckPrivateAgentCap is checkPrivateAgentCap for the handler that flips
 // an existing agent to private.
 func (s *Service) CheckPrivateAgentCap(ctx context.Context, a Agent) error {
-	return s.checkPrivateAgentCap(ctx, subjectFor(a), a.NamespaceID)
+	return s.checkPrivateAgentCapFor(ctx, subjectFor(a), a.NamespaceID, 1)
+}
+
+// CheckPrivateAgentCapFor refuses adding n more private agents to an
+// organization's namespace at once — an erased account's catalogue moving
+// in (agentry#363: the transfer door respects the cap). n of zero always
+// passes.
+func (s *Service) CheckPrivateAgentCapFor(ctx context.Context, orgID uuid.UUID, n int64) error {
+	if n <= 0 {
+		return nil
+	}
+	return s.checkPrivateAgentCapFor(ctx, entitlements.ForOrg(orgID), orgID, n)
 }
 
 // checkPrivateAgentCap refuses one more private agent when the subject's
 // Features cap is reached. An unresolvable entitlement is not permission.
 func (s *Service) checkPrivateAgentCap(ctx context.Context, subject entitlements.Subject, nsID uuid.UUID) error {
+	return s.checkPrivateAgentCapFor(ctx, subject, nsID, 1)
+}
+
+func (s *Service) checkPrivateAgentCapFor(ctx context.Context, subject entitlements.Subject, nsID uuid.UUID, adding int64) error {
 	f, err := s.Entitlements().Features(ctx, subject)
 	if err != nil {
 		return fmt.Errorf("registry: entitlements: %w", err)
@@ -373,7 +394,7 @@ func (s *Service) checkPrivateAgentCap(ctx context.Context, subject entitlements
 	if err != nil {
 		return fmt.Errorf("registry: private agent count: %w", err)
 	}
-	if n >= f.PrivateAgents.Max {
+	if n+adding > f.PrivateAgents.Max {
 		return ErrPrivateAgentCap
 	}
 	return nil

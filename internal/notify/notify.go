@@ -52,6 +52,26 @@ type Notifier interface {
 	// declares an MCP server version with a newly known high or critical
 	// vulnerability, and that the fix is a new version (agentry#177).
 	MCPDependencyAlert(ctx context.Context, n MCPDependencyAlertNotice) error
+	// OrgAccessRequest tells an organisation's admin that a person whose
+	// verified address is at the organisation's domain asks to be added
+	// (agentry#363, D13, D21). One mail per admin, once a day per person.
+	OrgAccessRequest(ctx context.Context, n AccessRequestNotice) error
+}
+
+// AccessRequestNotice is a request for access delivered to one of the
+// organisation's admins.
+type AccessRequestNotice struct {
+	ToEmail string
+	Org     string
+	// OrgDisplayName is the organisation's name, for the sentence.
+	OrgDisplayName string
+	// Requester is the handle of the person asking; RequesterEmail their
+	// verified address, which is at the organisation's domain.
+	Requester      string
+	RequesterEmail string
+	// ConsoleURL is where the admin invites them; empty when the server
+	// knows no absolute origin.
+	ConsoleURL string
 }
 
 // MCPDependencyAlertNotice is a dependency alert delivered to the version's
@@ -250,6 +270,13 @@ func (n LogNotifier) MCPDependencyAlert(_ context.Context, notice MCPDependencyA
 func (n LogNotifier) OrgInvite(_ context.Context, notice InviteOffer) error {
 	n.logger().Info("notify: org invite",
 		"to", logx.MaskEmail(notice.ToEmail), "org", notice.Org, "role", notice.Role)
+	return nil
+}
+
+// OrgAccessRequest implements Notifier.
+func (n LogNotifier) OrgAccessRequest(_ context.Context, notice AccessRequestNotice) error {
+	n.logger().Info("notify: org access request",
+		"to", logx.MaskEmail(notice.ToEmail), "org", notice.Org, "requester", notice.Requester)
 	return nil
 }
 
@@ -484,11 +511,17 @@ func (r renderer) mcpAlert(n MCPDependencyAlertNotice) message {
 	}
 }
 
-func (r renderer) invite(n InviteOffer) message {
-	who := n.Org
-	if n.OrgDisplayName != "" && n.OrgDisplayName != n.Org {
-		who = n.OrgDisplayName + " (" + n.Org + ")"
+// orgLabel names an organisation for a sentence: its display name with the
+// handle in brackets, or the handle alone.
+func orgLabel(handle, displayName string) string {
+	if displayName != "" && displayName != handle {
+		return displayName + " (" + handle + ")"
 	}
+	return handle
+}
+
+func (r renderer) invite(n InviteOffer) message {
+	who := orgLabel(n.Org, n.OrgDisplayName)
 	body := "You have been invited to join the " + who + " organization on " + r.registry + "."
 	if n.InvitedBy != "" {
 		body += "\nInvited by: " + n.InvitedBy
@@ -511,6 +544,26 @@ func (r renderer) invite(n InviteOffer) message {
 		"it will expire.\n"
 	return message{
 		Subject: r.registry + ": you are invited to the " + n.Org + " organization",
+		Body:    body + r.footer(),
+	}
+}
+
+func (r renderer) accessRequest(n AccessRequestNotice) message {
+	who := orgLabel(n.Org, n.OrgDisplayName)
+	body := n.Requester + " <" + n.RequesterEmail + "> asks to join the " + who +
+		" organization on " + r.registry + ".\n\n" +
+		"Their address is at the domain registered to your organization, which is\n" +
+		"why this reached you. Nobody joins uninvited: to add them, send them an\n" +
+		"invitation from the organization's console"
+	if n.ConsoleURL != "" {
+		body += ":\n" + n.ConsoleURL + "\n"
+	} else {
+		body += ".\n"
+	}
+	body += "\nIf you do not know them, there is nothing to do: they hold nothing of the\n" +
+		"organization, and they can ask again at most once a day.\n"
+	return message{
+		Subject: r.registry + ": " + n.Requester + " asks to join the " + n.Org + " organization",
 		Body:    body + r.footer(),
 	}
 }

@@ -2,9 +2,11 @@
 
 -- name: CreateOrg :one
 -- activated_at is now() where nothing will activate the org later (no
--- admission extension), NULL where one will (agentry#360).
-INSERT INTO orgs (id, display_name, created_by, activated_at)
-VALUES ($1, $2, $3, CASE WHEN sqlc.arg(activated)::boolean THEN now() ELSE NULL END)
+-- admission extension), NULL where one will (agentry#360). domain is the
+-- creator's verified email domain, or NULL for none (agentry#363); the
+-- unique constraint refuses a second organization at one domain.
+INSERT INTO orgs (id, display_name, created_by, activated_at, domain)
+VALUES ($1, $2, $3, CASE WHEN sqlc.arg(activated)::boolean THEN now() ELSE NULL END, sqlc.narg(domain)::citext)
 RETURNING *;
 
 -- name: ActivateOrg :execrows
@@ -16,16 +18,102 @@ SELECT h.handle FROM orgs o JOIN handles h ON h.id = o.id
 WHERE o.created_by = $1 AND o.activated_at IS NULL
 LIMIT 1;
 
+-- name: LockKey :exec
+-- A transaction-scoped advisory lock on a name, for the rules that span
+-- more than one table or row and so have no constraint to hold them: a
+-- domain across orgs.domain and the verified claims, a person's once-a-day
+-- request for access (agentry#363). Released with the transaction.
+SELECT pg_advisory_xact_lock(hashtext(sqlc.arg(key)::text));
+
 -- name: LockOrg :exec
 -- Serialises the membership changes of one organization inside a
 -- transaction (the last-admin guard counts under this lock).
 SELECT id FROM orgs WHERE id = $1 FOR UPDATE;
 
 -- name: GetOrgByHandle :one
-SELECT o.*, h.handle FROM orgs o JOIN handles h ON h.id = o.id WHERE h.handle = $1 AND h.kind = 'org';
+-- verified_domains is every domain the organization proved control of
+-- over DNS (domain_claims.verified_at), oldest first: the T-12 auto-link
+-- rule and the invitation door read it (agentry#363).
+SELECT o.*, h.handle,
+  coalesce((SELECT array_agg(dc.domain::text ORDER BY dc.verified_at)
+            FROM domain_claims dc WHERE dc.org_id = o.id AND dc.verified_at IS NOT NULL), '{}')::text[] AS verified_domains
+FROM orgs o JOIN handles h ON h.id = o.id WHERE h.handle = $1 AND h.kind = 'org';
 
 -- name: GetOrgByID :one
-SELECT o.*, h.handle FROM orgs o JOIN handles h ON h.id = o.id WHERE o.id = $1;
+SELECT o.*, h.handle,
+  coalesce((SELECT array_agg(dc.domain::text ORDER BY dc.verified_at)
+            FROM domain_claims dc WHERE dc.org_id = o.id AND dc.verified_at IS NOT NULL), '{}')::text[] AS verified_domains
+FROM orgs o JOIN handles h ON h.id = o.id WHERE o.id = $1;
+
+-- name: GetOrgByDomain :one
+-- The organization a domain belongs to: recorded at its creation, or
+-- verified over DNS by it. One organization per domain (D21, D26) spans
+-- both facts, so a creation at a DNS-verified domain and a verification
+-- of another organization's creation domain are both refused by the API
+-- against this lookup. A decommissioned organization has released its
+-- domain (both columns are cleared by the erasure), so it never matches.
+SELECT o.*, h.handle
+FROM orgs o JOIN handles h ON h.id = o.id
+WHERE o.domain = sqlc.arg(domain)::citext
+   OR EXISTS (SELECT 1 FROM domain_claims dc
+              WHERE dc.org_id = o.id AND dc.domain = sqlc.arg(domain)::citext AND dc.verified_at IS NOT NULL)
+ORDER BY o.created_at
+LIMIT 1;
+
+-- name: GetOrgState :one
+-- What the organization's state permits, for the one gate the API, the
+-- git door and the membership chokepoint consult (agentry#363).
+SELECT state, decommission_at FROM orgs WHERE id = $1;
+
+-- name: DecommissionOrg :execrows
+-- Only an active organization enters the hold; a repeat is 0 rows.
+UPDATE orgs SET state = 'decommissioning', decommission_at = $2, decommission_reason = $3, updated_at = now()
+WHERE id = $1 AND state = 'active';
+
+-- name: SuspendOrg :execrows
+UPDATE orgs SET state = 'suspended', decommission_reason = $2, updated_at = now()
+WHERE id = $1 AND state = 'active';
+
+-- name: ReinstateOrg :execrows
+-- Back to active from a suspension or from the decommission hold; the
+-- erasure that already ran cannot be undone, so decommissioned stays.
+UPDATE orgs SET state = 'active', decommission_at = NULL, decommission_reason = NULL, updated_at = now()
+WHERE id = $1 AND state IN ('suspended','decommissioning');
+
+-- name: ListOrgsDueForErasure :many
+SELECT o.id, h.handle FROM orgs o JOIN handles h ON h.id = o.id
+WHERE o.state = 'decommissioning' AND o.decommission_at <= now()
+ORDER BY o.decommission_at;
+
+-- name: GetOrgWhereUserIsLastAdmin :one
+-- The erasure guard (D14): an account that is the only active admin of an
+-- organization that still exists cannot be erased until another admin is
+-- in place. Counts the way CountOrgAdmins does.
+SELECT h.handle FROM memberships m
+JOIN orgs o ON o.id = m.org_id
+JOIN handles h ON h.id = m.org_id
+WHERE m.user_id = $1 AND m.role = 'admin' AND m.state = 'active'
+  AND o.state IN ('active','suspended','decommissioning')
+  AND (SELECT count(*) FROM memberships m2 JOIN users u ON u.id = m2.user_id
+       WHERE m2.org_id = m.org_id AND m2.role = 'admin' AND m2.state = 'active' AND u.state = 'active') <= 1
+ORDER BY h.handle
+LIMIT 1;
+
+-- name: ListOrgAdminsForMail :many
+-- The organization's active admins with what a mail to them needs; whether
+-- each may be written to — a verified address, the orgInvites preference —
+-- is notify.AllowsEmail's decision, not this query's (agentry#363).
+SELECT u.id, u.email, h.handle
+FROM memberships m
+JOIN users u ON u.id = m.user_id
+JOIN handles h ON h.id = u.id
+WHERE m.org_id = $1 AND m.role = 'admin' AND m.state = 'active' AND u.state = 'active'
+ORDER BY h.handle;
+
+-- name: DeleteUserMemberships :execrows
+-- An erased account holds no seat anywhere (agentry#363): its rows go
+-- with it, after the last-admin guard has passed.
+DELETE FROM memberships WHERE user_id = $1;
 
 -- name: UpdateOrgDisplayName :one
 UPDATE orgs SET display_name = $2, updated_at = now() WHERE id = $1 RETURNING id;
@@ -99,6 +187,11 @@ SELECT
 -- someone already active elsewhere is refused.
 SELECT count(*) FROM memberships m WHERE m.user_id = $1 AND m.state = 'active' AND m.org_id <> $2;
 
+-- name: CountActiveMemberships :one
+-- The same rule at the creation door (agentry#370): a person who is an
+-- active member anywhere founds nothing until they leave.
+SELECT count(*) FROM memberships m WHERE m.user_id = $1 AND m.state = 'active';
+
 -- name: ListUserMemberships :many
 -- The caller's org roles, for the principal every request is authorized
 -- against. ACTIVE memberships only (agentry#361): a pending member —
@@ -120,10 +213,13 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: GetInvitationByToken :one
--- The organization's verified domain travels with the invitation: whether
--- the invited address is at it decides both whether the offer was mailed
--- and whether accepting confirms the address (agentry#361).
-SELECT i.*, h.handle AS org_handle, o.display_name AS org_display_name, o.verified_domain
+-- Whether the invited address is at one of the organization's DNS-verified
+-- domains travels with the invitation: it decides both whether the offer
+-- was mailed and whether accepting confirms the address (agentry#361).
+SELECT i.*, h.handle AS org_handle, o.display_name AS org_display_name,
+  EXISTS (SELECT 1 FROM domain_claims dc
+          WHERE dc.org_id = i.org_id AND dc.verified_at IS NOT NULL
+            AND dc.domain = split_part(i.email::text, '@', 2)::citext) AS at_verified_domain
 FROM org_invitations i
 JOIN orgs o ON o.id = i.org_id
 JOIN handles h ON h.id = i.org_id

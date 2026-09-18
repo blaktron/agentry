@@ -114,15 +114,19 @@ func TestWebhookRateLimitIsPerOrgNotGlobal(t *testing.T) {
 	env.verifyEmail(owner)
 	sess := env.login(owner)
 
+	// Two organizations, two founders: a person belongs to one at a time.
+	ownerB := env.register("whiso-b")
+	env.verifyEmail(ownerB)
+	sessB := env.login(ownerB)
 	orgA := "whisoa" + env.sfx
 	orgB := "whisob" + env.sfx
 	idA := env.createOrg(sess, orgA)
-	idB := env.createOrg(sess, orgB)
+	idB := env.createOrg(sessB, orgB)
 
 	tsA, deliveredA := countingEndpoint(t)
 	tsB, deliveredB := countingEndpoint(t)
 	env.registerWebhook(t, sess, orgA, tsA.URL)
-	env.registerWebhook(t, sess, orgB, tsB.URL)
+	env.registerWebhook(t, sessB, orgB, tsB.URL)
 
 	sealer, err := auth.NewSealer("", true)
 	if err != nil {

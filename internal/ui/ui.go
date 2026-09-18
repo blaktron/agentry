@@ -127,6 +127,7 @@ func New(opt Options) http.Handler {
 		m.HandleFunc("GET /ui/invitations/{token}", h.invitationPage)
 		m.HandleFunc("POST /ui/invitations/{token}", h.invitationAccept)
 		m.HandleFunc("GET /ui/orgs", h.orgsIndex)
+		m.HandleFunc("POST /ui/orgs", h.orgsCreate)
 		m.HandleFunc("GET /ui/orgs/{org}", h.orgPage)
 		m.HandleFunc("POST /ui/orgs/{org}", h.orgAction)
 	}

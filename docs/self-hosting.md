@@ -963,6 +963,44 @@ Three notes on the knobs:
   policy only when every identifier in it is allowed. Custom `LicenseRef-`
   identifiers are refused for public publish.
 
+## Organizations
+
+An organization is a namespace with members. Anyone with a verified
+address creates one from the organizations page (`/ui/orgs`; `POST
+/api/v1/orgs`) and becomes its first **admin**; the other role is
+**member**. Admins manage members, teams, settings, policy, SSO, SCIM,
+domains and webhooks and publish to the organization's agents; members
+create agents in its namespace and publish to them. Nobody joins
+uninvited: an admin invites by email, or approves someone the
+organization's IdP provisioned over SCIM. A person belongs to one
+organization at a time and may leave it from the members list; the last
+admin cannot leave, be removed or erase their account until another admin
+is in place.
+
+An organization is **keyed on its creator's email domain**: unless the
+form asks for no domain, or the address is at a public mail provider,
+the domain is recorded, a second organization cannot be created at it,
+and a person who signs up with an address there is pointed to its admins
+(`GET /api/v1/user/domain-org`; `POST …/request-access` mails them, once a
+day). Further domains are claimed and verified over DNS from the
+organization's page; a verified domain also belongs to one organization.
+
+An admin **decommissions** the organization from its page by typing its
+handle. It is then read-only for its members for the hold below, and
+when the hold ends a sweep yanks its releases, deletes its archives and
+repositories, ends every membership and releases its handle and domain.
+Platform staff can **suspend** an organization from the same page — it
+and everything under it answer as absent, over the API and over git,
+until reinstated — and **reinstate** one, which also cancels a hold that
+has not run.
+
+```yaml
+orgs:
+  decommissionHold: 720h      # 30 days; 0 erases at the next hourly sweep
+```
+
+Env: `AGENTRY_ORGS_DECOMMISSION_HOLD`.
+
 ## Operating it
 
 - **Backups:** Postgres is the system of record. Back it up. Release archives
