@@ -392,22 +392,43 @@ func (e McpServerScanStatus) Valid() bool {
 
 // Defines values for OrgRole.
 const (
-	Admin            OrgRole = "admin"
-	Member           OrgRole = "member"
-	Owner            OrgRole = "owner"
-	SecurityReviewer OrgRole = "security_reviewer"
+	OrgRoleAdmin            OrgRole = "admin"
+	OrgRoleMember           OrgRole = "member"
+	OrgRoleSecurityReviewer OrgRole = "security_reviewer"
 )
 
 // Valid indicates whether the value is a known member of the OrgRole enum.
 func (e OrgRole) Valid() bool {
 	switch e {
-	case Admin:
+	case OrgRoleAdmin:
 		return true
-	case Member:
+	case OrgRoleMember:
 		return true
-	case Owner:
+	case OrgRoleSecurityReviewer:
 		return true
-	case SecurityReviewer:
+	default:
+		return false
+	}
+}
+
+// Defines values for OrgRoleAssignment.
+const (
+	OrgRoleAssignmentAdmin            OrgRoleAssignment = "admin"
+	OrgRoleAssignmentMember           OrgRoleAssignment = "member"
+	OrgRoleAssignmentOwner            OrgRoleAssignment = "owner"
+	OrgRoleAssignmentSecurityReviewer OrgRoleAssignment = "security_reviewer"
+)
+
+// Valid indicates whether the value is a known member of the OrgRoleAssignment enum.
+func (e OrgRoleAssignment) Valid() bool {
+	switch e {
+	case OrgRoleAssignmentAdmin:
+		return true
+	case OrgRoleAssignmentMember:
+		return true
+	case OrgRoleAssignmentOwner:
+		return true
+	case OrgRoleAssignmentSecurityReviewer:
 		return true
 	default:
 		return false
@@ -1519,7 +1540,7 @@ type McpServerScanStatus string
 
 // Membership defines model for Membership.
 type Membership struct {
-	// Role Org roles, ordered owner > admin > security_reviewer | member (§12.2).
+	// Role An organization role, ordered admin > security_reviewer | member (§12.2 as amended by agentry#360). Admins manage the organization, its members, settings, SSO and SCIM, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; the owner role is retired and every owner became an admin. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
 	Role    OrgRole    `json:"role"`
 	User    PublicUser `json:"user"`
 	ViaScim *bool      `json:"viaScim,omitempty"`
@@ -1574,8 +1595,11 @@ type Org struct {
 	VerifiedDomain *string `json:"verifiedDomain,omitempty"`
 }
 
-// OrgRole Org roles, ordered owner > admin > security_reviewer | member (§12.2).
+// OrgRole An organization role, ordered admin > security_reviewer | member (§12.2 as amended by agentry#360). Admins manage the organization, its members, settings, SSO and SCIM, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; the owner role is retired and every owner became an admin. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
 type OrgRole string
+
+// OrgRoleAssignment The role a PUT assigns. security_reviewer is refused outside a first-party organization, and owner — retired by agentry#360, kept here so an older client's request still parses — is refused with a 422 that names the roles that exist.
+type OrgRoleAssignment string
 
 // Pat defines model for Pat.
 type Pat struct {
@@ -2244,7 +2268,7 @@ type GetMcpServerScanParamsEcosystem string
 type UpdateOrgJSONBody struct {
 	DisplayName *string `json:"displayName,omitempty"`
 
-	// SsoRequired Enforce SSO for org resources (§12.4). Owner only.
+	// SsoRequired Enforce SSO for org resources (§12.4). Admin only.
 	SsoRequired *bool `json:"ssoRequired,omitempty"`
 }
 
@@ -2273,8 +2297,8 @@ type VerifyDomainClaimJSONBody struct {
 
 // SetOrgMemberJSONBody defines parameters for SetOrgMember.
 type SetOrgMemberJSONBody struct {
-	// Role Org roles, ordered owner > admin > security_reviewer | member (§12.2).
-	Role OrgRole `json:"role"`
+	// Role The role a PUT assigns. security_reviewer is refused outside a first-party organization, and owner — retired by agentry#360, kept here so an older client's request still parses — is refused with a 422 that names the roles that exist.
+	Role OrgRoleAssignment `json:"role"`
 }
 
 // SetOrgPolicyJSONBody defines parameters for SetOrgPolicy.
@@ -2459,7 +2483,7 @@ type DeleteCurrentUserParams struct {
 	// PublishedContent What to do with published public versions. Required when the account has any; ignored (and defaulted to yank) when it has none.
 	PublishedContent *DeleteCurrentUserParamsPublishedContent `form:"publishedContent,omitempty" json:"publishedContent,omitempty"`
 
-	// TransferOrg Destination org handle, required with publishedContent=transfer. The caller must be an owner or admin of that org.
+	// TransferOrg Destination org handle, required with publishedContent=transfer. The caller must be an admin of that org.
 	TransferOrg *string `form:"transferOrg,omitempty" json:"transferOrg,omitempty"`
 }
 
@@ -2653,7 +2677,7 @@ type ClientInterface interface {
 
 	// ListAdvisories Published advisories — for one agent, or the global feed (§8.7).
 	//
-	// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's owners and admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
+	// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
 	//
 	// Corresponds with GET /advisories (the `ListAdvisories` operationId).
 	ListAdvisories(ctx context.Context, params *ListAdvisoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2695,7 +2719,7 @@ type ClientInterface interface {
 
 	// GetAgent Agent metadata (public agents readable by anyone).
 	//
-	// A public agent is readable by anyone. A private agent is readable by its owner, the owning org's owners and admins, and anyone holding a grant on it; every other caller, anonymous included, gets the 404 a missing name gets — never a 401 or 403 that would confirm the name exists. The same rule holds on every route under `/agents/{ns}/{name}` (agentry#313).
+	// A public agent is readable by anyone. A private agent is readable by its owner, the owning org's admins, and anyone holding a grant on it; every other caller, anonymous included, gets the 404 a missing name gets — never a 401 or 403 that would confirm the name exists. The same rule holds on every route under `/agents/{ns}/{name}` (agentry#313).
 	//
 	// Corresponds with GET /agents/{ns}/{name} (the `GetAgent` operationId).
 	GetAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3037,14 +3061,14 @@ type ClientInterface interface {
 	// Corresponds with GET /meta (the `GetMeta` operationId).
 	GetMeta(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateOrgWithBody Create an organization; caller becomes owner.
+	// CreateOrgWithBody Create an organization; the caller becomes its first admin.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /orgs (the `CreateOrg` operationId).
 	CreateOrgWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateOrg Create an organization; caller becomes owner.
+	// CreateOrg Create an organization; the caller becomes its first admin.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -3137,14 +3161,14 @@ type ClientInterface interface {
 	// Corresponds with DELETE /orgs/{org}/members/{handle} (the `RemoveOrgMember` operationId).
 	RemoveOrgMember(ctx context.Context, org OrgHandle, handle Handle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetOrgMemberWithBody Add a member or change a role (admin+; owner grants owner/admin).
+	// SetOrgMemberWithBody Add a member or change a role (admin).
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PUT /orgs/{org}/members/{handle} (the `SetOrgMember` operationId).
 	SetOrgMemberWithBody(ctx context.Context, org OrgHandle, handle Handle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetOrgMember Add a member or change a role (admin+; owner grants owner/admin).
+	// SetOrgMember Add a member or change a role (admin).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -3156,69 +3180,69 @@ type ClientInterface interface {
 	// Corresponds with GET /orgs/{org}/policy (the `GetOrgPolicy` operationId).
 	GetOrgPolicy(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetOrgPolicyWithBody Set the org policy overlay (owner; tighten-only, §8.6).
+	// SetOrgPolicyWithBody Set the org policy overlay (admin; tighten-only, §8.6).
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PUT /orgs/{org}/policy (the `SetOrgPolicy` operationId).
 	SetOrgPolicyWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetOrgPolicy Set the org policy overlay (owner; tighten-only, §8.6).
+	// SetOrgPolicy Set the org policy overlay (admin; tighten-only, §8.6).
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with PUT /orgs/{org}/policy (the `SetOrgPolicy` operationId).
 	SetOrgPolicy(ctx context.Context, org OrgHandle, body SetOrgPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListScimTokens List active SCIM provisioning tokens (owner, §12.5).
+	// ListScimTokens List active SCIM provisioning tokens (admin, §12.5).
 	//
 	// Corresponds with GET /orgs/{org}/scim/tokens (the `ListScimTokens` operationId).
 	ListScimTokens(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateScimTokenWithBody Mint a SCIM bearer token (owner, §12.5).
+	// CreateScimTokenWithBody Mint a SCIM bearer token (admin, §12.5).
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
 	CreateScimTokenWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateScimToken Mint a SCIM bearer token (owner, §12.5).
+	// CreateScimToken Mint a SCIM bearer token (admin, §12.5).
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
 	CreateScimToken(ctx context.Context, org OrgHandle, body CreateScimTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// RevokeScimToken Revoke a SCIM token (owner, §12.5).
+	// RevokeScimToken Revoke a SCIM token (admin, §12.5).
 	//
 	// Corresponds with DELETE /orgs/{org}/scim/tokens/{tokenId} (the `RevokeScimToken` operationId).
 	RevokeScimToken(ctx context.Context, org OrgHandle, tokenId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListSsoConnections List the org's SSO connections (owner, §12.4).
+	// ListSsoConnections List the org's SSO connections (admin, §12.4).
 	//
 	// Corresponds with GET /orgs/{org}/sso/connections (the `ListSsoConnections` operationId).
 	ListSsoConnections(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DeleteSsoConnection Delete a connection (owner, §12.4).
+	// DeleteSsoConnection Delete a connection (admin, §12.4).
 	//
 	// Corresponds with DELETE /orgs/{org}/sso/connections/{kind} (the `DeleteSsoConnection` operationId).
 	DeleteSsoConnection(ctx context.Context, org OrgHandle, kind DeleteSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PutSsoConnectionWithBody Create or update a SAML/OIDC connection (owner, §12.4).
+	// PutSsoConnectionWithBody Create or update a SAML/OIDC connection (admin, §12.4).
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
 	PutSsoConnectionWithBody(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PutSsoConnection Create or update a SAML/OIDC connection (owner, §12.4).
+	// PutSsoConnection Create or update a SAML/OIDC connection (admin, §12.4).
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
 	PutSsoConnection(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, body PutSsoConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// TestSsoConnection Probe a stored connection without signing in (owner, §12.4; agentry#50).
+	// TestSsoConnection Probe a stored connection without signing in (admin, §12.4; agentry#50).
 	//
 	// OIDC: runs discovery against the stored issuer and reports the endpoints it advertises. SAML: parses the stored IdP metadata and reports entity id, sign-on URLs and signing-certificate expiry. Neither contacts the IdP's sign-in flow or uses the client secret. A failed probe is a 200 with ok=false and the reason, so the admin page can show it inline.
 	//
@@ -3675,7 +3699,7 @@ type ClientInterface interface {
 
 // ListAdvisories Published advisories — for one agent, or the global feed (§8.7).
 //
-// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's owners and admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
+// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
 //
 // Corresponds with GET /advisories (the `ListAdvisories` operationId).
 func (c *Client) ListAdvisories(ctx context.Context, params *ListAdvisoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -3777,7 +3801,7 @@ func (c *Client) DeleteAgent(ctx context.Context, ns Namespace, name AgentName, 
 
 // GetAgent Agent metadata (public agents readable by anyone).
 //
-// A public agent is readable by anyone. A private agent is readable by its owner, the owning org's owners and admins, and anyone holding a grant on it; every other caller, anonymous included, gets the 404 a missing name gets — never a 401 or 403 that would confirm the name exists. The same rule holds on every route under `/agents/{ns}/{name}` (agentry#313).
+// A public agent is readable by anyone. A private agent is readable by its owner, the owning org's admins, and anyone holding a grant on it; every other caller, anonymous included, gets the 404 a missing name gets — never a 401 or 403 that would confirm the name exists. The same rule holds on every route under `/agents/{ns}/{name}` (agentry#313).
 //
 // Corresponds with GET /agents/{ns}/{name} (the `GetAgent` operationId).
 func (c *Client) GetAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4599,7 +4623,7 @@ func (c *Client) GetMeta(ctx context.Context, reqEditors ...RequestEditorFn) (*h
 	return c.Client.Do(req)
 }
 
-// CreateOrgWithBody Create an organization; caller becomes owner.
+// CreateOrgWithBody Create an organization; the caller becomes its first admin.
 //
 // Takes any type of body and a specified content type.
 //
@@ -4616,7 +4640,7 @@ func (c *Client) CreateOrgWithBody(ctx context.Context, contentType string, body
 	return c.Client.Do(req)
 }
 
-// CreateOrg Create an organization; caller becomes owner.
+// CreateOrg Create an organization; the caller becomes its first admin.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -4859,7 +4883,7 @@ func (c *Client) RemoveOrgMember(ctx context.Context, org OrgHandle, handle Hand
 	return c.Client.Do(req)
 }
 
-// SetOrgMemberWithBody Add a member or change a role (admin+; owner grants owner/admin).
+// SetOrgMemberWithBody Add a member or change a role (admin).
 //
 // Takes any type of body and a specified content type.
 //
@@ -4876,7 +4900,7 @@ func (c *Client) SetOrgMemberWithBody(ctx context.Context, org OrgHandle, handle
 	return c.Client.Do(req)
 }
 
-// SetOrgMember Add a member or change a role (admin+; owner grants owner/admin).
+// SetOrgMember Add a member or change a role (admin).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -4908,7 +4932,7 @@ func (c *Client) GetOrgPolicy(ctx context.Context, org OrgHandle, reqEditors ...
 	return c.Client.Do(req)
 }
 
-// SetOrgPolicyWithBody Set the org policy overlay (owner; tighten-only, §8.6).
+// SetOrgPolicyWithBody Set the org policy overlay (admin; tighten-only, §8.6).
 //
 // Takes any type of body and a specified content type.
 //
@@ -4925,7 +4949,7 @@ func (c *Client) SetOrgPolicyWithBody(ctx context.Context, org OrgHandle, conten
 	return c.Client.Do(req)
 }
 
-// SetOrgPolicy Set the org policy overlay (owner; tighten-only, §8.6).
+// SetOrgPolicy Set the org policy overlay (admin; tighten-only, §8.6).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -4942,7 +4966,7 @@ func (c *Client) SetOrgPolicy(ctx context.Context, org OrgHandle, body SetOrgPol
 	return c.Client.Do(req)
 }
 
-// ListScimTokens List active SCIM provisioning tokens (owner, §12.5).
+// ListScimTokens List active SCIM provisioning tokens (admin, §12.5).
 //
 // Corresponds with GET /orgs/{org}/scim/tokens (the `ListScimTokens` operationId).
 func (c *Client) ListScimTokens(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4957,7 +4981,7 @@ func (c *Client) ListScimTokens(ctx context.Context, org OrgHandle, reqEditors .
 	return c.Client.Do(req)
 }
 
-// CreateScimTokenWithBody Mint a SCIM bearer token (owner, §12.5).
+// CreateScimTokenWithBody Mint a SCIM bearer token (admin, §12.5).
 //
 // Takes any type of body and a specified content type.
 //
@@ -4974,7 +4998,7 @@ func (c *Client) CreateScimTokenWithBody(ctx context.Context, org OrgHandle, con
 	return c.Client.Do(req)
 }
 
-// CreateScimToken Mint a SCIM bearer token (owner, §12.5).
+// CreateScimToken Mint a SCIM bearer token (admin, §12.5).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -4991,7 +5015,7 @@ func (c *Client) CreateScimToken(ctx context.Context, org OrgHandle, body Create
 	return c.Client.Do(req)
 }
 
-// RevokeScimToken Revoke a SCIM token (owner, §12.5).
+// RevokeScimToken Revoke a SCIM token (admin, §12.5).
 //
 // Corresponds with DELETE /orgs/{org}/scim/tokens/{tokenId} (the `RevokeScimToken` operationId).
 func (c *Client) RevokeScimToken(ctx context.Context, org OrgHandle, tokenId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5006,7 +5030,7 @@ func (c *Client) RevokeScimToken(ctx context.Context, org OrgHandle, tokenId ope
 	return c.Client.Do(req)
 }
 
-// ListSsoConnections List the org's SSO connections (owner, §12.4).
+// ListSsoConnections List the org's SSO connections (admin, §12.4).
 //
 // Corresponds with GET /orgs/{org}/sso/connections (the `ListSsoConnections` operationId).
 func (c *Client) ListSsoConnections(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5021,7 +5045,7 @@ func (c *Client) ListSsoConnections(ctx context.Context, org OrgHandle, reqEdito
 	return c.Client.Do(req)
 }
 
-// DeleteSsoConnection Delete a connection (owner, §12.4).
+// DeleteSsoConnection Delete a connection (admin, §12.4).
 //
 // Corresponds with DELETE /orgs/{org}/sso/connections/{kind} (the `DeleteSsoConnection` operationId).
 func (c *Client) DeleteSsoConnection(ctx context.Context, org OrgHandle, kind DeleteSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5036,7 +5060,7 @@ func (c *Client) DeleteSsoConnection(ctx context.Context, org OrgHandle, kind De
 	return c.Client.Do(req)
 }
 
-// PutSsoConnectionWithBody Create or update a SAML/OIDC connection (owner, §12.4).
+// PutSsoConnectionWithBody Create or update a SAML/OIDC connection (admin, §12.4).
 //
 // Takes any type of body and a specified content type.
 //
@@ -5053,7 +5077,7 @@ func (c *Client) PutSsoConnectionWithBody(ctx context.Context, org OrgHandle, ki
 	return c.Client.Do(req)
 }
 
-// PutSsoConnection Create or update a SAML/OIDC connection (owner, §12.4).
+// PutSsoConnection Create or update a SAML/OIDC connection (admin, §12.4).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -5070,7 +5094,7 @@ func (c *Client) PutSsoConnection(ctx context.Context, org OrgHandle, kind PutSs
 	return c.Client.Do(req)
 }
 
-// TestSsoConnection Probe a stored connection without signing in (owner, §12.4; agentry#50).
+// TestSsoConnection Probe a stored connection without signing in (admin, §12.4; agentry#50).
 //
 // OIDC: runs discovery against the stored issuer and reports the endpoints it advertises. SAML: parses the stored IdP metadata and reports entity id, sign-on URLs and signing-certificate expiry. Neither contacts the IdP's sign-in flow or uses the client secret. A failed probe is a 200 with ok=false and the reason, so the admin page can show it inline.
 //
@@ -11817,7 +11841,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListAdvisoriesWithResponse Published advisories — for one agent, or the global feed (§8.7).
 	//
-	// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's owners and admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
+	// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -11867,7 +11891,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetAgentWithResponse Agent metadata (public agents readable by anyone).
 	//
-	// A public agent is readable by anyone. A private agent is readable by its owner, the owning org's owners and admins, and anyone holding a grant on it; every other caller, anonymous included, gets the 404 a missing name gets — never a 401 or 403 that would confirm the name exists. The same rule holds on every route under `/agents/{ns}/{name}` (agentry#313).
+	// A public agent is readable by anyone. A private agent is readable by its owner, the owning org's admins, and anyone holding a grant on it; every other caller, anonymous included, gets the 404 a missing name gets — never a 401 or 403 that would confirm the name exists. The same rule holds on every route under `/agents/{ns}/{name}` (agentry#313).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -12253,14 +12277,14 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /meta (the `GetMeta` operationId).
 	GetMetaWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMetaResponse, error)
 
-	// CreateOrgWithBodyWithResponse Create an organization; caller becomes owner.
+	// CreateOrgWithBodyWithResponse Create an organization; the caller becomes its first admin.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /orgs (the `CreateOrg` operationId).
 	CreateOrgWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateOrgResponse, error)
 
-	// CreateOrgWithResponse Create an organization; caller becomes owner.
+	// CreateOrgWithResponse Create an organization; the caller becomes its first admin.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12365,14 +12389,14 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /orgs/{org}/members/{handle} (the `RemoveOrgMember` operationId).
 	RemoveOrgMemberWithResponse(ctx context.Context, org OrgHandle, handle Handle, reqEditors ...RequestEditorFn) (*RemoveOrgMemberResponse, error)
 
-	// SetOrgMemberWithBodyWithResponse Add a member or change a role (admin+; owner grants owner/admin).
+	// SetOrgMemberWithBodyWithResponse Add a member or change a role (admin).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /orgs/{org}/members/{handle} (the `SetOrgMember` operationId).
 	SetOrgMemberWithBodyWithResponse(ctx context.Context, org OrgHandle, handle Handle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetOrgMemberResponse, error)
 
-	// SetOrgMemberWithResponse Add a member or change a role (admin+; owner grants owner/admin).
+	// SetOrgMemberWithResponse Add a member or change a role (admin).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12386,77 +12410,77 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/policy (the `GetOrgPolicy` operationId).
 	GetOrgPolicyWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*GetOrgPolicyResponse, error)
 
-	// SetOrgPolicyWithBodyWithResponse Set the org policy overlay (owner; tighten-only, §8.6).
+	// SetOrgPolicyWithBodyWithResponse Set the org policy overlay (admin; tighten-only, §8.6).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /orgs/{org}/policy (the `SetOrgPolicy` operationId).
 	SetOrgPolicyWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetOrgPolicyResponse, error)
 
-	// SetOrgPolicyWithResponse Set the org policy overlay (owner; tighten-only, §8.6).
+	// SetOrgPolicyWithResponse Set the org policy overlay (admin; tighten-only, §8.6).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /orgs/{org}/policy (the `SetOrgPolicy` operationId).
 	SetOrgPolicyWithResponse(ctx context.Context, org OrgHandle, body SetOrgPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*SetOrgPolicyResponse, error)
 
-	// ListScimTokensWithResponse List active SCIM provisioning tokens (owner, §12.5).
+	// ListScimTokensWithResponse List active SCIM provisioning tokens (admin, §12.5).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/scim/tokens (the `ListScimTokens` operationId).
 	ListScimTokensWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListScimTokensResponse, error)
 
-	// CreateScimTokenWithBodyWithResponse Mint a SCIM bearer token (owner, §12.5).
+	// CreateScimTokenWithBodyWithResponse Mint a SCIM bearer token (admin, §12.5).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
 	CreateScimTokenWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateScimTokenResponse, error)
 
-	// CreateScimTokenWithResponse Mint a SCIM bearer token (owner, §12.5).
+	// CreateScimTokenWithResponse Mint a SCIM bearer token (admin, §12.5).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
 	CreateScimTokenWithResponse(ctx context.Context, org OrgHandle, body CreateScimTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateScimTokenResponse, error)
 
-	// RevokeScimTokenWithResponse Revoke a SCIM token (owner, §12.5).
+	// RevokeScimTokenWithResponse Revoke a SCIM token (admin, §12.5).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with DELETE /orgs/{org}/scim/tokens/{tokenId} (the `RevokeScimToken` operationId).
 	RevokeScimTokenWithResponse(ctx context.Context, org OrgHandle, tokenId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokeScimTokenResponse, error)
 
-	// ListSsoConnectionsWithResponse List the org's SSO connections (owner, §12.4).
+	// ListSsoConnectionsWithResponse List the org's SSO connections (admin, §12.4).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/sso/connections (the `ListSsoConnections` operationId).
 	ListSsoConnectionsWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListSsoConnectionsResponse, error)
 
-	// DeleteSsoConnectionWithResponse Delete a connection (owner, §12.4).
+	// DeleteSsoConnectionWithResponse Delete a connection (admin, §12.4).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with DELETE /orgs/{org}/sso/connections/{kind} (the `DeleteSsoConnection` operationId).
 	DeleteSsoConnectionWithResponse(ctx context.Context, org OrgHandle, kind DeleteSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*DeleteSsoConnectionResponse, error)
 
-	// PutSsoConnectionWithBodyWithResponse Create or update a SAML/OIDC connection (owner, §12.4).
+	// PutSsoConnectionWithBodyWithResponse Create or update a SAML/OIDC connection (admin, §12.4).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
 	PutSsoConnectionWithBodyWithResponse(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutSsoConnectionResponse, error)
 
-	// PutSsoConnectionWithResponse Create or update a SAML/OIDC connection (owner, §12.4).
+	// PutSsoConnectionWithResponse Create or update a SAML/OIDC connection (admin, §12.4).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
 	PutSsoConnectionWithResponse(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, body PutSsoConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*PutSsoConnectionResponse, error)
 
-	// TestSsoConnectionWithResponse Probe a stored connection without signing in (owner, §12.4; agentry#50).
+	// TestSsoConnectionWithResponse Probe a stored connection without signing in (admin, §12.4; agentry#50).
 	//
 	// OIDC: runs discovery against the stored issuer and reports the endpoints it advertises. SAML: parses the stored IdP metadata and reports entity id, sign-on URLs and signing-certificate expiry. Neither contacts the IdP's sign-in flow or uses the client secret. A failed probe is a 200 with ok=false and the reason, so the admin page can show it inline.
 	//
@@ -18575,7 +18599,7 @@ func (r GetUserProfileResponse) ContentType() string {
 
 // ListAdvisoriesWithResponse Published advisories — for one agent, or the global feed (§8.7).
 //
-// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's owners and admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
+// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -18661,7 +18685,7 @@ func (c *ClientWithResponses) DeleteAgentWithResponse(ctx context.Context, ns Na
 
 // GetAgentWithResponse Agent metadata (public agents readable by anyone).
 //
-// A public agent is readable by anyone. A private agent is readable by its owner, the owning org's owners and admins, and anyone holding a grant on it; every other caller, anonymous included, gets the 404 a missing name gets — never a 401 or 403 that would confirm the name exists. The same rule holds on every route under `/agents/{ns}/{name}` (agentry#313).
+// A public agent is readable by anyone. A private agent is readable by its owner, the owning org's admins, and anyone holding a grant on it; every other caller, anonymous included, gets the 404 a missing name gets — never a 401 or 403 that would confirm the name exists. The same rule holds on every route under `/agents/{ns}/{name}` (agentry#313).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -19335,7 +19359,7 @@ func (c *ClientWithResponses) GetMetaWithResponse(ctx context.Context, reqEditor
 	return ParseGetMetaResponse(rsp)
 }
 
-// CreateOrgWithBodyWithResponse Create an organization; caller becomes owner.
+// CreateOrgWithBodyWithResponse Create an organization; the caller becomes its first admin.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -19348,7 +19372,7 @@ func (c *ClientWithResponses) CreateOrgWithBodyWithResponse(ctx context.Context,
 	return ParseCreateOrgResponse(rsp)
 }
 
-// CreateOrgWithResponse Create an organization; caller becomes owner.
+// CreateOrgWithResponse Create an organization; the caller becomes its first admin.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -19543,7 +19567,7 @@ func (c *ClientWithResponses) RemoveOrgMemberWithResponse(ctx context.Context, o
 	return ParseRemoveOrgMemberResponse(rsp)
 }
 
-// SetOrgMemberWithBodyWithResponse Add a member or change a role (admin+; owner grants owner/admin).
+// SetOrgMemberWithBodyWithResponse Add a member or change a role (admin).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -19556,7 +19580,7 @@ func (c *ClientWithResponses) SetOrgMemberWithBodyWithResponse(ctx context.Conte
 	return ParseSetOrgMemberResponse(rsp)
 }
 
-// SetOrgMemberWithResponse Add a member or change a role (admin+; owner grants owner/admin).
+// SetOrgMemberWithResponse Add a member or change a role (admin).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -19582,7 +19606,7 @@ func (c *ClientWithResponses) GetOrgPolicyWithResponse(ctx context.Context, org 
 	return ParseGetOrgPolicyResponse(rsp)
 }
 
-// SetOrgPolicyWithBodyWithResponse Set the org policy overlay (owner; tighten-only, §8.6).
+// SetOrgPolicyWithBodyWithResponse Set the org policy overlay (admin; tighten-only, §8.6).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -19595,7 +19619,7 @@ func (c *ClientWithResponses) SetOrgPolicyWithBodyWithResponse(ctx context.Conte
 	return ParseSetOrgPolicyResponse(rsp)
 }
 
-// SetOrgPolicyWithResponse Set the org policy overlay (owner; tighten-only, §8.6).
+// SetOrgPolicyWithResponse Set the org policy overlay (admin; tighten-only, §8.6).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -19608,7 +19632,7 @@ func (c *ClientWithResponses) SetOrgPolicyWithResponse(ctx context.Context, org 
 	return ParseSetOrgPolicyResponse(rsp)
 }
 
-// ListScimTokensWithResponse List active SCIM provisioning tokens (owner, §12.5).
+// ListScimTokensWithResponse List active SCIM provisioning tokens (admin, §12.5).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -19621,7 +19645,7 @@ func (c *ClientWithResponses) ListScimTokensWithResponse(ctx context.Context, or
 	return ParseListScimTokensResponse(rsp)
 }
 
-// CreateScimTokenWithBodyWithResponse Mint a SCIM bearer token (owner, §12.5).
+// CreateScimTokenWithBodyWithResponse Mint a SCIM bearer token (admin, §12.5).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -19634,7 +19658,7 @@ func (c *ClientWithResponses) CreateScimTokenWithBodyWithResponse(ctx context.Co
 	return ParseCreateScimTokenResponse(rsp)
 }
 
-// CreateScimTokenWithResponse Mint a SCIM bearer token (owner, §12.5).
+// CreateScimTokenWithResponse Mint a SCIM bearer token (admin, §12.5).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -19647,7 +19671,7 @@ func (c *ClientWithResponses) CreateScimTokenWithResponse(ctx context.Context, o
 	return ParseCreateScimTokenResponse(rsp)
 }
 
-// RevokeScimTokenWithResponse Revoke a SCIM token (owner, §12.5).
+// RevokeScimTokenWithResponse Revoke a SCIM token (admin, §12.5).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -19660,7 +19684,7 @@ func (c *ClientWithResponses) RevokeScimTokenWithResponse(ctx context.Context, o
 	return ParseRevokeScimTokenResponse(rsp)
 }
 
-// ListSsoConnectionsWithResponse List the org's SSO connections (owner, §12.4).
+// ListSsoConnectionsWithResponse List the org's SSO connections (admin, §12.4).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -19673,7 +19697,7 @@ func (c *ClientWithResponses) ListSsoConnectionsWithResponse(ctx context.Context
 	return ParseListSsoConnectionsResponse(rsp)
 }
 
-// DeleteSsoConnectionWithResponse Delete a connection (owner, §12.4).
+// DeleteSsoConnectionWithResponse Delete a connection (admin, §12.4).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -19686,7 +19710,7 @@ func (c *ClientWithResponses) DeleteSsoConnectionWithResponse(ctx context.Contex
 	return ParseDeleteSsoConnectionResponse(rsp)
 }
 
-// PutSsoConnectionWithBodyWithResponse Create or update a SAML/OIDC connection (owner, §12.4).
+// PutSsoConnectionWithBodyWithResponse Create or update a SAML/OIDC connection (admin, §12.4).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -19699,7 +19723,7 @@ func (c *ClientWithResponses) PutSsoConnectionWithBodyWithResponse(ctx context.C
 	return ParsePutSsoConnectionResponse(rsp)
 }
 
-// PutSsoConnectionWithResponse Create or update a SAML/OIDC connection (owner, §12.4).
+// PutSsoConnectionWithResponse Create or update a SAML/OIDC connection (admin, §12.4).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -19712,7 +19736,7 @@ func (c *ClientWithResponses) PutSsoConnectionWithResponse(ctx context.Context, 
 	return ParsePutSsoConnectionResponse(rsp)
 }
 
-// TestSsoConnectionWithResponse Probe a stored connection without signing in (owner, §12.4; agentry#50).
+// TestSsoConnectionWithResponse Probe a stored connection without signing in (admin, §12.4; agentry#50).
 //
 // OIDC: runs discovery against the stored issuer and reports the endpoints it advertises. SAML: parses the stored IdP metadata and reports entity id, sign-on URLs and signing-certificate expiry. Neither contacts the IdP's sign-in flow or uses the client secret. A failed probe is a 200 with ok=false and the reason, so the admin page can show it inline.
 //

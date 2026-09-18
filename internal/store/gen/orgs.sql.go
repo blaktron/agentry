@@ -12,6 +12,18 @@ import (
 	"github.com/google/uuid"
 )
 
+const activateOrg = `-- name: ActivateOrg :execrows
+UPDATE orgs SET activated_at = now(), updated_at = now() WHERE id = $1 AND activated_at IS NULL
+`
+
+func (q *Queries) ActivateOrg(ctx context.Context, id uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, activateOrg, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const addTeamMember = `-- name: AddTeamMember :exec
 INSERT INTO team_members (team_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING
 `
@@ -26,12 +38,15 @@ func (q *Queries) AddTeamMember(ctx context.Context, arg AddTeamMemberParams) er
 	return err
 }
 
-const countOrgOwners = `-- name: CountOrgOwners :one
-SELECT count(*) FROM memberships WHERE org_id = $1 AND role = 'owner'
+const countOrgAdmins = `-- name: CountOrgAdmins :one
+SELECT count(*) FROM memberships m JOIN users u ON u.id = m.user_id
+WHERE m.org_id = $1 AND m.role = 'admin' AND u.state = 'active'
 `
 
-func (q *Queries) CountOrgOwners(ctx context.Context, orgID uuid.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countOrgOwners, orgID)
+// Only an admin who can still act counts: an erased account keeps its
+// membership row, and the last-owner guard this replaces counted it.
+func (q *Queries) CountOrgAdmins(ctx context.Context, orgID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countOrgAdmins, orgID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -39,17 +54,28 @@ func (q *Queries) CountOrgOwners(ctx context.Context, orgID uuid.UUID) (int64, e
 
 const createOrg = `-- name: CreateOrg :one
 
-INSERT INTO orgs (id, display_name) VALUES ($1, $2) RETURNING id, display_name, sso_required, verified_domain, state, created_at, updated_at
+INSERT INTO orgs (id, display_name, created_by, activated_at)
+VALUES ($1, $2, $3, CASE WHEN $4::boolean THEN now() ELSE NULL END)
+RETURNING id, display_name, sso_required, verified_domain, state, created_at, updated_at, created_by, activated_at
 `
 
 type CreateOrgParams struct {
-	ID          uuid.UUID `json:"id"`
-	DisplayName string    `json:"display_name"`
+	ID          uuid.UUID  `json:"id"`
+	DisplayName string     `json:"display_name"`
+	CreatedBy   *uuid.UUID `json:"created_by"`
+	Activated   bool       `json:"activated"`
 }
 
 // Orgs, memberships, teams (M1/WG-B).
+// activated_at is now() where nothing will activate the org later (no
+// admission extension), NULL where one will (agentry#360).
 func (q *Queries) CreateOrg(ctx context.Context, arg CreateOrgParams) (Org, error) {
-	row := q.db.QueryRow(ctx, createOrg, arg.ID, arg.DisplayName)
+	row := q.db.QueryRow(ctx, createOrg,
+		arg.ID,
+		arg.DisplayName,
+		arg.CreatedBy,
+		arg.Activated,
+	)
 	var i Org
 	err := row.Scan(
 		&i.ID,
@@ -59,6 +85,8 @@ func (q *Queries) CreateOrg(ctx context.Context, arg CreateOrgParams) (Org, erro
 		&i.State,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CreatedBy,
+		&i.ActivatedAt,
 	)
 	return i, err
 }
@@ -144,18 +172,20 @@ func (q *Queries) GetMembership(ctx context.Context, arg GetMembershipParams) (M
 }
 
 const getOrgByHandle = `-- name: GetOrgByHandle :one
-SELECT o.id, o.display_name, o.sso_required, o.verified_domain, o.state, o.created_at, o.updated_at, h.handle FROM orgs o JOIN handles h ON h.id = o.id WHERE h.handle = $1 AND h.kind = 'org'
+SELECT o.id, o.display_name, o.sso_required, o.verified_domain, o.state, o.created_at, o.updated_at, o.created_by, o.activated_at, h.handle FROM orgs o JOIN handles h ON h.id = o.id WHERE h.handle = $1 AND h.kind = 'org'
 `
 
 type GetOrgByHandleRow struct {
-	ID             uuid.UUID `json:"id"`
-	DisplayName    string    `json:"display_name"`
-	SsoRequired    bool      `json:"sso_required"`
-	VerifiedDomain *string   `json:"verified_domain"`
-	State          string    `json:"state"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
-	Handle         string    `json:"handle"`
+	ID             uuid.UUID  `json:"id"`
+	DisplayName    string     `json:"display_name"`
+	SsoRequired    bool       `json:"sso_required"`
+	VerifiedDomain *string    `json:"verified_domain"`
+	State          string     `json:"state"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	CreatedBy      *uuid.UUID `json:"created_by"`
+	ActivatedAt    *time.Time `json:"activated_at"`
+	Handle         string     `json:"handle"`
 }
 
 func (q *Queries) GetOrgByHandle(ctx context.Context, handle string) (GetOrgByHandleRow, error) {
@@ -169,24 +199,28 @@ func (q *Queries) GetOrgByHandle(ctx context.Context, handle string) (GetOrgByHa
 		&i.State,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CreatedBy,
+		&i.ActivatedAt,
 		&i.Handle,
 	)
 	return i, err
 }
 
 const getOrgByID = `-- name: GetOrgByID :one
-SELECT o.id, o.display_name, o.sso_required, o.verified_domain, o.state, o.created_at, o.updated_at, h.handle FROM orgs o JOIN handles h ON h.id = o.id WHERE o.id = $1
+SELECT o.id, o.display_name, o.sso_required, o.verified_domain, o.state, o.created_at, o.updated_at, o.created_by, o.activated_at, h.handle FROM orgs o JOIN handles h ON h.id = o.id WHERE o.id = $1
 `
 
 type GetOrgByIDRow struct {
-	ID             uuid.UUID `json:"id"`
-	DisplayName    string    `json:"display_name"`
-	SsoRequired    bool      `json:"sso_required"`
-	VerifiedDomain *string   `json:"verified_domain"`
-	State          string    `json:"state"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
-	Handle         string    `json:"handle"`
+	ID             uuid.UUID  `json:"id"`
+	DisplayName    string     `json:"display_name"`
+	SsoRequired    bool       `json:"sso_required"`
+	VerifiedDomain *string    `json:"verified_domain"`
+	State          string     `json:"state"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	CreatedBy      *uuid.UUID `json:"created_by"`
+	ActivatedAt    *time.Time `json:"activated_at"`
+	Handle         string     `json:"handle"`
 }
 
 func (q *Queries) GetOrgByID(ctx context.Context, id uuid.UUID) (GetOrgByIDRow, error) {
@@ -200,6 +234,8 @@ func (q *Queries) GetOrgByID(ctx context.Context, id uuid.UUID) (GetOrgByIDRow, 
 		&i.State,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CreatedBy,
+		&i.ActivatedAt,
 		&i.Handle,
 	)
 	return i, err
@@ -261,6 +297,32 @@ func (q *Queries) ListOrgMembers(ctx context.Context, orgID uuid.UUID) ([]ListOr
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPendingOrgsCreatedBy = `-- name: ListPendingOrgsCreatedBy :many
+SELECT h.handle FROM orgs o JOIN handles h ON h.id = o.id
+WHERE o.created_by = $1 AND o.activated_at IS NULL AND o.state = 'active'
+ORDER BY o.created_at
+`
+
+func (q *Queries) ListPendingOrgsCreatedBy(ctx context.Context, createdBy *uuid.UUID) ([]string, error) {
+	rows, err := q.db.Query(ctx, listPendingOrgsCreatedBy, createdBy)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var handle string
+		if err := rows.Scan(&handle); err != nil {
+			return nil, err
+		}
+		items = append(items, handle)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

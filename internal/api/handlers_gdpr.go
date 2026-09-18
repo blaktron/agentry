@@ -96,12 +96,10 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		if !ok {
 			return
 		}
-		// Owner or admin: transferring content into an org binds that org to
+		// Admin: transferring content into an org binds that org to
 		// maintaining it, which is an administrative act, not a membership one.
-		switch p.Role(orgRow.ID) {
-		case auth.RoleOwner, auth.RoleAdmin:
-		default:
-			problemForbidden(w, r, "Transferring BriefAgents into "+orgRow.Handle+" requires the owner or admin role there.")
+		if p.Role(orgRow.ID) != auth.RoleAdmin {
+			problemForbidden(w, r, "Transferring BriefAgents into "+orgRow.Handle+" requires the admin role there.")
 			return
 		}
 		transferOrgID = orgRow.ID

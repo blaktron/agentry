@@ -120,7 +120,7 @@ var routeAuthz = map[string]RouteDecl{
 	"reportAbuse":        {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"listAbuseReports":   {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"triageAbuseReport":  {Action: auth.ActPublicRead, SelfAuthorized: true},
-	// Enterprise (M6/WG-J). SSO/SCIM config = owner (ActOrgSettingsManage,
+	// Enterprise (M6/WG-J). SSO/SCIM config = admin (ActOrgSettingsManage,
 	// session-only for PATs); webhooks/domains = admin+ (ActOrgUpdate);
 	// audit export = admin+ (ActOrgAuditRead). The SSO login-flow endpoints
 	// establish credentials (like login/register) so they are NoAuthz. The
@@ -189,10 +189,10 @@ var routeAuthz = map[string]RouteDecl{
 	"exchangeDesktopCode":         {NoAuthz: true, Anonymous: true},
 	"logout":                      {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	"register":                    {NoAuthz: true, Anonymous: true},
-	"removeOrgMember":             {Action: auth.ActOrgMembersManage, OrgScoped: true}, // elevates to ActOrgMembersElevate for owner/admin targets
+	"removeOrgMember":             {Action: auth.ActOrgMembersManage, OrgScoped: true}, // elevates to ActOrgMembersElevate for admin targets
 	"removeTeamMember":            {Action: auth.ActOrgTeamsManage, OrgScoped: true},
 	"revokeToken":                 {Action: auth.ActUserTokensManage, SessionOnly: true},
-	"setOrgMember":                {Action: auth.ActOrgMembersManage, OrgScoped: true}, // elevates to ActOrgMembersElevate for owner/admin roles
+	"setOrgMember":                {Action: auth.ActOrgMembersManage, OrgScoped: true}, // elevates to ActOrgMembersElevate for the admin role
 	"totpSetup":                   {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	"totpVerify":                  {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	"updateCurrentUser":           {Action: auth.ActUserSelfUpdate},

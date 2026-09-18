@@ -206,7 +206,7 @@ func (e *gitEnv) seedOrg(handle string, ssoRequired bool) uuid.UUID {
 	if _, err := q.CreateOrg(ctx, storegen.CreateOrgParams{ID: id, DisplayName: handle}); err != nil {
 		e.t.Fatal(err)
 	}
-	if err := q.UpsertMembership(ctx, storegen.UpsertMembershipParams{OrgID: id, UserID: e.owner.id, Role: "owner"}); err != nil {
+	if err := q.UpsertMembership(ctx, storegen.UpsertMembershipParams{OrgID: id, UserID: e.owner.id, Role: "admin"}); err != nil {
 		e.t.Fatal(err)
 	}
 	if ssoRequired {
@@ -222,7 +222,7 @@ func (e *gitEnv) seedOrgAgent(orgHandle string, orgID uuid.UUID, name, visibilit
 	e.t.Helper()
 	p := &auth.Principal{
 		UserID: e.owner.id, Handle: e.owner.handle, Via: "session", EmailVerified: true,
-		OrgRoles: map[uuid.UUID]auth.OrgRole{orgID: auth.RoleOwner},
+		OrgRoles: map[uuid.UUID]auth.OrgRole{orgID: auth.RoleAdmin},
 	}
 	a, err := e.reg.CreateAgent(context.Background(), p, registry.CreateAgentInput{
 		Namespace: orgHandle, Name: name, Modes: []string{"autonomous"}, Visibility: visibility,

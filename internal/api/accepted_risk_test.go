@@ -7,9 +7,13 @@ package api_test
 // risk accepted on the org's behalf by any platform staff member, because
 // reviewItemAccess admits all staff to platform items. This pins the rule:
 // staff who are not that org's reviewers get 403 on accepted_risk, an org
-// reviewer (here the owner, granted the staff flag so the platform item is
-// reachable at all) succeeds, and the protective false-positive verdict
-// stays available to staff.
+// reviewer succeeds, and the protective false-positive verdict stays
+// available to staff. Since agentry#360 (DEV-034 amended) the security
+// reviewer role exists only inside a first-party organization, so in an
+// ordinary organization "the org's reviewers" are its admins: here the
+// org's admin (its creator, granted the staff flag so the platform item is
+// reachable at all) succeeds where a plain member, staff or not, is
+// refused.
 
 import (
 	"context"
@@ -22,7 +26,7 @@ import (
 func TestAcceptedRiskOnOrgAgentReservedToOrgReviewers(t *testing.T) {
 	env := newTestEnv(t)
 
-	ownerH := env.register("ar-owner")
+	ownerH := env.register("ar-admin")
 	env.verifyEmail(ownerH)
 	owner := env.login(ownerH)
 	// Age the account past the S8 young-publisher window so the item's
@@ -123,12 +127,24 @@ publish:
 		t.Fatalf("staff accepted_risk on an org agent: got %d %s, want 403 naming the org's reviewers", code, body)
 	}
 
-	// The org's owner is an org reviewer (§12.2); the staff flag is what
-	// makes the platform-queue item reachable for them at all.
+	// A plain member of the org, even one who is platform staff, is not one
+	// of its reviewers: in an ordinary organization only the admins are.
+	memberH := env.register("ar-member")
+	env.verifyEmail(memberH)
+	env.doJSON(owner, http.MethodPut, "/api/v1/orgs/"+orgH+"/members/"+memberH,
+		map[string]any{"role": "member"}, nil, http.StatusOK)
+	env.makePlatformStaff(t, memberH)
+	member := env.login(memberH)
+	if code, body := verdict(member, "dismissed_accepted_risk"); code != http.StatusForbidden || !strings.Contains(body, "security reviewers") {
+		t.Fatalf("member accepted_risk on an org agent: got %d %s, want 403 naming the org's reviewers", code, body)
+	}
+
+	// The org's admin is an org reviewer (§12.2 as amended); the staff flag
+	// is what makes the platform-queue item reachable for them at all.
 	env.makePlatformStaff(t, ownerH)
 	owner = env.login(ownerH)
 	if code, body := verdict(owner, "dismissed_accepted_risk"); code != http.StatusNoContent {
-		t.Fatalf("org reviewer accepted_risk: got %d %s, want 204", code, body)
+		t.Fatalf("org admin accepted_risk: got %d %s, want 204", code, body)
 	}
 
 	// Protective verdicts are unchanged: staff may still mark a finding as

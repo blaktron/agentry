@@ -53,6 +53,7 @@ func TestExtensionRoutesMetaAndHooks(t *testing.T) {
 		t.Fatalf("anonymous whoami = %q", who.Who)
 	}
 	handle := env.register("ext")
+	env.verifyEmail(handle) // creating an organization needs it (agentry#360)
 	sess := env.login(handle)
 	env.doJSON(sess, http.MethodGet, "/api/v1/x/probe/whoami", nil, &who, http.StatusOK)
 	if who.Who != handle {

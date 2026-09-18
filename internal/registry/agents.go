@@ -265,7 +265,7 @@ func (s *Service) CreateAgent(ctx context.Context, p *auth.Principal, in CreateA
 			return Agent{}, auth.ErrForbidden
 		}
 	case "org":
-		if r := p.Role(ns.ID); r != auth.RoleOwner && r != auth.RoleAdmin {
+		if p.Role(ns.ID) != auth.RoleAdmin {
 			return Agent{}, auth.ErrForbidden
 		}
 		subject = entitlements.ForOrg(ns.ID)

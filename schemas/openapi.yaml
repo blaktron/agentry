@@ -465,7 +465,7 @@ paths:
             pattern: "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"
           description: >
             Destination org handle, required with publishedContent=transfer.
-            The caller must be an owner or admin of that org.
+            The caller must be an admin of that org.
       responses:
         "204":
           description: Account erased; session revoked.
@@ -938,7 +938,7 @@ paths:
     post:
       operationId: createOrg
       tags: [orgs]
-      summary: Create an organization; caller becomes owner.
+      summary: Create an organization; the caller becomes its first admin.
       requestBody:
         required: true
         content:
@@ -1004,7 +1004,7 @@ paths:
                   maxLength: 120
                 ssoRequired:
                   type: boolean
-                  description: Enforce SSO for org resources (§12.4). Owner only.
+                  description: Enforce SSO for org resources (§12.4). Admin only.
       responses:
         "200":
           description: Updated organization.
@@ -1038,7 +1038,7 @@ paths:
     put:
       operationId: setOrgMember
       tags: [orgs]
-      summary: Add a member or change a role (admin+; owner grants owner/admin).
+      summary: Add a member or change a role (admin).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
         - $ref: "#/components/parameters/Handle"
@@ -1051,7 +1051,7 @@ paths:
               required: [role]
               properties:
                 role:
-                  $ref: "#/components/schemas/OrgRole"
+                  $ref: "#/components/schemas/OrgRoleAssignment"
       responses:
         "200":
           description: Membership set.
@@ -1278,7 +1278,7 @@ paths:
       summary: Agent metadata (public agents readable by anyone).
       description: >-
         A public agent is readable by anyone. A private agent is readable by
-        its owner, the owning org's owners and admins, and anyone holding a
+        its owner, the owning org's admins, and anyone holding a
         grant on it; every other caller, anonymous included, gets the 404 a
         missing name gets — never a 401 or 403 that would confirm the name
         exists. The same rule holds on every route under `/agents/{ns}/{name}`
@@ -2076,7 +2076,7 @@ paths:
     put:
       operationId: setOrgPolicy
       tags: [policies]
-      summary: Set the org policy overlay (owner; tighten-only, §8.6).
+      summary: Set the org policy overlay (admin; tighten-only, §8.6).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
       requestBody:
@@ -2101,7 +2101,7 @@ paths:
     get:
       operationId: listSsoConnections
       tags: [sso]
-      summary: List the org's SSO connections (owner, §12.4).
+      summary: List the org's SSO connections (admin, §12.4).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
       responses:
@@ -2120,7 +2120,7 @@ paths:
     put:
       operationId: putSsoConnection
       tags: [sso]
-      summary: Create or update a SAML/OIDC connection (owner, §12.4).
+      summary: Create or update a SAML/OIDC connection (admin, §12.4).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
         - $ref: "#/components/parameters/SsoKind"
@@ -2142,7 +2142,7 @@ paths:
     delete:
       operationId: deleteSsoConnection
       tags: [sso]
-      summary: Delete a connection (owner, §12.4).
+      summary: Delete a connection (admin, §12.4).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
         - $ref: "#/components/parameters/SsoKind"
@@ -2156,7 +2156,7 @@ paths:
     post:
       operationId: testSsoConnection
       tags: [sso]
-      summary: Probe a stored connection without signing in (owner, §12.4; agentry#50).
+      summary: Probe a stored connection without signing in (admin, §12.4; agentry#50).
       description: >
         OIDC: runs discovery against the stored issuer and reports the
         endpoints it advertises. SAML: parses the stored IdP metadata and
@@ -2291,7 +2291,7 @@ paths:
     get:
       operationId: listScimTokens
       tags: [scim]
-      summary: List active SCIM provisioning tokens (owner, §12.5).
+      summary: List active SCIM provisioning tokens (admin, §12.5).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
       responses:
@@ -2308,7 +2308,7 @@ paths:
     post:
       operationId: createScimToken
       tags: [scim]
-      summary: Mint a SCIM bearer token (owner, §12.5).
+      summary: Mint a SCIM bearer token (admin, §12.5).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
       requestBody:
@@ -2336,7 +2336,7 @@ paths:
     delete:
       operationId: revokeScimToken
       tags: [scim]
-      summary: Revoke a SCIM token (owner, §12.5).
+      summary: Revoke a SCIM token (admin, §12.5).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
         - name: tokenId
@@ -2875,7 +2875,7 @@ paths:
       description: >
         With `affecting`, the advisories against that agent (newest first),
         under the agent's own read rule: a private agent's advisories are
-        its readers' (the owning user, the owning org's owners and admins,
+        its readers' (the owning user, the owning org's admins,
         and anyone holding a grant on the agent), and anyone else —
         anonymous or signed in — gets the 404 a missing name gets, so the
         agent's existence is not discoverable here (agentry#313).
@@ -3529,8 +3529,24 @@ components:
 
     OrgRole:
       type: string
-      description: Org roles, ordered owner > admin > security_reviewer | member (§12.2).
-      enum: [owner, admin, security_reviewer, member]
+      description: >
+        An organization role, ordered admin > security_reviewer | member
+        (§12.2 as amended by agentry#360). Admins manage the organization,
+        its members, settings, SSO and SCIM, and hold the security
+        reviewer's powers; security_reviewer is a platform-internal role
+        that exists only inside a first-party organization; the owner role
+        is retired and every owner became an admin. An organization always
+        keeps one admin: demoting or removing the last one is 409 last-admin.
+      enum: [admin, member, security_reviewer]
+
+    OrgRoleAssignment:
+      type: string
+      description: >
+        The role a PUT assigns. security_reviewer is refused outside a
+        first-party organization, and owner — retired by agentry#360, kept
+        here so an older client's request still parses — is refused with a
+        422 that names the roles that exist.
+      enum: [admin, member, security_reviewer, owner]
 
     CreateOrgRequest:
       type: object
