@@ -90,6 +90,23 @@ One BriefAgent, one job, one container tree, then gone.
 | `--yes` | accept the capability consent gate non-interactively |
 | `--policy FILE` | operator policy override (tests, fleets) |
 | `--keep-run-dir` | keep the per-run scratch dir for debugging (secrets are still deleted) |
+| `--events FILE` | append the harness event stream to FILE as JSON lines **while the run is live** — the same redacted lines the receipt's `events.ndjson` gets, for a driver that meters a run as it goes |
+
+With `--output-format json` the run also narrates the harness's usage to
+**stderr** as it arrives, one line per report:
+
+```
+usage: input=6186 output=2153 total=8339 turns=2
+```
+
+stdout still carries nothing but the envelope, so a driver reads the lines
+without disturbing what it parses. The numbers are the run's running totals,
+and the last line is what the envelope ends up carrying; `total` is the
+harness's own total where it reports one and input plus output otherwise, so
+a meter never has to know which kind of harness ran. Text mode narrates no
+usage. This is what lets something driving `agentry run` hold it to a token
+budget while it runs, rather than discovering the cost when the run is over
+(`--timeout` and `--max-turns` are enforced inside the run either way).
 
 First run of a release **is** the install: verify (sha256 digest + DSSE
 attestation against TOFU-pinned keys — the same gate as
