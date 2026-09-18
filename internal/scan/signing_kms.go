@@ -112,7 +112,20 @@ func (s *KMSSigner) Sign(stmt InTotoStatement) (DSSEEnvelope, error) {
 	if err != nil {
 		return DSSEEnvelope{}, err
 	}
-	pae := attest.PAE(attest.PayloadType, payload)
+	sig, err := s.SignPayload(attest.PayloadType, payload)
+	if err != nil {
+		return DSSEEnvelope{}, err
+	}
+	return DSSEEnvelope{
+		PayloadType: attest.PayloadType,
+		Payload:     base64.StdEncoding.EncodeToString(payload),
+		Signatures:  []DSSESignature{sig},
+	}, nil
+}
+
+// SignPayload implements Signer: the KMS call itself.
+func (s *KMSSigner) SignPayload(payloadType string, payload []byte) (DSSESignature, error) {
+	pae := attest.PAE(payloadType, payload)
 	digest := sha256.Sum256(pae)
 
 	out, err := s.api.Sign(context.Background(), &kms.SignInput{
@@ -122,22 +135,15 @@ func (s *KMSSigner) Sign(stmt InTotoStatement) (DSSEEnvelope, error) {
 		SigningAlgorithm: kmstypes.SigningAlgorithmSpecEcdsaSha256,
 	})
 	if err != nil {
-		return DSSEEnvelope{}, fmt.Errorf("scan: kms sign: %w", err)
+		return DSSESignature{}, fmt.Errorf("scan: kms sign: %w", err)
 	}
 	if len(out.Signature) == 0 {
-		return DSSEEnvelope{}, errors.New("scan: kms returned an empty signature")
+		return DSSESignature{}, errors.New("scan: kms returned an empty signature")
 	}
 	// KMS returns a DER-encoded ASN.1 ECDSA signature — byte-identical in
 	// form to ecdsa.SignASN1 — so VerifyEnvelope and the CLI verify a KMS
 	// envelope and a file envelope by exactly the same code path.
-	return DSSEEnvelope{
-		PayloadType: attest.PayloadType,
-		Payload:     base64.StdEncoding.EncodeToString(payload),
-		Signatures: []DSSESignature{{
-			KeyID: s.keyID,
-			Sig:   base64.StdEncoding.EncodeToString(out.Signature),
-		}},
-	}, nil
+	return DSSESignature{KeyID: s.keyID, Sig: base64.StdEncoding.EncodeToString(out.Signature)}, nil
 }
 
 // parseECDSAPublicKeyDER decodes a PKIX/SPKI DER public key and insists it is

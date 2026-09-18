@@ -156,13 +156,16 @@ of artefacts, and an output over what is left is reported on the run rather
 than dropped quietly.
 
 One refusal happens after the run is created, because only the CLI can find
-it: a release attested by a signing key the registry no longer advertises is
-refused at verify (exit 10). The run is created, held, claimed, and comes back
-`refused` with the whole hold refunded, and the receipt's error says no pinned
-key verifies the signature. Re-attesting on rotation and advertising retired
-public keys is agentry#350; until it lands, a release published before the
-registry's current key is unverifiable by any fresh client, the worker
-included.
+it: a release whose attestation verifies under no key the worker has pinned
+is refused at verify (exit 10). The run is created, held, claimed, and comes
+back `refused` with the whole hold refunded, and the receipt's error says no
+pinned key verifies the signature. A key rotation on the registry does not
+leave it that way: the registry advertises its retired keys and, at its next
+start, queues a sweep that countersigns every attestation the new key has not
+signed (see [Trust and security](trust.md)), so a release published before
+the current key verifies for a fresh worker once the sweep has run. What does
+cause it is a worker whose pinned set predates a rotation — its preflight
+login reports the changed key ids; re-pin its home deliberately.
 
 ## Watching a run, and cancelling it
 

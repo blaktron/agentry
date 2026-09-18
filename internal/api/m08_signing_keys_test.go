@@ -29,9 +29,28 @@ type publishedKey struct {
 	PublicKey string `json:"publicKeyPem"`
 	NotBefore string `json:"notBefore"`
 	NotAfter  string `json:"notAfter"`
+	Status    string `json:"status"`
+	RetiredAt string `json:"retiredAt"`
 }
 
+// signingKeys returns the keys the configuration describes: the active one
+// and the operator's additional keys. Retired keys the registry itself
+// signed with earlier (agentry#350) are left out — the shared test database
+// accumulates one per server the package has started that published
+// something — and read through allSigningKeys by the test that is about them.
 func (env *testEnv) signingKeys(t *testing.T) []publishedKey {
+	t.Helper()
+	var keys []publishedKey
+	for _, k := range env.allSigningKeys(t) {
+		if k.Status == "retired" {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+func (env *testEnv) allSigningKeys(t *testing.T) []publishedKey {
 	t.Helper()
 	res := env.do(anonymous, http.MethodGet, "/.well-known/agentry/signing-keys.json", nil)
 	defer func() { _ = res.Body.Close() }()
@@ -78,6 +97,9 @@ func TestSigningKeysOmitAnUnsetWindow(t *testing.T) {
 	}
 	if keys[0].NotBefore != "" || keys[0].NotAfter != "" {
 		t.Errorf("an unconfigured key published a window: %+v", keys[0])
+	}
+	if keys[0].Status != "active" || keys[0].RetiredAt != "" {
+		t.Errorf("the signing key is not published as active: %+v", keys[0])
 	}
 }
 
@@ -139,6 +161,11 @@ func TestSigningKeysPublishOverlappingWindowsDuringRotation(t *testing.T) {
 	// publishing an empty one.
 	if old.Algorithm != "ecdsa-p256-sha256" {
 		t.Errorf("outgoing algorithm = %q, want the default", old.Algorithm)
+	}
+	// The registry never signed with a configured verification key, so it
+	// claims no status for it.
+	if old.Status != "" {
+		t.Errorf("a configured verification-only key carries status %q", old.Status)
 	}
 }
 

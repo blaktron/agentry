@@ -163,32 +163,58 @@ trail complete.
 **Trigger:** scheduled rotation, suspected exposure, or a KMS `Sign` anomaly
 alert.
 
-Keys rotate with **overlapping validity windows** because clients pin what
-they have seen (TOFU). A hard swap makes every installed client report a key
-mismatch.
+Clients pin what they have seen (TOFU), so a rotation is visible to every
+installed client: at its next login it is told the advertised key ids
+changed. What a rotation does **not** do any more is orphan what the old key
+signed. The registry records the public part of every key it signs with
+(`signing_keys`); the outgoing key stays in
+`/.well-known/agentry/signing-keys.json` with `status: retired` for as long
+as an attestation carries its signature; and a start on a key that some
+attestation lacks queues `scan.reattest_sweep`, which appends the new key's
+countersignature to each of those attestations (the statement is checked
+against its release first and never changed). A client that pins today
+verifies everything; a client that pinned the old key keeps verifying the
+original signatures.
 
-1. Create the new key (your KMS or a new file key; on the hosted
-   deployment the site's Terraform, `modules/kms`). Do not delete the old one.
-2. Publish both at `/.well-known/agentry/signing-keys.json`: the active key
-   is listed first, and the old one goes under `signing.additionalKeys`
-   (YAML or the Helm values; there is no env form). Roll the api role, which
-   serves the document. Clients now accept either.
-3. Point signing at the new key (`AGENTRY_SIGNING_KMS_KEY_ARN`, or the file
-   key), roll the workers, which sign. New attestations use the new key; old
-   ones still verify.
-4. Leave the old key published for at least one CLI release cycle, then remove
-   it from the key set. Keep the key material itself (old attestations must
-   stay verifiable). **Never schedule deletion of a key that signed a
-   published version.**
+1. Create the new key (your KMS or a new file key; on the hosted deployment
+   the site's Terraform, `modules/kms`). Keep the old key material: an
+   attestation it signed stays verifiable through its own signature for
+   clients that pinned it, and **never schedule deletion of a key that
+   signed a published version**.
+2. Point signing at the new key (`AGENTRY_SIGNING_KMS_KEY_ARN`, or the file
+   key) and roll every role that signs or serves the key set — the worker
+   and the api (`all`, on compose). At start the log reads `attestations
+   lack the signing key; re-attestation sweep enqueued` with the count; the
+   worker then logs `re-attestation sweep complete` with how many it signed.
+   A start on a key every attestation already carries logs nothing.
+3. Check: the key set lists the new key as `active` and the old one as
+   `retired` with its date (`curl -s …/.well-known/agentry/signing-keys.json`);
+   `SELECT count(*) FROM attestations WHERE NOT (dsse_envelope->'signatures'
+   @> '[{"keyid":"<new key id>"}]')` is zero. A count that stays above zero
+   after the sweep names rows the sweep would not sign — the log line
+   `re-attest: not signed` says why for each (a statement that does not
+   describe its release is a corrupted row, not something to vouch for).
+   The next start queues the sweep again for whatever is still pending.
+4. `signing.additionalKeys` is still honoured for a key the registry has no
+   record of (one that signed before the record existed, or a verification
+   key from elsewhere); a configured key the registry also has on record
+   carries the record's status. Nothing needs removing later: a retired key
+   drops out of the set by itself once no attestation carries its signature.
 
 **If the key is suspected compromised:** rotate immediately as above, then
-audit `kms:Sign` calls against the pipeline's own signing job and diff the
-`attestations` table against `agent_versions` where `status='published'`. Any
-attestation without a matching published version is a forgery signal. Publish
-a security advisory; do not quietly rotate.
+audit `kms:Sign` calls against the pipeline's own signing and the sweep, and
+diff the `attestations` table against `agent_versions` where
+`status='published'`. Any attestation without a matching published version
+is a forgery signal; so is a signature by the compromised key dated after
+the rotation. Publish a security advisory; do not quietly rotate. A
+compromised key stays advertised as retired — its old signatures are still
+what clients that pinned it verify against — and the advisory is what tells
+them to re-pin.
 
-**Verify:** `agentry verify` succeeds against both a pre- and post-rotation
-version from a client that pinned the old key.
+**Verify:** `agentry verify` succeeds against a pre-rotation version from a
+freshly logged-in client (pins the new set), and against both a pre- and a
+post-rotation version from a client that pinned the old key and re-pinned
+after the warning.
 
 ---
 
