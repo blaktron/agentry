@@ -40,10 +40,12 @@ type RescanSweepArgs struct {
 	RulesetSemver string `json:"rulesetSemver,omitempty"`
 }
 
-// ReattestSweepArgs records which key's arrival scheduled the sweep. The
-// sweep signs with whatever key the worker holds; the argument is the log's.
+// ReattestSweepArgs records which key scheduled the sweep and how many
+// attestations lacked it. The sweep signs with whatever key the worker
+// holds; the arguments are the log's.
 type ReattestSweepArgs struct {
-	KeyID string `json:"keyId,omitempty"`
+	KeyID   string `json:"keyId,omitempty"`
+	Pending int64  `json:"pending,omitempty"`
 }
 
 // RegisterHandlers wires the pipeline's job handlers onto a queue client

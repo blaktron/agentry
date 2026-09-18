@@ -75,14 +75,16 @@ with, and the well-known set lists each one with a `status`: `active` for the
 key signing today, `retired` (with `retiredAt`) for a key that signed releases
 before and no longer does. A retired key stays listed for as long as an
 attestation carries its signature, so a client that pinned it keeps
-verifying. When the registry starts signing with a new key it also
-countersigns every existing attestation: the statement inside the envelope is
-untouched, and a second signature by the new key is appended to it. A client
-that pins only the new key verifies a release published before the rotation;
-a client that pinned the old key sees the original signature still standing.
-The attestation is the same envelope at the same URL with one more signature,
+verifying. When the registry starts on a key that some attestation lacks, it
+queues a sweep that countersigns those attestations: the statement inside the
+envelope is checked against the release it belongs to and left untouched, and
+a second signature by the new key is appended to it. A client that pins only
+the new key then verifies a release published before the rotation; a client
+that pinned the old key sees the original signature still standing. The
+attestation is the same envelope at the same URL with one more signature,
 which is why it is served with a short cache lifetime rather than as
-immutable.
+immutable. Keys the registry signed with before it kept this record cannot
+be listed; the attestations they signed verify through the countersignature.
 
 ## What this does not guarantee
 

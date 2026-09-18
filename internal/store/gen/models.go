@@ -101,14 +101,12 @@ type AgentVersionMcpServer struct {
 }
 
 type Attestation struct {
-	ID              uuid.UUID  `json:"id"`
-	VersionID       uuid.UUID  `json:"version_id"`
-	PredicateType   string     `json:"predicate_type"`
-	DsseEnvelope    []byte     `json:"dsse_envelope"`
-	KeyID           string     `json:"key_id"`
-	CreatedAt       time.Time  `json:"created_at"`
-	ReattestedAt    *time.Time `json:"reattested_at"`
-	ReattestedKeyID *string    `json:"reattested_key_id"`
+	ID            uuid.UUID `json:"id"`
+	VersionID     uuid.UUID `json:"version_id"`
+	PredicateType string    `json:"predicate_type"`
+	DsseEnvelope  []byte    `json:"dsse_envelope"`
+	KeyID         string    `json:"key_id"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 type AuditEvent struct {

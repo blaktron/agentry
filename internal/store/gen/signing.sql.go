@@ -14,24 +14,24 @@ import (
 
 const appendAttestationSignature = `-- name: AppendAttestationSignature :execrows
 UPDATE attestations
-SET dsse_envelope = jsonb_set(dsse_envelope, '{signatures}', (dsse_envelope->'signatures') || $1::jsonb),
-    reattested_at = now(),
-    reattested_key_id = $2
-WHERE id = $3
-  AND NOT (dsse_envelope->'signatures' @> $1::jsonb)
+SET dsse_envelope = jsonb_set(dsse_envelope, '{signatures}', (dsse_envelope->'signatures') || $1::jsonb)
+WHERE id = $2
+  AND NOT (dsse_envelope->'signatures' @> $3::jsonb)
 `
 
 type AppendAttestationSignatureParams struct {
 	Signature []byte    `json:"signature"`
-	KeyID     *string   `json:"key_id"`
 	ID        uuid.UUID `json:"id"`
+	KeyMatch  []byte    `json:"key_match"`
 }
 
-// Append a countersignature (`$2` is `[{"keyid": …, "sig": …}]`) unless the
-// envelope already carries one by that key — idempotent, so two sweeps or
-// two roles racing cannot double-sign.
+// Append a countersignature (`signature` is `[{"keyid": …, "sig": …}]`)
+// unless the envelope already carries one by that key id (`key_match` is
+// `[{"keyid": …}]`). The guard is on the key id, not the signature: ECDSA
+// signatures are randomised, so two sweeps signing the same bytes produce
+// different ones, and a guard on the whole object would let both through.
 func (q *Queries) AppendAttestationSignature(ctx context.Context, arg AppendAttestationSignatureParams) (int64, error) {
-	result, err := q.db.Exec(ctx, appendAttestationSignature, arg.Signature, arg.KeyID, arg.ID)
+	result, err := q.db.Exec(ctx, appendAttestationSignature, arg.Signature, arg.ID, arg.KeyMatch)
 	if err != nil {
 		return 0, err
 	}
@@ -43,6 +43,9 @@ SELECT count(*) FROM attestations
 WHERE NOT (dsse_envelope->'signatures' @> $1::jsonb)
 `
 
+// How many attestations lack the given key's signature: at start, a count
+// above zero enqueues the sweep, so a rotation, a partial sweep and a lost
+// enqueue all complete at the next start.
 func (q *Queries) CountAttestationsLackingSignature(ctx context.Context, keyMatch []byte) (int64, error) {
 	row := q.db.QueryRow(ctx, countAttestationsLackingSignature, keyMatch)
 	var count int64
@@ -69,10 +72,11 @@ func (q *Queries) GetSigningKey(ctx context.Context, keyID string) (SigningKey, 
 }
 
 const listAttestationsLackingSignature = `-- name: ListAttestationsLackingSignature :many
-SELECT id, version_id, dsse_envelope FROM attestations
-WHERE NOT (dsse_envelope->'signatures' @> $1::jsonb)
-  AND ($2::uuid IS NULL OR id > $2)
-ORDER BY id
+SELECT a.id, a.version_id, a.dsse_envelope, v.version, v.archive_digest
+FROM attestations a JOIN agent_versions v ON v.id = a.version_id
+WHERE NOT (a.dsse_envelope->'signatures' @> $1::jsonb)
+  AND ($2::uuid IS NULL OR a.id > $2)
+ORDER BY a.id
 LIMIT $3
 `
 
@@ -83,14 +87,17 @@ type ListAttestationsLackingSignatureParams struct {
 }
 
 type ListAttestationsLackingSignatureRow struct {
-	ID           uuid.UUID `json:"id"`
-	VersionID    uuid.UUID `json:"version_id"`
-	DsseEnvelope []byte    `json:"dsse_envelope"`
+	ID            uuid.UUID `json:"id"`
+	VersionID     uuid.UUID `json:"version_id"`
+	DsseEnvelope  []byte    `json:"dsse_envelope"`
+	Version       string    `json:"version"`
+	ArchiveDigest *string   `json:"archive_digest"`
 }
 
 // Attestations whose envelope carries no signature by the given key
-// (`$1` is `[{"keyid": "<id>"}]`). Keyset paging: the sweep moves rows out
-// of the set it pages over.
+// (`key_match` is `[{"keyid": "<id>"}]`), with the version row's facts the
+// sweep checks the statement against before vouching for it. Keyset paging:
+// the sweep moves rows out of the set it pages over.
 func (q *Queries) ListAttestationsLackingSignature(ctx context.Context, arg ListAttestationsLackingSignatureParams) ([]ListAttestationsLackingSignatureRow, error) {
 	rows, err := q.db.Query(ctx, listAttestationsLackingSignature, arg.KeyMatch, arg.After, arg.Batch)
 	if err != nil {
@@ -100,7 +107,13 @@ func (q *Queries) ListAttestationsLackingSignature(ctx context.Context, arg List
 	var items []ListAttestationsLackingSignatureRow
 	for rows.Next() {
 		var i ListAttestationsLackingSignatureRow
-		if err := rows.Scan(&i.ID, &i.VersionID, &i.DsseEnvelope); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.VersionID,
+			&i.DsseEnvelope,
+			&i.Version,
+			&i.ArchiveDigest,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -180,7 +193,7 @@ type RegisterSigningKeyRow struct {
 // A signer registers its public key at start. Seeing a key again keeps it
 // current (a rollback to the previous key file is a legitimate rotation
 // too); `inserted` tells the caller this is a key the registry has never
-// signed with, which is what triggers the re-attestation sweep.
+// signed with.
 func (q *Queries) RegisterSigningKey(ctx context.Context, arg RegisterSigningKeyParams) (RegisterSigningKeyRow, error) {
 	row := q.db.QueryRow(ctx, registerSigningKey, arg.KeyID, arg.Algorithm, arg.PublicKeyPem)
 	var i RegisterSigningKeyRow
