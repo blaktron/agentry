@@ -55,6 +55,16 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 	env.doJSON(orgOwner, http.MethodPost, "/api/v1/orgs",
 		map[string]any{"handle": orgH, "displayName": "SelfAuthz Org"}, nil, http.StatusCreated)
 
+	// An invitation the org's admin sent to `plain`: the token is the
+	// authorization, and who may use it is the per-invitation rule
+	// (agentry#361). A token nobody holds is 404, which is a PASS for the
+	// matrix — the point is that it is never 401/403 for a session.
+	var invited struct {
+		Token string `json:"token"`
+	}
+	env.doJSON(orgOwner, http.MethodPost, "/api/v1/orgs/"+orgH+"/invitations",
+		map[string]any{"email": plainH + "@example.test", "role": "member"}, &invited, http.StatusCreated)
+
 	// PATs of the STAFF user: role identical, scope differing — isolates
 	// the §12.3 review:act gate from the role check.
 	_, patScopedTok := env.mintPAT(staffSess, "sam-scoped", "review:act", "user:profile", "agent:read")
@@ -192,6 +202,24 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 	}
 
 	covered := map[string]bool{}
+	// getInvitation / acceptInvitation: session-only, and the token plus
+	// the session's verified address is the whole rule. Anonymous is 401;
+	// a PAT is 403 however it is scoped, because answering an invitation is
+	// a person's act; a session that is not the invited address is 403 on
+	// accept and may still read the offer (it says why it cannot take it).
+	// `plain` accepts last, so the single-use token is spent only after
+	// every other case has run.
+	cases = append(cases,
+		sCase{"getInvitation", "GET", "/api/v1/invitations/" + invited.Token, nil, anonymous, deny1},
+		sCase{"getInvitation", "GET", "/api/v1/invitations/" + invited.Token, nil, patScoped, deny3},
+		sCase{"getInvitation", "GET", "/api/v1/invitations/" + invited.Token, nil, staffSess, pass},
+		sCase{"getInvitation", "GET", "/api/v1/invitations/" + invited.Token, nil, plain, pass},
+		sCase{"acceptInvitation", "POST", "/api/v1/invitations/" + invited.Token, nil, anonymous, deny1},
+		sCase{"acceptInvitation", "POST", "/api/v1/invitations/" + invited.Token, nil, patUnscoped, deny3},
+		sCase{"acceptInvitation", "POST", "/api/v1/invitations/" + invited.Token, nil, staffSess, deny3},
+		sCase{"acceptInvitation", "POST", "/api/v1/invitations/" + invited.Token, nil, plain, pass},
+	)
+
 	for i, c := range cases {
 		covered[c.op] = true
 		name := fmt.Sprintf("%s/%s", c.op, c.caller.name)

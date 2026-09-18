@@ -115,9 +115,10 @@ func TestWebhookEventWiring(t *testing.T) {
 	env.doJSON(sess, http.MethodPost, "/api/v1/orgs/"+orgH+"/webhooks",
 		map[string]any{"url": "https://example.invalid/hook", "events": []string{"member.added"}}, &created, http.StatusCreated)
 
-	// Adding a member fires member.added → a delivery row is recorded.
-	env.doJSON(sess, http.MethodPut, "/api/v1/orgs/"+orgH+"/members/"+member,
-		map[string]any{"role": "member"}, nil, http.StatusOK)
+	// A membership becoming active fires member.added → a delivery row is
+	// recorded. Since agentry#361 that happens when the invitation is
+	// accepted, which is what joinOrg drives.
+	env.joinOrg(sess, orgH, member)
 
 	var deliveries []struct {
 		EventType string `json:"eventType"`
@@ -147,7 +148,7 @@ func TestAuditExport(t *testing.T) {
 
 	// Generate a few more org-scoped audit events.
 	pawn := env.register("ae-pawn")
-	env.doJSON(sess, http.MethodPut, "/api/v1/orgs/"+orgH+"/members/"+pawn, map[string]any{"role": "member"}, nil, http.StatusOK)
+	env.joinOrg(sess, orgH, pawn)
 
 	var exp struct {
 		Id     string `json:"id"`

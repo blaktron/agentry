@@ -100,6 +100,19 @@ func (p webPaths) verifyEmailURL(token string) string {
 	return p.base + "/ui/verify-email?token=" + url.QueryEscape(token)
 }
 
+// invitationURL is where an invited person accepts an organization
+// invitation; "" when no absolute origin is known, in which case the admin
+// conveys the token itself.
+func (p webPaths) invitationURL(token string) string {
+	if p.site() {
+		return p.web + "/invitations/" + url.PathEscape(token)
+	}
+	if p.base == "" {
+		return ""
+	}
+	return p.base + "/ui/invitations/" + url.PathEscape(token)
+}
+
 // accountSettingsURL is where the directory's flows return a browser after
 // a password change or an authenticator enrolment.
 func (p webPaths) accountSettingsURL() string {

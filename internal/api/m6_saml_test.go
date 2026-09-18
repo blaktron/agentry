@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -126,8 +127,11 @@ func randHex() string {
 	return fmt.Sprintf("%x", b)
 }
 
-// TestSAMLACSEndpoint covers §12.4: a signed assertion POSTed to the ACS
-// endpoint establishes an SSO session (JIT), and a tampered one is rejected.
+// TestSAMLACSEndpoint covers §12.4 as agentry#361 leaves it: a signed
+// assertion for an ACTIVE MEMBER establishes an SSO session, a tampered one
+// is rejected, and an assertion for someone the organization has not
+// admitted is refused rather than provisioning them — the organization's
+// SSO recognises its members and is not a door into it (D7, D11).
 func TestSAMLACSEndpoint(t *testing.T) {
 	env := newTestEnv(t)
 	owner := env.register("saml-owner")
@@ -136,6 +140,10 @@ func TestSAMLACSEndpoint(t *testing.T) {
 	orgH := "samlorg" + env.sfx
 	env.createOrg(sess, orgH)
 
+	// The organization has proved it controls the domain the IdP asserts:
+	// linking an identity to an existing member's account for the first
+	// time needs that proof as well as the membership (T-12, agentry#361).
+	env.verifyOrgDomain(orgH, "acme.example")
 	idp := newSAMLTestIdP(t)
 	metadataXML, err := samlsp.BuildIDPMetadataXML(idp.entityID, "https://acs-idp.test/sso", idp.certPEM)
 	if err != nil {
@@ -157,8 +165,28 @@ func TestSAMLACSEndpoint(t *testing.T) {
 	}
 	_ = mres.Body.Close()
 
-	// Good assertion → session established.
+	// An assertion for someone who is not a member: refused, and nothing is
+	// created — no account, no identity, no membership.
+	stranger := "sso-stranger-" + env.sfx + "@acme.example"
+	strangerResp := env.postForm(t, acsURL, url.Values{"SAMLResponse": {idp.signedResponse(t, metadataURL, acsURL, stranger, false)}})
+	strangerBody, _ := io.ReadAll(strangerResp.Body)
+	_ = strangerResp.Body.Close()
+	if strangerResp.StatusCode != http.StatusForbidden || !strings.Contains(string(strangerBody), "not-a-member") {
+		t.Fatalf("assertion for a non-member: got %d %s, want 403 not-a-member", strangerResp.StatusCode, strangerBody)
+	}
+	var strangers int
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM users WHERE email = $1`, stranger).Scan(&strangers); err != nil {
+		t.Fatal(err)
+	}
+	if strangers != 0 {
+		t.Fatalf("the refused assertion created %d account(s)", strangers)
+	}
+
+	// Good assertion, for a member the organization admitted → session.
 	nameID := "sso-user-" + env.sfx + "@acme.example"
+	memberH := env.registerEmail("saml-member", nameID)
+	env.seedMembership(orgH, memberH, "member", "active")
 	resp := idp.signedResponse(t, metadataURL, acsURL, nameID, false)
 	httpResp := env.postForm(t, acsURL, url.Values{"SAMLResponse": {resp}})
 	defer func() { _ = httpResp.Body.Close() }()
@@ -268,8 +296,14 @@ func TestSAMLSingleLogout(t *testing.T) {
 		t.Fatalf("SP metadata lacks SLO endpoint:\n%s", mb)
 	}
 
+	// The person the IdP will assert is already a member: since agentry#361
+	// the organization's SSO signs in members and admits nobody.
+	sloNameID := "slo-user-" + env.sfx + "@acme.example"
+	env.verifyOrgDomain(orgH, "acme.example")
+	env.seedMembership(orgH, env.registerEmail("slo-member", sloNameID), "member", "active")
+
 	loginSAML := func(name string) caller {
-		nameID := "slo-user-" + env.sfx + "@acme.example"
+		nameID := sloNameID
 		res := env.postForm(t, acsURL, url.Values{"SAMLResponse": {idp.signedResponse(t, metadataURL, acsURL, nameID, false)}})
 		defer func() { _ = res.Body.Close() }()
 		if res.StatusCode != http.StatusOK {

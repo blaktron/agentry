@@ -30,10 +30,39 @@ SELECT o.*, h.handle FROM orgs o JOIN handles h ON h.id = o.id WHERE o.id = $1;
 -- name: UpdateOrgDisplayName :one
 UPDATE orgs SET display_name = $2, updated_at = now() WHERE id = $1 RETURNING id;
 
--- name: UpsertMembership :exec
-INSERT INTO memberships (org_id, user_id, role, via_scim)
-VALUES ($1, $2, $3, $4)
-ON CONFLICT (org_id, user_id) DO UPDATE SET role = EXCLUDED.role, updated_at = now();
+-- name: UpsertMembership :execrows
+-- Role changes only, and it cannot create: every door that makes someone a
+-- member goes through registry.ActivateMember (agentry#361), which counts
+-- seats. An UPDATE with no row is 0 rows, so a caller that reaches here
+-- with nobody to change writes nothing rather than admitting them.
+UPDATE memberships SET role = $3, updated_at = now()
+WHERE org_id = $1 AND user_id = $2;
+
+-- name: CreateFounderMembership :exec
+-- The one membership written without a seat check: the person creating the
+-- organization, who is its first admin. There is nothing yet to count and
+-- nobody yet to approve them.
+INSERT INTO memberships (org_id, user_id, role, state)
+VALUES ($1, $2, $3, 'active');
+
+-- name: UpsertPendingMembership :exec
+-- The SCIM and fold-in doors: a membership that holds no seat and confers
+-- nothing until an admin approves it. An existing membership is left alone
+-- — approving twice, or provisioning someone who is already active, must
+-- not push them back to pending.
+INSERT INTO memberships (org_id, user_id, role, via_scim, state)
+VALUES ($1, $2, $3, $4, 'pending')
+ON CONFLICT (org_id, user_id) DO NOTHING;
+
+-- name: ActivateMembership :execrows
+-- The one write that makes a membership active. Returns 0 rows when it was
+-- already active, so the caller can tell a first activation from a repeat
+-- and emit member.added exactly once.
+INSERT INTO memberships AS m (org_id, user_id, role, via_scim, state)
+VALUES ($1, $2, $3, $4, 'active')
+ON CONFLICT (org_id, user_id) DO UPDATE
+  SET role = EXCLUDED.role, state = 'active', updated_at = now()
+  WHERE m.state <> 'active';
 
 -- name: GetMembership :one
 SELECT * FROM memberships WHERE org_id = $1 AND user_id = $2;
@@ -42,7 +71,7 @@ SELECT * FROM memberships WHERE org_id = $1 AND user_id = $2;
 DELETE FROM memberships WHERE org_id = $1 AND user_id = $2;
 
 -- name: ListOrgMembers :many
-SELECT m.role, m.via_scim, h.handle, u.display_name
+SELECT m.role, m.via_scim, m.state, h.handle, u.display_name
 FROM memberships m
 JOIN users u ON u.id = m.user_id
 JOIN handles h ON h.id = u.id
@@ -51,19 +80,75 @@ ORDER BY h.handle;
 
 -- name: CountOrgAdmins :one
 -- Only an admin who can still act counts: an erased account keeps its
--- membership row, and the last-owner guard this replaces counted it.
+-- membership row (and the last-owner guard this replaces counted it), and a
+-- pending admin holds nothing until they are approved (agentry#361).
 SELECT count(*) FROM memberships m JOIN users u ON u.id = m.user_id
-WHERE m.org_id = $1 AND m.role = 'admin' AND u.state = 'active';
+WHERE m.org_id = $1 AND m.role = 'admin' AND m.state = 'active' AND u.state = 'active';
+
+-- name: CountOrgSeats :one
+-- A seat is every active membership plus every open invitation (plan §4
+-- "Seats"); pending members hold none and are reported so an admin can see
+-- who is waiting.
+SELECT
+  (SELECT count(*) FROM memberships am WHERE am.org_id = $1 AND am.state = 'active')::bigint AS used,
+  (SELECT count(*) FROM org_invitations oi WHERE oi.org_id = $1 AND oi.accepted_at IS NULL AND oi.expires_at > now())::bigint AS invited,
+  (SELECT count(*) FROM memberships pm WHERE pm.org_id = $1 AND pm.state = 'pending')::bigint AS pending;
+
+-- name: CountActiveMembershipsElsewhere :one
+-- One organization per person (D26): an invitation or an approval for
+-- someone already active elsewhere is refused.
+SELECT count(*) FROM memberships m WHERE m.user_id = $1 AND m.state = 'active' AND m.org_id <> $2;
 
 -- name: ListUserMemberships :many
-SELECT m.org_id, m.role FROM memberships m WHERE m.user_id = $1;
+-- The caller's org roles, for the principal every request is authorized
+-- against. ACTIVE memberships only (agentry#361): a pending member —
+-- provisioned by the IdP, or folded in from the domain — is waiting for an
+-- admin and holds nothing of the organization until then, so their row
+-- must not reach auth.Check as a role.
+SELECT m.org_id, m.role FROM memberships m WHERE m.user_id = $1 AND m.state = 'active';
 
 -- name: ListUserMembershipsWithHandles :many
-SELECT m.org_id, m.role, h.handle
+SELECT m.org_id, m.role, m.state, h.handle
 FROM memberships m
 JOIN handles h ON h.id = m.org_id
 WHERE m.user_id = $1
 ORDER BY h.handle;
+
+-- name: CreateInvitation :one
+INSERT INTO org_invitations (id, org_id, email, role, token_sha256, invited_by, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING *;
+
+-- name: GetInvitationByToken :one
+-- The organization's verified domain travels with the invitation: whether
+-- the invited address is at it decides both whether the offer was mailed
+-- and whether accepting confirms the address (agentry#361).
+SELECT i.*, h.handle AS org_handle, o.display_name AS org_display_name, o.verified_domain
+FROM org_invitations i
+JOIN orgs o ON o.id = i.org_id
+JOIN handles h ON h.id = i.org_id
+WHERE i.token_sha256 = $1;
+
+-- name: ListOpenInvitations :many
+SELECT i.*, h.handle AS invited_by_handle
+FROM org_invitations i
+LEFT JOIN handles h ON h.id = i.invited_by
+WHERE i.org_id = $1 AND i.accepted_at IS NULL
+ORDER BY i.created_at DESC;
+
+-- name: DeleteInvitation :execrows
+DELETE FROM org_invitations WHERE org_id = $1 AND id = $2 AND accepted_at IS NULL;
+
+-- name: DeleteUnacceptedInvitationsFor :execrows
+-- Re-inviting the same address supersedes the standing invitation, whose
+-- token stops working; the unique index makes this the only way to do it.
+DELETE FROM org_invitations WHERE org_id = $1 AND email = $2 AND accepted_at IS NULL;
+
+-- name: MarkInvitationAccepted :execrows
+-- Single use: the guard on accepted_at is what makes a second accept with
+-- the same token a no-op rather than a second membership.
+UPDATE org_invitations SET accepted_at = now(), accepted_by = $3
+WHERE id = $1 AND org_id = $2 AND accepted_at IS NULL;
 
 -- name: CreateTeam :one
 INSERT INTO teams (id, org_id, slug) VALUES ($1, $2, $3) RETURNING *;

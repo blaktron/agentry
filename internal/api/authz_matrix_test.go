@@ -5,7 +5,6 @@ package api_test
 // requests. This is the tenant-isolation control (D-24, T-11).
 
 import (
-	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"fmt"
@@ -84,19 +83,11 @@ func seedMatrix(t *testing.T, env *testEnv) *matrixSeed {
 	}
 	env.doJSON(sessions["admin"], http.MethodPost, "/api/v1/orgs",
 		map[string]any{"handle": orgH, "displayName": "Matrix Org"}, &org, http.StatusCreated)
-	env.doJSON(sessions["admin"], http.MethodPut,
-		"/api/v1/orgs/"+orgH+"/members/"+sessions["member"].name,
-		map[string]any{"role": "member"}, nil, http.StatusOK)
-	if _, err := env.st.Pool().Exec(context.Background(),
-		`INSERT INTO memberships (org_id, user_id, role)
-		 SELECT $1, id, 'security_reviewer' FROM handles WHERE handle = $2`, org.Id, sessions["security_reviewer"].name); err != nil {
-		t.Fatalf("seed security_reviewer: %v", err)
-	}
+	env.joinOrg(sessions["admin"], orgH, sessions["member"].name)
+	env.seedMembership(orgH, sessions["security_reviewer"].name, "security_reviewer", "active")
 	// A pawn member for non-destructive member-set targets.
 	pawnH := env.register("mx-pawn")
-	env.doJSON(sessions["admin"], http.MethodPut,
-		"/api/v1/orgs/"+orgH+"/members/"+pawnH,
-		map[string]any{"role": "member"}, nil, http.StatusOK)
+	env.joinOrg(sessions["admin"], orgH, pawnH)
 	// A standing team for read routes.
 	env.doJSON(sessions["admin"], http.MethodPost, "/api/v1/orgs/"+orgH+"/teams",
 		map[string]any{"slug": "mx-team"}, nil, http.StatusCreated)
@@ -254,13 +245,14 @@ func requestFactories(env *testEnv) map[string]opRequest {
 				return "/api/v1/orgs/" + s.orgH + "/members/" + caseID
 			},
 			prep: func(s *matrixSeed, caseID string) string {
-				// Register a disposable user, then add as a plain member.
+				// A disposable member per case. Seeded directly: the
+				// invitation door is exercised by its own tests, and one
+				// organization per person (D26) would refuse a second
+				// active membership for a matrix caller anyway.
 				s.env.doJSON(anonymous, http.MethodPost, "/api/v1/auth/register", map[string]any{
 					"handle": caseID, "email": caseID + "@example.test", "password": "hunter2hunter2",
 				}, nil, http.StatusCreated)
-				s.env.doJSON(s.sessions["admin"], http.MethodPut,
-					"/api/v1/orgs/"+s.orgH+"/members/"+caseID,
-					map[string]any{"role": "member"}, nil, http.StatusOK)
+				s.env.seedMembership(s.orgH, caseID, "member", "active")
 				return ""
 			},
 		},
@@ -474,6 +466,35 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			method: "POST",
 			path: func(s *matrixSeed, _ string) string {
 				return "/api/v1/orgs/" + s.orgH + "/webhooks/" + uuid.NewString() + "/ping"
+			},
+		},
+		// Invitations and approvals (agentry#361). The approve/decline
+		// targets are the pawn, an ACTIVE member: an authorized caller gets
+		// 409 rather than changing the fixture, which the matrix counts as
+		// a pass.
+		"listInvitations": {method: "GET", path: orgPath("/invitations")},
+		"createInvitation": {
+			method: "POST", path: orgPath("/invitations"),
+			body: func(s *matrixSeed, caseID string) any {
+				return map[string]any{"email": caseID + "@invite.example", "role": "member"}
+			},
+		},
+		"revokeInvitation": {
+			method: "DELETE",
+			path: func(s *matrixSeed, _ string) string {
+				return "/api/v1/orgs/" + s.orgH + "/invitations/" + uuid.NewString()
+			},
+		},
+		"approveOrgMember": {
+			method: "POST",
+			path: func(s *matrixSeed, _ string) string {
+				return "/api/v1/orgs/" + s.orgH + "/members/" + s.pawnH + "/approve"
+			},
+		},
+		"declineOrgMember": {
+			method: "POST",
+			path: func(s *matrixSeed, _ string) string {
+				return "/api/v1/orgs/" + s.orgH + "/members/" + s.pawnH + "/decline"
 			},
 		},
 		"listDomainClaims": {method: "GET", path: orgPath("/domain-claims")},

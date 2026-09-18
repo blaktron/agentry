@@ -97,7 +97,7 @@ func TestNoMessageOverclaimsSafety(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := n.OrgInvite(ctx, InviteNotice{
+	if err := n.OrgInvite(ctx, InviteOffer{
 		ToEmail: "user@example.test", Org: "acme", Role: "member",
 	}); err != nil {
 		t.Fatal(err)
@@ -316,7 +316,7 @@ func TestSendFailureIsReported(t *testing.T) {
 	n.send = func(context.Context, string, []string, []byte) error {
 		return errors.New("connection refused")
 	}
-	err := n.OrgInvite(t.Context(), InviteNotice{ToEmail: "u@example.test", Org: "acme"})
+	err := n.OrgInvite(t.Context(), InviteOffer{ToEmail: "u@example.test", Org: "acme"})
 	if err == nil {
 		t.Fatal("a failed send reported success")
 	}
@@ -334,7 +334,7 @@ func TestLogNotifierNeverFails(t *testing.T) {
 		n.AgentQuarantined(ctx, QuarantineNotice{}),
 		n.ReviewDecided(ctx, ReviewNotice{}),
 		n.AdvisoryPublished(ctx, AdvisoryNotice{}),
-		n.OrgInvite(ctx, InviteNotice{}),
+		n.OrgInvite(ctx, InviteOffer{}),
 	} {
 		if err != nil {
 			t.Errorf("LogNotifier returned %v", err)

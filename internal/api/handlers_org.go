@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/google/uuid"
@@ -11,7 +12,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
-	"github.com/blaktron/agentry/internal/notify"
+	"github.com/blaktron/agentry/internal/registry"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 	"github.com/blaktron/agentry/internal/webhook"
 )
@@ -48,23 +49,6 @@ func (s *Server) orgOrNotFound(w http.ResponseWriter, r *http.Request, handle st
 	return row, true
 }
 
-// notifyOrgInvite tells someone they were added to an organisation (§13.4).
-// Best-effort: the membership is already committed, and a mail failure must
-// not turn a successful grant into a 500 the admin would retry.
-func (s *Server) notifyOrgInvite(ctx context.Context, org storegen.GetOrgByHandleRow, target storegen.GetUserByHandleRow, role, invitedBy string) {
-	if s.notifier == nil || !notify.AllowsEmail(ctx, s.q(), s.log, target.ID, notify.KindOrgInvite) {
-		return
-	}
-	if err := s.notifier.OrgInvite(ctx, notify.InviteNotice{
-		ToEmail:   target.Email,
-		Org:       org.Handle,
-		Role:      role,
-		InvitedBy: invitedBy,
-	}); err != nil {
-		s.log.ErrorContext(ctx, "org invite notification", "org", org.ID, "user", target.ID, "err", err)
-	}
-}
-
 // userOrNotFound resolves a user handle or writes the problem: 404 for a
 // handle no active account holds, 500 for a lookup that failed.
 func (s *Server) userOrNotFound(w http.ResponseWriter, r *http.Request, handle string) (storegen.GetUserByHandleRow, bool) {
@@ -88,6 +72,20 @@ func orgToAPI(row storegen.GetOrgByHandleRow, includeSettings bool) Org {
 		sso := row.SsoRequired
 		o.SsoRequired = &sso
 	}
+	return o
+}
+
+// withSeats adds the organization's seat usage, which its members may see
+// and nobody else may: how many people an organization licenses is its own
+// business. A seat count that cannot be resolved is left off rather than
+// failing the read — the resource is the organization, not its billing.
+func (s *Server) withSeats(r *http.Request, o Org, orgID uuid.UUID) Org {
+	seats, err := s.reg.Seats(r.Context(), orgID)
+	if err != nil {
+		s.log.ErrorContext(r.Context(), "org seats", "org", orgID, "err", err)
+		return o
+	}
+	o.Seats = &Seats{Used: seats.Used, Invited: seats.Invited, Pending: seats.Pending, Max: seats.Max}
 	return o
 }
 
@@ -161,7 +159,7 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		}); err != nil {
 			return err
 		}
-		if err := q.UpsertMembership(r.Context(), storegen.UpsertMembershipParams{
+		if err := q.CreateFounderMembership(r.Context(), storegen.CreateFounderMembershipParams{
 			OrgID: orgID, UserID: p.UserID, Role: string(auth.RoleAdmin),
 		}); err != nil {
 			return err
@@ -190,7 +188,11 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := orgToAPI(row, true)
-	s.fireEvent(r.Context(), Event{Kind: "org.created", OrgID: out.Id, Payload: map[string]any{"org": out.Handle}})
+	// The creator rides on the event (agentry#361): the extension that
+	// opens the organization's billing row needs to know whose it is, and
+	// the org's only member at this moment is the person who made it.
+	s.fireEvent(r.Context(), Event{Kind: "org.created", OrgID: out.Id, UserID: p.UserID,
+		Payload: map[string]any{"org": out.Handle, "creator": p.Handle}})
 	ik.complete(r, http.StatusCreated, out)
 	writeJSON(w, http.StatusCreated, out)
 }
@@ -209,7 +211,12 @@ func (s *Server) GetOrg(w http.ResponseWriter, r *http.Request, org OrgHandle) {
 	}
 	p := principalFrom(r.Context())
 	isAdmin := auth.Check(p, auth.Resource{OrgID: row.ID}, auth.ActOrgUpdate) == nil
-	writeJSON(w, http.StatusOK, orgToAPI(row, isAdmin))
+	out := orgToAPI(row, isAdmin)
+	// Members see the seats; the public profile does not.
+	if auth.Check(p, auth.Resource{OrgID: row.ID}, auth.ActOrgMembersRead) == nil {
+		out = s.withSeats(r, out, row.ID)
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // UpdateOrg implements PATCH /orgs/{org} (admin+).
@@ -301,13 +308,81 @@ func (s *Server) ListOrgMembers(w http.ResponseWriter, r *http.Request, org OrgH
 	}
 	out := make([]Membership, 0, len(rows))
 	for _, m := range rows {
-		via := m.ViaScim
+		via, state := m.ViaScim, MembershipState(m.State)
 		out = append(out, Membership{
 			User: PublicUser{Handle: m.Handle, DisplayName: m.DisplayName},
-			Role: OrgRole(m.Role), ViaScim: &via,
+			Role: OrgRole(m.Role), ViaScim: &via, State: &state,
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// reEmail is the address grammar an invitation accepts: the registry's own
+// sign-up rule (an @, a bounded length), not a parser of RFC 5322.
+var reEmail = regexp.MustCompile(`^[^@\s]+@[^@\s.]+(\.[^@\s.]+)+$`)
+
+// requireSessionCaller refuses a token where only a browser session will
+// do, and reports whether the caller may proceed. Accepting an invitation
+// is such an act: it is a person answering an offer made to their address,
+// not something an automation holds authority to do.
+func (s *Server) requireSessionCaller(w http.ResponseWriter, r *http.Request) bool {
+	p := principalFrom(r.Context())
+	if p == nil || p.Anonymous {
+		problemUnauthorized(w, r, "Sign in to answer an invitation.")
+		return false
+	}
+	if p.Via != "session" {
+		problemForbidden(w, r, "Answering an invitation requires a session, not a token.")
+		return false
+	}
+	return true
+}
+
+// assignableOrgRole validates a role an admin is assigning and reports
+// whether it may be. security_reviewer exists only inside a first-party
+// organization (D20); the retired owner is refused by name.
+func (s *Server) assignableOrgRole(w http.ResponseWriter, r *http.Request, org storegen.GetOrgByHandleRow, role auth.OrgRole) bool {
+	switch role {
+	case auth.RoleAdmin, auth.RoleMember:
+		return true
+	case auth.RoleSecurityReviewer:
+		if firstPartyOrg(org.Handle) {
+			return true
+		}
+		problemValidation(w, r, "The security_reviewer role exists only in a first-party organization; in "+org.Handle+" its powers belong to the admins.")
+		return false
+	}
+	roles := "admin or member"
+	if firstPartyOrg(org.Handle) {
+		roles = "admin, member or security_reviewer"
+	}
+	problemValidation(w, r, "Set role to "+roles+".")
+	return false
+}
+
+// seatRefusal turns the membership chokepoint's refusals into problems and
+// reports whether it wrote one. A seat refusal carries the counts; an
+// entitlement that could not be resolved is not permission and is not one
+// of these — it reaches the caller as a 500 with nothing written.
+func (s *Server) seatRefusal(w http.ResponseWriter, r *http.Request, org storegen.GetOrgByHandleRow, err error) bool {
+	switch {
+	case errors.Is(err, registry.ErrSeatAllowance):
+		var counts *registry.Seats
+		if seats, serr := s.reg.Seats(r.Context(), org.ID); serr == nil {
+			counts = &seats
+		} else {
+			s.log.ErrorContext(r.Context(), "seats", "org", org.ID, "err", serr)
+		}
+		problemSeatAllowance(w, r, org.Handle, counts)
+		return true
+	case errors.Is(err, registry.ErrSeatsNotOffered):
+		problemFeatureNotIncluded(w, r, "The "+org.Handle+" organization's subscription includes no seats. Start or restore its subscription, then invite people.")
+		return true
+	case errors.Is(err, registry.ErrAlreadyAMember):
+		problemAlreadyAMember(w, r)
+		return true
+	}
+	return false
 }
 
 // memberChangeAction picks the §12.2 action for a role change: touching
@@ -378,29 +453,36 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 		return
 	}
 	requested := auth.OrgRole(req.Role)
-	switch requested {
-	case auth.RoleAdmin, auth.RoleMember:
-	case auth.RoleSecurityReviewer:
-		// A platform-internal role: it exists only inside a first-party
-		// organization (D20). Everywhere else the admins accept risk.
-		if !firstPartyOrg(orgRow.Handle) {
-			problemValidation(w, r, "The security_reviewer role exists only in a first-party organization; in "+orgRow.Handle+" its powers belong to the admins.")
-			return
-		}
-	default:
-		roles := "admin or member"
-		if firstPartyOrg(orgRow.Handle) {
-			roles = "admin, member or security_reviewer"
-		}
-		problemValidation(w, r, "Set role to "+roles+".")
+	if !s.assignableOrgRole(w, r, orgRow, requested) {
 		return
 	}
 
 	current := auth.RoleNone
+	state := ""
 	if m, err := s.q().GetMembership(r.Context(), storegen.GetMembershipParams{OrgID: orgRow.ID, UserID: target.ID}); err == nil {
-		current = auth.OrgRole(m.Role)
+		current, state = auth.OrgRole(m.Role), m.State
 	}
+	// The precise gate first, so that whether a handle is a member of this
+	// organization is not something an unauthorized caller learns from
+	// which refusal they get.
 	if !s.authorize(w, r, memberChangeAction(current, requested), orgRow.ID) {
+		return
+	}
+	// Adding by handle is retired (agentry#361, D7, D12): an organization
+	// is joined by accepting an invitation or by an admin approving a
+	// pending member, and both go through the seat chokepoint. This route
+	// keeps only what it was also for — changing the role of someone who
+	// is already here.
+	if current == auth.RoleNone {
+		problemValidation(w, r,
+			"Nobody joins an organization by being added. Invite "+target.Handle+" by email (POST /orgs/"+orgRow.Handle+"/invitations), or approve them if they are waiting.")
+		return
+	}
+	// A pending member's role is set by approving them, where the seat
+	// check fires; changing it here would let an admin skip that.
+	if state == "pending" {
+		problemValidation(w, r,
+			target.Handle+" is waiting for approval in "+orgRow.Handle+". Approve them with the role you want (POST /orgs/"+orgRow.Handle+"/members/"+target.Handle+"/approve).")
 		return
 	}
 
@@ -410,7 +492,7 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 				return err
 			}
 		}
-		if err := q.UpsertMembership(r.Context(), storegen.UpsertMembershipParams{
+		if _, err := q.UpsertMembership(r.Context(), storegen.UpsertMembershipParams{
 			OrgID: orgRow.ID, UserID: target.ID, Role: string(requested),
 		}); err != nil {
 			return err
@@ -430,24 +512,128 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 		problemInternal(w, r)
 		return
 	}
-	// Webhook fan-out (§9.3): a brand-new membership is a member.added event.
-	if current == auth.RoleNone {
-		s.emitOrgEvent(r.Context(), orgRow.ID, webhook.EventMemberAdded,
-			map[string]any{"user": target.Handle, "role": string(requested)})
-	}
-	// §13.4 lists invites among the transactional mails. There is no separate
-	// invite object in v1 — org membership is GRANTED by an admin, not offered
-	// and accepted — so the notification belongs on the same transition the
-	// member.added webhook fires on. Telling someone they were added to an org
-	// they did not ask to join is also how they find out to object.
-	if current == auth.RoleNone {
-		s.notifyOrgInvite(r.Context(), orgRow, target, string(requested), principalFrom(r.Context()).Handle)
-	}
-	via := false
+	via, activeState := false, MembershipState("active")
 	writeJSON(w, http.StatusOK, Membership{
 		User: PublicUser{Handle: target.Handle, DisplayName: target.DisplayName},
-		Role: OrgRole(requested), ViaScim: &via,
+		Role: OrgRole(requested), ViaScim: &via, State: &activeState,
 	})
+}
+
+// ApproveOrgMember implements POST /orgs/{org}/members/{handle}/approve
+// (admin). This is where the seat check bites for the SCIM and fold-in
+// doors: a person the IdP provisioned holds no seat until an admin says so.
+func (s *Server) ApproveOrgMember(w http.ResponseWriter, r *http.Request, org OrgHandle, handle Handle) {
+	if !s.requireDB(w, r) {
+		return
+	}
+	orgRow, ok := s.orgOrNotFound(w, r, org)
+	if !ok {
+		return
+	}
+	if !s.authorize(w, r, auth.ActOrgMembersManage, orgRow.ID) {
+		return
+	}
+	target, ok := s.userOrNotFound(w, r, handle)
+	if !ok {
+		return
+	}
+	m, err := s.q().GetMembership(r.Context(), storegen.GetMembershipParams{OrgID: orgRow.ID, UserID: target.ID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			problemNotFound(w, r)
+			return
+		}
+		problemInternal(w, r)
+		return
+	}
+	role := auth.OrgRole(m.Role)
+	var body ApproveOrgMemberJSONBody
+	if r.ContentLength > 0 {
+		if !readJSON(w, r, &body) {
+			return
+		}
+		if body.Role != nil {
+			role = auth.OrgRole(*body.Role)
+		}
+	}
+	if !s.assignableOrgRole(w, r, orgRow, role) {
+		return
+	}
+	// Granting admin is an elevation whichever door it comes through.
+	if !s.authorize(w, r, memberChangeAction(auth.OrgRole(m.Role), role), orgRow.ID) {
+		return
+	}
+	if m.State == "active" {
+		problemConflict(w, r, target.Handle+" is already a member of "+orgRow.Handle+".")
+		return
+	}
+
+	if _, err := s.reg.ActivateMember(r.Context(), registry.ActivateMemberRequest{
+		OrgID: orgRow.ID, UserID: target.ID, Role: role, Via: registry.ViaApproval,
+		Actor: auditEvent(r, audit.ActionOrgMemberSet),
+	}); err != nil {
+		if s.seatRefusal(w, r, orgRow, err) {
+			return
+		}
+		s.log.ErrorContext(r.Context(), "approve member", "err", err)
+		problemInternal(w, r)
+		return
+	}
+	via, state := m.ViaScim, MembershipState("active")
+	writeJSON(w, http.StatusOK, Membership{
+		User: PublicUser{Handle: target.Handle, DisplayName: target.DisplayName},
+		Role: OrgRole(role), ViaScim: &via, State: &state,
+	})
+}
+
+// DeclineOrgMember implements POST /orgs/{org}/members/{handle}/decline
+// (admin): the pending membership is removed and no seat was ever taken.
+// An active member is removed with DELETE, which the last-admin guard
+// covers; a pending member can never be the last admin, since a pending
+// admin holds nothing.
+func (s *Server) DeclineOrgMember(w http.ResponseWriter, r *http.Request, org OrgHandle, handle Handle) {
+	if !s.requireDB(w, r) {
+		return
+	}
+	orgRow, ok := s.orgOrNotFound(w, r, org)
+	if !ok {
+		return
+	}
+	if !s.authorize(w, r, auth.ActOrgMembersManage, orgRow.ID) {
+		return
+	}
+	target, ok := s.userOrNotFound(w, r, handle)
+	if !ok {
+		return
+	}
+	m, err := s.q().GetMembership(r.Context(), storegen.GetMembershipParams{OrgID: orgRow.ID, UserID: target.ID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			problemNotFound(w, r)
+			return
+		}
+		problemInternal(w, r)
+		return
+	}
+	if m.State != "pending" {
+		problemConflict(w, r, target.Handle+" is an active member of "+orgRow.Handle+"; remove them instead.")
+		return
+	}
+	err = s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
+		if _, err := q.DeleteMembership(r.Context(), storegen.DeleteMembershipParams{OrgID: orgRow.ID, UserID: target.ID}); err != nil {
+			return err
+		}
+		e := auditEvent(r, audit.ActionOrgMemberDecline)
+		e.OrgID = orgRow.ID
+		e.TargetKind, e.TargetID = "user", target.ID
+		return s.auditW.Write(r.Context(), q, e)
+	})
+	if err != nil {
+		s.log.ErrorContext(r.Context(), "decline member", "err", err)
+		problemInternal(w, r)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // RemoveOrgMember implements DELETE /orgs/{org}/members/{handle}.

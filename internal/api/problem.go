@@ -195,6 +195,37 @@ func problemOrgPending(w http.ResponseWriter, r *http.Request, org string) {
 		"This account already created "+org+", which is awaiting payment. Complete its subscription, or let it lapse, before creating another.")
 }
 
+// problemSeatAllowance refuses an invitation or an approval past the
+// organization's seats (plan §4 "Seats"). The counts ride at the top level
+// so a console can say "24 of 25 used, 1 invited" without parsing a
+// sentence; nothing is removed when it is answered.
+func problemSeatAllowance(w http.ResponseWriter, r *http.Request, org string, seats *registry.Seats) {
+	detail := "The " + org + " organization holds as many seats as its subscription allows. Free a seat, or add seats to the subscription, then try again."
+	if seats == nil {
+		// The counts could not be read. Saying nothing beats saying zero:
+		// max 0 means "unbounded" to every client of this schema, which is
+		// the opposite of what this refusal means.
+		writeProblem(w, r, http.StatusForbidden, "seat-allowance", "No seat available", detail)
+		return
+	}
+	writeProblemWith(w, r, http.StatusForbidden, "seat-allowance", "No seat available", detail,
+		map[string]any{"used": seats.Used, "invited": seats.Invited, "pending": seats.Pending, "max": seats.Max})
+}
+
+// problemFeatureNotIncluded refuses an act the organization's subscription
+// does not include at all — distinct from its allowance being reached.
+func problemFeatureNotIncluded(w http.ResponseWriter, r *http.Request, detail string) {
+	writeProblem(w, r, http.StatusForbidden, "feature-not-included", "Not included in this subscription", detail)
+}
+
+// problemAlreadyAMember refuses an invitation or an approval for someone
+// who is already an active member of another organization (D26: one
+// organization per person).
+func problemAlreadyAMember(w http.ResponseWriter, r *http.Request) {
+	writeProblem(w, r, http.StatusConflict, "already-a-member", "Already in an organization",
+		"That person is already a member of another organization. A person belongs to one organization at a time; they leave the other first.")
+}
+
 func problemUnavailable(w http.ResponseWriter, r *http.Request, detail string) {
 	writeProblem(w, r, http.StatusServiceUnavailable, "unavailable", "Service unavailable", detail)
 }
