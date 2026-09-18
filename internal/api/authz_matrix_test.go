@@ -83,11 +83,11 @@ func seedMatrix(t *testing.T, env *testEnv) *matrixSeed {
 	}
 	env.doJSON(sessions["admin"], http.MethodPost, "/api/v1/orgs",
 		map[string]any{"handle": orgH, "displayName": "Matrix Org"}, &org, http.StatusCreated)
-	env.joinOrg(sessions["admin"], orgH, sessions["member"].name, "member")
+	env.joinOrg(sessions["admin"], orgH, sessions["member"].name)
 	env.seedMembership(orgH, sessions["security_reviewer"].name, "security_reviewer", "active")
 	// A pawn member for non-destructive member-set targets.
 	pawnH := env.register("mx-pawn")
-	env.joinOrg(sessions["admin"], orgH, pawnH, "member")
+	env.joinOrg(sessions["admin"], orgH, pawnH)
 	// A standing team for read routes.
 	env.doJSON(sessions["admin"], http.MethodPost, "/api/v1/orgs/"+orgH+"/teams",
 		map[string]any{"slug": "mx-team"}, nil, http.StatusCreated)

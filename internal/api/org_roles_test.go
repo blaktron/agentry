@@ -46,7 +46,7 @@ func TestLastAdminCannotBeRemoved(t *testing.T) {
 	env.createOrg(admin, orgH)
 
 	otherH := env.register("la-other")
-	env.joinOrg(admin, orgH, otherH, "member")
+	env.joinOrg(admin, orgH, otherH)
 
 	var members []struct {
 		User struct {
@@ -158,7 +158,7 @@ func TestSecurityReviewerIsFirstPartyOnly(t *testing.T) {
 	var m struct {
 		Role string `json:"role"`
 	}
-	env.joinOrg(staff, "secureagentry", memberH, "member")
+	env.joinOrg(staff, "secureagentry", memberH)
 	env.doJSON(staff, http.MethodPut, "/api/v1/orgs/secureagentry/members/"+memberH,
 		map[string]any{"role": "security_reviewer"}, &m, http.StatusOK)
 	if m.Role != "security_reviewer" {
@@ -320,7 +320,7 @@ func TestLastAdminGuardHoldsUnderConcurrentDemotions(t *testing.T) {
 	bH := env.register("cc-b")
 	orgH := "ccorg" + env.sfx
 	env.createOrg(a, orgH)
-	env.joinOrg(a, orgH, bH, "member")
+	env.joinOrg(a, orgH, bH)
 	env.doJSON(a, http.MethodPut, "/api/v1/orgs/"+orgH+"/members/"+bH, map[string]any{"role": "admin"}, nil, http.StatusOK)
 	b := env.login(bH)
 

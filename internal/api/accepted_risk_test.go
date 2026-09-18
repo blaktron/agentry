@@ -131,7 +131,7 @@ publish:
 	// of its reviewers: in an ordinary organization only the admins are.
 	memberH := env.register("ar-member")
 	env.verifyEmail(memberH)
-	env.joinOrg(owner, orgH, memberH, "member")
+	env.joinOrg(owner, orgH, memberH)
 	env.makePlatformStaff(t, memberH)
 	member := env.login(memberH)
 	if code, body := verdict(member, "dismissed_accepted_risk"); code != http.StatusForbidden || !strings.Contains(body, "security reviewers") {

@@ -141,7 +141,7 @@ func TestErasureTransferTargetIsValidated(t *testing.T) {
 	// A member who does NOT administer it.
 	member := env.register("era-mem")
 	env.verifyEmail(member)
-	env.joinOrg(ownerSess, orgH, member, "member")
+	env.joinOrg(ownerSess, orgH, member)
 	memberSess := env.login(member)
 	agentName := "member-thing-" + env.sfx
 	env.publishUnder(t, memberSess, member, agentName)

@@ -30,7 +30,7 @@ const invitationTTL = 7 * 24 * time.Hour
 func invitationToAPI(row storegen.OrgInvitation, invitedBy *string) Invitation {
 	expired := row.ExpiresAt.Before(time.Now())
 	inv := Invitation{
-		Id: row.ID, Email: string(row.Email), Role: OrgRole(row.Role),
+		Id: row.ID, Email: row.Email, Role: OrgRole(row.Role),
 		ExpiresAt: row.ExpiresAt, CreatedAt: row.CreatedAt, Expired: &expired,
 	}
 	if invitedBy != nil && *invitedBy != "" {
@@ -171,7 +171,7 @@ func (s *Server) CreateInvitation(w http.ResponseWriter, r *http.Request, org Or
 	acceptURL := s.paths.invitationURL(token)
 	mailed := s.mailInvitation(r, orgRow, row, acceptURL, p.Handle)
 	out := CreatedInvitation{
-		AcceptUrl: acceptURL, CreatedAt: row.CreatedAt, Email: string(row.Email),
+		AcceptUrl: acceptURL, CreatedAt: row.CreatedAt, Email: row.Email,
 		ExpiresAt: row.ExpiresAt, Id: row.ID, Role: OrgRole(row.Role),
 		Token: token, Mailed: mailed,
 	}
@@ -189,7 +189,7 @@ func (s *Server) mailInvitation(r *http.Request, org storegen.GetOrgByHandleRow,
 	if s.notifier == nil {
 		return false
 	}
-	u, err := s.q().GetUserByEmail(r.Context(), string(inv.Email))
+	u, err := s.q().GetUserByEmail(r.Context(), inv.Email)
 	if err != nil {
 		return false
 	}
@@ -197,7 +197,7 @@ func (s *Server) mailInvitation(r *http.Request, org storegen.GetOrgByHandleRow,
 		return false
 	}
 	if err := s.notifier.OrgInvite(r.Context(), notify.InviteOffer{
-		ToEmail: string(inv.Email), Org: org.Handle, OrgDisplayName: org.DisplayName,
+		ToEmail: inv.Email, Org: org.Handle, OrgDisplayName: org.DisplayName,
 		Role: inv.Role, InvitedBy: invitedBy, AcceptURL: acceptURL, ExpiresAt: inv.ExpiresAt,
 	}); err != nil {
 		s.log.ErrorContext(r.Context(), "invitation mail", "org", org.ID, "err", err)
@@ -278,8 +278,8 @@ func (s *Server) invitationAcceptable(r *http.Request, row storegen.GetInvitatio
 	if u.EmailVerifiedAt == nil {
 		return false, "Verify this account's email address before accepting an invitation."
 	}
-	if !strings.EqualFold(strings.TrimSpace(u.Email), strings.TrimSpace(string(row.Email))) {
-		return false, "This invitation was sent to " + string(row.Email) + ". Sign in as that account to accept it."
+	if !strings.EqualFold(strings.TrimSpace(u.Email), strings.TrimSpace(row.Email)) {
+		return false, "This invitation was sent to " + row.Email + ". Sign in as that account to accept it."
 	}
 	return true, ""
 }
@@ -298,7 +298,7 @@ func (s *Server) GetInvitation(w http.ResponseWriter, r *http.Request, token str
 	}
 	acceptable, reason := s.invitationAcceptable(r, row)
 	out := InvitationOffer{
-		Org: row.OrgHandle, OrgDisplayName: row.OrgDisplayName, Email: string(row.Email),
+		Org: row.OrgHandle, OrgDisplayName: row.OrgDisplayName, Email: row.Email,
 		Role: OrgRole(row.Role), ExpiresAt: row.ExpiresAt, Acceptable: acceptable,
 	}
 	if reason != "" {

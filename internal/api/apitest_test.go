@@ -298,15 +298,16 @@ func (env *testEnv) registerEmail(handle, email string) string {
 // since agentry#361 an invitation accepted by the invited account is the
 // only way in, so a fixture that needs a member builds one the way a person
 // would. The account must be registered; its address is verified here
-// because accepting requires it.
-func (env *testEnv) joinOrg(admin caller, org, handle, role string) {
+// because accepting requires it. A fixture that needs another role changes
+// it afterwards, which is what the PUT route is still for.
+func (env *testEnv) joinOrg(admin caller, org, handle string) {
 	env.t.Helper()
 	env.verifyEmail(handle)
 	var inv struct {
 		Token string `json:"token"`
 	}
 	env.doJSON(admin, http.MethodPost, "/api/v1/orgs/"+org+"/invitations",
-		map[string]any{"email": handle + "@example.test", "role": role}, &inv, http.StatusCreated)
+		map[string]any{"email": handle + "@example.test", "role": "member"}, &inv, http.StatusCreated)
 	env.doJSON(env.login(handle), http.MethodPost, "/api/v1/invitations/"+inv.Token, nil, nil, http.StatusOK)
 }
 
