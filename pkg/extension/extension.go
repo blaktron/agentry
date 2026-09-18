@@ -12,6 +12,7 @@ package extension
 
 import (
 	"context"
+	"github.com/google/uuid"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -190,6 +191,20 @@ type Deps struct {
 	// the deployment's configured limits — for an extension's own resolver
 	// to embed and answer Features over (agentry#326).
 	Entitlements Resolver
+	// Orgs is the core's organization store as an extension may act on it
+	// (agentry#360). nil when the server runs without a database.
+	Orgs Orgs
+}
+
+// Orgs holds the acts on an organization the core owns and an extension
+// triggers. Where an admission extension runs, an organization is created
+// awaiting activation and its creator may not create another until it is
+// activated; the extension that owns the org's standing activates it when
+// the subscription starts (plan organization-subscriptions §4, D5).
+type Orgs interface {
+	// Activate marks the organization activated. Idempotent: it reports
+	// whether this call did it, and an unknown org is false with no error.
+	Activate(ctx context.Context, orgID uuid.UUID) (bool, error)
 }
 
 // BlobStore is the core's object store: put (write-once per key, so an

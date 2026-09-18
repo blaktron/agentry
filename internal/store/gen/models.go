@@ -286,13 +286,15 @@ type Membership struct {
 }
 
 type Org struct {
-	ID             uuid.UUID `json:"id"`
-	DisplayName    string    `json:"display_name"`
-	SsoRequired    bool      `json:"sso_required"`
-	VerifiedDomain *string   `json:"verified_domain"`
-	State          string    `json:"state"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID             uuid.UUID  `json:"id"`
+	DisplayName    string     `json:"display_name"`
+	SsoRequired    bool       `json:"sso_required"`
+	VerifiedDomain *string    `json:"verified_domain"`
+	State          string     `json:"state"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	CreatedBy      *uuid.UUID `json:"created_by"`
+	ActivatedAt    *time.Time `json:"activated_at"`
 }
 
 type Pat struct {

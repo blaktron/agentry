@@ -59,7 +59,7 @@ func (s *Server) GetOrgPolicy(w http.ResponseWriter, r *http.Request, org OrgHan
 	_, _ = w.Write(row.Document)
 }
 
-// SetOrgPolicy implements PUT /orgs/{org}/policy (owner; tighten-only §8.6).
+// SetOrgPolicy implements PUT /orgs/{org}/policy (admin; tighten-only §8.6).
 func (s *Server) SetOrgPolicy(w http.ResponseWriter, r *http.Request, org OrgHandle) {
 	if !s.requireDB(w, r) {
 		return

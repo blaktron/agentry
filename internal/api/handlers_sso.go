@@ -44,7 +44,7 @@ func (s *Server) samlSloURL(r *http.Request, handle string) string {
 	return strings.TrimSuffix(metadataURL, "/metadata") + "/slo"
 }
 
-// ---- SSO connection config CRUD (owner only, §12.4) ----
+// ---- SSO connection config CRUD (admin only, §12.4) ----
 
 // ListSsoConnections implements GET /orgs/{org}/sso/connections.
 func (s *Server) ListSsoConnections(w http.ResponseWriter, r *http.Request, org OrgHandle) {

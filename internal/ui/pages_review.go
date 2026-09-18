@@ -86,7 +86,7 @@ func (h *handler) reviewQueue(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	d := queueData{Queue: "platform", Org: strings.TrimSpace(q.Get("org"))}
 	for _, o := range u.Orgs {
-		if o.Role == "owner" || o.Role == "admin" || o.Role == "security_reviewer" {
+		if o.Role == "admin" || o.Role == "security_reviewer" {
 			d.Orgs = append(d.Orgs, o)
 		}
 	}

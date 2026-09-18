@@ -504,10 +504,13 @@ func (s *Server) SetFindingVerdict(w http.ResponseWriter, r *http.Request, id op
 }
 
 // isOrgReviewer reports whether p may act on the org review queue (§12.2:
-// security_reviewer or higher).
+// security_reviewer or higher). The reviewer role exists only inside a
+// first-party organization (D20); in every other organization this is the
+// admins alone — accepting risk on the org's agents included (DEV-034 as
+// amended by agentry#360).
 func (s *Server) isOrgReviewer(p *auth.Principal, orgID uuid.UUID) bool {
 	switch p.Role(orgID) {
-	case auth.RoleOwner, auth.RoleAdmin, auth.RoleSecurityReviewer:
+	case auth.RoleAdmin, auth.RoleSecurityReviewer:
 		return true
 	default:
 		return false

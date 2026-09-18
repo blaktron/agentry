@@ -64,7 +64,10 @@ type webhook struct {
 }
 
 var (
-	orgRoles      = []string{"owner", "admin", "member", "security_reviewer"}
+	// The roles the API accepts (agentry#360): admin and member everywhere;
+	// security_reviewer only inside a first-party organization, which the
+	// API decides — the page offers it and shows the refusal.
+	orgRoles      = []string{"admin", "member", "security_reviewer"}
 	webhookEvents = []string{"version.published", "version.rejected", "version.yanked", "agent.quarantined"}
 )
 
@@ -370,7 +373,7 @@ func (h *handler) orgsIndex(w http.ResponseWriter, r *http.Request) {
 	}
 	var admin []userOrg
 	for _, o := range u.Orgs {
-		if o.Role == "owner" || o.Role == "admin" {
+		if o.Role == "admin" {
 			admin = append(admin, o)
 		}
 	}
