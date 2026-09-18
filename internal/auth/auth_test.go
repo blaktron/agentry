@@ -191,10 +191,11 @@ func TestRunScopesAreValidFlatAndUnlockNoCoreAction(t *testing.T) {
 }
 
 // TestNamespaceDerivedAgentRole pins what a membership confers on an org's
-// agents before any grant (§12.2, agentry#360): an admin holds the
-// namespace's full rights (publish), the way an owner did — an
-// organization must keep someone who can release — and everyone else
-// holds nothing until a grant says otherwise (M3 opens members).
+// agents before any grant (§12.2, D6, D19; agentry#360, agentry#362): an
+// admin administers them, an active member may release them, and everyone
+// else holds nothing until a grant says otherwise. A pending member needs
+// no row here: an inactive membership never reaches OrgRoles, so they
+// arrive as RoleNone — the "outsider" case is theirs too.
 func TestNamespaceDerivedAgentRole(t *testing.T) {
 	orgID, userID := uuid.New(), uuid.New()
 	p := &Principal{UserID: userID, Via: "session"}
@@ -205,10 +206,10 @@ func TestNamespaceDerivedAgentRole(t *testing.T) {
 		role OrgRole
 		want AgentRole
 	}{
-		{"own namespace", "user", userID, RoleNone, AgentRolePublish},
+		{"own namespace", "user", userID, RoleNone, AgentRoleAdmin},
 		{"someone else's namespace", "user", uuid.New(), RoleNone, AgentRoleNone},
-		{"org admin", "org", orgID, RoleAdmin, AgentRolePublish},
-		{"org member", "org", orgID, RoleMember, AgentRoleNone},
+		{"org admin", "org", orgID, RoleAdmin, AgentRoleAdmin},
+		{"org member", "org", orgID, RoleMember, AgentRolePublish},
 		{"org security_reviewer", "org", orgID, RoleSecurityReviewer, AgentRoleNone},
 		{"outsider", "org", orgID, RoleNone, AgentRoleNone},
 		{"retired owner", "org", orgID, OrgRole("owner"), AgentRoleNone},
@@ -222,5 +223,32 @@ func TestNamespaceDerivedAgentRole(t *testing.T) {
 	}
 	if got := NamespaceDerivedAgentRole(&Principal{Anonymous: true}, "org", orgID, RoleAdmin); got != AgentRoleNone {
 		t.Fatalf("anonymous derived %q, want none", got)
+	}
+}
+
+// TestAgentRoleLadder pins the order the thresholds read, and that the top
+// of it cannot be handed out: a grant must never be a way to acquire the
+// acts that decide what an agent is (agentry#362).
+func TestAgentRoleLadder(t *testing.T) {
+	ascending := []AgentRole{AgentRoleNone, AgentRoleRead, AgentRoleWrite, AgentRoleMaintain, AgentRolePublish, AgentRoleAdmin}
+	for i := 1; i < len(ascending); i++ {
+		if agentRoleRank(ascending[i]) <= agentRoleRank(ascending[i-1]) {
+			t.Fatalf("%q does not outrank %q", ascending[i], ascending[i-1])
+		}
+		if MaxAgentRole(ascending[i-1], ascending[i]) != ascending[i] {
+			t.Fatalf("MaxAgentRole(%q, %q) is not %q", ascending[i-1], ascending[i], ascending[i])
+		}
+	}
+	if ValidAgentRole(AgentRoleAdmin) {
+		t.Fatal("AgentRoleAdmin is grantable: a grant on one agent would hand out the organization's own authority")
+	}
+	// The one that matters for D19: publish does not reach the acts that
+	// decide what the agent is, so an organization's members do not.
+	publisher := AgentResource{EffectiveRole: AgentRolePublish}
+	if err := CheckAgent(&Principal{UserID: uuid.New(), Via: "session"}, publisher, ActAgentPublish); err != nil {
+		t.Fatalf("a publisher cannot publish: %v", err)
+	}
+	if err := CheckAgent(&Principal{UserID: uuid.New(), Via: "session"}, publisher, ActAgentAdminister); err == nil {
+		t.Fatal("a publisher may administer the agent: visibility, deletion and grants would fall to every member")
 	}
 }

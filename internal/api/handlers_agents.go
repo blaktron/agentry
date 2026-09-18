@@ -130,7 +130,7 @@ func (s *Server) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, registry.ErrNotFound):
 			problemNotFound(w, r)
 		case errors.Is(err, auth.ErrForbidden):
-			problemForbidden(w, r, "Creating a BriefAgent here needs the namespace's owner, or an organization admin.")
+			problemForbidden(w, r, "Creating a BriefAgent here needs the namespace's owner, or active membership of the organization.")
 		case errors.Is(err, auth.ErrUnauthorized):
 			problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
 		case errors.Is(err, registry.ErrPrivateAgentCap):
@@ -163,11 +163,11 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, params ListA
 	}
 	p := principalFrom(r.Context())
 	// Private agents appear only for callers the by-name route would let
-	// read them by namespace alone — the owning user, or an owner or admin
-	// of the owning org (the §12.2 namespace-derived role; a plain member
-	// has no role on an agent without a grant) — so a listing never names
-	// an agent its reader could not open (agentry#313). Per-agent grant
-	// holders are not in the listing either: conservative.
+	// read them by namespace alone — the owning user, or an active member
+	// of the owning org, who since agentry#362 holds publish on its agents
+	// — so a listing never names an agent its reader could not open
+	// (agentry#313). A pending member holds nothing and sees nothing. Per-
+	// agent grant holders are not in the listing either: conservative.
 	includePrivate := false
 	if !p.Anonymous {
 		if h, err := s.q().GetHandle(r.Context(), params.Namespace); err == nil {
@@ -220,12 +220,35 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	if !s.requireDB(w, r) {
 		return
 	}
-	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentMaintain)
+	a, role, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentMaintain)
 	if !ok {
 		return
 	}
 	var req UpdateAgentJSONBody
 	if !readJSON(w, r, &req) {
+		return
+	}
+	// Two fields in this body are not settings. Changing who can see an
+	// agent, and allowing its history to be rewritten, are the
+	// namespace's administrators' to decide — not everyone who may
+	// release it (D19, agentry#362). An organization's members hold
+	// publish, and the line the admin/member split draws is that a member
+	// adds to the organization's agents while the acts that expose or
+	// destroy what is already there stay with the admins. (Yanking a
+	// release is neither: it is the publisher's own safety valve, and the
+	// version stays on the record marked yanked.) The rest of this body
+	// is settings, which maintain covers.
+	administers := func() bool {
+		return auth.CheckAgent(principalFrom(r.Context()),
+			auth.AgentResource{Public: a.Visibility == "public", EffectiveRole: role},
+			auth.ActAgentAdminister) == nil
+	}
+	if req.Visibility != nil && string(*req.Visibility) != a.Visibility && !administers() {
+		problemForbidden(w, r, "Changing this BriefAgent's visibility needs the "+a.Namespace+" namespace's administrators.")
+		return
+	}
+	if req.AllowForcePush != nil && *req.AllowForcePush != a.AllowForcePush && !administers() {
+		problemForbidden(w, r, "Allowing force pushes rewrites history everyone else is working from, so it needs the "+a.Namespace+" namespace's administrators.")
 		return
 	}
 	params := storegen.UpdateAgentSettingsParams{ID: a.ID}
@@ -299,7 +322,7 @@ func (s *Server) ListAgentGrants(w http.ResponseWriter, r *http.Request, ns Name
 	if !s.requireDB(w, r) {
 		return
 	}
-	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentMaintain)
+	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentAdminister)
 	if !ok {
 		return
 	}
@@ -321,7 +344,7 @@ func (s *Server) SetAgentUserGrant(w http.ResponseWriter, r *http.Request, ns Na
 	if !s.requireDB(w, r) {
 		return
 	}
-	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentMaintain)
+	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentAdminister)
 	if !ok {
 		return
 	}
@@ -364,7 +387,7 @@ func (s *Server) RemoveAgentUserGrant(w http.ResponseWriter, r *http.Request, ns
 	if !s.requireDB(w, r) {
 		return
 	}
-	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentMaintain)
+	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentAdminister)
 	if !ok {
 		return
 	}
@@ -409,7 +432,7 @@ func (s *Server) SetAgentTeamGrant(w http.ResponseWriter, r *http.Request, ns Na
 	if !s.requireDB(w, r) {
 		return
 	}
-	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentMaintain)
+	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentAdminister)
 	if !ok {
 		return
 	}
@@ -455,7 +478,7 @@ func (s *Server) RemoveAgentTeamGrant(w http.ResponseWriter, r *http.Request, ns
 	if !s.requireDB(w, r) {
 		return
 	}
-	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentMaintain)
+	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentAdminister)
 	if !ok {
 		return
 	}
