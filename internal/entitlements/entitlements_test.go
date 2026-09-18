@@ -80,24 +80,11 @@ func TestLimitsFollowConfig(t *testing.T) {
 	}
 }
 
-// §1.6.5/§14.3: the OSS build must not ship crippled stubs of paid features.
-func TestOSSResolverEnablesEveryFeature(t *testing.T) {
-	r := Default()
-	for _, f := range []Feature{
-		FeatureEnforcedSSO, FeatureSCIM, FeaturePrivateNamespaces, FeatureWebhooks,
-		FeatureAuditExport, FeatureAuditStream, FeaturePolicyOverrides, FeaturePriorityReview,
-	} {
-		if !r.FeatureEnabled(t.Context(), uuid.New(), f) {
-			t.Errorf("feature %q is off in the OSS resolver", f)
-		}
-	}
-	if !r.FeatureEnabled(t.Context(), uuid.Nil, FeatureWebhooks) {
-		t.Error("a personal namespace was refused a feature")
-	}
-}
-
-// The core resolver caps nothing: a self-hosted registry has no tiers, so
-// private agents are enabled with no maximum for users and orgs alike.
+// The core resolver caps nothing and switches nothing off: a self-hosted
+// registry has no tiers, so every Cap is enabled with no maximum and every
+// flag is on, for users and orgs alike (§1.6.5, §14.3: no crippled stubs).
+// One case per field, so a field added to Features without a line here
+// fails to compile rather than ship unanswered.
 func TestOSSResolverCapsNothing(t *testing.T) {
 	r := Default()
 	for _, s := range []Subject{ForUser(uuid.New()), ForOrg(uuid.New()), {}} {
@@ -105,8 +92,18 @@ func TestOSSResolverCapsNothing(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !f.PrivateAgents.Enabled || f.PrivateAgents.Max != 0 {
-			t.Errorf("subject %+v: private agents %+v, want enabled and uncapped", s, f.PrivateAgents)
+		for name, c := range map[string]Cap{"private agents": f.PrivateAgents, "seats": f.Seats} {
+			if !c.Enabled || c.Max != 0 {
+				t.Errorf("subject %+v: %s %+v, want enabled and uncapped", s, name, c)
+			}
+		}
+		for name, on := range map[string]bool{
+			"sso": f.SSO, "scim": f.SCIM, "branding": f.Branding,
+			"alert routing": f.AlertRouting, "unscanned agents": f.UnscannedAgents,
+		} {
+			if !on {
+				t.Errorf("subject %+v: %s is off in the core resolver", s, name)
+			}
 		}
 	}
 }
@@ -117,15 +114,11 @@ var _ Resolver = (*ConfigResolver)(nil)
 // stubResolver stands in for the SaaS overlay in consumer tests.
 type stubResolver struct {
 	limits Limits
-	off    map[Feature]bool
 }
 
 func (s stubResolver) Limits(context.Context, Subject) (Limits, error) { return s.limits, nil }
 func (s stubResolver) Features(context.Context, Subject) (Features, error) {
-	return Features{PrivateAgents: Allowance{Enabled: true}}, nil
-}
-func (s stubResolver) FeatureEnabled(_ context.Context, _ uuid.UUID, f Feature) bool {
-	return !s.off[f]
+	return Features{PrivateAgents: Cap{Enabled: true}}, nil
 }
 
 var _ Resolver = stubResolver{}

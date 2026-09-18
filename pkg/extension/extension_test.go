@@ -67,7 +67,7 @@ type tiered struct {
 }
 
 func (tiered) Features(context.Context, Subject) (Features, error) {
-	return Features{PrivateAgents: Allowance{Enabled: true, Max: 10}}, nil
+	return Features{PrivateAgents: Cap{Enabled: true, Max: 10}}, nil
 }
 
 var _ Resolver = tiered{}

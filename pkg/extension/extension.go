@@ -55,18 +55,23 @@ type Extension interface {
 	Jobs() []Job
 }
 
-// Resolver, Subject, Limits, Features, Allowance and Feature are the
-// core's entitlements types. A resolver an extension supplies usually wraps
-// the core's (entitlements.NewConfigResolver) and answers Features by tier.
+// Resolver, Subject, Limits, Features and Cap are the core's entitlements
+// types. A resolver an extension supplies usually wraps the core's
+// (entitlements.NewConfigResolver) and answers Features by tier.
 type (
 	Resolver      = entitlements.Resolver
 	Subject       = entitlements.Subject
 	NamespaceKind = entitlements.NamespaceKind
 	Limits        = entitlements.Limits
 	Features      = entitlements.Features
-	Allowance     = entitlements.Allowance
-	Feature       = entitlements.Feature
+	Cap           = entitlements.Cap
 )
+
+// Allowance is the old name of Cap (agentry#360): kept so an extension
+// built against it still compiles until it adopts Cap.
+//
+// Deprecated: use Cap; removed once agentry-enterprise#29 lands.
+type Allowance = entitlements.Cap
 
 // The two namespace kinds a Subject carries.
 const (
