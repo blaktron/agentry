@@ -138,7 +138,7 @@ const createAttestation = `-- name: CreateAttestation :one
 INSERT INTO attestations (id, version_id, predicate_type, dsse_envelope, key_id)
 VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (version_id) DO NOTHING
-RETURNING id, version_id, predicate_type, dsse_envelope, key_id, created_at, reattested_at, reattested_key_id
+RETURNING id, version_id, predicate_type, dsse_envelope, key_id, created_at
 `
 
 type CreateAttestationParams struct {
@@ -165,8 +165,6 @@ func (q *Queries) CreateAttestation(ctx context.Context, arg CreateAttestationPa
 		&i.DsseEnvelope,
 		&i.KeyID,
 		&i.CreatedAt,
-		&i.ReattestedAt,
-		&i.ReattestedKeyID,
 	)
 	return i, err
 }
@@ -436,7 +434,7 @@ func (q *Queries) GetAdvisoryPublic(ctx context.Context, id uuid.UUID) (GetAdvis
 }
 
 const getAttestation = `-- name: GetAttestation :one
-SELECT id, version_id, predicate_type, dsse_envelope, key_id, created_at, reattested_at, reattested_key_id FROM attestations WHERE version_id = $1
+SELECT id, version_id, predicate_type, dsse_envelope, key_id, created_at FROM attestations WHERE version_id = $1
 `
 
 func (q *Queries) GetAttestation(ctx context.Context, versionID uuid.UUID) (Attestation, error) {
@@ -449,8 +447,6 @@ func (q *Queries) GetAttestation(ctx context.Context, versionID uuid.UUID) (Atte
 		&i.DsseEnvelope,
 		&i.KeyID,
 		&i.CreatedAt,
-		&i.ReattestedAt,
-		&i.ReattestedKeyID,
 	)
 	return i, err
 }

@@ -123,26 +123,35 @@ func RegisterSigningKey(ctx context.Context, st *store.Store, signer Signer) (Si
 	return SigningKeyRegistration{KeyID: row.KeyID, New: row.Inserted, Retired: retired}, nil
 }
 
-// EnqueueReattestSweepOnNewKey kicks off the re-attestation sweep when the
-// registry starts signing with a key it has never signed with (agentry#350).
-// Every published release's statement gains a countersignature by the new
-// key, so a client that pins today verifies releases published before the
-// rotation. Not enqueued on a restart with the same key: nothing changed.
-func EnqueueReattestSweepOnNewKey(ctx context.Context, q queue.Client, log *slog.Logger, reg SigningKeyRegistration) {
-	if q == nil || !reg.New {
+// EnqueueReattestSweepIfBehind enqueues the re-attestation sweep when any
+// attestation lacks the signer's signature (agentry#350): a rotation, a key
+// rolled back to, a sweep that failed part way, or an enqueue that was
+// lost — every one completes at the next start, because the trigger is the
+// state of the table, not the memory of having enqueued once. A start on a
+// key every attestation already carries enqueues nothing.
+func EnqueueReattestSweepIfBehind(ctx context.Context, st *store.Store, q queue.Client, log *slog.Logger, signer Signer, reg SigningKeyRegistration) {
+	if st == nil || q == nil || signer == nil {
 		return
 	}
 	if log == nil {
 		log = slog.Default()
 	}
-	if _, err := q.Enqueue(ctx, JobReattestSweep, "core", ReattestSweepArgs{KeyID: reg.KeyID}); err != nil {
-		// Not fatal: signing new releases works either way. But loud — until
-		// the sweep runs, a fresh client refuses everything published before
-		// this key, and a restart on the same key will not enqueue it again.
-		log.Error("scan: could not enqueue re-attestation sweep for new signing key",
-			"keyId", reg.KeyID, "err", err)
+	pending, err := st.Queries().CountAttestationsLackingSignature(ctx, KeyMatchJSON(signer.KeyID()))
+	if err != nil {
+		log.Error("scan: could not count attestations lacking the signing key", "keyId", signer.KeyID(), "err", err)
 		return
 	}
-	log.Info("scan: new signing key registered; re-attestation sweep enqueued",
-		"keyId", reg.KeyID, "retired", reg.Retired)
+	if pending == 0 {
+		return
+	}
+	if _, err := q.Enqueue(ctx, JobReattestSweep, "core", ReattestSweepArgs{KeyID: signer.KeyID(), Pending: pending}); err != nil {
+		// Not fatal: signing new releases works either way, and the next
+		// start counts again. But loud — until the sweep runs, a fresh
+		// client refuses everything published before this key.
+		log.Error("scan: could not enqueue re-attestation sweep",
+			"keyId", signer.KeyID(), "pending", pending, "err", err)
+		return
+	}
+	log.Info("scan: attestations lack the signing key; re-attestation sweep enqueued",
+		"keyId", signer.KeyID(), "pending", pending, "newKey", reg.New, "retired", reg.Retired)
 }

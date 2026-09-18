@@ -6,7 +6,9 @@
 -- the current key, so a client pinning today refused everything published
 -- before it. The registry now records each signer's public key at start
 -- (`retired_at` set on the others), advertises the retired ones that signed
--- something, and countersigns existing attestations with the new key.
+-- something, and countersigns existing attestations with the new key. Keys
+-- used before this migration were never recorded and cannot be listed; the
+-- attestations they signed verify through the countersignature.
 CREATE TABLE signing_keys (
   key_id         text PRIMARY KEY,
   algorithm      text NOT NULL,
@@ -16,23 +18,14 @@ CREATE TABLE signing_keys (
   retired_at     timestamptz
 );
 
--- A countersignature appends to the DSSE envelope's `signatures` (the
--- statement is signed once, at publish; later keys vouch for the same
--- bytes). The two columns record the latest countersignature; the envelope
--- itself lists every key id.
-ALTER TABLE attestations
-  ADD COLUMN reattested_at     timestamptz,
-  ADD COLUMN reattested_key_id text;
-
--- Which envelopes carry a given key's signature: the well-known set asks it
--- per retired key, and the sweep pages over the ones that lack the current
--- key.
+-- A countersignature appends to the DSSE envelope's `signatures`; the
+-- envelope itself lists every key id that has signed it. The index serves
+-- the containment probe ("carries a signature by this key"): the well-known
+-- set asks it per retired key. The sweep's complement ("lacks this key")
+-- cannot use it and scans, which a rotation-time job can afford.
 CREATE INDEX attestations_signatures_idx
   ON attestations USING gin ((dsse_envelope->'signatures') jsonb_path_ops);
 
 -- +goose Down
 DROP INDEX IF EXISTS attestations_signatures_idx;
-ALTER TABLE attestations
-  DROP COLUMN reattested_at,
-  DROP COLUMN reattested_key_id;
 DROP TABLE IF EXISTS signing_keys;

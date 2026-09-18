@@ -8,12 +8,14 @@ package scan_test
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"testing"
 
 	"github.com/google/uuid"
 
 	"github.com/blaktron/agentry/internal/scan"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 	"github.com/blaktron/agentry/pkg/attest"
 )
 
@@ -153,8 +155,10 @@ func TestReattestSweepCountersignsWithTheNewKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sum.KeyID != b.KeyID() || sum.Signed < 1 || sum.Failed != 0 {
-		t.Fatalf("sweep summary = %+v, want at least one signed by %s and no failures", sum, b.KeyID())
+	// The shared test database carries rows other tests left deliberately
+	// unsignable, so only this release's outcome is asserted below.
+	if sum.KeyID != b.KeyID() || sum.Signed < 1 {
+		t.Fatalf("sweep summary = %+v, want at least one signed by %s", sum, b.KeyID())
 	}
 
 	after := envelopeOf(t, ea, v.ID)
@@ -185,16 +189,35 @@ func TestReattestSweepCountersignsWithTheNewKey(t *testing.T) {
 	if att.KeyID != a.KeyID() {
 		t.Errorf("the publishing key id was rewritten to %q", att.KeyID)
 	}
-	if att.ReattestedKeyID == nil || *att.ReattestedKeyID != b.KeyID() || att.ReattestedAt == nil {
-		t.Errorf("re-attestation bookkeeping = %v/%v, want key %s and a time", att.ReattestedKeyID, att.ReattestedAt, b.KeyID())
-	}
 
-	// Idempotent: a second sweep on the same key finds nothing to sign.
+	// Idempotent: a second sweep on the same key finds nothing to sign, and
+	// nothing is pending for B at the next start.
 	if _, err := eb.pipe.ReattestSweepWithSummary(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if again := envelopeOf(t, ea, v.ID); len(again.Signatures) != 2 {
 		t.Errorf("a second sweep double-signed: %d signatures", len(again.Signatures))
+	}
+	// The append itself refuses a second signature by the same key id even
+	// when the bytes differ — ECDSA signatures are randomised, so a guard on
+	// the whole signature object would let a racing sweep through.
+	payload, _ := base64.StdEncoding.DecodeString(after.Payload)
+	fresh, err := b.SignPayload(after.PayloadType, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fresh.Sig == after.Signatures[1].Sig {
+		t.Fatal("two signatures over the same bytes came out identical; the guard test proves nothing")
+	}
+	freshJSON, _ := json.Marshal([]attest.DSSESignature{fresh})
+	n, err := ea.st.Queries().AppendAttestationSignature(ctx, storegen.AppendAttestationSignatureParams{
+		ID: att.ID, Signature: freshJSON, KeyMatch: scan.KeyMatchJSON(b.KeyID()),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Errorf("a second signature by the same key id was appended (%d rows)", n)
 	}
 
 	// The retired key that signed something is advertised; one that signed
@@ -236,4 +259,61 @@ func envelopeOf(t *testing.T, e *pipeEnv, versionID uuid.UUID) attest.DSSEEnvelo
 		t.Fatal(err)
 	}
 	return env
+}
+
+// The registry's key covers only a statement about a publish the registry
+// holds: a stored statement whose subject is not the row's archive is left
+// unsigned and counted, never vouched for.
+func TestReattestSweepRefusesAStatementThatIsNotTheRows(t *testing.T) {
+	ctx := context.Background()
+	a, _ := scan.NewFileSigner("", true)
+	b, _ := scan.NewFileSigner("", true)
+	ea := newPipeEnv(t, func(d *scan.PipelineDeps) { d.Signer = a })
+	u, _ := ea.st.Queries().GetUserByID(ctx, ea.owner)
+	v := ea.publish("swapped", "public", map[string]string{
+		"agent.yaml": skillManifest(u.Handle, "swapped", "1.0.0"),
+		"README.md":  "# swapped\nA helpful, well-behaved skill.\n",
+		"SKILL.md":   "Summarize the input politely and cite sources.\n",
+		"LICENSE":    "Apache-2.0\n",
+	})
+	if v.Status != "published" {
+		t.Fatalf("status = %s, want published", v.Status)
+	}
+	// Replace the stored statement with one about other bytes, signed by A
+	// (a valid signature is not what the check is about).
+	other := scan.BuildStatement("https://test.example", u.Handle+"/swapped", "1.0.0",
+		"sha256:0000000000000000000000000000000000000000000000000000000000000000", "", "upload",
+		scan.ScanRunRef{ID: "run-x"}, 1)
+	env, err := a.Sign(other)
+	if err != nil {
+		t.Fatal(err)
+	}
+	envJSON, _ := json.Marshal(env)
+	if _, err := ea.st.Pool().Exec(ctx, `UPDATE attestations SET dsse_envelope = $1 WHERE version_id = $2`, envJSON, v.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	eb := newPipeEnv(t, func(d *scan.PipelineDeps) { d.Signer = b })
+	sum, err := eb.pipe.ReattestSweepWithSummary(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.Failed < 1 {
+		t.Errorf("sweep = %+v, want the swapped statement counted as refused", sum)
+	}
+	got := envelopeOf(t, ea, v.ID)
+	for _, sig := range got.Signatures {
+		if sig.KeyID == b.KeyID() {
+			t.Fatal("the new key vouched for a statement that does not describe the version")
+		}
+	}
+	// And it stays pending, so the next start enqueues the sweep again
+	// rather than forgetting the row.
+	pending, err := eb.st.Queries().CountAttestationsLackingSignature(ctx, scan.KeyMatchJSON(b.KeyID()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pending < 1 {
+		t.Error("a refused row is not counted as pending")
+	}
 }
