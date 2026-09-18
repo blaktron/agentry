@@ -48,16 +48,17 @@ func cappedSeats(max int64) func(*api.Server) {
 	}
 }
 
-// invite sends an invitation and returns its token, failing the test on an
-// unexpected status.
-func inviteTo(t *testing.T, env *testEnv, admin caller, org, email, role string, want int) string {
+// inviteTo sends an invitation and returns its token, failing the test
+// unless it was created. A refusal is asserted by the caller with env.do,
+// where the problem body is what matters.
+func inviteTo(t *testing.T, env *testEnv, admin caller, org, email string) string {
 	t.Helper()
 	res := env.do(admin, http.MethodPost, "/api/v1/orgs/"+org+"/invitations",
-		map[string]any{"email": email, "role": role})
+		map[string]any{"email": email, "role": "member"})
 	defer func() { _ = res.Body.Close() }()
 	body, _ := io.ReadAll(res.Body)
-	if res.StatusCode != want {
-		t.Fatalf("invite %s: got %d %s, want %d", email, res.StatusCode, body, want)
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("invite %s: got %d %s, want 201", email, res.StatusCode, body)
 	}
 	var out struct {
 		Token string `json:"token"`
@@ -82,7 +83,7 @@ func TestEveryMembershipDoorCountsSeats(t *testing.T) {
 	// The second seat goes to an invitation, which reserves it when sent.
 	oneH := env.register("st-one")
 	env.verifyEmail(oneH)
-	token := inviteTo(t, env, admin, orgH, oneH+"@example.test", "member", http.StatusCreated)
+	token := inviteTo(t, env, admin, orgH, oneH+"@example.test")
 
 	// The third is refused at the invitation, before anybody is told:
 	// used 1, invited 1, max 2.
@@ -235,7 +236,7 @@ func TestSeatCapIsAbsentWithoutAnExtension(t *testing.T) {
 	env.createOrg(admin, orgH)
 	for i := range 4 {
 		h := env.register("nc-m" + string(rune('a'+i)))
-		env.joinOrg(admin, orgH, h, "member")
+		env.joinOrg(admin, orgH, h)
 	}
 	var org struct {
 		Seats struct {
@@ -261,7 +262,7 @@ func TestInvitationIsACredential(t *testing.T) {
 
 	inviteeH := env.register("iv-invitee")
 	env.verifyEmail(inviteeH)
-	token := inviteTo(t, env, admin, orgH, inviteeH+"@example.test", "member", http.StatusCreated)
+	token := inviteTo(t, env, admin, orgH, inviteeH+"@example.test")
 	if !strings.HasPrefix(token, "agyi_") {
 		t.Fatalf("token %q does not identify itself", token)
 	}
@@ -307,7 +308,7 @@ func TestInvitationIsACredential(t *testing.T) {
 	// An account whose address is not verified cannot accept, even when it
 	// is the invited one.
 	unverifiedH := env.register("iv-unverified")
-	unverifiedToken := inviteTo(t, env, admin, orgH, unverifiedH+"@example.test", "member", http.StatusCreated)
+	unverifiedToken := inviteTo(t, env, admin, orgH, unverifiedH+"@example.test")
 	res = env.do(env.login(unverifiedH), http.MethodPost, "/api/v1/invitations/"+unverifiedToken, nil)
 	if code, _, detail := problemOf(t, res); code != http.StatusForbidden || !strings.Contains(detail, "Verify") {
 		t.Fatalf("accept from an unverified address: %d %q, want 403 asking for verification", code, detail)
@@ -325,7 +326,7 @@ func TestInvitationIsACredential(t *testing.T) {
 	// An expired invitation is not acceptable either.
 	expiredH := env.register("iv-expired")
 	env.verifyEmail(expiredH)
-	expiredToken := inviteTo(t, env, admin, orgH, expiredH+"@example.test", "member", http.StatusCreated)
+	expiredToken := inviteTo(t, env, admin, orgH, expiredH+"@example.test")
 	if _, err := env.st.Pool().Exec(context.Background(),
 		`UPDATE org_invitations SET expires_at = now() - interval '1 hour' WHERE email = $1`, expiredH+"@example.test"); err != nil {
 		t.Fatal(err)
@@ -339,7 +340,7 @@ func TestInvitationIsACredential(t *testing.T) {
 	// Revoking releases the seat and stops the token.
 	revokedH := env.register("iv-revoked")
 	env.verifyEmail(revokedH)
-	revokedToken := inviteTo(t, env, admin, orgH, revokedH+"@example.test", "member", http.StatusCreated)
+	revokedToken := inviteTo(t, env, admin, orgH, revokedH+"@example.test")
 	var open []struct {
 		Id    string `json:"id"`
 		Email string `json:"email"`
@@ -373,7 +374,7 @@ func TestOneOrgPerPerson(t *testing.T) {
 	env.createOrg(firstAdmin, firstOrg)
 
 	personH := env.register("op-person")
-	env.joinOrg(firstAdmin, firstOrg, personH, "member")
+	env.joinOrg(firstAdmin, firstOrg, personH)
 
 	secondAdminH := env.register("op-a2")
 	env.verifyEmail(secondAdminH)
@@ -495,7 +496,7 @@ func TestAddingByHandleIsRetired(t *testing.T) {
 	}
 
 	// A role change for someone who is already here still works.
-	env.joinOrg(admin, orgH, strangerH, "member")
+	env.joinOrg(admin, orgH, strangerH)
 	env.doJSON(admin, http.MethodPut, "/api/v1/orgs/"+orgH+"/members/"+strangerH,
 		map[string]any{"role": "admin"}, nil, http.StatusOK)
 

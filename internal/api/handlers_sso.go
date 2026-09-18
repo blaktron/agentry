@@ -302,11 +302,11 @@ type samlSessionLink struct {
 	SessionIndex string
 }
 
-func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, orgRow storegen.GetOrgByHandleRow, connID uuid.UUID, providerKind, subject, email, displayName string, samlLink *samlSessionLink) {
+func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, orgRow storegen.GetOrgByHandleRow, connID uuid.UUID, providerKind, subject, email string, samlLink *samlSessionLink) {
 	ctx := r.Context()
 	q := s.q()
 
-	userID, err := s.resolveSSOUser(ctx, orgRow, connID, providerKind, subject, email, displayName)
+	userID, err := s.resolveSSOUser(ctx, orgRow, connID, providerKind, subject, email)
 	if err != nil {
 		if errors.Is(err, errNotAMember) {
 			// A plain notice, and the same one whether the person has no
@@ -423,7 +423,7 @@ var errNotAMember = errors.New("not an active member of this organization")
 // An active member signing in for the first time through a connection has
 // their identity linked, which is recognition, not admission: they are
 // already a member, and the link is what makes the next sign-in direct.
-func (s *Server) resolveSSOUser(ctx context.Context, orgRow storegen.GetOrgByHandleRow, connID uuid.UUID, providerKind, subject, email, displayName string) (uuid.UUID, error) {
+func (s *Server) resolveSSOUser(ctx context.Context, orgRow storegen.GetOrgByHandleRow, connID uuid.UUID, providerKind, subject, email string) (uuid.UUID, error) {
 	q := s.q()
 	// 1. Known identity for this connection: the usual case.
 	if id, err := q.GetIdentityBySubject(ctx, storegen.GetIdentityBySubjectParams{
@@ -517,13 +517,6 @@ func truncateHandle(s string, n int) string {
 		return strings.Trim(s[:n], "-")
 	}
 	return s
-}
-
-func emailDomain(email string) string {
-	if i := strings.LastIndex(email, "@"); i >= 0 {
-		return strings.ToLower(email[i+1:])
-	}
-	return ""
 }
 
 func emailLocalPart(email string) string {

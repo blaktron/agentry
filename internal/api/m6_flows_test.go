@@ -118,7 +118,7 @@ func TestWebhookEventWiring(t *testing.T) {
 	// A membership becoming active fires member.added → a delivery row is
 	// recorded. Since agentry#361 that happens when the invitation is
 	// accepted, which is what joinOrg drives.
-	env.joinOrg(sess, orgH, member, "member")
+	env.joinOrg(sess, orgH, member)
 
 	var deliveries []struct {
 		EventType string `json:"eventType"`
@@ -148,7 +148,7 @@ func TestAuditExport(t *testing.T) {
 
 	// Generate a few more org-scoped audit events.
 	pawn := env.register("ae-pawn")
-	env.joinOrg(sess, orgH, pawn, "member")
+	env.joinOrg(sess, orgH, pawn)
 
 	var exp struct {
 		Id     string `json:"id"`
