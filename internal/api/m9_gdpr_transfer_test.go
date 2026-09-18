@@ -141,9 +141,8 @@ func TestErasureTransferTargetIsValidated(t *testing.T) {
 	// A member who does NOT administer it.
 	member := env.register("era-mem")
 	env.verifyEmail(member)
+	env.joinOrg(ownerSess, orgH, member, "member")
 	memberSess := env.login(member)
-	env.doJSON(ownerSess, http.MethodPut, "/api/v1/orgs/"+orgH+"/members/"+member,
-		map[string]any{"role": "member"}, nil, http.StatusOK)
 	agentName := "member-thing-" + env.sfx
 	env.publishUnder(t, memberSess, member, agentName)
 
@@ -176,7 +175,7 @@ func TestErasureTransferTargetIsValidated(t *testing.T) {
 
 	// An admin of the org can transfer into it.
 	env.doJSON(ownerSess, http.MethodPut, "/api/v1/orgs/"+orgH+"/members/"+member,
-		map[string]any{"role": "admin"}, nil, http.StatusOK)
+		map[string]any{"role": "admin"}, nil, http.StatusOK) // a role change, not an add
 	memberSess = env.login(member)
 	env.doJSON(memberSess, http.MethodPost,
 		"/api/v1/user/delete?publishedContent=transfer&transferOrg="+orgH, nil, nil, http.StatusNoContent)

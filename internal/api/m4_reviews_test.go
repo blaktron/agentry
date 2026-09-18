@@ -61,7 +61,8 @@ func TestOrgReviewQueueRequiresReviewer(t *testing.T) {
 	member := env.register("orv-mem")
 	env.verifyEmail(member)
 	memberSess := env.login(member)
-	env.doJSON(ownerSess, http.MethodPut, "/api/v1/orgs/"+org+"/members/"+member, map[string]any{"role": "member"}, nil, http.StatusOK)
+	env.joinOrg(ownerSess, org, member, "member")
+	memberSess = env.login(member)
 	res := env.do(memberSess, http.MethodGet, "/api/v1/review-queue?queue=org&org="+org, nil)
 	_ = res.Body.Close()
 	if res.StatusCode != http.StatusForbidden {

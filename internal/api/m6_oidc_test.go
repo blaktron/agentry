@@ -91,7 +91,8 @@ func newOIDCEndpointIdP(t *testing.T) *oidcEndpointIdP {
 }
 
 // TestOIDCEndpointFlow covers §12.4 end-to-end: start → IdP authorize → callback
-// creates a user and establishes a session; email_verified=false is rejected.
+// signs an active member in and establishes a session; email_verified=false
+// is rejected. It no longer creates anyone: see resolveSSOUser.
 func TestOIDCEndpointFlow(t *testing.T) {
 	idp := newOIDCEndpointIdP(t)
 	env := newTestEnvWith(t, func(s *api.Server) {
@@ -103,6 +104,10 @@ func TestOIDCEndpointFlow(t *testing.T) {
 	sess := env.login(owner)
 	orgH := "oidcorg" + env.sfx
 	env.createOrg(sess, orgH)
+	// The person the IdP will assert is already an active member: the
+	// organization's SSO recognises members and provisions nobody
+	// (agentry#361, D7, D11).
+	env.seedMembership(orgH, env.registerEmail("oidc-person", idp.email), "member", "active")
 
 	env.doJSON(sess, http.MethodPut, "/api/v1/orgs/"+orgH+"/sso/connections/oidc", map[string]any{
 		"enabled": true,
