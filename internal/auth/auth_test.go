@@ -111,8 +111,9 @@ func TestCheckTruthTable(t *testing.T) {
 		{"security_reviewer cannot update org", principal(RoleSecurityReviewer), ActOrgUpdate, orgID, false},
 		{"security_reviewer reads teams", principal(RoleSecurityReviewer), ActOrgTeamsRead, orgID, true},
 		{"admin updates org", principal(RoleAdmin), ActOrgUpdate, orgID, true},
-		{"admin cannot elevate", principal(RoleAdmin), ActOrgMembersElevate, orgID, false},
-		{"owner elevates", principal(RoleOwner), ActOrgMembersElevate, orgID, true},
+		{"admin elevates", principal(RoleAdmin), ActOrgMembersElevate, orgID, true},
+		{"member cannot elevate", principal(RoleMember), ActOrgMembersElevate, orgID, false},
+		{"security_reviewer cannot elevate", principal(RoleSecurityReviewer), ActOrgMembersElevate, orgID, false},
 		{"admin manages members", principal(RoleAdmin), ActOrgMembersManage, orgID, true},
 		{"member cannot manage members", principal(RoleMember), ActOrgMembersManage, orgID, false},
 		{"admin reads audit", principal(RoleAdmin), ActOrgAuditRead, orgID, true},
@@ -120,8 +121,12 @@ func TestCheckTruthTable(t *testing.T) {
 		{"cross-org admin denied", principal(RoleAdmin), ActOrgUpdate, otherOrg, false},
 		{"authed self read", principal(RoleNone), ActUserSelfRead, uuid.Nil, true},
 		{"authed org create", principal(RoleNone), ActOrgCreate, uuid.Nil, true},
-		{"owner settings", principal(RoleOwner), ActOrgSettingsManage, orgID, true},
-		{"admin no settings", principal(RoleAdmin), ActOrgSettingsManage, orgID, false},
+		{"admin settings", principal(RoleAdmin), ActOrgSettingsManage, orgID, true},
+		{"member no settings", principal(RoleMember), ActOrgSettingsManage, orgID, false},
+		{"security_reviewer no settings", principal(RoleSecurityReviewer), ActOrgSettingsManage, orgID, false},
+		// The retired owner value is nobody: a stale row or token that still
+		// carries it holds no role at all (agentry#360).
+		{"retired owner is nobody", principal(OrgRole("owner")), ActOrgMembersRead, orgID, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -145,13 +150,13 @@ func TestCheckPATScopes(t *testing.T) {
 			OrgRoles: map[uuid.UUID]OrgRole{orgID: role},
 		}
 	}
-	if err := Check(pat(RoleOwner, "org:admin"), Resource{OrgID: orgID}, ActOrgUpdate); err != nil {
-		t.Fatalf("owner PAT with org:admin must update org: %v", err)
+	if err := Check(pat(RoleAdmin, "org:admin"), Resource{OrgID: orgID}, ActOrgUpdate); err != nil {
+		t.Fatalf("admin PAT with org:admin must update org: %v", err)
 	}
-	if err := Check(pat(RoleOwner, "user:profile"), Resource{OrgID: orgID}, ActOrgUpdate); err == nil {
+	if err := Check(pat(RoleAdmin, "user:profile"), Resource{OrgID: orgID}, ActOrgUpdate); err == nil {
 		t.Fatal("wrong-scope PAT must be denied")
 	}
-	if err := Check(pat(RoleOwner, "org:admin", "audit:read"), Resource{}, ActUserTokensManage); err == nil {
+	if err := Check(pat(RoleAdmin, "org:admin", "audit:read"), Resource{}, ActUserTokensManage); err == nil {
 		t.Fatal("session-only action must deny every PAT")
 	}
 	if err := Check(pat(RoleMember, "org:admin"), Resource{OrgID: orgID}, ActOrgUpdate); err == nil {
@@ -182,5 +187,40 @@ func TestRunScopesAreValidFlatAndUnlockNoCoreAction(t *testing.T) {
 		if sc == ScopeRunRead || sc == ScopeRunWrite {
 			t.Errorf("core action %v is unlocked by %s", act, sc)
 		}
+	}
+}
+
+// TestNamespaceDerivedAgentRole pins what a membership confers on an org's
+// agents before any grant (§12.2, agentry#360): an admin holds the
+// namespace's full rights (publish), the way an owner did — an
+// organization must keep someone who can release — and everyone else
+// holds nothing until a grant says otherwise (M3 opens members).
+func TestNamespaceDerivedAgentRole(t *testing.T) {
+	orgID, userID := uuid.New(), uuid.New()
+	p := &Principal{UserID: userID, Via: "session"}
+	cases := []struct {
+		name string
+		kind string
+		ns   uuid.UUID
+		role OrgRole
+		want AgentRole
+	}{
+		{"own namespace", "user", userID, RoleNone, AgentRolePublish},
+		{"someone else's namespace", "user", uuid.New(), RoleNone, AgentRoleNone},
+		{"org admin", "org", orgID, RoleAdmin, AgentRolePublish},
+		{"org member", "org", orgID, RoleMember, AgentRoleNone},
+		{"org security_reviewer", "org", orgID, RoleSecurityReviewer, AgentRoleNone},
+		{"outsider", "org", orgID, RoleNone, AgentRoleNone},
+		{"retired owner", "org", orgID, OrgRole("owner"), AgentRoleNone},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := NamespaceDerivedAgentRole(p, tc.kind, tc.ns, tc.role); got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+	if got := NamespaceDerivedAgentRole(&Principal{Anonymous: true}, "org", orgID, RoleAdmin); got != AgentRoleNone {
+		t.Fatalf("anonymous derived %q, want none", got)
 	}
 }

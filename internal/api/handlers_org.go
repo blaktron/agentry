@@ -91,12 +91,27 @@ func orgToAPI(row storegen.GetOrgByHandleRow, includeSettings bool) Org {
 	return o
 }
 
-// CreateOrg implements POST /orgs; the caller becomes owner (§12.2).
+// CreateOrg implements POST /orgs; the caller becomes its first admin
+// (§12.2, agentry#360). Two gates precede the handle rules. The account's
+// email must be verified: an organization is keyed on its creator's domain
+// (plan organization-subscriptions D13, D21 — the domain itself lands in
+// M4). And the account may have at most one organization awaiting
+// activation: on the hosted product an org is a paid thing that starts out
+// awaiting payment, and the core refuses a second until the first is
+// activated or gone (D5), so nobody squats handles behind organizations
+// that never pay. Where nothing will activate an org later — no admission
+// extension, so no payment — it is activated as it is created, and the
+// rule never bites (§3: the core with no extension is unchanged).
 func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 	if !s.authorize(w, r, auth.ActOrgCreate, uuid.Nil) {
 		return
 	}
 	if !s.requireDB(w, r) {
+		return
+	}
+	p := principalFrom(r.Context())
+	if !p.EmailVerified {
+		problemEmailUnverified(w, r, "Verify this account's email address before creating an organization.")
 		return
 	}
 	ik, handled := s.beginIdempotent(w, r, "POST /orgs")
@@ -112,7 +127,6 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		problemValidation(w, r, "An org handle is 1-39 lowercase letters, digits and hyphens, starting and ending with a letter or digit.")
 		return
 	}
-	p := principalFrom(r.Context())
 	if orgHandleReserved(req.Handle, p.PlatformStaff) {
 		problemValidation(w, r, "That org handle is reserved. Choose another.")
 		return
@@ -122,16 +136,33 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		problemValidation(w, r, "Set displayName to 1-120 characters.")
 		return
 	}
+	activated := !s.orgsAwaitActivation()
+	if !activated {
+		// The early answer names the pending organization; the unique
+		// partial index is what holds the rule under concurrent requests.
+		pending, err := s.q().GetPendingOrgCreatedBy(r.Context(), &p.UserID)
+		switch {
+		case err == nil:
+			problemOrgPending(w, r, pending)
+			return
+		case !errors.Is(err, pgx.ErrNoRows):
+			s.log.ErrorContext(r.Context(), "pending org", "err", err)
+			problemInternal(w, r)
+			return
+		}
+	}
 	orgID := newUUID()
 	err := s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
 		if err := q.CreateHandle(r.Context(), storegen.CreateHandleParams{ID: orgID, Handle: req.Handle, Kind: "org"}); err != nil {
 			return err
 		}
-		if _, err := q.CreateOrg(r.Context(), storegen.CreateOrgParams{ID: orgID, DisplayName: name}); err != nil {
+		if _, err := q.CreateOrg(r.Context(), storegen.CreateOrgParams{
+			ID: orgID, DisplayName: name, CreatedBy: &p.UserID, Activated: activated,
+		}); err != nil {
 			return err
 		}
 		if err := q.UpsertMembership(r.Context(), storegen.UpsertMembershipParams{
-			OrgID: orgID, UserID: p.UserID, Role: string(auth.RoleOwner),
+			OrgID: orgID, UserID: p.UserID, Role: string(auth.RoleAdmin),
 		}); err != nil {
 			return err
 		}
@@ -141,6 +172,10 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
+		if uniqueViolationOn(err, "orgs_pending_by_creator_idx") {
+			problemOrgPending(w, r, "an organization")
+			return
+		}
 		if isUniqueViolation(err) {
 			problemConflict(w, r, "That org handle is already in use. Choose another.")
 			return
@@ -205,12 +240,12 @@ func (s *Server) UpdateOrg(w http.ResponseWriter, r *http.Request, org OrgHandle
 			return
 		}
 	}
-	// Toggling enforced SSO is an SSO setting → owner only (§12.2, §12.4),
-	// stricter than the admin+ gate that guards the rest of org update.
+	// Toggling enforced SSO is an SSO setting (§12.2, §12.4): the settings
+	// action, declared apart from the update so the two can diverge again.
 	if req.SsoRequired != nil {
 		p := principalFrom(r.Context())
 		if auth.Check(p, auth.Resource{OrgID: row.ID}, auth.ActOrgSettingsManage) != nil {
-			problemForbidden(w, r, "Only an owner can change ssoRequired.")
+			problemForbidden(w, r, "Only an admin can change ssoRequired.")
 			return
 		}
 	}
@@ -276,15 +311,48 @@ func (s *Server) ListOrgMembers(w http.ResponseWriter, r *http.Request, org OrgH
 }
 
 // memberChangeAction picks the §12.2 action for a role change: touching
-// owner/admin roles (either direction) is an owner-level elevation.
+// the admin role (either direction) is an elevation. Both actions need an
+// admin since the owner role retired (agentry#360); they stay distinct so
+// the declaration says which is which.
 func memberChangeAction(current, requested auth.OrgRole) auth.Action {
-	privileged := func(role auth.OrgRole) bool {
-		return role == auth.RoleOwner || role == auth.RoleAdmin
-	}
-	if privileged(current) || privileged(requested) {
+	if current == auth.RoleAdmin || requested == auth.RoleAdmin {
 		return auth.ActOrgMembersElevate
 	}
 	return auth.ActOrgMembersManage
+}
+
+// errLastAdmin is what a membership transaction returns when the change
+// would leave the organization with no admin who can act.
+var errLastAdmin = errors.New("api: the organization's last admin")
+
+// guardLastAdmin runs inside a transaction that removes or demotes a
+// membership (agentry#360, D14): it locks the organization's row, so two
+// such changes serialise and the second counts what the first committed,
+// then refuses with errLastAdmin when the membership is that of the last
+// admin whose account is active. Erased accounts keep their membership rows
+// and do not count. A user who is not a member, or not an admin, passes.
+func guardLastAdmin(ctx context.Context, q *storegen.Queries, orgID, userID uuid.UUID) error {
+	if err := q.LockOrg(ctx, orgID); err != nil {
+		return err
+	}
+	m, err := q.GetMembership(ctx, storegen.GetMembershipParams{OrgID: orgID, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if auth.OrgRole(m.Role) != auth.RoleAdmin {
+		return nil
+	}
+	n, err := q.CountOrgAdmins(ctx, orgID)
+	if err != nil {
+		return err
+	}
+	if n <= 1 {
+		return errLastAdmin
+	}
+	return nil
 }
 
 // SetOrgMember implements PUT /orgs/{org}/members/{handle}.
@@ -311,9 +379,20 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 	}
 	requested := auth.OrgRole(req.Role)
 	switch requested {
-	case auth.RoleOwner, auth.RoleAdmin, auth.RoleSecurityReviewer, auth.RoleMember:
+	case auth.RoleAdmin, auth.RoleMember:
+	case auth.RoleSecurityReviewer:
+		// A platform-internal role: it exists only inside a first-party
+		// organization (D20). Everywhere else the admins accept risk.
+		if !firstPartyOrg(orgRow.Handle) {
+			problemValidation(w, r, "The security_reviewer role exists only in a first-party organization; in "+orgRow.Handle+" its powers belong to the admins.")
+			return
+		}
 	default:
-		problemValidation(w, r, "Set role to owner, admin, member or security_reviewer.")
+		roles := "admin or member"
+		if firstPartyOrg(orgRow.Handle) {
+			roles = "admin, member or security_reviewer"
+		}
+		problemValidation(w, r, "Set role to "+roles+".")
 		return
 	}
 
@@ -325,20 +404,12 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 		return
 	}
 
-	// Last-owner guard: an org must always retain one owner.
-	if current == auth.RoleOwner && requested != auth.RoleOwner {
-		n, err := s.q().CountOrgOwners(r.Context(), orgRow.ID)
-		if err != nil {
-			problemInternal(w, r)
-			return
-		}
-		if n <= 1 {
-			problemValidation(w, r, "This organization must keep at least one owner. Make another member an owner first.")
-			return
-		}
-	}
-
 	err := s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
+		if requested != auth.RoleAdmin {
+			if err := guardLastAdmin(r.Context(), q, orgRow.ID, target.ID); err != nil {
+				return err
+			}
+		}
 		if err := q.UpsertMembership(r.Context(), storegen.UpsertMembershipParams{
 			OrgID: orgRow.ID, UserID: target.ID, Role: string(requested),
 		}); err != nil {
@@ -350,6 +421,10 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 		e.Detail = map[string]any{"role": string(requested), "previous": string(current)}
 		return s.auditW.Write(r.Context(), q, e)
 	})
+	if errors.Is(err, errLastAdmin) {
+		problemLastAdmin(w, r, orgRow.Handle)
+		return
+	}
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "set member", "err", err)
 		problemInternal(w, r)
@@ -405,18 +480,10 @@ func (s *Server) RemoveOrgMember(w http.ResponseWriter, r *http.Request, org Org
 	if !s.authorize(w, r, memberChangeAction(current, auth.RoleNone), orgRow.ID) {
 		return
 	}
-	if current == auth.RoleOwner {
-		n, err := s.q().CountOrgOwners(r.Context(), orgRow.ID)
-		if err != nil {
-			problemInternal(w, r)
-			return
-		}
-		if n <= 1 {
-			problemValidation(w, r, "This organization must keep at least one owner. Make another member an owner first.")
-			return
-		}
-	}
 	err = s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
+		if err := guardLastAdmin(r.Context(), q, orgRow.ID, target.ID); err != nil {
+			return err
+		}
 		if _, err := q.DeleteMembership(r.Context(), storegen.DeleteMembershipParams{OrgID: orgRow.ID, UserID: target.ID}); err != nil {
 			return err
 		}
@@ -431,6 +498,10 @@ func (s *Server) RemoveOrgMember(w http.ResponseWriter, r *http.Request, org Org
 		e.Detail = map[string]any{"previous": string(current)}
 		return s.auditW.Write(r.Context(), q, e)
 	})
+	if errors.Is(err, errLastAdmin) {
+		problemLastAdmin(w, r, orgRow.Handle)
+		return
+	}
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "remove member", "err", err)
 		problemInternal(w, r)

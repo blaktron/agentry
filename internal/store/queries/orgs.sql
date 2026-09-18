@@ -1,7 +1,25 @@
 -- Orgs, memberships, teams (M1/WG-B).
 
 -- name: CreateOrg :one
-INSERT INTO orgs (id, display_name) VALUES ($1, $2) RETURNING *;
+-- activated_at is now() where nothing will activate the org later (no
+-- admission extension), NULL where one will (agentry#360).
+INSERT INTO orgs (id, display_name, created_by, activated_at)
+VALUES ($1, $2, $3, CASE WHEN sqlc.arg(activated)::boolean THEN now() ELSE NULL END)
+RETURNING *;
+
+-- name: ActivateOrg :execrows
+UPDATE orgs SET activated_at = now(), updated_at = now() WHERE id = $1 AND activated_at IS NULL;
+
+-- name: GetPendingOrgCreatedBy :one
+-- At most one exists per creator (the unique partial index).
+SELECT h.handle FROM orgs o JOIN handles h ON h.id = o.id
+WHERE o.created_by = $1 AND o.activated_at IS NULL
+LIMIT 1;
+
+-- name: LockOrg :exec
+-- Serialises the membership changes of one organization inside a
+-- transaction (the last-admin guard counts under this lock).
+SELECT id FROM orgs WHERE id = $1 FOR UPDATE;
 
 -- name: GetOrgByHandle :one
 SELECT o.*, h.handle FROM orgs o JOIN handles h ON h.id = o.id WHERE h.handle = $1 AND h.kind = 'org';
@@ -31,8 +49,11 @@ JOIN handles h ON h.id = u.id
 WHERE m.org_id = $1
 ORDER BY h.handle;
 
--- name: CountOrgOwners :one
-SELECT count(*) FROM memberships WHERE org_id = $1 AND role = 'owner';
+-- name: CountOrgAdmins :one
+-- Only an admin who can still act counts: an erased account keeps its
+-- membership row, and the last-owner guard this replaces counted it.
+SELECT count(*) FROM memberships m JOIN users u ON u.id = m.user_id
+WHERE m.org_id = $1 AND m.role = 'admin' AND u.state = 'active';
 
 -- name: ListUserMemberships :many
 SELECT m.org_id, m.role FROM memberships m WHERE m.user_id = $1;

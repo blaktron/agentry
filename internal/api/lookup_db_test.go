@@ -11,6 +11,7 @@ import (
 func TestPublicLookupsAnswer404OnlyForAbsence(t *testing.T) {
 	env := newTestEnv(t)
 	h := env.register("look")
+	env.verifyEmail(h)
 	sess := env.login(h)
 	orgH := "lookorg" + env.sfx
 	env.doJSON(sess, http.MethodPost, "/api/v1/orgs", map[string]any{"handle": orgH, "displayName": "L"}, nil, http.StatusCreated)

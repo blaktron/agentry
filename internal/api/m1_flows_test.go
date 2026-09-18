@@ -69,6 +69,7 @@ func TestAuthLifecycle(t *testing.T) {
 func TestPATLifecycle(t *testing.T) {
 	env := newTestEnv(t)
 	h := env.register("patty")
+	env.verifyEmail(h)
 	sess := env.login(h)
 
 	id, token := env.mintPAT(sess, "ci-token", "user:profile")
@@ -128,6 +129,7 @@ func TestPATLifecycle(t *testing.T) {
 func TestAuditCoverage(t *testing.T) {
 	env := newTestEnv(t)
 	h := env.register("aud")
+	env.verifyEmail(h)
 	sess := env.login(h)
 
 	// Drive mutations.

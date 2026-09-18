@@ -68,8 +68,24 @@ func TestOrgReviewQueueRequiresReviewer(t *testing.T) {
 		t.Fatalf("member org queue: got %d want 403", res.StatusCode)
 	}
 
-	// A security_reviewer can.
-	env.doJSON(ownerSess, http.MethodPut, "/api/v1/orgs/"+org+"/members/"+member, map[string]any{"role": "security_reviewer"}, nil, http.StatusOK)
+	// An admin can: in an ordinary organization the admins are its
+	// reviewers (agentry#360).
+	env.doJSON(ownerSess, http.MethodPut, "/api/v1/orgs/"+org+"/members/"+member, map[string]any{"role": "admin"}, nil, http.StatusOK)
+	adminSess := env.login(member)
+	res = env.do(adminSess, http.MethodGet, "/api/v1/review-queue?queue=org&org="+org, nil)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("admin org queue: got %d want 200", res.StatusCode)
+	}
+
+	// So can a security_reviewer row, which the API assigns only inside a
+	// first-party organization; seeded directly here.
+	env.doJSON(ownerSess, http.MethodPut, "/api/v1/orgs/"+org+"/members/"+member, map[string]any{"role": "member"}, nil, http.StatusOK)
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`UPDATE memberships SET role = 'security_reviewer'
+		 WHERE user_id = (SELECT id FROM handles WHERE handle = $1) AND org_id = (SELECT id FROM handles WHERE handle = $2)`, member, org); err != nil {
+		t.Fatal(err)
+	}
 	reviewerSess := env.login(member)
 	res = env.do(reviewerSess, http.MethodGet, "/api/v1/review-queue?queue=org&org="+org, nil)
 	_ = res.Body.Close()

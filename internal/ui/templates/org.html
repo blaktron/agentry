@@ -18,7 +18,7 @@
 <button type="submit" name="action" value="remove" class="small danger">Remove</button></form></li>{{end}}</ul>
 <form method="post" action="/ui/orgs/{{.Handle}}" class="row"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="section" value="member">
 <input name="handle" placeholder="handle" class="short" required><select name="role">{{range .Roles}}<option value="{{.}}">{{.}}</option>{{end}}</select><button type="submit" class="small">Add member</button></form>
-<p class="muted">The handle must already have an account; adding grants membership at once and emails the person. Only an owner may grant or revoke owner and admin, and an organization always keeps one owner.</p>
+<p class="muted">The handle must already have an account; adding grants membership at once and emails the person. Admins grant and revoke every role, and an organization always keeps one admin: promote someone else before stepping down. The security_reviewer role exists only in a first-party organization.</p>
 </section>
 
 <section class="card"><h2>Teams</h2>

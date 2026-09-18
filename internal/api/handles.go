@@ -23,6 +23,12 @@ var firstPartyHandles = map[string]bool{
 	"agentry": true, "secureagentry": true,
 }
 
+// firstPartyOrg reports whether an organization handle is one of the
+// product's own: the platform-internal security_reviewer role exists only
+// there (plan organization-subscriptions D20, agentry#360); everywhere else
+// the admins hold its powers.
+func firstPartyOrg(h string) bool { return firstPartyHandles[h] }
+
 // handleReserved reports whether no sign-up may take h: a root path or a
 // first-party name. Sign-up has no staff.
 func handleReserved(h string) bool { return orgHandleReserved(h, false) }

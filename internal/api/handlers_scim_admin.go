@@ -14,7 +14,7 @@ import (
 // scimTokenPrefix identifies SCIM bearer tokens in logs/scanners.
 const scimTokenPrefix = "agyscim_"
 
-// ListScimTokens implements GET /orgs/{org}/scim/tokens (owner, §12.5).
+// ListScimTokens implements GET /orgs/{org}/scim/tokens (admin, §12.5).
 func (s *Server) ListScimTokens(w http.ResponseWriter, r *http.Request, org OrgHandle) {
 	if !s.requireDB(w, r) {
 		return
@@ -42,7 +42,7 @@ func (s *Server) ListScimTokens(w http.ResponseWriter, r *http.Request, org OrgH
 	writeJSON(w, http.StatusOK, out)
 }
 
-// CreateScimToken implements POST /orgs/{org}/scim/tokens (owner, §12.5).
+// CreateScimToken implements POST /orgs/{org}/scim/tokens (admin, §12.5).
 func (s *Server) CreateScimToken(w http.ResponseWriter, r *http.Request, org OrgHandle) {
 	if !s.requireDB(w, r) {
 		return

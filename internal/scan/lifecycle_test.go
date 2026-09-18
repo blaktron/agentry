@@ -866,7 +866,7 @@ func (e *pipeEnv) seedOrg(handle string) testOrg {
 		e.t.Fatal(err)
 	}
 	if err := q.UpsertMembership(ctx, storegen.UpsertMembershipParams{
-		OrgID: id, UserID: e.owner, Role: string(auth.RoleOwner),
+		OrgID: id, UserID: e.owner, Role: string(auth.RoleAdmin),
 	}); err != nil {
 		e.t.Fatal(err)
 	}
@@ -890,7 +890,7 @@ func (e *pipeEnv) orgPrincipal(org testOrg) *auth.Principal {
 	}
 	return &auth.Principal{
 		UserID: e.owner, Handle: u.Handle, Via: "session", EmailVerified: true,
-		OrgRoles: map[uuid.UUID]auth.OrgRole{org.id: auth.RoleOwner},
+		OrgRoles: map[uuid.UUID]auth.OrgRole{org.id: auth.RoleAdmin},
 	}
 }
 
