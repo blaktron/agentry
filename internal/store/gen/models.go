@@ -283,6 +283,7 @@ type Membership struct {
 	ViaScim   bool      `json:"via_scim"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	State     string    `json:"state"`
 }
 
 type Org struct {
@@ -295,6 +296,19 @@ type Org struct {
 	UpdatedAt      time.Time  `json:"updated_at"`
 	CreatedBy      *uuid.UUID `json:"created_by"`
 	ActivatedAt    *time.Time `json:"activated_at"`
+}
+
+type OrgInvitation struct {
+	ID          uuid.UUID  `json:"id"`
+	OrgID       uuid.UUID  `json:"org_id"`
+	Email       string     `json:"email"`
+	Role        string     `json:"role"`
+	TokenSha256 []byte     `json:"token_sha256"`
+	InvitedBy   *uuid.UUID `json:"invited_by"`
+	CreatedAt   time.Time  `json:"created_at"`
+	ExpiresAt   time.Time  `json:"expires_at"`
+	AcceptedAt  *time.Time `json:"accepted_at"`
+	AcceptedBy  *uuid.UUID `json:"accepted_by"`
 }
 
 type Pat struct {

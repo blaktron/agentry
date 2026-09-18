@@ -31,10 +31,16 @@ const (
 	ActionUserDelete    Action = "user.delete"
 
 	// Orgs & teams.
-	ActionOrgCreate        Action = "org.create"
-	ActionOrgUpdate        Action = "org.update"
-	ActionOrgMemberSet     Action = "org.member_set"
-	ActionOrgMemberRemove  Action = "org.member_remove"
+	ActionOrgCreate       Action = "org.create"
+	ActionOrgUpdate       Action = "org.update"
+	ActionOrgMemberSet    Action = "org.member_set"
+	ActionOrgMemberRemove Action = "org.member_remove"
+	// Invitations and approvals (agentry#361): the only doors into an
+	// organization, each audited where it is decided.
+	ActionOrgInviteCreate  Action = "org.invite_create"
+	ActionOrgInviteRevoke  Action = "org.invite_revoke"
+	ActionOrgInviteAccept  Action = "org.invite_accept"
+	ActionOrgMemberDecline Action = "org.member_decline"
 	ActionTeamCreate       Action = "team.create"
 	ActionTeamDelete       Action = "team.delete"
 	ActionTeamMemberAdd    Action = "team.member_add"
@@ -103,7 +109,9 @@ func init() {
 		ActionUserLogout, ActionUserEmailVerified, ActionUserUpdate,
 		ActionUserTOTPEnabled, ActionPATCreate, ActionPATRevoke, ActionSSHKeyAdd, ActionSSHKeyRemove, ActionUserDelete, ActionUserDirectoryErase, ActionUserStaffSync,
 		ActionOrgCreate, ActionOrgUpdate, ActionOrgMemberSet,
-		ActionOrgMemberRemove, ActionTeamCreate, ActionTeamDelete,
+		ActionOrgMemberRemove, ActionOrgInviteCreate, ActionOrgInviteRevoke,
+		ActionOrgInviteAccept, ActionOrgMemberDecline,
+		ActionTeamCreate, ActionTeamDelete,
 		ActionTeamMemberAdd, ActionTeamMemberRemove,
 		ActionAgentCreate, ActionAgentUpdate, ActionAgentGrantSet,
 		ActionAgentGrantRemove, ActionRepoPush,

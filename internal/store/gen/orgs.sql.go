@@ -12,6 +12,37 @@ import (
 	"github.com/google/uuid"
 )
 
+const activateMembership = `-- name: ActivateMembership :execrows
+INSERT INTO memberships AS m (org_id, user_id, role, via_scim, state)
+VALUES ($1, $2, $3, $4, 'active')
+ON CONFLICT (org_id, user_id) DO UPDATE
+  SET role = EXCLUDED.role, state = 'active', updated_at = now()
+  WHERE m.state <> 'active'
+`
+
+type ActivateMembershipParams struct {
+	OrgID   uuid.UUID `json:"org_id"`
+	UserID  uuid.UUID `json:"user_id"`
+	Role    string    `json:"role"`
+	ViaScim bool      `json:"via_scim"`
+}
+
+// The one write that makes a membership active. Returns 0 rows when it was
+// already active, so the caller can tell a first activation from a repeat
+// and emit member.added exactly once.
+func (q *Queries) ActivateMembership(ctx context.Context, arg ActivateMembershipParams) (int64, error) {
+	result, err := q.db.Exec(ctx, activateMembership,
+		arg.OrgID,
+		arg.UserID,
+		arg.Role,
+		arg.ViaScim,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const activateOrg = `-- name: ActivateOrg :execrows
 UPDATE orgs SET activated_at = now(), updated_at = now() WHERE id = $1 AND activated_at IS NULL
 `
@@ -38,18 +69,102 @@ func (q *Queries) AddTeamMember(ctx context.Context, arg AddTeamMemberParams) er
 	return err
 }
 
+const countActiveMembershipsElsewhere = `-- name: CountActiveMembershipsElsewhere :one
+SELECT count(*) FROM memberships m WHERE m.user_id = $1 AND m.state = 'active' AND m.org_id <> $2
+`
+
+type CountActiveMembershipsElsewhereParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	OrgID  uuid.UUID `json:"org_id"`
+}
+
+// One organization per person (D26): an invitation or an approval for
+// someone already active elsewhere is refused.
+func (q *Queries) CountActiveMembershipsElsewhere(ctx context.Context, arg CountActiveMembershipsElsewhereParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countActiveMembershipsElsewhere, arg.UserID, arg.OrgID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countOrgAdmins = `-- name: CountOrgAdmins :one
 SELECT count(*) FROM memberships m JOIN users u ON u.id = m.user_id
-WHERE m.org_id = $1 AND m.role = 'admin' AND u.state = 'active'
+WHERE m.org_id = $1 AND m.role = 'admin' AND m.state = 'active' AND u.state = 'active'
 `
 
 // Only an admin who can still act counts: an erased account keeps its
-// membership row, and the last-owner guard this replaces counted it.
+// membership row (and the last-owner guard this replaces counted it), and a
+// pending admin holds nothing until they are approved (agentry#361).
 func (q *Queries) CountOrgAdmins(ctx context.Context, orgID uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countOrgAdmins, orgID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const countOrgSeats = `-- name: CountOrgSeats :one
+SELECT
+  (SELECT count(*) FROM memberships am WHERE am.org_id = $1 AND am.state = 'active')::bigint AS used,
+  (SELECT count(*) FROM org_invitations oi WHERE oi.org_id = $1 AND oi.accepted_at IS NULL AND oi.expires_at > now())::bigint AS invited,
+  (SELECT count(*) FROM memberships pm WHERE pm.org_id = $1 AND pm.state = 'pending')::bigint AS pending
+`
+
+type CountOrgSeatsRow struct {
+	Used    int64 `json:"used"`
+	Invited int64 `json:"invited"`
+	Pending int64 `json:"pending"`
+}
+
+// A seat is every active membership plus every open invitation (plan §4
+// "Seats"); pending members hold none and are reported so an admin can see
+// who is waiting.
+func (q *Queries) CountOrgSeats(ctx context.Context, orgID uuid.UUID) (CountOrgSeatsRow, error) {
+	row := q.db.QueryRow(ctx, countOrgSeats, orgID)
+	var i CountOrgSeatsRow
+	err := row.Scan(&i.Used, &i.Invited, &i.Pending)
+	return i, err
+}
+
+const createInvitation = `-- name: CreateInvitation :one
+INSERT INTO org_invitations (id, org_id, email, role, token_sha256, invited_by, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, org_id, email, role, token_sha256, invited_by, created_at, expires_at, accepted_at, accepted_by
+`
+
+type CreateInvitationParams struct {
+	ID          uuid.UUID  `json:"id"`
+	OrgID       uuid.UUID  `json:"org_id"`
+	Email       string     `json:"email"`
+	Role        string     `json:"role"`
+	TokenSha256 []byte     `json:"token_sha256"`
+	InvitedBy   *uuid.UUID `json:"invited_by"`
+	ExpiresAt   time.Time  `json:"expires_at"`
+}
+
+func (q *Queries) CreateInvitation(ctx context.Context, arg CreateInvitationParams) (OrgInvitation, error) {
+	row := q.db.QueryRow(ctx, createInvitation,
+		arg.ID,
+		arg.OrgID,
+		arg.Email,
+		arg.Role,
+		arg.TokenSha256,
+		arg.InvitedBy,
+		arg.ExpiresAt,
+	)
+	var i OrgInvitation
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.Email,
+		&i.Role,
+		&i.TokenSha256,
+		&i.InvitedBy,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.AcceptedAt,
+		&i.AcceptedBy,
+	)
+	return i, err
 }
 
 const createOrg = `-- name: CreateOrg :one
@@ -114,6 +229,23 @@ func (q *Queries) CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, e
 	return i, err
 }
 
+const deleteInvitation = `-- name: DeleteInvitation :execrows
+DELETE FROM org_invitations WHERE org_id = $1 AND id = $2 AND accepted_at IS NULL
+`
+
+type DeleteInvitationParams struct {
+	OrgID uuid.UUID `json:"org_id"`
+	ID    uuid.UUID `json:"id"`
+}
+
+func (q *Queries) DeleteInvitation(ctx context.Context, arg DeleteInvitationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteInvitation, arg.OrgID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteMembership = `-- name: DeleteMembership :execrows
 DELETE FROM memberships WHERE org_id = $1 AND user_id = $2
 `
@@ -148,8 +280,70 @@ func (q *Queries) DeleteTeam(ctx context.Context, arg DeleteTeamParams) (int64, 
 	return result.RowsAffected(), nil
 }
 
+const deleteUnacceptedInvitationsFor = `-- name: DeleteUnacceptedInvitationsFor :execrows
+DELETE FROM org_invitations WHERE org_id = $1 AND email = $2 AND accepted_at IS NULL
+`
+
+type DeleteUnacceptedInvitationsForParams struct {
+	OrgID uuid.UUID `json:"org_id"`
+	Email string    `json:"email"`
+}
+
+// Re-inviting the same address supersedes the standing invitation, whose
+// token stops working; the unique index makes this the only way to do it.
+func (q *Queries) DeleteUnacceptedInvitationsFor(ctx context.Context, arg DeleteUnacceptedInvitationsForParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUnacceptedInvitationsFor, arg.OrgID, arg.Email)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getInvitationByToken = `-- name: GetInvitationByToken :one
+SELECT i.id, i.org_id, i.email, i.role, i.token_sha256, i.invited_by, i.created_at, i.expires_at, i.accepted_at, i.accepted_by, h.handle AS org_handle, o.display_name AS org_display_name
+FROM org_invitations i
+JOIN orgs o ON o.id = i.org_id
+JOIN handles h ON h.id = i.org_id
+WHERE i.token_sha256 = $1
+`
+
+type GetInvitationByTokenRow struct {
+	ID             uuid.UUID  `json:"id"`
+	OrgID          uuid.UUID  `json:"org_id"`
+	Email          string     `json:"email"`
+	Role           string     `json:"role"`
+	TokenSha256    []byte     `json:"token_sha256"`
+	InvitedBy      *uuid.UUID `json:"invited_by"`
+	CreatedAt      time.Time  `json:"created_at"`
+	ExpiresAt      time.Time  `json:"expires_at"`
+	AcceptedAt     *time.Time `json:"accepted_at"`
+	AcceptedBy     *uuid.UUID `json:"accepted_by"`
+	OrgHandle      string     `json:"org_handle"`
+	OrgDisplayName string     `json:"org_display_name"`
+}
+
+func (q *Queries) GetInvitationByToken(ctx context.Context, tokenSha256 []byte) (GetInvitationByTokenRow, error) {
+	row := q.db.QueryRow(ctx, getInvitationByToken, tokenSha256)
+	var i GetInvitationByTokenRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.Email,
+		&i.Role,
+		&i.TokenSha256,
+		&i.InvitedBy,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.AcceptedAt,
+		&i.AcceptedBy,
+		&i.OrgHandle,
+		&i.OrgDisplayName,
+	)
+	return i, err
+}
+
 const getMembership = `-- name: GetMembership :one
-SELECT org_id, user_id, role, via_scim, created_at, updated_at FROM memberships WHERE org_id = $1 AND user_id = $2
+SELECT org_id, user_id, role, via_scim, created_at, updated_at, state FROM memberships WHERE org_id = $1 AND user_id = $2
 `
 
 type GetMembershipParams struct {
@@ -167,6 +361,7 @@ func (q *Queries) GetMembership(ctx context.Context, arg GetMembershipParams) (M
 		&i.ViaScim,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.State,
 	)
 	return i, err
 }
@@ -277,8 +472,62 @@ func (q *Queries) GetTeam(ctx context.Context, arg GetTeamParams) (Team, error) 
 	return i, err
 }
 
+const listOpenInvitations = `-- name: ListOpenInvitations :many
+SELECT i.id, i.org_id, i.email, i.role, i.token_sha256, i.invited_by, i.created_at, i.expires_at, i.accepted_at, i.accepted_by, h.handle AS invited_by_handle
+FROM org_invitations i
+LEFT JOIN handles h ON h.id = i.invited_by
+WHERE i.org_id = $1 AND i.accepted_at IS NULL
+ORDER BY i.created_at DESC
+`
+
+type ListOpenInvitationsRow struct {
+	ID              uuid.UUID  `json:"id"`
+	OrgID           uuid.UUID  `json:"org_id"`
+	Email           string     `json:"email"`
+	Role            string     `json:"role"`
+	TokenSha256     []byte     `json:"token_sha256"`
+	InvitedBy       *uuid.UUID `json:"invited_by"`
+	CreatedAt       time.Time  `json:"created_at"`
+	ExpiresAt       time.Time  `json:"expires_at"`
+	AcceptedAt      *time.Time `json:"accepted_at"`
+	AcceptedBy      *uuid.UUID `json:"accepted_by"`
+	InvitedByHandle *string    `json:"invited_by_handle"`
+}
+
+func (q *Queries) ListOpenInvitations(ctx context.Context, orgID uuid.UUID) ([]ListOpenInvitationsRow, error) {
+	rows, err := q.db.Query(ctx, listOpenInvitations, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOpenInvitationsRow
+	for rows.Next() {
+		var i ListOpenInvitationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.Email,
+			&i.Role,
+			&i.TokenSha256,
+			&i.InvitedBy,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.AcceptedAt,
+			&i.AcceptedBy,
+			&i.InvitedByHandle,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrgMembers = `-- name: ListOrgMembers :many
-SELECT m.role, m.via_scim, h.handle, u.display_name
+SELECT m.role, m.via_scim, m.state, h.handle, u.display_name
 FROM memberships m
 JOIN users u ON u.id = m.user_id
 JOIN handles h ON h.id = u.id
@@ -289,6 +538,7 @@ ORDER BY h.handle
 type ListOrgMembersRow struct {
 	Role        string `json:"role"`
 	ViaScim     bool   `json:"via_scim"`
+	State       string `json:"state"`
 	Handle      string `json:"handle"`
 	DisplayName string `json:"display_name"`
 }
@@ -305,6 +555,7 @@ func (q *Queries) ListOrgMembers(ctx context.Context, orgID uuid.UUID) ([]ListOr
 		if err := rows.Scan(
 			&i.Role,
 			&i.ViaScim,
+			&i.State,
 			&i.Handle,
 			&i.DisplayName,
 		); err != nil {
@@ -412,7 +663,7 @@ func (q *Queries) ListUserMemberships(ctx context.Context, userID uuid.UUID) ([]
 }
 
 const listUserMembershipsWithHandles = `-- name: ListUserMembershipsWithHandles :many
-SELECT m.org_id, m.role, h.handle
+SELECT m.org_id, m.role, m.state, h.handle
 FROM memberships m
 JOIN handles h ON h.id = m.org_id
 WHERE m.user_id = $1
@@ -422,6 +673,7 @@ ORDER BY h.handle
 type ListUserMembershipsWithHandlesRow struct {
 	OrgID  uuid.UUID `json:"org_id"`
 	Role   string    `json:"role"`
+	State  string    `json:"state"`
 	Handle string    `json:"handle"`
 }
 
@@ -434,7 +686,12 @@ func (q *Queries) ListUserMembershipsWithHandles(ctx context.Context, userID uui
 	var items []ListUserMembershipsWithHandlesRow
 	for rows.Next() {
 		var i ListUserMembershipsWithHandlesRow
-		if err := rows.Scan(&i.OrgID, &i.Role, &i.Handle); err != nil {
+		if err := rows.Scan(
+			&i.OrgID,
+			&i.Role,
+			&i.State,
+			&i.Handle,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -478,6 +735,27 @@ SELECT id FROM orgs WHERE id = $1 FOR UPDATE
 func (q *Queries) LockOrg(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, lockOrg, id)
 	return err
+}
+
+const markInvitationAccepted = `-- name: MarkInvitationAccepted :execrows
+UPDATE org_invitations SET accepted_at = now(), accepted_by = $3
+WHERE id = $1 AND org_id = $2 AND accepted_at IS NULL
+`
+
+type MarkInvitationAcceptedParams struct {
+	ID         uuid.UUID  `json:"id"`
+	OrgID      uuid.UUID  `json:"org_id"`
+	AcceptedBy *uuid.UUID `json:"accepted_by"`
+}
+
+// Single use: the guard on accepted_at is what makes a second accept with
+// the same token a no-op rather than a second membership.
+func (q *Queries) MarkInvitationAccepted(ctx context.Context, arg MarkInvitationAcceptedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markInvitationAccepted, arg.ID, arg.OrgID, arg.AcceptedBy)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const removeTeamMember = `-- name: RemoveTeamMember :execrows
@@ -526,8 +804,37 @@ type UpsertMembershipParams struct {
 	ViaScim bool      `json:"via_scim"`
 }
 
+// Role changes only: every door that *creates* an active membership goes
+// through registry.ActivateMember (agentry#361), which counts seats.
 func (q *Queries) UpsertMembership(ctx context.Context, arg UpsertMembershipParams) error {
 	_, err := q.db.Exec(ctx, upsertMembership,
+		arg.OrgID,
+		arg.UserID,
+		arg.Role,
+		arg.ViaScim,
+	)
+	return err
+}
+
+const upsertPendingMembership = `-- name: UpsertPendingMembership :exec
+INSERT INTO memberships (org_id, user_id, role, via_scim, state)
+VALUES ($1, $2, $3, $4, 'pending')
+ON CONFLICT (org_id, user_id) DO NOTHING
+`
+
+type UpsertPendingMembershipParams struct {
+	OrgID   uuid.UUID `json:"org_id"`
+	UserID  uuid.UUID `json:"user_id"`
+	Role    string    `json:"role"`
+	ViaScim bool      `json:"via_scim"`
+}
+
+// The SCIM and fold-in doors: a membership that holds no seat and confers
+// nothing until an admin approves it. An existing membership is left alone
+// — approving twice, or provisioning someone who is already active, must
+// not push them back to pending.
+func (q *Queries) UpsertPendingMembership(ctx context.Context, arg UpsertPendingMembershipParams) error {
+	_, err := q.db.Exec(ctx, upsertPendingMembership,
 		arg.OrgID,
 		arg.UserID,
 		arg.Role,

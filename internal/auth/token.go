@@ -12,8 +12,11 @@ import (
 // secret scanners (S2 ships a matching rule). Sessions and verification
 // tokens get distinct prefixes so leaked strings identify themselves.
 const (
-	PATPrefix          = "agy_"
-	SessionPrefix      = "agys_"
+	PATPrefix     = "agy_"
+	SessionPrefix = "agys_"
+	// InvitePrefix marks an organization invitation token (agentry#361).
+	// It is a credential like the others: shown once, stored as its hash.
+	InvitePrefix       = "agyi_"
 	VerificationPrefix = "agyv_"
 
 	// PATDisplayPrefixLen is how many characters of a PAT are stored and
