@@ -130,7 +130,7 @@ func (s *Server) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, registry.ErrNotFound):
 			problemNotFound(w, r)
 		case errors.Is(err, auth.ErrForbidden):
-			problemForbidden(w, r, "Creating a BriefAgent here needs the namespace's owner, or an organization admin.")
+			problemForbidden(w, r, "Creating a BriefAgent here needs the namespace's owner, or membership of the organization.")
 		case errors.Is(err, auth.ErrUnauthorized):
 			problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
 		case errors.Is(err, registry.ErrPrivateAgentCap):
@@ -220,13 +220,26 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	if !s.requireDB(w, r) {
 		return
 	}
-	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentMaintain)
+	a, role, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentMaintain)
 	if !ok {
 		return
 	}
 	var req UpdateAgentJSONBody
 	if !readJSON(w, r, &req) {
 		return
+	}
+	// Changing who can see an agent is the namespace's administrators' to
+	// make, not everyone who may release it (D19, agentry#362): an
+	// organization's members hold publish on its agents, and publishing a
+	// release is not the same act as putting the agent itself in public.
+	// The rest of this body is settings, which maintain covers.
+	if req.Visibility != nil && string(*req.Visibility) != a.Visibility {
+		if err := auth.CheckAgent(principalFrom(r.Context()),
+			auth.AgentResource{Public: a.Visibility == "public", EffectiveRole: role},
+			auth.ActAgentAdminister); err != nil {
+			problemForbidden(w, r, "Changing this BriefAgent's visibility needs the "+a.Namespace+" namespace's administrators.")
+			return
+		}
 	}
 	params := storegen.UpdateAgentSettingsParams{ID: a.ID}
 	detail := map[string]any{}
@@ -299,7 +312,7 @@ func (s *Server) ListAgentGrants(w http.ResponseWriter, r *http.Request, ns Name
 	if !s.requireDB(w, r) {
 		return
 	}
-	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentMaintain)
+	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentAdminister)
 	if !ok {
 		return
 	}
@@ -321,7 +334,7 @@ func (s *Server) SetAgentUserGrant(w http.ResponseWriter, r *http.Request, ns Na
 	if !s.requireDB(w, r) {
 		return
 	}
-	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentMaintain)
+	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentAdminister)
 	if !ok {
 		return
 	}
@@ -364,7 +377,7 @@ func (s *Server) RemoveAgentUserGrant(w http.ResponseWriter, r *http.Request, ns
 	if !s.requireDB(w, r) {
 		return
 	}
-	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentMaintain)
+	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentAdminister)
 	if !ok {
 		return
 	}
@@ -409,7 +422,7 @@ func (s *Server) SetAgentTeamGrant(w http.ResponseWriter, r *http.Request, ns Na
 	if !s.requireDB(w, r) {
 		return
 	}
-	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentMaintain)
+	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentAdminister)
 	if !ok {
 		return
 	}
@@ -455,7 +468,7 @@ func (s *Server) RemoveAgentTeamGrant(w http.ResponseWriter, r *http.Request, ns
 	if !s.requireDB(w, r) {
 		return
 	}
-	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentMaintain)
+	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentAdminister)
 	if !ok {
 		return
 	}
