@@ -87,37 +87,40 @@ type ArchiveLimits struct {
 	MaxTextBytes int64
 }
 
-// Feature names a capability an overlay may gate. The OSS Resolver enables
-// every one of them: §1.6.5 makes self-hosting first-class, and a crippled
-// stub in the OSS tree would be exactly the thing §14.3 forbids.
-type Feature string
-
-const (
-	FeatureEnforcedSSO       Feature = "enforced_sso"
-	FeatureSCIM              Feature = "scim"
-	FeaturePrivateNamespaces Feature = "private_namespaces"
-	FeatureWebhooks          Feature = "webhooks"
-	FeatureAuditExport       Feature = "audit_export"
-	FeatureAuditStream       Feature = "audit_stream"
-	FeaturePolicyOverrides   Feature = "policy_overrides"
-	FeaturePriorityReview    Feature = "priority_review"
-)
-
-// Allowance is a feature with a cap: Enabled says whether the subject may
-// use it at all, Max how many it may hold (0 = no cap).
-type Allowance struct {
+// Cap is a feature with a cap: Enabled says whether the subject may use
+// it at all, Max how many it may hold (0 = no cap). It was Allowance until
+// agentry#360; the word now means only the monthly credit grant (plan
+// organization-subscriptions D15).
+type Cap struct {
 	Enabled bool
 	Max     int64
 }
 
 // Features is what a subject may hold, as opposed to how fast it may act
-// (Limits): the caps a subscription tier sets (plan subscription-tiers
-// §5.3). The core resolver answers everything enabled with no cap; a
-// closed build's resolver answers by tier.
+// (Limits): the caps and switches a subscription tier sets (plans
+// subscription-tiers §5.3, organization-subscriptions §5.1). The core
+// resolver answers every cap enabled with no maximum and every switch on
+// (§1.6.5, §14.3: a self-hosted registry has no tiers and ships no crippled
+// stub); a closed build's resolver answers by tier. A cap never deletes:
+// over it, nothing can be added and nothing is lost.
 type Features struct {
-	// PrivateAgents caps the private agents a personal namespace holds. A
-	// cap never deletes: over it, nothing can be added and nothing is lost.
-	PrivateAgents Allowance
+	// PrivateAgents caps the private agents a namespace holds.
+	PrivateAgents Cap
+	// Seats caps the people an organization may license — active members
+	// plus open invitations (org subjects; meaningless for a user).
+	Seats Cap
+	// SSO and SCIM say whether the organization may create an SSO
+	// connection or mint a SCIM token.
+	SSO  bool
+	SCIM bool
+	// Branding says whether the organization may set a logo.
+	Branding bool
+	// AlertRouting says whether the organization may route dependency
+	// alerts to a destination of its own.
+	AlertRouting bool
+	// UnscannedAgents says whether the organization's admins may mark a
+	// private agent as skipping the pipeline.
+	UnscannedAgents bool
 }
 
 // Resolver answers entitlement questions.
@@ -129,9 +132,6 @@ type Resolver interface {
 	// Features returns the caps for a subject; an error means "unknown" and
 	// callers fail closed, as for Limits.
 	Features(ctx context.Context, s Subject) (Features, error)
-	// FeatureEnabled reports whether a feature is available to an org.
-	// uuid.Nil asks about a personal namespace.
-	FeatureEnabled(ctx context.Context, orgID uuid.UUID, f Feature) bool
 }
 
 // ConfigResolver is the OSS default: limits come from config, every feature is
@@ -177,12 +177,12 @@ func (r *ConfigResolver) Limits(_ context.Context, s Subject) (Limits, error) {
 	}, nil
 }
 
-// Features implements Resolver: the OSS build caps nothing.
+// Features implements Resolver: the OSS build caps nothing and switches
+// nothing off.
 func (r *ConfigResolver) Features(context.Context, Subject) (Features, error) {
-	return Features{PrivateAgents: Allowance{Enabled: true, Max: 0}}, nil
-}
-
-// FeatureEnabled implements Resolver: the OSS build ships everything on.
-func (r *ConfigResolver) FeatureEnabled(context.Context, uuid.UUID, Feature) bool {
-	return true
+	on := Cap{Enabled: true, Max: 0}
+	return Features{
+		PrivateAgents: on, Seats: on,
+		SSO: true, SCIM: true, Branding: true, AlertRouting: true, UnscannedAgents: true,
+	}, nil
 }
