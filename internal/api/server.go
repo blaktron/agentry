@@ -200,6 +200,14 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 			panic(serr)
 		}
 		srv.signer = signer
+		// The signer's public key is recorded so a rotation orphans nothing
+		// (§8.8, agentry#350): retired keys stay advertised, and a key some
+		// attestation lacks triggers the re-attestation sweep once the
+		// pipeline below exists to run it.
+		keyReg, kerr := scan.RegisterSigningKey(context.Background(), st, signer)
+		if kerr != nil {
+			panic(kerr)
+		}
 		orch := scan.NewOrchestrator(bundle, judge, log)
 		tools, terr := externalScanTools(cfg.Scan, log)
 		if terr != nil {
@@ -234,6 +242,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		// A ruleset semver we have never seen means the catalogue was judged
 		// by older rules (§8.7).
 		scan.EnqueueRescanSweepOnNewRuleset(context.Background(), srv.jobs, log, rulesetReg)
+		scan.EnqueueReattestSweepIfBehind(context.Background(), st, srv.jobs, log, signer, keyReg)
 	}
 	return srv
 }
@@ -521,11 +530,12 @@ func (s *Server) wellKnownRegistry(w http.ResponseWriter, r *http.Request) {
 
 // wellKnownSigningKeys serves /.well-known/agentry/signing-keys.json (§8.8):
 // the verification key set clients pin on first use (TOFU) and use to verify
-// DSSE attestations offline. Rotation = overlapping validity windows.
+// DSSE attestations offline. Rotation = overlapping validity windows, plus
+// the registry's own record of every key it has signed with (agentry#350).
 func (s *Server) wellKnownSigningKeys(w http.ResponseWriter, r *http.Request) {
 	out := struct {
 		Keys []signingKey `json:"keys"`
-	}{Keys: s.signingKeySet()}
+	}{Keys: s.signingKeySet(r.Context())}
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	writeJSON(w, http.StatusOK, out)
 }
@@ -536,31 +546,53 @@ func (s *Server) wellKnownSigningKeys(w http.ResponseWriter, r *http.Request) {
 // rotating a key has no way to say "both of these are legitimate, here is
 // when each applies". Omitted when unset, so an unbounded key is silent rather
 // than claiming a window it does not have.
+//
+// status is the registry's own record (agentry#350): `active` for the key
+// that signs today, `retired` for a key the registry signed with before and
+// no longer does — still listed, with the date, so an attestation it signed
+// verifies and a client can say "signed by a retired key". A verification-only
+// key from the operator's config carries no status: the registry never
+// signed with it and cannot say what it was.
 type signingKey struct {
 	KeyID     string `json:"keyId"`
 	Algorithm string `json:"algorithm"`
 	PublicKey string `json:"publicKeyPem"`
 	NotBefore string `json:"notBefore,omitempty"`
 	NotAfter  string `json:"notAfter,omitempty"`
+	Status    string `json:"status,omitempty"`
+	RetiredAt string `json:"retiredAt,omitempty"`
 }
 
-const defaultSigningAlgorithm = "ecdsa-p256-sha256"
+const (
+	signingKeyActive  = "active"
+	signingKeyRetired = "retired"
+)
 
 // signingKeySet assembles the published key set: the active signer first, then
 // any verification-only keys the operator configured for an in-flight
-// rotation. A key whose PEM cannot be read is dropped with a log line rather
-// than failing the endpoint — serving the keys that ARE valid keeps existing
-// clients verifying, where a 500 would break all of them at once.
-func (s *Server) signingKeySet() []signingKey {
+// rotation, then the retired keys the registry itself signed with and that
+// still have attestations to their name. A configured key the registry also
+// has on record carries the record's status — the operator's listing is the
+// rotation runbook's older step, not a reason to hide the date. A key whose
+// PEM cannot be read is dropped with a log line rather than failing the
+// endpoint — serving the keys that ARE valid keeps existing clients
+// verifying, where a 500 would break all of them at once. The retired keys
+// are read from the database on each request; the document is cached for
+// five minutes and the query is one indexed probe per retired key.
+func (s *Server) signingKeySet(ctx context.Context) []signingKey {
 	keys := []signingKey{}
+	listed := map[string]bool{}
+	retired := s.retiredSigningKeys(ctx)
 	if s.signer != nil {
 		keys = append(keys, signingKey{
 			KeyID:     s.signer.KeyID(),
-			Algorithm: defaultSigningAlgorithm,
+			Algorithm: scan.SigningAlgorithm,
 			PublicKey: s.signer.PublicKeyPEM(),
 			NotBefore: s.cfg.Signing.NotBefore,
 			NotAfter:  s.cfg.Signing.NotAfter,
+			Status:    signingKeyActive,
 		})
+		listed[s.signer.KeyID()] = true
 	}
 	for _, k := range s.cfg.Signing.AdditionalKeys {
 		pemText := k.PublicKeyPEM
@@ -577,17 +609,58 @@ func (s *Server) signingKeySet() []signingKey {
 		}
 		alg := k.Algorithm
 		if alg == "" {
-			alg = defaultSigningAlgorithm
+			alg = scan.SigningAlgorithm
 		}
-		keys = append(keys, signingKey{
+		entry := signingKey{
 			KeyID:     k.KeyID,
 			Algorithm: alg,
 			PublicKey: pemText,
 			NotBefore: k.NotBefore,
 			NotAfter:  k.NotAfter,
-		})
+		}
+		if rec, ok := retired[k.KeyID]; ok {
+			entry.Status, entry.RetiredAt = rec.Status, rec.RetiredAt
+		}
+		keys = append(keys, entry)
+		listed[k.KeyID] = true
+	}
+	for _, k := range retired {
+		if listed[k.KeyID] {
+			continue
+		}
+		keys = append(keys, k)
 	}
 	return keys
+}
+
+// retiredSigningKeys reads the registry's record of retired keys that still
+// have attestations to their name, keyed by id, in the served shape. Empty
+// without a database, and empty with a log line when the read fails: the
+// current key still serves and a client that pinned earlier keeps verifying,
+// but a fresh client is refusing old releases for as long as that lasts.
+func (s *Server) retiredSigningKeys(ctx context.Context) map[string]signingKey {
+	out := map[string]signingKey{}
+	if s.st == nil {
+		return out
+	}
+	rows, err := s.q().ListRetiredSigningKeysInUse(ctx)
+	if err != nil {
+		s.log.Error("signing keys: listing retired keys", "err", err)
+		return out
+	}
+	for _, k := range rows {
+		entry := signingKey{
+			KeyID:     k.KeyID,
+			Algorithm: k.Algorithm,
+			PublicKey: k.PublicKeyPem,
+			Status:    signingKeyRetired,
+		}
+		if k.RetiredAt != nil {
+			entry.RetiredAt = k.RetiredAt.UTC().Format(time.RFC3339)
+		}
+		out[k.KeyID] = entry
+	}
+	return out
 }
 
 // NewHandler assembles the full HTTP handler for the api role.

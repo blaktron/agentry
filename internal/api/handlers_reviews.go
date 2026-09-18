@@ -147,7 +147,11 @@ func (s *Server) GetVersionAttestation(w http.ResponseWriter, r *http.Request, n
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	// Not immutable: a rotation countersigns the envelope with the new key
+	// (agentry#350), and a cache that kept the old bytes for a year would
+	// keep serving an envelope a fresh client cannot verify. The statement
+	// inside never changes; the signature list grows.
+	w.Header().Set("Cache-Control", "public, max-age=300")
 	_, _ = w.Write(att.DsseEnvelope)
 }
 

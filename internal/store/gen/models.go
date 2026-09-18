@@ -414,6 +414,15 @@ type Session struct {
 	SamlSessionIndex *string     `json:"saml_session_index"`
 }
 
+type SigningKey struct {
+	KeyID        string     `json:"key_id"`
+	Algorithm    string     `json:"algorithm"`
+	PublicKeyPem string     `json:"public_key_pem"`
+	FirstSeenAt  time.Time  `json:"first_seen_at"`
+	LastSeenAt   time.Time  `json:"last_seen_at"`
+	RetiredAt    *time.Time `json:"retired_at"`
+}
+
 type SsoConnection struct {
 	ID        uuid.UUID `json:"id"`
 	OrgID     uuid.UUID `json:"org_id"`

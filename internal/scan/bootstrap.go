@@ -78,3 +78,80 @@ func EnqueueRescanSweepOnNewRuleset(ctx context.Context, q queue.Client, log *sl
 	}
 	log.Info("scan: new ruleset registered; rescan sweep enqueued", "ruleset", reg.Semver)
 }
+
+// SigningKeyRegistration is the outcome of recording the signer's public key.
+type SigningKeyRegistration struct {
+	// KeyID is the signer's key id.
+	KeyID string
+	// New reports that the registry had never signed with this key before:
+	// a rotation, or the first start. A new key is what triggers the
+	// re-attestation sweep (agentry#350); a restart on the same key is not.
+	New bool
+	// Retired counts the keys the arrival of this one retired.
+	Retired int64
+}
+
+// RegisterSigningKey records the signer's public key at start and retires
+// every other key (§8.8, agentry#350). The public part is what a verifier
+// needs and what a rotation used to lose: the well-known set only ever named
+// the current key, so every attestation the outgoing key had signed became
+// unverifiable to a client pinning afterwards. Callers treat an error as fatal
+// to startup, as with RegisterRuleset: a registry that signs with a key it
+// cannot record is the failure mode this exists to close.
+func RegisterSigningKey(ctx context.Context, st *store.Store, signer Signer) (SigningKeyRegistration, error) {
+	if st == nil {
+		return SigningKeyRegistration{}, fmt.Errorf("scan: register signing key: no database")
+	}
+	if signer == nil {
+		return SigningKeyRegistration{}, fmt.Errorf("scan: register signing key: no signer")
+	}
+	pemText := signer.PublicKeyPEM()
+	if pemText == "" {
+		return SigningKeyRegistration{}, fmt.Errorf("scan: register signing key %s: no public key", signer.KeyID())
+	}
+	q := st.Queries()
+	row, err := q.RegisterSigningKey(ctx, storegen.RegisterSigningKeyParams{
+		KeyID: signer.KeyID(), Algorithm: SigningAlgorithm, PublicKeyPem: pemText,
+	})
+	if err != nil {
+		return SigningKeyRegistration{}, fmt.Errorf("scan: register signing key %s: %w", signer.KeyID(), err)
+	}
+	retired, err := q.RetireOtherSigningKeys(ctx, signer.KeyID())
+	if err != nil {
+		return SigningKeyRegistration{}, fmt.Errorf("scan: retire signing keys: %w", err)
+	}
+	return SigningKeyRegistration{KeyID: row.KeyID, New: row.Inserted, Retired: retired}, nil
+}
+
+// EnqueueReattestSweepIfBehind enqueues the re-attestation sweep when any
+// attestation lacks the signer's signature (agentry#350): a rotation, a key
+// rolled back to, a sweep that failed part way, or an enqueue that was
+// lost — every one completes at the next start, because the trigger is the
+// state of the table, not the memory of having enqueued once. A start on a
+// key every attestation already carries enqueues nothing.
+func EnqueueReattestSweepIfBehind(ctx context.Context, st *store.Store, q queue.Client, log *slog.Logger, signer Signer, reg SigningKeyRegistration) {
+	if st == nil || q == nil || signer == nil {
+		return
+	}
+	if log == nil {
+		log = slog.Default()
+	}
+	pending, err := st.Queries().CountAttestationsLackingSignature(ctx, KeyMatchJSON(signer.KeyID()))
+	if err != nil {
+		log.Error("scan: could not count attestations lacking the signing key", "keyId", signer.KeyID(), "err", err)
+		return
+	}
+	if pending == 0 {
+		return
+	}
+	if _, err := q.Enqueue(ctx, JobReattestSweep, "core", ReattestSweepArgs{KeyID: signer.KeyID(), Pending: pending}); err != nil {
+		// Not fatal: signing new releases works either way, and the next
+		// start counts again. But loud — until the sweep runs, a fresh
+		// client refuses everything published before this key.
+		log.Error("scan: could not enqueue re-attestation sweep",
+			"keyId", signer.KeyID(), "pending", pending, "err", err)
+		return
+	}
+	log.Info("scan: attestations lack the signing key; re-attestation sweep enqueued",
+		"keyId", signer.KeyID(), "pending", pending, "newKey", reg.New, "retired", reg.Retired)
+}
