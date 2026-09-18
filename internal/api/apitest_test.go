@@ -294,6 +294,16 @@ func (env *testEnv) registerEmail(handle, email string) string {
 	return h
 }
 
+// verifyOrgDomain records that the organization proved control of a
+// domain, which a DNS-TXT claim does in real life (handlers_domains.go).
+func (env *testEnv) verifyOrgDomain(org, domain string) {
+	env.t.Helper()
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`UPDATE orgs SET verified_domain = $2 WHERE id = (SELECT id FROM handles WHERE handle = $1)`, org, domain); err != nil {
+		env.t.Fatal(err)
+	}
+}
+
 // joinOrg makes handle an active member of org through the real doors —
 // since agentry#361 an invitation accepted by the invited account is the
 // only way in, so a fixture that needs a member builds one the way a person

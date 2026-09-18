@@ -709,8 +709,11 @@ mints (`POST /api/v1/orgs/{org}/scim/tokens`, or the org admin console).
 In Authentik create a *SCIM provider* with URL
 `https://<host>/scim/v2` and that token, attach it to the `agentry`
 application as a backchannel provider, and scope it to the group(s) that
-should become org members. Users then arrive as members and Authentik
-groups as teams; the registry keeps ownership of roles. A single Authentik
+should become org members. Users then arrive as **pending** members and
+Authentik groups as teams: the IdP says who exists, an admin says who is a
+member, so each provisioned person waits for an approval (which is also
+where their seat is taken) and holds nothing of the organisation until
+then. Declining removes them. The registry keeps ownership of roles. A single Authentik
 instance can provision several orgs — one SCIM provider per org, each
 with its own token. This is deliberately not a blueprint: the token is
 org-scoped and minted by the org, not by the platform.

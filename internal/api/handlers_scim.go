@@ -370,8 +370,11 @@ func (s *Server) scimPutUser(w http.ResponseWriter, r *http.Request, sc scimCtx)
 			}
 		}
 		// Re-assert the membership: a PUT with active=true on someone
-		// previously deactivated is how an IdP reinstates them.
-		if err := q.UpsertMembership(r.Context(), storegen.UpsertMembershipParams{
+		// previously deactivated is how an IdP reinstates them — as a
+		// PENDING member (agentry#361, D7). Deactivating removed the row,
+		// so this is a fresh provisioning, and SCIM provisions; an admin
+		// approves. Someone who is still an active member is untouched.
+		if err := q.UpsertPendingMembership(r.Context(), storegen.UpsertPendingMembershipParams{
 			OrgID: sc.orgID, UserID: id, Role: orDefault(u.Role, string(auth.RoleMember)), ViaScim: true,
 		}); err != nil {
 			return err

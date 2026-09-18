@@ -140,6 +140,10 @@ func TestSAMLACSEndpoint(t *testing.T) {
 	orgH := "samlorg" + env.sfx
 	env.createOrg(sess, orgH)
 
+	// The organization has proved it controls the domain the IdP asserts:
+	// linking an identity to an existing member's account for the first
+	// time needs that proof as well as the membership (T-12, agentry#361).
+	env.verifyOrgDomain(orgH, "acme.example")
 	idp := newSAMLTestIdP(t)
 	metadataXML, err := samlsp.BuildIDPMetadataXML(idp.entityID, "https://acs-idp.test/sso", idp.certPEM)
 	if err != nil {
@@ -295,6 +299,7 @@ func TestSAMLSingleLogout(t *testing.T) {
 	// The person the IdP will assert is already a member: since agentry#361
 	// the organization's SSO signs in members and admits nobody.
 	sloNameID := "slo-user-" + env.sfx + "@acme.example"
+	env.verifyOrgDomain(orgH, "acme.example")
 	env.seedMembership(orgH, env.registerEmail("slo-member", sloNameID), "member", "active")
 
 	loginSAML := func(name string) caller {
