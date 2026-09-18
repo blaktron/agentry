@@ -70,6 +70,20 @@ Verification keys are served at
 `/.well-known/agentry/signing-keys.json`; the CLI pins them on first use and
 warns when the advertised key ids change.
 
+A key rotation orphans nothing. The registry keeps every key it has signed
+with, and the well-known set lists each one with a `status`: `active` for the
+key signing today, `retired` (with `retiredAt`) for a key that signed releases
+before and no longer does. A retired key stays listed for as long as an
+attestation carries its signature, so a client that pinned it keeps
+verifying. When the registry starts signing with a new key it also
+countersigns every existing attestation: the statement inside the envelope is
+untouched, and a second signature by the new key is appended to it. A client
+that pins only the new key verifies a release published before the rotation;
+a client that pinned the old key sees the original signature still standing.
+The attestation is the same envelope at the same URL with one more signature,
+which is why it is served with a short cache lifetime rather than as
+immutable.
+
 ## What this does not guarantee
 
 The language throughout the product is **"scanned, N findings, signed"**,

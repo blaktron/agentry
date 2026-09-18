@@ -101,12 +101,14 @@ type AgentVersionMcpServer struct {
 }
 
 type Attestation struct {
-	ID            uuid.UUID `json:"id"`
-	VersionID     uuid.UUID `json:"version_id"`
-	PredicateType string    `json:"predicate_type"`
-	DsseEnvelope  []byte    `json:"dsse_envelope"`
-	KeyID         string    `json:"key_id"`
-	CreatedAt     time.Time `json:"created_at"`
+	ID              uuid.UUID  `json:"id"`
+	VersionID       uuid.UUID  `json:"version_id"`
+	PredicateType   string     `json:"predicate_type"`
+	DsseEnvelope    []byte     `json:"dsse_envelope"`
+	KeyID           string     `json:"key_id"`
+	CreatedAt       time.Time  `json:"created_at"`
+	ReattestedAt    *time.Time `json:"reattested_at"`
+	ReattestedKeyID *string    `json:"reattested_key_id"`
 }
 
 type AuditEvent struct {
@@ -412,6 +414,15 @@ type Session struct {
 	SsoConnectionID  *uuid.UUID  `json:"sso_connection_id"`
 	SamlNameID       *string     `json:"saml_name_id"`
 	SamlSessionIndex *string     `json:"saml_session_index"`
+}
+
+type SigningKey struct {
+	KeyID        string     `json:"key_id"`
+	Algorithm    string     `json:"algorithm"`
+	PublicKeyPem string     `json:"public_key_pem"`
+	FirstSeenAt  time.Time  `json:"first_seen_at"`
+	LastSeenAt   time.Time  `json:"last_seen_at"`
+	RetiredAt    *time.Time `json:"retired_at"`
 }
 
 type SsoConnection struct {

@@ -200,9 +200,14 @@ chmod 600 signing-key.pem
 ```
 
 Your public key is served at `/.well-known/agentry/signing-keys.json`, and
-clients pin it on first use. **Back this key up**: it is what makes your
-already-published attestations verifiable, and losing it means every installed
-copy stops verifying.
+clients pin it on first use. **Back this key up.** Losing it forces a
+rotation, and a rotation is visible to every client: the registry records the
+public part of each key it signs with, keeps the old one listed as `retired`,
+and at the next start countersigns every existing attestation with the new
+key, so nothing already published becomes unverifiable — but a client that
+pinned the old key is told the advertised key ids changed and has to re-pin
+deliberately before it verifies anything published afterwards. Rotate on
+purpose, not by accident.
 
 With the compose stack, three lines in `.env` wire the key in without leaving
 dev mode (agentry#308): `AGENTRY_SIGNING_KIND=file`,
@@ -211,10 +216,12 @@ dev mode (agentry#308): `AGENTRY_SIGNING_KIND=file`,
 host directory, mounted read-only at `/etc/agentry`). The server runs as uid
 65532 inside the container, so a `0600` key has to be owned by that uid
 (`chown 65532 signing-key.pem`) or the server refuses to start. Without
-these lines dev mode mints a key at every start, and an attestation stops
-verifying at the next restart — fine for a throwaway stack, not for one
-anyone installs from; and `kind: file` with no `keyFile` in dev mode is the
-same ephemeral key, not an error.
+these lines dev mode mints a key at every start, so every restart is a
+rotation: the previous key is retired and the whole catalogue is countersigned
+again, and every client that pinned the stack warns about a changed key set
+until it re-pins — fine for a throwaway stack, not for one anyone installs
+from; and `kind: file` with no `keyFile` in dev mode is the same ephemeral
+key, not an error.
 
 Generate a sealing key:
 

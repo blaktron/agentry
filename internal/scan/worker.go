@@ -22,6 +22,10 @@ const (
 	// JobScanReconcile is the §7 watchdog: sweep versions parked in
 	// `scanning` past the 30-minute cap into review.
 	JobScanReconcile = "scan.reconcile"
+	// JobReattestSweep countersigns every attestation with a newly
+	// registered signing key (§8.8, agentry#350). On the core queue: it
+	// touches the database and the signer, never untrusted content.
+	JobReattestSweep = "scan.reattest_sweep"
 )
 
 // ScanJobArgs is the payload for a scan.version job.
@@ -34,6 +38,12 @@ type ScanJobArgs struct {
 // arrival triggered it, §8.7).
 type RescanSweepArgs struct {
 	RulesetSemver string `json:"rulesetSemver,omitempty"`
+}
+
+// ReattestSweepArgs records which key's arrival scheduled the sweep. The
+// sweep signs with whatever key the worker holds; the argument is the log's.
+type ReattestSweepArgs struct {
+	KeyID string `json:"keyId,omitempty"`
 }
 
 // RegisterHandlers wires the pipeline's job handlers onto a queue client
@@ -53,6 +63,18 @@ func (p *Pipeline) RegisterHandlers(q queue.Client) {
 			p.log.Info("scan: rescan sweep starting", "ruleset", args.RulesetSemver)
 		}
 		return p.RescanSweep(ctx)
+	})
+	q.Register(JobReattestSweep, func(ctx context.Context, job queue.Job) error {
+		var args ReattestSweepArgs
+		_ = json.Unmarshal(job.Args, &args) // args are advisory
+		if args.KeyID != "" && p.signer != nil && args.KeyID != p.signer.KeyID() {
+			// The worker signs with its own key; a sweep enqueued for another
+			// key id (a split deployment mid-rotation) is still worth running
+			// — every attestation should carry the key that signs today.
+			p.log.Warn("scan: re-attestation sweep enqueued for another key id",
+				"enqueuedFor", args.KeyID, "signingWith", p.signer.KeyID())
+		}
+		return p.ReattestSweep(ctx)
 	})
 	q.Register(JobMCPSweep, func(ctx context.Context, _ queue.Job) error {
 		_, err := p.MCPSweep(ctx)
