@@ -306,6 +306,9 @@ func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st 
 	// operator can trigger a reconcile by hand.
 	go reconcileTicker(ctx, q, log)
 	go mcpSweepTicker(ctx, q, log)
+	// The organization decommission sweep (agentry#363): hourly, and once
+	// at start; the handler erases only what is past its hold.
+	go periodicTicker(ctx, q, api.JobOrgDecommissionSweep, "core", time.Hour, log)
 	return q, nil
 }
 
@@ -333,6 +336,10 @@ type serverOrgs struct{ srv *api.Server }
 
 func (o serverOrgs) Activate(ctx context.Context, orgID uuid.UUID) (bool, error) {
 	return o.srv.ActivateOrg(ctx, orgID)
+}
+
+func (o serverOrgs) Decommission(ctx context.Context, orgID uuid.UUID, reason string) (bool, error) {
+	return o.srv.DecommissionOrgByExtension(ctx, orgID, reason)
 }
 
 // periodicTicker enqueues a job once now and then on its period. Every

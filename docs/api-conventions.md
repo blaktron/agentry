@@ -46,10 +46,10 @@ The organization problems (plan organization-subscriptions), each with
 its own slug so a client can offer the right next step. Answered by every
 registry: `409 last-admin` refuses the demotion or removal of an
 organization's last admin, by an admin or by the organization's IdP over
-SCIM — promote another member first; only a decommission removes the
-last one (the guard on an account's erasure follows with the lifecycle
-milestone). `403 email-unverified` refuses
-`POST /orgs` from an account whose address is not verified. `409
+SCIM, their leaving, and the erasure of their account (`POST
+/user/delete`) — promote another member first; only a decommission
+removes the last one. `403 email-unverified` refuses `POST /orgs` and the
+domain lookup from an account whose address is not verified. `409
 org-pending` refuses `POST /orgs` while an organization the account
 created is still awaiting payment (only where an admission extension
 runs; a core registry activates an organization as it is created).
@@ -58,15 +58,25 @@ organization's seats, carrying `used`, `invited`, `pending` and `max`; a
 registry with no billing extension has no seat cap and never answers it.
 `403 feature-not-included` refuses an act the organization's subscription
 does not include at all, which is not the same as its allowance being
-reached. `409 already-a-member` refuses an invitation or an approval for
-someone who is an active member of another organization: a person belongs
-to one at a time.
+reached. `409 already-a-member` refuses an invitation, an approval or
+`POST /orgs` for someone who is an active member of another
+organization: a person belongs to one at a time, and leaves it (`DELETE
+/orgs/{org}/members/{own handle}`) before joining or founding another.
+`409 domain-claimed` refuses `POST /orgs` from an address whose domain
+already belongs to an organization — recorded at that organization's
+creation, or verified by it over DNS — and a DNS verification of a domain
+another organization holds; it carries `domain` and `org`, the holder,
+whose administrators can add the person (`GET /user/domain-org` says the
+same, and `POST /user/domain-org/request-access` asks them, once a day —
+`429 rate-limited` afterwards). `409 org-decommissioning` refuses every
+change to an organization in its decommission hold, and to anything under
+it, carrying `org` and `decommissionAt`; reads, the audit log and its
+export go on until then, and a member may still leave. A suspended organization, and everything under
+it, answers `404` to everyone until platform staff reinstate it.
 
-Reserved for the milestones that build them, so a client can be written
-against the catalogue now: `409 domain-claimed` (the creator's email
-domain already belongs to an organization) and `422
-pipeline-skip-refused` (the unscanned flag on a public agent, or a
-private→public change while it is set).
+Reserved for the milestone that builds it, so a client can be written
+against the catalogue now: `422 pipeline-skip-refused` (the unscanned
+flag on a public agent, or a private→public change while it is set).
 
 ## Idempotency-Key
 
@@ -200,6 +210,39 @@ content whenever the account has any:
   forbids deleting version rows and a database trigger enforces it: digests
   stay resolvable so existing installs can still be verified. PII is purged
   and credentials revoked; what remains is a leak-free tombstone.
+- **An organization's last admin cannot be erased** (`409 last-admin`):
+  promote another member first, or decommission the organization. The
+  erased account's memberships go with it, so no seat is held by an
+  account that is gone.
+- **A transfer respects the organization's private-agent cap** (`422
+  private-agent-cap`, nothing erased, nothing moved) and is refused into an
+  organization in its decommission hold.
+
+## Organization lifecycle
+
+An organization is created by `POST /orgs` from an account with a verified
+address (its first admin), one per person: an active member of another
+organization leaves it first. It is **keyed on its creator's email domain**
+unless the body says `domain: none` or the domain is one no organization
+owns (a public mail provider, a reserved name); a domain belongs to one
+organization, and a further domain is claimed over DNS
+(`/orgs/{org}/domain-claims`). `GET /orgs/{org}` carries `domain`,
+`verifiedDomains`, `state` and, in a hold, `decommissionAt`.
+
+`POST /orgs/{org}/decommission` (admin, session only, the handle repeated
+in `confirm`) starts the **decommission hold**: the organization is
+read-only for its members — its agents readable, its audit log listable
+and exportable, every change `409 org-decommissioning`, pushes refused
+over git — for the deployment's hold (`orgs.decommissionHold`, default
+30 days), then a sweep yanks every release, deletes the archives and
+repositories, ends every membership and invitation, retires the agents,
+scrubs the organization's row and releases its handle and domain, and
+records `org.erase` in the audit log. Version rows are immutable and are
+not deleted. Platform staff may `POST /orgs/{org}/suspend` (with a
+reason) — the organization and everything under it answer `404` to
+everyone — and `POST /orgs/{org}/reinstate`, which ends a suspension or
+cancels a hold that has not run; an erased organization does not come
+back.
 
 ## Agent deletion
 

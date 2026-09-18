@@ -19,6 +19,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/maildomains"
 	"github.com/blaktron/agentry/internal/notify"
 	"github.com/blaktron/agentry/internal/registry"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
@@ -121,7 +122,7 @@ func (s *Server) CreateInvitation(w http.ResponseWriter, r *http.Request, org Or
 			return
 		}
 		if n > 0 {
-			problemAlreadyAMember(w, r)
+			problemAlreadyAMember(w, r, alreadyAMemberDetail)
 			return
 		}
 	} else if !errors.Is(err, pgx.ErrNoRows) {
@@ -197,15 +198,16 @@ func (s *Server) CreateInvitation(w http.ResponseWriter, r *http.Request, org Or
 // (operator decision, 2026-09-18): the organization holds the mail domain,
 // so it holds the mailbox.
 func atOrgDomain(org storegen.GetOrgByHandleRow, email string) bool {
-	if org.VerifiedDomain == nil {
-		return false
-	}
-	domain := strings.TrimSpace(*org.VerifiedDomain)
+	domain := maildomains.Of(email)
 	if domain == "" {
 		return false
 	}
-	at := strings.LastIndex(email, "@")
-	return at >= 0 && strings.EqualFold(strings.TrimSpace(email[at+1:]), domain)
+	for _, v := range org.VerifiedDomains {
+		if strings.EqualFold(strings.TrimSpace(v), domain) {
+			return true
+		}
+	}
+	return false
 }
 
 // mailInvitation sends the offer and reports whether it went.
@@ -344,7 +346,7 @@ func (s *Server) invitationAcceptable(r *http.Request, row storegen.GetInvitatio
 // invitationAtOrgDomain reports whether the invited address is at the
 // organization's own verified domain.
 func invitationAtOrgDomain(row storegen.GetInvitationByTokenRow) bool {
-	return atOrgDomain(storegen.GetOrgByHandleRow{VerifiedDomain: row.VerifiedDomain}, row.Email)
+	return row.AtVerifiedDomain
 }
 
 // GetInvitation implements GET /invitations/{token} (session only).

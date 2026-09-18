@@ -232,7 +232,31 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, act auth.Acti
 			"SSO required", "This organization requires a fresh SSO session or an org-bound token. Sign in through SSO again.")
 		return false
 	}
+	// The organization's state (agentry#363): a suspended organization
+	// answers as absent, one in its decommission hold takes reads only.
+	// The same gate guards agent routes, the git door and the membership
+	// chokepoint; this is where every org-scoped route meets it.
+	if orgID != uuid.Nil && s.st != nil {
+		if err := s.reg.OrgGate(r.Context(), orgID, act); err != nil {
+			if s.orgGateProblem(w, r, s.orgHandleOf(r.Context(), orgID), err) {
+				return false
+			}
+			s.log.ErrorContext(r.Context(), "org gate", "org", orgID, "err", err)
+			problemInternal(w, r)
+			return false
+		}
+	}
 	return true
+}
+
+// orgHandleOf names an organization for a refusal; "" when it cannot be
+// read, which the refusal tolerates.
+func (s *Server) orgHandleOf(ctx context.Context, orgID uuid.UUID) string {
+	row, err := s.q().GetOrgByID(ctx, orgID)
+	if err != nil {
+		return ""
+	}
+	return row.Handle
 }
 
 // enforceSSO returns true when the caller may act on orgID's resources under

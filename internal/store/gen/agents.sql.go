@@ -112,7 +112,10 @@ WHERE a.visibility = 'public'
   AND ($4::text IS NULL
        OR lower(lv.manifest ->> 'license') = lower($4::text))
   AND ($5::boolean = false
-       OR (h.kind = 'org' AND o.verified_domain IS NOT NULL))
+       OR (h.kind = 'org' AND EXISTS (SELECT 1 FROM domain_claims dc WHERE dc.org_id = o.id AND dc.verified_at IS NOT NULL)))
+  -- An organization that is suspended or erased is absent everywhere, its
+  -- listings included (agentry#363); one in its decommission hold is read.
+  AND (h.kind <> 'org' OR o.state IN ('active','decommissioning'))
 `
 
 type CountSearchAgentsParams struct {
@@ -479,8 +482,10 @@ func (q *Queries) ListAgentTeamGrantsForUser(ctx context.Context, arg ListAgentT
 const listAgentsByNamespace = `-- name: ListAgentsByNamespace :many
 SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, h.handle AS namespace
 FROM agents a JOIN handles h ON h.id = a.namespace_id
+LEFT JOIN orgs o ON o.id = a.namespace_id
 WHERE h.handle = $1
   AND (a.visibility = 'public' OR $2::boolean)
+  AND (h.kind <> 'org' OR o.state IN ('active','decommissioning'))
 ORDER BY a.name
 `
 
@@ -508,6 +513,9 @@ type ListAgentsByNamespaceRow struct {
 	Namespace                string      `json:"namespace"`
 }
 
+// A suspended or erased organization's agents are absent (agentry#363);
+// the handler answers 404 for the namespace before this runs, and the
+// predicate keeps the listing honest on its own.
 func (q *Queries) ListAgentsByNamespace(ctx context.Context, arg ListAgentsByNamespaceParams) ([]ListAgentsByNamespaceRow, error) {
 	rows, err := q.db.Query(ctx, listAgentsByNamespace, arg.Handle, arg.IncludePrivate)
 	if err != nil {
@@ -551,6 +559,7 @@ SELECT a.id, a.name, a.modes, a.summary, a.quarantine_state, a.created_at,
        coalesce(d.installs, 0)::bigint AS installs
 FROM agents a
 JOIN handles h ON h.id = a.namespace_id
+LEFT JOIN orgs o ON o.id = a.namespace_id
 JOIN agent_versions lv ON lv.id = a.latest_published_version_id
 LEFT JOIN (
   SELECT agent_id, sum(installs) AS installs
@@ -558,6 +567,7 @@ LEFT JOIN (
 ) d ON d.agent_id = a.id
 WHERE a.visibility = 'public'
   AND a.quarantine_state <> 'blocked'
+  AND (h.kind <> 'org' OR o.state IN ('active','decommissioning'))
   AND lv.manifest -> 'tags' @> to_jsonb($2::text)
   AND ($3::timestamptz IS NULL
        OR a.created_at < $3
@@ -703,7 +713,10 @@ WHERE a.visibility = 'public'
   AND ($6::text IS NULL
        OR lower(lv.manifest ->> 'license') = lower($6::text))
   AND ($7::boolean = false
-       OR (h.kind = 'org' AND o.verified_domain IS NOT NULL))
+       OR (h.kind = 'org' AND EXISTS (SELECT 1 FROM domain_claims dc WHERE dc.org_id = o.id AND dc.verified_at IS NOT NULL)))
+  -- An organization that is suspended or erased is absent everywhere, its
+  -- listings included (agentry#363); one in its decommission hold is read.
+  AND (h.kind <> 'org' OR o.state IN ('active','decommissioning'))
 ORDER BY
   CASE WHEN $8::text = 'installs' THEN coalesce(d.installs, 0) END DESC NULLS LAST,
   CASE WHEN $8::text = 'newest' THEN a.created_at END DESC NULLS LAST,
@@ -788,8 +801,11 @@ func (q *Queries) SearchAgents(ctx context.Context, arg SearchAgentsParams) ([]S
 const searchFacetLicenses = `-- name: SearchFacetLicenses :many
 SELECT (lv.manifest ->> 'license')::text AS license, count(*)::bigint AS n
 FROM agents a
+JOIN handles h ON h.id = a.namespace_id
+LEFT JOIN orgs o ON o.id = a.namespace_id
 JOIN agent_versions lv ON lv.id = a.latest_published_version_id
 WHERE a.visibility = 'public' AND a.quarantine_state <> 'blocked'
+  AND (h.kind <> 'org' OR o.state IN ('active','decommissioning'))
   AND lv.manifest ->> 'license' IS NOT NULL
   AND ($1::text = '' OR a.search_tsv @@ websearch_to_tsquery('english', $1::text))
 GROUP BY 1 ORDER BY n DESC, 1 LIMIT 20
@@ -824,8 +840,11 @@ func (q *Queries) SearchFacetLicenses(ctx context.Context, query string) ([]Sear
 
 const searchFacetModes = `-- name: SearchFacetModes :many
 SELECT m.mode::text AS mode, count(*)::bigint AS n
-FROM agents a, unnest(a.modes) AS m(mode)
+FROM agents a
+JOIN handles h ON h.id = a.namespace_id
+LEFT JOIN orgs o ON o.id = a.namespace_id, unnest(a.modes) AS m(mode)
 WHERE a.visibility = 'public' AND a.quarantine_state <> 'blocked'
+  AND (h.kind <> 'org' OR o.state IN ('active','decommissioning'))
   AND ($1::text = '' OR a.search_tsv @@ websearch_to_tsquery('english', $1::text))
 GROUP BY m.mode ORDER BY m.mode
 `

@@ -14,6 +14,27 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countAuditActionsByActorSince = `-- name: CountAuditActionsByActorSince :one
+SELECT count(*)::bigint FROM audit_events
+WHERE actor_id = $1 AND action = $2 AND occurred_at >= $3
+`
+
+type CountAuditActionsByActorSinceParams struct {
+	ActorID    *uuid.UUID `json:"actor_id"`
+	Action     string     `json:"action"`
+	OccurredAt time.Time  `json:"occurred_at"`
+}
+
+// How many times an actor took one action since a moment: the record is
+// the rate limit for an act a person may take once a day (agentry#363,
+// the request for access to their domain's organization).
+func (q *Queries) CountAuditActionsByActorSince(ctx context.Context, arg CountAuditActionsByActorSinceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countAuditActionsByActorSince, arg.ActorID, arg.Action, arg.OccurredAt)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countAuditEvents = `-- name: CountAuditEvents :one
 SELECT count(*) FROM audit_events WHERE action = $1 AND (org_id = $2 OR $2 IS NULL)
 `

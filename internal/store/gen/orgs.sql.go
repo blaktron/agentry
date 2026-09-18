@@ -69,6 +69,19 @@ func (q *Queries) AddTeamMember(ctx context.Context, arg AddTeamMemberParams) er
 	return err
 }
 
+const countActiveMemberships = `-- name: CountActiveMemberships :one
+SELECT count(*) FROM memberships m WHERE m.user_id = $1 AND m.state = 'active'
+`
+
+// The same rule at the creation door (agentry#370): a person who is an
+// active member anywhere founds nothing until they leave.
+func (q *Queries) CountActiveMemberships(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countActiveMemberships, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countActiveMembershipsElsewhere = `-- name: CountActiveMembershipsElsewhere :one
 SELECT count(*) FROM memberships m WHERE m.user_id = $1 AND m.state = 'active' AND m.org_id <> $2
 `
@@ -188,9 +201,9 @@ func (q *Queries) CreateInvitation(ctx context.Context, arg CreateInvitationPara
 
 const createOrg = `-- name: CreateOrg :one
 
-INSERT INTO orgs (id, display_name, created_by, activated_at)
-VALUES ($1, $2, $3, CASE WHEN $4::boolean THEN now() ELSE NULL END)
-RETURNING id, display_name, sso_required, verified_domain, state, created_at, updated_at, created_by, activated_at
+INSERT INTO orgs (id, display_name, created_by, activated_at, domain)
+VALUES ($1, $2, $3, CASE WHEN $4::boolean THEN now() ELSE NULL END, $5::citext)
+RETURNING id, display_name, sso_required, state, created_at, updated_at, created_by, activated_at, domain, decommission_at, decommission_reason
 `
 
 type CreateOrgParams struct {
@@ -198,29 +211,35 @@ type CreateOrgParams struct {
 	DisplayName string     `json:"display_name"`
 	CreatedBy   *uuid.UUID `json:"created_by"`
 	Activated   bool       `json:"activated"`
+	Domain      *string    `json:"domain"`
 }
 
 // Orgs, memberships, teams (M1/WG-B).
 // activated_at is now() where nothing will activate the org later (no
-// admission extension), NULL where one will (agentry#360).
+// admission extension), NULL where one will (agentry#360). domain is the
+// creator's verified email domain, or NULL for none (agentry#363); the
+// unique constraint refuses a second organization at one domain.
 func (q *Queries) CreateOrg(ctx context.Context, arg CreateOrgParams) (Org, error) {
 	row := q.db.QueryRow(ctx, createOrg,
 		arg.ID,
 		arg.DisplayName,
 		arg.CreatedBy,
 		arg.Activated,
+		arg.Domain,
 	)
 	var i Org
 	err := row.Scan(
 		&i.ID,
 		&i.DisplayName,
 		&i.SsoRequired,
-		&i.VerifiedDomain,
 		&i.State,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.ActivatedAt,
+		&i.Domain,
+		&i.DecommissionAt,
+		&i.DecommissionReason,
 	)
 	return i, err
 }
@@ -246,6 +265,26 @@ func (q *Queries) CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, e
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const decommissionOrg = `-- name: DecommissionOrg :execrows
+UPDATE orgs SET state = 'decommissioning', decommission_at = $2, decommission_reason = $3, updated_at = now()
+WHERE id = $1 AND state = 'active'
+`
+
+type DecommissionOrgParams struct {
+	ID                 uuid.UUID  `json:"id"`
+	DecommissionAt     *time.Time `json:"decommission_at"`
+	DecommissionReason *string    `json:"decommission_reason"`
+}
+
+// Only an active organization enters the hold; a repeat is 0 rows.
+func (q *Queries) DecommissionOrg(ctx context.Context, arg DecommissionOrgParams) (int64, error) {
+	result, err := q.db.Exec(ctx, decommissionOrg, arg.ID, arg.DecommissionAt, arg.DecommissionReason)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deleteInvitation = `-- name: DeleteInvitation :execrows
@@ -318,8 +357,25 @@ func (q *Queries) DeleteUnacceptedInvitationsFor(ctx context.Context, arg Delete
 	return result.RowsAffected(), nil
 }
 
+const deleteUserMemberships = `-- name: DeleteUserMemberships :execrows
+DELETE FROM memberships WHERE user_id = $1
+`
+
+// An erased account holds no seat anywhere (agentry#363): its rows go
+// with it, after the last-admin guard has passed.
+func (q *Queries) DeleteUserMemberships(ctx context.Context, userID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUserMemberships, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getInvitationByToken = `-- name: GetInvitationByToken :one
-SELECT i.id, i.org_id, i.email, i.role, i.token_sha256, i.invited_by, i.created_at, i.expires_at, i.accepted_at, i.accepted_by, h.handle AS org_handle, o.display_name AS org_display_name, o.verified_domain
+SELECT i.id, i.org_id, i.email, i.role, i.token_sha256, i.invited_by, i.created_at, i.expires_at, i.accepted_at, i.accepted_by, h.handle AS org_handle, o.display_name AS org_display_name,
+  EXISTS (SELECT 1 FROM domain_claims dc
+          WHERE dc.org_id = i.org_id AND dc.verified_at IS NOT NULL
+            AND dc.domain = split_part(i.email::text, '@', 2)::citext) AS at_verified_domain
 FROM org_invitations i
 JOIN orgs o ON o.id = i.org_id
 JOIN handles h ON h.id = i.org_id
@@ -327,24 +383,24 @@ WHERE i.token_sha256 = $1
 `
 
 type GetInvitationByTokenRow struct {
-	ID             uuid.UUID  `json:"id"`
-	OrgID          uuid.UUID  `json:"org_id"`
-	Email          string     `json:"email"`
-	Role           string     `json:"role"`
-	TokenSha256    []byte     `json:"token_sha256"`
-	InvitedBy      *uuid.UUID `json:"invited_by"`
-	CreatedAt      time.Time  `json:"created_at"`
-	ExpiresAt      time.Time  `json:"expires_at"`
-	AcceptedAt     *time.Time `json:"accepted_at"`
-	AcceptedBy     *uuid.UUID `json:"accepted_by"`
-	OrgHandle      string     `json:"org_handle"`
-	OrgDisplayName string     `json:"org_display_name"`
-	VerifiedDomain *string    `json:"verified_domain"`
+	ID               uuid.UUID  `json:"id"`
+	OrgID            uuid.UUID  `json:"org_id"`
+	Email            string     `json:"email"`
+	Role             string     `json:"role"`
+	TokenSha256      []byte     `json:"token_sha256"`
+	InvitedBy        *uuid.UUID `json:"invited_by"`
+	CreatedAt        time.Time  `json:"created_at"`
+	ExpiresAt        time.Time  `json:"expires_at"`
+	AcceptedAt       *time.Time `json:"accepted_at"`
+	AcceptedBy       *uuid.UUID `json:"accepted_by"`
+	OrgHandle        string     `json:"org_handle"`
+	OrgDisplayName   string     `json:"org_display_name"`
+	AtVerifiedDomain bool       `json:"at_verified_domain"`
 }
 
-// The organization's verified domain travels with the invitation: whether
-// the invited address is at it decides both whether the offer was mailed
-// and whether accepting confirms the address (agentry#361).
+// Whether the invited address is at one of the organization's DNS-verified
+// domains travels with the invitation: it decides both whether the offer
+// was mailed and whether accepting confirms the address (agentry#361).
 func (q *Queries) GetInvitationByToken(ctx context.Context, tokenSha256 []byte) (GetInvitationByTokenRow, error) {
 	row := q.db.QueryRow(ctx, getInvitationByToken, tokenSha256)
 	var i GetInvitationByTokenRow
@@ -361,7 +417,7 @@ func (q *Queries) GetInvitationByToken(ctx context.Context, tokenSha256 []byte) 
 		&i.AcceptedBy,
 		&i.OrgHandle,
 		&i.OrgDisplayName,
-		&i.VerifiedDomain,
+		&i.AtVerifiedDomain,
 	)
 	return i, err
 }
@@ -390,23 +446,83 @@ func (q *Queries) GetMembership(ctx context.Context, arg GetMembershipParams) (M
 	return i, err
 }
 
+const getOrgByDomain = `-- name: GetOrgByDomain :one
+SELECT o.id, o.display_name, o.sso_required, o.state, o.created_at, o.updated_at, o.created_by, o.activated_at, o.domain, o.decommission_at, o.decommission_reason, h.handle
+FROM orgs o JOIN handles h ON h.id = o.id
+WHERE o.domain = $1::citext
+   OR EXISTS (SELECT 1 FROM domain_claims dc
+              WHERE dc.org_id = o.id AND dc.domain = $1::citext AND dc.verified_at IS NOT NULL)
+ORDER BY o.created_at
+LIMIT 1
+`
+
+type GetOrgByDomainRow struct {
+	ID                 uuid.UUID  `json:"id"`
+	DisplayName        string     `json:"display_name"`
+	SsoRequired        bool       `json:"sso_required"`
+	State              string     `json:"state"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
+	CreatedBy          *uuid.UUID `json:"created_by"`
+	ActivatedAt        *time.Time `json:"activated_at"`
+	Domain             *string    `json:"domain"`
+	DecommissionAt     *time.Time `json:"decommission_at"`
+	DecommissionReason *string    `json:"decommission_reason"`
+	Handle             string     `json:"handle"`
+}
+
+// The organization a domain belongs to: recorded at its creation, or
+// verified over DNS by it. One organization per domain (D21, D26) spans
+// both facts, so a creation at a DNS-verified domain and a verification
+// of another organization's creation domain are both refused by the API
+// against this lookup. A decommissioned organization has released its
+// domain (both columns are cleared by the erasure), so it never matches.
+func (q *Queries) GetOrgByDomain(ctx context.Context, domain string) (GetOrgByDomainRow, error) {
+	row := q.db.QueryRow(ctx, getOrgByDomain, domain)
+	var i GetOrgByDomainRow
+	err := row.Scan(
+		&i.ID,
+		&i.DisplayName,
+		&i.SsoRequired,
+		&i.State,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CreatedBy,
+		&i.ActivatedAt,
+		&i.Domain,
+		&i.DecommissionAt,
+		&i.DecommissionReason,
+		&i.Handle,
+	)
+	return i, err
+}
+
 const getOrgByHandle = `-- name: GetOrgByHandle :one
-SELECT o.id, o.display_name, o.sso_required, o.verified_domain, o.state, o.created_at, o.updated_at, o.created_by, o.activated_at, h.handle FROM orgs o JOIN handles h ON h.id = o.id WHERE h.handle = $1 AND h.kind = 'org'
+SELECT o.id, o.display_name, o.sso_required, o.state, o.created_at, o.updated_at, o.created_by, o.activated_at, o.domain, o.decommission_at, o.decommission_reason, h.handle,
+  coalesce((SELECT array_agg(dc.domain::text ORDER BY dc.verified_at)
+            FROM domain_claims dc WHERE dc.org_id = o.id AND dc.verified_at IS NOT NULL), '{}')::text[] AS verified_domains
+FROM orgs o JOIN handles h ON h.id = o.id WHERE h.handle = $1 AND h.kind = 'org'
 `
 
 type GetOrgByHandleRow struct {
-	ID             uuid.UUID  `json:"id"`
-	DisplayName    string     `json:"display_name"`
-	SsoRequired    bool       `json:"sso_required"`
-	VerifiedDomain *string    `json:"verified_domain"`
-	State          string     `json:"state"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
-	CreatedBy      *uuid.UUID `json:"created_by"`
-	ActivatedAt    *time.Time `json:"activated_at"`
-	Handle         string     `json:"handle"`
+	ID                 uuid.UUID  `json:"id"`
+	DisplayName        string     `json:"display_name"`
+	SsoRequired        bool       `json:"sso_required"`
+	State              string     `json:"state"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
+	CreatedBy          *uuid.UUID `json:"created_by"`
+	ActivatedAt        *time.Time `json:"activated_at"`
+	Domain             *string    `json:"domain"`
+	DecommissionAt     *time.Time `json:"decommission_at"`
+	DecommissionReason *string    `json:"decommission_reason"`
+	Handle             string     `json:"handle"`
+	VerifiedDomains    []string   `json:"verified_domains"`
 }
 
+// verified_domains is every domain the organization proved control of
+// over DNS (domain_claims.verified_at), oldest first: the T-12 auto-link
+// rule and the invitation door read it (agentry#363).
 func (q *Queries) GetOrgByHandle(ctx context.Context, handle string) (GetOrgByHandleRow, error) {
 	row := q.db.QueryRow(ctx, getOrgByHandle, handle)
 	var i GetOrgByHandleRow
@@ -414,32 +530,41 @@ func (q *Queries) GetOrgByHandle(ctx context.Context, handle string) (GetOrgByHa
 		&i.ID,
 		&i.DisplayName,
 		&i.SsoRequired,
-		&i.VerifiedDomain,
 		&i.State,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.ActivatedAt,
+		&i.Domain,
+		&i.DecommissionAt,
+		&i.DecommissionReason,
 		&i.Handle,
+		&i.VerifiedDomains,
 	)
 	return i, err
 }
 
 const getOrgByID = `-- name: GetOrgByID :one
-SELECT o.id, o.display_name, o.sso_required, o.verified_domain, o.state, o.created_at, o.updated_at, o.created_by, o.activated_at, h.handle FROM orgs o JOIN handles h ON h.id = o.id WHERE o.id = $1
+SELECT o.id, o.display_name, o.sso_required, o.state, o.created_at, o.updated_at, o.created_by, o.activated_at, o.domain, o.decommission_at, o.decommission_reason, h.handle,
+  coalesce((SELECT array_agg(dc.domain::text ORDER BY dc.verified_at)
+            FROM domain_claims dc WHERE dc.org_id = o.id AND dc.verified_at IS NOT NULL), '{}')::text[] AS verified_domains
+FROM orgs o JOIN handles h ON h.id = o.id WHERE o.id = $1
 `
 
 type GetOrgByIDRow struct {
-	ID             uuid.UUID  `json:"id"`
-	DisplayName    string     `json:"display_name"`
-	SsoRequired    bool       `json:"sso_required"`
-	VerifiedDomain *string    `json:"verified_domain"`
-	State          string     `json:"state"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
-	CreatedBy      *uuid.UUID `json:"created_by"`
-	ActivatedAt    *time.Time `json:"activated_at"`
-	Handle         string     `json:"handle"`
+	ID                 uuid.UUID  `json:"id"`
+	DisplayName        string     `json:"display_name"`
+	SsoRequired        bool       `json:"sso_required"`
+	State              string     `json:"state"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
+	CreatedBy          *uuid.UUID `json:"created_by"`
+	ActivatedAt        *time.Time `json:"activated_at"`
+	Domain             *string    `json:"domain"`
+	DecommissionAt     *time.Time `json:"decommission_at"`
+	DecommissionReason *string    `json:"decommission_reason"`
+	Handle             string     `json:"handle"`
+	VerifiedDomains    []string   `json:"verified_domains"`
 }
 
 func (q *Queries) GetOrgByID(ctx context.Context, id uuid.UUID) (GetOrgByIDRow, error) {
@@ -449,15 +574,58 @@ func (q *Queries) GetOrgByID(ctx context.Context, id uuid.UUID) (GetOrgByIDRow, 
 		&i.ID,
 		&i.DisplayName,
 		&i.SsoRequired,
-		&i.VerifiedDomain,
 		&i.State,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.ActivatedAt,
+		&i.Domain,
+		&i.DecommissionAt,
+		&i.DecommissionReason,
 		&i.Handle,
+		&i.VerifiedDomains,
 	)
 	return i, err
+}
+
+const getOrgState = `-- name: GetOrgState :one
+SELECT state, decommission_at FROM orgs WHERE id = $1
+`
+
+type GetOrgStateRow struct {
+	State          string     `json:"state"`
+	DecommissionAt *time.Time `json:"decommission_at"`
+}
+
+// What the organization's state permits, for the one gate the API, the
+// git door and the membership chokepoint consult (agentry#363).
+func (q *Queries) GetOrgState(ctx context.Context, id uuid.UUID) (GetOrgStateRow, error) {
+	row := q.db.QueryRow(ctx, getOrgState, id)
+	var i GetOrgStateRow
+	err := row.Scan(&i.State, &i.DecommissionAt)
+	return i, err
+}
+
+const getOrgWhereUserIsLastAdmin = `-- name: GetOrgWhereUserIsLastAdmin :one
+SELECT h.handle FROM memberships m
+JOIN orgs o ON o.id = m.org_id
+JOIN handles h ON h.id = m.org_id
+WHERE m.user_id = $1 AND m.role = 'admin' AND m.state = 'active'
+  AND o.state IN ('active','suspended','decommissioning')
+  AND (SELECT count(*) FROM memberships m2 JOIN users u ON u.id = m2.user_id
+       WHERE m2.org_id = m.org_id AND m2.role = 'admin' AND m2.state = 'active' AND u.state = 'active') <= 1
+ORDER BY h.handle
+LIMIT 1
+`
+
+// The erasure guard (D14): an account that is the only active admin of an
+// organization that still exists cannot be erased until another admin is
+// in place. Counts the way CountOrgAdmins does.
+func (q *Queries) GetOrgWhereUserIsLastAdmin(ctx context.Context, userID uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, getOrgWhereUserIsLastAdmin, userID)
+	var handle string
+	err := row.Scan(&handle)
+	return handle, err
 }
 
 const getPendingOrgCreatedBy = `-- name: GetPendingOrgCreatedBy :one
@@ -550,6 +718,44 @@ func (q *Queries) ListOpenInvitations(ctx context.Context, orgID uuid.UUID) ([]L
 	return items, nil
 }
 
+const listOrgAdminsForMail = `-- name: ListOrgAdminsForMail :many
+SELECT u.id, u.email, h.handle
+FROM memberships m
+JOIN users u ON u.id = m.user_id
+JOIN handles h ON h.id = u.id
+WHERE m.org_id = $1 AND m.role = 'admin' AND m.state = 'active' AND u.state = 'active'
+ORDER BY h.handle
+`
+
+type ListOrgAdminsForMailRow struct {
+	ID     uuid.UUID `json:"id"`
+	Email  string    `json:"email"`
+	Handle string    `json:"handle"`
+}
+
+// The organization's active admins with what a mail to them needs; whether
+// each may be written to — a verified address, the orgInvites preference —
+// is notify.AllowsEmail's decision, not this query's (agentry#363).
+func (q *Queries) ListOrgAdminsForMail(ctx context.Context, orgID uuid.UUID) ([]ListOrgAdminsForMailRow, error) {
+	rows, err := q.db.Query(ctx, listOrgAdminsForMail, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOrgAdminsForMailRow
+	for rows.Next() {
+		var i ListOrgAdminsForMailRow
+		if err := rows.Scan(&i.ID, &i.Email, &i.Handle); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrgMembers = `-- name: ListOrgMembers :many
 SELECT m.role, m.via_scim, m.state, h.handle, u.display_name
 FROM memberships m
@@ -583,6 +789,37 @@ func (q *Queries) ListOrgMembers(ctx context.Context, orgID uuid.UUID) ([]ListOr
 			&i.Handle,
 			&i.DisplayName,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOrgsDueForErasure = `-- name: ListOrgsDueForErasure :many
+SELECT o.id, h.handle FROM orgs o JOIN handles h ON h.id = o.id
+WHERE o.state = 'decommissioning' AND o.decommission_at <= now()
+ORDER BY o.decommission_at
+`
+
+type ListOrgsDueForErasureRow struct {
+	ID     uuid.UUID `json:"id"`
+	Handle string    `json:"handle"`
+}
+
+func (q *Queries) ListOrgsDueForErasure(ctx context.Context) ([]ListOrgsDueForErasureRow, error) {
+	rows, err := q.db.Query(ctx, listOrgsDueForErasure)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOrgsDueForErasureRow
+	for rows.Next() {
+		var i ListOrgsDueForErasureRow
+		if err := rows.Scan(&i.ID, &i.Handle); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -755,6 +992,19 @@ func (q *Queries) ListUserTeamIDs(ctx context.Context, userID uuid.UUID) ([]uuid
 	return items, nil
 }
 
+const lockKey = `-- name: LockKey :exec
+SELECT pg_advisory_xact_lock(hashtext($1::text))
+`
+
+// A transaction-scoped advisory lock on a name, for the rules that span
+// more than one table or row and so have no constraint to hold them: a
+// domain across orgs.domain and the verified claims, a person's once-a-day
+// request for access (agentry#363). Released with the transaction.
+func (q *Queries) LockKey(ctx context.Context, key string) error {
+	_, err := q.db.Exec(ctx, lockKey, key)
+	return err
+}
+
 const lockOrg = `-- name: LockOrg :exec
 SELECT id FROM orgs WHERE id = $1 FOR UPDATE
 `
@@ -787,6 +1037,21 @@ func (q *Queries) MarkInvitationAccepted(ctx context.Context, arg MarkInvitation
 	return result.RowsAffected(), nil
 }
 
+const reinstateOrg = `-- name: ReinstateOrg :execrows
+UPDATE orgs SET state = 'active', decommission_at = NULL, decommission_reason = NULL, updated_at = now()
+WHERE id = $1 AND state IN ('suspended','decommissioning')
+`
+
+// Back to active from a suspension or from the decommission hold; the
+// erasure that already ran cannot be undone, so decommissioned stays.
+func (q *Queries) ReinstateOrg(ctx context.Context, id uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, reinstateOrg, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const removeTeamMember = `-- name: RemoveTeamMember :execrows
 DELETE FROM team_members WHERE team_id = $1 AND user_id = $2
 `
@@ -798,6 +1063,24 @@ type RemoveTeamMemberParams struct {
 
 func (q *Queries) RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) (int64, error) {
 	result, err := q.db.Exec(ctx, removeTeamMember, arg.TeamID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const suspendOrg = `-- name: SuspendOrg :execrows
+UPDATE orgs SET state = 'suspended', decommission_reason = $2, updated_at = now()
+WHERE id = $1 AND state = 'active'
+`
+
+type SuspendOrgParams struct {
+	ID                 uuid.UUID `json:"id"`
+	DecommissionReason *string   `json:"decommission_reason"`
+}
+
+func (q *Queries) SuspendOrg(ctx context.Context, arg SuspendOrgParams) (int64, error) {
+	result, err := q.db.Exec(ctx, suspendOrg, arg.ID, arg.DecommissionReason)
 	if err != nil {
 		return 0, err
 	}

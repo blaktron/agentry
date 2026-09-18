@@ -12,6 +12,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/maildomains"
 	"github.com/blaktron/agentry/internal/registry"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 	"github.com/blaktron/agentry/internal/webhook"
@@ -36,17 +37,21 @@ func (s *Server) lookupFailed(w http.ResponseWriter, r *http.Request, what strin
 }
 
 // orgOrNotFound resolves an org handle or writes the problem: 404 for a
-// handle no active organisation holds, 500 for a lookup that failed.
+// handle no active organisation holds, 500 for a lookup that failed. An
+// organization in its decommission hold is found — its members still
+// read it — and the authorize chokepoint refuses every change to it; a
+// suspended or erased one is absent (agentry#363).
 func (s *Server) orgOrNotFound(w http.ResponseWriter, r *http.Request, handle string) (storegen.GetOrgByHandleRow, bool) {
 	row, err := s.q().GetOrgByHandle(r.Context(), handle)
 	if s.lookupFailed(w, r, "org", err) {
 		return storegen.GetOrgByHandleRow{}, false
 	}
-	if row.State != "active" {
-		problemNotFound(w, r)
-		return storegen.GetOrgByHandleRow{}, false
+	switch row.State {
+	case registry.OrgStateActive, registry.OrgStateDecommissioning:
+		return row, true
 	}
-	return row, true
+	problemNotFound(w, r)
+	return storegen.GetOrgByHandleRow{}, false
 }
 
 // userOrNotFound resolves a user handle or writes the problem: 404 for a
@@ -65,8 +70,19 @@ func (s *Server) userOrNotFound(w http.ResponseWriter, r *http.Request, handle s
 
 func orgToAPI(row storegen.GetOrgByHandleRow, includeSettings bool) Org {
 	o := Org{Id: row.ID, Handle: row.Handle, DisplayName: row.DisplayName, CreatedAt: row.CreatedAt}
-	if row.VerifiedDomain != nil {
-		o.VerifiedDomain = row.VerifiedDomain
+	state := OrgState(row.State)
+	o.State = &state
+	if row.State == registry.OrgStateDecommissioning && row.DecommissionAt != nil {
+		o.DecommissionAt = row.DecommissionAt
+	}
+	if row.Domain != nil && *row.Domain != "" {
+		o.Domain = row.Domain
+	}
+	if len(row.VerifiedDomains) > 0 {
+		vd := append([]string(nil), row.VerifiedDomains...)
+		o.VerifiedDomains = &vd
+		first := vd[0]
+		o.VerifiedDomain = &first
 	}
 	if includeSettings {
 		sso := row.SsoRequired
@@ -90,16 +106,23 @@ func (s *Server) withSeats(r *http.Request, o Org, orgID uuid.UUID) Org {
 }
 
 // CreateOrg implements POST /orgs; the caller becomes its first admin
-// (§12.2, agentry#360). Two gates precede the handle rules. The account's
-// email must be verified: an organization is keyed on its creator's domain
-// (plan organization-subscriptions D13, D21 — the domain itself lands in
-// M4). And the account may have at most one organization awaiting
-// activation: on the hosted product an org is a paid thing that starts out
-// awaiting payment, and the core refuses a second until the first is
-// activated or gone (D5), so nobody squats handles behind organizations
-// that never pay. Where nothing will activate an org later — no admission
-// extension, so no payment — it is activated as it is created, and the
-// rule never bites (§3: the core with no extension is unchanged).
+// (§12.2, agentry#360). Four gates precede the handle rules. The account's
+// email must be verified, because an organization is keyed on its
+// creator's domain (plan organization-subscriptions D13, D21): the domain
+// of that address is recorded as the organization's unless the body says
+// `none` or the domain is one nobody owns (a public mail provider), and a
+// domain already registered to an organization — at its creation, or
+// verified over DNS — is 409 domain-claimed naming it (agentry#363). The
+// account may be an active member of no other organization (D26, one
+// organization per person, agentry#370): the creator becomes the org's
+// first admin, and that is a membership like any other. And the account
+// may have at most one organization awaiting activation: on the hosted
+// product an org is a paid thing that starts out awaiting payment, and
+// the core refuses a second until the first is activated or gone (D5), so
+// nobody squats handles behind organizations that never pay. Where
+// nothing will activate an org later — no admission extension, so no
+// payment — it is activated as it is created, and the rule never bites
+// (§3: the core with no extension is unchanged).
 func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 	if !s.authorize(w, r, auth.ActOrgCreate, uuid.Nil) {
 		return
@@ -149,13 +172,52 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// One organization per person (D26): the creator's founding
+	// membership is a membership, and the rule that refuses an invitation
+	// or an approval for someone active elsewhere refuses this door too.
+	// Platform staff are not exempt — a first-party organization is made
+	// by an account that belongs to no other, and the invariant holds at
+	// every door or it is not one (agentry#370). After the pending rule,
+	// which names the organization that is in the way.
+	elsewhere, err := s.q().CountActiveMemberships(r.Context(), p.UserID)
+	if err != nil {
+		s.log.ErrorContext(r.Context(), "memberships", "err", err)
+		problemInternal(w, r)
+		return
+	}
+	if elsewhere > 0 {
+		problemAlreadyAMember(w, r, "This account is already a member of an organization. A person belongs to one organization at a time: leave it before creating another.")
+		return
+	}
+	domain, ok := s.orgDomainFor(w, r, p.UserID, req.Domain)
+	if !ok {
+		return
+	}
 	orgID := newUUID()
-	err := s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
+	var domainParam *string
+	if domain != "" {
+		domainParam = &domain
+	}
+	err = s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
+		// One organization per domain spans orgs.domain and the verified
+		// claims, which no constraint covers together: the domain's
+		// advisory lock serialises this creation against a verification of
+		// the same domain, and the holder is checked again under it.
+		if domain != "" {
+			if err := q.LockKey(r.Context(), domainLockKey(domain)); err != nil {
+				return err
+			}
+			if _, err := q.GetOrgByDomain(r.Context(), domain); err == nil {
+				return errDomainClaimed
+			} else if !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+		}
 		if err := q.CreateHandle(r.Context(), storegen.CreateHandleParams{ID: orgID, Handle: req.Handle, Kind: "org"}); err != nil {
 			return err
 		}
 		if _, err := q.CreateOrg(r.Context(), storegen.CreateOrgParams{
-			ID: orgID, DisplayName: name, CreatedBy: &p.UserID, Activated: activated,
+			ID: orgID, DisplayName: name, CreatedBy: &p.UserID, Activated: activated, Domain: domainParam,
 		}); err != nil {
 			return err
 		}
@@ -167,11 +229,20 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		e := auditEvent(r, audit.ActionOrgCreate)
 		e.OrgID = orgID
 		e.TargetKind, e.TargetID = "org", orgID
+		e.Detail = map[string]any{"domain": domain}
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
 		if uniqueViolationOn(err, "orgs_pending_by_creator_idx") {
 			problemOrgPending(w, r, "an organization")
+			return
+		}
+		if errors.Is(err, errDomainClaimed) || uniqueViolationOn(err, "orgs_domain_key") {
+			// Two creations at one domain at once: the constraint decides,
+			// and the loser learns who won.
+			if !s.domainClaimed(w, r, domain, uuid.Nil) {
+				problemDomainClaimed(w, r, domain, "another organization", "")
+			}
 			return
 		}
 		if isUniqueViolation(err) {
@@ -195,6 +266,72 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		Payload: map[string]any{"org": out.Handle, "creator": p.Handle}})
 	ik.complete(r, http.StatusCreated, out)
 	writeJSON(w, http.StatusCreated, out)
+}
+
+// orgDomainFor decides the domain a new organization is keyed on, or
+// writes the refusal and reports false: the creator's verified email
+// domain, unless the body asks for none, and never a domain no single
+// organization owns; a domain already registered is 409 domain-claimed
+// naming its holder (agentry#363, D13, D21, D26). "" is none.
+func (s *Server) orgDomainFor(w http.ResponseWriter, r *http.Request, userID uuid.UUID, requested *string) (string, bool) {
+	u, err := s.q().GetUserByID(r.Context(), userID)
+	if err != nil {
+		s.log.ErrorContext(r.Context(), "creator", "err", err)
+		problemInternal(w, r)
+		return "", false
+	}
+	domain := maildomains.Of(u.Email)
+	if requested != nil {
+		switch normalizeDomain(*requested) {
+		case "none":
+			domain = ""
+		case domain:
+			// Spelled out: fine.
+		default:
+			problemValidation(w, r, "An organization's domain is the creator's verified email domain ("+domain+") or none; a further domain is claimed over DNS after creation.")
+			return "", false
+		}
+	}
+	if maildomains.Shared(domain) {
+		// A public mail provider, or a reserved name: nobody's.
+		domain = ""
+	}
+	if domain == "" {
+		return "", true
+	}
+	if s.domainClaimed(w, r, domain, uuid.Nil) {
+		return "", false
+	}
+	return domain, true
+}
+
+// errDomainClaimed is what a transaction returns when the domain it was
+// about to record belongs to another organization.
+var errDomainClaimed = errors.New("api: the domain belongs to another organization")
+
+// domainLockKey is the advisory-lock name for a domain.
+func domainLockKey(domain string) string { return "domain:" + domain }
+
+// domainClaimed reports whether an organization other than except holds
+// the domain — recorded at its creation, or verified over DNS — and writes
+// 409 domain-claimed naming it when one does. A lookup that failed is
+// written as a 500 and reported as claimed: an unreadable answer is not a
+// free domain.
+func (s *Server) domainClaimed(w http.ResponseWriter, r *http.Request, domain string, except uuid.UUID) bool {
+	holder, err := s.q().GetOrgByDomain(r.Context(), domain)
+	switch {
+	case err == nil && holder.ID == except:
+		return false
+	case err == nil:
+		problemDomainClaimed(w, r, domain, holder.Handle, holder.DisplayName)
+		return true
+	case errors.Is(err, pgx.ErrNoRows):
+		return false
+	default:
+		s.log.ErrorContext(r.Context(), "domain holder", "domain", domain, "err", err)
+		problemInternal(w, r)
+		return true
+	}
 }
 
 // GetOrg implements GET /orgs/{org} (public profile; settings for admins).
@@ -379,7 +516,9 @@ func (s *Server) seatRefusal(w http.ResponseWriter, r *http.Request, org storege
 		problemFeatureNotIncluded(w, r, "The "+org.Handle+" organization's subscription includes no seats. Start or restore its subscription, then invite people.")
 		return true
 	case errors.Is(err, registry.ErrAlreadyAMember):
-		problemAlreadyAMember(w, r)
+		problemAlreadyAMember(w, r, alreadyAMemberDetail)
+		return true
+	case s.orgGateProblem(w, r, org.Handle, err):
 		return true
 	}
 	return false
@@ -636,7 +775,12 @@ func (s *Server) DeclineOrgMember(w http.ResponseWriter, r *http.Request, org Or
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// RemoveOrgMember implements DELETE /orgs/{org}/members/{handle}.
+// RemoveOrgMember implements DELETE /orgs/{org}/members/{handle}: an admin
+// removes a member, or a member leaves. Leaving is any active member's
+// own act (agentry#363): a person belongs to one organization at a time
+// (D26), so they must be able to end the membership they hold, and it
+// deletes nothing of theirs. The last admin can do neither (409
+// last-admin) — only a decommission removes them.
 func (s *Server) RemoveOrgMember(w http.ResponseWriter, r *http.Request, org OrgHandle, handle Handle) {
 	if !s.requireDB(w, r) {
 		return
@@ -645,8 +789,15 @@ func (s *Server) RemoveOrgMember(w http.ResponseWriter, r *http.Request, org Org
 	if !ok {
 		return
 	}
+	p := principalFrom(r.Context())
+	leaving := !p.Anonymous && strings.EqualFold(handle, p.Handle)
 	// Baseline gate before resolving targets (elevation re-checked below).
-	if !s.authorize(w, r, auth.ActOrgMembersManage, orgRow.ID) {
+	// Someone leaving needs only to be here, and may go during a hold.
+	if leaving {
+		if !s.authorize(w, r, auth.ActOrgLeave, orgRow.ID) {
+			return
+		}
+	} else if !s.authorize(w, r, auth.ActOrgMembersManage, orgRow.ID) {
 		return
 	}
 	target, ok := s.userOrNotFound(w, r, handle)
@@ -663,7 +814,7 @@ func (s *Server) RemoveOrgMember(w http.ResponseWriter, r *http.Request, org Org
 		return
 	}
 	current := auth.OrgRole(m.Role)
-	if !s.authorize(w, r, memberChangeAction(current, auth.RoleNone), orgRow.ID) {
+	if !leaving && !s.authorize(w, r, memberChangeAction(current, auth.RoleNone), orgRow.ID) {
 		return
 	}
 	err = s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
@@ -681,7 +832,7 @@ func (s *Server) RemoveOrgMember(w http.ResponseWriter, r *http.Request, org Org
 		e := auditEvent(r, audit.ActionOrgMemberRemove)
 		e.OrgID = orgRow.ID
 		e.TargetKind, e.TargetID = "user", target.ID
-		e.Detail = map[string]any{"previous": string(current)}
+		e.Detail = map[string]any{"previous": string(current), "left": leaving}
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if errors.Is(err, errLastAdmin) {
@@ -694,7 +845,7 @@ func (s *Server) RemoveOrgMember(w http.ResponseWriter, r *http.Request, org Org
 		return
 	}
 	s.emitOrgEvent(r.Context(), orgRow.ID, webhook.EventMemberRemoved,
-		map[string]any{"user": target.Handle})
+		map[string]any{"user": target.Handle, "left": leaving})
 	w.WriteHeader(http.StatusNoContent)
 }
 

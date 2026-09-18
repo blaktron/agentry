@@ -453,6 +453,30 @@ func (e OrgRoleAssignment) Valid() bool {
 	}
 }
 
+// Defines values for OrgState.
+const (
+	OrgStateActive          OrgState = "active"
+	OrgStateDecommissioned  OrgState = "decommissioned"
+	OrgStateDecommissioning OrgState = "decommissioning"
+	OrgStateSuspended       OrgState = "suspended"
+)
+
+// Valid indicates whether the value is a known member of the OrgState enum.
+func (e OrgState) Valid() bool {
+	switch e {
+	case OrgStateActive:
+		return true
+	case OrgStateDecommissioned:
+		return true
+	case OrgStateDecommissioning:
+		return true
+	case OrgStateSuspended:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ReviewItemQueue.
 const (
 	ReviewItemQueueOrg      ReviewItemQueue = "org"
@@ -1179,6 +1203,13 @@ type AbuseReport struct {
 // AbuseReportState defines model for AbuseReport.State.
 type AbuseReportState string
 
+// AccessRequestResult defines model for AccessRequestResult.
+type AccessRequestResult struct {
+	// MailedAdmins How many of the organization's admins were mailed. Zero when none has a verified address that accepts organization mail; the request is still audited.
+	MailedAdmins int    `json:"mailedAdmins"`
+	Org          string `json:"org"`
+}
+
 // ActivityEvent One agent-scoped entry from the audit log (§9.2 activity).
 type ActivityEvent struct {
 	// Action Registered action id (internal/audit/actions.go).
@@ -1409,7 +1440,10 @@ type CreateInvitationRequest struct {
 // CreateOrgRequest defines model for CreateOrgRequest.
 type CreateOrgRequest struct {
 	DisplayName string `json:"displayName"`
-	Handle      string `json:"handle"`
+
+	// Domain The domain the organization is keyed on. Omitted, it is the domain of the creator's verified email address; `none` records no domain; the creator's own domain, spelled out, is accepted. Any other value is 422 — a further domain is claimed over DNS (`POST /orgs/{org}/domain-claims`). A domain no single organization owns (a public mail provider, a reserved name) is recorded as none whatever is sent. A domain that already belongs to an organization is `409 domain-claimed`.
+	Domain *string `json:"domain,omitempty"`
+	Handle string  `json:"handle"`
 }
 
 // CreateTokenRequest defines model for CreateTokenRequest.
@@ -1505,6 +1539,24 @@ type DomainClaim struct {
 	VerificationToken string     `json:"verificationToken"`
 	Verified          bool       `json:"verified"`
 	VerifiedAt        *time.Time `json:"verifiedAt,omitempty"`
+}
+
+// DomainOrg Which organization, if any, the caller's verified email domain belongs to — recorded at the organization's creation or verified over DNS by it. A domain no single organization owns (a public mail provider) belongs to nobody.
+type DomainOrg struct {
+	// Domain The caller's verified email domain; empty for an address at a shared domain.
+	Domain string `json:"domain"`
+
+	// Member Whether the caller already holds a membership there, pending or active.
+	Member *bool `json:"member,omitempty"`
+
+	// Org Absent when no organization holds the domain.
+	Org *struct {
+		DisplayName string `json:"displayName"`
+		Handle      string `json:"handle"`
+	} `json:"org,omitempty"`
+
+	// RequestedToday Whether the caller already asked its administrators for access in the last day.
+	RequestedToday *bool `json:"requestedToday,omitempty"`
 }
 
 // EmailNotificationSettings Which of the registry's mails the person receives.
@@ -1677,17 +1729,31 @@ type NotificationSettings struct {
 
 // Org defines model for Org.
 type Org struct {
-	CreatedAt   time.Time          `json:"createdAt"`
-	DisplayName string             `json:"displayName"`
-	Handle      string             `json:"handle"`
-	Id          openapi_types.UUID `json:"id"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// DecommissionAt While `state` is `decommissioning`: when the hold ends and the organization's agents, repositories, blobs and invitations are erased, its handle and domain released.
+	DecommissionAt *time.Time `json:"decommissionAt,omitempty"`
+	DisplayName    string     `json:"displayName"`
+
+	// Domain The domain the organization was created at (its creator's verified email domain), which routes people at that domain to its administrators. Absent when none was recorded.
+	Domain *string            `json:"domain,omitempty"`
+	Handle string             `json:"handle"`
+	Id     openapi_types.UUID `json:"id"`
 
 	// Seats Present for the organization's members only.
 	Seats *Seats `json:"seats,omitempty"`
 
 	// SsoRequired Present for org admins only.
-	SsoRequired    *bool   `json:"ssoRequired,omitempty"`
+	SsoRequired *bool `json:"ssoRequired,omitempty"`
+
+	// State Where the organization is in its life. `active` is the ordinary state. `suspended` (platform staff) makes the organization and everything under it answer as absent — 404 to every caller, git included — until it is reinstated. `decommissioning` is the read-only hold an admin, platform staff or the hosted product's pending-payment sweep started: members still read every agent and export the audit log, nothing under the organization can be changed, pushed or submitted (409 org-decommissioning), and at `decommissionAt` the erasure runs; staff may reinstate it before then. `decommissioned` is the row after the erasure; its handle is released, so no path names it.
+	State *OrgState `json:"state,omitempty"`
+
+	// VerifiedDomain The first domain the organization verified over DNS. Kept for older clients; `verifiedDomains` carries them all.
 	VerifiedDomain *string `json:"verifiedDomain,omitempty"`
+
+	// VerifiedDomains Every domain the organization proved control of over DNS, oldest first.
+	VerifiedDomains *[]string `json:"verifiedDomains,omitempty"`
 }
 
 // OrgRole An organization role, ordered admin > security_reviewer | member (§12.2 as amended by agentry#360). Admins manage the organization, its members, settings, SSO and SCIM, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; the owner role is retired and every owner became an admin. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
@@ -1695,6 +1761,9 @@ type OrgRole string
 
 // OrgRoleAssignment The role a PUT assigns. security_reviewer is refused outside a first-party organization, and owner — retired by agentry#360, kept here so an older client's request still parses — is refused with a 422 that names the roles that exist.
 type OrgRoleAssignment string
+
+// OrgState Where the organization is in its life. `active` is the ordinary state. `suspended` (platform staff) makes the organization and everything under it answer as absent — 404 to every caller, git included — until it is reinstated. `decommissioning` is the read-only hold an admin, platform staff or the hosted product's pending-payment sweep started: members still read every agent and export the audit log, nothing under the organization can be changed, pushed or submitted (409 org-decommissioning), and at `decommissionAt` the erasure runs; staff may reinstate it before then. `decommissioned` is the row after the erasure; its handle is released, so no path names it.
+type OrgState string
 
 // Pat defines model for Pat.
 type Pat struct {
@@ -2391,6 +2460,13 @@ type CreateAuditExportJSONBody struct {
 	Action *string `json:"action,omitempty"`
 }
 
+// DecommissionOrgJSONBody defines parameters for DecommissionOrg.
+type DecommissionOrgJSONBody struct {
+	// Confirm The organization's handle, typed again.
+	Confirm string  `json:"confirm"`
+	Reason  *string `json:"reason,omitempty"`
+}
+
 // CreateDomainClaimJSONBody defines parameters for CreateDomainClaim.
 type CreateDomainClaimJSONBody struct {
 	Domain string `json:"domain"`
@@ -2434,6 +2510,11 @@ type TestSsoConnectionParamsKind string
 type OidcCallbackParams struct {
 	Code  *string `form:"code,omitempty" json:"code,omitempty"`
 	State *string `form:"state,omitempty" json:"state,omitempty"`
+}
+
+// SuspendOrgJSONBody defines parameters for SuspendOrg.
+type SuspendOrgJSONBody struct {
+	Reason string `json:"reason"`
 }
 
 // CreateTeamJSONBody defines parameters for CreateTeam.
@@ -2659,6 +2740,9 @@ type UpdateOrgJSONRequestBody UpdateOrgJSONBody
 // CreateAuditExportJSONRequestBody defines body for CreateAuditExport for application/json ContentType.
 type CreateAuditExportJSONRequestBody CreateAuditExportJSONBody
 
+// DecommissionOrgJSONRequestBody defines body for DecommissionOrg for application/json ContentType.
+type DecommissionOrgJSONRequestBody DecommissionOrgJSONBody
+
 // CreateDomainClaimJSONRequestBody defines body for CreateDomainClaim for application/json ContentType.
 type CreateDomainClaimJSONRequestBody CreateDomainClaimJSONBody
 
@@ -2682,6 +2766,9 @@ type CreateScimTokenJSONRequestBody CreateScimTokenJSONBody
 
 // PutSsoConnectionJSONRequestBody defines body for PutSsoConnection for application/json ContentType.
 type PutSsoConnectionJSONRequestBody = SsoConnectionInput
+
+// SuspendOrgJSONRequestBody defines body for SuspendOrg for application/json ContentType.
+type SuspendOrgJSONRequestBody SuspendOrgJSONBody
 
 // CreateTeamJSONRequestBody defines body for CreateTeam for application/json ContentType.
 type CreateTeamJSONRequestBody CreateTeamJSONBody
@@ -3246,6 +3333,20 @@ type ClientInterface interface {
 	// Corresponds with GET /orgs/{org}/audit/exports/{id} (the `GetAuditExport` operationId).
 	GetAuditExport(ctx context.Context, org OrgHandle, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// DecommissionOrgWithBody Decommission the organization (admin; session only). It enters a read-only hold — members keep read and export — and at the end of the hold its agents, repositories, blobs and invitations are erased, its handle and domain released. The body must repeat the organization's handle. The last admin goes with it: this is the one way an organization loses its last admin (409 last-admin everywhere else).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/decommission (the `DecommissionOrg` operationId).
+	DecommissionOrgWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DecommissionOrg Decommission the organization (admin; session only). It enters a read-only hold — members keep read and export — and at the end of the hold its agents, repositories, blobs and invitations are erased, its handle and domain released. The body must repeat the organization's handle. The last admin goes with it: this is the one way an organization loses its last admin (409 last-admin everywhere else).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/decommission (the `DecommissionOrg` operationId).
+	DecommissionOrg(ctx context.Context, org OrgHandle, body DecommissionOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListDomainClaims List domain claims (admin+, §12.4).
 	//
 	// Corresponds with GET /orgs/{org}/domain-claims (the `ListDomainClaims` operationId).
@@ -3308,7 +3409,7 @@ type ClientInterface interface {
 	// Corresponds with GET /orgs/{org}/members (the `ListOrgMembers` operationId).
 	ListOrgMembers(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// RemoveOrgMember Remove a member (admin). Removing a pending member is how an admin declines them; the last admin cannot be removed (409 last-admin).
+	// RemoveOrgMember Remove a member (admin), or leave: any active member may remove themselves, since a person belongs to one organization at a time and must be able to leave it. Removing a pending member is how an admin declines them; the last admin cannot be removed or leave (409 last-admin) — only a decommission removes them.
 	//
 	// Corresponds with DELETE /orgs/{org}/members/{handle} (the `RemoveOrgMember` operationId).
 	RemoveOrgMember(ctx context.Context, org OrgHandle, handle Handle, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3364,6 +3465,11 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /orgs/{org}/policy (the `SetOrgPolicy` operationId).
 	SetOrgPolicy(ctx context.Context, org OrgHandle, body SetOrgPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReinstateOrg Reinstate a suspended organization, or cancel a decommission hold before its erasure runs (platform staff). An organization already erased cannot come back (409).
+	//
+	// Corresponds with POST /orgs/{org}/reinstate (the `ReinstateOrg` operationId).
+	ReinstateOrg(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListScimTokens List active SCIM provisioning tokens (admin, §12.5).
 	//
@@ -3451,6 +3557,20 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /orgs/{org}/sso/saml/slo (the `SamlSloPost` operationId).
 	SamlSloPost(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SuspendOrgWithBody Suspend the organization (platform staff). It and everything under it answer 404 to everyone, over the API and over git, until it is reinstated. Nothing is deleted.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/suspend (the `SuspendOrg` operationId).
+	SuspendOrgWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SuspendOrg Suspend the organization (platform staff). It and everything under it answer 404 to everyone, over the API and over git, until it is reinstated. Nothing is deleted.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/suspend (the `SuspendOrg` operationId).
+	SuspendOrg(ctx context.Context, org OrgHandle, body SuspendOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListTeams List teams (members can view).
 	//
@@ -3718,7 +3838,7 @@ type ClientInterface interface {
 
 	// DeleteCurrentUser Erase the caller's account (GDPR flow, §12.7).
 	//
-	// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase`.
+	// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase`. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
 	//
 	// Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
 	DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3743,6 +3863,16 @@ type ClientInterface interface {
 	//
 	// Corresponds with DELETE /user/directory/devices/{kind}/{deviceId} (the `DeleteUserDirectoryDevice` operationId).
 	DeleteUserDirectoryDevice(ctx context.Context, kind DeleteUserDirectoryDeviceParamsKind, deviceId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetDomainOrg Which organization the caller's verified email domain belongs to. 403 email-unverified until the address is verified.
+	//
+	// Corresponds with GET /user/domain-org (the `GetDomainOrg` operationId).
+	GetDomainOrg(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RequestDomainOrgAccess Ask the administrators of the organization that holds the caller's email domain to add them (session only). Mails the admins, once a day per person (429 rate-limited afterwards), audited as `org.access_request`. 404 when no organization holds the domain; 409 when the caller is already a member there.
+	//
+	// Corresponds with POST /user/domain-org/request-access (the `RequestDomainOrgAccess` operationId).
+	RequestDomainOrgAccess(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetUserNotificationSettings How the registry's alerts reach the caller (agentry#190).
 	//
@@ -4971,6 +5101,40 @@ func (c *Client) GetAuditExport(ctx context.Context, org OrgHandle, id openapi_t
 	return c.Client.Do(req)
 }
 
+// DecommissionOrgWithBody Decommission the organization (admin; session only). It enters a read-only hold — members keep read and export — and at the end of the hold its agents, repositories, blobs and invitations are erased, its handle and domain released. The body must repeat the organization's handle. The last admin goes with it: this is the one way an organization loses its last admin (409 last-admin everywhere else).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/decommission (the `DecommissionOrg` operationId).
+func (c *Client) DecommissionOrgWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDecommissionOrgRequestWithBody(c.Server, org, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DecommissionOrg Decommission the organization (admin; session only). It enters a read-only hold — members keep read and export — and at the end of the hold its agents, repositories, blobs and invitations are erased, its handle and domain released. The body must repeat the organization's handle. The last admin goes with it: this is the one way an organization loses its last admin (409 last-admin everywhere else).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/decommission (the `DecommissionOrg` operationId).
+func (c *Client) DecommissionOrg(ctx context.Context, org OrgHandle, body DecommissionOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDecommissionOrgRequest(c.Server, org, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListDomainClaims List domain claims (admin+, §12.4).
 //
 // Corresponds with GET /orgs/{org}/domain-claims (the `ListDomainClaims` operationId).
@@ -5133,7 +5297,7 @@ func (c *Client) ListOrgMembers(ctx context.Context, org OrgHandle, reqEditors .
 	return c.Client.Do(req)
 }
 
-// RemoveOrgMember Remove a member (admin). Removing a pending member is how an admin declines them; the last admin cannot be removed (409 last-admin).
+// RemoveOrgMember Remove a member (admin), or leave: any active member may remove themselves, since a person belongs to one organization at a time and must be able to leave it. Removing a pending member is how an admin declines them; the last admin cannot be removed or leave (409 last-admin) — only a decommission removes them.
 //
 // Corresponds with DELETE /orgs/{org}/members/{handle} (the `RemoveOrgMember` operationId).
 func (c *Client) RemoveOrgMember(ctx context.Context, org OrgHandle, handle Handle, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5270,6 +5434,21 @@ func (c *Client) SetOrgPolicyWithBody(ctx context.Context, org OrgHandle, conten
 // Corresponds with PUT /orgs/{org}/policy (the `SetOrgPolicy` operationId).
 func (c *Client) SetOrgPolicy(ctx context.Context, org OrgHandle, body SetOrgPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSetOrgPolicyRequest(c.Server, org, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ReinstateOrg Reinstate a suspended organization, or cancel a decommission hold before its erasure runs (platform staff). An organization already erased cannot come back (409).
+//
+// Corresponds with POST /orgs/{org}/reinstate (the `ReinstateOrg` operationId).
+func (c *Client) ReinstateOrg(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReinstateOrgRequest(c.Server, org)
 	if err != nil {
 		return nil, err
 	}
@@ -5507,6 +5686,40 @@ func (c *Client) SamlSloRedirect(ctx context.Context, org OrgHandle, reqEditors 
 // Corresponds with POST /orgs/{org}/sso/saml/slo (the `SamlSloPost` operationId).
 func (c *Client) SamlSloPost(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSamlSloPostRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SuspendOrgWithBody Suspend the organization (platform staff). It and everything under it answer 404 to everyone, over the API and over git, until it is reinstated. Nothing is deleted.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/suspend (the `SuspendOrg` operationId).
+func (c *Client) SuspendOrgWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSuspendOrgRequestWithBody(c.Server, org, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SuspendOrg Suspend the organization (platform staff). It and everything under it answer 404 to everyone, over the API and over git, until it is reinstated. Nothing is deleted.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/suspend (the `SuspendOrg` operationId).
+func (c *Client) SuspendOrg(ctx context.Context, org OrgHandle, body SuspendOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSuspendOrgRequest(c.Server, org, body)
 	if err != nil {
 		return nil, err
 	}
@@ -6203,7 +6416,7 @@ func (c *Client) ListUserActivity(ctx context.Context, params *ListUserActivityP
 
 // DeleteCurrentUser Erase the caller's account (GDPR flow, §12.7).
 //
-// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase`.
+// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase`. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
 //
 // Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
 func (c *Client) DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -6259,6 +6472,36 @@ func (c *Client) GetUserDirectory(ctx context.Context, reqEditors ...RequestEdit
 // Corresponds with DELETE /user/directory/devices/{kind}/{deviceId} (the `DeleteUserDirectoryDevice` operationId).
 func (c *Client) DeleteUserDirectoryDevice(ctx context.Context, kind DeleteUserDirectoryDeviceParamsKind, deviceId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteUserDirectoryDeviceRequest(c.Server, kind, deviceId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetDomainOrg Which organization the caller's verified email domain belongs to. 403 email-unverified until the address is verified.
+//
+// Corresponds with GET /user/domain-org (the `GetDomainOrg` operationId).
+func (c *Client) GetDomainOrg(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetDomainOrgRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RequestDomainOrgAccess Ask the administrators of the organization that holds the caller's email domain to add them (session only). Mails the admins, once a day per person (429 rate-limited afterwards), audited as `org.access_request`. 404 when no organization holds the domain; 409 when the caller is already a member there.
+//
+// Corresponds with POST /user/domain-org/request-access (the `RequestDomainOrgAccess` operationId).
+func (c *Client) RequestDomainOrgAccess(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRequestDomainOrgAccessRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -8915,6 +9158,53 @@ func NewGetAuditExportRequest(server string, org OrgHandle, id openapi_types.UUI
 	return req, nil
 }
 
+// NewDecommissionOrgRequest calls the generic DecommissionOrg builder with application/json body
+func NewDecommissionOrgRequest(server string, org OrgHandle, body DecommissionOrgJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewDecommissionOrgRequestWithBody(server, org, "application/json", bodyReader)
+}
+
+// NewDecommissionOrgRequestWithBody constructs an http.Request for the DecommissionOrg method, with any body, and a specified content type
+func NewDecommissionOrgRequestWithBody(server string, org OrgHandle, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/decommission", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewListDomainClaimsRequest constructs an http.Request for the ListDomainClaims method
 func NewListDomainClaimsRequest(server string, org OrgHandle) (*http.Request, error) {
 	var err error
@@ -9470,6 +9760,40 @@ func NewSetOrgPolicyRequestWithBody(server string, org OrgHandle, contentType st
 	return req, nil
 }
 
+// NewReinstateOrgRequest constructs an http.Request for the ReinstateOrg method
+func NewReinstateOrgRequest(server string, org OrgHandle) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/reinstate", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListScimTokensRequest constructs an http.Request for the ListScimTokens method
 func NewListScimTokensRequest(server string, org OrgHandle) (*http.Request, error) {
 	var err error
@@ -10001,6 +10325,53 @@ func NewSamlSloPostRequest(server string, org OrgHandle) (*http.Request, error) 
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewSuspendOrgRequest calls the generic SuspendOrg builder with application/json body
+func NewSuspendOrgRequest(server string, org OrgHandle, body SuspendOrgJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSuspendOrgRequestWithBody(server, org, "application/json", bodyReader)
+}
+
+// NewSuspendOrgRequestWithBody constructs an http.Request for the SuspendOrg method, with any body, and a specified content type
+func NewSuspendOrgRequestWithBody(server string, org OrgHandle, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/suspend", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -11881,6 +12252,60 @@ func NewDeleteUserDirectoryDeviceRequest(server string, kind DeleteUserDirectory
 	return req, nil
 }
 
+// NewGetDomainOrgRequest constructs an http.Request for the GetDomainOrg method
+func NewGetDomainOrgRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/domain-org")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRequestDomainOrgAccessRequest constructs an http.Request for the RequestDomainOrgAccess method
+func NewRequestDomainOrgAccessRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/domain-org/request-access")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetUserNotificationSettingsRequest constructs an http.Request for the GetUserNotificationSettings method
 func NewGetUserNotificationSettingsRequest(server string) (*http.Request, error) {
 	var err error
@@ -12953,6 +13378,20 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/audit/exports/{id} (the `GetAuditExport` operationId).
 	GetAuditExportWithResponse(ctx context.Context, org OrgHandle, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetAuditExportResponse, error)
 
+	// DecommissionOrgWithBodyWithResponse Decommission the organization (admin; session only). It enters a read-only hold — members keep read and export — and at the end of the hold its agents, repositories, blobs and invitations are erased, its handle and domain released. The body must repeat the organization's handle. The last admin goes with it: this is the one way an organization loses its last admin (409 last-admin everywhere else).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/decommission (the `DecommissionOrg` operationId).
+	DecommissionOrgWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DecommissionOrgResponse, error)
+
+	// DecommissionOrgWithResponse Decommission the organization (admin; session only). It enters a read-only hold — members keep read and export — and at the end of the hold its agents, repositories, blobs and invitations are erased, its handle and domain released. The body must repeat the organization's handle. The last admin goes with it: this is the one way an organization loses its last admin (409 last-admin everywhere else).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/decommission (the `DecommissionOrg` operationId).
+	DecommissionOrgWithResponse(ctx context.Context, org OrgHandle, body DecommissionOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*DecommissionOrgResponse, error)
+
 	// ListDomainClaimsWithResponse List domain claims (admin+, §12.4).
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -13023,7 +13462,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/members (the `ListOrgMembers` operationId).
 	ListOrgMembersWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListOrgMembersResponse, error)
 
-	// RemoveOrgMemberWithResponse Remove a member (admin). Removing a pending member is how an admin declines them; the last admin cannot be removed (409 last-admin).
+	// RemoveOrgMemberWithResponse Remove a member (admin), or leave: any active member may remove themselves, since a person belongs to one organization at a time and must be able to leave it. Removing a pending member is how an admin declines them; the last admin cannot be removed or leave (409 last-admin) — only a decommission removes them.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -13085,6 +13524,13 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PUT /orgs/{org}/policy (the `SetOrgPolicy` operationId).
 	SetOrgPolicyWithResponse(ctx context.Context, org OrgHandle, body SetOrgPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*SetOrgPolicyResponse, error)
+
+	// ReinstateOrgWithResponse Reinstate a suspended organization, or cancel a decommission hold before its erasure runs (platform staff). An organization already erased cannot come back (409).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/reinstate (the `ReinstateOrg` operationId).
+	ReinstateOrgWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ReinstateOrgResponse, error)
 
 	// ListScimTokensWithResponse List active SCIM provisioning tokens (admin, §12.5).
 	//
@@ -13194,6 +13640,20 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /orgs/{org}/sso/saml/slo (the `SamlSloPost` operationId).
 	SamlSloPostWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*SamlSloPostResponse, error)
+
+	// SuspendOrgWithBodyWithResponse Suspend the organization (platform staff). It and everything under it answer 404 to everyone, over the API and over git, until it is reinstated. Nothing is deleted.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/suspend (the `SuspendOrg` operationId).
+	SuspendOrgWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SuspendOrgResponse, error)
+
+	// SuspendOrgWithResponse Suspend the organization (platform staff). It and everything under it answer 404 to everyone, over the API and over git, until it is reinstated. Nothing is deleted.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/suspend (the `SuspendOrg` operationId).
+	SuspendOrgWithResponse(ctx context.Context, org OrgHandle, body SuspendOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*SuspendOrgResponse, error)
 
 	// ListTeamsWithResponse List teams (members can view).
 	//
@@ -13513,7 +13973,7 @@ type ClientWithResponsesInterface interface {
 
 	// DeleteCurrentUserWithResponse Erase the caller's account (GDPR flow, §12.7).
 	//
-	// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase`.
+	// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase`. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -13546,6 +14006,20 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with DELETE /user/directory/devices/{kind}/{deviceId} (the `DeleteUserDirectoryDevice` operationId).
 	DeleteUserDirectoryDeviceWithResponse(ctx context.Context, kind DeleteUserDirectoryDeviceParamsKind, deviceId string, reqEditors ...RequestEditorFn) (*DeleteUserDirectoryDeviceResponse, error)
+
+	// GetDomainOrgWithResponse Which organization the caller's verified email domain belongs to. 403 email-unverified until the address is verified.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /user/domain-org (the `GetDomainOrg` operationId).
+	GetDomainOrgWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetDomainOrgResponse, error)
+
+	// RequestDomainOrgAccessWithResponse Ask the administrators of the organization that holds the caller's email domain to add them (session only). Mails the admins, once a day per person (429 rate-limited afterwards), audited as `org.access_request`. 404 when no organization holds the domain; 409 when the caller is already a member there.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /user/domain-org/request-access (the `RequestDomainOrgAccess` operationId).
+	RequestDomainOrgAccessWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*RequestDomainOrgAccessResponse, error)
 
 	// GetUserNotificationSettingsWithResponse How the registry's alerts reach the caller (agentry#190).
 	//
@@ -15934,6 +16408,61 @@ func (r GetAuditExportResponse) ContentType() string {
 	return ""
 }
 
+type DecommissionOrgResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Org
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DecommissionOrgResponse) GetJSON200() *Org {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r DecommissionOrgResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DecommissionOrgResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DecommissionOrgResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DecommissionOrgResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DecommissionOrgResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DecommissionOrgResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListDomainClaimsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -16537,6 +17066,54 @@ func (r SetOrgPolicyResponse) ContentType() string {
 	return ""
 }
 
+type ReinstateOrgResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Org
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ReinstateOrgResponse) GetJSON200() *Org {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ReinstateOrgResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ReinstateOrgResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ReinstateOrgResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReinstateOrgResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ReinstateOrgResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListScimTokensResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -17113,6 +17690,54 @@ func (r SamlSloPostResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r SamlSloPostResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SuspendOrgResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Org
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SuspendOrgResponse) GetJSON200() *Org {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r SuspendOrgResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SuspendOrgResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SuspendOrgResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SuspendOrgResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SuspendOrgResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -18889,6 +19514,102 @@ func (r DeleteUserDirectoryDeviceResponse) ContentType() string {
 	return ""
 }
 
+type GetDomainOrgResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *DomainOrg
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetDomainOrgResponse) GetJSON200() *DomainOrg {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetDomainOrgResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetDomainOrgResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetDomainOrgResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetDomainOrgResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetDomainOrgResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RequestDomainOrgAccessResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *AccessRequestResult
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r RequestDomainOrgAccessResponse) GetJSON202() *AccessRequestResult {
+	return r.JSON202
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r RequestDomainOrgAccessResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r RequestDomainOrgAccessResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RequestDomainOrgAccessResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RequestDomainOrgAccessResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RequestDomainOrgAccessResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetUserNotificationSettingsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -20486,6 +21207,32 @@ func (c *ClientWithResponses) GetAuditExportWithResponse(ctx context.Context, or
 	return ParseGetAuditExportResponse(rsp)
 }
 
+// DecommissionOrgWithBodyWithResponse Decommission the organization (admin; session only). It enters a read-only hold — members keep read and export — and at the end of the hold its agents, repositories, blobs and invitations are erased, its handle and domain released. The body must repeat the organization's handle. The last admin goes with it: this is the one way an organization loses its last admin (409 last-admin everywhere else).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/decommission (the `DecommissionOrg` operationId).
+func (c *ClientWithResponses) DecommissionOrgWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DecommissionOrgResponse, error) {
+	rsp, err := c.DecommissionOrgWithBody(ctx, org, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDecommissionOrgResponse(rsp)
+}
+
+// DecommissionOrgWithResponse Decommission the organization (admin; session only). It enters a read-only hold — members keep read and export — and at the end of the hold its agents, repositories, blobs and invitations are erased, its handle and domain released. The body must repeat the organization's handle. The last admin goes with it: this is the one way an organization loses its last admin (409 last-admin everywhere else).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/decommission (the `DecommissionOrg` operationId).
+func (c *ClientWithResponses) DecommissionOrgWithResponse(ctx context.Context, org OrgHandle, body DecommissionOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*DecommissionOrgResponse, error) {
+	rsp, err := c.DecommissionOrg(ctx, org, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDecommissionOrgResponse(rsp)
+}
+
 // ListDomainClaimsWithResponse List domain claims (admin+, §12.4).
 //
 // Returns a wrapper object for the known response body format(s).
@@ -20616,7 +21363,7 @@ func (c *ClientWithResponses) ListOrgMembersWithResponse(ctx context.Context, or
 	return ParseListOrgMembersResponse(rsp)
 }
 
-// RemoveOrgMemberWithResponse Remove a member (admin). Removing a pending member is how an admin declines them; the last admin cannot be removed (409 last-admin).
+// RemoveOrgMemberWithResponse Remove a member (admin), or leave: any active member may remove themselves, since a person belongs to one organization at a time and must be able to leave it. Removing a pending member is how an admin declines them; the last admin cannot be removed or leave (409 last-admin) — only a decommission removes them.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -20731,6 +21478,19 @@ func (c *ClientWithResponses) SetOrgPolicyWithResponse(ctx context.Context, org 
 		return nil, err
 	}
 	return ParseSetOrgPolicyResponse(rsp)
+}
+
+// ReinstateOrgWithResponse Reinstate a suspended organization, or cancel a decommission hold before its erasure runs (platform staff). An organization already erased cannot come back (409).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/reinstate (the `ReinstateOrg` operationId).
+func (c *ClientWithResponses) ReinstateOrgWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ReinstateOrgResponse, error) {
+	rsp, err := c.ReinstateOrg(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReinstateOrgResponse(rsp)
 }
 
 // ListScimTokensWithResponse List active SCIM provisioning tokens (admin, §12.5).
@@ -20930,6 +21690,32 @@ func (c *ClientWithResponses) SamlSloPostWithResponse(ctx context.Context, org O
 		return nil, err
 	}
 	return ParseSamlSloPostResponse(rsp)
+}
+
+// SuspendOrgWithBodyWithResponse Suspend the organization (platform staff). It and everything under it answer 404 to everyone, over the API and over git, until it is reinstated. Nothing is deleted.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/suspend (the `SuspendOrg` operationId).
+func (c *ClientWithResponses) SuspendOrgWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SuspendOrgResponse, error) {
+	rsp, err := c.SuspendOrgWithBody(ctx, org, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSuspendOrgResponse(rsp)
+}
+
+// SuspendOrgWithResponse Suspend the organization (platform staff). It and everything under it answer 404 to everyone, over the API and over git, until it is reinstated. Nothing is deleted.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/suspend (the `SuspendOrg` operationId).
+func (c *ClientWithResponses) SuspendOrgWithResponse(ctx context.Context, org OrgHandle, body SuspendOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*SuspendOrgResponse, error) {
+	rsp, err := c.SuspendOrg(ctx, org, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSuspendOrgResponse(rsp)
 }
 
 // ListTeamsWithResponse List teams (members can view).
@@ -21502,7 +22288,7 @@ func (c *ClientWithResponses) ListUserActivityWithResponse(ctx context.Context, 
 
 // DeleteCurrentUserWithResponse Erase the caller's account (GDPR flow, §12.7).
 //
-// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase`.
+// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase`. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -21558,6 +22344,32 @@ func (c *ClientWithResponses) DeleteUserDirectoryDeviceWithResponse(ctx context.
 		return nil, err
 	}
 	return ParseDeleteUserDirectoryDeviceResponse(rsp)
+}
+
+// GetDomainOrgWithResponse Which organization the caller's verified email domain belongs to. 403 email-unverified until the address is verified.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /user/domain-org (the `GetDomainOrg` operationId).
+func (c *ClientWithResponses) GetDomainOrgWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetDomainOrgResponse, error) {
+	rsp, err := c.GetDomainOrg(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetDomainOrgResponse(rsp)
+}
+
+// RequestDomainOrgAccessWithResponse Ask the administrators of the organization that holds the caller's email domain to add them (session only). Mails the admins, once a day per person (429 rate-limited afterwards), audited as `org.access_request`. 404 when no organization holds the domain; 409 when the caller is already a member there.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /user/domain-org/request-access (the `RequestDomainOrgAccess` operationId).
+func (c *ClientWithResponses) RequestDomainOrgAccessWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*RequestDomainOrgAccessResponse, error) {
+	rsp, err := c.RequestDomainOrgAccess(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRequestDomainOrgAccessResponse(rsp)
 }
 
 // GetUserNotificationSettingsWithResponse How the registry's alerts reach the caller (agentry#190).
@@ -23400,6 +24212,46 @@ func ParseGetAuditExportResponse(rsp *http.Response) (*GetAuditExportResponse, e
 	return response, nil
 }
 
+// ParseDecommissionOrgResponse parses an HTTP response from a DecommissionOrgWithResponse call
+func ParseDecommissionOrgResponse(rsp *http.Response) (*DecommissionOrgResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DecommissionOrgResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Org
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListDomainClaimsResponse parses an HTTP response from a ListDomainClaimsWithResponse call
 func ParseListDomainClaimsResponse(rsp *http.Response) (*ListDomainClaimsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -23817,6 +24669,39 @@ func ParseSetOrgPolicyResponse(rsp *http.Response) (*SetOrgPolicyResponse, error
 	return response, nil
 }
 
+// ParseReinstateOrgResponse parses an HTTP response from a ReinstateOrgWithResponse call
+func ParseReinstateOrgResponse(rsp *http.Response) (*ReinstateOrgResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReinstateOrgResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Org
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListScimTokensResponse parses an HTTP response from a ListScimTokensWithResponse call
 func ParseListScimTokensResponse(rsp *http.Response) (*ListScimTokensResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -24212,6 +25097,39 @@ func ParseSamlSloPostResponse(rsp *http.Response) (*SamlSloPostResponse, error) 
 
 	case rsp.StatusCode == 303:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSuspendOrgResponse parses an HTTP response from a SuspendOrgWithResponse call
+func ParseSuspendOrgResponse(rsp *http.Response) (*SuspendOrgResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SuspendOrgResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Org
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
@@ -25457,6 +26375,72 @@ func ParseDeleteUserDirectoryDeviceResponse(rsp *http.Response) (*DeleteUserDire
 	switch {
 	case rsp.StatusCode == 204:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetDomainOrgResponse parses an HTTP response from a GetDomainOrgWithResponse call
+func ParseGetDomainOrgResponse(rsp *http.Response) (*GetDomainOrgResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetDomainOrgResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DomainOrg
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRequestDomainOrgAccessResponse parses an HTTP response from a RequestDomainOrgAccessWithResponse call
+func ParseRequestDomainOrgAccessResponse(rsp *http.Response) (*RequestDomainOrgAccessResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RequestDomainOrgAccessResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest AccessRequestResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

@@ -141,3 +141,13 @@ func (p webPaths) reportCardURL(agent, version string) string {
 func (p webPaths) authorizeURL() string {
 	return p.abs("/ui/authorize")
 }
+
+// orgConsoleURL is where an organization's admins manage it: the site's
+// organization console, or the server's own page. "" when neither origin
+// is configured, in which case a mail names the organization and no link.
+func (p webPaths) orgConsoleURL(handle string) string {
+	if p.site() {
+		return p.web + "/orgs/" + url.PathEscape(handle) + "/admin"
+	}
+	return p.abs("/ui/orgs/" + url.PathEscape(handle))
+}

@@ -252,3 +252,29 @@ func TestAgentRoleLadder(t *testing.T) {
 		t.Fatal("a publisher may administer the agent: visibility, deletion and grants would fall to every member")
 	}
 }
+
+// TestHoldPermits pins what an organization in its decommission hold still
+// permits (agentry#363, D23): the reads, and a member leaving. The list is
+// kept by hand beside minRole, so a change to it is a deliberate one.
+func TestHoldPermits(t *testing.T) {
+	permitted := map[Action]bool{
+		ActOrgRead: true, ActOrgMembersRead: true, ActOrgTeamsRead: true, ActOrgAuditRead: true,
+		ActPublicRead: true, ActUserSelfRead: true, ActUserTokensRead: true,
+		ActAgentRead: true, ActAgentRepoRead: true, ActOrgLeave: true,
+	}
+	all := []Action{
+		ActOrgRead, ActOrgUpdate, ActOrgMembersRead, ActOrgMembersManage, ActOrgMembersElevate,
+		ActOrgTeamsRead, ActOrgTeamsManage, ActOrgAuditRead, ActOrgSettingsManage, ActOrgInvitationsManage,
+		ActOrgDecommission, ActOrgLeave, ActUserSelfRead, ActUserSelfUpdate, ActUserTokensRead,
+		ActUserTokensManage, ActUserSecurityManage, ActUserOrgRequest, ActOrgCreate, ActPublicRead, ActReviewAct,
+		ActAgentCreate, ActAgentRead, ActAgentRepoRead, ActAgentRepoWrite, ActAgentMaintain, ActAgentPublish, ActAgentAdminister,
+	}
+	for _, act := range all {
+		if got := HoldPermits(act); got != permitted[act] {
+			t.Errorf("HoldPermits(%s) = %v, want %v", act, got, permitted[act])
+		}
+		if act != ActOrgLeave && ReadOnly(act) != permitted[act] {
+			t.Errorf("ReadOnly(%s) = %v, want %v", act, ReadOnly(act), permitted[act])
+		}
+	}
+}

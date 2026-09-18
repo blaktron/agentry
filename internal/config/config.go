@@ -35,6 +35,7 @@ type Config struct {
 	Scan      Scan      `yaml:"scan"`
 	Social    Social    `yaml:"social"`
 	Audit     Audit     `yaml:"audit"`
+	Orgs      Orgs      `yaml:"orgs"`
 	RedTeam   RedTeam   `yaml:"redTeam"`
 	Telemetry Telemetry `yaml:"telemetry"`
 	Queue     Queue     `yaml:"queue"`
@@ -435,6 +436,16 @@ type Audit struct {
 	RetentionDays int `yaml:"retentionDays"`
 }
 
+// Orgs configures the organization lifecycle (agentry#363, plan
+// organization-subscriptions D23).
+type Orgs struct {
+	// DecommissionHold is how long a decommissioned organization stays
+	// readable — members keep read and export — before the erasure job
+	// deletes its agents, repositories, blobs and invitations and releases
+	// its handle and domain. Zero erases at the next hourly sweep.
+	DecommissionHold time.Duration `yaml:"decommissionHold"`
+}
+
 // Default returns the development-safe baseline configuration.
 func Default() Config {
 	return Config{
@@ -484,6 +495,7 @@ func Default() Config {
 			StreamFlush:   30 * time.Second,
 			RetentionDays: 400,
 		},
+		Orgs:    Orgs{DecommissionHold: 30 * 24 * time.Hour},
 		RedTeam: RedTeam{Interval: 24 * time.Hour},
 		Queue:   Queue{Driver: "river", Workers: 1},
 		Telemetry: Telemetry{
@@ -665,6 +677,10 @@ func applyEnv(c *Config) error {
 		return err
 	}
 	if err := integer("AGENTRY_AUDIT_RETENTION_DAYS", &c.Audit.RetentionDays); err != nil {
+		return err
+	}
+	// The organization lifecycle (agentry#363).
+	if err := dur("AGENTRY_ORGS_DECOMMISSION_HOLD", &c.Orgs.DecommissionHold); err != nil {
 		return err
 	}
 	// §17.5 red-team job (agentry#67).
@@ -860,6 +876,9 @@ func (c Config) Validate() error {
 	}
 	if c.Audit.RetentionDays < 0 {
 		return fmt.Errorf("config: audit.retentionDays must be >= 0")
+	}
+	if c.Orgs.DecommissionHold < 0 {
+		return fmt.Errorf("config: orgs.decommissionHold must be >= 0")
 	}
 	if err := c.validateAuthTTLs(); err != nil {
 		return err

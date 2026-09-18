@@ -453,7 +453,11 @@ paths:
         When the deployment holds credentials in a directory service and is
         configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account
         there is deleted in the same step; the outcome is audited as
-        `user.directory_erase`.
+        `user.directory_erase`. An account that is an organization's last
+        admin is refused (409 last-admin) until another admin is in
+        place; a transfer that would put the organization over its
+        private-agent cap is refused (422 private-agent-cap) with nothing
+        erased. The erased account's memberships go with it.
       parameters:
         - name: publishedContent
           in: query
@@ -474,6 +478,43 @@ paths:
       responses:
         "204":
           description: Account erased; session revoked.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /user/domain-org:
+    get:
+      operationId: getDomainOrg
+      tags: [users]
+      summary: >
+        Which organization the caller's verified email domain belongs to.
+        403 email-unverified until the address is verified.
+      responses:
+        "200":
+          description: The domain and, when one holds it, the organization.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DomainOrg"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /user/domain-org/request-access:
+    post:
+      operationId: requestDomainOrgAccess
+      tags: [users]
+      summary: >
+        Ask the administrators of the organization that holds the caller's
+        email domain to add them (session only). Mails the admins, once a
+        day per person (429 rate-limited afterwards), audited as
+        `org.access_request`. 404 when no organization holds the domain;
+        409 when the caller is already a member there.
+      responses:
+        "202":
+          description: The request was recorded and the admins mailed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccessRequestResult"
         default:
           $ref: "#/components/responses/Problem"
 
@@ -1020,6 +1061,102 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /orgs/{org}/decommission:
+    post:
+      operationId: decommissionOrg
+      tags: [orgs]
+      summary: >
+        Decommission the organization (admin; session only). It enters a
+        read-only hold — members keep read and export — and at the end of
+        the hold its agents, repositories, blobs and invitations are
+        erased, its handle and domain released. The body must repeat the
+        organization's handle. The last admin goes with it: this is the
+        one way an organization loses its last admin (409 last-admin
+        everywhere else).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm]
+              properties:
+                confirm:
+                  type: string
+                  description: The organization's handle, typed again.
+                reason:
+                  type: string
+                  maxLength: 500
+      responses:
+        "200":
+          description: The organization, now decommissioning, with when the hold ends.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Org"
+        "409":
+          description: The organization is not active, or `confirm` is not its handle (422).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/suspend:
+    post:
+      operationId: suspendOrg
+      tags: [orgs]
+      summary: >
+        Suspend the organization (platform staff). It and everything under
+        it answer 404 to everyone, over the API and over git, until it is
+        reinstated. Nothing is deleted.
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+      responses:
+        "200":
+          description: The organization, now suspended.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Org"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/reinstate:
+    post:
+      operationId: reinstateOrg
+      tags: [orgs]
+      summary: >
+        Reinstate a suspended organization, or cancel a decommission hold
+        before its erasure runs (platform staff). An organization already
+        erased cannot come back (409).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      responses:
+        "200":
+          description: The organization, active again.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Org"
+        default:
+          $ref: "#/components/responses/Problem"
+
   /orgs/{org}/members:
     get:
       operationId: listOrgMembers
@@ -1074,8 +1211,11 @@ paths:
       operationId: removeOrgMember
       tags: [orgs]
       summary: >
-        Remove a member (admin). Removing a pending member is how an admin
-        declines them; the last admin cannot be removed (409 last-admin).
+        Remove a member (admin), or leave: any active member may remove
+        themselves, since a person belongs to one organization at a time
+        and must be able to leave it. Removing a pending member is how an
+        admin declines them; the last admin cannot be removed or leave
+        (409 last-admin) — only a decommission removes them.
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
         - $ref: "#/components/parameters/Handle"
@@ -3738,6 +3878,18 @@ components:
         displayName:
           type: string
           maxLength: 120
+        domain:
+          type: string
+          maxLength: 253
+          description: >
+            The domain the organization is keyed on. Omitted, it is the
+            domain of the creator's verified email address; `none` records
+            no domain; the creator's own domain, spelled out, is accepted.
+            Any other value is 422 — a further domain is claimed over DNS
+            (`POST /orgs/{org}/domain-claims`). A domain no single
+            organization owns (a public mail provider, a reserved name) is
+            recorded as none whatever is sent. A domain that already
+            belongs to an organization is `409 domain-claimed`.
 
     Org:
       type: object
@@ -3752,6 +3904,29 @@ components:
           type: string
         verifiedDomain:
           type: string
+          description: >
+            The first domain the organization verified over DNS. Kept for
+            older clients; `verifiedDomains` carries them all.
+        verifiedDomains:
+          type: array
+          description: Every domain the organization proved control of over DNS, oldest first.
+          items:
+            type: string
+        domain:
+          type: string
+          description: >
+            The domain the organization was created at (its creator's
+            verified email domain), which routes people at that domain to
+            its administrators. Absent when none was recorded.
+        state:
+          $ref: "#/components/schemas/OrgState"
+        decommissionAt:
+          type: string
+          format: date-time
+          description: >
+            While `state` is `decommissioning`: when the hold ends and the
+            organization's agents, repositories, blobs and invitations are
+            erased, its handle and domain released.
         ssoRequired:
           type: boolean
           description: Present for org admins only.
@@ -3762,6 +3937,63 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    OrgState:
+      type: string
+      description: >
+        Where the organization is in its life. `active` is the ordinary
+        state. `suspended` (platform staff) makes the organization and
+        everything under it answer as absent — 404 to every caller, git
+        included — until it is reinstated. `decommissioning` is the
+        read-only hold an admin, platform staff or the hosted product's
+        pending-payment sweep started: members still read every agent and
+        export the audit log, nothing under the organization can be
+        changed, pushed or submitted (409 org-decommissioning), and at
+        `decommissionAt` the erasure runs; staff may reinstate it before
+        then. `decommissioned` is the row after the erasure; its handle is
+        released, so no path names it.
+      enum: [active, suspended, decommissioning, decommissioned]
+
+    DomainOrg:
+      type: object
+      description: >
+        Which organization, if any, the caller's verified email domain
+        belongs to — recorded at the organization's creation or verified
+        over DNS by it. A domain no single organization owns (a public
+        mail provider) belongs to nobody.
+      required: [domain]
+      properties:
+        domain:
+          type: string
+          description: The caller's verified email domain; empty for an address at a shared domain.
+        org:
+          type: object
+          description: Absent when no organization holds the domain.
+          required: [handle, displayName]
+          properties:
+            handle:
+              type: string
+            displayName:
+              type: string
+        member:
+          type: boolean
+          description: Whether the caller already holds a membership there, pending or active.
+        requestedToday:
+          type: boolean
+          description: Whether the caller already asked its administrators for access in the last day.
+
+    AccessRequestResult:
+      type: object
+      required: [org, mailedAdmins]
+      properties:
+        org:
+          type: string
+        mailedAdmins:
+          type: integer
+          description: >
+            How many of the organization's admins were mailed. Zero when
+            none has a verified address that accepts organization mail;
+            the request is still audited.
 
     Membership:
       type: object

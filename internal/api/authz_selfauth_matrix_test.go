@@ -160,6 +160,18 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 		{"platformAgentAction", "POST", "/api/v1/platform/agents/nobody" + env.sfx + "/ghost/quarantine",
 			map[string]any{"reason": "matrix"}, staffSess, pass},
 
+		// suspendOrg / reinstateOrg — staff-only (agentry#363); an absent
+		// organization turns every authorized probe into a 404, nothing
+		// suspended.
+		{"suspendOrg", "POST", "/api/v1/orgs/nobody" + env.sfx + "/suspend", map[string]any{"reason": "matrix"}, anonymous, deny1},
+		{"suspendOrg", "POST", "/api/v1/orgs/nobody" + env.sfx + "/suspend", map[string]any{"reason": "matrix"}, plain, deny3},
+		{"suspendOrg", "POST", "/api/v1/orgs/" + orgH + "/suspend", map[string]any{"reason": "matrix"}, orgOwner, deny3},
+		{"suspendOrg", "POST", "/api/v1/orgs/nobody" + env.sfx + "/suspend", map[string]any{"reason": "matrix"}, staffSess, pass},
+		{"reinstateOrg", "POST", "/api/v1/orgs/nobody" + env.sfx + "/reinstate", nil, anonymous, deny1},
+		{"reinstateOrg", "POST", "/api/v1/orgs/nobody" + env.sfx + "/reinstate", nil, plain, deny3},
+		{"reinstateOrg", "POST", "/api/v1/orgs/" + orgH + "/reinstate", nil, orgOwner, deny3},
+		{"reinstateOrg", "POST", "/api/v1/orgs/nobody" + env.sfx + "/reinstate", nil, staffSess, pass},
+
 		// listPlatformAudit — staff-only read.
 		{"listPlatformAudit", "GET", "/api/v1/platform/audit?limit=1", nil, anonymous, deny1},
 		{"listPlatformAudit", "GET", "/api/v1/platform/audit?limit=1", nil, plain, deny3},
