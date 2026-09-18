@@ -59,25 +59,32 @@ func AllRouteAuthzDecls() map[string]RouteDecl {
 
 // routeAuthz maps OpenAPI operationId → declaration. Keep alphabetical.
 var routeAuthz = map[string]RouteDecl{
-	"addTeamMember":     {Action: auth.ActOrgTeamsManage, OrgScoped: true},
-	"createAgent":       {Action: auth.ActAgentCreate, AgentScoped: false},
-	"getAgent":          {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
-	"listAgents":        {Action: auth.ActPublicRead, Anonymous: true},
-	"getAdvisory":       {Action: auth.ActPublicRead, Anonymous: true},
+	"addTeamMember": {Action: auth.ActOrgTeamsManage, OrgScoped: true},
+	"createAgent":   {Action: auth.ActAgentCreate, AgentScoped: false},
+	"getAgent":      {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
+	"listAgents":    {Action: auth.ActPublicRead, Anonymous: true},
+	"getAdvisory":   {Action: auth.ActPublicRead, Anonymous: true},
+	// updateAgent stays at maintain: its fields are the agent's settings,
+	// which a publisher may change. The one field that is not — visibility
+	// — is checked against ActAgentAdminister in the handler, the way
+	// ssoRequired is inside updateOrg.
 	"updateAgent":       {Action: auth.ActAgentMaintain, AgentScoped: true},
-	"deleteAgent":       {Action: auth.ActAgentMaintain, AgentScoped: true},
+	"deleteAgent":       {Action: auth.ActAgentAdminister, AgentScoped: true},
 	"listAgentActivity": {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
 	"getAgentStats":     {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
 	// Stars are per-agent reads that mutate the CALLER's list, so they carry
 	// the agent read action (you cannot star what you cannot see) and refuse
 	// anonymous callers in the handler — there is no anonymous star list.
-	"starAgent":             {Action: auth.ActAgentRead, AgentScoped: true},
-	"unstarAgent":           {Action: auth.ActAgentRead, AgentScoped: true},
-	"listAgentGrants":       {Action: auth.ActAgentMaintain, AgentScoped: true},
-	"setAgentUserGrant":     {Action: auth.ActAgentMaintain, AgentScoped: true},
-	"removeAgentUserGrant":  {Action: auth.ActAgentMaintain, AgentScoped: true},
-	"setAgentTeamGrant":     {Action: auth.ActAgentMaintain, AgentScoped: true},
-	"removeAgentTeamGrant":  {Action: auth.ActAgentMaintain, AgentScoped: true},
+	"starAgent":   {Action: auth.ActAgentRead, AgentScoped: true},
+	"unstarAgent": {Action: auth.ActAgentRead, AgentScoped: true},
+	// The grants are administrative: handing someone access to an
+	// organization's private agent is a disclosure, so it belongs with the
+	// admins rather than with everyone who may publish (agentry#362).
+	"listAgentGrants":       {Action: auth.ActAgentAdminister, AgentScoped: true},
+	"setAgentUserGrant":     {Action: auth.ActAgentAdminister, AgentScoped: true},
+	"removeAgentUserGrant":  {Action: auth.ActAgentAdminister, AgentScoped: true},
+	"setAgentTeamGrant":     {Action: auth.ActAgentAdminister, AgentScoped: true},
+	"removeAgentTeamGrant":  {Action: auth.ActAgentAdminister, AgentScoped: true},
 	"submitVersion":         {Action: auth.ActAgentPublish, AgentScoped: true},
 	"listVersions":          {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
 	"getVersionInfo":        {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},

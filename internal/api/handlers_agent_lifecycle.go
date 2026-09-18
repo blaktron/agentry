@@ -57,7 +57,7 @@ func (s *Server) DeleteAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	if !s.requireDB(w, r) {
 		return
 	}
-	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentMaintain)
+	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentAdminister)
 	if !ok {
 		return
 	}
