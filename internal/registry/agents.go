@@ -231,9 +231,10 @@ func normalizeModes(modes []string) ([]string, error) {
 }
 
 // CreateAgent creates the agent row and its bare repository. The caller is
-// authorized here: personal namespace = self; org namespace = org admin+
-// (org role admin gets maintain via NamespaceDerivedAgentRole, and creation
-// requires at least that).
+// authorized here: personal namespace = self; org namespace = any active
+// member (D6, agentry#362 — a seat buys a share of the organization's
+// namespace, and an admin is a member with more). A pending member is not
+// one: their membership never reaches Principal.OrgRoles.
 func (s *Service) CreateAgent(ctx context.Context, p *auth.Principal, in CreateAgentInput, actorEvent audit.Event) (Agent, error) {
 	if p == nil || p.Anonymous {
 		return Agent{}, auth.ErrUnauthorized
@@ -268,7 +269,9 @@ func (s *Service) CreateAgent(ctx context.Context, p *auth.Principal, in CreateA
 			return Agent{}, auth.ErrForbidden
 		}
 	case "org":
-		if p.Role(ns.ID) != auth.RoleAdmin {
+		// The namespace-derived role is the one rule: whoever may release
+		// an agent here may make one here.
+		if auth.NamespaceDerivedAgentRole(p, ns.Kind, ns.ID, p.Role(ns.ID)) == auth.AgentRoleNone {
 			return Agent{}, auth.ErrForbidden
 		}
 		subject = entitlements.ForOrg(ns.ID)

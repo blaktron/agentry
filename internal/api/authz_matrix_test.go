@@ -70,7 +70,7 @@ type matrixSeed struct {
 
 func seedMatrix(t *testing.T, env *testEnv) *matrixSeed {
 	t.Helper()
-	roles := []string{"admin", "security_reviewer", "member", "outsider"}
+	roles := []string{"admin", "security_reviewer", "member", "pending", "outsider"}
 	sessions := map[string]caller{}
 	for _, role := range roles {
 		h := env.register("mx-" + role[:3])
@@ -85,6 +85,10 @@ func seedMatrix(t *testing.T, env *testEnv) *matrixSeed {
 		map[string]any{"handle": orgH, "displayName": "Matrix Org"}, &org, http.StatusCreated)
 	env.joinOrg(sessions["admin"], orgH, sessions["member"].name)
 	env.seedMembership(orgH, sessions["security_reviewer"].name, "security_reviewer", "active")
+	// A member the IdP provisioned and no admin has approved. They hold
+	// nothing (agentry#361, agentry#362), and the matrix proves it route by
+	// route rather than only where someone thought to look.
+	env.seedMembership(orgH, sessions["pending"].name, "member", "pending")
 	// A pawn member for non-destructive member-set targets.
 	pawnH := env.register("mx-pawn")
 	env.joinOrg(sessions["admin"], orgH, pawnH)
@@ -316,7 +320,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 		// the matrix only checks that anonymous and PAT callers are refused.
 		"deleteCurrentUser": {
 			method: "POST", path: sPath("/api/v1/user/delete"),
-			skipCallers: map[string]bool{"admin": true, "security_reviewer": true, "member": true, "outsider": true},
+			skipCallers: map[string]bool{"admin": true, "security_reviewer": true, "member": true, "pending": true, "outsider": true},
 		},
 		"getAgentReadme":        {method: "GET", path: agentPath("/readme")},
 		"getVersionReport":      {method: "GET", path: agentPath("/versions/9.9.9/report")},
@@ -399,7 +403,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 				return ""
 			},
 		},
-		"logout":    {method: "POST", path: sPath("/api/v1/auth/logout"), skipCallers: map[string]bool{"admin": true, "security_reviewer": true, "member": true, "outsider": true}},
+		"logout":    {method: "POST", path: sPath("/api/v1/auth/logout"), skipCallers: map[string]bool{"admin": true, "security_reviewer": true, "member": true, "pending": true, "outsider": true}},
 		"totpSetup": {method: "POST", path: sPath("/api/v1/auth/2fa/totp/setup")},
 		"totpVerify": {
 			method: "POST", path: sPath("/api/v1/auth/2fa/totp/verify"),
@@ -540,10 +544,15 @@ func TestAuthzMatrix(t *testing.T) {
 	seed := seedMatrix(t, env)
 	factories := requestFactories(env)
 
+	// What the server will resolve for each caller. A pending membership
+	// never reaches Principal.OrgRoles, so the expectation for "pending" is
+	// an outsider's — which is the assertion.
 	roleFor := map[string]auth.OrgRole{
 		"admin":             auth.RoleAdmin,
 		"security_reviewer": auth.RoleSecurityReviewer,
-		"member":            auth.RoleMember, "outsider": auth.RoleNone,
+		"member":            auth.RoleMember,
+		"pending":           auth.RoleNone,
+		"outsider":          auth.RoleNone,
 	}
 
 	caseN := 0
