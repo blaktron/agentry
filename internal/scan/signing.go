@@ -51,11 +51,21 @@ var (
 type Signer interface {
 	// Sign signs a statement, returning the DSSE envelope.
 	Sign(stmt InTotoStatement) (DSSEEnvelope, error)
+	// SignPayload signs an already-encoded DSSE payload and returns the one
+	// signature. Sign is a marshal plus this; the re-attestation sweep uses
+	// it directly, because a countersignature must cover the payload bytes
+	// the envelope already holds — a re-marshalled statement could differ by
+	// a byte and every old signature would stop verifying (agentry#350).
+	SignPayload(payloadType string, payload []byte) (DSSESignature, error)
 	// KeyID identifies the signing key.
 	KeyID() string
 	// PublicKeyPEM returns the verification key for the well-known endpoint.
 	PublicKeyPEM() string
 }
+
+// SigningAlgorithm is the one algorithm §8.8 fixes; every key the registry
+// publishes or records carries it.
+const SigningAlgorithm = "ecdsa-p256-sha256"
 
 // FileSigner signs with a local ECDSA P-256 key.
 type FileSigner struct {
@@ -111,17 +121,26 @@ func (s *FileSigner) Sign(stmt InTotoStatement) (DSSEEnvelope, error) {
 	if err != nil {
 		return DSSEEnvelope{}, err
 	}
-	pae := attest.PAE(attest.PayloadType, payload)
-	digest := sha256.Sum256(pae)
-	sig, err := ecdsa.SignASN1(rand.Reader, s.priv, digest[:])
+	sig, err := s.SignPayload(attest.PayloadType, payload)
 	if err != nil {
-		return DSSEEnvelope{}, fmt.Errorf("scan: sign: %w", err)
+		return DSSEEnvelope{}, err
 	}
 	return DSSEEnvelope{
 		PayloadType: attest.PayloadType,
 		Payload:     base64.StdEncoding.EncodeToString(payload),
-		Signatures:  []DSSESignature{{KeyID: s.keyID, Sig: base64.StdEncoding.EncodeToString(sig)}},
+		Signatures:  []DSSESignature{sig},
 	}, nil
+}
+
+// SignPayload implements Signer.
+func (s *FileSigner) SignPayload(payloadType string, payload []byte) (DSSESignature, error) {
+	pae := attest.PAE(payloadType, payload)
+	digest := sha256.Sum256(pae)
+	sig, err := ecdsa.SignASN1(rand.Reader, s.priv, digest[:])
+	if err != nil {
+		return DSSESignature{}, fmt.Errorf("scan: sign: %w", err)
+	}
+	return DSSESignature{KeyID: s.keyID, Sig: base64.StdEncoding.EncodeToString(sig)}, nil
 }
 
 // SignerOptions selects and configures the signer (D-16: none|file|kms).
