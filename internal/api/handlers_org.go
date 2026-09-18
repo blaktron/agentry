@@ -138,14 +138,16 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 	}
 	activated := !s.orgsAwaitActivation()
 	if !activated {
-		pending, err := s.q().ListPendingOrgsCreatedBy(r.Context(), &p.UserID)
-		if err != nil {
-			s.log.ErrorContext(r.Context(), "pending orgs", "err", err)
-			problemInternal(w, r)
+		// The early answer names the pending organization; the unique
+		// partial index is what holds the rule under concurrent requests.
+		pending, err := s.q().GetPendingOrgCreatedBy(r.Context(), &p.UserID)
+		switch {
+		case err == nil:
+			problemOrgPending(w, r, pending)
 			return
-		}
-		if len(pending) > 0 {
-			problemOrgPending(w, r, pending[0])
+		case !errors.Is(err, pgx.ErrNoRows):
+			s.log.ErrorContext(r.Context(), "pending org", "err", err)
+			problemInternal(w, r)
 			return
 		}
 	}
@@ -170,6 +172,10 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
+		if uniqueViolationOn(err, "orgs_pending_by_creator_idx") {
+			problemOrgPending(w, r, "an organization")
+			return
+		}
 		if isUniqueViolation(err) {
 			problemConflict(w, r, "That org handle is already in use. Choose another.")
 			return
@@ -315,25 +321,38 @@ func memberChangeAction(current, requested auth.OrgRole) auth.Action {
 	return auth.ActOrgMembersManage
 }
 
-// lastAdminGuard refuses a change that would leave the organization with
-// no admin who can act (agentry#360, D14): the caller is demoting or
-// removing an admin, and no other active admin exists. Erased accounts
-// keep their membership rows and do not count. It reports whether it
-// wrote the problem.
-func (s *Server) lastAdminGuard(w http.ResponseWriter, r *http.Request, org storegen.GetOrgByHandleRow, current, requested auth.OrgRole) bool {
-	if current != auth.RoleAdmin || requested == auth.RoleAdmin {
-		return false
+// errLastAdmin is what a membership transaction returns when the change
+// would leave the organization with no admin who can act.
+var errLastAdmin = errors.New("api: the organization's last admin")
+
+// guardLastAdmin runs inside a transaction that removes or demotes a
+// membership (agentry#360, D14): it locks the organization's row, so two
+// such changes serialise and the second counts what the first committed,
+// then refuses with errLastAdmin when the membership is that of the last
+// admin whose account is active. Erased accounts keep their membership rows
+// and do not count. A user who is not a member, or not an admin, passes.
+func guardLastAdmin(ctx context.Context, q *storegen.Queries, orgID, userID uuid.UUID) error {
+	if err := q.LockOrg(ctx, orgID); err != nil {
+		return err
 	}
-	n, err := s.q().CountOrgAdmins(r.Context(), org.ID)
+	m, err := q.GetMembership(ctx, storegen.GetMembershipParams{OrgID: orgID, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
 	if err != nil {
-		problemInternal(w, r)
-		return true
+		return err
+	}
+	if auth.OrgRole(m.Role) != auth.RoleAdmin {
+		return nil
+	}
+	n, err := q.CountOrgAdmins(ctx, orgID)
+	if err != nil {
+		return err
 	}
 	if n <= 1 {
-		problemLastAdmin(w, r, org.Handle)
-		return true
+		return errLastAdmin
 	}
-	return false
+	return nil
 }
 
 // SetOrgMember implements PUT /orgs/{org}/members/{handle}.
@@ -369,7 +388,11 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 			return
 		}
 	default:
-		problemValidation(w, r, "Set role to admin or member.")
+		roles := "admin or member"
+		if firstPartyOrg(orgRow.Handle) {
+			roles = "admin, member or security_reviewer"
+		}
+		problemValidation(w, r, "Set role to "+roles+".")
 		return
 	}
 
@@ -381,11 +404,12 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 		return
 	}
 
-	if s.lastAdminGuard(w, r, orgRow, current, requested) {
-		return
-	}
-
 	err := s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
+		if requested != auth.RoleAdmin {
+			if err := guardLastAdmin(r.Context(), q, orgRow.ID, target.ID); err != nil {
+				return err
+			}
+		}
 		if err := q.UpsertMembership(r.Context(), storegen.UpsertMembershipParams{
 			OrgID: orgRow.ID, UserID: target.ID, Role: string(requested),
 		}); err != nil {
@@ -397,6 +421,10 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 		e.Detail = map[string]any{"role": string(requested), "previous": string(current)}
 		return s.auditW.Write(r.Context(), q, e)
 	})
+	if errors.Is(err, errLastAdmin) {
+		problemLastAdmin(w, r, orgRow.Handle)
+		return
+	}
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "set member", "err", err)
 		problemInternal(w, r)
@@ -452,10 +480,10 @@ func (s *Server) RemoveOrgMember(w http.ResponseWriter, r *http.Request, org Org
 	if !s.authorize(w, r, memberChangeAction(current, auth.RoleNone), orgRow.ID) {
 		return
 	}
-	if s.lastAdminGuard(w, r, orgRow, current, auth.RoleNone) {
-		return
-	}
 	err = s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
+		if err := guardLastAdmin(r.Context(), q, orgRow.ID, target.ID); err != nil {
+			return err
+		}
 		if _, err := q.DeleteMembership(r.Context(), storegen.DeleteMembershipParams{OrgID: orgRow.ID, UserID: target.ID}); err != nil {
 			return err
 		}
@@ -470,6 +498,10 @@ func (s *Server) RemoveOrgMember(w http.ResponseWriter, r *http.Request, org Org
 		e.Detail = map[string]any{"previous": string(current)}
 		return s.auditW.Write(r.Context(), q, e)
 	})
+	if errors.Is(err, errLastAdmin) {
+		problemLastAdmin(w, r, orgRow.Handle)
+		return
+	}
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "remove member", "err", err)
 		problemInternal(w, r)

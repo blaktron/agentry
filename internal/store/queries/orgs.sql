@@ -10,10 +10,16 @@ RETURNING *;
 -- name: ActivateOrg :execrows
 UPDATE orgs SET activated_at = now(), updated_at = now() WHERE id = $1 AND activated_at IS NULL;
 
--- name: ListPendingOrgsCreatedBy :many
+-- name: GetPendingOrgCreatedBy :one
+-- At most one exists per creator (the unique partial index).
 SELECT h.handle FROM orgs o JOIN handles h ON h.id = o.id
-WHERE o.created_by = $1 AND o.activated_at IS NULL AND o.state = 'active'
-ORDER BY o.created_at;
+WHERE o.created_by = $1 AND o.activated_at IS NULL
+LIMIT 1;
+
+-- name: LockOrg :exec
+-- Serialises the membership changes of one organization inside a
+-- transaction (the last-admin guard counts under this lock).
+SELECT id FROM orgs WHERE id = $1 FOR UPDATE;
 
 -- name: GetOrgByHandle :one
 SELECT o.*, h.handle FROM orgs o JOIN handles h ON h.id = o.id WHERE h.handle = $1 AND h.kind = 'org';

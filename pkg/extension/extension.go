@@ -12,7 +12,6 @@ package extension
 
 import (
 	"context"
-	"github.com/google/uuid"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -20,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 

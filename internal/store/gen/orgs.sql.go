@@ -241,6 +241,20 @@ func (q *Queries) GetOrgByID(ctx context.Context, id uuid.UUID) (GetOrgByIDRow, 
 	return i, err
 }
 
+const getPendingOrgCreatedBy = `-- name: GetPendingOrgCreatedBy :one
+SELECT h.handle FROM orgs o JOIN handles h ON h.id = o.id
+WHERE o.created_by = $1 AND o.activated_at IS NULL
+LIMIT 1
+`
+
+// At most one exists per creator (the unique partial index).
+func (q *Queries) GetPendingOrgCreatedBy(ctx context.Context, createdBy *uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, getPendingOrgCreatedBy, createdBy)
+	var handle string
+	err := row.Scan(&handle)
+	return handle, err
+}
+
 const getTeam = `-- name: GetTeam :one
 SELECT id, org_id, slug, scim_group_id, created_at FROM teams WHERE org_id = $1 AND slug = $2
 `
@@ -297,32 +311,6 @@ func (q *Queries) ListOrgMembers(ctx context.Context, orgID uuid.UUID) ([]ListOr
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listPendingOrgsCreatedBy = `-- name: ListPendingOrgsCreatedBy :many
-SELECT h.handle FROM orgs o JOIN handles h ON h.id = o.id
-WHERE o.created_by = $1 AND o.activated_at IS NULL AND o.state = 'active'
-ORDER BY o.created_at
-`
-
-func (q *Queries) ListPendingOrgsCreatedBy(ctx context.Context, createdBy *uuid.UUID) ([]string, error) {
-	rows, err := q.db.Query(ctx, listPendingOrgsCreatedBy, createdBy)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []string
-	for rows.Next() {
-		var handle string
-		if err := rows.Scan(&handle); err != nil {
-			return nil, err
-		}
-		items = append(items, handle)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -479,6 +467,17 @@ func (q *Queries) ListUserTeamIDs(ctx context.Context, userID uuid.UUID) ([]uuid
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockOrg = `-- name: LockOrg :exec
+SELECT id FROM orgs WHERE id = $1 FOR UPDATE
+`
+
+// Serialises the membership changes of one organization inside a
+// transaction (the last-admin guard counts under this lock).
+func (q *Queries) LockOrg(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, lockOrg, id)
+	return err
 }
 
 const removeTeamMember = `-- name: RemoveTeamMember :execrows

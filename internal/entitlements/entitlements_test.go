@@ -2,6 +2,7 @@ package entitlements
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"github.com/google/uuid"
@@ -83,8 +84,8 @@ func TestLimitsFollowConfig(t *testing.T) {
 // The core resolver caps nothing and switches nothing off: a self-hosted
 // registry has no tiers, so every Cap is enabled with no maximum and every
 // flag is on, for users and orgs alike (§1.6.5, §14.3: no crippled stubs).
-// One case per field, so a field added to Features without a line here
-// fails to compile rather than ship unanswered.
+// The walk is over the struct's fields, so a field added to Features fails
+// here until the resolver answers it and this test knows its kind.
 func TestOSSResolverCapsNothing(t *testing.T) {
 	r := Default()
 	for _, s := range []Subject{ForUser(uuid.New()), ForOrg(uuid.New()), {}} {
@@ -92,18 +93,24 @@ func TestOSSResolverCapsNothing(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for name, c := range map[string]Cap{"private agents": f.PrivateAgents, "seats": f.Seats} {
-			if !c.Enabled || c.Max != 0 {
-				t.Errorf("subject %+v: %s %+v, want enabled and uncapped", s, name, c)
+		v := reflect.ValueOf(f)
+		for i := 0; i < v.NumField(); i++ {
+			name := v.Type().Field(i).Name
+			switch field := v.Field(i).Interface().(type) {
+			case Cap:
+				if !field.Enabled || field.Max != 0 {
+					t.Errorf("subject %+v: %s %+v, want enabled and uncapped", s, name, field)
+				}
+			case bool:
+				if !field {
+					t.Errorf("subject %+v: %s is off in the core resolver", s, name)
+				}
+			default:
+				t.Fatalf("Features.%s has a kind this test does not know: %T", name, field)
 			}
 		}
-		for name, on := range map[string]bool{
-			"sso": f.SSO, "scim": f.SCIM, "branding": f.Branding,
-			"alert routing": f.AlertRouting, "unscanned agents": f.UnscannedAgents,
-		} {
-			if !on {
-				t.Errorf("subject %+v: %s is off in the core resolver", s, name)
-			}
+		if v.NumField() != 7 {
+			t.Fatalf("Features has %d fields, want 7 — add the new one to this test's expectations", v.NumField())
 		}
 	}
 }
