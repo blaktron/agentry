@@ -439,6 +439,70 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 	h.back(w, r, backTo, ok, "")
 }
 
+// invitationOffer is what GET /invitations/{token} answers.
+type invitationOffer struct {
+	Org            string `json:"org"`
+	OrgDisplayName string `json:"orgDisplayName"`
+	Email          string `json:"email"`
+	Role           string `json:"role"`
+	ExpiresAt      string `json:"expiresAt"`
+	Acceptable     bool   `json:"acceptable"`
+	Reason         string `json:"reason"`
+	Token          string `json:"-"`
+}
+
+// invitationPage shows an invitation to the person holding its link. It is
+// where the mailed link lands, so it has to work for someone who has never
+// seen this server's pages: sign in first if they are anonymous, then the
+// offer and one button.
+func (h *handler) invitationPage(w http.ResponseWriter, r *http.Request) {
+	u := h.requireUser(w, r)
+	if u == nil {
+		return
+	}
+	token := r.PathValue("token")
+	c := h.call(r)
+	res, err := c.do(http.MethodGet, "/invitations/"+url.PathEscape(token), nil)
+	if err != nil || !res.OK() {
+		status, msg := http.StatusBadGateway, notSent
+		if err == nil {
+			status, msg = res.Status, res.detail()
+			if status == http.StatusNotFound {
+				msg = "This invitation has expired, been used, or been revoked. Ask an administrator to send another."
+			}
+		}
+		h.render(w, r, status, "message", page{Title: "Invitation", User: u, Error: msg})
+		return
+	}
+	var offer invitationOffer
+	_ = res.decode(&offer)
+	offer.Token = token
+	h.render(w, r, http.StatusOK, "invitation", page{Title: "Invitation to " + offer.Org, User: u, Data: offer})
+}
+
+// invitationAccept posts the acceptance and lands the new member on the
+// organization's page.
+func (h *handler) invitationAccept(w http.ResponseWriter, r *http.Request) {
+	u := h.requireUser(w, r)
+	if u == nil {
+		return
+	}
+	token := r.PathValue("token")
+	c := h.call(r)
+	res, err := c.do(http.MethodPost, "/invitations/"+url.PathEscape(token), nil)
+	if err != nil || !res.OK() {
+		msg := notSent
+		if err == nil {
+			msg = res.detail()
+		}
+		h.back(w, r, "/ui/invitations/"+url.PathEscape(token), "", msg)
+		return
+	}
+	var m orgMember
+	_ = res.decode(&m)
+	h.back(w, r, "/ui/orgs", "You are now a member.", "")
+}
+
 // orgsIndex lists the organizations the caller can administer (from
 // GET /user), each linking to its page; anyone can also type a handle.
 func (h *handler) orgsIndex(w http.ResponseWriter, r *http.Request) {

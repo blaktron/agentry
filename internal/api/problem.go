@@ -199,9 +199,16 @@ func problemOrgPending(w http.ResponseWriter, r *http.Request, org string) {
 // organization's seats (plan §4 "Seats"). The counts ride at the top level
 // so a console can say "24 of 25 used, 1 invited" without parsing a
 // sentence; nothing is removed when it is answered.
-func problemSeatAllowance(w http.ResponseWriter, r *http.Request, org string, seats registry.Seats) {
-	writeProblemWith(w, r, http.StatusForbidden, "seat-allowance", "No seat available",
-		"The "+org+" organization holds as many seats as its subscription allows. Free a seat, or add seats to the subscription, then try again.",
+func problemSeatAllowance(w http.ResponseWriter, r *http.Request, org string, seats *registry.Seats) {
+	detail := "The " + org + " organization holds as many seats as its subscription allows. Free a seat, or add seats to the subscription, then try again."
+	if seats == nil {
+		// The counts could not be read. Saying nothing beats saying zero:
+		// max 0 means "unbounded" to every client of this schema, which is
+		// the opposite of what this refusal means.
+		writeProblem(w, r, http.StatusForbidden, "seat-allowance", "No seat available", detail)
+		return
+	}
+	writeProblemWith(w, r, http.StatusForbidden, "seat-allowance", "No seat available", detail,
 		map[string]any{"used": seats.Used, "invited": seats.Invited, "pending": seats.Pending, "max": seats.Max})
 }
 

@@ -291,9 +291,10 @@ func (s *Server) oidcRPForOrg(ctx context.Context, r *http.Request, orgRow store
 	return rp, conn.ID, err
 }
 
-// establishSSOSession is the shared JIT + session step for SAML and OIDC
-// (§12.4). It links or creates the user, ensures org membership, opens an
-// SSO-tagged session, and writes the LoginResult.
+// establishSSOSession is the shared sign-in step for SAML and OIDC
+// (§12.4). It recognises the member the assertion names — since
+// agentry#361 it creates nobody — opens an SSO-tagged session, and writes
+// the LoginResult.
 // samlSessionLink is what a SAML-established session remembers for Single
 // Logout (§12.4, agentry#62): the asserted NameID and the IdP's
 // SessionIndex, keyed by the connection.
@@ -308,6 +309,12 @@ func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, org
 
 	userID, err := s.resolveSSOUser(ctx, orgRow, connID, providerKind, subject, email)
 	if err != nil {
+		if errors.Is(err, errExplicitLinkRequired) {
+			writeProblem(w, r, http.StatusConflict, "sso-link-required",
+				"This organization has not verified that domain",
+				"An account here already uses that address, and this organization has not proved it controls the address's domain. Verify the domain (DNS TXT), or sign in with the account's own credentials once so the two are linked.")
+			return
+		}
 		if errors.Is(err, errNotAMember) {
 			// A plain notice, and the same one whether the person has no
 			// account, has one that is not a member, or is a member
@@ -399,13 +406,12 @@ func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, org
 	})
 }
 
-// errExplicitLinkRequired signals the T-12 guard: an existing account matches
-// the email but the domain is not org-verified, so auto-link is refused.
+// errExplicitLinkRequired signals the T-12 guard: an existing account holds
+// the asserted address and the asserting party has not proved it controls
+// that address's domain, so linking it would be taking the account over.
+// Raised by the org-SSO path (agentry#361 keeps T-12's condition for the
+// first link) and by the social sign-in path.
 var errExplicitLinkRequired = errors.New("explicit link confirmation required")
-
-// (The org-SSO path no longer raises it: since agentry#361 an organization's
-// SSO recognises members and admits nobody, so there is no account for it to
-// link without confirmation. The social sign-in path still does.)
 
 // errNotAMember reports that the person the IdP authenticated is not an
 // active member of the organization.
@@ -437,9 +443,22 @@ func (s *Server) resolveSSOUser(ctx context.Context, orgRow storegen.GetOrgByHan
 		return uuid.Nil, err
 	}
 
-	// 2. No identity yet: only an account that is already an active member
-	// may be recognised, and only when the IdP asserted the address it
-	// holds — the address is what ties the assertion to the member.
+	// 2. No identity yet. Linking one to an existing account is a takeover
+	// if it is done on the IdP's word alone: an organization's admin
+	// configures its SSO connection, so they could point it at an IdP they
+	// control and assert any address they liked. Nothing on this side
+	// verifies the asserted address — SAML reads it from an attribute,
+	// OIDC trusts the IdP's own email_verified — so two independent facts
+	// are required before an assertion may speak for an account, and
+	// membership alone is not enough:
+	//
+	//   - the account is an active member of this organization, and
+	//   - the address is at the domain this organization proved it
+	//     controls (T-12, the DNS-TXT verified domain).
+	//
+	// A member who joined with a personal address is therefore never
+	// linked automatically, which is the case that would hurt. Once an
+	// identity exists, sign-in rides it (step 1) and this does not run.
 	if email == "" {
 		return uuid.Nil, errNotAMember
 	}
@@ -452,6 +471,9 @@ func (s *Server) resolveSSOUser(ctx context.Context, orgRow storegen.GetOrgByHan
 	}
 	if !s.isActiveMember(ctx, orgRow.ID, u.ID) {
 		return uuid.Nil, errNotAMember
+	}
+	if !atOrgDomain(orgRow, email) {
+		return uuid.Nil, errExplicitLinkRequired
 	}
 	if err := s.linkIdentity(ctx, u.ID, providerKind, connID, subject); err != nil {
 		return uuid.Nil, err

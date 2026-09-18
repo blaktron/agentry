@@ -30,12 +30,20 @@ SELECT o.*, h.handle FROM orgs o JOIN handles h ON h.id = o.id WHERE o.id = $1;
 -- name: UpdateOrgDisplayName :one
 UPDATE orgs SET display_name = $2, updated_at = now() WHERE id = $1 RETURNING id;
 
--- name: UpsertMembership :exec
--- Role changes only: every door that *creates* an active membership goes
--- through registry.ActivateMember (agentry#361), which counts seats.
-INSERT INTO memberships (org_id, user_id, role, via_scim)
-VALUES ($1, $2, $3, $4)
-ON CONFLICT (org_id, user_id) DO UPDATE SET role = EXCLUDED.role, updated_at = now();
+-- name: UpsertMembership :execrows
+-- Role changes only, and it cannot create: every door that makes someone a
+-- member goes through registry.ActivateMember (agentry#361), which counts
+-- seats. An UPDATE with no row is 0 rows, so a caller that reaches here
+-- with nobody to change writes nothing rather than admitting them.
+UPDATE memberships SET role = $3, updated_at = now()
+WHERE org_id = $1 AND user_id = $2;
+
+-- name: CreateFounderMembership :exec
+-- The one membership written without a seat check: the person creating the
+-- organization, who is its first admin. There is nothing yet to count and
+-- nobody yet to approve them.
+INSERT INTO memberships (org_id, user_id, role, state)
+VALUES ($1, $2, $3, 'active');
 
 -- name: UpsertPendingMembership :exec
 -- The SCIM and fold-in doors: a membership that holds no seat and confers
@@ -92,7 +100,12 @@ SELECT
 SELECT count(*) FROM memberships m WHERE m.user_id = $1 AND m.state = 'active' AND m.org_id <> $2;
 
 -- name: ListUserMemberships :many
-SELECT m.org_id, m.role FROM memberships m WHERE m.user_id = $1;
+-- The caller's org roles, for the principal every request is authorized
+-- against. ACTIVE memberships only (agentry#361): a pending member —
+-- provisioned by the IdP, or folded in from the domain — is waiting for an
+-- admin and holds nothing of the organization until then, so their row
+-- must not reach auth.Check as a role.
+SELECT m.org_id, m.role FROM memberships m WHERE m.user_id = $1 AND m.state = 'active';
 
 -- name: ListUserMembershipsWithHandles :many
 SELECT m.org_id, m.role, m.state, h.handle
@@ -107,7 +120,10 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: GetInvitationByToken :one
-SELECT i.*, h.handle AS org_handle, o.display_name AS org_display_name
+-- The organization's verified domain travels with the invitation: whether
+-- the invited address is at it decides both whether the offer was mailed
+-- and whether accepting confirms the address (agentry#361).
+SELECT i.*, h.handle AS org_handle, o.display_name AS org_display_name, o.verified_domain
 FROM org_invitations i
 JOIN orgs o ON o.id = i.org_id
 JOIN handles h ON h.id = i.org_id

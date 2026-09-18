@@ -82,7 +82,12 @@ tags:
   - name: webhooks
     description: Org webhook endpoints and deliveries (§9.3).
   - name: domains
-    description: Domain verification for JIT auto-linking (§12.4).
+    description: >-
+      Domain verification (§12.4). A verified domain is what an
+      organization proves it controls, and three things rest on it: linking
+      an SSO identity to an existing member's account for the first time,
+      mailing an invitation to an address there, and treating that address
+      as confirmed when its invitation is accepted.
   - name: mcp-servers
     description: >-
       The registry of scanned MCP server package versions S7 keeps and the
@@ -1038,7 +1043,11 @@ paths:
     put:
       operationId: setOrgMember
       tags: [orgs]
-      summary: Add a member or change a role (admin).
+      summary: >
+        Change a member's role (admin). Adding is retired: an organization
+        is joined by accepting an invitation, or by an admin approving
+        someone the IdP provisioned, and a PUT for a handle that holds no
+        membership answers 422 naming those doors.
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
         - $ref: "#/components/parameters/Handle"
@@ -1147,9 +1156,14 @@ paths:
       summary: >
         Invite someone by email (admin). The invitation reserves a seat
         when it is sent and expires in seven days. Its token is a
-        credential shown once in this response and stored only as a hash;
-        it is also mailed to the address when that address belongs to an
-        account the registry has verified.
+        credential shown once in this response and stored only as a hash.
+        It is also mailed to the address when the registry may write
+        there: an address at the organization's own verified domain
+        always, and any other address only when it belongs to an account
+        whose address the registry has confirmed. Accepting an invitation
+        sent to the organization's verified domain also confirms the
+        accepting account's address, because the organization proved it
+        controls that domain.
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
       requestBody:

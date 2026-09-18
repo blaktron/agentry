@@ -66,6 +66,10 @@ func TestSSOLandingStartsSPInitiatedSAML(t *testing.T) {
 	orgH := "spiorg" + env.sfx
 	env.createOrg(sess, orgH)
 
+	// The organization has proved it controls the domain the IdP asserts:
+	// linking an identity to an existing member's account for the first
+	// time needs that proof as well as the membership (T-12, agentry#361).
+	env.verifyOrgDomain(orgH, "acme.example")
 	idp := newSAMLTestIdP(t)
 	metadataXML, err := samlsp.BuildIDPMetadataXML(idp.entityID, "https://acs-idp.test/sso", idp.certPEM)
 	if err != nil {

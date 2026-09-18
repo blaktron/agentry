@@ -64,6 +64,13 @@ var ErrAlreadyAMember = errors.New("registry: this person is already a member of
 // being reached, so the caller can say which it is.
 var ErrSeatsNotOffered = errors.New("registry: this organization's subscription does not include seats")
 
+// The membership states (memberships.state). A pending membership holds no
+// seat and confers nothing; an active one is a member.
+const (
+	StatePending = "pending"
+	StateActive  = "active"
+)
+
 // MembershipVia names the door a membership came through, for the audit
 // row and the event payload.
 type MembershipVia string
@@ -75,17 +82,33 @@ const (
 	ViaRoleChange MembershipVia = "role"       // an admin changed an existing member's role
 )
 
+// ActivateMemberRequest is what one activation needs.
+type ActivateMemberRequest struct {
+	OrgID  uuid.UUID
+	UserID uuid.UUID
+	// Role is what the person will hold.
+	Role auth.OrgRole
+	// Via names the door, for the audit row and the event.
+	Via MembershipVia
+	// Actor carries the acting principal (the invitee for an accept, the
+	// admin for an approval), filled in by the API layer the way every
+	// other audited act is.
+	Actor audit.Event
+	// Spend runs inside the same transaction, before the seat is counted:
+	// the invitation door spends its token here. Putting it inside means a
+	// token cannot be consumed by an activation that is then refused, and
+	// that the invitation has left the open count by the time the seat is
+	// counted — so the seat it reserved is the one being taken, not a
+	// second one. nil for a door that reserves nothing.
+	Spend func(ctx context.Context, q *storegen.Queries) error
+}
+
 // ActivateMember is the one operation that makes a membership active.
-//
-// orgID and userID name the membership; role is what they hold; via names
-// the door, for the audit row. actorEvent carries the acting principal
-// (the invitee for an accept, the admin for an approval), already filled
-// in by the API layer the way every other audited act is.
 //
 // It reports whether this call was the activation: a membership that was
 // already active is left alone and reports false, so a repeated accept or
 // a double-clicked approval does not fire a second `member.added`.
-func (s *Service) ActivateMember(ctx context.Context, orgID, userID uuid.UUID, role auth.OrgRole, via MembershipVia, actorEvent audit.Event) (bool, error) {
+func (s *Service) ActivateMember(ctx context.Context, req ActivateMemberRequest) (bool, error) {
 	var (
 		activated bool
 		viaSCIM   bool
@@ -94,30 +117,37 @@ func (s *Service) ActivateMember(ctx context.Context, orgID, userID uuid.UUID, r
 		// The organization's row is the lock every seat decision is taken
 		// under, so two admins approving at the same moment cannot both
 		// see the last seat free.
-		if err := q.LockOrg(ctx, orgID); err != nil {
+		if err := q.LockOrg(ctx, req.OrgID); err != nil {
 			return err
 		}
-		current, err := q.GetMembership(ctx, storegen.GetMembershipParams{OrgID: orgID, UserID: userID})
+		current, err := q.GetMembership(ctx, storegen.GetMembershipParams{OrgID: req.OrgID, UserID: req.UserID})
 		switch {
 		case err == nil:
 			viaSCIM = current.ViaScim
-			if current.State == "active" {
+			if current.State == StateActive {
 				// Already a member: a role change, not an activation. It
 				// consumes no seat and is not a new membership.
-				if auth.OrgRole(current.Role) == role {
+				if auth.OrgRole(current.Role) == req.Role {
 					return nil
 				}
-				return q.UpsertMembership(ctx, storegen.UpsertMembershipParams{
-					OrgID: orgID, UserID: userID, Role: string(role), ViaScim: viaSCIM,
+				_, err := q.UpsertMembership(ctx, storegen.UpsertMembershipParams{
+					OrgID: req.OrgID, UserID: req.UserID, Role: string(req.Role),
 				})
+				return err
 			}
 		case errors.Is(err, pgx.ErrNoRows):
 		default:
 			return err
 		}
 
+		if req.Spend != nil {
+			if err := req.Spend(ctx, q); err != nil {
+				return err
+			}
+		}
+
 		// A person is active in at most one organization at a time (D26).
-		elsewhere, err := q.CountActiveMembershipsElsewhere(ctx, storegen.CountActiveMembershipsElsewhereParams{UserID: userID, OrgID: orgID})
+		elsewhere, err := q.CountActiveMembershipsElsewhere(ctx, storegen.CountActiveMembershipsElsewhereParams{UserID: req.UserID, OrgID: req.OrgID})
 		if err != nil {
 			return err
 		}
@@ -125,16 +155,12 @@ func (s *Service) ActivateMember(ctx context.Context, orgID, userID uuid.UUID, r
 			return ErrAlreadyAMember
 		}
 
-		// The seat wall. A person accepting an invitation already holds the
-		// seat that invitation reserved, so their acceptance is not asked
-		// to find another one.
-		holdsAnInvitation := via == ViaInvitation
-		if err := s.checkSeatAllowance(ctx, q, orgID, holdsAnInvitation); err != nil {
+		if err := s.checkSeatAllowance(ctx, q, req.OrgID); err != nil {
 			return err
 		}
 
 		n, err := q.ActivateMembership(ctx, storegen.ActivateMembershipParams{
-			OrgID: orgID, UserID: userID, Role: string(role), ViaScim: viaSCIM,
+			OrgID: req.OrgID, UserID: req.UserID, Role: string(req.Role), ViaScim: viaSCIM,
 		})
 		if err != nil {
 			return err
@@ -143,19 +169,19 @@ func (s *Service) ActivateMember(ctx context.Context, orgID, userID uuid.UUID, r
 		if !activated {
 			return nil
 		}
-		e := actorEvent
+		e := req.Actor
 		e.Action = audit.ActionOrgMemberSet
-		e.OrgID = orgID
-		e.TargetKind, e.TargetID = "user", userID
-		e.Detail = map[string]any{"role": string(role), "state": "active", "via": string(via)}
+		e.OrgID = req.OrgID
+		e.TargetKind, e.TargetID = "user", req.UserID
+		e.Detail = map[string]any{"role": string(req.Role), "state": StateActive, "via": string(req.Via)}
 		return s.aud.Write(ctx, q, e)
 	})
 	if err != nil {
 		return false, err
 	}
 	if activated && s.orgEventSink != nil {
-		s.orgEventSink(ctx, orgID, eventMemberAdded, map[string]any{
-			"user": userID.String(), "role": string(role), "via": string(via),
+		s.orgEventSink(ctx, req.OrgID, eventMemberAdded, map[string]any{
+			"user": req.UserID.String(), "role": string(req.Role), "via": string(req.Via),
 		})
 	}
 	return activated, nil
@@ -172,17 +198,18 @@ const eventMemberAdded = "member.added"
 // the count and the insert that consumes it commit together; the caller
 // holds the organization's row lock first, as ActivateMember does.
 func (s *Service) CheckSeatAllowanceIn(ctx context.Context, q *storegen.Queries, orgID uuid.UUID) error {
-	return s.checkSeatAllowance(ctx, q, orgID, false)
+	return s.checkSeatAllowance(ctx, q, orgID)
 }
 
 // checkSeatAllowance refuses one more seat when the organization's
 // allowance is reached. An unresolvable entitlement is not permission: the
 // error is returned and the caller stores nothing.
 //
-// holdsAnInvitation excuses the one seat the caller's own open invitation
-// is already counted in, so accepting an invitation that was within the
-// allowance when it was sent is not refused for the seat it reserved.
-func (s *Service) checkSeatAllowance(ctx context.Context, q *storegen.Queries, orgID uuid.UUID, holdsAnInvitation bool) error {
+// The count is authoritative at the moment it runs, under the
+// organization's row lock: an invitation that has just been spent has
+// already left the open count, so accepting one takes the seat that
+// invitation was holding rather than a second one.
+func (s *Service) checkSeatAllowance(ctx context.Context, q *storegen.Queries, orgID uuid.UUID) error {
 	f, err := s.Entitlements().Features(ctx, entitlements.ForOrg(orgID))
 	if err != nil {
 		return fmt.Errorf("registry: entitlements: %w", err)
@@ -197,11 +224,7 @@ func (s *Service) checkSeatAllowance(ctx context.Context, q *storegen.Queries, o
 	if err != nil {
 		return err
 	}
-	taken := seats.Taken()
-	if holdsAnInvitation && taken > 0 {
-		taken--
-	}
-	if taken >= f.Seats.Max {
+	if seats.Taken() >= f.Seats.Max {
 		return ErrSeatAllowance
 	}
 	return nil

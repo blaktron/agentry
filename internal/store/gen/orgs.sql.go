@@ -125,6 +125,25 @@ func (q *Queries) CountOrgSeats(ctx context.Context, orgID uuid.UUID) (CountOrgS
 	return i, err
 }
 
+const createFounderMembership = `-- name: CreateFounderMembership :exec
+INSERT INTO memberships (org_id, user_id, role, state)
+VALUES ($1, $2, $3, 'active')
+`
+
+type CreateFounderMembershipParams struct {
+	OrgID  uuid.UUID `json:"org_id"`
+	UserID uuid.UUID `json:"user_id"`
+	Role   string    `json:"role"`
+}
+
+// The one membership written without a seat check: the person creating the
+// organization, who is its first admin. There is nothing yet to count and
+// nobody yet to approve them.
+func (q *Queries) CreateFounderMembership(ctx context.Context, arg CreateFounderMembershipParams) error {
+	_, err := q.db.Exec(ctx, createFounderMembership, arg.OrgID, arg.UserID, arg.Role)
+	return err
+}
+
 const createInvitation = `-- name: CreateInvitation :one
 INSERT INTO org_invitations (id, org_id, email, role, token_sha256, invited_by, expires_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -300,7 +319,7 @@ func (q *Queries) DeleteUnacceptedInvitationsFor(ctx context.Context, arg Delete
 }
 
 const getInvitationByToken = `-- name: GetInvitationByToken :one
-SELECT i.id, i.org_id, i.email, i.role, i.token_sha256, i.invited_by, i.created_at, i.expires_at, i.accepted_at, i.accepted_by, h.handle AS org_handle, o.display_name AS org_display_name
+SELECT i.id, i.org_id, i.email, i.role, i.token_sha256, i.invited_by, i.created_at, i.expires_at, i.accepted_at, i.accepted_by, h.handle AS org_handle, o.display_name AS org_display_name, o.verified_domain
 FROM org_invitations i
 JOIN orgs o ON o.id = i.org_id
 JOIN handles h ON h.id = i.org_id
@@ -320,8 +339,12 @@ type GetInvitationByTokenRow struct {
 	AcceptedBy     *uuid.UUID `json:"accepted_by"`
 	OrgHandle      string     `json:"org_handle"`
 	OrgDisplayName string     `json:"org_display_name"`
+	VerifiedDomain *string    `json:"verified_domain"`
 }
 
+// The organization's verified domain travels with the invitation: whether
+// the invited address is at it decides both whether the offer was mailed
+// and whether accepting confirms the address (agentry#361).
 func (q *Queries) GetInvitationByToken(ctx context.Context, tokenSha256 []byte) (GetInvitationByTokenRow, error) {
 	row := q.db.QueryRow(ctx, getInvitationByToken, tokenSha256)
 	var i GetInvitationByTokenRow
@@ -338,6 +361,7 @@ func (q *Queries) GetInvitationByToken(ctx context.Context, tokenSha256 []byte) 
 		&i.AcceptedBy,
 		&i.OrgHandle,
 		&i.OrgDisplayName,
+		&i.VerifiedDomain,
 	)
 	return i, err
 }
@@ -634,7 +658,7 @@ func (q *Queries) ListTeams(ctx context.Context, orgID uuid.UUID) ([]Team, error
 }
 
 const listUserMemberships = `-- name: ListUserMemberships :many
-SELECT m.org_id, m.role FROM memberships m WHERE m.user_id = $1
+SELECT m.org_id, m.role FROM memberships m WHERE m.user_id = $1 AND m.state = 'active'
 `
 
 type ListUserMembershipsRow struct {
@@ -642,6 +666,11 @@ type ListUserMembershipsRow struct {
 	Role  string    `json:"role"`
 }
 
+// The caller's org roles, for the principal every request is authorized
+// against. ACTIVE memberships only (agentry#361): a pending member —
+// provisioned by the IdP, or folded in from the domain — is waiting for an
+// admin and holds nothing of the organization until then, so their row
+// must not reach auth.Check as a role.
 func (q *Queries) ListUserMemberships(ctx context.Context, userID uuid.UUID) ([]ListUserMembershipsRow, error) {
 	rows, err := q.db.Query(ctx, listUserMemberships, userID)
 	if err != nil {
@@ -791,29 +820,27 @@ func (q *Queries) UpdateOrgDisplayName(ctx context.Context, arg UpdateOrgDisplay
 	return id, err
 }
 
-const upsertMembership = `-- name: UpsertMembership :exec
-INSERT INTO memberships (org_id, user_id, role, via_scim)
-VALUES ($1, $2, $3, $4)
-ON CONFLICT (org_id, user_id) DO UPDATE SET role = EXCLUDED.role, updated_at = now()
+const upsertMembership = `-- name: UpsertMembership :execrows
+UPDATE memberships SET role = $3, updated_at = now()
+WHERE org_id = $1 AND user_id = $2
 `
 
 type UpsertMembershipParams struct {
-	OrgID   uuid.UUID `json:"org_id"`
-	UserID  uuid.UUID `json:"user_id"`
-	Role    string    `json:"role"`
-	ViaScim bool      `json:"via_scim"`
+	OrgID  uuid.UUID `json:"org_id"`
+	UserID uuid.UUID `json:"user_id"`
+	Role   string    `json:"role"`
 }
 
-// Role changes only: every door that *creates* an active membership goes
-// through registry.ActivateMember (agentry#361), which counts seats.
-func (q *Queries) UpsertMembership(ctx context.Context, arg UpsertMembershipParams) error {
-	_, err := q.db.Exec(ctx, upsertMembership,
-		arg.OrgID,
-		arg.UserID,
-		arg.Role,
-		arg.ViaScim,
-	)
-	return err
+// Role changes only, and it cannot create: every door that makes someone a
+// member goes through registry.ActivateMember (agentry#361), which counts
+// seats. An UPDATE with no row is 0 rows, so a caller that reaches here
+// with nobody to change writes nothing rather than admitting them.
+func (q *Queries) UpsertMembership(ctx context.Context, arg UpsertMembershipParams) (int64, error) {
+	result, err := q.db.Exec(ctx, upsertMembership, arg.OrgID, arg.UserID, arg.Role)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const upsertPendingMembership = `-- name: UpsertPendingMembership :exec

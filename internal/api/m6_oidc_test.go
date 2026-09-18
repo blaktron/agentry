@@ -107,6 +107,10 @@ func TestOIDCEndpointFlow(t *testing.T) {
 	// The person the IdP will assert is already an active member: the
 	// organization's SSO recognises members and provisions nobody
 	// (agentry#361, D7, D11).
+	// The organization has proved it controls the domain the IdP asserts:
+	// linking an identity to an existing member's account for the first
+	// time needs that proof as well as the membership (T-12, agentry#361).
+	env.verifyOrgDomain(orgH, "acme.example")
 	env.seedMembership(orgH, env.registerEmail("oidc-person", idp.email), "member", "active")
 
 	env.doJSON(sess, http.MethodPut, "/api/v1/orgs/"+orgH+"/sso/connections/oidc", map[string]any{

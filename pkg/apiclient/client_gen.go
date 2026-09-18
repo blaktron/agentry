@@ -3284,14 +3284,14 @@ type ClientInterface interface {
 	// Corresponds with GET /orgs/{org}/invitations (the `ListInvitations` operationId).
 	ListInvitations(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateInvitationWithBody Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash; it is also mailed to the address when that address belongs to an account the registry has verified.
+	// CreateInvitationWithBody Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash. It is also mailed to the address when the registry may write there: an address at the organization's own verified domain always, and any other address only when it belongs to an account whose address the registry has confirmed. Accepting an invitation sent to the organization's verified domain also confirms the accepting account's address, because the organization proved it controls that domain.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /orgs/{org}/invitations (the `CreateInvitation` operationId).
 	CreateInvitationWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateInvitation Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash; it is also mailed to the address when that address belongs to an account the registry has verified.
+	// CreateInvitation Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash. It is also mailed to the address when the registry may write there: an address at the organization's own verified domain always, and any other address only when it belongs to an account whose address the registry has confirmed. Accepting an invitation sent to the organization's verified domain also confirms the accepting account's address, because the organization proved it controls that domain.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -3313,14 +3313,14 @@ type ClientInterface interface {
 	// Corresponds with DELETE /orgs/{org}/members/{handle} (the `RemoveOrgMember` operationId).
 	RemoveOrgMember(ctx context.Context, org OrgHandle, handle Handle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetOrgMemberWithBody Add a member or change a role (admin).
+	// SetOrgMemberWithBody Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PUT /orgs/{org}/members/{handle} (the `SetOrgMember` operationId).
 	SetOrgMemberWithBody(ctx context.Context, org OrgHandle, handle Handle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetOrgMember Add a member or change a role (admin).
+	// SetOrgMember Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -5069,7 +5069,7 @@ func (c *Client) ListInvitations(ctx context.Context, org OrgHandle, reqEditors 
 	return c.Client.Do(req)
 }
 
-// CreateInvitationWithBody Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash; it is also mailed to the address when that address belongs to an account the registry has verified.
+// CreateInvitationWithBody Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash. It is also mailed to the address when the registry may write there: an address at the organization's own verified domain always, and any other address only when it belongs to an account whose address the registry has confirmed. Accepting an invitation sent to the organization's verified domain also confirms the accepting account's address, because the organization proved it controls that domain.
 //
 // Takes any type of body and a specified content type.
 //
@@ -5086,7 +5086,7 @@ func (c *Client) CreateInvitationWithBody(ctx context.Context, org OrgHandle, co
 	return c.Client.Do(req)
 }
 
-// CreateInvitation Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash; it is also mailed to the address when that address belongs to an account the registry has verified.
+// CreateInvitation Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash. It is also mailed to the address when the registry may write there: an address at the organization's own verified domain always, and any other address only when it belongs to an account whose address the registry has confirmed. Accepting an invitation sent to the organization's verified domain also confirms the accepting account's address, because the organization proved it controls that domain.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -5148,7 +5148,7 @@ func (c *Client) RemoveOrgMember(ctx context.Context, org OrgHandle, handle Hand
 	return c.Client.Do(req)
 }
 
-// SetOrgMemberWithBody Add a member or change a role (admin).
+// SetOrgMemberWithBody Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 //
 // Takes any type of body and a specified content type.
 //
@@ -5165,7 +5165,7 @@ func (c *Client) SetOrgMemberWithBody(ctx context.Context, org OrgHandle, handle
 	return c.Client.Do(req)
 }
 
-// SetOrgMember Add a member or change a role (admin).
+// SetOrgMember Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -12995,14 +12995,14 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/invitations (the `ListInvitations` operationId).
 	ListInvitationsWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListInvitationsResponse, error)
 
-	// CreateInvitationWithBodyWithResponse Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash; it is also mailed to the address when that address belongs to an account the registry has verified.
+	// CreateInvitationWithBodyWithResponse Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash. It is also mailed to the address when the registry may write there: an address at the organization's own verified domain always, and any other address only when it belongs to an account whose address the registry has confirmed. Accepting an invitation sent to the organization's verified domain also confirms the accepting account's address, because the organization proved it controls that domain.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /orgs/{org}/invitations (the `CreateInvitation` operationId).
 	CreateInvitationWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateInvitationResponse, error)
 
-	// CreateInvitationWithResponse Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash; it is also mailed to the address when that address belongs to an account the registry has verified.
+	// CreateInvitationWithResponse Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash. It is also mailed to the address when the registry may write there: an address at the organization's own verified domain always, and any other address only when it belongs to an account whose address the registry has confirmed. Accepting an invitation sent to the organization's verified domain also confirms the accepting account's address, because the organization proved it controls that domain.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -13030,14 +13030,14 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /orgs/{org}/members/{handle} (the `RemoveOrgMember` operationId).
 	RemoveOrgMemberWithResponse(ctx context.Context, org OrgHandle, handle Handle, reqEditors ...RequestEditorFn) (*RemoveOrgMemberResponse, error)
 
-	// SetOrgMemberWithBodyWithResponse Add a member or change a role (admin).
+	// SetOrgMemberWithBodyWithResponse Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /orgs/{org}/members/{handle} (the `SetOrgMember` operationId).
 	SetOrgMemberWithBodyWithResponse(ctx context.Context, org OrgHandle, handle Handle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetOrgMemberResponse, error)
 
-	// SetOrgMemberWithResponse Add a member or change a role (admin).
+	// SetOrgMemberWithResponse Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -20564,7 +20564,7 @@ func (c *ClientWithResponses) ListInvitationsWithResponse(ctx context.Context, o
 	return ParseListInvitationsResponse(rsp)
 }
 
-// CreateInvitationWithBodyWithResponse Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash; it is also mailed to the address when that address belongs to an account the registry has verified.
+// CreateInvitationWithBodyWithResponse Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash. It is also mailed to the address when the registry may write there: an address at the organization's own verified domain always, and any other address only when it belongs to an account whose address the registry has confirmed. Accepting an invitation sent to the organization's verified domain also confirms the accepting account's address, because the organization proved it controls that domain.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -20577,7 +20577,7 @@ func (c *ClientWithResponses) CreateInvitationWithBodyWithResponse(ctx context.C
 	return ParseCreateInvitationResponse(rsp)
 }
 
-// CreateInvitationWithResponse Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash; it is also mailed to the address when that address belongs to an account the registry has verified.
+// CreateInvitationWithResponse Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash. It is also mailed to the address when the registry may write there: an address at the organization's own verified domain always, and any other address only when it belongs to an account whose address the registry has confirmed. Accepting an invitation sent to the organization's verified domain also confirms the accepting account's address, because the organization proved it controls that domain.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -20629,7 +20629,7 @@ func (c *ClientWithResponses) RemoveOrgMemberWithResponse(ctx context.Context, o
 	return ParseRemoveOrgMemberResponse(rsp)
 }
 
-// SetOrgMemberWithBodyWithResponse Add a member or change a role (admin).
+// SetOrgMemberWithBodyWithResponse Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -20642,7 +20642,7 @@ func (c *ClientWithResponses) SetOrgMemberWithBodyWithResponse(ctx context.Conte
 	return ParseSetOrgMemberResponse(rsp)
 }
 
-// SetOrgMemberWithResponse Add a member or change a role (admin).
+// SetOrgMemberWithResponse Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

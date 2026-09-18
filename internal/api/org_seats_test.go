@@ -12,12 +12,17 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
+	"sync"
 	"testing"
+
+	samlsp "github.com/blaktron/agentry/internal/auth/saml"
 
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/entitlements"
+	"github.com/blaktron/agentry/internal/notify"
 )
 
 // seatedResolver is the core resolver with a seat cap, as a tier's
@@ -506,5 +511,215 @@ func TestAddingByHandleIsRetired(t *testing.T) {
 	res = env.do(admin, http.MethodPut, "/api/v1/orgs/"+orgH+"/members/"+pendingH, map[string]any{"role": "admin"})
 	if code, _, detail := problemOf(t, res); code != http.StatusUnprocessableEntity || !strings.Contains(detail, "approve") {
 		t.Fatalf("role change for a pending member: %d %q, want 422 naming approve", code, detail)
+	}
+}
+
+// invitationNotifier records the offers a test's server sent.
+type invitationNotifier struct {
+	notify.Notifier
+	mu     sync.Mutex
+	offers []notify.InviteOffer
+}
+
+func (n *invitationNotifier) OrgInvite(_ context.Context, o notify.InviteOffer) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.offers = append(n.offers, o)
+	return nil
+}
+
+func (n *invitationNotifier) sentTo(email string) *notify.InviteOffer {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	for i := range n.offers {
+		if n.offers[i].ToEmail == email {
+			return &n.offers[i]
+		}
+	}
+	return nil
+}
+
+// TestInvitationToTheOrgsOwnDomainIsMailedAndConfirmsTheAddress: the
+// operator's rule of 2026-09-18. An organization that proved it controls a
+// domain (DNS TXT) vouches for the addresses there, so an invitation to one
+// is mailed even though no verified account holds it — which is the whole
+// point, since those are the colleagues an organization most needs to
+// invite — and accepting it confirms the accepting account's address.
+// Every other address keeps DEV-099's rule.
+func TestInvitationToTheOrgsOwnDomainIsMailedAndConfirmsTheAddress(t *testing.T) {
+	mails := &invitationNotifier{Notifier: notify.LogNotifier{}}
+	env := newTestEnvCfg(t, func(c *config.Config) {
+		// An absolute origin, so the offer carries a link a person can open
+		// (webPaths.invitationURL answers "" without one, as every other
+		// emailed link does).
+		c.BaseURL = "https://registry.example"
+	}, func(s *api.Server) { s.SetNotifier(mails) })
+	adminH := env.register("od-admin")
+	env.verifyEmail(adminH)
+	admin := env.login(adminH)
+	orgH := "odorg" + env.sfx
+	env.createOrg(admin, orgH)
+	domain := orgH + ".example"
+	env.verifyOrgDomain(orgH, domain)
+
+	// An address at the organization's own domain, held by nobody here.
+	stranger := "newcomer@" + domain
+	var created struct {
+		Mailed    bool   `json:"mailed"`
+		AcceptUrl string `json:"acceptUrl"`
+		Token     string `json:"token"`
+	}
+	env.doJSON(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/invitations",
+		map[string]any{"email": stranger}, &created, http.StatusCreated)
+	if !created.Mailed {
+		t.Fatal("an invitation to the organization's own domain was not mailed")
+	}
+	if offer := mails.sentTo(stranger); offer == nil || offer.AcceptURL == "" || offer.Org != orgH {
+		t.Fatalf("the offer that went to %s: %+v", stranger, offer)
+	}
+
+	// An address somewhere else, held by nobody: not mailed, and the admin
+	// is handed the link instead (DEV-099 unchanged).
+	outsider := "someone@elsewhere.example"
+	var elsewhere struct {
+		Mailed    bool   `json:"mailed"`
+		AcceptUrl string `json:"acceptUrl"`
+	}
+	env.doJSON(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/invitations",
+		map[string]any{"email": outsider}, &elsewhere, http.StatusCreated)
+	if elsewhere.Mailed || mails.sentTo(outsider) != nil {
+		t.Fatal("an invitation to an unverified address elsewhere was mailed")
+	}
+	if elsewhere.AcceptUrl == "" {
+		t.Fatal("the admin was given no link for an invitation that was not mailed")
+	}
+
+	// Accepting an invitation at the organization's domain confirms the
+	// accepting account's address: the organization holds the mail domain,
+	// so it holds the mailbox.
+	joinerH := env.registerEmail("od-joiner", "joiner@"+domain)
+	joinerToken := inviteTo(t, env, admin, orgH, "joiner@"+domain)
+	joiner := env.login(joinerH)
+	// Unverified, and accepted anyway.
+	env.doJSON(joiner, http.MethodPost, "/api/v1/invitations/"+joinerToken, nil, nil, http.StatusOK)
+	var verified bool
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT email_verified_at IS NOT NULL FROM users u JOIN handles h ON h.id = u.id WHERE h.handle = $1`, joinerH).Scan(&verified); err != nil {
+		t.Fatal(err)
+	}
+	if !verified {
+		t.Fatal("accepting an invitation at the organization's own domain did not confirm the address")
+	}
+
+	// An invitation to an address NOT at the organization's domain still
+	// needs the account's own verified address.
+	elseH := env.registerEmail("od-else", "else@elsewhere.example")
+	elseToken := inviteTo(t, env, admin, orgH, "else@elsewhere.example")
+	res := env.do(env.login(elseH), http.MethodPost, "/api/v1/invitations/"+elseToken, nil)
+	if code, _, detail := problemOf(t, res); code != http.StatusForbidden || !strings.Contains(detail, "Verify") {
+		t.Fatalf("accept from an unverified address elsewhere: %d %q, want 403 asking for verification", code, detail)
+	}
+}
+
+// TestPendingMemberHoldsNothing: a pending membership is not a role. The
+// principal every request is authorized against carries active memberships
+// only, so someone the IdP provisioned and no admin has approved cannot
+// read the organization's members or its teams.
+func TestPendingMemberHoldsNothing(t *testing.T) {
+	env := newTestEnv(t)
+	adminH := env.register("ph-admin")
+	env.verifyEmail(adminH)
+	admin := env.login(adminH)
+	orgH := "phorg" + env.sfx
+	env.createOrg(admin, orgH)
+
+	pendingH := env.register("ph-pending")
+	env.verifyEmail(pendingH)
+	env.seedMembership(orgH, pendingH, "member", "pending")
+	pending := env.login(pendingH)
+
+	for _, path := range []string{"/members", "/teams"} {
+		res := env.do(pending, http.MethodGet, "/api/v1/orgs/"+orgH+path, nil)
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusForbidden {
+			t.Fatalf("a pending member reading %s: %d, want 403", path, res.StatusCode)
+		}
+	}
+	// And the organization does not appear as one of theirs with a role
+	// that would let a client offer its pages.
+	var me struct {
+		Orgs []struct {
+			Handle string `json:"handle"`
+			State  string `json:"state"`
+		} `json:"orgs"`
+	}
+	env.doJSON(pending, http.MethodGet, "/api/v1/user", nil, &me, http.StatusOK)
+	for _, o := range me.Orgs {
+		if o.Handle == orgH && o.State != "pending" {
+			t.Fatalf("GET /user shows the pending membership as %q", o.State)
+		}
+	}
+	// Approving them is what confers it.
+	env.doJSON(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/members/"+pendingH+"/approve", nil, nil, http.StatusOK)
+	env.doJSON(env.login(pendingH), http.MethodGet, "/api/v1/orgs/"+orgH+"/members", nil, nil, http.StatusOK)
+}
+
+// TestOrgSSODoesNotLinkAnAccountOutsideTheVerifiedDomain: an organization's
+// admin configures its SSO connection, so an assertion alone must not be
+// able to speak for an account. Linking an identity to an existing member
+// needs the organization's verified domain as well as the membership
+// (T-12); a member who joined with a personal address is never linked
+// automatically.
+func TestOrgSSODoesNotLinkAnAccountOutsideTheVerifiedDomain(t *testing.T) {
+	env := newTestEnv(t)
+	adminH := env.register("lk-admin")
+	env.verifyEmail(adminH)
+	admin := env.login(adminH)
+	orgH := "lkorg" + env.sfx
+	env.createOrg(admin, orgH)
+	env.verifyOrgDomain(orgH, orgH+".example")
+
+	idp := newSAMLTestIdP(t)
+	metadataXML, err := samlsp.BuildIDPMetadataXML(idp.entityID, "https://lk-idp.test/sso", idp.certPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env.doJSON(admin, http.MethodPut, "/api/v1/orgs/"+orgH+"/sso/connections/saml", map[string]any{
+		"enabled": true,
+		"config":  map[string]any{"idpMetadataXml": metadataXML, "emailAttribute": "email"},
+	}, nil, http.StatusOK)
+	metadataURL := env.srv.URL + "/api/v1/orgs/" + orgH + "/sso/saml/metadata"
+	acsURL := env.srv.URL + "/api/v1/orgs/" + orgH + "/sso/saml/acs"
+
+	// A member who joined with a personal address. The IdP asserts it —
+	// which an org admin who controls the connection could always do — and
+	// the registry refuses to hand over the account.
+	personal := "lk-person-" + env.sfx + "@personal.example"
+	memberH := env.registerEmail("lk-member", personal)
+	env.seedMembership(orgH, memberH, "member", "active")
+	res := env.postForm(t, acsURL, url.Values{"SAMLResponse": {idp.signedResponse(t, metadataURL, acsURL, personal, false)}})
+	body, _ := io.ReadAll(res.Body)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusConflict || !strings.Contains(string(body), "sso-link-required") {
+		t.Fatalf("assertion for a member's personal address: %d %s, want 409 sso-link-required", res.StatusCode, body)
+	}
+	var identities int
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM identities i JOIN handles h ON h.id = i.user_id WHERE h.handle = $1`, memberH).Scan(&identities); err != nil {
+		t.Fatal(err)
+	}
+	if identities != 0 {
+		t.Fatalf("the refused assertion linked %d identity/identities", identities)
+	}
+
+	// The same member at the organization's own verified domain: linked,
+	// because the organization proved it controls that domain.
+	atDomain := "lk-at-" + env.sfx + "@" + orgH + ".example"
+	domainMemberH := env.registerEmail("lk-domain", atDomain)
+	env.seedMembership(orgH, domainMemberH, "member", "active")
+	ok := env.postForm(t, acsURL, url.Values{"SAMLResponse": {idp.signedResponse(t, metadataURL, acsURL, atDomain, false)}})
+	_ = ok.Body.Close()
+	if ok.StatusCode != http.StatusOK {
+		t.Fatalf("assertion for a member at the verified domain: %d, want 200", ok.StatusCode)
 	}
 }

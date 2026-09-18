@@ -8,6 +8,7 @@ package api
 // stored only as its SHA-256, single use, seven days, bound to the address.
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -25,6 +26,10 @@ import (
 
 // invitationTTL is how long an invitation stands (plan §4: seven days).
 const invitationTTL = 7 * 24 * time.Hour
+
+// errInvitationSpent reports that the token was already used, from inside
+// the transaction that tried to spend it.
+var errInvitationSpent = errors.New("api: the invitation was already accepted")
 
 // invitationToAPI renders a stored invitation.
 func invitationToAPI(row storegen.OrgInvitation, invitedBy *string) Invitation {
@@ -97,6 +102,11 @@ func (s *Server) CreateInvitation(w http.ResponseWriter, r *http.Request, org Or
 	if !s.assignableOrgRole(w, r, orgRow, role) {
 		return
 	}
+	// Offering admin is an elevation, the same as granting it through any
+	// other door: the invitation door does not become the cheap way in.
+	if role == auth.RoleAdmin && !s.authorize(w, r, auth.ActOrgMembersElevate, orgRow.ID) {
+		return
+	}
 
 	// Someone already in this organization is not invited again; someone
 	// active in another organization cannot be (D26).
@@ -134,12 +144,14 @@ func (s *Server) CreateInvitation(w http.ResponseWriter, r *http.Request, org Or
 		if err := q.LockOrg(r.Context(), orgRow.ID); err != nil {
 			return err
 		}
-		if err := s.reg.CheckSeatAllowanceIn(r.Context(), q, orgRow.ID); err != nil {
+		// Re-inviting supersedes the standing invitation: its token stops
+		// working and its seat is released. That happens before the count,
+		// so re-inviting the same address at the allowance is not refused
+		// for a seat this very invitation is about to give back.
+		if _, err := q.DeleteUnacceptedInvitationsFor(r.Context(), storegen.DeleteUnacceptedInvitationsForParams{OrgID: orgRow.ID, Email: email}); err != nil {
 			return err
 		}
-		// Re-inviting supersedes the standing invitation: its token stops
-		// working and its seat is released to this one.
-		if _, err := q.DeleteUnacceptedInvitationsFor(r.Context(), storegen.DeleteUnacceptedInvitationsForParams{OrgID: orgRow.ID, Email: email}); err != nil {
+		if err := s.reg.CheckSeatAllowanceIn(r.Context(), q, orgRow.ID); err != nil {
 			return err
 		}
 		created, err := q.CreateInvitation(r.Context(), storegen.CreateInvitationParams{
@@ -178,22 +190,61 @@ func (s *Server) CreateInvitation(w http.ResponseWriter, r *http.Request, org Or
 	writeJSON(w, http.StatusCreated, out)
 }
 
-// mailInvitation sends the offer and reports whether it went. The registry
-// mails no address it has not verified (DEV-099), and an invitation is a
-// mail like any other: an address that belongs to no account, or to one
-// whose address was never confirmed, is not written to — the admin has the
-// link and conveys it. That is the trade DEV-099 made deliberately, and an
-// invitation is the case where it costs the most, so the response says
-// plainly whether the mail went.
+// atOrgDomain reports whether an address belongs to the organization's own
+// verified domain — the one it proved control of with a DNS TXT record
+// (handlers_domains.go). That proof is what lets an invitation to such an
+// address be treated as an address the organization vouches for
+// (operator decision, 2026-09-18): the organization holds the mail domain,
+// so it holds the mailbox.
+func atOrgDomain(org storegen.GetOrgByHandleRow, email string) bool {
+	if org.VerifiedDomain == nil {
+		return false
+	}
+	domain := strings.TrimSpace(*org.VerifiedDomain)
+	if domain == "" {
+		return false
+	}
+	at := strings.LastIndex(email, "@")
+	return at >= 0 && strings.EqualFold(strings.TrimSpace(email[at+1:]), domain)
+}
+
+// mailInvitation sends the offer and reports whether it went.
+//
+// The registry mails no address it has not verified (DEV-099), which for
+// an invitation would mean never writing to the very people an
+// organization most needs to invite — colleagues with no account here yet.
+// The organization's own verified domain is the way out (operator
+// decision, 2026-09-18): an address at a domain the organization proved
+// control of is one it vouches for, so the offer is mailed there whether
+// or not an account holds it. Every other address keeps DEV-099's rule —
+// a verified account, and its orgInvites preference — and the response
+// says plainly whether the mail went, because when it did not the admin's
+// copy of the link is the only one.
 func (s *Server) mailInvitation(r *http.Request, org storegen.GetOrgByHandleRow, inv storegen.OrgInvitation, acceptURL, invitedBy string) bool {
 	if s.notifier == nil {
 		return false
 	}
+	ownDomain := atOrgDomain(org, inv.Email)
 	u, err := s.q().GetUserByEmail(r.Context(), inv.Email)
-	if err != nil {
-		return false
-	}
-	if !notify.AllowsEmail(r.Context(), s.q(), s.log, u.ID, notify.KindOrgInvite) {
+	switch {
+	case err == nil:
+		// An account exists: its owner's preference is theirs to set, and
+		// is honoured whichever domain the address is at. The verified-
+		// address gate is what the organization's domain stands in for.
+		prefs, perr := notify.Settings(r.Context(), s.q(), u.ID)
+		if perr != nil {
+			prefs = notify.Defaults(u.ID)
+		}
+		if !notify.EmailPermitted(true, prefs, notify.KindOrgInvite) {
+			return false
+		}
+		if !ownDomain && !notify.AllowsEmail(r.Context(), s.q(), s.log, u.ID, notify.KindOrgInvite) {
+			return false
+		}
+	case ownDomain:
+		// Nobody holds the address yet, and it is the organization's own
+		// domain: this is the invitation that brings them in.
+	default:
 		return false
 	}
 	if err := s.notifier.OrgInvite(r.Context(), notify.InviteOffer{
@@ -266,22 +317,34 @@ func (s *Server) invitationForToken(w http.ResponseWriter, r *http.Request, toke
 
 // invitationAcceptable reports whether the signed-in caller may accept this
 // invitation, and why not when they may not. Accepting is bound to the
-// address: the session's email must be the invited one and must be
-// verified, so an invitation cannot be redeemed by whoever happens to hold
-// the link.
+// address: the session's email must be the invited one, so an invitation
+// cannot be redeemed by whoever happens to hold the link.
+//
+// The address must also be one the registry trusts, which is either of two
+// things: the account confirmed it, or the invitation is at a domain the
+// organization proved it controls, in which case the organization's proof
+// stands in for the account's (operator decision, 2026-09-18) and
+// accepting confirms it.
 func (s *Server) invitationAcceptable(r *http.Request, row storegen.GetInvitationByTokenRow) (bool, string) {
 	p := principalFrom(r.Context())
 	u, err := s.q().GetUserByID(r.Context(), p.UserID)
 	if err != nil {
+		s.log.ErrorContext(r.Context(), "invitation: caller lookup", "user", p.UserID, "err", err)
 		return false, "This account could not be read."
-	}
-	if u.EmailVerifiedAt == nil {
-		return false, "Verify this account's email address before accepting an invitation."
 	}
 	if !strings.EqualFold(strings.TrimSpace(u.Email), strings.TrimSpace(row.Email)) {
 		return false, "This invitation was sent to " + row.Email + ". Sign in as that account to accept it."
 	}
+	if u.EmailVerifiedAt == nil && !invitationAtOrgDomain(row) {
+		return false, "Verify this account's email address before accepting an invitation."
+	}
 	return true, ""
+}
+
+// invitationAtOrgDomain reports whether the invited address is at the
+// organization's own verified domain.
+func invitationAtOrgDomain(row storegen.GetInvitationByTokenRow) bool {
+	return atOrgDomain(storegen.GetOrgByHandleRow{VerifiedDomain: row.VerifiedDomain}, row.Email)
 }
 
 // GetInvitation implements GET /invitations/{token} (session only).
@@ -330,43 +393,62 @@ func (s *Server) AcceptInvitation(w http.ResponseWriter, r *http.Request, token 
 		return
 	}
 
-	// Single use: the invitation is spent in the same transaction the
-	// membership is written in, so a token cannot be redeemed twice even
-	// if two requests arrive together.
-	err = s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
-		n, err := q.MarkInvitationAccepted(r.Context(), storegen.MarkInvitationAcceptedParams{
-			ID: row.ID, OrgID: row.OrgID, AcceptedBy: &p.UserID,
-		})
-		if err != nil {
-			return err
-		}
-		if n == 0 {
-			return pgx.ErrNoRows
-		}
-		e := auditEvent(r, audit.ActionOrgInviteAccept)
-		e.OrgID = row.OrgID
-		e.TargetKind, e.TargetID = "invitation", row.ID
-		return s.auditW.Write(r.Context(), q, e)
+	// The token is spent inside the activation's own transaction: single
+	// use even when two requests arrive together, and — because the two
+	// commit or roll back together — an activation the seat wall or the
+	// one-organization rule refuses leaves the invitation standing rather
+	// than spending it for nothing.
+	spent := false
+	activated, err := s.reg.ActivateMember(r.Context(), registry.ActivateMemberRequest{
+		OrgID: row.OrgID, UserID: p.UserID, Role: auth.OrgRole(row.Role), Via: registry.ViaInvitation,
+		Actor: auditEvent(r, audit.ActionOrgMemberSet),
+		Spend: func(ctx context.Context, q *storegen.Queries) error {
+			n, err := q.MarkInvitationAccepted(ctx, storegen.MarkInvitationAcceptedParams{
+				ID: row.ID, OrgID: row.OrgID, AcceptedBy: &p.UserID,
+			})
+			if err != nil {
+				return err
+			}
+			if n == 0 {
+				return errInvitationSpent
+			}
+			spent = true
+			e := auditEvent(r, audit.ActionOrgInviteAccept)
+			e.OrgID = row.OrgID
+			e.TargetKind, e.TargetID = "invitation", row.ID
+			return s.auditW.Write(ctx, q, e)
+		},
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
+	switch {
+	case errors.Is(err, errInvitationSpent):
 		problemNotFound(w, r)
 		return
-	}
-	if err != nil {
+	case err != nil:
+		if s.seatRefusal(w, r, storegen.GetOrgByHandleRow{ID: orgRow.ID, Handle: orgRow.Handle}, err) {
+			return
+		}
 		s.log.ErrorContext(r.Context(), "accept invitation", "err", err)
 		problemInternal(w, r)
 		return
 	}
-
-	if _, err := s.reg.ActivateMember(r.Context(), row.OrgID, p.UserID, auth.OrgRole(row.Role),
-		registry.ViaInvitation, auditEvent(r, audit.ActionOrgMemberSet)); err != nil {
-		if s.seatRefusal(w, r, storegen.GetOrgByHandleRow{ID: orgRow.ID, Handle: orgRow.Handle}, err) {
-			return
-		}
-		s.log.ErrorContext(r.Context(), "accept invitation: activate", "err", err)
-		problemInternal(w, r)
+	if !activated && !spent {
+		// Already an active member of this organization, and the token was
+		// not spent: nothing to do, and the invitation stays answerable.
+		problemConflict(w, r, "You are already a member of "+orgRow.Handle+".")
 		return
 	}
+
+	// The organization's own verified domain vouches for the address, so
+	// accepting from it confirms the account's address (operator decision,
+	// 2026-09-18). Best effort after the fact: the membership is what the
+	// request was for, and a stamp that did not land is retried by the
+	// ordinary verification mail.
+	if invitationAtOrgDomain(row) {
+		if err := s.q().MarkEmailVerified(r.Context(), p.UserID); err != nil {
+			s.log.ErrorContext(r.Context(), "invitation: mark verified", "user", p.UserID, "err", err)
+		}
+	}
+
 	u, _ := s.q().GetUserByID(r.Context(), p.UserID)
 	state := MembershipState("active")
 	via := false

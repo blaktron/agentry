@@ -159,7 +159,7 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		}); err != nil {
 			return err
 		}
-		if err := q.UpsertMembership(r.Context(), storegen.UpsertMembershipParams{
+		if err := q.CreateFounderMembership(r.Context(), storegen.CreateFounderMembershipParams{
 			OrgID: orgID, UserID: p.UserID, Role: string(auth.RoleAdmin),
 		}); err != nil {
 			return err
@@ -367,11 +367,13 @@ func (s *Server) assignableOrgRole(w http.ResponseWriter, r *http.Request, org s
 func (s *Server) seatRefusal(w http.ResponseWriter, r *http.Request, org storegen.GetOrgByHandleRow, err error) bool {
 	switch {
 	case errors.Is(err, registry.ErrSeatAllowance):
-		seats, serr := s.reg.Seats(r.Context(), org.ID)
-		if serr != nil {
-			s.log.ErrorContext(r.Context(), "seats", "err", serr)
+		var counts *registry.Seats
+		if seats, serr := s.reg.Seats(r.Context(), org.ID); serr == nil {
+			counts = &seats
+		} else {
+			s.log.ErrorContext(r.Context(), "seats", "org", org.ID, "err", serr)
 		}
-		problemSeatAllowance(w, r, org.Handle, seats)
+		problemSeatAllowance(w, r, org.Handle, counts)
 		return true
 	case errors.Is(err, registry.ErrSeatsNotOffered):
 		problemFeatureNotIncluded(w, r, "The "+org.Handle+" organization's subscription includes no seats. Start or restore its subscription, then invite people.")
@@ -460,6 +462,12 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 	if m, err := s.q().GetMembership(r.Context(), storegen.GetMembershipParams{OrgID: orgRow.ID, UserID: target.ID}); err == nil {
 		current, state = auth.OrgRole(m.Role), m.State
 	}
+	// The precise gate first, so that whether a handle is a member of this
+	// organization is not something an unauthorized caller learns from
+	// which refusal they get.
+	if !s.authorize(w, r, memberChangeAction(current, requested), orgRow.ID) {
+		return
+	}
 	// Adding by handle is retired (agentry#361, D7, D12): an organization
 	// is joined by accepting an invitation or by an admin approving a
 	// pending member, and both go through the seat chokepoint. This route
@@ -468,9 +476,6 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 	if current == auth.RoleNone {
 		problemValidation(w, r,
 			"Nobody joins an organization by being added. Invite "+target.Handle+" by email (POST /orgs/"+orgRow.Handle+"/invitations), or approve them if they are waiting.")
-		return
-	}
-	if !s.authorize(w, r, memberChangeAction(current, requested), orgRow.ID) {
 		return
 	}
 	// A pending member's role is set by approving them, where the seat
@@ -487,7 +492,7 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 				return err
 			}
 		}
-		if err := q.UpsertMembership(r.Context(), storegen.UpsertMembershipParams{
+		if _, err := q.UpsertMembership(r.Context(), storegen.UpsertMembershipParams{
 			OrgID: orgRow.ID, UserID: target.ID, Role: string(requested),
 		}); err != nil {
 			return err
@@ -563,8 +568,10 @@ func (s *Server) ApproveOrgMember(w http.ResponseWriter, r *http.Request, org Or
 		return
 	}
 
-	if _, err := s.reg.ActivateMember(r.Context(), orgRow.ID, target.ID, role,
-		registry.ViaApproval, auditEvent(r, audit.ActionOrgMemberSet)); err != nil {
+	if _, err := s.reg.ActivateMember(r.Context(), registry.ActivateMemberRequest{
+		OrgID: orgRow.ID, UserID: target.ID, Role: role, Via: registry.ViaApproval,
+		Actor: auditEvent(r, audit.ActionOrgMemberSet),
+	}); err != nil {
 		if s.seatRefusal(w, r, orgRow, err) {
 			return
 		}
