@@ -227,6 +227,26 @@ func TestMembershipConfersPublishButNotTheAgentItself(t *testing.T) {
 		map[string]any{"visibility": "public"}, nil, http.StatusOK)
 	env.doJSON(admin, http.MethodDelete, "/api/v1/agents/"+orgH+"/shared", nil, nil, http.StatusNoContent)
 
+	// Creating a PUBLIC agent is the same exposure decision as making one
+	// public, so it is the admins' too — otherwise "create it public"
+	// would be the way round the rule above.
+	res = env.do(member, http.MethodPost, "/api/v1/agents",
+		map[string]any{"namespace": orgH, "name": "open-one", "modes": []string{"autonomous"}, "visibility": "public"})
+	if code, _, detail := problemOf(t, res); code != http.StatusUnprocessableEntity || !strings.Contains(detail, "administrators") {
+		t.Fatalf("a member creating a public agent in the org: %d %q, want a refusal naming the administrators", code, detail)
+	}
+
+	// Allowing force pushes rewrites history the rest of the organization
+	// is working from: also the admins'.
+	env.doJSON(member, http.MethodPost, "/api/v1/agents",
+		map[string]any{"namespace": orgH, "name": "history", "modes": []string{"autonomous"}, "visibility": "private"}, nil, http.StatusCreated)
+	res = env.do(member, http.MethodPatch, "/api/v1/agents/"+orgH+"/history", map[string]any{"allowForcePush": true})
+	if code, _, _ := problemOf(t, res); code != http.StatusForbidden {
+		t.Fatalf("a member allowing force pushes: %d, want 403", code)
+	}
+	env.doJSON(admin, http.MethodPatch, "/api/v1/agents/"+orgH+"/history",
+		map[string]any{"allowForcePush": true}, nil, http.StatusOK)
+
 	// A pending member creates nothing here.
 	pendingH := env.register("mc-pending")
 	env.verifyEmail(pendingH)

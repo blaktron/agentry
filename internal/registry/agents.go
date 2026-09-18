@@ -271,8 +271,17 @@ func (s *Service) CreateAgent(ctx context.Context, p *auth.Principal, in CreateA
 	case "org":
 		// The namespace-derived role is the one rule: whoever may release
 		// an agent here may make one here.
-		if auth.NamespaceDerivedAgentRole(p, ns.Kind, ns.ID, p.Role(ns.ID)) == auth.AgentRoleNone {
+		derived := auth.NamespaceDerivedAgentRole(p, ns.Kind, ns.ID, p.Role(ns.ID))
+		if derived == auth.AgentRoleNone {
 			return Agent{}, auth.ErrForbidden
+		}
+		// Putting the organization's name on something the world can see
+		// is the same decision as making an existing agent public, and it
+		// belongs to the same people (D19, agentry#362). Enforcing it only
+		// on the transition would leave "create it public" as the way
+		// round: the state is what matters, not how it was reached.
+		if in.Visibility == "public" && derived != auth.AgentRoleAdmin {
+			return Agent{}, fmt.Errorf("%w: creating a public BriefAgent in %s is for the organization's administrators; create it private and ask an admin to publish it", ErrDenied, in.Namespace)
 		}
 		subject = entitlements.ForOrg(ns.ID)
 	}
