@@ -174,9 +174,9 @@ func problemPrivateAgentCap(w http.ResponseWriter, r *http.Request) {
 // §5.1). Each has its own slug so a client can offer the right next step
 // rather than parse a sentence.
 
-// problemLastAdmin refuses the demotion, removal or erasure of an
-// organization's last admin: the org must first have another one, and only
-// a decommission removes the last (D14).
+// problemLastAdmin refuses the demotion or removal of an organization's
+// last admin: the org must first have another one, and only a decommission
+// removes the last (D14; the erasure guard is M4's).
 func problemLastAdmin(w http.ResponseWriter, r *http.Request, org string) {
 	writeProblem(w, r, http.StatusConflict, "last-admin", "The last admin stays",
 		"This organization must keep at least one admin. Make another member of "+org+" an admin first.")

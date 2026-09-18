@@ -24,7 +24,9 @@ ALTER TABLE orgs
   ADD COLUMN created_by uuid REFERENCES users(id),
   ADD COLUMN activated_at timestamptz;
 UPDATE orgs SET activated_at = created_at;
-CREATE INDEX orgs_pending_by_creator_idx ON orgs (created_by) WHERE activated_at IS NULL;
+-- Unique, so the rule holds under two concurrent requests too: the second
+-- insert fails on the index and the API answers it as the same refusal.
+CREATE UNIQUE INDEX orgs_pending_by_creator_idx ON orgs (created_by) WHERE activated_at IS NULL;
 
 -- +goose Down
 DROP INDEX IF EXISTS orgs_pending_by_creator_idx;

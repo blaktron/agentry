@@ -40,9 +40,11 @@ private; nothing already private is touched.
 
 The organization problems (plan organization-subscriptions), each with
 its own slug so a client can offer the right next step. Answered by every
-registry: `409 last-admin` refuses the demotion, removal or erasure of an
-organization's last admin — promote another member first; only a
-decommission removes the last one. `403 email-unverified` refuses
+registry: `409 last-admin` refuses the demotion or removal of an
+organization's last admin, by an admin or by the organization's IdP over
+SCIM — promote another member first; only a decommission removes the
+last one (the guard on an account's erasure follows with the lifecycle
+milestone). `403 email-unverified` refuses
 `POST /orgs` from an account whose address is not verified. `409
 org-pending` refuses `POST /orgs` while an organization the account
 created is still awaiting payment (only where an admission extension

@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
 	"log/slog"
 	"net/http"
 	"os"
@@ -22,6 +21,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/blaktron/agentry/internal/api"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 

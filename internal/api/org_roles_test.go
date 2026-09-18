@@ -227,3 +227,125 @@ func TestOnePendingOrgPerAccount(t *testing.T) {
 		env.createOrg(sess, "popaid2"+env.sfx)
 	})
 }
+
+// TestSCIMCannotDeactivateTheLastAdmin: the organization's IdP is a door
+// that removes memberships too, and the last admin is the one person it
+// cannot deprovision — DELETE and a PATCH to active=false are both 409 —
+// until another admin exists, whereupon the deactivation goes through.
+func TestSCIMCannotDeactivateTheLastAdmin(t *testing.T) {
+	env := newTestEnv(t)
+	adminH := env.register("scimla-admin")
+	env.verifyEmail(adminH)
+	admin := env.login(adminH)
+	orgH := "scimlaorg" + env.sfx
+	env.createOrg(admin, orgH)
+	var tok struct {
+		Token string `json:"token"`
+	}
+	env.doJSON(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/scim/tokens", map[string]any{}, &tok, http.StatusCreated)
+	scim := caller{name: "scim", pat: tok.Token}
+
+	// The IdP provisions someone, whom the admin then makes an admin and
+	// steps down for: that person is now the last admin, provisioned by SCIM.
+	email := "carol-" + env.sfx + "@acme.example"
+	var created struct {
+		ID string `json:"id"`
+	}
+	env.doJSON(scim, http.MethodPost, "/scim/v2/Users", map[string]any{
+		"userName": email, "emails": []map[string]any{{"value": email, "primary": true}}, "active": true,
+	}, &created, http.StatusCreated)
+	var carolH string
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT handle FROM handles WHERE id = $1`, created.ID).Scan(&carolH); err != nil {
+		t.Fatal(err)
+	}
+	env.doJSON(admin, http.MethodPut, "/api/v1/orgs/"+orgH+"/members/"+carolH, map[string]any{"role": "admin"}, nil, http.StatusOK)
+	env.doJSON(admin, http.MethodDelete, "/api/v1/orgs/"+orgH+"/members/"+adminH, nil, nil, http.StatusNoContent)
+
+	for _, tc := range []struct {
+		name   string
+		method string
+		body   any
+	}{
+		{"delete", http.MethodDelete, nil},
+		{"patch active=false", http.MethodPatch, map[string]any{
+			"schemas":    []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"},
+			"Operations": []map[string]any{{"op": "replace", "path": "active", "value": false}},
+		}},
+	} {
+		res := env.do(scim, tc.method, "/scim/v2/Users/"+created.ID, tc.body)
+		b, _ := io.ReadAll(res.Body)
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusConflict || !strings.Contains(string(b), "last admin") {
+			t.Fatalf("SCIM %s of the last admin: %d %s, want 409 naming the last admin", tc.name, res.StatusCode, b)
+		}
+	}
+	res := env.do(scim, http.MethodGet, "/scim/v2/Users/"+created.ID, nil)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("the refused user is gone: %d", res.StatusCode)
+	}
+
+	// With a second admin the IdP may deprovision them. (A SCIM-provisioned
+	// account has no password to sign in with here, so the second admin is
+	// seeded as the promotion an admin would make.)
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`INSERT INTO memberships (org_id, user_id, role)
+		 SELECT o.id, u.id, 'admin' FROM handles o, handles u WHERE o.handle = $1 AND u.handle = $2`, orgH, adminH); err != nil {
+		t.Fatal(err)
+	}
+	res = env.do(scim, http.MethodDelete, "/scim/v2/Users/"+created.ID, nil)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("SCIM delete beside another admin: %d want 204", res.StatusCode)
+	}
+}
+
+// TestLastAdminGuardHoldsUnderConcurrentDemotions: two admins demoting each
+// other at the same moment end with exactly one admin, whatever the
+// interleaving — the guard counts under the organization's row lock, so the
+// second demotion sees the first one committed and is refused (409), or,
+// when the first commits before the second is even authorized, the loser
+// is no longer an admin at all (403). Never two members.
+func TestLastAdminGuardHoldsUnderConcurrentDemotions(t *testing.T) {
+	env := newTestEnv(t)
+	aH := env.register("cc-a")
+	env.verifyEmail(aH)
+	a := env.login(aH)
+	bH := env.register("cc-b")
+	env.verifyEmail(bH)
+	orgH := "ccorg" + env.sfx
+	env.createOrg(a, orgH)
+	env.doJSON(a, http.MethodPut, "/api/v1/orgs/"+orgH+"/members/"+bH, map[string]any{"role": "admin"}, nil, http.StatusOK)
+	b := env.login(bH)
+
+	codes := make(chan int, 2)
+	start := make(chan struct{})
+	for _, pair := range []struct {
+		who    caller
+		target string
+	}{{a, bH}, {b, aH}} {
+		go func() {
+			<-start
+			res := env.do(pair.who, http.MethodPut, "/api/v1/orgs/"+orgH+"/members/"+pair.target, map[string]any{"role": "member"})
+			_ = res.Body.Close()
+			codes <- res.StatusCode
+		}()
+	}
+	close(start)
+	got := map[int]int{}
+	for range 2 {
+		got[<-codes]++
+	}
+	if got[http.StatusOK] != 1 || got[http.StatusConflict]+got[http.StatusForbidden] != 1 {
+		t.Fatalf("concurrent demotions: %v, want one 200 and one refusal", got)
+	}
+	var admins int
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM memberships m JOIN handles h ON h.id = m.org_id WHERE h.handle = $1 AND m.role = 'admin'`, orgH).Scan(&admins); err != nil {
+		t.Fatal(err)
+	}
+	if admins != 1 {
+		t.Fatalf("admins left: %d, want 1", admins)
+	}
+}
