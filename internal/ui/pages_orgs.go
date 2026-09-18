@@ -18,6 +18,16 @@ type orgInfo struct {
 	DisplayName    string `json:"displayName"`
 	SsoRequired    *bool  `json:"ssoRequired"`
 	VerifiedDomain string `json:"verifiedDomain"`
+	Seats          *seats `json:"seats"`
+}
+
+// seats is what the organization holds against its allowance; Max 0 is
+// unbounded, which is what a registry with no billing extension answers.
+type seats struct {
+	Used    int64 `json:"used"`
+	Invited int64 `json:"invited"`
+	Pending int64 `json:"pending"`
+	Max     int64 `json:"max"`
 }
 
 // orgMember is the API's Membership: the user nested, the role beside it.
@@ -28,6 +38,20 @@ type orgMember struct {
 	} `json:"user"`
 	Role    string `json:"role"`
 	ViaScim bool   `json:"viaScim"`
+	State   string `json:"state"`
+}
+
+// Pending reports whether this membership is waiting for an admin.
+func (m orgMember) Pending() bool { return m.State == "pending" }
+
+// invitation is an open invitation on the org page.
+type invitation struct {
+	ID        string `json:"id"`
+	Email     string `json:"email"`
+	Role      string `json:"role"`
+	ExpiresAt string `json:"expiresAt"`
+	Expired   bool   `json:"expired"`
+	InvitedBy string `json:"invitedBy"`
 }
 
 type team struct {
@@ -87,6 +111,7 @@ type orgData struct {
 	SCIM         []scimToken
 	Domains      []domainClaim
 	Webhooks     []webhook
+	Invitations  []invitation
 	Roles        []string
 	Events       []string
 	Refused      string
@@ -124,6 +149,9 @@ func (h *handler) orgPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if d.Refused == "" {
+		if res, err := c.do(http.MethodGet, base+"/invitations", nil); err == nil && res.OK() {
+			_ = res.decode(&d.Invitations)
+		}
 		if res, err := c.do(http.MethodGet, base+"/teams", nil); err == nil && res.OK() {
 			_ = res.decode(&d.Teams)
 			for i := range d.Teams {
@@ -201,16 +229,63 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 			h.back(w, r, backTo, "", "Enter the member's handle.")
 			return
 		}
-		if f("action") == "remove" {
+		role := f("role")
+		if role == "" {
+			role = "member"
+		}
+		switch f("action") {
+		case "remove":
 			res, err = c.do(http.MethodDelete, base+"/members/"+url.PathEscape(handle), nil)
 			ok = handle + " removed. Their org-bound tokens stop working."
-		} else {
+		case "approve":
+			// Where the seat is taken (agentry#361): a person the IdP
+			// provisioned is waiting until an admin says so.
+			res, err = c.do(http.MethodPost, base+"/members/"+url.PathEscape(handle)+"/approve", map[string]string{"role": role})
+			ok = handle + " approved as " + role + "."
+		case "decline":
+			res, err = c.do(http.MethodPost, base+"/members/"+url.PathEscape(handle)+"/decline", nil)
+			ok = handle + " declined."
+		default:
+			res, err = c.do(http.MethodPut, base+"/members/"+url.PathEscape(handle), map[string]string{"role": role})
+			ok = handle + " is " + role + "."
+		}
+	case "invitation":
+		switch f("action") {
+		case "revoke":
+			id := strings.TrimSpace(f("id"))
+			if id == "" {
+				h.back(w, r, backTo, "", "Choose an invitation to revoke.")
+				return
+			}
+			res, err = c.do(http.MethodDelete, base+"/invitations/"+url.PathEscape(id), nil)
+			ok = "Invitation revoked. Its seat is free and its link stops working."
+		default:
+			email := strings.TrimSpace(f("email"))
+			if email == "" {
+				h.back(w, r, backTo, "", "Enter the address to invite.")
+				return
+			}
 			role := f("role")
 			if role == "" {
 				role = "member"
 			}
-			res, err = c.do(http.MethodPut, base+"/members/"+url.PathEscape(handle), map[string]string{"role": role})
-			ok = handle + " is " + role + "."
+			res, err = c.do(http.MethodPost, base+"/invitations", map[string]string{"email": email, "role": role})
+			if err == nil && res.OK() {
+				var created struct {
+					AcceptURL string `json:"acceptUrl"`
+					Mailed    bool   `json:"mailed"`
+				}
+				_ = json.Unmarshal(res.Body, &created)
+				// The link is shown once. When the registry did not mail it
+				// — it mails no address it has not verified — this page is
+				// the only place the admin will ever see it.
+				ok = "Invited " + email + " as " + role + ". "
+				if created.Mailed {
+					ok += "The invitation was emailed to them."
+				} else {
+					ok += "It was not emailed, because that address is not a verified account here. Send them this link, which is shown once: " + created.AcceptURL
+				}
+			}
 		}
 	case "team":
 		slug := strings.TrimSpace(f("slug"))
@@ -362,6 +437,70 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.back(w, r, backTo, ok, "")
+}
+
+// invitationOffer is what GET /invitations/{token} answers.
+type invitationOffer struct {
+	Org            string `json:"org"`
+	OrgDisplayName string `json:"orgDisplayName"`
+	Email          string `json:"email"`
+	Role           string `json:"role"`
+	ExpiresAt      string `json:"expiresAt"`
+	Acceptable     bool   `json:"acceptable"`
+	Reason         string `json:"reason"`
+	Token          string `json:"-"`
+}
+
+// invitationPage shows an invitation to the person holding its link. It is
+// where the mailed link lands, so it has to work for someone who has never
+// seen this server's pages: sign in first if they are anonymous, then the
+// offer and one button.
+func (h *handler) invitationPage(w http.ResponseWriter, r *http.Request) {
+	u := h.requireUser(w, r)
+	if u == nil {
+		return
+	}
+	token := r.PathValue("token")
+	c := h.call(r)
+	res, err := c.do(http.MethodGet, "/invitations/"+url.PathEscape(token), nil)
+	if err != nil || !res.OK() {
+		status, msg := http.StatusBadGateway, notSent
+		if err == nil {
+			status, msg = res.Status, res.detail()
+			if status == http.StatusNotFound {
+				msg = "This invitation has expired, been used, or been revoked. Ask an administrator to send another."
+			}
+		}
+		h.render(w, r, status, "message", page{Title: "Invitation", User: u, Error: msg})
+		return
+	}
+	var offer invitationOffer
+	_ = res.decode(&offer)
+	offer.Token = token
+	h.render(w, r, http.StatusOK, "invitation", page{Title: "Invitation to " + offer.Org, User: u, Data: offer})
+}
+
+// invitationAccept posts the acceptance and lands the new member on the
+// organization's page.
+func (h *handler) invitationAccept(w http.ResponseWriter, r *http.Request) {
+	u := h.requireUser(w, r)
+	if u == nil {
+		return
+	}
+	token := r.PathValue("token")
+	c := h.call(r)
+	res, err := c.do(http.MethodPost, "/invitations/"+url.PathEscape(token), nil)
+	if err != nil || !res.OK() {
+		msg := notSent
+		if err == nil {
+			msg = res.detail()
+		}
+		h.back(w, r, "/ui/invitations/"+url.PathEscape(token), "", msg)
+		return
+	}
+	var m orgMember
+	_ = res.decode(&m)
+	h.back(w, r, "/ui/orgs", "You are now a member.", "")
 }
 
 // orgsIndex lists the organizations the caller can administer (from

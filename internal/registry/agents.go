@@ -43,6 +43,9 @@ type Service struct {
 	// eventSink receives post-commit state transitions for webhook fan-out
 	// (§9.3, M6). Set by the api layer; nil = no fan-out.
 	eventSink EventSink
+	// orgEventSink is the same fan-out for organization-scoped events
+	// (membership.go). Set by the api layer; nil = no fan-out.
+	orgEventSink OrgEventSink
 	// policyGate enforces the §8.6 knobs that reject at V-validation time.
 	// nil = platform baseline only (no submission-time policy rejections).
 	policyGate PolicyGate

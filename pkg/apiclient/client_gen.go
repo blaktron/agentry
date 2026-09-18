@@ -390,6 +390,24 @@ func (e McpServerScanStatus) Valid() bool {
 	}
 }
 
+// Defines values for MembershipState.
+const (
+	MembershipStateActive  MembershipState = "active"
+	MembershipStatePending MembershipState = "pending"
+)
+
+// Valid indicates whether the value is a known member of the MembershipState enum.
+func (e MembershipState) Valid() bool {
+	switch e {
+	case MembershipStateActive:
+		return true
+	case MembershipStatePending:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OrgRole.
 const (
 	OrgRoleAdmin            OrgRole = "admin"
@@ -1380,6 +1398,14 @@ type CreateAgentRequest struct {
 // CreateAgentRequestVisibility defines model for CreateAgentRequest.Visibility.
 type CreateAgentRequestVisibility string
 
+// CreateInvitationRequest defines model for CreateInvitationRequest.
+type CreateInvitationRequest struct {
+	Email string `json:"email"`
+
+	// Role The role a PUT assigns. security_reviewer is refused outside a first-party organization, and owner — retired by agentry#360, kept here so an older client's request still parses — is refused with a 422 that names the roles that exist.
+	Role *OrgRoleAssignment `json:"role,omitempty"`
+}
+
 // CreateOrgRequest defines model for CreateOrgRequest.
 type CreateOrgRequest struct {
 	DisplayName string `json:"displayName"`
@@ -1395,6 +1421,31 @@ type CreateTokenRequest struct {
 	// OrgHandle Bind the token to this org (§12.4). Requires the current session to be SSO-fresh for the org; org-bound tokens live at most 90 days (a later expiresAt is refused with 422) and are the only tokens accepted against an enforced-SSO org's resources.
 	OrgHandle *string `json:"orgHandle,omitempty"`
 	Scopes    []Scope `json:"scopes"`
+}
+
+// CreatedInvitation defines model for CreatedInvitation.
+type CreatedInvitation struct {
+	// AcceptUrl Where the invited person accepts it.
+	AcceptUrl string    `json:"acceptUrl"`
+	CreatedAt time.Time `json:"createdAt"`
+	Email     string    `json:"email"`
+
+	// Expired An expired invitation holds no seat and cannot be accepted.
+	Expired   *bool              `json:"expired,omitempty"`
+	ExpiresAt time.Time          `json:"expiresAt"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// InvitedBy The handle of the admin who sent it.
+	InvitedBy *string `json:"invitedBy,omitempty"`
+
+	// Mailed Whether the invitation was mailed. It is not when the address belongs to no account, to an account whose address the registry has not verified, or to someone who has turned organization-invitation mail off — the registry mails no address it has not confirmed (DEV-099).
+	Mailed bool `json:"mailed"`
+
+	// Role An organization role, ordered admin > security_reviewer | member (§12.2 as amended by agentry#360). Admins manage the organization, its members, settings, SSO and SCIM, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; the owner role is retired and every owner became an admin. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
+	Role OrgRole `json:"role"`
+
+	// Token The credential, shown once and never again: the registry keeps only its SHA-256. Give it to the person you invited if it was not mailed to them.
+	Token string `json:"token"`
 }
 
 // DependencyAlert A published version declares an MCP server version with a newly known high or critical vulnerability (agentry#177).
@@ -1474,6 +1525,41 @@ type EmailNotificationSettings struct {
 	ReviewDecisions bool `json:"reviewDecisions"`
 }
 
+// Invitation defines model for Invitation.
+type Invitation struct {
+	CreatedAt time.Time `json:"createdAt"`
+	Email     string    `json:"email"`
+
+	// Expired An expired invitation holds no seat and cannot be accepted.
+	Expired   *bool              `json:"expired,omitempty"`
+	ExpiresAt time.Time          `json:"expiresAt"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// InvitedBy The handle of the admin who sent it.
+	InvitedBy *string `json:"invitedBy,omitempty"`
+
+	// Role An organization role, ordered admin > security_reviewer | member (§12.2 as amended by agentry#360). Admins manage the organization, its members, settings, SSO and SCIM, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; the owner role is retired and every owner became an admin. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
+	Role OrgRole `json:"role"`
+}
+
+// InvitationOffer defines model for InvitationOffer.
+type InvitationOffer struct {
+	// Acceptable Whether the signed-in account may accept it now.
+	Acceptable bool `json:"acceptable"`
+
+	// Email The address the invitation is bound to.
+	Email          string    `json:"email"`
+	ExpiresAt      time.Time `json:"expiresAt"`
+	Org            string    `json:"org"`
+	OrgDisplayName string    `json:"orgDisplayName"`
+
+	// Reason Why it cannot be accepted, when it cannot.
+	Reason *string `json:"reason,omitempty"`
+
+	// Role An organization role, ordered admin > security_reviewer | member (§12.2 as amended by agentry#360). Admins manage the organization, its members, settings, SSO and SCIM, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; the owner role is retired and every owner became an admin. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
+	Role OrgRole `json:"role"`
+}
+
 // JudgeUsage The token use the LLM judge's provider reported for this scan run — what the review cost, as measured. Present for platform staff only, and absent when the provider reported none (the static and classifier judges, an endpoint without a usage block); absent means unknown, not zero. Not part of the signed report.
 type JudgeUsage struct {
 	CompletionTokens int `json:"completionTokens"`
@@ -1541,10 +1627,16 @@ type McpServerScanStatus string
 // Membership defines model for Membership.
 type Membership struct {
 	// Role An organization role, ordered admin > security_reviewer | member (§12.2 as amended by agentry#360). Admins manage the organization, its members, settings, SSO and SCIM, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; the owner role is retired and every owner became an admin. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
-	Role    OrgRole    `json:"role"`
-	User    PublicUser `json:"user"`
-	ViaScim *bool      `json:"viaScim,omitempty"`
+	Role OrgRole `json:"role"`
+
+	// State Whether the membership is in force. `pending` is someone the organization's IdP provisioned, or its domain folded in, who holds no seat and nothing of the organization until an admin approves them; `active` is a member.
+	State   *MembershipState `json:"state,omitempty"`
+	User    PublicUser       `json:"user"`
+	ViaScim *bool            `json:"viaScim,omitempty"`
 }
+
+// MembershipState Whether the membership is in force. `pending` is someone the organization's IdP provisioned, or its domain folded in, who holds no seat and nothing of the organization until an admin approves them; `active` is a member.
+type MembershipState string
 
 // Meta defines model for Meta.
 type Meta struct {
@@ -1589,6 +1681,9 @@ type Org struct {
 	DisplayName string             `json:"displayName"`
 	Handle      string             `json:"handle"`
 	Id          openapi_types.UUID `json:"id"`
+
+	// Seats Present for the organization's members only.
+	Seats *Seats `json:"seats,omitempty"`
 
 	// SsoRequired Present for org admins only.
 	SsoRequired    *bool   `json:"ssoRequired,omitempty"`
@@ -1872,6 +1967,14 @@ type SearchResults struct {
 	Total *int `json:"total,omitempty"`
 }
 
+// Seats What the organization holds against its seat allowance. A seat is every active membership plus every open invitation; pending people hold none. `max` is the allowance, 0 meaning unbounded — what a registry with no billing extension answers.
+type Seats struct {
+	Invited int64 `json:"invited"`
+	Max     int64 `json:"max"`
+	Pending int64 `json:"pending"`
+	Used    int64 `json:"used"`
+}
+
 // SessionInfo defines model for SessionInfo.
 type SessionInfo struct {
 	CreatedAt time.Time `json:"createdAt"`
@@ -1999,6 +2102,9 @@ type User struct {
 	Orgs *[]struct {
 		Handle string `json:"handle"`
 		Role   string `json:"role"`
+
+		// State Whether the membership is in force. `pending` is someone the organization's IdP provisioned, or its domain folded in, who holds no seat and nothing of the organization until an admin approves them; `active` is a member.
+		State *MembershipState `json:"state,omitempty"`
 	} `json:"orgs,omitempty"`
 	PlatformStaff *bool `json:"platformStaff,omitempty"`
 	TotpEnabled   bool  `json:"totpEnabled"`
@@ -2301,6 +2407,12 @@ type SetOrgMemberJSONBody struct {
 	Role OrgRoleAssignment `json:"role"`
 }
 
+// ApproveOrgMemberJSONBody defines parameters for ApproveOrgMember.
+type ApproveOrgMemberJSONBody struct {
+	// Role The role a PUT assigns. security_reviewer is refused outside a first-party organization, and owner — retired by agentry#360, kept here so an older client's request still parses — is refused with a 422 that names the roles that exist.
+	Role *OrgRoleAssignment `json:"role,omitempty"`
+}
+
 // SetOrgPolicyJSONBody defines parameters for SetOrgPolicy.
 type SetOrgPolicyJSONBody map[string]interface{}
 
@@ -2553,8 +2665,14 @@ type CreateDomainClaimJSONRequestBody CreateDomainClaimJSONBody
 // VerifyDomainClaimJSONRequestBody defines body for VerifyDomainClaim for application/json ContentType.
 type VerifyDomainClaimJSONRequestBody VerifyDomainClaimJSONBody
 
+// CreateInvitationJSONRequestBody defines body for CreateInvitation for application/json ContentType.
+type CreateInvitationJSONRequestBody = CreateInvitationRequest
+
 // SetOrgMemberJSONRequestBody defines body for SetOrgMember for application/json ContentType.
 type SetOrgMemberJSONRequestBody SetOrgMemberJSONBody
+
+// ApproveOrgMemberJSONRequestBody defines body for ApproveOrgMember for application/json ContentType.
+type ApproveOrgMemberJSONRequestBody ApproveOrgMemberJSONBody
 
 // SetOrgPolicyJSONRequestBody defines body for SetOrgPolicy for application/json ContentType.
 type SetOrgPolicyJSONRequestBody SetOrgPolicyJSONBody
@@ -2822,7 +2940,7 @@ type ClientInterface interface {
 	// SubmitVersionWithBody Submit a version for publication (§7 state machine entry).
 	//
 	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
-	// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance` and `resetsAt` at the top level of the problem body; `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers either. The gate's verdict never depends on admission.
+	// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2832,7 +2950,7 @@ type ClientInterface interface {
 	// SubmitVersion Submit a version for publication (§7 state machine entry).
 	//
 	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
-	// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance` and `resetsAt` at the top level of the problem body; `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers either. The gate's verdict never depends on admission.
+	// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -3049,6 +3167,16 @@ type ClientInterface interface {
 	// Corresponds with POST /findings/{id}/verdict (the `SetFindingVerdict` operationId).
 	SetFindingVerdict(ctx context.Context, id openapi_types.UUID, body SetFindingVerdictJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetInvitation Read an invitation by its token (session only). Says which organization and role it offers and whether the signed-in account may accept it.
+	//
+	// Corresponds with GET /invitations/{token} (the `GetInvitation` operationId).
+	GetInvitation(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AcceptInvitation Accept an invitation (session only). Refused unless the session's verified email is the invited address; single use.
+	//
+	// Corresponds with POST /invitations/{token} (the `AcceptInvitation` operationId).
+	AcceptInvitation(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetMcpServerScan The registry's last vulnerability check of one MCP server package version (agentry#177).
 	//
 	// What S7 recorded for the exact package version: `safe` means no known advisories at `lastCheckedAt`, `vulnerable` lists them, `error` means the last lookup failed and the advisories are the last known. 404 when no manifest has ever declared this version. The runner asks here before installing a declared server.
@@ -3151,29 +3279,72 @@ type ClientInterface interface {
 	// Corresponds with POST /orgs/{org}/domain-claims/verify (the `VerifyDomainClaim` operationId).
 	VerifyDomainClaim(ctx context.Context, org OrgHandle, body VerifyDomainClaimJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListInvitations List the organization's open invitations (admin).
+	//
+	// Corresponds with GET /orgs/{org}/invitations (the `ListInvitations` operationId).
+	ListInvitations(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateInvitationWithBody Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash. It is also mailed to the address when the registry may write there: an address at the organization's own verified domain always, and any other address only when it belongs to an account whose address the registry has confirmed. Accepting an invitation sent to the organization's verified domain also confirms the accepting account's address, because the organization proved it controls that domain.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/invitations (the `CreateInvitation` operationId).
+	CreateInvitationWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateInvitation Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash. It is also mailed to the address when the registry may write there: an address at the organization's own verified domain always, and any other address only when it belongs to an account whose address the registry has confirmed. Accepting an invitation sent to the organization's verified domain also confirms the accepting account's address, because the organization proved it controls that domain.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/invitations (the `CreateInvitation` operationId).
+	CreateInvitation(ctx context.Context, org OrgHandle, body CreateInvitationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RevokeInvitation Revoke an open invitation (admin); its seat is released.
+	//
+	// Corresponds with DELETE /orgs/{org}/invitations/{id} (the `RevokeInvitation` operationId).
+	RevokeInvitation(ctx context.Context, org OrgHandle, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListOrgMembers List members with roles (members can view).
 	//
 	// Corresponds with GET /orgs/{org}/members (the `ListOrgMembers` operationId).
 	ListOrgMembers(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// RemoveOrgMember Remove a member (admin+; owners removable only by owners).
+	// RemoveOrgMember Remove a member (admin). Removing a pending member is how an admin declines them; the last admin cannot be removed (409 last-admin).
 	//
 	// Corresponds with DELETE /orgs/{org}/members/{handle} (the `RemoveOrgMember` operationId).
 	RemoveOrgMember(ctx context.Context, org OrgHandle, handle Handle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetOrgMemberWithBody Add a member or change a role (admin).
+	// SetOrgMemberWithBody Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PUT /orgs/{org}/members/{handle} (the `SetOrgMember` operationId).
 	SetOrgMemberWithBody(ctx context.Context, org OrgHandle, handle Handle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetOrgMember Add a member or change a role (admin).
+	// SetOrgMember Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with PUT /orgs/{org}/members/{handle} (the `SetOrgMember` operationId).
 	SetOrgMember(ctx context.Context, org OrgHandle, handle Handle, body SetOrgMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApproveOrgMemberWithBody Approve a pending member (admin). The seat check fires here: a person provisioned by SCIM, or folded in from the organization's domain, holds no seat until an admin approves them.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/members/{handle}/approve (the `ApproveOrgMember` operationId).
+	ApproveOrgMemberWithBody(ctx context.Context, org OrgHandle, handle Handle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApproveOrgMember Approve a pending member (admin). The seat check fires here: a person provisioned by SCIM, or folded in from the organization's domain, holds no seat until an admin approves them.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/members/{handle}/approve (the `ApproveOrgMember` operationId).
+	ApproveOrgMember(ctx context.Context, org OrgHandle, handle Handle, body ApproveOrgMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeclineOrgMember Decline a pending member (admin): the pending membership is removed and no seat is consumed. An active member is removed with DELETE instead.
+	//
+	// Corresponds with POST /orgs/{org}/members/{handle}/decline (the `DeclineOrgMember` operationId).
+	DeclineOrgMember(ctx context.Context, org OrgHandle, handle Handle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetOrgPolicy The org policy overlay (admin+).
 	//
@@ -4064,7 +4235,7 @@ func (c *Client) ListVersions(ctx context.Context, ns Namespace, name AgentName,
 // SubmitVersionWithBody Submit a version for publication (§7 state machine entry).
 //
 // Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
-// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance` and `resetsAt` at the top level of the problem body; `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers either. The gate's verdict never depends on admission.
+// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 //
 // Takes any type of body and a specified content type.
 //
@@ -4084,7 +4255,7 @@ func (c *Client) SubmitVersionWithBody(ctx context.Context, ns Namespace, name A
 // SubmitVersion Submit a version for publication (§7 state machine entry).
 //
 // Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
-// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance` and `resetsAt` at the top level of the problem body; `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers either. The gate's verdict never depends on admission.
+// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -4591,6 +4762,36 @@ func (c *Client) SetFindingVerdict(ctx context.Context, id openapi_types.UUID, b
 	return c.Client.Do(req)
 }
 
+// GetInvitation Read an invitation by its token (session only). Says which organization and role it offers and whether the signed-in account may accept it.
+//
+// Corresponds with GET /invitations/{token} (the `GetInvitation` operationId).
+func (c *Client) GetInvitation(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetInvitationRequest(c.Server, token)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AcceptInvitation Accept an invitation (session only). Refused unless the session's verified email is the invited address; single use.
+//
+// Corresponds with POST /invitations/{token} (the `AcceptInvitation` operationId).
+func (c *Client) AcceptInvitation(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAcceptInvitationRequest(c.Server, token)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetMcpServerScan The registry's last vulnerability check of one MCP server package version (agentry#177).
 //
 // What S7 recorded for the exact package version: `safe` means no known advisories at `lastCheckedAt`, `vulnerable` lists them, `error` means the last lookup failed and the advisories are the last known. 404 when no manifest has ever declared this version. The runner asks here before installing a declared server.
@@ -4853,6 +5054,70 @@ func (c *Client) VerifyDomainClaim(ctx context.Context, org OrgHandle, body Veri
 	return c.Client.Do(req)
 }
 
+// ListInvitations List the organization's open invitations (admin).
+//
+// Corresponds with GET /orgs/{org}/invitations (the `ListInvitations` operationId).
+func (c *Client) ListInvitations(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListInvitationsRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateInvitationWithBody Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash. It is also mailed to the address when the registry may write there: an address at the organization's own verified domain always, and any other address only when it belongs to an account whose address the registry has confirmed. Accepting an invitation sent to the organization's verified domain also confirms the accepting account's address, because the organization proved it controls that domain.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/invitations (the `CreateInvitation` operationId).
+func (c *Client) CreateInvitationWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateInvitationRequestWithBody(c.Server, org, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateInvitation Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash. It is also mailed to the address when the registry may write there: an address at the organization's own verified domain always, and any other address only when it belongs to an account whose address the registry has confirmed. Accepting an invitation sent to the organization's verified domain also confirms the accepting account's address, because the organization proved it controls that domain.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/invitations (the `CreateInvitation` operationId).
+func (c *Client) CreateInvitation(ctx context.Context, org OrgHandle, body CreateInvitationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateInvitationRequest(c.Server, org, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RevokeInvitation Revoke an open invitation (admin); its seat is released.
+//
+// Corresponds with DELETE /orgs/{org}/invitations/{id} (the `RevokeInvitation` operationId).
+func (c *Client) RevokeInvitation(ctx context.Context, org OrgHandle, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRevokeInvitationRequest(c.Server, org, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListOrgMembers List members with roles (members can view).
 //
 // Corresponds with GET /orgs/{org}/members (the `ListOrgMembers` operationId).
@@ -4868,7 +5133,7 @@ func (c *Client) ListOrgMembers(ctx context.Context, org OrgHandle, reqEditors .
 	return c.Client.Do(req)
 }
 
-// RemoveOrgMember Remove a member (admin+; owners removable only by owners).
+// RemoveOrgMember Remove a member (admin). Removing a pending member is how an admin declines them; the last admin cannot be removed (409 last-admin).
 //
 // Corresponds with DELETE /orgs/{org}/members/{handle} (the `RemoveOrgMember` operationId).
 func (c *Client) RemoveOrgMember(ctx context.Context, org OrgHandle, handle Handle, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4883,7 +5148,7 @@ func (c *Client) RemoveOrgMember(ctx context.Context, org OrgHandle, handle Hand
 	return c.Client.Do(req)
 }
 
-// SetOrgMemberWithBody Add a member or change a role (admin).
+// SetOrgMemberWithBody Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 //
 // Takes any type of body and a specified content type.
 //
@@ -4900,13 +5165,62 @@ func (c *Client) SetOrgMemberWithBody(ctx context.Context, org OrgHandle, handle
 	return c.Client.Do(req)
 }
 
-// SetOrgMember Add a member or change a role (admin).
+// SetOrgMember Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 //
 // Takes a body of the `application/json` content type.
 //
 // Corresponds with PUT /orgs/{org}/members/{handle} (the `SetOrgMember` operationId).
 func (c *Client) SetOrgMember(ctx context.Context, org OrgHandle, handle Handle, body SetOrgMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSetOrgMemberRequest(c.Server, org, handle, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ApproveOrgMemberWithBody Approve a pending member (admin). The seat check fires here: a person provisioned by SCIM, or folded in from the organization's domain, holds no seat until an admin approves them.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/members/{handle}/approve (the `ApproveOrgMember` operationId).
+func (c *Client) ApproveOrgMemberWithBody(ctx context.Context, org OrgHandle, handle Handle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApproveOrgMemberRequestWithBody(c.Server, org, handle, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ApproveOrgMember Approve a pending member (admin). The seat check fires here: a person provisioned by SCIM, or folded in from the organization's domain, holds no seat until an admin approves them.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/members/{handle}/approve (the `ApproveOrgMember` operationId).
+func (c *Client) ApproveOrgMember(ctx context.Context, org OrgHandle, handle Handle, body ApproveOrgMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApproveOrgMemberRequest(c.Server, org, handle, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeclineOrgMember Decline a pending member (admin): the pending membership is removed and no seat is consumed. An active member is removed with DELETE instead.
+//
+// Corresponds with POST /orgs/{org}/members/{handle}/decline (the `DeclineOrgMember` operationId).
+func (c *Client) DeclineOrgMember(ctx context.Context, org OrgHandle, handle Handle, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeclineOrgMemberRequest(c.Server, org, handle)
 	if err != nil {
 		return nil, err
 	}
@@ -8146,6 +8460,74 @@ func NewSetFindingVerdictRequestWithBody(server string, id openapi_types.UUID, c
 	return req, nil
 }
 
+// NewGetInvitationRequest constructs an http.Request for the GetInvitation method
+func NewGetInvitationRequest(server string, token string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "token", token, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/invitations/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAcceptInvitationRequest constructs an http.Request for the AcceptInvitation method
+func NewAcceptInvitationRequest(server string, token string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "token", token, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/invitations/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetMcpServerScanRequest constructs an http.Request for the GetMcpServerScan method
 func NewGetMcpServerScanRequest(server string, params *GetMcpServerScanParams) (*http.Request, error) {
 	var err error
@@ -8661,6 +9043,128 @@ func NewVerifyDomainClaimRequestWithBody(server string, org OrgHandle, contentTy
 	return req, nil
 }
 
+// NewListInvitationsRequest constructs an http.Request for the ListInvitations method
+func NewListInvitationsRequest(server string, org OrgHandle) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/invitations", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateInvitationRequest calls the generic CreateInvitation builder with application/json body
+func NewCreateInvitationRequest(server string, org OrgHandle, body CreateInvitationJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateInvitationRequestWithBody(server, org, "application/json", bodyReader)
+}
+
+// NewCreateInvitationRequestWithBody constructs an http.Request for the CreateInvitation method, with any body, and a specified content type
+func NewCreateInvitationRequestWithBody(server string, org OrgHandle, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/invitations", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewRevokeInvitationRequest constructs an http.Request for the RevokeInvitation method
+func NewRevokeInvitationRequest(server string, org OrgHandle, id openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/invitations/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListOrgMembersRequest constructs an http.Request for the ListOrgMembers method
 func NewListOrgMembersRequest(server string, org OrgHandle) (*http.Request, error) {
 	var err error
@@ -8786,6 +9290,101 @@ func NewSetOrgMemberRequestWithBody(server string, org OrgHandle, handle Handle,
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewApproveOrgMemberRequest calls the generic ApproveOrgMember builder with application/json body
+func NewApproveOrgMemberRequest(server string, org OrgHandle, handle Handle, body ApproveOrgMemberJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewApproveOrgMemberRequestWithBody(server, org, handle, "application/json", bodyReader)
+}
+
+// NewApproveOrgMemberRequestWithBody constructs an http.Request for the ApproveOrgMember method, with any body, and a specified content type
+func NewApproveOrgMemberRequestWithBody(server string, org OrgHandle, handle Handle, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "handle", handle, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/members/%s/approve", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeclineOrgMemberRequest constructs an http.Request for the DeclineOrgMember method
+func NewDeclineOrgMemberRequest(server string, org OrgHandle, handle Handle) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "handle", handle, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/members/%s/decline", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -12010,7 +12609,7 @@ type ClientWithResponsesInterface interface {
 	// SubmitVersionWithBodyWithResponse Submit a version for publication (§7 state machine entry).
 	//
 	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
-	// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance` and `resetsAt` at the top level of the problem body; `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers either. The gate's verdict never depends on admission.
+	// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12020,7 +12619,7 @@ type ClientWithResponsesInterface interface {
 	// SubmitVersionWithResponse Submit a version for publication (§7 state machine entry).
 	//
 	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
-	// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance` and `resetsAt` at the top level of the problem body; `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers either. The gate's verdict never depends on admission.
+	// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12261,6 +12860,20 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /findings/{id}/verdict (the `SetFindingVerdict` operationId).
 	SetFindingVerdictWithResponse(ctx context.Context, id openapi_types.UUID, body SetFindingVerdictJSONRequestBody, reqEditors ...RequestEditorFn) (*SetFindingVerdictResponse, error)
 
+	// GetInvitationWithResponse Read an invitation by its token (session only). Says which organization and role it offers and whether the signed-in account may accept it.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /invitations/{token} (the `GetInvitation` operationId).
+	GetInvitationWithResponse(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*GetInvitationResponse, error)
+
+	// AcceptInvitationWithResponse Accept an invitation (session only). Refused unless the session's verified email is the invited address; single use.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /invitations/{token} (the `AcceptInvitation` operationId).
+	AcceptInvitationWithResponse(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*AcceptInvitationResponse, error)
+
 	// GetMcpServerScanWithResponse The registry's last vulnerability check of one MCP server package version (agentry#177).
 	//
 	// What S7 recorded for the exact package version: `safe` means no known advisories at `lastCheckedAt`, `vulnerable` lists them, `error` means the last lookup failed and the advisories are the last known. 404 when no manifest has ever declared this version. The runner asks here before installing a declared server.
@@ -12375,6 +12988,34 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /orgs/{org}/domain-claims/verify (the `VerifyDomainClaim` operationId).
 	VerifyDomainClaimWithResponse(ctx context.Context, org OrgHandle, body VerifyDomainClaimJSONRequestBody, reqEditors ...RequestEditorFn) (*VerifyDomainClaimResponse, error)
 
+	// ListInvitationsWithResponse List the organization's open invitations (admin).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/invitations (the `ListInvitations` operationId).
+	ListInvitationsWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListInvitationsResponse, error)
+
+	// CreateInvitationWithBodyWithResponse Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash. It is also mailed to the address when the registry may write there: an address at the organization's own verified domain always, and any other address only when it belongs to an account whose address the registry has confirmed. Accepting an invitation sent to the organization's verified domain also confirms the accepting account's address, because the organization proved it controls that domain.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/invitations (the `CreateInvitation` operationId).
+	CreateInvitationWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateInvitationResponse, error)
+
+	// CreateInvitationWithResponse Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash. It is also mailed to the address when the registry may write there: an address at the organization's own verified domain always, and any other address only when it belongs to an account whose address the registry has confirmed. Accepting an invitation sent to the organization's verified domain also confirms the accepting account's address, because the organization proved it controls that domain.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/invitations (the `CreateInvitation` operationId).
+	CreateInvitationWithResponse(ctx context.Context, org OrgHandle, body CreateInvitationJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateInvitationResponse, error)
+
+	// RevokeInvitationWithResponse Revoke an open invitation (admin); its seat is released.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/invitations/{id} (the `RevokeInvitation` operationId).
+	RevokeInvitationWithResponse(ctx context.Context, org OrgHandle, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokeInvitationResponse, error)
+
 	// ListOrgMembersWithResponse List members with roles (members can view).
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -12382,26 +13023,47 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/members (the `ListOrgMembers` operationId).
 	ListOrgMembersWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListOrgMembersResponse, error)
 
-	// RemoveOrgMemberWithResponse Remove a member (admin+; owners removable only by owners).
+	// RemoveOrgMemberWithResponse Remove a member (admin). Removing a pending member is how an admin declines them; the last admin cannot be removed (409 last-admin).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with DELETE /orgs/{org}/members/{handle} (the `RemoveOrgMember` operationId).
 	RemoveOrgMemberWithResponse(ctx context.Context, org OrgHandle, handle Handle, reqEditors ...RequestEditorFn) (*RemoveOrgMemberResponse, error)
 
-	// SetOrgMemberWithBodyWithResponse Add a member or change a role (admin).
+	// SetOrgMemberWithBodyWithResponse Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /orgs/{org}/members/{handle} (the `SetOrgMember` operationId).
 	SetOrgMemberWithBodyWithResponse(ctx context.Context, org OrgHandle, handle Handle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetOrgMemberResponse, error)
 
-	// SetOrgMemberWithResponse Add a member or change a role (admin).
+	// SetOrgMemberWithResponse Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /orgs/{org}/members/{handle} (the `SetOrgMember` operationId).
 	SetOrgMemberWithResponse(ctx context.Context, org OrgHandle, handle Handle, body SetOrgMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*SetOrgMemberResponse, error)
+
+	// ApproveOrgMemberWithBodyWithResponse Approve a pending member (admin). The seat check fires here: a person provisioned by SCIM, or folded in from the organization's domain, holds no seat until an admin approves them.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/members/{handle}/approve (the `ApproveOrgMember` operationId).
+	ApproveOrgMemberWithBodyWithResponse(ctx context.Context, org OrgHandle, handle Handle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApproveOrgMemberResponse, error)
+
+	// ApproveOrgMemberWithResponse Approve a pending member (admin). The seat check fires here: a person provisioned by SCIM, or folded in from the organization's domain, holds no seat until an admin approves them.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/members/{handle}/approve (the `ApproveOrgMember` operationId).
+	ApproveOrgMemberWithResponse(ctx context.Context, org OrgHandle, handle Handle, body ApproveOrgMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*ApproveOrgMemberResponse, error)
+
+	// DeclineOrgMemberWithResponse Decline a pending member (admin): the pending membership is removed and no seat is consumed. An active member is removed with DELETE instead.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/members/{handle}/decline (the `DeclineOrgMember` operationId).
+	DeclineOrgMemberWithResponse(ctx context.Context, org OrgHandle, handle Handle, reqEditors ...RequestEditorFn) (*DeclineOrgMemberResponse, error)
 
 	// GetOrgPolicyWithResponse The org policy overlay (admin+).
 	//
@@ -14778,6 +15440,102 @@ func (r SetFindingVerdictResponse) ContentType() string {
 	return ""
 }
 
+type GetInvitationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *InvitationOffer
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetInvitationResponse) GetJSON200() *InvitationOffer {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetInvitationResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetInvitationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetInvitationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetInvitationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetInvitationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AcceptInvitationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Membership
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AcceptInvitationResponse) GetJSON200() *Membership {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r AcceptInvitationResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r AcceptInvitationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AcceptInvitationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AcceptInvitationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AcceptInvitationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetMcpServerScanResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -15320,6 +16078,143 @@ func (r VerifyDomainClaimResponse) ContentType() string {
 	return ""
 }
 
+type ListInvitationsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]Invitation
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListInvitationsResponse) GetJSON200() *[]Invitation {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListInvitationsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListInvitationsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListInvitationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListInvitationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListInvitationsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateInvitationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *CreatedInvitation
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateInvitationResponse) GetJSON201() *CreatedInvitation {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r CreateInvitationResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateInvitationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateInvitationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateInvitationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateInvitationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RevokeInvitationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r RevokeInvitationResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r RevokeInvitationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RevokeInvitationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RevokeInvitationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RevokeInvitationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListOrgMembersResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -15451,6 +16346,95 @@ func (r SetOrgMemberResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r SetOrgMemberResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ApproveOrgMemberResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Membership
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ApproveOrgMemberResponse) GetJSON200() *Membership {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ApproveOrgMemberResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ApproveOrgMemberResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ApproveOrgMemberResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApproveOrgMemberResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ApproveOrgMemberResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeclineOrgMemberResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DeclineOrgMemberResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeclineOrgMemberResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeclineOrgMemberResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeclineOrgMemberResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeclineOrgMemberResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -18900,7 +19884,7 @@ func (c *ClientWithResponses) ListVersionsWithResponse(ctx context.Context, ns N
 // SubmitVersionWithBodyWithResponse Submit a version for publication (§7 state machine entry).
 //
 // Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
-// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance` and `resetsAt` at the top level of the problem body; `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers either. The gate's verdict never depends on admission.
+// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -18916,7 +19900,7 @@ func (c *ClientWithResponses) SubmitVersionWithBodyWithResponse(ctx context.Cont
 // SubmitVersionWithResponse Submit a version for publication (§7 state machine entry).
 //
 // Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
-// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance` and `resetsAt` at the top level of the problem body; `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers either. The gate's verdict never depends on admission.
+// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -19331,6 +20315,32 @@ func (c *ClientWithResponses) SetFindingVerdictWithResponse(ctx context.Context,
 	return ParseSetFindingVerdictResponse(rsp)
 }
 
+// GetInvitationWithResponse Read an invitation by its token (session only). Says which organization and role it offers and whether the signed-in account may accept it.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /invitations/{token} (the `GetInvitation` operationId).
+func (c *ClientWithResponses) GetInvitationWithResponse(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*GetInvitationResponse, error) {
+	rsp, err := c.GetInvitation(ctx, token, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetInvitationResponse(rsp)
+}
+
+// AcceptInvitationWithResponse Accept an invitation (session only). Refused unless the session's verified email is the invited address; single use.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /invitations/{token} (the `AcceptInvitation` operationId).
+func (c *ClientWithResponses) AcceptInvitationWithResponse(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*AcceptInvitationResponse, error) {
+	rsp, err := c.AcceptInvitation(ctx, token, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAcceptInvitationResponse(rsp)
+}
+
 // GetMcpServerScanWithResponse The registry's last vulnerability check of one MCP server package version (agentry#177).
 //
 // What S7 recorded for the exact package version: `safe` means no known advisories at `lastCheckedAt`, `vulnerable` lists them, `error` means the last lookup failed and the advisories are the last known. 404 when no manifest has ever declared this version. The runner asks here before installing a declared server.
@@ -19541,6 +20551,58 @@ func (c *ClientWithResponses) VerifyDomainClaimWithResponse(ctx context.Context,
 	return ParseVerifyDomainClaimResponse(rsp)
 }
 
+// ListInvitationsWithResponse List the organization's open invitations (admin).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/invitations (the `ListInvitations` operationId).
+func (c *ClientWithResponses) ListInvitationsWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListInvitationsResponse, error) {
+	rsp, err := c.ListInvitations(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListInvitationsResponse(rsp)
+}
+
+// CreateInvitationWithBodyWithResponse Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash. It is also mailed to the address when the registry may write there: an address at the organization's own verified domain always, and any other address only when it belongs to an account whose address the registry has confirmed. Accepting an invitation sent to the organization's verified domain also confirms the accepting account's address, because the organization proved it controls that domain.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/invitations (the `CreateInvitation` operationId).
+func (c *ClientWithResponses) CreateInvitationWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateInvitationResponse, error) {
+	rsp, err := c.CreateInvitationWithBody(ctx, org, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateInvitationResponse(rsp)
+}
+
+// CreateInvitationWithResponse Invite someone by email (admin). The invitation reserves a seat when it is sent and expires in seven days. Its token is a credential shown once in this response and stored only as a hash. It is also mailed to the address when the registry may write there: an address at the organization's own verified domain always, and any other address only when it belongs to an account whose address the registry has confirmed. Accepting an invitation sent to the organization's verified domain also confirms the accepting account's address, because the organization proved it controls that domain.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/invitations (the `CreateInvitation` operationId).
+func (c *ClientWithResponses) CreateInvitationWithResponse(ctx context.Context, org OrgHandle, body CreateInvitationJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateInvitationResponse, error) {
+	rsp, err := c.CreateInvitation(ctx, org, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateInvitationResponse(rsp)
+}
+
+// RevokeInvitationWithResponse Revoke an open invitation (admin); its seat is released.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/invitations/{id} (the `RevokeInvitation` operationId).
+func (c *ClientWithResponses) RevokeInvitationWithResponse(ctx context.Context, org OrgHandle, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokeInvitationResponse, error) {
+	rsp, err := c.RevokeInvitation(ctx, org, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRevokeInvitationResponse(rsp)
+}
+
 // ListOrgMembersWithResponse List members with roles (members can view).
 //
 // Returns a wrapper object for the known response body format(s).
@@ -19554,7 +20616,7 @@ func (c *ClientWithResponses) ListOrgMembersWithResponse(ctx context.Context, or
 	return ParseListOrgMembersResponse(rsp)
 }
 
-// RemoveOrgMemberWithResponse Remove a member (admin+; owners removable only by owners).
+// RemoveOrgMemberWithResponse Remove a member (admin). Removing a pending member is how an admin declines them; the last admin cannot be removed (409 last-admin).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -19567,7 +20629,7 @@ func (c *ClientWithResponses) RemoveOrgMemberWithResponse(ctx context.Context, o
 	return ParseRemoveOrgMemberResponse(rsp)
 }
 
-// SetOrgMemberWithBodyWithResponse Add a member or change a role (admin).
+// SetOrgMemberWithBodyWithResponse Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -19580,7 +20642,7 @@ func (c *ClientWithResponses) SetOrgMemberWithBodyWithResponse(ctx context.Conte
 	return ParseSetOrgMemberResponse(rsp)
 }
 
-// SetOrgMemberWithResponse Add a member or change a role (admin).
+// SetOrgMemberWithResponse Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -19591,6 +20653,45 @@ func (c *ClientWithResponses) SetOrgMemberWithResponse(ctx context.Context, org 
 		return nil, err
 	}
 	return ParseSetOrgMemberResponse(rsp)
+}
+
+// ApproveOrgMemberWithBodyWithResponse Approve a pending member (admin). The seat check fires here: a person provisioned by SCIM, or folded in from the organization's domain, holds no seat until an admin approves them.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/members/{handle}/approve (the `ApproveOrgMember` operationId).
+func (c *ClientWithResponses) ApproveOrgMemberWithBodyWithResponse(ctx context.Context, org OrgHandle, handle Handle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApproveOrgMemberResponse, error) {
+	rsp, err := c.ApproveOrgMemberWithBody(ctx, org, handle, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApproveOrgMemberResponse(rsp)
+}
+
+// ApproveOrgMemberWithResponse Approve a pending member (admin). The seat check fires here: a person provisioned by SCIM, or folded in from the organization's domain, holds no seat until an admin approves them.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/members/{handle}/approve (the `ApproveOrgMember` operationId).
+func (c *ClientWithResponses) ApproveOrgMemberWithResponse(ctx context.Context, org OrgHandle, handle Handle, body ApproveOrgMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*ApproveOrgMemberResponse, error) {
+	rsp, err := c.ApproveOrgMember(ctx, org, handle, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApproveOrgMemberResponse(rsp)
+}
+
+// DeclineOrgMemberWithResponse Decline a pending member (admin): the pending membership is removed and no seat is consumed. An active member is removed with DELETE instead.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/members/{handle}/decline (the `DeclineOrgMember` operationId).
+func (c *ClientWithResponses) DeclineOrgMemberWithResponse(ctx context.Context, org OrgHandle, handle Handle, reqEditors ...RequestEditorFn) (*DeclineOrgMemberResponse, error) {
+	rsp, err := c.DeclineOrgMember(ctx, org, handle, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeclineOrgMemberResponse(rsp)
 }
 
 // GetOrgPolicyWithResponse The org policy overlay (admin+).
@@ -21955,6 +23056,72 @@ func ParseSetFindingVerdictResponse(rsp *http.Response) (*SetFindingVerdictRespo
 	return response, nil
 }
 
+// ParseGetInvitationResponse parses an HTTP response from a GetInvitationWithResponse call
+func ParseGetInvitationResponse(rsp *http.Response) (*GetInvitationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetInvitationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest InvitationOffer
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAcceptInvitationResponse parses an HTTP response from a AcceptInvitationWithResponse call
+func ParseAcceptInvitationResponse(rsp *http.Response) (*AcceptInvitationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AcceptInvitationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Membership
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetMcpServerScanResponse parses an HTTP response from a GetMcpServerScanWithResponse call
 func ParseGetMcpServerScanResponse(rsp *http.Response) (*GetMcpServerScanResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -22332,6 +23499,101 @@ func ParseVerifyDomainClaimResponse(rsp *http.Response) (*VerifyDomainClaimRespo
 	return response, nil
 }
 
+// ParseListInvitationsResponse parses an HTTP response from a ListInvitationsWithResponse call
+func ParseListInvitationsResponse(rsp *http.Response) (*ListInvitationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListInvitationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []Invitation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateInvitationResponse parses an HTTP response from a CreateInvitationWithResponse call
+func ParseCreateInvitationResponse(rsp *http.Response) (*CreateInvitationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateInvitationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest CreatedInvitation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRevokeInvitationResponse parses an HTTP response from a RevokeInvitationWithResponse call
+func ParseRevokeInvitationResponse(rsp *http.Response) (*RevokeInvitationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RevokeInvitationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListOrgMembersResponse parses an HTTP response from a ListOrgMembersWithResponse call
 func ParseListOrgMembersResponse(rsp *http.Response) (*ListOrgMembersResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -22414,6 +23676,68 @@ func ParseSetOrgMemberResponse(rsp *http.Response) (*SetOrgMemberResponse, error
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseApproveOrgMemberResponse parses an HTTP response from a ApproveOrgMemberWithResponse call
+func ParseApproveOrgMemberResponse(rsp *http.Response) (*ApproveOrgMemberResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApproveOrgMemberResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Membership
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeclineOrgMemberResponse parses an HTTP response from a DeclineOrgMemberWithResponse call
+func ParseDeclineOrgMemberResponse(rsp *http.Response) (*DeclineOrgMemberResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeclineOrgMemberResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

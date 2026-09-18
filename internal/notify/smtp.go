@@ -112,7 +112,7 @@ func (n *SMTPNotifier) MCPDependencyAlert(ctx context.Context, notice MCPDepende
 }
 
 // OrgInvite implements Notifier.
-func (n *SMTPNotifier) OrgInvite(ctx context.Context, notice InviteNotice) error {
+func (n *SMTPNotifier) OrgInvite(ctx context.Context, notice InviteOffer) error {
 	return n.deliver(ctx, notice.ToEmail, n.render.invite(notice), "org_invite")
 }
 

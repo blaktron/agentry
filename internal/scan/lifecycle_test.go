@@ -865,7 +865,7 @@ func (e *pipeEnv) seedOrg(handle string) testOrg {
 	if _, err := q.CreateOrg(ctx, storegen.CreateOrgParams{ID: id, DisplayName: handle}); err != nil {
 		e.t.Fatal(err)
 	}
-	if err := q.UpsertMembership(ctx, storegen.UpsertMembershipParams{
+	if err := q.CreateFounderMembership(ctx, storegen.CreateFounderMembershipParams{
 		OrgID: id, UserID: e.owner, Role: string(auth.RoleAdmin),
 	}); err != nil {
 		e.t.Fatal(err)

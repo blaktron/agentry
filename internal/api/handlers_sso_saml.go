@@ -68,11 +68,10 @@ func (s *Server) SamlAcs(w http.ResponseWriter, r *http.Request, org OrgHandle) 
 		problemUnauthorized(w, r, "The registry rejected the SAML assertion. Start sign-in again.")
 		return
 	}
-	displayName := ""
-	if v := res.Attributes["displayName"]; len(v) > 0 {
-		displayName = v[0]
-	}
-	s.establishSSOSession(w, r, orgRow, connID, "saml", res.Subject, res.Email, displayName,
+	// The IdP's displayName was used to name a JIT-created account; since
+	// agentry#361 this path creates nobody, and an existing member's name
+	// is their own to set.
+	s.establishSSOSession(w, r, orgRow, connID, "saml", res.Subject, res.Email,
 		&samlSessionLink{NameID: res.NameID, SessionIndex: res.SessionIndex})
 }
 

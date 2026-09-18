@@ -36,6 +36,10 @@ type testEnv struct {
 	srv *httptest.Server
 	st  *store.Store
 	sfx string // unique suffix for fixture handles
+	// srvObj is the server behind srv, for a test that must change a seam
+	// after the fixture is built (a resolver that starts answering and then
+	// fails).
+	srvObj *api.Server
 }
 
 func newTestEnv(t *testing.T) *testEnv {
@@ -88,10 +92,11 @@ func newTestEnvCfg(t *testing.T, cfgFn func(*config.Config), opts ...func(*api.S
 	t.Cleanup(srv.Close)
 
 	return &testEnv{
-		t:   t,
-		srv: srv,
-		st:  envSt,
-		sfx: fmt.Sprintf("%06x", rand.Int63n(1<<24)), //nolint:gosec // test fixture names
+		t:      t,
+		srv:    srv,
+		srvObj: srvObj,
+		st:     envSt,
+		sfx:    fmt.Sprintf("%06x", rand.Int63n(1<<24)), //nolint:gosec // test fixture names
 	}
 }
 
@@ -275,6 +280,59 @@ func (env *testEnv) register(handle string) string {
 		"handle": h, "email": h + "@example.test", "password": "hunter2hunter2",
 	}, nil, http.StatusCreated)
 	return h
+}
+
+// registerEmail registers an account at a chosen address, for a fixture
+// whose subject is an IdP assertion about that address rather than the
+// address the register helper would invent.
+func (env *testEnv) registerEmail(handle, email string) string {
+	env.t.Helper()
+	h := handle + env.sfx
+	env.doJSON(anonymous, http.MethodPost, "/api/v1/auth/register", map[string]any{
+		"handle": h, "email": email, "password": "hunter2hunter2",
+	}, nil, http.StatusCreated)
+	return h
+}
+
+// verifyOrgDomain records that the organization proved control of a
+// domain, which a DNS-TXT claim does in real life (handlers_domains.go).
+func (env *testEnv) verifyOrgDomain(org, domain string) {
+	env.t.Helper()
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`UPDATE orgs SET verified_domain = $2 WHERE id = (SELECT id FROM handles WHERE handle = $1)`, org, domain); err != nil {
+		env.t.Fatal(err)
+	}
+}
+
+// joinOrg makes handle an active member of org through the real doors —
+// since agentry#361 an invitation accepted by the invited account is the
+// only way in, so a fixture that needs a member builds one the way a person
+// would. The account must be registered; its address is verified here
+// because accepting requires it. A fixture that needs another role changes
+// it afterwards, which is what the PUT route is still for.
+func (env *testEnv) joinOrg(admin caller, org, handle string) {
+	env.t.Helper()
+	env.verifyEmail(handle)
+	var inv struct {
+		Token string `json:"token"`
+	}
+	env.doJSON(admin, http.MethodPost, "/api/v1/orgs/"+org+"/invitations",
+		map[string]any{"email": handle + "@example.test", "role": "member"}, &inv, http.StatusCreated)
+	env.doJSON(env.login(handle), http.MethodPost, "/api/v1/invitations/"+inv.Token, nil, nil, http.StatusOK)
+}
+
+// seedMembership writes a membership straight into the database, for a
+// fixture whose subject is not the door: a security_reviewer (which the API
+// assigns only inside a first-party organization) or a pending member (whom
+// only SCIM or the fold-in creates).
+func (env *testEnv) seedMembership(org, handle, role, state string) {
+	env.t.Helper()
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`INSERT INTO memberships (org_id, user_id, role, state)
+		 SELECT o.id, u.id, $3, $4 FROM handles o, handles u WHERE o.handle = $1 AND u.handle = $2
+		 ON CONFLICT (org_id, user_id) DO UPDATE SET role = $3, state = $4`, org, handle, role, state); err != nil {
+		env.t.Fatal(err)
+	}
 }
 
 // login opens a session for a registered user.

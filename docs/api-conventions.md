@@ -31,8 +31,12 @@ and the `detail` says how.
 Three problems exist only where a deployment runs an admission extension
 (the hosted product's subscription tiers); a core registry never answers
 them. `402 credits-exhausted` refuses a submission after every core check
-has passed and before anything is stored, and carries `balance` and
-`resetsAt` beside the standard members so a client can say when to retry.
+has passed and before anything is stored, and carries `balance`,
+`resetsAt` and `account` beside the standard members so a client can say
+when to retry and whose balance is short — the submitter's own, or the
+organization's when they are a member of one that pays for their work.
+`402 subscription-inactive` refuses a submission whose payer is an
+organization awaiting payment or lapsed, and names it in `account` too.
 `503 admission-unavailable` means the check could not be reached; nothing
 was recorded. `422 private-agent-cap` refuses one more private agent in a
 namespace at its cap, on create and on a `PATCH` that turns an agent
@@ -49,17 +53,20 @@ milestone). `403 email-unverified` refuses
 org-pending` refuses `POST /orgs` while an organization the account
 created is still awaiting payment (only where an admission extension
 runs; a core registry activates an organization as it is created).
+`403 seat-allowance` refuses an invitation or an approval past the
+organization's seats, carrying `used`, `invited`, `pending` and `max`; a
+registry with no billing extension has no seat cap and never answers it.
+`403 feature-not-included` refuses an act the organization's subscription
+does not include at all, which is not the same as its allowance being
+reached. `409 already-a-member` refuses an invitation or an approval for
+someone who is an active member of another organization: a person belongs
+to one at a time.
+
 Reserved for the milestones that build them, so a client can be written
-against the catalogue now: `403 seat-allowance` (an invitation or an
-approval past the organization's seats, with `used`, `invited`, `max`
-and `tier`), `403 feature-not-included` (a feature the organization's
-tier lacks), `409 domain-claimed` (the creator's email domain already
-belongs to an organization), `409 already-a-member` (the person is an
-active member of another organization), `402 subscription-inactive` (a
-submission or hosted run for a pending or restricted organization, with
-`account` naming whose balance it is) and `422 pipeline-skip-refused`
-(the unscanned flag on a public agent, or a private→public change while
-it is set).
+against the catalogue now: `409 domain-claimed` (the creator's email
+domain already belongs to an organization) and `422
+pipeline-skip-refused` (the unscanned flag on a public agent, or a
+private→public change while it is set).
 
 ## Idempotency-Key
 

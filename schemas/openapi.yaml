@@ -82,7 +82,12 @@ tags:
   - name: webhooks
     description: Org webhook endpoints and deliveries (§9.3).
   - name: domains
-    description: Domain verification for JIT auto-linking (§12.4).
+    description: >-
+      Domain verification (§12.4). A verified domain is what an
+      organization proves it controls, and three things rest on it: linking
+      an SSO identity to an existing member's account for the first time,
+      mailing an invitation to an address there, and treating that address
+      as confirmed when its invitation is accepted.
   - name: mcp-servers
     description: >-
       The registry of scanned MCP server package versions S7 keeps and the
@@ -1038,7 +1043,11 @@ paths:
     put:
       operationId: setOrgMember
       tags: [orgs]
-      summary: Add a member or change a role (admin).
+      summary: >
+        Change a member's role (admin). Adding is retired: an organization
+        is joined by accepting an invitation, or by an admin approving
+        someone the IdP provisioned, and a PUT for a handle that holds no
+        membership answers 422 naming those doors.
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
         - $ref: "#/components/parameters/Handle"
@@ -1064,13 +1073,176 @@ paths:
     delete:
       operationId: removeOrgMember
       tags: [orgs]
-      summary: Remove a member (admin+; owners removable only by owners).
+      summary: >
+        Remove a member (admin). Removing a pending member is how an admin
+        declines them; the last admin cannot be removed (409 last-admin).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
         - $ref: "#/components/parameters/Handle"
       responses:
         "204":
           description: Removed.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/members/{handle}/approve:
+    post:
+      operationId: approveOrgMember
+      tags: [orgs]
+      summary: >
+        Approve a pending member (admin). The seat check fires here: a
+        person provisioned by SCIM, or folded in from the organization's
+        domain, holds no seat until an admin approves them.
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+        - $ref: "#/components/parameters/Handle"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  $ref: "#/components/schemas/OrgRoleAssignment"
+      responses:
+        "200":
+          description: Approved; the membership is active.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Membership"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/members/{handle}/decline:
+    post:
+      operationId: declineOrgMember
+      tags: [orgs]
+      summary: >
+        Decline a pending member (admin): the pending membership is
+        removed and no seat is consumed. An active member is removed with
+        DELETE instead.
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+        - $ref: "#/components/parameters/Handle"
+      responses:
+        "204":
+          description: Declined.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/invitations:
+    get:
+      operationId: listInvitations
+      tags: [orgs]
+      summary: List the organization's open invitations (admin).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      responses:
+        "200":
+          description: Open invitations.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Invitation"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createInvitation
+      tags: [orgs]
+      summary: >
+        Invite someone by email (admin). The invitation reserves a seat
+        when it is sent and expires in seven days. Its token is a
+        credential shown once in this response and stored only as a hash.
+        It is also mailed to the address when the registry may write
+        there: an address at the organization's own verified domain
+        always, and any other address only when it belongs to an account
+        whose address the registry has confirmed. Accepting an invitation
+        sent to the organization's verified domain also confirms the
+        accepting account's address, because the organization proved it
+        controls that domain.
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInvitationRequest"
+      responses:
+        "201":
+          description: Invitation created; acceptUrl and token are shown once.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedInvitation"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/invitations/{id}:
+    delete:
+      operationId: revokeInvitation
+      tags: [orgs]
+      summary: Revoke an open invitation (admin); its seat is released.
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Revoked.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /invitations/{token}:
+    get:
+      operationId: getInvitation
+      tags: [orgs]
+      summary: >
+        Read an invitation by its token (session only). Says which
+        organization and role it offers and whether the signed-in account
+        may accept it.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The offer.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationOffer"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: acceptInvitation
+      tags: [orgs]
+      summary: >
+        Accept an invitation (session only). Refused unless the session's
+        verified email is the invited address; single use.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Accepted; the membership is active.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Membership"
         default:
           $ref: "#/components/responses/Problem"
 
@@ -1516,10 +1688,15 @@ paths:
         A deployment with an admission extension (the hosted product's
         subscription tiers) may refuse a submission after every core check
         has passed and before anything is stored: `402` with the problem
-        type `credits-exhausted` carries `balance` and `resetsAt` at the top
-        level of the problem body; `503 admission-unavailable` means the
-        check could not be reached and nothing was recorded. A core
-        registry never answers either. The gate's verdict never depends on
+        type `credits-exhausted` carries `balance`, `resetsAt` and
+        `account` — the handle whose balance is short, which is the
+        submitter's own or, for a member of a paid organization, the
+        organization's — at the top level of the problem body.
+        `402 subscription-inactive` refuses one whose payer is an
+        organization that is awaiting payment or has lapsed, and carries
+        `account` the same way. `503 admission-unavailable` means the check
+        could not be reached and nothing was recorded. A core registry
+        never answers any of them. The gate's verdict never depends on
         admission.
       parameters:
         - $ref: "#/components/parameters/Namespace"
@@ -1556,7 +1733,8 @@ paths:
         "402":
           description: >-
             Refused by the deployment's admission extension (problem type
-            `credits-exhausted`, with `balance` and `resetsAt`); nothing was
+            `credits-exhausted` with `balance`, `resetsAt` and `account`,
+            or `subscription-inactive` with `account`); nothing was
             stored. Never answered by a core registry.
           content:
             application/problem+json:
@@ -3378,6 +3556,8 @@ components:
                 type: string
               role:
                 type: string
+              state:
+                $ref: "#/components/schemas/MembershipState"
         createdAt:
           type: string
           format: date-time
@@ -3575,6 +3755,10 @@ components:
         ssoRequired:
           type: boolean
           description: Present for org admins only.
+        seats:
+          allOf:
+            - $ref: "#/components/schemas/Seats"
+          description: Present for the organization's members only.
         createdAt:
           type: string
           format: date-time
@@ -3589,6 +3773,119 @@ components:
           $ref: "#/components/schemas/OrgRole"
         viaScim:
           type: boolean
+        state:
+          $ref: "#/components/schemas/MembershipState"
+
+    MembershipState:
+      type: string
+      description: >
+        Whether the membership is in force. `pending` is someone the
+        organization's IdP provisioned, or its domain folded in, who holds
+        no seat and nothing of the organization until an admin approves
+        them; `active` is a member.
+      enum: [pending, active]
+
+    Seats:
+      type: object
+      description: >
+        What the organization holds against its seat allowance. A seat is
+        every active membership plus every open invitation; pending people
+        hold none. `max` is the allowance, 0 meaning unbounded — what a
+        registry with no billing extension answers.
+      required: [used, invited, pending, max]
+      properties:
+        used:
+          type: integer
+          format: int64
+        invited:
+          type: integer
+          format: int64
+        pending:
+          type: integer
+          format: int64
+        max:
+          type: integer
+          format: int64
+
+    Invitation:
+      type: object
+      required: [id, email, role, expiresAt, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        role:
+          $ref: "#/components/schemas/OrgRole"
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        invitedBy:
+          type: string
+          description: The handle of the admin who sent it.
+        expired:
+          type: boolean
+          description: An expired invitation holds no seat and cannot be accepted.
+
+    CreateInvitationRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+        role:
+          $ref: "#/components/schemas/OrgRoleAssignment"
+
+    CreatedInvitation:
+      allOf:
+        - $ref: "#/components/schemas/Invitation"
+        - type: object
+          required: [token, acceptUrl, mailed]
+          properties:
+            token:
+              type: string
+              description: >
+                The credential, shown once and never again: the registry
+                keeps only its SHA-256. Give it to the person you invited
+                if it was not mailed to them.
+            acceptUrl:
+              type: string
+              description: Where the invited person accepts it.
+            mailed:
+              type: boolean
+              description: >
+                Whether the invitation was mailed. It is not when the
+                address belongs to no account, to an account whose address
+                the registry has not verified, or to someone who has turned
+                organization-invitation mail off — the registry mails no
+                address it has not confirmed (DEV-099).
+
+    InvitationOffer:
+      type: object
+      required: [org, orgDisplayName, email, role, expiresAt, acceptable]
+      properties:
+        org:
+          type: string
+        orgDisplayName:
+          type: string
+        email:
+          type: string
+          description: The address the invitation is bound to.
+        role:
+          $ref: "#/components/schemas/OrgRole"
+        expiresAt:
+          type: string
+          format: date-time
+        acceptable:
+          type: boolean
+          description: Whether the signed-in account may accept it now.
+        reason:
+          type: string
+          description: Why it cannot be accepted, when it cannot.
 
     Team:
       type: object

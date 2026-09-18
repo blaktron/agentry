@@ -56,6 +56,10 @@ const (
 	ActOrgTeamsManage    Action = "org.teams.manage"    // admin+
 	ActOrgAuditRead      Action = "org.audit.read"      // admin+ (§12.2)
 	ActOrgSettingsManage Action = "org.settings.manage" // admin (SSO/SCIM, policy; once owner-only)
+	// ActOrgInvitationsManage is the invitation door (agentry#361): send,
+	// list and revoke. Declared apart from members.manage because an
+	// invitation reserves a seat before any membership exists.
+	ActOrgInvitationsManage Action = "org.invitations.manage" // admin
 	// Self-scoped (resource is the caller's own account).
 	ActUserSelfRead       Action = "user.self.read"
 	ActUserSelfUpdate     Action = "user.self.update"
@@ -147,33 +151,35 @@ var (
 // Actions absent here are session-only for PATs (minting PATs, org
 // settings) — a deliberate least-privilege default.
 var scopeFor = map[Action]Scope{
-	ActOrgRead:           ScopeUserProfile, // public anyway; scope moot
-	ActPublicRead:        ScopeUserProfile,
-	ActOrgCreate:         ScopeOrgAdmin,
-	ActOrgMembersRead:    ScopeOrgAdmin,
-	ActOrgMembersManage:  ScopeOrgAdmin,
-	ActOrgMembersElevate: ScopeOrgAdmin,
-	ActOrgTeamsRead:      ScopeOrgAdmin,
-	ActOrgTeamsManage:    ScopeOrgAdmin,
-	ActOrgUpdate:         ScopeOrgAdmin,
-	ActOrgAuditRead:      ScopeAuditRead,
-	ActAgentCreate:       ScopeAgentPublish,
-	ActUserSelfRead:      ScopeUserProfile,
-	ActUserSelfUpdate:    ScopeUserProfile,
-	ActUserTokensRead:    ScopeUserProfile,
-	ActReviewAct:         ScopeReviewAct,
+	ActOrgRead:              ScopeUserProfile, // public anyway; scope moot
+	ActPublicRead:           ScopeUserProfile,
+	ActOrgCreate:            ScopeOrgAdmin,
+	ActOrgMembersRead:       ScopeOrgAdmin,
+	ActOrgMembersManage:     ScopeOrgAdmin,
+	ActOrgMembersElevate:    ScopeOrgAdmin,
+	ActOrgInvitationsManage: ScopeOrgAdmin,
+	ActOrgTeamsRead:         ScopeOrgAdmin,
+	ActOrgTeamsManage:       ScopeOrgAdmin,
+	ActOrgUpdate:            ScopeOrgAdmin,
+	ActOrgAuditRead:         ScopeAuditRead,
+	ActAgentCreate:          ScopeAgentPublish,
+	ActUserSelfRead:         ScopeUserProfile,
+	ActUserSelfUpdate:       ScopeUserProfile,
+	ActUserTokensRead:       ScopeUserProfile,
+	ActReviewAct:            ScopeReviewAct,
 }
 
 // minRole is the role threshold per org-scoped action.
 var minRole = map[Action]OrgRole{
-	ActOrgUpdate:         RoleAdmin,
-	ActOrgMembersRead:    RoleMember,
-	ActOrgMembersManage:  RoleAdmin,
-	ActOrgMembersElevate: RoleAdmin,
-	ActOrgTeamsRead:      RoleMember,
-	ActOrgTeamsManage:    RoleAdmin,
-	ActOrgAuditRead:      RoleAdmin,
-	ActOrgSettingsManage: RoleAdmin,
+	ActOrgUpdate:            RoleAdmin,
+	ActOrgMembersRead:       RoleMember,
+	ActOrgMembersManage:     RoleAdmin,
+	ActOrgMembersElevate:    RoleAdmin,
+	ActOrgTeamsRead:         RoleMember,
+	ActOrgTeamsManage:       RoleAdmin,
+	ActOrgAuditRead:         RoleAdmin,
+	ActOrgSettingsManage:    RoleAdmin,
+	ActOrgInvitationsManage: RoleAdmin,
 }
 
 // Check is the single authorization chokepoint (§12.2): every handler calls

@@ -206,7 +206,7 @@ func (e *gitEnv) seedOrg(handle string, ssoRequired bool) uuid.UUID {
 	if _, err := q.CreateOrg(ctx, storegen.CreateOrgParams{ID: id, DisplayName: handle}); err != nil {
 		e.t.Fatal(err)
 	}
-	if err := q.UpsertMembership(ctx, storegen.UpsertMembershipParams{OrgID: id, UserID: e.owner.id, Role: "admin"}); err != nil {
+	if err := q.CreateFounderMembership(ctx, storegen.CreateFounderMembershipParams{OrgID: id, UserID: e.owner.id, Role: "admin"}); err != nil {
 		e.t.Fatal(err)
 	}
 	if ssoRequired {

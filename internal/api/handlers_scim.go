@@ -190,12 +190,16 @@ func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request, sc scimC
 	scimWrite(w, http.StatusCreated, userToSCIM(userID, email, orDefault(displayName, email), true))
 }
 
-// scimProvisionUser links an existing global user by email or JIT-creates one,
-// then adds an org membership marked via_scim.
+// scimProvisionUser links an existing global user by email or JIT-creates
+// one, then adds a **pending** org membership marked via_scim (agentry#361,
+// D7): the IdP says who exists, an admin says who is a member. A pending
+// membership holds no seat and confers nothing, so a SCIM create still
+// answers 201 however many seats the organization has left — the wall is at
+// the approval.
 func (s *Server) scimProvisionUser(ctx context.Context, orgID uuid.UUID, email, displayName string) (uuid.UUID, error) {
 	if u, err := s.q().GetUserByEmail(ctx, email); err == nil {
 		if err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
-			return q.UpsertMembership(ctx, storegen.UpsertMembershipParams{
+			return q.UpsertPendingMembership(ctx, storegen.UpsertPendingMembershipParams{
 				OrgID: orgID, UserID: u.ID, Role: string(auth.RoleMember), ViaScim: true,
 			})
 		}); err != nil {
@@ -222,7 +226,7 @@ func (s *Server) scimProvisionUser(ctx context.Context, orgID uuid.UUID, email, 
 		if err := q.MarkEmailVerified(ctx, userID); err != nil {
 			return err
 		}
-		return q.UpsertMembership(ctx, storegen.UpsertMembershipParams{
+		return q.UpsertPendingMembership(ctx, storegen.UpsertPendingMembershipParams{
 			OrgID: orgID, UserID: userID, Role: string(auth.RoleMember), ViaScim: true,
 		})
 	})
@@ -366,8 +370,11 @@ func (s *Server) scimPutUser(w http.ResponseWriter, r *http.Request, sc scimCtx)
 			}
 		}
 		// Re-assert the membership: a PUT with active=true on someone
-		// previously deactivated is how an IdP reinstates them.
-		if err := q.UpsertMembership(r.Context(), storegen.UpsertMembershipParams{
+		// previously deactivated is how an IdP reinstates them — as a
+		// PENDING member (agentry#361, D7). Deactivating removed the row,
+		// so this is a fresh provisioning, and SCIM provisions; an admin
+		// approves. Someone who is still an active member is untouched.
+		if err := q.UpsertPendingMembership(r.Context(), storegen.UpsertPendingMembershipParams{
 			OrgID: sc.orgID, UserID: id, Role: orDefault(u.Role, string(auth.RoleMember)), ViaScim: true,
 		}); err != nil {
 			return err

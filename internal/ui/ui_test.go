@@ -574,9 +574,11 @@ func TestOrgAdminPage(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.Method + " " + r.URL.Path {
 		case "GET /api/v1/orgs/acme":
-			_, _ = io.WriteString(w, `{"handle":"acme","displayName":"Acme Corp","ssoRequired":false}`)
+			_, _ = io.WriteString(w, `{"handle":"acme","displayName":"Acme Corp","ssoRequired":false,"seats":{"used":1,"invited":1,"pending":1,"max":5}}`)
 		case "GET /api/v1/orgs/acme/members":
-			_, _ = io.WriteString(w, `[{"user":{"handle":"chris"},"role":"admin"},{"user":{"handle":"pat"},"role":"member"}]`)
+			_, _ = io.WriteString(w, `[{"user":{"handle":"chris"},"role":"admin","state":"active"},{"user":{"handle":"pat"},"role":"member","state":"pending","viaScim":true}]`)
+		case "GET /api/v1/orgs/acme/invitations":
+			_, _ = io.WriteString(w, `[{"id":"i1","email":"dana@acme.example","role":"member","expiresAt":"2026-09-25T00:00:00Z"}]`)
 		case "GET /api/v1/orgs/acme/teams":
 			_, _ = io.WriteString(w, `[{"id":"t1","slug":"platform"}]`)
 		case "GET /api/v1/orgs/acme/teams/platform/members":
@@ -611,6 +613,11 @@ func TestOrgAdminPage(t *testing.T) {
 	w := get(h, "/ui/orgs/acme", sessCookie, csrfCookieV)
 	body := w.Body.String()
 	for _, want := range []string{"Acme Corp", "<strong>chris</strong>", "<strong>platform</strong>", `&#34;allowPrivateIps&#34;: false`, "Create webhook",
+		// Seats, the pending member's two buttons and the open invitation
+		// (agentry#361): the page an admin runs the doors from.
+		"Seats: 1 used, 1 invited, 1 waiting of 5",
+		"waiting for approval", `name="action" value="approve"`, `name="action" value="decline"`,
+		"<strong>dana@acme.example</strong>", `value="invitation"`,
 		// agentry#272: the SSO forms reflect the stored state on load — the
 		// SAML metadata and its Enabled box, the OIDC fields with Enabled off.
 		`<textarea name="idpMetadataXml" rows="4" class="mono">&lt;EntityDescriptor/&gt;</textarea>`,

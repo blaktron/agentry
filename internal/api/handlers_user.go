@@ -35,15 +35,15 @@ func (s *Server) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 		CookieAckAt:   row.CookieAckAt,
 	}
 	if ms, err := s.q().ListUserMembershipsWithHandles(r.Context(), p.UserID); err == nil {
-		orgs := make([]struct {
-			Handle string `json:"handle"`
-			Role   string `json:"role"`
-		}, 0, len(ms))
+		type orgRow = struct {
+			Handle string           `json:"handle"`
+			Role   string           `json:"role"`
+			State  *MembershipState `json:"state,omitempty"`
+		}
+		orgs := make([]orgRow, 0, len(ms))
 		for _, m := range ms {
-			orgs = append(orgs, struct {
-				Handle string `json:"handle"`
-				Role   string `json:"role"`
-			}{Handle: m.Handle, Role: m.Role})
+			state := MembershipState(m.State)
+			orgs = append(orgs, orgRow{Handle: m.Handle, Role: m.Role, State: &state})
 		}
 		u.Orgs = &orgs
 	}
