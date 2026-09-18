@@ -190,12 +190,16 @@ func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request, sc scimC
 	scimWrite(w, http.StatusCreated, userToSCIM(userID, email, orDefault(displayName, email), true))
 }
 
-// scimProvisionUser links an existing global user by email or JIT-creates one,
-// then adds an org membership marked via_scim.
+// scimProvisionUser links an existing global user by email or JIT-creates
+// one, then adds a **pending** org membership marked via_scim (agentry#361,
+// D7): the IdP says who exists, an admin says who is a member. A pending
+// membership holds no seat and confers nothing, so a SCIM create still
+// answers 201 however many seats the organization has left — the wall is at
+// the approval.
 func (s *Server) scimProvisionUser(ctx context.Context, orgID uuid.UUID, email, displayName string) (uuid.UUID, error) {
 	if u, err := s.q().GetUserByEmail(ctx, email); err == nil {
 		if err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
-			return q.UpsertMembership(ctx, storegen.UpsertMembershipParams{
+			return q.UpsertPendingMembership(ctx, storegen.UpsertPendingMembershipParams{
 				OrgID: orgID, UserID: u.ID, Role: string(auth.RoleMember), ViaScim: true,
 			})
 		}); err != nil {
@@ -222,7 +226,7 @@ func (s *Server) scimProvisionUser(ctx context.Context, orgID uuid.UUID, email, 
 		if err := q.MarkEmailVerified(ctx, userID); err != nil {
 			return err
 		}
-		return q.UpsertMembership(ctx, storegen.UpsertMembershipParams{
+		return q.UpsertPendingMembership(ctx, storegen.UpsertPendingMembershipParams{
 			OrgID: orgID, UserID: userID, Role: string(auth.RoleMember), ViaScim: true,
 		})
 	})

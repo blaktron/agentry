@@ -308,13 +308,17 @@ func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, org
 
 	userID, err := s.resolveSSOUser(ctx, orgRow, connID, providerKind, subject, email, displayName)
 	if err != nil {
-		if errors.Is(err, errExplicitLinkRequired) {
-			writeProblem(w, r, http.StatusConflict, "sso-link-required",
-				"Email address already in use",
-				"An account already uses this email address. This organization must verify the email domain before SSO can link them.")
+		if errors.Is(err, errNotAMember) {
+			// A plain notice, and the same one whether the person has no
+			// account, has one that is not a member, or is a member
+			// waiting for approval: the organization's SSO is not a place
+			// to learn who is in it.
+			writeProblem(w, r, http.StatusForbidden, "not-a-member",
+				"Not a member of this organization",
+				"This organization signs in its members only. Ask an administrator of "+orgRow.Handle+" to invite you; you will be able to sign in here once you have accepted.")
 			return
 		}
-		s.log.ErrorContext(r.Context(), "sso jit", "err", err)
+		s.log.ErrorContext(r.Context(), "sso sign-in", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -399,98 +403,69 @@ func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, org
 // the email but the domain is not org-verified, so auto-link is refused.
 var errExplicitLinkRequired = errors.New("explicit link confirmation required")
 
-// resolveSSOUser applies the §12.4 JIT rules and returns the user id, adding
-// org membership (default role member) as a side effect.
+// (The org-SSO path no longer raises it: since agentry#361 an organization's
+// SSO recognises members and admits nobody, so there is no account for it to
+// link without confirmation. The social sign-in path still does.)
+
+// errNotAMember reports that the person the IdP authenticated is not an
+// active member of the organization.
+var errNotAMember = errors.New("not an active member of this organization")
+
+// resolveSSOUser answers who the IdP just authenticated, and refuses
+// anyone the organization has not already admitted (agentry#361, D7, D11).
+// It used to be a door: it linked accounts by verified domain and
+// JIT-created an account and a membership for whoever the IdP asserted,
+// which meant the IdP decided who belonged. Now the organization decides —
+// an admin invites, or approves someone the IdP provisioned over SCIM —
+// and this path only recognises them. Nothing is created here: no account,
+// no identity for an unknown person, no membership.
+//
+// An active member signing in for the first time through a connection has
+// their identity linked, which is recognition, not admission: they are
+// already a member, and the link is what makes the next sign-in direct.
 func (s *Server) resolveSSOUser(ctx context.Context, orgRow storegen.GetOrgByHandleRow, connID uuid.UUID, providerKind, subject, email, displayName string) (uuid.UUID, error) {
 	q := s.q()
-	// 1. Existing identity for this connection+subject → that user.
+	// 1. Known identity for this connection: the usual case.
 	if id, err := q.GetIdentityBySubject(ctx, storegen.GetIdentityBySubjectParams{
 		SsoConnectionID: &connID, Subject: subject,
 	}); err == nil {
-		if err := s.ensureMembership(ctx, orgRow.ID, id.UserID); err != nil {
-			return uuid.Nil, err
+		if !s.isActiveMember(ctx, orgRow.ID, id.UserID) {
+			return uuid.Nil, errNotAMember
 		}
 		return id.UserID, nil
-	}
-
-	domainVerified := email != "" && orgRow.VerifiedDomain != nil &&
-		strings.EqualFold(emailDomain(email), strings.TrimSpace(*orgRow.VerifiedDomain))
-
-	// 2. No identity: look for an existing account by email.
-	if email != "" {
-		if u, err := q.GetUserByEmail(ctx, email); err == nil {
-			// Auto-link only when the email domain is org-verified (T-12).
-			if !domainVerified {
-				return uuid.Nil, errExplicitLinkRequired
-			}
-			if err := s.linkIdentity(ctx, u.ID, providerKind, connID, subject); err != nil {
-				return uuid.Nil, err
-			}
-			if err := s.ensureMembership(ctx, orgRow.ID, u.ID); err != nil {
-				return uuid.Nil, err
-			}
-			return u.ID, nil
-		} else if !errors.Is(err, pgx.ErrNoRows) {
-			return uuid.Nil, err
-		}
-	}
-
-	// 3. No existing account: JIT-create one bound to the IdP subject. A new
-	// account is not a takeover, so this is allowed regardless of domain; the
-	// email is marked verified only when the domain is org-verified.
-	newUserID := newUUID()
-	handle, herr := s.allocateHandle(ctx, email, subject)
-	if herr != nil {
-		return uuid.Nil, herr
-	}
-	dn := displayName
-	if strings.TrimSpace(dn) == "" {
-		dn = handle
-	}
-	err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
-		if err := q.CreateHandle(ctx, storegen.CreateHandleParams{ID: newUserID, Handle: handle, Kind: "user"}); err != nil {
-			return err
-		}
-		userEmail := email
-		if userEmail == "" {
-			userEmail = handle + "@sso.local" // no email asserted; synthetic, unverified
-		}
-		if _, err := q.CreateUser(ctx, storegen.CreateUserParams{
-			ID: newUserID, Email: userEmail, DisplayName: dn, PasswordHash: nil,
-		}); err != nil {
-			return err
-		}
-		if domainVerified {
-			if err := q.MarkEmailVerified(ctx, newUserID); err != nil {
-				return err
-			}
-		}
-		if _, err := q.CreateIdentity(ctx, storegen.CreateIdentityParams{
-			ID: newUUID(), UserID: newUserID, ProviderKind: providerKind,
-			SsoConnectionID: &connID, Subject: subject,
-		}); err != nil {
-			return err
-		}
-		if err := q.UpsertMembership(ctx, storegen.UpsertMembershipParams{
-			OrgID: orgRow.ID, UserID: newUserID, Role: string(auth.RoleMember), ViaScim: false,
-		}); err != nil {
-			return err
-		}
-		e := audit.Event{Action: audit.ActionSSOLogin, ActorKind: audit.ActorUser, Actor: newUserID, OrgID: orgRow.ID}
-		e.TargetKind, e.TargetID = "user", newUserID
-		e.Detail = map[string]any{"jit": true, "provider": providerKind}
-		return s.auditW.Write(ctx, q, e)
-	})
-	if err != nil {
+	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return uuid.Nil, err
 	}
-	// Every door that creates an account fires user.registered (see the
-	// social JIT path); an org's SSO is one of them.
-	s.fireEvent(ctx, Event{Kind: "user.registered", UserID: newUserID, OrgID: orgRow.ID, Payload: map[string]any{
-		"handle": handle, "email": email, "emailVerified": domainVerified && email != "",
-		"via": "sso", "provider": providerKind,
-	}})
-	return newUserID, nil
+
+	// 2. No identity yet: only an account that is already an active member
+	// may be recognised, and only when the IdP asserted the address it
+	// holds — the address is what ties the assertion to the member.
+	if email == "" {
+		return uuid.Nil, errNotAMember
+	}
+	u, err := q.GetUserByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, errNotAMember
+		}
+		return uuid.Nil, err
+	}
+	if !s.isActiveMember(ctx, orgRow.ID, u.ID) {
+		return uuid.Nil, errNotAMember
+	}
+	if err := s.linkIdentity(ctx, u.ID, providerKind, connID, subject); err != nil {
+		return uuid.Nil, err
+	}
+	return u.ID, nil
+}
+
+// isActiveMember reports whether the user is an active member of the org.
+// A pending member — provisioned by SCIM, or folded in from the domain —
+// is not: they are waiting for an admin, and signing them in would be the
+// organization admitting them without deciding to.
+func (s *Server) isActiveMember(ctx context.Context, orgID, userID uuid.UUID) bool {
+	m, err := s.q().GetMembership(ctx, storegen.GetMembershipParams{OrgID: orgID, UserID: userID})
+	return err == nil && m.State == "active"
 }
 
 func (s *Server) linkIdentity(ctx context.Context, userID uuid.UUID, providerKind string, connID uuid.UUID, subject string) error {
@@ -499,15 +474,6 @@ func (s *Server) linkIdentity(ctx context.Context, userID uuid.UUID, providerKin
 		SsoConnectionID: &connID, Subject: subject,
 	})
 	return err
-}
-
-func (s *Server) ensureMembership(ctx context.Context, orgID, userID uuid.UUID) error {
-	if _, err := s.q().GetMembership(ctx, storegen.GetMembershipParams{OrgID: orgID, UserID: userID}); err == nil {
-		return nil
-	}
-	return s.q().UpsertMembership(ctx, storegen.UpsertMembershipParams{
-		OrgID: orgID, UserID: userID, Role: string(auth.RoleMember), ViaScim: false,
-	})
 }
 
 var reHandleChars = regexp.MustCompile(`[^a-z0-9-]+`)

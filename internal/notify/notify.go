@@ -43,9 +43,11 @@ type Notifier interface {
 	// AdvisoryPublished tells an author that an advisory naming their agent
 	// is now public (§8.7).
 	AdvisoryPublished(ctx context.Context, n AdvisoryNotice) error
-	// OrgInvite tells someone they have been added to an organisation
-	// (§13.4 lists invites among the transactional mails).
-	OrgInvite(ctx context.Context, n InviteNotice) error
+	// OrgInvite offers someone a place in an organisation (§13.4 lists
+	// invites among the transactional mails). Since agentry#361 it is a
+	// real offer with a link to accept, not a notice that a membership
+	// already exists: nobody joins an organisation uninvited.
+	OrgInvite(ctx context.Context, n InviteOffer) error
 	// MCPDependencyAlert tells an author that a published version of theirs
 	// declares an MCP server version with a newly known high or critical
 	// vulnerability, and that the fix is a new version (agentry#177).
@@ -116,16 +118,24 @@ type AdvisoryNotice struct {
 	AdvisoryURL string
 }
 
-// InviteNotice announces org membership.
-type InviteNotice struct {
+// InviteOffer offers a place in an organisation. It replaced InviteNotice
+// with agentry#361: an organisation's membership is offered and accepted,
+// not granted, so the mail carries a link the person acts on and the role
+// it names is not yet in force.
+type InviteOffer struct {
 	ToEmail string
 	Org     string
-	// Role is the granted org role.
+	// OrgDisplayName is the organisation's name, for the sentence.
+	OrgDisplayName string
+	// Role is the org role the invitation offers.
 	Role string
-	// InvitedBy is the acting admin's handle.
+	// InvitedBy is the inviting admin's handle.
 	InvitedBy string
-	// URL is where the recipient goes to see the org.
-	URL string
+	// AcceptURL is where the recipient accepts it; empty when the server
+	// knows no absolute origin, in which case the admin conveys the token.
+	AcceptURL string
+	// ExpiresAt is when the invitation stops working.
+	ExpiresAt time.Time
 }
 
 // Options selects and configures the notifier.
@@ -237,7 +247,7 @@ func (n LogNotifier) MCPDependencyAlert(_ context.Context, notice MCPDependencyA
 }
 
 // OrgInvite implements Notifier.
-func (n LogNotifier) OrgInvite(_ context.Context, notice InviteNotice) error {
+func (n LogNotifier) OrgInvite(_ context.Context, notice InviteOffer) error {
 	n.logger().Info("notify: org invite",
 		"to", logx.MaskEmail(notice.ToEmail), "org", notice.Org, "role", notice.Role)
 	return nil
@@ -474,27 +484,33 @@ func (r renderer) mcpAlert(n MCPDependencyAlertNotice) message {
 	}
 }
 
-func (r renderer) invite(n InviteNotice) message {
-	body := "You were added to the " + n.Org + " organization on " + r.registry + "."
+func (r renderer) invite(n InviteOffer) message {
+	who := n.Org
+	if n.OrgDisplayName != "" && n.OrgDisplayName != n.Org {
+		who = n.OrgDisplayName + " (" + n.Org + ")"
+	}
+	body := "You have been invited to join the " + who + " organization on " + r.registry + "."
 	if n.InvitedBy != "" {
-		body += "\nAdded by: " + n.InvitedBy
+		body += "\nInvited by: " + n.InvitedBy
 	}
 	if n.Role != "" {
 		body += "\nRole: " + n.Role
 	}
 	body += "\n"
-	if u := firstNonEmpty(n.URL, r.link("/orgs/"+n.Org)); u != "" {
-		body += "\n" + u + "\n"
+	if n.AcceptURL != "" {
+		body += "\nAccept it here:\n" + n.AcceptURL + "\n"
 	}
-	// There is no invite object in v1: the membership is committed before
-	// this mail is sent, so the role above is already in force. Saying so is
-	// the consequence the notice owes the reader; the mechanism it turns on
-	// is why there is nothing to accept.
-	body += "\nThe role above is already in force: org membership is granted by an\n" +
-		"admin, not offered and accepted. If you did not expect it, tell the\n" +
-		"organization's owners.\n"
+	if !n.ExpiresAt.IsZero() {
+		body += "\nThe invitation expires " + n.ExpiresAt.UTC().Format("2 January 2006") + ".\n"
+	}
+	// Nothing is in force until the person accepts, and accepting is bound
+	// to this address: saying both is what tells a reader who did not
+	// expect this that ignoring it is enough.
+	body += "\nNothing changes until you accept, and only an account signed in with\n" +
+		"this address can. If you did not expect this invitation, ignore it and\n" +
+		"it will expire.\n"
 	return message{
-		Subject: r.registry + ": you were added to the " + n.Org + " organization",
+		Subject: r.registry + ": you are invited to the " + n.Org + " organization",
 		Body:    body + r.footer(),
 	}
 }

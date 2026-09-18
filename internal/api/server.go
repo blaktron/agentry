@@ -154,6 +154,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 			DeliveriesPerSecond: float64(cfg.Limits.WebhookDeliveriesPerSecond),
 		})
 		srv.reg.SetEventSink(srv.emitAgentEvent)
+		srv.reg.SetOrgEventSink(srv.emitOrgEvent)
 		srv.reg.SetEntitlements(srv.ents)
 		// Archive storage. Both kinds are wired here, so the pipeline below is
 		// assembled identically either way — the s3 kind used to fall through

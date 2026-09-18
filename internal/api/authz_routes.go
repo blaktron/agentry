@@ -193,9 +193,20 @@ var routeAuthz = map[string]RouteDecl{
 	"removeTeamMember":            {Action: auth.ActOrgTeamsManage, OrgScoped: true},
 	"revokeToken":                 {Action: auth.ActUserTokensManage, SessionOnly: true},
 	"setOrgMember":                {Action: auth.ActOrgMembersManage, OrgScoped: true}, // elevates to ActOrgMembersElevate for the admin role
-	"totpSetup":                   {Action: auth.ActUserSecurityManage, SessionOnly: true},
-	"totpVerify":                  {Action: auth.ActUserSecurityManage, SessionOnly: true},
-	"updateCurrentUser":           {Action: auth.ActUserSelfUpdate},
-	"updateOrg":                   {Action: auth.ActOrgUpdate, OrgScoped: true},
-	"verifyEmail":                 {NoAuthz: true, Anonymous: true},
+	"approveOrgMember":            {Action: auth.ActOrgMembersManage, OrgScoped: true}, // elevates when the approval grants admin
+	"declineOrgMember":            {Action: auth.ActOrgMembersManage, OrgScoped: true},
+	"listInvitations":             {Action: auth.ActOrgInvitationsManage, OrgScoped: true},
+	"createInvitation":            {Action: auth.ActOrgInvitationsManage, OrgScoped: true},
+	"revokeInvitation":            {Action: auth.ActOrgInvitationsManage, OrgScoped: true},
+	// The two sides of an invitation the invited person holds: the token is
+	// the authorization, and who may use it — the session whose verified
+	// address is the invited one — is a per-invitation judgement the
+	// handler makes with the row in hand, like the review surface's.
+	"getInvitation":     {SelfAuthorized: true},
+	"acceptInvitation":  {SelfAuthorized: true},
+	"totpSetup":         {Action: auth.ActUserSecurityManage, SessionOnly: true},
+	"totpVerify":        {Action: auth.ActUserSecurityManage, SessionOnly: true},
+	"updateCurrentUser": {Action: auth.ActUserSelfUpdate},
+	"updateOrg":         {Action: auth.ActOrgUpdate, OrgScoped: true},
+	"verifyEmail":       {NoAuthz: true, Anonymous: true},
 }
