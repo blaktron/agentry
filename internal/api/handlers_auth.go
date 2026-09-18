@@ -38,6 +38,14 @@ func isUniqueViolation(err error) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
+// uniqueViolationOn reports whether err is a unique violation of the named
+// constraint or index, for a handler whose insert can collide on more than
+// one.
+func uniqueViolationOn(err error, constraint string) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == constraint
+}
+
 // auditEvent builds the base event for this request's principal.
 func auditEvent(r *http.Request, action audit.Action) audit.Event {
 	p := principalFrom(r.Context())

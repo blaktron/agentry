@@ -522,18 +522,20 @@ func (q *Queries) GetIdentityBySubject(ctx context.Context, arg GetIdentityBySub
 }
 
 const getOrgByVerifiedDomain = `-- name: GetOrgByVerifiedDomain :one
-SELECT o.id, o.display_name, o.sso_required, o.verified_domain, o.state, o.created_at, o.updated_at, h.handle FROM orgs o JOIN handles h ON h.id = o.id WHERE o.verified_domain = $1
+SELECT o.id, o.display_name, o.sso_required, o.verified_domain, o.state, o.created_at, o.updated_at, o.created_by, o.activated_at, h.handle FROM orgs o JOIN handles h ON h.id = o.id WHERE o.verified_domain = $1
 `
 
 type GetOrgByVerifiedDomainRow struct {
-	ID             uuid.UUID `json:"id"`
-	DisplayName    string    `json:"display_name"`
-	SsoRequired    bool      `json:"sso_required"`
-	VerifiedDomain *string   `json:"verified_domain"`
-	State          string    `json:"state"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
-	Handle         string    `json:"handle"`
+	ID             uuid.UUID  `json:"id"`
+	DisplayName    string     `json:"display_name"`
+	SsoRequired    bool       `json:"sso_required"`
+	VerifiedDomain *string    `json:"verified_domain"`
+	State          string     `json:"state"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	CreatedBy      *uuid.UUID `json:"created_by"`
+	ActivatedAt    *time.Time `json:"activated_at"`
+	Handle         string     `json:"handle"`
 }
 
 func (q *Queries) GetOrgByVerifiedDomain(ctx context.Context, verifiedDomain *string) (GetOrgByVerifiedDomainRow, error) {
@@ -547,6 +549,8 @@ func (q *Queries) GetOrgByVerifiedDomain(ctx context.Context, verifiedDomain *st
 		&i.State,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CreatedBy,
+		&i.ActivatedAt,
 		&i.Handle,
 	)
 	return i, err

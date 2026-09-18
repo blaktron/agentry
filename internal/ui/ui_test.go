@@ -576,7 +576,7 @@ func TestOrgAdminPage(t *testing.T) {
 		case "GET /api/v1/orgs/acme":
 			_, _ = io.WriteString(w, `{"handle":"acme","displayName":"Acme Corp","ssoRequired":false}`)
 		case "GET /api/v1/orgs/acme/members":
-			_, _ = io.WriteString(w, `[{"user":{"handle":"chris"},"role":"owner"},{"user":{"handle":"pat"},"role":"member"}]`)
+			_, _ = io.WriteString(w, `[{"user":{"handle":"chris"},"role":"admin"},{"user":{"handle":"pat"},"role":"member"}]`)
 		case "GET /api/v1/orgs/acme/teams":
 			_, _ = io.WriteString(w, `[{"id":"t1","slug":"platform"}]`)
 		case "GET /api/v1/orgs/acme/teams/platform/members":

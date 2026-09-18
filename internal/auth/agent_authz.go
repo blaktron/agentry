@@ -51,9 +51,12 @@ func ValidAgentRole(r AgentRole) bool {
 // NamespaceDerivedAgentRole computes the implicit role a caller holds on an
 // agent from its namespace, before explicit grants (§12.2):
 //   - personal namespace: the owning user has full rights (publish);
-//   - org namespace: org owner ⇒ publish (bootstrap + accountability),
-//     org admin ⇒ maintain (can manage settings/grants but NOT release —
-//     enterprises separate "can edit" from "can release", §6.4);
+//   - org namespace: org admin ⇒ publish. The owner held this and the
+//     admin held maintain (§6.4 separated "can edit" from "can release");
+//     with the owner role retired (agentry#360) the admins are the
+//     organization's accountable people and must be able to release, or
+//     an organization could hold agents nobody may publish. Members
+//     follow in M3 (agentry#362);
 //   - everyone else: none (explicit grants only).
 func NamespaceDerivedAgentRole(p *Principal, namespaceKind string, namespaceID uuid.UUID, orgRole OrgRole) AgentRole {
 	if p == nil || p.Anonymous {
@@ -65,14 +68,10 @@ func NamespaceDerivedAgentRole(p *Principal, namespaceKind string, namespaceID u
 		}
 		return AgentRoleNone
 	}
-	switch orgRole {
-	case RoleOwner:
+	if orgRole == RoleAdmin {
 		return AgentRolePublish
-	case RoleAdmin:
-		return AgentRoleMaintain
-	default:
-		return AgentRoleNone
 	}
+	return AgentRoleNone
 }
 
 // Agent-scoped actions (M2+). Declared like every other action. Transport

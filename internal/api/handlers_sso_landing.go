@@ -65,13 +65,13 @@ func (s *Server) ssoLanding(w http.ResponseWriter, r *http.Request) {
 		sp, _, err := s.samlSPForOrg(r, orgRow)
 		if err != nil {
 			s.log.WarnContext(r.Context(), "sso landing: saml sp", "org", org, "err", err)
-			problemValidation(w, r, "This organization's SAML connection is not usable. Ask an owner to check it.")
+			problemValidation(w, r, "This organization's SAML connection is not usable. Ask an admin to check it.")
 			return
 		}
 		redirect, err := sp.AuthnRequest(orgRow.Handle)
 		if err != nil {
 			s.log.WarnContext(r.Context(), "sso landing: authn request", "org", org, "err", err)
-			problemValidation(w, r, "The registry could not start SAML login for this organization. Ask an owner to check the connection.")
+			problemValidation(w, r, "The registry could not start SAML login for this organization. Ask an admin to check the connection.")
 			return
 		}
 		http.Redirect(w, r, redirect, http.StatusFound)

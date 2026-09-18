@@ -5,6 +5,7 @@ package api_test
 // requests. This is the tenant-isolation control (D-24, T-11).
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"fmt"
@@ -52,7 +53,12 @@ func TestRouteDeclarationsComplete(t *testing.T) {
 }
 
 // matrixSeed builds one org with every role plus an outsider, sessions for
-// all, and PATs for the owner (right-scope and wrong-scope).
+// all, and PATs for the admin (right-scope and wrong-scope). The admin is
+// the org's creator (agentry#360: there is no owner). The security
+// reviewer row is seeded in the database, not through the API: the role
+// exists only inside a first-party organization and the API refuses to
+// assign it here, but a row can exist (the `agentry` org) and every route
+// must rank it as a member.
 type matrixSeed struct {
 	env      *testEnv
 	orgH     string
@@ -65,7 +71,7 @@ type matrixSeed struct {
 
 func seedMatrix(t *testing.T, env *testEnv) *matrixSeed {
 	t.Helper()
-	roles := []string{"owner", "admin", "security_reviewer", "member", "outsider"}
+	roles := []string{"admin", "security_reviewer", "member", "outsider"}
 	sessions := map[string]caller{}
 	for _, role := range roles {
 		h := env.register("mx-" + role[:3])
@@ -73,26 +79,32 @@ func seedMatrix(t *testing.T, env *testEnv) *matrixSeed {
 		sessions[role] = env.login(h)
 	}
 	orgH := "mxorg" + env.sfx
-	env.doJSON(sessions["owner"], http.MethodPost, "/api/v1/orgs",
-		map[string]any{"handle": orgH, "displayName": "Matrix Org"}, nil, http.StatusCreated)
-	for _, role := range []string{"admin", "security_reviewer", "member"} {
-		env.doJSON(sessions["owner"], http.MethodPut,
-			"/api/v1/orgs/"+orgH+"/members/"+sessions[role].name,
-			map[string]any{"role": role}, nil, http.StatusOK)
+	var org struct {
+		Id uuid.UUID `json:"id"`
+	}
+	env.doJSON(sessions["admin"], http.MethodPost, "/api/v1/orgs",
+		map[string]any{"handle": orgH, "displayName": "Matrix Org"}, &org, http.StatusCreated)
+	env.doJSON(sessions["admin"], http.MethodPut,
+		"/api/v1/orgs/"+orgH+"/members/"+sessions["member"].name,
+		map[string]any{"role": "member"}, nil, http.StatusOK)
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`INSERT INTO memberships (org_id, user_id, role)
+		 SELECT $1, id, 'security_reviewer' FROM handles WHERE handle = $2`, org.Id, sessions["security_reviewer"].name); err != nil {
+		t.Fatalf("seed security_reviewer: %v", err)
 	}
 	// A pawn member for non-destructive member-set targets.
 	pawnH := env.register("mx-pawn")
-	env.doJSON(sessions["owner"], http.MethodPut,
+	env.doJSON(sessions["admin"], http.MethodPut,
 		"/api/v1/orgs/"+orgH+"/members/"+pawnH,
 		map[string]any{"role": "member"}, nil, http.StatusOK)
 	// A standing team for read routes.
-	env.doJSON(sessions["owner"], http.MethodPost, "/api/v1/orgs/"+orgH+"/teams",
+	env.doJSON(sessions["admin"], http.MethodPost, "/api/v1/orgs/"+orgH+"/teams",
 		map[string]any{"slug": "mx-team"}, nil, http.StatusCreated)
-	env.doJSON(sessions["owner"], http.MethodPut,
+	env.doJSON(sessions["admin"], http.MethodPut,
 		"/api/v1/orgs/"+orgH+"/teams/mx-team/members/"+pawnH, nil, nil, http.StatusNoContent)
 
 	// A public agent in the org for agent-scoped routes.
-	env.doJSON(sessions["owner"], http.MethodPost, "/api/v1/agents", map[string]any{
+	env.doJSON(sessions["admin"], http.MethodPost, "/api/v1/agents", map[string]any{
 		"namespace": orgH, "name": "mx-agent", "modes": []string{"autonomous"}, "visibility": "public",
 	}, nil, http.StatusCreated)
 
@@ -101,7 +113,7 @@ func seedMatrix(t *testing.T, env *testEnv) *matrixSeed {
 	// it, so the matrix (whose case order is map-random) cannot destroy the
 	// fixture for later cases. The real delete path is covered by
 	// TestDeleteAgent* in the M-10 handler tests.
-	env.doJSON(sessions["owner"], http.MethodPost, "/api/v1/agents", map[string]any{
+	env.doJSON(sessions["admin"], http.MethodPost, "/api/v1/agents", map[string]any{
 		"namespace": orgH, "name": "mx-undeletable", "modes": []string{"autonomous"}, "visibility": "public",
 	}, nil, http.StatusCreated)
 	env.doJSON(sessions["member"], http.MethodPost,
@@ -109,19 +121,12 @@ func seedMatrix(t *testing.T, env *testEnv) *matrixSeed {
 		map[string]any{"category": "spam", "detail": "matrix fixture: keeps this agent undeletable"},
 		nil, http.StatusAccepted)
 
-	_, patAll := env.mintPAT(sessions["owner"], "matrix-ok",
+	_, patAll := env.mintPAT(sessions["admin"], "matrix-ok",
 		"org:admin", "audit:read", "user:profile", "agent:read")
-	_, patNone := env.mintPAT(sessions["owner"], "matrix-wrong", "repo:read")
-
-	var orgID uuid.UUID
-	var out struct {
-		Id uuid.UUID `json:"id"`
-	}
-	env.doJSON(anonymous, http.MethodGet, "/api/v1/orgs/"+orgH, nil, &out, http.StatusOK)
-	orgID = out.Id
+	_, patNone := env.mintPAT(sessions["admin"], "matrix-wrong", "repo:read")
 
 	return &matrixSeed{
-		env: env, orgH: orgH, pawnH: pawnH, sessions: sessions, orgID: orgID,
+		env: env, orgH: orgH, pawnH: pawnH, sessions: sessions, orgID: org.Id,
 		patOK: func(string) caller {
 			return caller{name: "pat-ok", pat: patAll}
 		},
@@ -245,7 +250,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 		"removeOrgMember": {
 			method: "DELETE",
 			path: func(s *matrixSeed, caseID string) string {
-				// Disposable member per case: seeded by owner in prep.
+				// Disposable member per case: seeded by the admin in prep.
 				return "/api/v1/orgs/" + s.orgH + "/members/" + caseID
 			},
 			prep: func(s *matrixSeed, caseID string) string {
@@ -253,7 +258,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 				s.env.doJSON(anonymous, http.MethodPost, "/api/v1/auth/register", map[string]any{
 					"handle": caseID, "email": caseID + "@example.test", "password": "hunter2hunter2",
 				}, nil, http.StatusCreated)
-				s.env.doJSON(s.sessions["owner"], http.MethodPut,
+				s.env.doJSON(s.sessions["admin"], http.MethodPut,
 					"/api/v1/orgs/"+s.orgH+"/members/"+caseID,
 					map[string]any{"role": "member"}, nil, http.StatusOK)
 				return ""
@@ -270,7 +275,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 				return "/api/v1/orgs/" + s.orgH + "/teams/" + caseID
 			},
 			prep: func(s *matrixSeed, caseID string) string {
-				s.env.doJSON(s.sessions["owner"], http.MethodPost, "/api/v1/orgs/"+s.orgH+"/teams",
+				s.env.doJSON(s.sessions["admin"], http.MethodPost, "/api/v1/orgs/"+s.orgH+"/teams",
 					map[string]any{"slug": caseID}, nil, http.StatusCreated)
 				return ""
 			},
@@ -289,7 +294,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			},
 			prep: func(s *matrixSeed, _ string) string {
 				// (Re-)add so removal always has a target.
-				s.env.doJSON(s.sessions["owner"], http.MethodPut,
+				s.env.doJSON(s.sessions["admin"], http.MethodPut,
 					"/api/v1/orgs/"+s.orgH+"/teams/mx-team/members/"+s.pawnH, nil, nil, http.StatusNoContent)
 				return ""
 			},
@@ -319,7 +324,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 		// the matrix only checks that anonymous and PAT callers are refused.
 		"deleteCurrentUser": {
 			method: "POST", path: sPath("/api/v1/user/delete"),
-			skipCallers: map[string]bool{"owner": true, "admin": true, "security_reviewer": true, "member": true, "outsider": true},
+			skipCallers: map[string]bool{"admin": true, "security_reviewer": true, "member": true, "outsider": true},
 		},
 		"getAgentReadme":        {method: "GET", path: agentPath("/readme")},
 		"getVersionReport":      {method: "GET", path: agentPath("/versions/9.9.9/report")},
@@ -377,7 +382,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 				return "/api/v1/agents/" + s.orgH + "/mx-agent/grants/user/" + s.pawnH
 			},
 			prep: func(s *matrixSeed, _ string) string {
-				s.env.doJSON(s.sessions["owner"], http.MethodPut,
+				s.env.doJSON(s.sessions["admin"], http.MethodPut,
 					"/api/v1/agents/"+s.orgH+"/mx-agent/grants/user/"+s.pawnH,
 					map[string]any{"role": "read"}, nil, http.StatusNoContent)
 				return ""
@@ -396,13 +401,13 @@ func requestFactories(env *testEnv) map[string]opRequest {
 				return "/api/v1/agents/" + s.orgH + "/mx-agent/grants/team/mx-team"
 			},
 			prep: func(s *matrixSeed, _ string) string {
-				s.env.doJSON(s.sessions["owner"], http.MethodPut,
+				s.env.doJSON(s.sessions["admin"], http.MethodPut,
 					"/api/v1/agents/"+s.orgH+"/mx-agent/grants/team/mx-team",
 					map[string]any{"role": "read"}, nil, http.StatusNoContent)
 				return ""
 			},
 		},
-		"logout":    {method: "POST", path: sPath("/api/v1/auth/logout"), skipCallers: map[string]bool{"owner": true, "admin": true, "security_reviewer": true, "member": true, "outsider": true}},
+		"logout":    {method: "POST", path: sPath("/api/v1/auth/logout"), skipCallers: map[string]bool{"admin": true, "security_reviewer": true, "member": true, "outsider": true}},
 		"totpSetup": {method: "POST", path: sPath("/api/v1/auth/2fa/totp/setup")},
 		"totpVerify": {
 			method: "POST", path: sPath("/api/v1/auth/2fa/totp/verify"),
@@ -515,7 +520,7 @@ func TestAuthzMatrix(t *testing.T) {
 	factories := requestFactories(env)
 
 	roleFor := map[string]auth.OrgRole{
-		"owner": auth.RoleOwner, "admin": auth.RoleAdmin,
+		"admin":             auth.RoleAdmin,
 		"security_reviewer": auth.RoleSecurityReviewer,
 		"member":            auth.RoleMember, "outsider": auth.RoleNone,
 	}
@@ -549,11 +554,11 @@ func TestAuthzMatrix(t *testing.T) {
 			}
 			cases = append(cases, mcase{sess, p})
 		}
-		// PAT callers (owner role, right scope vs wrong scope).
+		// PAT callers (admin role, right scope vs wrong scope).
 		patP := func(scopes ...string) *auth.Principal {
 			return &auth.Principal{
 				UserID: uuid.New(), Via: "pat", Scopes: scopes,
-				OrgRoles: map[uuid.UUID]auth.OrgRole{seed.orgID: auth.RoleOwner},
+				OrgRoles: map[uuid.UUID]auth.OrgRole{seed.orgID: auth.RoleAdmin},
 			}
 		}
 		cases = append(cases,

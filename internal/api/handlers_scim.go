@@ -218,7 +218,7 @@ func (s *Server) scimProvisionUser(ctx context.Context, orgID uuid.UUID, email, 
 		if _, err := q.CreateUser(ctx, storegen.CreateUserParams{ID: userID, Email: email, DisplayName: dn, PasswordHash: nil}); err != nil {
 			return err
 		}
-		// IdP-provisioned via a token the org owner minted: treat as verified.
+		// IdP-provisioned via a token an org admin minted: treat as verified.
 		if err := q.MarkEmailVerified(ctx, userID); err != nil {
 			return err
 		}
@@ -293,6 +293,9 @@ func (s *Server) scimPatchUser(w http.ResponseWriter, r *http.Request, sc scimCt
 	setActive, active := patchActiveValue(patch)
 	if setActive && !active {
 		if err := s.scimDeactivate(r.Context(), sc.orgID, id); err != nil {
+			if scimLastAdmin(w, err) {
+				return
+			}
 			s.log.ErrorContext(r.Context(), "scim deactivate", "err", err)
 			scimError(w, http.StatusInternalServerError, "deactivate failed")
 			return
@@ -331,6 +334,9 @@ func (s *Server) scimPutUser(w http.ResponseWriter, r *http.Request, sc scimCtx)
 	// and DELETE — drop the membership, revoke org-bound PATs, kill sessions.
 	if !in.Active {
 		if err := s.scimDeactivate(r.Context(), sc.orgID, id); err != nil {
+			if scimLastAdmin(w, err) {
+				return
+			}
 			s.log.ErrorContext(r.Context(), "scim put deactivate", "err", err)
 			scimError(w, http.StatusInternalServerError, "deactivate failed")
 			return
@@ -387,18 +393,37 @@ func (s *Server) scimDeleteUser(w http.ResponseWriter, r *http.Request, sc scimC
 		return
 	}
 	if err := s.scimDeactivate(r.Context(), sc.orgID, id); err != nil {
+		if scimLastAdmin(w, err) {
+			return
+		}
 		scimError(w, http.StatusInternalServerError, "deactivate failed")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// scimLastAdmin answers a deactivation refused for being the last admin's,
+// and reports whether it did.
+func scimLastAdmin(w http.ResponseWriter, err error) bool {
+	if !errors.Is(err, errLastAdmin) {
+		return false
+	}
+	scimError(w, http.StatusConflict, "this user is the organization's last admin; make another member an admin before deactivating them")
+	return true
+}
+
 // scimDeactivate is the §12.5 deactivation: drop the membership, revoke the
 // user's org-bound PATs, and kill the user's sessions — all in one request so
 // access is revoked well within the 60s acceptance bound. SCIM never
-// hard-deletes the global user (they may exist outside the org).
+// hard-deletes the global user (they may exist outside the org). The
+// organization's last admin is the one person it cannot deprovision
+// (agentry#360, D14): the IdP is answered errLastAdmin and the org keeps
+// someone who can act until another admin is made.
 func (s *Server) scimDeactivate(ctx context.Context, orgID, userID uuid.UUID) error {
 	return s.st.WithTx(ctx, func(q *storegen.Queries) error {
+		if err := guardLastAdmin(ctx, q, orgID, userID); err != nil {
+			return err
+		}
 		if _, err := q.DeleteMembership(ctx, storegen.DeleteMembershipParams{OrgID: orgID, UserID: userID}); err != nil {
 			return err
 		}

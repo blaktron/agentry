@@ -704,7 +704,7 @@ Only the `authentik` provider's claim counts — a Google or GitHub token
 carrying the same group name is ignored.
 
 **Provisioning org members from Authentik (SCIM).** The registry's SCIM
-endpoint is per organisation and authenticated by a token the org owner
+endpoint is per organisation and authenticated by a token an org admin
 mints (`POST /api/v1/orgs/{org}/scim/tokens`, or the org admin console).
 In Authentik create a *SCIM provider* with URL
 `https://<host>/scim/v2` and that token, attach it to the `agentry`

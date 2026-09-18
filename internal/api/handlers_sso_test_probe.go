@@ -14,7 +14,7 @@ import (
 )
 
 // TestSsoConnection implements POST /orgs/{org}/sso/connections/{kind}/test
-// (agentry#50): the "does this connection make sense" probe an owner needs
+// (agentry#50): the "does this connection make sense" probe an admin needs
 // before asking a colleague to try a real login. Read-only against the
 // IdP (OIDC discovery only; SAML parses stored metadata) and never uses
 // the client secret. A failing probe is ok=false with the reason, 200.

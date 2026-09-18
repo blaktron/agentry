@@ -21,7 +21,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/blaktron/agentry/internal/api"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/config"
@@ -318,6 +320,21 @@ func (w auditWriter) WriteIn(ctx context.Context, tx pgx.Tx, e audit.Event) erro
 	return w.writeIn(ctx, tx, e)
 }
 
+// orgsOf adapts the server's organization acts to Orgs: nil without a
+// database, the way Deps.DB is.
+func orgsOf(srv *api.Server, pool *pgxpool.Pool) Orgs {
+	if pool == nil {
+		return nil
+	}
+	return serverOrgs{srv}
+}
+
+type serverOrgs struct{ srv *api.Server }
+
+func (o serverOrgs) Activate(ctx context.Context, orgID uuid.UUID) (bool, error) {
+	return o.srv.ActivateOrg(ctx, orgID)
+}
+
 // periodicTicker enqueues a job once now and then on its period. Every
 // replica running this enqueues on its own clock; the queue's claim runs
 // each row once, so the handler must tolerate a run that finds nothing to
@@ -538,7 +555,7 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 		if b, ok := e.(Binds); ok {
 			pool, log, write, writeIn := srv.ExtensionDeps()
 			b.Bind(Deps{DB: pool, Log: log.With("extension", e.Name()), Audit: auditWriter{write: write, writeIn: writeIn},
-				Entitlements: srv.CoreEntitlements(), Blobs: srv.Blobs()})
+				Entitlements: srv.CoreEntitlements(), Blobs: srv.Blobs(), Orgs: orgsOf(srv, pool)})
 		}
 		srv.RegisterExtension(e.Name(), e.Routes)
 		if u, ok := e.(Unthrottles); ok {

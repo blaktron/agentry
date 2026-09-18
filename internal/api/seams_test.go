@@ -255,9 +255,9 @@ type cappedResolver struct {
 
 func (c cappedResolver) Features(_ context.Context, s entitlements.Subject) (entitlements.Features, error) {
 	if s.Kind == entitlements.NamespaceOrg {
-		return entitlements.Features{PrivateAgents: entitlements.Allowance{Enabled: true}}, nil
+		return entitlements.Features{PrivateAgents: entitlements.Cap{Enabled: true}}, nil
 	}
-	return entitlements.Features{PrivateAgents: entitlements.Allowance{Enabled: true, Max: c.max}}, nil
+	return entitlements.Features{PrivateAgents: entitlements.Cap{Enabled: true, Max: c.max}}, nil
 }
 
 // TestPrivateAgentCapNeverDeletes: at the cap, one more private agent is a

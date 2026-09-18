@@ -7,13 +7,18 @@ import (
 	"github.com/google/uuid"
 )
 
-// OrgRole is an organization role, ordered owner > admin >
-// security_reviewer | member (§12.2). The empty string means "not a member".
+// OrgRole is an organization role, ordered admin > security_reviewer |
+// member (§12.2 as amended by agentry#360: the owner role is retired and
+// every owner became an admin; there is no role above admin, and the last
+// admin can only leave through a decommission). security_reviewer is a
+// platform-internal role that exists only inside a first-party
+// organization (plan organization-subscriptions D20); in every other
+// organization the admins hold its powers. The empty string means "not a
+// member".
 type OrgRole string
 
 // Org roles (§12.2).
 const (
-	RoleOwner            OrgRole = "owner"
 	RoleAdmin            OrgRole = "admin"
 	RoleSecurityReviewer OrgRole = "security_reviewer"
 	RoleMember           OrgRole = "member"
@@ -22,10 +27,9 @@ const (
 
 // roleRank orders roles for threshold checks. security_reviewer and member
 // are siblings (§12.2); reviewer-only powers use explicit checks, not rank.
+// Any other value — the retired owner, a typo — ranks as nobody.
 func roleRank(r OrgRole) int {
 	switch r {
-	case RoleOwner:
-		return 4
 	case RoleAdmin:
 		return 3
 	case RoleSecurityReviewer, RoleMember:
@@ -46,12 +50,12 @@ const (
 	ActOrgRead           Action = "org.read"            // public profile: anonymous ok
 	ActOrgUpdate         Action = "org.update"          // admin+
 	ActOrgMembersRead    Action = "org.members.read"    // member+ (any role)
-	ActOrgMembersManage  Action = "org.members.manage"  // admin+: member/security_reviewer roles
-	ActOrgMembersElevate Action = "org.members.elevate" // owner: grant/revoke owner or admin
+	ActOrgMembersManage  Action = "org.members.manage"  // admin: member/security_reviewer roles
+	ActOrgMembersElevate Action = "org.members.elevate" // admin: grant/revoke admin (once owner-only)
 	ActOrgTeamsRead      Action = "org.teams.read"      // member+
 	ActOrgTeamsManage    Action = "org.teams.manage"    // admin+
 	ActOrgAuditRead      Action = "org.audit.read"      // admin+ (§12.2)
-	ActOrgSettingsManage Action = "org.settings.manage" // owner (SSO/SCIM, M6)
+	ActOrgSettingsManage Action = "org.settings.manage" // admin (SSO/SCIM, policy; once owner-only)
 	// Self-scoped (resource is the caller's own account).
 	ActUserSelfRead       Action = "user.self.read"
 	ActUserSelfUpdate     Action = "user.self.update"
@@ -165,11 +169,11 @@ var minRole = map[Action]OrgRole{
 	ActOrgUpdate:         RoleAdmin,
 	ActOrgMembersRead:    RoleMember,
 	ActOrgMembersManage:  RoleAdmin,
-	ActOrgMembersElevate: RoleOwner,
+	ActOrgMembersElevate: RoleAdmin,
 	ActOrgTeamsRead:      RoleMember,
 	ActOrgTeamsManage:    RoleAdmin,
 	ActOrgAuditRead:      RoleAdmin,
-	ActOrgSettingsManage: RoleOwner,
+	ActOrgSettingsManage: RoleAdmin,
 }
 
 // Check is the single authorization chokepoint (§12.2): every handler calls

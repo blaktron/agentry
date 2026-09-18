@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -55,18 +56,23 @@ type Extension interface {
 	Jobs() []Job
 }
 
-// Resolver, Subject, Limits, Features, Allowance and Feature are the
-// core's entitlements types. A resolver an extension supplies usually wraps
-// the core's (entitlements.NewConfigResolver) and answers Features by tier.
+// Resolver, Subject, Limits, Features and Cap are the core's entitlements
+// types. A resolver an extension supplies usually wraps the core's
+// (entitlements.NewConfigResolver) and answers Features by tier.
 type (
 	Resolver      = entitlements.Resolver
 	Subject       = entitlements.Subject
 	NamespaceKind = entitlements.NamespaceKind
 	Limits        = entitlements.Limits
 	Features      = entitlements.Features
-	Allowance     = entitlements.Allowance
-	Feature       = entitlements.Feature
+	Cap           = entitlements.Cap
 )
+
+// Allowance is the old name of Cap (agentry#360): kept so an extension
+// built against it still compiles until it adopts Cap.
+//
+// Deprecated: use Cap; removed once agentry-enterprise#29 lands.
+type Allowance = entitlements.Cap
 
 // The two namespace kinds a Subject carries.
 const (
@@ -185,6 +191,20 @@ type Deps struct {
 	// the deployment's configured limits — for an extension's own resolver
 	// to embed and answer Features over (agentry#326).
 	Entitlements Resolver
+	// Orgs is the core's organization store as an extension may act on it
+	// (agentry#360). nil when the server runs without a database.
+	Orgs Orgs
+}
+
+// Orgs holds the acts on an organization the core owns and an extension
+// triggers. Where an admission extension runs, an organization is created
+// awaiting activation and its creator may not create another until it is
+// activated; the extension that owns the org's standing activates it when
+// the subscription starts (plan organization-subscriptions §4, D5).
+type Orgs interface {
+	// Activate marks the organization activated. Idempotent: it reports
+	// whether this call did it, and an unknown org is false with no error.
+	Activate(ctx context.Context, orgID uuid.UUID) (bool, error)
 }
 
 // BlobStore is the core's object store: put (write-once per key, so an

@@ -38,6 +38,29 @@ was recorded. `422 private-agent-cap` refuses one more private agent in a
 namespace at its cap, on create and on a `PATCH` that turns an agent
 private; nothing already private is touched.
 
+The organization problems (plan organization-subscriptions), each with
+its own slug so a client can offer the right next step. Answered by every
+registry: `409 last-admin` refuses the demotion or removal of an
+organization's last admin, by an admin or by the organization's IdP over
+SCIM — promote another member first; only a decommission removes the
+last one (the guard on an account's erasure follows with the lifecycle
+milestone). `403 email-unverified` refuses
+`POST /orgs` from an account whose address is not verified. `409
+org-pending` refuses `POST /orgs` while an organization the account
+created is still awaiting payment (only where an admission extension
+runs; a core registry activates an organization as it is created).
+Reserved for the milestones that build them, so a client can be written
+against the catalogue now: `403 seat-allowance` (an invitation or an
+approval past the organization's seats, with `used`, `invited`, `max`
+and `tier`), `403 feature-not-included` (a feature the organization's
+tier lacks), `409 domain-claimed` (the creator's email domain already
+belongs to an organization), `409 already-a-member` (the person is an
+active member of another organization), `402 subscription-inactive` (a
+submission or hosted run for a pending or restricted organization, with
+`account` naming whose balance it is) and `422 pipeline-skip-refused`
+(the unscanned flag on a public agent, or a private→public change while
+it is set).
+
 ## Idempotency-Key
 
 Send `Idempotency-Key: <opaque string, ≤255 chars>` on a mutating POST and a
@@ -165,7 +188,7 @@ content whenever the account has any:
   is no default; the previous behaviour defaulted to `yank` and the guard
   meant to prevent that was dead code behind it (DEV-021).
 - **`publishedContent=transfer` additionally requires `transferOrg=<org
-  handle>`**, and the caller must be an owner or admin of that org.
+  handle>`**, and the caller must be an admin of that org.
 - Published versions are **yanked or transferred, never deleted**. §4.3
   forbids deleting version rows and a database trigger enforces it: digests
   stay resolvable so existing installs can still be verified. PII is purged

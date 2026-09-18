@@ -129,6 +129,32 @@ func (s *Server) ExtensionDeps() (*pgxpool.Pool, *slog.Logger, func(context.Cont
 	return pool, s.log, write, writeIn
 }
 
+// orgsAwaitActivation reports whether an organization created now starts
+// out awaiting activation (agentry#360). It does where an admission
+// extension runs — the hosted product, where an organization is a paid
+// thing and the extension that admits submissions is the one that sells
+// it — and not on a registry that admits everything, where nothing would
+// ever activate it.
+func (s *Server) orgsAwaitActivation() bool {
+	return s.reg != nil && s.reg.HasAdmitter()
+}
+
+// ActivateOrg marks an organization activated (pkg/extension.Deps.Orgs):
+// the extension that owns its standing calls it when the subscription
+// starts, and from then on the account that created the org may create
+// another. Idempotent: an organization already activated, or unknown, is
+// left alone and reported as false.
+func (s *Server) ActivateOrg(ctx context.Context, orgID uuid.UUID) (bool, error) {
+	if s.st == nil {
+		return false, errors.New("api: no database to activate the organization in")
+	}
+	n, err := s.q().ActivateOrg(ctx, orgID)
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
 // Blobs is the deployment's object store for pkg/extension.Deps
 // (agentry#348): nil when the server was built without a database, the
 // way ExtensionDeps' pool is.

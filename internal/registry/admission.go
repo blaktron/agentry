@@ -81,6 +81,10 @@ func (e *ErrAdmissionRefused) Error() string {
 // SetAdmitter wires the admission seam; nil (the core build) admits all.
 func (s *Service) SetAdmitter(a Admitter) { s.admitter = a }
 
+// HasAdmitter reports whether an admission seam is wired: whether this
+// deployment runs the extension that sells things (agentry#360).
+func (s *Service) HasAdmitter() bool { return s.admitter != nil }
+
 // admit asks the Admitter, if any. The returned ticket is empty when there
 // is none to ask.
 func (s *Service) admit(ctx context.Context, req Admission) (Ticket, error) {

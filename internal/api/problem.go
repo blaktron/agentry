@@ -170,6 +170,31 @@ func problemPrivateAgentCap(w http.ResponseWriter, r *http.Request) {
 		"This namespace holds as many private agents as its subscription tier allows. Make one public, or upgrade the account.")
 }
 
+// The organization problems (agentry#360, plan organization-subscriptions
+// §5.1). Each has its own slug so a client can offer the right next step
+// rather than parse a sentence.
+
+// problemLastAdmin refuses the demotion or removal of an organization's
+// last admin: the org must first have another one, and only a decommission
+// removes the last (D14; the erasure guard is M4's).
+func problemLastAdmin(w http.ResponseWriter, r *http.Request, org string) {
+	writeProblem(w, r, http.StatusConflict, "last-admin", "The last admin stays",
+		"This organization must keep at least one admin. Make another member of "+org+" an admin first.")
+}
+
+// problemEmailUnverified refuses an act that needs a verified address —
+// creating an organization, which is keyed on the creator's domain.
+func problemEmailUnverified(w http.ResponseWriter, r *http.Request, detail string) {
+	writeProblem(w, r, http.StatusForbidden, "email-unverified", "Verify your email address", detail)
+}
+
+// problemOrgPending refuses a second organization while one the account
+// created is still awaiting payment.
+func problemOrgPending(w http.ResponseWriter, r *http.Request, org string) {
+	writeProblem(w, r, http.StatusConflict, "org-pending", "An organization is awaiting payment",
+		"This account already created "+org+", which is awaiting payment. Complete its subscription, or let it lapse, before creating another.")
+}
+
 func problemUnavailable(w http.ResponseWriter, r *http.Request, detail string) {
 	writeProblem(w, r, http.StatusServiceUnavailable, "unavailable", "Service unavailable", detail)
 }
