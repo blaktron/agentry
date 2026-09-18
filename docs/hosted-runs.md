@@ -202,9 +202,12 @@ were created with ([the `docker.runtime` knob](runner.md#the-oci-runtime-dockerr
 Summarising them would replace what the run enforced with someone's reading
 of it.
 
-No browser or desktop surface for hosted runs exists yet: today a run is
-created, watched and read through the API above. The site's run page
-(agentry-web#127) and the desktop app's (agentry-desktop#77) are open.
+Three surfaces read the same run. The API above is one; the site's run page
+is another, reached from **Run in Agentry** on a BriefAgent's page, with the
+queue, the live log, the credits held and settled, and the outputs to
+download; the desktop app's run panel is the third. The site's
+[Running on Agentry](https://docs.secureagentry.net/agentry/hosted-runs/)
+walks through what a person sees.
 
 ## What actually bounds a run
 
