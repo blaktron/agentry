@@ -345,6 +345,25 @@ func (o serverOrgs) Decommission(ctx context.Context, orgID uuid.UUID, reason st
 	return o.srv.DecommissionOrgByExtension(ctx, orgID, reason)
 }
 
+// agentsOf adapts the server's agent read to Agents: nil without a
+// database, the way Deps.DB is.
+func agentsOf(srv *api.Server, pool *pgxpool.Pool) Agents {
+	if pool == nil {
+		return nil
+	}
+	return serverAgents{srv}
+}
+
+type serverAgents struct{ srv *api.Server }
+
+func (a serverAgents) Readable(ctx context.Context, p *Principal, namespace, name string) (AgentRef, bool, error) {
+	ag, ok, err := a.srv.AgentReadable(ctx, p, namespace, name)
+	if err != nil || !ok {
+		return AgentRef{}, false, err
+	}
+	return AgentRef{ID: ag.ID, NamespaceID: ag.NamespaceID, NamespaceKind: NamespaceKind(ag.NamespaceKind), Public: ag.Visibility == "public"}, true, nil
+}
+
 // periodicTicker enqueues a job once now and then on its period. Every
 // replica running this enqueues on its own clock; the queue's claim runs
 // each row once, so the handler must tolerate a run that finds nothing to
@@ -565,7 +584,7 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 		if b, ok := e.(Binds); ok {
 			pool, log, write, writeIn := srv.ExtensionDeps()
 			b.Bind(Deps{DB: pool, Log: log.With("extension", e.Name()), Audit: auditWriter{write: write, writeIn: writeIn},
-				Entitlements: srv.CoreEntitlements(), Blobs: srv.Blobs(), Orgs: orgsOf(srv, pool)})
+				Entitlements: srv.CoreEntitlements(), Blobs: srv.Blobs(), Orgs: orgsOf(srv, pool), Agents: agentsOf(srv, pool)})
 		}
 		srv.RegisterExtension(e.Name(), e.Routes)
 		if u, ok := e.(Unthrottles); ok {
