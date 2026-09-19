@@ -38,6 +38,11 @@ DELETE FROM org_invitations WHERE org_id = $1;
 -- name: DeleteOrgMemberships :execrows
 DELETE FROM memberships WHERE org_id = $1;
 
+-- name: DeleteOrgFoldInDeclines :execrows
+-- An erased organization remembers no decline (agentry#364); the rows
+-- would go with the organization's row if it were deleted, and it is not.
+DELETE FROM fold_in_declines WHERE org_id = $1;
+
 -- name: DeleteOrgTeams :execrows
 -- team_members and agent_team_grants cascade.
 DELETE FROM teams WHERE org_id = $1;

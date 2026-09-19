@@ -607,6 +607,9 @@ type fakeOIDC struct {
 	amr []string
 	// groups, when set, rides the ID token as the `groups` claim (agentry#51).
 	groups []string
+	// emailUnverified asserts the address without vouching for it
+	// (agentry#364: the fold-in must not fire on one).
+	emailUnverified bool
 }
 
 func newFakeOIDC(t *testing.T) *fakeOIDC {
@@ -650,7 +653,7 @@ func newFakeOIDC(t *testing.T) *fakeOIDC {
 		claimMap := map[string]any{
 			"iss": p.srv.URL, "aud": p.clientID, "sub": p.sub,
 			"iat": time.Now().Unix(), "exp": time.Now().Add(time.Hour).Unix(),
-			"email": p.email, "email_verified": true,
+			"email": p.email, "email_verified": !p.emailUnverified,
 			"nonce": p.nonce,
 		}
 		if p.amr != nil {

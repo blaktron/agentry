@@ -177,6 +177,9 @@ func (s *Server) VerifyDomainClaim(w http.ResponseWriter, r *http.Request, org O
 		problemInternal(w, r)
 		return
 	}
+	// A verified domain is the organization's like the one it was created
+	// at: the accounts already known there are folded in (agentry#364).
+	s.enqueueFoldInSweep(r.Context(), orgRow.ID, domain)
 	writeJSON(w, http.StatusOK, domainClaimToAPI(refreshed))
 }
 

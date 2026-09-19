@@ -121,6 +121,15 @@ func (n *SMTPNotifier) OrgAccessRequest(ctx context.Context, notice AccessReques
 	return n.deliver(ctx, notice.ToEmail, n.render.accessRequest(notice), "org_access_request")
 }
 
+// OrgPendingMembers implements Notifier. A digest with nobody in it is
+// not a mail; the caller never sends one, and this refuses it anyway.
+func (n *SMTPNotifier) OrgPendingMembers(ctx context.Context, notice PendingMembersNotice) error {
+	if len(notice.Members) == 0 {
+		return nil
+	}
+	return n.deliver(ctx, notice.ToEmail, n.render.pendingMembers(notice), "org_pending_members")
+}
+
 // deliver renders and sends one message.
 func (n *SMTPNotifier) deliver(ctx context.Context, to string, m message, kind string) error {
 	addr, err := mail.ParseAddress(to)

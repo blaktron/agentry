@@ -395,6 +395,7 @@ func (s *Server) RegisterQueueHandlers(q queue.Client) {
 	s.registerAuditRetention(q) // §4.3 hot-table retention (audit_retention.go)
 	s.registerRedTeam(q)        // §17.5 report-only red-team job (handlers_redteam.go)
 	s.registerOrgLifecycle(q)   // the decommission sweep (handlers_org_lifecycle.go, agentry#363)
+	s.registerFoldIn(q)         // the fold-in sweep and the pending members digest (handlers_fold_in.go, agentry#364)
 }
 
 // emitAgentEvent is the registry event sink (§9.3): it resolves the agent's

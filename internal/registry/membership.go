@@ -80,7 +80,25 @@ const (
 	ViaInvitation MembershipVia = "invitation" // the invitee accepted
 	ViaApproval   MembershipVia = "approval"   // an admin approved a pending member
 	ViaRoleChange MembershipVia = "role"       // an admin changed an existing member's role
+	// The two provisioning doors, which write pending and nothing else:
+	// the organization's IdP, and its domain (DEV-111).
+	ViaSCIM   MembershipVia = "scim"
+	ViaDomain MembershipVia = "domain"
 )
+
+// DoorOf names the provisioning door a membership row records, from its
+// two flags: the IdP's door first, since SCIM provisioning is the
+// organization's own act and the domain is the registry's inference. An
+// admin-granted membership has neither and is "".
+func DoorOf(viaSCIM, viaDomain bool) MembershipVia {
+	switch {
+	case viaSCIM:
+		return ViaSCIM
+	case viaDomain:
+		return ViaDomain
+	}
+	return ""
+}
 
 // ActivateMemberRequest is what one activation needs.
 type ActivateMemberRequest struct {
@@ -112,6 +130,7 @@ func (s *Service) ActivateMember(ctx context.Context, req ActivateMemberRequest)
 	var (
 		activated bool
 		viaSCIM   bool
+		viaDomain bool
 	)
 	err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
 		// The organization's row is the lock every seat decision is taken
@@ -123,7 +142,7 @@ func (s *Service) ActivateMember(ctx context.Context, req ActivateMemberRequest)
 		current, err := q.GetMembership(ctx, storegen.GetMembershipParams{OrgID: req.OrgID, UserID: req.UserID})
 		switch {
 		case err == nil:
-			viaSCIM = current.ViaScim
+			viaSCIM, viaDomain = current.ViaScim, current.ViaDomain
 			if current.State == StateActive {
 				// Already a member: a role change, not an activation. It
 				// consumes no seat and is not a new membership.
@@ -167,7 +186,7 @@ func (s *Service) ActivateMember(ctx context.Context, req ActivateMemberRequest)
 		}
 
 		n, err := q.ActivateMembership(ctx, storegen.ActivateMembershipParams{
-			OrgID: req.OrgID, UserID: req.UserID, Role: string(req.Role), ViaScim: viaSCIM,
+			OrgID: req.OrgID, UserID: req.UserID, Role: string(req.Role), ViaScim: viaSCIM, ViaDomain: viaDomain,
 		})
 		if err != nil {
 			return err
@@ -175,6 +194,11 @@ func (s *Service) ActivateMember(ctx context.Context, req ActivateMemberRequest)
 		activated = n > 0
 		if !activated {
 			return nil
+		}
+		// An admin's invitation or approval supersedes a decline the
+		// fold-in remembered (agentry#364, D25): the person is a member.
+		if _, err := q.DeleteFoldInDecline(ctx, storegen.DeleteFoldInDeclineParams{OrgID: req.OrgID, UserID: req.UserID}); err != nil {
+			return err
 		}
 		e := req.Actor
 		e.Action = audit.ActionOrgMemberSet
