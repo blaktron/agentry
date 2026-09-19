@@ -57,12 +57,14 @@ type userInfo struct {
 	DisplayName   string    `json:"displayName"`
 	EmailVerified bool      `json:"emailVerified"`
 	TotpEnabled   bool      `json:"totpEnabled"`
+	PlatformStaff bool      `json:"platformStaff"`
 	Orgs          []userOrg `json:"orgs"`
 }
 
 type userOrg struct {
 	Handle string `json:"handle"`
 	Role   string `json:"role"`
+	State  string `json:"state"`
 }
 
 var funcs = template.FuncMap{

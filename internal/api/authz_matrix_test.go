@@ -232,6 +232,16 @@ func requestFactories(env *testEnv) map[string]opRequest {
 				return map[string]any{"handle": "mo" + nextUniq(), "displayName": "M"}
 			},
 		},
+		// The lifecycle (agentry#363). A wrong confirmation stops an
+		// authorized caller at 422 before the fixture organization is
+		// touched; the domain routes read, or answer 404 for a caller at a
+		// shared domain, which every matrix caller is.
+		"decommissionOrg": {
+			method: "POST", path: orgPath("/decommission"),
+			body: func(*matrixSeed, string) any { return map[string]any{"confirm": "not-the-handle"} },
+		},
+		"getDomainOrg":           {method: "GET", path: sPath("/api/v1/user/domain-org")},
+		"requestDomainOrgAccess": {method: "POST", path: sPath("/api/v1/user/domain-org/request-access")},
 		"updateOrg": {
 			method: "PATCH", path: orgPath(""),
 			body: func(*matrixSeed, string) any { return map[string]any{"displayName": "Matrix Org"} },

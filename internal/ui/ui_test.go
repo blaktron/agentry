@@ -574,7 +574,7 @@ func TestOrgAdminPage(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.Method + " " + r.URL.Path {
 		case "GET /api/v1/orgs/acme":
-			_, _ = io.WriteString(w, `{"handle":"acme","displayName":"Acme Corp","ssoRequired":false,"seats":{"used":1,"invited":1,"pending":1,"max":5}}`)
+			_, _ = io.WriteString(w, `{"handle":"acme","displayName":"Acme Corp","ssoRequired":false,"domain":"acme.example","verifiedDomains":["acme.example","acme.co"],"state":"active","seats":{"used":1,"invited":1,"pending":1,"max":5}}`)
 		case "GET /api/v1/orgs/acme/members":
 			_, _ = io.WriteString(w, `[{"user":{"handle":"chris"},"role":"admin","state":"active"},{"user":{"handle":"pat"},"role":"member","state":"pending","viaScim":true}]`)
 		case "GET /api/v1/orgs/acme/invitations":
@@ -594,6 +594,13 @@ func TestOrgAdminPage(t *testing.T) {
 			_, _ = io.WriteString(w, `{"ok":true,"kind":"saml","summary":"The IdP metadata parsed and the SP metadata is served.","warnings":["The IdP certificate expires in 20 days."],"checkedAt":"2026-09-12T00:00:00Z"}`)
 		case "GET /api/v1/orgs/acme/scim/tokens", "GET /api/v1/orgs/acme/domain-claims", "GET /api/v1/orgs/acme/webhooks":
 			_, _ = io.WriteString(w, `[]`)
+		case "POST /api/v1/orgs/acme/decommission":
+			var body map[string]string
+			if json.NewDecoder(r.Body).Decode(&body) != nil || body["confirm"] != "acme" {
+				http.Error(w, `{"detail":"Type the organization's handle, acme, as confirm to decommission it."}`, http.StatusUnprocessableEntity)
+				return
+			}
+			_, _ = io.WriteString(w, `{"handle":"acme","state":"decommissioning"}`)
 		case "PUT /api/v1/orgs/acme/policy":
 			var doc map[string]any
 			if json.NewDecoder(r.Body).Decode(&doc) != nil || doc["allowPrivateIps"] != true {
@@ -624,10 +631,22 @@ func TestOrgAdminPage(t *testing.T) {
 		`<input type="checkbox" name="enabled" value="true" checked> Enabled</label><div><button type="submit" class="secondary">Save SAML</button>`,
 		`value="https://idp.example"`, `placeholder="blank keeps the stored secret"`,
 		`<input type="checkbox" name="enabled" value="true"> Enabled</label><div><button type="submit" class="secondary">Save OIDC</button>`,
+		// The domain and the decommission form (agentry#363); no staff
+		// section for a viewer who is not staff.
+		"Registered at <strong>acme.example</strong>", "Verified domains: acme.example, acme.co",
+		`name="section" value="decommission"`, `Type <code>acme</code> to confirm`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("org page missing %q: %d %s", want, w.Code, body)
 		}
+	}
+	if strings.Contains(body, `value="suspend"`) {
+		t.Fatalf("a viewer who is not staff sees the suspend form")
+	}
+	// The decommission form posts the confirmation and reports the hold.
+	w = post(h, "/ui/orgs/acme", url.Values{"_csrf": {"csrf1"}, "section": {"decommission"}, "confirm": {"acme"}}, nil, sessCookie, csrfCookieV)
+	if loc, okMsg, errMsg := redirectedTo(t, w); w.Code != http.StatusSeeOther || loc != "/ui/orgs/acme" || errMsg != "" || !strings.Contains(okMsg, "read-only") {
+		t.Fatalf("decommission: %d %s ok=%q err=%q", w.Code, loc, okMsg, errMsg)
 	}
 	// The probe's verdict reaches the flash: ok=false is the error flash with
 	// the summary, ok=true the success flash with the summary and warnings.
@@ -815,5 +834,77 @@ func TestAccountNotificationSettings(t *testing.T) {
 	}
 	if !got.Email.Advisories || got.Email.DependencyAlerts || got.Email.Quarantine || got.Email.ReviewDecisions || got.Email.OrgInvites || !got.Web.DependencyAlerts {
 		t.Errorf("sent settings = %+v (unticked boxes must be off)", got)
+	}
+}
+
+// TestOrgsIndexCreateForm (agentry#363): the organizations page offers the
+// create form to a person who belongs to no organization, posts it
+// in-process, lands them on the new organization's page with what was
+// recorded, renders the API's refusal inside the layout, and withholds the
+// form from someone who is already a member.
+func TestOrgsIndexCreateForm(t *testing.T) {
+	base := fakeAPI(t)
+	member := false
+	var created []map[string]any
+	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if c, err := r.Cookie("agentry_session"); err != nil || c.Value != "sess1" {
+			http.Error(w, `{"detail":"sign in"}`, http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Method + " " + r.URL.Path {
+		case "GET /api/v1/user":
+			if member {
+				_, _ = io.WriteString(w, `{"id":"u1","handle":"chris","email":"c@example.test","emailVerified":true,"orgs":[{"handle":"acme","role":"member","state":"active"}]}`)
+				return
+			}
+			_, _ = io.WriteString(w, `{"id":"u1","handle":"chris","email":"c@example.test","emailVerified":true}`)
+		case "POST /api/v1/orgs":
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if body["handle"] == "taken" {
+				http.Error(w, `{"type":"https://agentry.dev/problems/domain-claimed","detail":"newco.example is registered to Acme (acme) on this registry. Its administrators can add you; ask them, or verify a different domain."}`, http.StatusConflict)
+				return
+			}
+			created = append(created, body)
+			w.WriteHeader(http.StatusCreated)
+			_, _ = io.WriteString(w, `{"handle":"newco","displayName":"New Co","domain":"newco.example","state":"active"}`)
+		default:
+			base.ServeHTTP(w, r)
+		}
+	})
+	h := New(Options{API: api})
+	w := get(h, "/ui/orgs", sessCookie, csrfCookieV)
+	body := w.Body.String()
+	for _, want := range []string{`action="/ui/orgs"`, `name="handle"`, `name="displayName"`, `name="noDomain"`, "Create organization"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("orgs page missing %q: %d %s", want, w.Code, body)
+		}
+	}
+	w = post(h, "/ui/orgs", url.Values{"_csrf": {"csrf1"}, "handle": {"NewCo"}, "displayName": {"New Co"}}, nil, sessCookie, csrfCookieV)
+	if loc, okMsg, errMsg := redirectedTo(t, w); w.Code != http.StatusSeeOther || loc != "/ui/orgs/newco" || errMsg != "" ||
+		!strings.Contains(okMsg, "newco created") || !strings.Contains(okMsg, "newco.example") {
+		t.Fatalf("create: %d %s ok=%q err=%q", w.Code, loc, okMsg, errMsg)
+	}
+	if len(created) != 1 || created[0]["handle"] != "newco" || created[0]["domain"] != nil {
+		t.Fatalf("what the form sent: %v", created)
+	}
+	w = post(h, "/ui/orgs", url.Values{"_csrf": {"csrf1"}, "handle": {"newco"}, "displayName": {"New Co"}, "noDomain": {"true"}}, nil, sessCookie, csrfCookieV)
+	if loc, _, _ := redirectedTo(t, w); loc != "/ui/orgs/newco" || len(created) != 2 || created[1]["domain"] != "none" {
+		t.Fatalf("the no-domain box: %s %v", loc, created)
+	}
+	w = post(h, "/ui/orgs", url.Values{"_csrf": {"csrf1"}, "handle": {"taken"}, "displayName": {"Taken"}}, nil, sessCookie, csrfCookieV)
+	if loc, _, errMsg := redirectedTo(t, w); loc != "/ui/orgs" || !strings.Contains(errMsg, "registered to Acme (acme)") {
+		t.Fatalf("refusal: %s %q", loc, errMsg)
+	}
+	w = post(h, "/ui/orgs", url.Values{"_csrf": {"csrf1"}, "handle": {""}, "displayName": {""}}, nil, sessCookie, csrfCookieV)
+	if _, _, errMsg := redirectedTo(t, w); errMsg != "Enter the organization's handle and display name." {
+		t.Fatalf("empty form: %q", errMsg)
+	}
+	member = true
+	w = get(h, "/ui/orgs", sessCookie, csrfCookieV)
+	body = w.Body.String()
+	if strings.Contains(body, `name="handle"`) || !strings.Contains(body, "leave it before creating another") || !strings.Contains(body, "<strong>acme</strong>") {
+		t.Fatalf("a member's orgs page: %d %s", w.Code, body)
 	}
 }

@@ -41,6 +41,15 @@ const (
 	ActionOrgInviteRevoke  Action = "org.invite_revoke"
 	ActionOrgInviteAccept  Action = "org.invite_accept"
 	ActionOrgMemberDecline Action = "org.member_decline"
+	// The organization's lifecycle and its domain (agentry#363): a
+	// decommission decided, the erasure that ends its hold, platform
+	// staff's suspension and reinstatement, and a person's request to
+	// join the organization at their email domain.
+	ActionOrgDecommission  Action = "org.decommission"
+	ActionOrgErase         Action = "org.erase"
+	ActionOrgSuspend       Action = "org.suspend"
+	ActionOrgReinstate     Action = "org.reinstate"
+	ActionOrgAccessRequest Action = "org.access_request"
 	ActionTeamCreate       Action = "team.create"
 	ActionTeamDelete       Action = "team.delete"
 	ActionTeamMemberAdd    Action = "team.member_add"
@@ -111,6 +120,7 @@ func init() {
 		ActionOrgCreate, ActionOrgUpdate, ActionOrgMemberSet,
 		ActionOrgMemberRemove, ActionOrgInviteCreate, ActionOrgInviteRevoke,
 		ActionOrgInviteAccept, ActionOrgMemberDecline,
+		ActionOrgDecommission, ActionOrgErase, ActionOrgSuspend, ActionOrgReinstate, ActionOrgAccessRequest,
 		ActionTeamCreate, ActionTeamDelete,
 		ActionTeamMemberAdd, ActionTeamMemberRemove,
 		ActionAgentCreate, ActionAgentUpdate, ActionAgentGrantSet,

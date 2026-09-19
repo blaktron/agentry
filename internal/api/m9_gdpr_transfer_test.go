@@ -90,6 +90,16 @@ func TestErasureTransferPath(t *testing.T) {
 	orgID := env.createOrg(sess, orgH)
 	agentName := "transferable-" + env.sfx
 	env.publishUnder(t, sess, user, agentName)
+	// The organization keeps an admin when its founder goes (agentry#363):
+	// the erasure is refused until another is in place.
+	res0 := env.do(sess, http.MethodPost, "/api/v1/user/delete?publishedContent=transfer&transferOrg="+orgH, nil)
+	if code, slug, _ := problemOf(t, res0); code != http.StatusConflict || slug != "last-admin" {
+		t.Fatalf("erasing the organization's only admin: %d %s, want 409 last-admin", code, slug)
+	}
+	successor := env.register("era-succ")
+	env.joinOrg(sess, orgH, successor)
+	env.doJSON(sess, http.MethodPut, "/api/v1/orgs/"+orgH+"/members/"+successor,
+		map[string]any{"role": "admin"}, nil, http.StatusOK)
 
 	env.doJSON(sess, http.MethodPost,
 		"/api/v1/user/delete?publishedContent=transfer&transferOrg="+orgH, nil, nil, http.StatusNoContent)

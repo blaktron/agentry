@@ -116,6 +116,11 @@ func (n *SMTPNotifier) OrgInvite(ctx context.Context, notice InviteOffer) error 
 	return n.deliver(ctx, notice.ToEmail, n.render.invite(notice), "org_invite")
 }
 
+// OrgAccessRequest implements Notifier.
+func (n *SMTPNotifier) OrgAccessRequest(ctx context.Context, notice AccessRequestNotice) error {
+	return n.deliver(ctx, notice.ToEmail, n.render.accessRequest(notice), "org_access_request")
+}
+
 // deliver renders and sends one message.
 func (n *SMTPNotifier) deliver(ctx context.Context, to string, m message, kind string) error {
 	addr, err := mail.ParseAddress(to)

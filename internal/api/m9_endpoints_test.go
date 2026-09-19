@@ -579,16 +579,21 @@ func TestIdempotencyKeyReplaysAndConflicts(t *testing.T) {
 		t.Fatalf("key reuse with a different body: got %d want 409", third.StatusCode)
 	}
 
-	// A failed request must not lock the key out.
+	// A failed request must not lock the key out. A second account makes
+	// the attempts: the first is now an admin of the organization it
+	// created, and a person belongs to one organization at a time (D26).
+	otherH := env.register("idem-other")
+	env.verifyEmail(otherH)
+	other := env.login(otherH)
 	badKey := "idem-bad-" + env.sfx
-	bad := env.doWithHeaders(sess, http.MethodPost, "/api/v1/orgs",
+	bad := env.doWithHeaders(other, http.MethodPost, "/api/v1/orgs",
 		map[string]any{"handle": "NOT VALID", "displayName": "x"},
 		map[string]string{"Idempotency-Key": badKey})
 	_ = bad.Body.Close()
 	if bad.StatusCode == http.StatusCreated {
 		t.Fatal("an invalid handle must not create an org")
 	}
-	retry := env.doWithHeaders(sess, http.MethodPost, "/api/v1/orgs",
+	retry := env.doWithHeaders(other, http.MethodPost, "/api/v1/orgs",
 		map[string]any{"handle": "idemthree" + env.sfx, "displayName": "Third"},
 		map[string]string{"Idempotency-Key": badKey})
 	_ = retry.Body.Close()

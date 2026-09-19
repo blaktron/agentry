@@ -12,6 +12,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/registry"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
@@ -76,6 +77,13 @@ func (s *Server) scimAuth(next scimHandler) http.HandlerFunc {
 		org, err := s.q().GetOrgByID(r.Context(), row.OrgID)
 		if err != nil {
 			scimError(w, http.StatusUnauthorized, "org not found")
+			return
+		}
+		// The IdP provisions nothing into an organization that is
+		// suspended or being decommissioned (agentry#363): every SCIM
+		// call changes or reads membership, which the hold has frozen.
+		if org.State != registry.OrgStateActive {
+			scimError(w, http.StatusForbidden, "this organization is "+org.State)
 			return
 		}
 		next(w, r, scimCtx{orgID: row.OrgID, orgHandle: org.Handle})

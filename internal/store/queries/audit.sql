@@ -80,3 +80,10 @@ WHERE a.actor_id = sqlc.arg(actor_id)
        OR (a.occurred_at = sqlc.narg('before_time') AND a.id < sqlc.narg('before_id')))
 ORDER BY a.occurred_at DESC, a.id DESC
 LIMIT $1;
+
+-- name: CountAuditActionsByActorSince :one
+-- How many times an actor took one action since a moment: the record is
+-- the rate limit for an act a person may take once a day (agentry#363,
+-- the request for access to their domain's organization).
+SELECT count(*)::bigint FROM audit_events
+WHERE actor_id = $1 AND action = $2 AND occurred_at >= $3;

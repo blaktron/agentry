@@ -5,12 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
@@ -43,6 +45,18 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 	q := s.q()
 	user, err := q.GetUserByID(r.Context(), p.UserID)
 	if err != nil {
+		problemInternal(w, r)
+		return
+	}
+
+	// The last admin stays (D14, agentry#363): an organization is never
+	// left without someone who can act, and erasing its only admin would.
+	// Promote another member first, or decommission the organization.
+	if org, err := q.GetOrgWhereUserIsLastAdmin(r.Context(), p.UserID); err == nil {
+		problemLastAdmin(w, r, org)
+		return
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		s.log.ErrorContext(r.Context(), "last-admin guard", "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -100,6 +114,31 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		// maintaining it, which is an administrative act, not a membership one.
 		if p.Role(orgRow.ID) != auth.RoleAdmin {
 			problemForbidden(w, r, "Transferring BriefAgents into "+orgRow.Handle+" requires the admin role there.")
+			return
+		}
+		// Nothing moves into an organization in its decommission hold.
+		if err := s.reg.OrgGate(r.Context(), orgRow.ID, auth.ActAgentCreate); err != nil {
+			if !s.orgGateProblem(w, r, orgRow.Handle, err) {
+				problemInternal(w, r)
+			}
+			return
+		}
+		// The private-agent cap (agentry#363): the transfer door is one
+		// more way private agents enter a namespace, and it respects the
+		// cap the other two do. Nothing is erased on a refusal.
+		var private int64
+		for _, a := range agents {
+			if a.Visibility == "private" {
+				private++
+			}
+		}
+		if err := s.reg.CheckPrivateAgentCapFor(r.Context(), orgRow.ID, private); err != nil {
+			if errors.Is(err, registry.ErrPrivateAgentCap) {
+				problemPrivateAgentCap(w, r)
+				return
+			}
+			s.log.ErrorContext(r.Context(), "gdpr transfer cap", "err", err)
+			problemInternal(w, r)
 			return
 		}
 		transferOrgID = orgRow.ID
@@ -172,6 +211,12 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 			return err
 		}
 		if _, err := tq.RevokeUserSessions(r.Context(), p.UserID); err != nil {
+			return err
+		}
+		// An erased account holds no seat anywhere (agentry#363): the
+		// last-admin guard above has already passed, so nothing is left
+		// headless by this.
+		if _, err := tq.DeleteUserMemberships(r.Context(), p.UserID); err != nil {
 			return err
 		}
 		// Every PAT dies with the account.

@@ -295,13 +295,35 @@ func (env *testEnv) registerEmail(handle, email string) string {
 }
 
 // verifyOrgDomain records that the organization proved control of a
-// domain, which a DNS-TXT claim does in real life (handlers_domains.go).
+// domain, which a DNS-TXT claim does in real life (handlers_domains.go):
+// a verified row in domain_claims (agentry#363). A verified domain belongs
+// to one organization, and the test database persists between runs, so a
+// verified claim another test's organization left on the same domain is
+// released first — that organization is done with it.
 func (env *testEnv) verifyOrgDomain(org, domain string) {
 	env.t.Helper()
-	if _, err := env.st.Pool().Exec(context.Background(),
-		`UPDATE orgs SET verified_domain = $2 WHERE id = (SELECT id FROM handles WHERE handle = $1)`, org, domain); err != nil {
+	ctx := context.Background()
+	if _, err := env.st.Pool().Exec(ctx,
+		`DELETE FROM domain_claims WHERE domain = $2 AND verified_at IS NOT NULL
+		   AND org_id <> (SELECT id FROM handles WHERE handle = $1)`, org, domain); err != nil {
 		env.t.Fatal(err)
 	}
+	if _, err := env.st.Pool().Exec(ctx,
+		`INSERT INTO domain_claims (id, org_id, domain, verification_token, verified_at)
+		 SELECT gen_random_uuid(), id, $2, 'test', now() FROM handles WHERE handle = $1
+		 ON CONFLICT (org_id, domain) DO UPDATE SET verified_at = now()`, org, domain); err != nil {
+		env.t.Fatal(err)
+	}
+}
+
+// handOverAndLeave makes other an admin of org and removes the admin's own
+// membership: what a person does before creating a second organization,
+// since they belong to one at a time (D26, agentry#363).
+func (env *testEnv) handOverAndLeave(admin caller, org, otherHandle string) {
+	env.t.Helper()
+	env.doJSON(admin, http.MethodPut, "/api/v1/orgs/"+org+"/members/"+otherHandle,
+		map[string]any{"role": "admin"}, nil, http.StatusOK)
+	env.doJSON(admin, http.MethodDelete, "/api/v1/orgs/"+org+"/members/"+admin.name, nil, nil, http.StatusNoContent)
 }
 
 // joinOrg makes handle an active member of org through the real doors —

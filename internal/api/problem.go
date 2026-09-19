@@ -4,9 +4,11 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -218,12 +220,64 @@ func problemFeatureNotIncluded(w http.ResponseWriter, r *http.Request, detail st
 	writeProblem(w, r, http.StatusForbidden, "feature-not-included", "Not included in this subscription", detail)
 }
 
-// problemAlreadyAMember refuses an invitation or an approval for someone
-// who is already an active member of another organization (D26: one
-// organization per person).
-func problemAlreadyAMember(w http.ResponseWriter, r *http.Request) {
-	writeProblem(w, r, http.StatusConflict, "already-a-member", "Already in an organization",
-		"That person is already a member of another organization. A person belongs to one organization at a time; they leave the other first.")
+// problemAlreadyAMember refuses an invitation, an approval or a creation
+// for someone who is already an active member of another organization
+// (D26: one organization per person). detail says whose membership it is.
+func problemAlreadyAMember(w http.ResponseWriter, r *http.Request, detail string) {
+	writeProblem(w, r, http.StatusConflict, "already-a-member", "Already in an organization", detail)
+}
+
+// alreadyAMemberDetail is the sentence for the doors an admin drives.
+const alreadyAMemberDetail = "That person is already a member of another organization. A person belongs to one organization at a time; they leave the other first."
+
+// problemDomainClaimed refuses an organization at a domain another one
+// holds (D21, D26: one organization per domain). It names the holder,
+// whose handle is public, so the person can ask its administrators — the
+// site's sign-up page and GET /user/domain-org say the same thing.
+func problemDomainClaimed(w http.ResponseWriter, r *http.Request, domain, org, displayName string) {
+	writeProblemWith(w, r, http.StatusConflict, "domain-claimed", "That domain belongs to an organization",
+		domain+" is registered to "+orgLabel(org, displayName)+" on this registry. Its administrators can add you; ask them, or verify a different domain.",
+		map[string]any{"domain": domain, "org": org})
+}
+
+// orgLabel names an organization for a sentence: its display name with the
+// handle in brackets, or the handle alone when they are the same or the
+// name is empty.
+func orgLabel(handle, displayName string) string {
+	if displayName != "" && displayName != handle {
+		return displayName + " (" + handle + ")"
+	}
+	return handle
+}
+
+// problemOrgDecommissioning refuses a change to an organization in its
+// decommission hold (D23): reads and exports go on, nothing else, until
+// the erasure at the hold's end.
+func problemOrgDecommissioning(w http.ResponseWriter, r *http.Request, org string, until *time.Time) {
+	detail := "The " + org + " organization is being decommissioned and is read-only: its members can still read its agents and export its audit log, and nothing else changes."
+	ext := map[string]any{"org": org}
+	if until != nil {
+		detail += " It is erased on " + until.UTC().Format("2 January 2006") + "."
+		ext["decommissionAt"] = until.UTC().Format(time.RFC3339)
+	}
+	writeProblemWith(w, r, http.StatusConflict, "org-decommissioning", "Organization being decommissioned", detail, ext)
+}
+
+// orgGateProblem answers a refusal from registry.OrgGate and reports
+// whether it wrote one: a suspended (or erased) organization answers as
+// absent, the way its own lookup does; a decommissioning one names the
+// hold. Any other error is not this function's.
+func (s *Server) orgGateProblem(w http.ResponseWriter, r *http.Request, org string, err error) bool {
+	var gate *registry.OrgGateError
+	if !errors.As(err, &gate) {
+		return false
+	}
+	if gate.State == registry.OrgStateDecommissioning {
+		problemOrgDecommissioning(w, r, org, gate.DecommissionAt)
+		return true
+	}
+	problemNotFound(w, r)
+	return true
 }
 
 func problemUnavailable(w http.ResponseWriter, r *http.Request, detail string) {

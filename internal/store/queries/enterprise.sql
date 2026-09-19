@@ -195,11 +195,6 @@ SELECT * FROM domain_claims WHERE org_id = $1 ORDER BY created_at DESC;
 -- name: MarkDomainClaimVerified :exec
 UPDATE domain_claims SET verified_at = now() WHERE org_id = $1 AND domain = $2;
 
--- name: SetOrgVerifiedDomain :exec
-UPDATE orgs SET verified_domain = $2, updated_at = now() WHERE id = $1;
-
--- name: GetOrgByVerifiedDomain :one
-SELECT o.*, h.handle FROM orgs o JOIN handles h ON h.id = o.id WHERE o.verified_domain = $1;
 
 -- ============================ Audit exports ============================
 

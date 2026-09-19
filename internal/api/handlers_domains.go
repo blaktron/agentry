@@ -1,8 +1,11 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
@@ -99,8 +102,9 @@ func (s *Server) CreateDomainClaim(w http.ResponseWriter, r *http.Request, org O
 
 // VerifyDomainClaim implements POST /orgs/{org}/domain-claims/verify: it looks
 // up the DNS TXT record via the injected resolver and, on success, marks the
-// claim verified and sets orgs.verified_domain (enabling verified-email JIT,
-// §12.4).
+// claim verified (the T-12 auto-link basis, §12.4). A domain belongs to one
+// organization (agentry#363, D21, D26): one that another organization was
+// created at, or has verified, is 409 domain-claimed here too.
 func (s *Server) VerifyDomainClaim(w http.ResponseWriter, r *http.Request, org OrgHandle) {
 	if !s.requireDB(w, r) {
 		return
@@ -134,11 +138,21 @@ func (s *Server) VerifyDomainClaim(w http.ResponseWriter, r *http.Request, org O
 		writeJSON(w, http.StatusOK, out)
 		return
 	}
+	if s.domainClaimed(w, r, domain, orgRow.ID) {
+		return
+	}
 	err = s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
-		if err := q.MarkDomainClaimVerified(r.Context(), storegen.MarkDomainClaimVerifiedParams{OrgID: orgRow.ID, Domain: domain}); err != nil {
+		// Under the domain's advisory lock, checked again: a creation at
+		// this domain racing this verification cannot both commit.
+		if err := q.LockKey(r.Context(), domainLockKey(domain)); err != nil {
 			return err
 		}
-		if err := q.SetOrgVerifiedDomain(r.Context(), storegen.SetOrgVerifiedDomainParams{ID: orgRow.ID, VerifiedDomain: &domain}); err != nil {
+		if holder, err := q.GetOrgByDomain(r.Context(), domain); err == nil && holder.ID != orgRow.ID {
+			return errDomainClaimed
+		} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		if err := q.MarkDomainClaimVerified(r.Context(), storegen.MarkDomainClaimVerifiedParams{OrgID: orgRow.ID, Domain: domain}); err != nil {
 			return err
 		}
 		e := auditEvent(r, audit.ActionDomainVerified)
@@ -148,6 +162,13 @@ func (s *Server) VerifyDomainClaim(w http.ResponseWriter, r *http.Request, org O
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
+		if errors.Is(err, errDomainClaimed) || uniqueViolationOn(err, "domain_claims_verified_domain_idx") {
+			if !s.domainClaimed(w, r, domain, orgRow.ID) {
+				problemDomainClaimed(w, r, domain, "another organization", "")
+			}
+			return
+		}
+		s.log.ErrorContext(r.Context(), "verify domain claim", "domain", domain, "err", err)
 		problemInternal(w, r)
 		return
 	}
