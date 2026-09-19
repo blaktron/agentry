@@ -592,12 +592,18 @@ func TestSuspendedOrgIsRefusedEverywhere(t *testing.T) {
 // and the domain — both are free for a new organization — audits it and
 // fires org.decommissioned; a second sweep finds nothing; an organization
 // with a version still in the pipeline waits for the next sweep; and the
-// extension's Decommission takes the same path.
+// extension's Decommission takes the same path. It runs with an admission
+// extension wired, the hosted product's shape, so the organization is
+// created awaiting activation: the erasure must release its founder from
+// the pending rule too, which is what the live check on dev found missing.
 func TestOrgDecommissionErasesAfterTheHold(t *testing.T) {
 	events := &recordedEvents{}
 	var srv *api.Server
 	env := newTestEnvCfg(t, func(c *config.Config) { c.Orgs.DecommissionHold = 0 },
-		events.hook(), func(s *api.Server) { srv = s })
+		events.hook(), func(s *api.Server) {
+			srv = s
+			s.Reg().SetAdmitter(&recordingAdmitter{})
+		})
 	ctx := context.Background()
 	domain := "gone" + env.sfx + ".io"
 	adminH := env.registerEmail("er-admin", "admin@"+domain)
@@ -642,12 +648,18 @@ func TestOrgDecommissionErasesAfterTheHold(t *testing.T) {
 	if len(me.Orgs) != 0 {
 		t.Fatalf("the admin's memberships after erasure: %v", me.Orgs)
 	}
-	newcomerH := env.registerEmail("er-new", "new@"+domain)
-	env.verifyEmail(newcomerH)
+	// The founder is free to start again — the erased organization was
+	// never activated, and must not count as their pending one — and the
+	// domain and the handle are free for them.
 	var reborn orgOut
-	env.doJSON(env.login(newcomerH), http.MethodPost, "/api/v1/orgs", map[string]any{"handle": orgH, "displayName": "Reborn"}, &reborn, http.StatusCreated)
-	if reborn.Domain == nil || *reborn.Domain != domain {
-		t.Fatalf("the domain was not released: %+v", reborn)
+	env.doJSON(admin, http.MethodPost, "/api/v1/orgs", map[string]any{"handle": orgH, "displayName": "Reborn"}, &reborn, http.StatusCreated)
+	if reborn.Domain == nil || *reborn.Domain != domain || reborn.State != "active" {
+		t.Fatalf("the founder's fresh start: %+v, want the same handle at the same domain", reborn)
+	}
+	// And that one is erased too, so the rest of the test sees a clean slate.
+	env.doJSON(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/decommission", map[string]any{"confirm": orgH}, nil, http.StatusOK)
+	if n, err := srv.RunOrgDecommissionSweep(ctx); err != nil || n != 1 {
+		t.Fatalf("sweep of the reborn org: erased %d, err %v; want 1", n, err)
 	}
 	// The record: versions yanked, the archive gone, the agent retired
 	// private under the released handle, the row scrubbed, the act audited.
@@ -677,10 +689,11 @@ func TestOrgDecommissionErasesAfterTheHold(t *testing.T) {
 	if members != 0 || invitations != 0 || teams != 0 || audited != 1 {
 		t.Fatalf("after erasure: %d memberships, %d invitations, %d teams, %d org.erase rows", members, invitations, teams, audited)
 	}
-	if events.count("org.decommissioned") != 1 {
-		t.Fatalf("org.decommissioned fired %d times", events.count("org.decommissioned"))
+	// Once per erasure: the organization, and its reborn namesake above.
+	if events.count("org.decommissioned") != 2 {
+		t.Fatalf("org.decommissioned fired %d times, want 2", events.count("org.decommissioned"))
 	}
-	// A second sweep has nothing to do.
+	// A further sweep has nothing to do.
 	if n, err := srv.RunOrgDecommissionSweep(ctx); err != nil || n != 0 {
 		t.Fatalf("second sweep: %d %v, want 0", n, err)
 	}
