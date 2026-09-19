@@ -60,12 +60,23 @@ const (
 	// list and revoke. Declared apart from members.manage because an
 	// invitation reserves a seat before any membership exists.
 	ActOrgInvitationsManage Action = "org.invitations.manage" // admin
+	// ActOrgDecommission ends the organization (agentry#363, D14): admin,
+	// session only — a token never decides that an organization goes.
+	ActOrgDecommission Action = "org.decommission"
+	// ActOrgLeave is a member ending their own membership (agentry#363,
+	// D26): a person belongs to one organization at a time, so they must
+	// be able to leave the one they hold. The last-admin guard applies.
+	ActOrgLeave Action = "org.leave"
 	// Self-scoped (resource is the caller's own account).
 	ActUserSelfRead       Action = "user.self.read"
 	ActUserSelfUpdate     Action = "user.self.update"
 	ActUserTokensRead     Action = "user.tokens.read"
 	ActUserTokensManage   Action = "user.tokens.manage"   // session-only (a PAT cannot mint or revoke PATs)
 	ActUserSecurityManage Action = "user.security.manage" // session-only: logout, 2FA enrollment
+	// ActUserOrgRequest asks the administrators of the organization at the
+	// caller's email domain for access (agentry#363): session only, since
+	// it mails people on the caller's behalf.
+	ActUserOrgRequest Action = "user.org.request"
 	// Org creation (no target org yet).
 	ActOrgCreate Action = "org.create"
 	// Anonymous-capable reads.
@@ -180,6 +191,29 @@ var minRole = map[Action]OrgRole{
 	ActOrgAuditRead:         RoleAdmin,
 	ActOrgSettingsManage:    RoleAdmin,
 	ActOrgInvitationsManage: RoleAdmin,
+	ActOrgDecommission:      RoleAdmin,
+	ActOrgLeave:             RoleMember,
+}
+
+// ReadOnly reports whether an action only reads. The audit export creates
+// a job, but what it produces is the organization's own record.
+func ReadOnly(act Action) bool {
+	switch act {
+	case ActOrgRead, ActOrgMembersRead, ActOrgTeamsRead, ActOrgAuditRead,
+		ActPublicRead, ActUserSelfRead, ActUserTokensRead,
+		ActAgentRead, ActAgentRepoRead:
+		return true
+	}
+	return false
+}
+
+// HoldPermits reports whether an organization in its decommission hold
+// still permits the action (agentry#363, D23 — "members keep read and
+// export"): the reads, and a member leaving, since a person belongs to
+// one organization at a time and must not be held in one on its way out.
+// Everything else changes something the hold has frozen.
+func HoldPermits(act Action) bool {
+	return ReadOnly(act) || act == ActOrgLeave
 }
 
 // Check is the single authorization chokepoint (§12.2): every handler calls
@@ -209,7 +243,7 @@ func Check(p *Principal, res Resource, act Action) error {
 	// (+scope gate above for PATs).
 	switch act {
 	case ActUserSelfRead, ActUserSelfUpdate, ActUserTokensRead,
-		ActUserTokensManage, ActUserSecurityManage, ActOrgCreate,
+		ActUserTokensManage, ActUserSecurityManage, ActUserOrgRequest, ActOrgCreate,
 		ActAgentCreate, ActReviewAct:
 		// ActAgentCreate: namespace-level authorization (self vs org
 		// admin+) happens in registry.CreateAgent with the target ns.

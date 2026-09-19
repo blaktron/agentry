@@ -14,12 +14,25 @@ import (
 // not an admin sees the refusal the API gives.
 
 type orgInfo struct {
-	Handle         string `json:"handle"`
-	DisplayName    string `json:"displayName"`
-	SsoRequired    *bool  `json:"ssoRequired"`
-	VerifiedDomain string `json:"verifiedDomain"`
-	Seats          *seats `json:"seats"`
+	Handle          string     `json:"handle"`
+	DisplayName     string     `json:"displayName"`
+	SsoRequired     *bool      `json:"ssoRequired"`
+	VerifiedDomain  string     `json:"verifiedDomain"`
+	VerifiedDomains []string   `json:"verifiedDomains"`
+	Domain          string     `json:"domain"`
+	State           string     `json:"state"`
+	DecommissionAt  *time.Time `json:"decommissionAt"`
+	Seats           *seats     `json:"seats"`
 }
+
+// Decommissioning reports whether the organization is in its read-only
+// hold (agentry#363): the page says so and offers nothing that would
+// change it.
+func (o orgInfo) Decommissioning() bool { return o.State == "decommissioning" }
+
+// Active reports whether the organization is in its ordinary state: the
+// one platform staff may suspend.
+func (o orgInfo) Active() bool { return o.State == "" || o.State == "active" }
 
 // seats is what the organization holds against its allowance; Max 0 is
 // unbounded, which is what a registry with no billing extension answers.
@@ -98,6 +111,7 @@ var (
 type orgData struct {
 	Org     orgInfo
 	Handle  string
+	Staff   bool // the viewer is platform staff: the suspend and reinstate forms
 	Members []orgMember
 	Teams   []team
 	Policy  string
@@ -126,7 +140,7 @@ func (h *handler) orgPage(w http.ResponseWriter, r *http.Request) {
 	}
 	org := r.PathValue("org")
 	c := h.call(r)
-	d := orgData{Handle: org, Roles: orgRoles, Events: webhookEvents}
+	d := orgData{Handle: org, Roles: orgRoles, Events: webhookEvents, Staff: u.PlatformStaff}
 	base := "/orgs/" + url.PathEscape(org)
 	res, err := c.do(http.MethodGet, base, nil)
 	if err != nil || !res.OK() {
@@ -223,6 +237,19 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 		}
 		res, err = c.do(http.MethodPatch, base, body)
 		ok = "Organization saved."
+	case "decommission":
+		// The API insists on the handle typed again; the page passes what
+		// was typed and shows the refusal when it does not match.
+		res, err = c.do(http.MethodPost, base+"/decommission", map[string]string{
+			"confirm": strings.TrimSpace(f("confirm")), "reason": strings.TrimSpace(f("reason")),
+		})
+		ok = org + " is being decommissioned: read-only for its members until the hold ends, then erased and its handle released. Platform staff can still reinstate it before then."
+	case "suspend":
+		res, err = c.do(http.MethodPost, base+"/suspend", map[string]string{"reason": strings.TrimSpace(f("reason"))})
+		ok = org + " is suspended: it and everything under it answer as absent until it is reinstated."
+	case "reinstate":
+		res, err = c.do(http.MethodPost, base+"/reinstate", map[string]string{})
+		ok = org + " is active again."
 	case "member":
 		handle := strings.TrimSpace(f("handle"))
 		if handle == "" {
@@ -503,18 +530,65 @@ func (h *handler) invitationAccept(w http.ResponseWriter, r *http.Request) {
 	h.back(w, r, "/ui/orgs", "You are now a member.", "")
 }
 
+// orgsIndexData is the organizations page: the ones the caller
+// administers, and whether they may create one — a person belongs to one
+// organization at a time (D26), so the form is offered to someone who is
+// a member of none.
+type orgsIndexData struct {
+	Admin     []userOrg
+	MemberOf  string
+	CanCreate bool
+}
+
 // orgsIndex lists the organizations the caller can administer (from
-// GET /user), each linking to its page; anyone can also type a handle.
+// GET /user), each linking to its page, and offers the create form to a
+// caller who belongs to none (agentry#363: every headless registry wants
+// one; the hosted product's sign-up is the site's).
 func (h *handler) orgsIndex(w http.ResponseWriter, r *http.Request) {
 	u := h.requireUser(w, r)
 	if u == nil {
 		return
 	}
-	var admin []userOrg
+	d := orgsIndexData{CanCreate: true}
 	for _, o := range u.Orgs {
 		if o.Role == "admin" {
-			admin = append(admin, o)
+			d.Admin = append(d.Admin, o)
+		}
+		if o.State == "" || o.State == "active" {
+			d.CanCreate = false
+			d.MemberOf = o.Handle
 		}
 	}
-	h.render(w, r, http.StatusOK, "orgs", page{Title: "Organizations", User: u, Data: admin})
+	h.render(w, r, http.StatusOK, "orgs", page{Title: "Organizations", User: u, Data: d})
+}
+
+// orgsCreate is the create form: POST /api/v1/orgs in-process, then the
+// new organization's page, or back here with the API's refusal.
+func (h *handler) orgsCreate(w http.ResponseWriter, r *http.Request) {
+	if !h.acceptForm(w, r) {
+		return
+	}
+	f := r.PostFormValue
+	handle := strings.ToLower(strings.TrimSpace(f("handle")))
+	name := strings.TrimSpace(f("displayName"))
+	if handle == "" || name == "" {
+		h.back(w, r, "/ui/orgs", "", "Enter the organization's handle and display name.")
+		return
+	}
+	body := map[string]any{"handle": handle, "displayName": name}
+	if f("noDomain") == "true" {
+		body["domain"] = "none"
+	}
+	res, err := h.call(r).do(http.MethodPost, "/orgs", body)
+	if err != nil || !res.OK() {
+		h.back(w, r, "/ui/orgs", "", failMsg(res, err))
+		return
+	}
+	var created orgInfo
+	_ = res.decode(&created)
+	msg := "Organization " + handle + " created; you are its first admin."
+	if created.Domain != "" {
+		msg += " It is registered at " + created.Domain + ": people who sign up with an address there are pointed to you."
+	}
+	h.back(w, r, "/ui/orgs/"+url.PathEscape(handle), msg, "")
 }

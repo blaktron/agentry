@@ -38,6 +38,20 @@ loc=$(curl -sS -o /dev/null -w '%{redirect_url}' -c "$JAR" -b "$JAR" -H 'Sec-Fet
 [ -n "$(csrf)" ] || { echo "sign-in: no csrf cookie"; exit 1; }
 echo "sign-in form: OK"
 curl -fsS -b "$JAR" "$BASE/ui/account" | grep -q "$HANDLE" && echo "account page: OK"
+# Organizations (agentry#363): the create form, then the decommission form.
+# Creating one needs a verified address, and the verification token never
+# leaves the server, so the address is marked verified directly, as
+# m3-cli.sh does — through the Go toolchain rather than psql.
+go run ./scripts/dev/dbexec "UPDATE users SET email_verified_at = now() WHERE id = (SELECT id FROM handles WHERE handle = '$HANDLE')" >/dev/null
+ORG="uiorg$SFX"
+loc=$(curl -sS -o /dev/null -w '%{redirect_url}' -b "$JAR" -c "$JAR" -H 'Sec-Fetch-Site: same-origin' --data-urlencode "_csrf=$(csrf)" \
+  --data-urlencode "handle=$ORG" --data-urlencode "displayName=Acceptance Org" "$BASE/ui/orgs")
+[ "$loc" = "$BASE/ui/orgs/$ORG" ] || { echo "create org form: redirect $loc"; exit 1; }
+curl -fsS -b "$JAR" -c "$JAR" "$BASE/ui/orgs/$ORG" | grep -q "Acceptance Org" && echo "org created from the form: OK"
+loc=$(curl -sS -o /dev/null -w '%{redirect_url}' -b "$JAR" -c "$JAR" -H 'Sec-Fetch-Site: same-origin' --data-urlencode "_csrf=$(csrf)" \
+  --data-urlencode "section=decommission" --data-urlencode "confirm=$ORG" "$BASE/ui/orgs/$ORG")
+[ "$loc" = "$BASE/ui/orgs/$ORG" ] || { echo "decommission form: redirect $loc"; exit 1; }
+curl -fsS -b "$JAR" -c "$JAR" "$BASE/ui/orgs/$ORG" | grep -q "being decommissioned" && echo "org decommissioned from the form: OK"
 curl -fsS -b "$JAR" -H 'Sec-Fetch-Site: same-origin' --data-urlencode "_csrf=$(csrf)" --data-urlencode "action=create" \
   --data-urlencode "name=acceptance" --data-urlencode "scopes=agent:read" "$BASE/ui/account/tokens" | grep -q "agy_" && echo "token shown once: OK"
 curl -fsS -b "$JAR" "$BASE/ui/account/tokens" | grep -q "acceptance" && echo "token listed: OK"

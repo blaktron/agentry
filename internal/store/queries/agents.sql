@@ -32,10 +32,15 @@ UPDATE agents SET
 WHERE id = $1;
 
 -- name: ListAgentsByNamespace :many
+-- A suspended or erased organization's agents are absent (agentry#363);
+-- the handler answers 404 for the namespace before this runs, and the
+-- predicate keeps the listing honest on its own.
 SELECT a.*, h.handle AS namespace
 FROM agents a JOIN handles h ON h.id = a.namespace_id
+LEFT JOIN orgs o ON o.id = a.namespace_id
 WHERE h.handle = $1
   AND (a.visibility = 'public' OR sqlc.arg(include_private)::boolean)
+  AND (h.kind <> 'org' OR o.state IN ('active','decommissioning'))
 ORDER BY a.name;
 
 -- name: CountAgentsInNamespace :one
@@ -184,7 +189,10 @@ WHERE a.visibility = 'public'
   AND (sqlc.narg('license')::text IS NULL
        OR lower(lv.manifest ->> 'license') = lower(sqlc.narg('license')::text))
   AND (sqlc.arg(verified_only)::boolean = false
-       OR (h.kind = 'org' AND o.verified_domain IS NOT NULL))
+       OR (h.kind = 'org' AND EXISTS (SELECT 1 FROM domain_claims dc WHERE dc.org_id = o.id AND dc.verified_at IS NOT NULL)))
+  -- An organization that is suspended or erased is absent everywhere, its
+  -- listings included (agentry#363); one in its decommission hold is read.
+  AND (h.kind <> 'org' OR o.state IN ('active','decommissioning'))
 ORDER BY
   CASE WHEN sqlc.arg(sort)::text = 'installs' THEN coalesce(d.installs, 0) END DESC NULLS LAST,
   CASE WHEN sqlc.arg(sort)::text = 'newest' THEN a.created_at END DESC NULLS LAST,
@@ -241,14 +249,20 @@ WHERE a.visibility = 'public'
   AND (sqlc.narg('license')::text IS NULL
        OR lower(lv.manifest ->> 'license') = lower(sqlc.narg('license')::text))
   AND (sqlc.arg(verified_only)::boolean = false
-       OR (h.kind = 'org' AND o.verified_domain IS NOT NULL));
+       OR (h.kind = 'org' AND EXISTS (SELECT 1 FROM domain_claims dc WHERE dc.org_id = o.id AND dc.verified_at IS NOT NULL)))
+  -- An organization that is suspended or erased is absent everywhere, its
+  -- listings included (agentry#363); one in its decommission hold is read.
+  AND (h.kind <> 'org' OR o.state IN ('active','decommissioning'));
 
 -- name: SearchFacetModes :many
 -- One row per run mode with the number of public, unblocked agents that
 -- support it; an agent supporting both counts under each.
 SELECT m.mode::text AS mode, count(*)::bigint AS n
-FROM agents a, unnest(a.modes) AS m(mode)
+FROM agents a
+JOIN handles h ON h.id = a.namespace_id
+LEFT JOIN orgs o ON o.id = a.namespace_id, unnest(a.modes) AS m(mode)
 WHERE a.visibility = 'public' AND a.quarantine_state <> 'blocked'
+  AND (h.kind <> 'org' OR o.state IN ('active','decommissioning'))
   AND (sqlc.arg(query)::text = '' OR a.search_tsv @@ websearch_to_tsquery('english', sqlc.arg(query)::text))
 GROUP BY m.mode ORDER BY m.mode;
 
@@ -257,8 +271,11 @@ GROUP BY m.mode ORDER BY m.mode;
 -- manifest (V7 requires an SPDX id for public publish).
 SELECT (lv.manifest ->> 'license')::text AS license, count(*)::bigint AS n
 FROM agents a
+JOIN handles h ON h.id = a.namespace_id
+LEFT JOIN orgs o ON o.id = a.namespace_id
 JOIN agent_versions lv ON lv.id = a.latest_published_version_id
 WHERE a.visibility = 'public' AND a.quarantine_state <> 'blocked'
+  AND (h.kind <> 'org' OR o.state IN ('active','decommissioning'))
   AND lv.manifest ->> 'license' IS NOT NULL
   AND (sqlc.arg(query)::text = '' OR a.search_tsv @@ websearch_to_tsquery('english', sqlc.arg(query)::text))
 GROUP BY 1 ORDER BY n DESC, 1 LIMIT 20;
@@ -272,6 +289,7 @@ SELECT a.id, a.name, a.modes, a.summary, a.quarantine_state, a.created_at,
        coalesce(d.installs, 0)::bigint AS installs
 FROM agents a
 JOIN handles h ON h.id = a.namespace_id
+LEFT JOIN orgs o ON o.id = a.namespace_id
 JOIN agent_versions lv ON lv.id = a.latest_published_version_id
 LEFT JOIN (
   SELECT agent_id, sum(installs) AS installs
@@ -279,6 +297,7 @@ LEFT JOIN (
 ) d ON d.agent_id = a.id
 WHERE a.visibility = 'public'
   AND a.quarantine_state <> 'blocked'
+  AND (h.kind <> 'org' OR o.state IN ('active','decommissioning'))
   AND lv.manifest -> 'tags' @> to_jsonb(sqlc.arg(tag)::text)
   AND (sqlc.narg('before_time')::timestamptz IS NULL
        OR a.created_at < sqlc.narg('before_time')

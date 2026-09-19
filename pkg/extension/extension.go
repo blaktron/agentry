@@ -205,6 +205,15 @@ type Orgs interface {
 	// Activate marks the organization activated. Idempotent: it reports
 	// whether this call did it, and an unknown org is false with no error.
 	Activate(ctx context.Context, orgID uuid.UUID) (bool, error)
+	// Decommission starts the organization's decommission hold the way an
+	// admin's request does (agentry#363): read-only for the configured
+	// hold, then erased, its handle and domain released; the core fires
+	// org.decommissioning now and org.decommissioned after the erasure.
+	// The hosted product's pending-payment sweep calls it for an
+	// organization nobody paid for. Idempotent: it reports whether this
+	// call did it; an organization that is not active, or unknown, is
+	// false with no error.
+	Decommission(ctx context.Context, orgID uuid.UUID, reason string) (bool, error)
 }
 
 // BlobStore is the core's object store: put (write-once per key, so an

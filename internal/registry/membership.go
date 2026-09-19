@@ -146,6 +146,13 @@ func (s *Service) ActivateMember(ctx context.Context, req ActivateMemberRequest)
 			}
 		}
 
+		// Nobody joins an organization that is suspended or in its
+		// decommission hold (agentry#363); the row lock above means the
+		// state read here is the one the activation commits against.
+		if err := s.OrgGateIn(ctx, q, req.OrgID, auth.ActOrgMembersManage); err != nil {
+			return err
+		}
+
 		// A person is active in at most one organization at a time (D26).
 		elsewhere, err := q.CountActiveMembershipsElsewhere(ctx, storegen.CountActiveMembershipsElsewhereParams{UserID: req.UserID, OrgID: req.OrgID})
 		if err != nil {

@@ -109,6 +109,29 @@ func TestLastAdminCannotBeRemoved(t *testing.T) {
 	if code, slug, _ := problemOf(t, res); code != http.StatusConflict || slug != "last-admin" {
 		t.Fatalf("self-demote beside an erased admin: %d %s, want 409 last-admin", code, slug)
 	}
+
+	// The erasure case (agentry#363): the last admin cannot erase their
+	// account either, and the refusal names the organization; with another
+	// admin in place the erasure goes through and takes the membership
+	// with it, so no seat is held by an account that is gone.
+	res = env.do(admin, http.MethodPost, "/api/v1/user/delete", nil)
+	if code, slug, detail := problemOf(t, res); code != http.StatusConflict || slug != "last-admin" || !strings.Contains(detail, orgH) {
+		t.Fatalf("erasing the last admin: %d %s %q, want 409 last-admin naming the org", code, slug, detail)
+	}
+	thirdH := env.register("la-third")
+	env.joinOrg(admin, orgH, thirdH)
+	env.doJSON(admin, http.MethodPut, "/api/v1/orgs/"+orgH+"/members/"+thirdH,
+		map[string]any{"role": "admin"}, nil, http.StatusOK)
+	env.doJSON(admin, http.MethodPost, "/api/v1/user/delete", nil, nil, http.StatusNoContent)
+	var held int
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM memberships m JOIN users u ON u.id = m.user_id WHERE u.state = 'deleted' AND u.deleted_tombstone IS NOT NULL
+		   AND m.org_id = (SELECT id FROM handles WHERE handle = $1)`, orgH).Scan(&held); err != nil {
+		t.Fatal(err)
+	}
+	if held != 0 {
+		t.Fatalf("an erased account still holds %d membership(s)", held)
+	}
 }
 
 // TestSecurityReviewerIsFirstPartyOnly: the role is refused in an ordinary
@@ -135,11 +158,17 @@ func TestSecurityReviewerIsFirstPartyOnly(t *testing.T) {
 		t.Fatalf("the retired owner role: %d %s %q, want 422 naming admin or member", code, slug, detail)
 	}
 
-	// The first-party org: created here by staff, or already present from an
-	// earlier run over the same database (the handle is fixed by design), in
-	// which case this run's staff account is seeded as one of its admins.
+	// The first-party org: created here by a second staff account — the
+	// first now belongs to the ordinary organization, and a person belongs
+	// to one at a time (D26, agentry#363) — or already present from an
+	// earlier run over the same database (the handle is fixed by design),
+	// in which case this run's account is seeded as one of its admins.
 	// (The refusals above needed no membership: an unassignable role is
 	// refused before the handler asks who the target is.)
+	staffH = env.register("sr-staff2")
+	env.verifyEmail(staffH)
+	env.makePlatformStaff(t, staffH)
+	staff = env.login(staffH)
 	res = env.do(staff, http.MethodPost, "/api/v1/orgs", map[string]any{"handle": "secureagentry", "displayName": "SecureAgentry"})
 	code, slug, _ := problemOf(t, res)
 	switch {
@@ -184,16 +213,22 @@ func TestCreateOrgRequiresVerifiedEmail(t *testing.T) {
 // TestOnePendingOrgPerAccount: where an admission extension runs an
 // organization is created awaiting activation, and its creator may not
 // create another until it is activated through Deps.Orgs; with no
-// extension every organization is activated as it is created and an
-// account may create as many as it likes (§3: the core with no extension is
-// unchanged).
+// extension every organization is activated as it is created and the
+// pending rule never bites (§3: the core with no extension is unchanged).
+// A person belongs to one organization at a time whatever the deployment
+// (D26, agentry#370), so between the two creations the creator hands the
+// first organization to another admin and leaves it.
 func TestOnePendingOrgPerAccount(t *testing.T) {
 	t.Run("without an extension", func(t *testing.T) {
 		env := newTestEnv(t)
 		h := env.register("po-free")
 		env.verifyEmail(h)
 		sess := env.login(h)
-		env.createOrg(sess, "pofree1"+env.sfx)
+		first := "pofree1" + env.sfx
+		env.createOrg(sess, first)
+		otherH := env.register("po-free2")
+		env.joinOrg(sess, first, otherH)
+		env.handOverAndLeave(sess, first, otherH)
 		env.createOrg(sess, "pofree2"+env.sfx)
 	})
 	t.Run("with an admission extension", func(t *testing.T) {
@@ -226,6 +261,16 @@ func TestOnePendingOrgPerAccount(t *testing.T) {
 		if did, err := srv.ActivateOrg(context.Background(), uuid.New()); err != nil || did {
 			t.Fatalf("ActivateOrg of nobody: %v %v, want false and no error", did, err)
 		}
+		// Activated, the first organization no longer stands in the way of
+		// the pending rule — and the creator's membership of it does, until
+		// they hand it over and leave.
+		res = env.do(sess, http.MethodPost, "/api/v1/orgs", map[string]any{"handle": "popaid2" + env.sfx, "displayName": "Second"})
+		if code, slug, _ := problemOf(t, res); code != http.StatusConflict || slug != "already-a-member" {
+			t.Fatalf("second org while a member of the first: %d %s, want 409 already-a-member", code, slug)
+		}
+		successorH := env.register("po-succ")
+		env.joinOrg(sess, first, successorH)
+		env.handOverAndLeave(sess, first, successorH)
 		env.createOrg(sess, "popaid2"+env.sfx)
 	})
 }

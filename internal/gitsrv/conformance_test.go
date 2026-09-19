@@ -810,3 +810,65 @@ func newUUID(t *testing.T) uuid.UUID {
 	}
 	return id
 }
+
+// TestOrgStateGatesGit (agentry#363): the git transport consults the same
+// organization-state gate the API does. A suspended organization's
+// repository is an unknown path — the credential prompt for anonymous,
+// 404 for a signed-in caller — and one in its decommission hold takes
+// reads and refuses pushes with a 403 that says why.
+func TestOrgStateGatesGit(t *testing.T) {
+	env := newGitEnv(t)
+	orgH := "gsorg" + env.sfx
+	orgID := env.seedOrg(orgH, false)
+	env.seedOrgAgent(orgH, orgID, "org-agent", "public")
+	work := seedWorkdir(t, map[string]string{"agent.yaml": "schemaVersion: \"1\"\n", "README.md": "# org\n"})
+	mustGit(t, work, "push", env.cloneURLNS(orgH, "org-agent", env.owner.patRW), "main")
+
+	setState := func(state string, hold bool) {
+		t.Helper()
+		var at any
+		if hold {
+			at = time.Now().Add(time.Hour)
+		}
+		if _, err := env.st.Pool().Exec(context.Background(),
+			`UPDATE orgs SET state = $2, decommission_at = $3 WHERE id = $1`, orgID, state, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	probe := func(pat string) int {
+		t.Helper()
+		req, _ := http.NewRequest(http.MethodGet, env.cloneURLNS(orgH, "org-agent", "")+"/info/refs?service=git-upload-pack", nil)
+		if pat != "" {
+			req.SetBasicAuth("token", pat)
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = res.Body.Close()
+		return res.StatusCode
+	}
+
+	setState("suspended", false)
+	if got := probe(""); got != http.StatusUnauthorized {
+		t.Fatalf("anonymous probe of a suspended org's repo: %d, want 401 (the same as an unknown path)", got)
+	}
+	if got := probe(env.owner.patRO); got != http.StatusNotFound {
+		t.Fatalf("the admin's probe of a suspended org's repo: %d, want 404", got)
+	}
+	if out, err := gitRun(t, t.TempDir(), "clone", env.cloneURLNS(orgH, "org-agent", env.owner.patRO), "c"); err == nil {
+		t.Fatalf("clone of a suspended org's repo succeeded:\n%s", out)
+	}
+
+	setState("decommissioning", true)
+	dst := t.TempDir()
+	mustGit(t, dst, "clone", env.cloneURLNS(orgH, "org-agent", env.owner.patRO), "c")
+	mustGit(t, work, "commit", "--allow-empty", "-m", "during the hold")
+	out, err := gitRun(t, work, "push", env.cloneURLNS(orgH, "org-agent", env.owner.patRW), "main")
+	if err == nil || !strings.Contains(out, "403") || !strings.Contains(out, "decommissioned") {
+		t.Fatalf("push during the hold: err=%v, want a 403 naming the decommission:\n%s", err, out)
+	}
+
+	setState("active", false)
+	mustGit(t, work, "push", env.cloneURLNS(orgH, "org-agent", env.owner.patRW), "main")
+}

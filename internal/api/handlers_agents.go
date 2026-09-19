@@ -90,6 +90,16 @@ func (s *Server) resolveAgentForAction(w http.ResponseWriter, r *http.Request, n
 		}
 		return registry.Agent{}, auth.AgentRoleNone, false
 	}
+	// The owning organization's state (agentry#363): under a suspended
+	// organization the agent is absent to everyone, reader or not; under
+	// one in its decommission hold it is read-only.
+	if err := s.reg.OrgGateFor(r.Context(), a, act); err != nil {
+		if !s.orgGateProblem(w, r, a.Namespace, err) {
+			s.log.ErrorContext(r.Context(), "org gate", "agent", a.ID, "err", err)
+			problemInternal(w, r)
+		}
+		return registry.Agent{}, auth.AgentRoleNone, false
+	}
 	return a, role, true
 }
 
@@ -135,6 +145,7 @@ func (s *Server) CreateAgent(w http.ResponseWriter, r *http.Request) {
 			problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
 		case errors.Is(err, registry.ErrPrivateAgentCap):
 			problemPrivateAgentCap(w, r)
+		case s.orgGateProblem(w, r, req.Namespace, err):
 		case errors.Is(err, registry.ErrDenied):
 			problemValidation(w, r, sentence(err.Error()))
 		case isUniqueViolation(err):
@@ -169,8 +180,19 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, params ListA
 	// (agentry#313). A pending member holds nothing and sees nothing. Per-
 	// agent grant holders are not in the listing either: conservative.
 	includePrivate := false
-	if !p.Anonymous {
-		if h, err := s.q().GetHandle(r.Context(), params.Namespace); err == nil {
+	if h, err := s.q().GetHandle(r.Context(), params.Namespace); err == nil {
+		// A suspended or erased organization's namespace is absent to
+		// everyone (agentry#363); the query says the same on its own.
+		if h.Kind == "org" {
+			if err := s.reg.OrgGate(r.Context(), h.ID, auth.ActPublicRead); err != nil {
+				if !s.orgGateProblem(w, r, params.Namespace, err) {
+					s.log.ErrorContext(r.Context(), "org gate", "org", h.ID, "err", err)
+					problemInternal(w, r)
+				}
+				return
+			}
+		}
+		if !p.Anonymous {
 			includePrivate = auth.NamespaceDerivedAgentRole(p, h.Kind, h.ID, p.Role(h.ID)) != auth.AgentRoleNone
 		}
 	}
