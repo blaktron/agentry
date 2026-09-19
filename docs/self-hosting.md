@@ -990,9 +990,11 @@ handle. It is then read-only for its members for the hold below, and
 when the hold ends a sweep yanks its releases, deletes its archives and
 repositories, ends every membership and releases its handle and domain.
 Platform staff can **suspend** an organization from the same page — it
-and everything under it answer as absent, over the API and over git,
-until reinstated — and **reinstate** one, which also cancels a hold that
-has not run.
+and everything under it answer as absent, over the API and over git and
+to staff too, until reinstated — and **reinstate** one, which also
+cancels a hold that has not run. Because a suspended organization's page
+is absent as well, the staff console (`/ui/staff`) carries suspend and
+reinstate by handle.
 
 ```yaml
 orgs:

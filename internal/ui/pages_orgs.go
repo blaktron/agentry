@@ -149,7 +149,15 @@ func (h *handler) orgPage(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			status, msg = res.Status, res.detail()
 		}
-		h.render(w, r, status, "message", page{Title: "Organization " + org, User: u, Error: msg})
+		p := page{Title: "Organization " + org, User: u, Error: msg}
+		// A suspended organization is absent to staff too (agentry#374),
+		// and this page cannot tell suspended from never-existed — that is
+		// the invariant — so staff are pointed at the console, where the
+		// actions live by handle.
+		if status == http.StatusNotFound && u.PlatformStaff {
+			p.Data = map[string]string{"Link": "/ui/staff", "LinkText": "Suspend or reinstate an organization from the staff console"}
+		}
+		h.render(w, r, status, "message", p)
 		return
 	}
 	_ = res.decode(&d.Org)
@@ -244,12 +252,8 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 			"confirm": strings.TrimSpace(f("confirm")), "reason": strings.TrimSpace(f("reason")),
 		})
 		ok = org + " is being decommissioned: read-only for its members until the hold ends, then erased and its handle released. Platform staff can still reinstate it before then."
-	case "suspend":
-		res, err = c.do(http.MethodPost, base+"/suspend", map[string]string{"reason": strings.TrimSpace(f("reason"))})
-		ok = org + " is suspended: it and everything under it answer as absent until it is reinstated."
-	case "reinstate":
-		res, err = c.do(http.MethodPost, base+"/reinstate", map[string]string{})
-		ok = org + " is active again."
+	case "suspend", "reinstate":
+		res, ok, err = c.orgLifecycle(org, f("section"), strings.TrimSpace(f("reason")))
 	case "member":
 		handle := strings.TrimSpace(f("handle"))
 		if handle == "" {
