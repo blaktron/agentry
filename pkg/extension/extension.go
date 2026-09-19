@@ -194,6 +194,36 @@ type Deps struct {
 	// Orgs is the core's organization store as an extension may act on it
 	// (agentry#360). nil when the server runs without a database.
 	Orgs Orgs
+	// Agents is the core's read of an agent as an extension may ask it
+	// (agentry#381). nil when the server runs without a database.
+	Agents Agents
+}
+
+// Agents answers whether a principal may read an agent the way the core's
+// own routes decide it — the effective role over the namespace and the
+// grants, a personal access token's agent:read, the owning organization's
+// state — so an extension that names a release (a hosted run of it, say)
+// admits exactly whom the core would and mirrors none of the rule in SQL.
+type Agents interface {
+	// Readable reports whether p may read the agent at namespace/name,
+	// and what the core knows of it when they may. An agent that does not
+	// exist and one p may not read are the same false with no error: the
+	// seam gives no way to tell a private agent's existence that the
+	// core's routes would not give.
+	Readable(ctx context.Context, p *Principal, namespace, name string) (AgentRef, bool, error)
+}
+
+// AgentRef is what the core says of an agent a principal may read: its
+// id, the owning namespace's id and kind (NamespaceUser or NamespaceOrg —
+// an organization's, for an organization's agent), and whether it is
+// public. Readable says nothing of what else the caller may do with it:
+// an agent of an organization in its decommission hold reads and is not
+// written.
+type AgentRef struct {
+	ID            uuid.UUID
+	NamespaceID   uuid.UUID
+	NamespaceKind NamespaceKind
+	Public        bool
 }
 
 // Orgs holds the acts on an organization the core owns and an extension

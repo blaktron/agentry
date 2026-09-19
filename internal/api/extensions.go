@@ -160,6 +160,32 @@ func (s *Server) ActivateOrg(ctx context.Context, orgID uuid.UUID) (bool, error)
 // way ExtensionDeps' pool is.
 func (s *Server) Blobs() registry.BlobStore { return s.blobs }
 
+// AgentReadable is the core's read of an agent for pkg/extension.Deps.Agents
+// (agentry#381): whether p may read the agent at ns/name exactly as the
+// core's own routes decide it — the effective role over the namespace and
+// the grants (auth.CheckAgent), a PAT's agent:read, the owning
+// organization's state (suspended: absent; in its hold: readable) — with
+// the agent when they may. An agent that does not exist and one p may not
+// read are the same false, never an error: an extension gets no way to
+// tell a private agent's existence the core's routes would not give.
+func (s *Server) AgentReadable(ctx context.Context, p *auth.Principal, ns, name string) (registry.Agent, bool, error) {
+	if s.reg == nil {
+		return registry.Agent{}, false, errors.New("api: no registry to read agents from")
+	}
+	// For a read, agentForAction answers a refused caller with ErrNotFound
+	// and the organization's state with a gate error; anything else is a
+	// fault the extension must answer as one, never as an absence.
+	a, _, err := s.agentForAction(ctx, p, ns, name, auth.ActAgentRead)
+	var gate *registry.OrgGateError
+	switch {
+	case err == nil:
+		return a, true, nil
+	case errors.Is(err, registry.ErrNotFound), errors.As(err, &gate):
+		return registry.Agent{}, false, nil
+	}
+	return registry.Agent{}, false, err
+}
+
 // ExtensionNames lists the mounted extensions in registration order.
 func (s *Server) ExtensionNames() []string {
 	out := make([]string, 0, len(s.extensions))
