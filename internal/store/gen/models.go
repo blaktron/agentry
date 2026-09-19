@@ -205,6 +205,13 @@ type Finding struct {
 	CreatedAt     time.Time  `json:"created_at"`
 }
 
+type FoldInDecline struct {
+	OrgID      uuid.UUID  `json:"org_id"`
+	UserID     uuid.UUID  `json:"user_id"`
+	DeclinedBy *uuid.UUID `json:"declined_by"`
+	DeclinedAt time.Time  `json:"declined_at"`
+}
+
 type Handle struct {
 	ID        uuid.UUID `json:"id"`
 	Handle    string    `json:"handle"`
@@ -277,13 +284,15 @@ type McpServerScan struct {
 }
 
 type Membership struct {
-	OrgID     uuid.UUID `json:"org_id"`
-	UserID    uuid.UUID `json:"user_id"`
-	Role      string    `json:"role"`
-	ViaScim   bool      `json:"via_scim"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	State     string    `json:"state"`
+	OrgID            uuid.UUID  `json:"org_id"`
+	UserID           uuid.UUID  `json:"user_id"`
+	Role             string     `json:"role"`
+	ViaScim          bool       `json:"via_scim"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+	State            string     `json:"state"`
+	ViaDomain        bool       `json:"via_domain"`
+	AdminsNotifiedAt *time.Time `json:"admins_notified_at"`
 }
 
 type Org struct {

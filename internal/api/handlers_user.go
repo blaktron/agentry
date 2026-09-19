@@ -47,6 +47,7 @@ func (s *Server) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 		}
 		u.Orgs = &orgs
 	}
+	u.PendingOrg = s.pendingOrgOf(r.Context(), p.UserID)
 	writeJSON(w, http.StatusOK, u)
 }
 

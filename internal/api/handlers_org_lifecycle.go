@@ -359,6 +359,7 @@ func (s *Server) eraseOrg(ctx context.Context, orgID uuid.UUID, handle string) e
 		}{
 			{"org_invitations", func() (int64, error) { return tq.DeleteOrgInvitations(ctx, orgID) }},
 			{"memberships", func() (int64, error) { return tq.DeleteOrgMemberships(ctx, orgID) }},
+			{"fold_in_declines", func() (int64, error) { return tq.DeleteOrgFoldInDeclines(ctx, orgID) }},
 			{"teams", func() (int64, error) { return tq.DeleteOrgTeams(ctx, orgID) }},
 			{"webhook_endpoints", func() (int64, error) { return tq.DeleteOrgWebhookEndpoints(ctx, orgID) }},
 			{"identities", func() (int64, error) { return tq.DeleteOrgSSOIdentities(ctx, orgID) }},

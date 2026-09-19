@@ -56,6 +56,37 @@ type Notifier interface {
 	// verified address is at the organisation's domain asks to be added
 	// (agentry#363, D13, D21). One mail per admin, once a day per person.
 	OrgAccessRequest(ctx context.Context, n AccessRequestNotice) error
+	// OrgPendingMembers tells an organisation's admin who is waiting to be
+	// approved (agentry#364, D25): the people the domain folded in, and
+	// the IdP provisioned, that no digest has named yet. One mail per
+	// admin per organisation, batched daily; a person is named once.
+	OrgPendingMembers(ctx context.Context, n PendingMembersNotice) error
+}
+
+// PendingMembersNotice is the daily digest delivered to one of the
+// organisation's admins.
+type PendingMembersNotice struct {
+	ToEmail string
+	Org     string
+	// OrgDisplayName is the organisation's name, for the sentence.
+	OrgDisplayName string
+	// Members are the people waiting, in the order they arrived.
+	Members []PendingMember
+	// ConsoleURL is where the admin approves or declines them; empty when
+	// the server knows no absolute origin.
+	ConsoleURL string
+}
+
+// PendingMember is one person in the digest.
+type PendingMember struct {
+	Handle string
+	// Email is their verified address.
+	Email string
+	// Via is the door: "domain" (their address is at the organisation's
+	// domain) or "scim" (the organisation's IdP provisioned them).
+	Via string
+	// Since is when they became pending.
+	Since time.Time
 }
 
 // AccessRequestNotice is a request for access delivered to one of the
@@ -277,6 +308,13 @@ func (n LogNotifier) OrgInvite(_ context.Context, notice InviteOffer) error {
 func (n LogNotifier) OrgAccessRequest(_ context.Context, notice AccessRequestNotice) error {
 	n.logger().Info("notify: org access request",
 		"to", logx.MaskEmail(notice.ToEmail), "org", notice.Org, "requester", notice.Requester)
+	return nil
+}
+
+// OrgPendingMembers implements Notifier.
+func (n LogNotifier) OrgPendingMembers(_ context.Context, notice PendingMembersNotice) error {
+	n.logger().Info("notify: org pending members",
+		"to", logx.MaskEmail(notice.ToEmail), "org", notice.Org, "pending", len(notice.Members))
 	return nil
 }
 
@@ -566,6 +604,37 @@ func (r renderer) accessRequest(n AccessRequestNotice) message {
 		Subject: r.registry + ": " + n.Requester + " asks to join the " + n.Org + " organization",
 		Body:    body + r.footer(),
 	}
+}
+
+func (r renderer) pendingMembers(n PendingMembersNotice) message {
+	who := orgLabel(n.Org, n.OrgDisplayName)
+	body := ""
+	if len(n.Members) == 1 {
+		body = "One person is waiting to join the " + who + " organization on " + r.registry + ":\n\n"
+	} else {
+		body = fmt.Sprintf("%d people are waiting to join the %s organization on %s:\n\n", len(n.Members), who, r.registry)
+	}
+	for _, m := range n.Members {
+		how := "their address is at the domain registered to your organization"
+		if m.Via == "scim" {
+			how = "your organization's identity provider provisioned them"
+		}
+		body += "  " + m.Handle + " <" + m.Email + "> — " + how + "\n"
+	}
+	body += "\nEach of them holds nothing of the organization until an admin approves\n" +
+		"them, which is also where their seat is taken; declining removes them and\n" +
+		"is remembered. Approve or decline from the organization's console"
+	if n.ConsoleURL != "" {
+		body += ":\n" + n.ConsoleURL + "\n"
+	} else {
+		body += ".\n"
+	}
+	body += "\nYou are told about each person once.\n"
+	subject := r.registry + ": " + n.Members[0].Handle + " is waiting to join the " + n.Org + " organization"
+	if len(n.Members) != 1 {
+		subject = fmt.Sprintf("%s: %d people are waiting to join the %s organization", r.registry, len(n.Members), n.Org)
+	}
+	return message{Subject: subject, Body: body + r.footer()}
 }
 
 // severityLine renders a severity label, defaulting to something honest when
