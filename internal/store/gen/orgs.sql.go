@@ -13,29 +13,32 @@ import (
 )
 
 const activateMembership = `-- name: ActivateMembership :execrows
-INSERT INTO memberships AS m (org_id, user_id, role, via_scim, state)
-VALUES ($1, $2, $3, $4, 'active')
+INSERT INTO memberships AS m (org_id, user_id, role, via_scim, via_domain, state)
+VALUES ($1, $2, $3, $4, $5, 'active')
 ON CONFLICT (org_id, user_id) DO UPDATE
   SET role = EXCLUDED.role, state = 'active', updated_at = now()
   WHERE m.state <> 'active'
 `
 
 type ActivateMembershipParams struct {
-	OrgID   uuid.UUID `json:"org_id"`
-	UserID  uuid.UUID `json:"user_id"`
-	Role    string    `json:"role"`
-	ViaScim bool      `json:"via_scim"`
+	OrgID     uuid.UUID `json:"org_id"`
+	UserID    uuid.UUID `json:"user_id"`
+	Role      string    `json:"role"`
+	ViaScim   bool      `json:"via_scim"`
+	ViaDomain bool      `json:"via_domain"`
 }
 
 // The one write that makes a membership active. Returns 0 rows when it was
 // already active, so the caller can tell a first activation from a repeat
-// and emit member.added exactly once.
+// and emit member.added exactly once. The door flags of a pending row are
+// kept: the console still says how the person arrived.
 func (q *Queries) ActivateMembership(ctx context.Context, arg ActivateMembershipParams) (int64, error) {
 	result, err := q.db.Exec(ctx, activateMembership,
 		arg.OrgID,
 		arg.UserID,
 		arg.Role,
 		arg.ViaScim,
+		arg.ViaDomain,
 	)
 	if err != nil {
 		return 0, err
@@ -95,6 +98,20 @@ type CountActiveMembershipsElsewhereParams struct {
 // someone already active elsewhere is refused.
 func (q *Queries) CountActiveMembershipsElsewhere(ctx context.Context, arg CountActiveMembershipsElsewhereParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countActiveMembershipsElsewhere, arg.UserID, arg.OrgID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countMemberships = `-- name: CountMemberships :one
+SELECT count(*) FROM memberships m WHERE m.user_id = $1
+`
+
+// Every membership row a person holds, pending included: the fold-in
+// (agentry#364) fires only for a member of no organization, and a person
+// already waiting somewhere is not folded in elsewhere.
+func (q *Queries) CountMemberships(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countMemberships, userID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -287,6 +304,25 @@ func (q *Queries) DecommissionOrg(ctx context.Context, arg DecommissionOrgParams
 	return result.RowsAffected(), nil
 }
 
+const deleteFoldInDecline = `-- name: DeleteFoldInDecline :execrows
+DELETE FROM fold_in_declines WHERE org_id = $1 AND user_id = $2
+`
+
+type DeleteFoldInDeclineParams struct {
+	OrgID  uuid.UUID `json:"org_id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+// An admin's invitation or approval supersedes the decline: the memory
+// goes when the membership is activated.
+func (q *Queries) DeleteFoldInDecline(ctx context.Context, arg DeleteFoldInDeclineParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteFoldInDecline, arg.OrgID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteInvitation = `-- name: DeleteInvitation :execrows
 DELETE FROM org_invitations WHERE org_id = $1 AND id = $2 AND accepted_at IS NULL
 `
@@ -371,6 +407,27 @@ func (q *Queries) DeleteUserMemberships(ctx context.Context, userID uuid.UUID) (
 	return result.RowsAffected(), nil
 }
 
+const getFoldInDecline = `-- name: GetFoldInDecline :one
+SELECT org_id, user_id, declined_by, declined_at FROM fold_in_declines WHERE org_id = $1 AND user_id = $2
+`
+
+type GetFoldInDeclineParams struct {
+	OrgID  uuid.UUID `json:"org_id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) GetFoldInDecline(ctx context.Context, arg GetFoldInDeclineParams) (FoldInDecline, error) {
+	row := q.db.QueryRow(ctx, getFoldInDecline, arg.OrgID, arg.UserID)
+	var i FoldInDecline
+	err := row.Scan(
+		&i.OrgID,
+		&i.UserID,
+		&i.DeclinedBy,
+		&i.DeclinedAt,
+	)
+	return i, err
+}
+
 const getInvitationByToken = `-- name: GetInvitationByToken :one
 SELECT i.id, i.org_id, i.email, i.role, i.token_sha256, i.invited_by, i.created_at, i.expires_at, i.accepted_at, i.accepted_by, h.handle AS org_handle, o.display_name AS org_display_name,
   EXISTS (SELECT 1 FROM domain_claims dc
@@ -423,7 +480,7 @@ func (q *Queries) GetInvitationByToken(ctx context.Context, tokenSha256 []byte) 
 }
 
 const getMembership = `-- name: GetMembership :one
-SELECT org_id, user_id, role, via_scim, created_at, updated_at, state FROM memberships WHERE org_id = $1 AND user_id = $2
+SELECT org_id, user_id, role, via_scim, created_at, updated_at, state, via_domain, admins_notified_at FROM memberships WHERE org_id = $1 AND user_id = $2
 `
 
 type GetMembershipParams struct {
@@ -442,6 +499,8 @@ func (q *Queries) GetMembership(ctx context.Context, arg GetMembershipParams) (M
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.State,
+		&i.ViaDomain,
+		&i.AdminsNotifiedAt,
 	)
 	return i, err
 }
@@ -664,6 +723,41 @@ func (q *Queries) GetTeam(ctx context.Context, arg GetTeamParams) (Team, error) 
 	return i, err
 }
 
+const getUserPendingOrg = `-- name: GetUserPendingOrg :one
+SELECT h.handle, o.display_name, m.via_scim, m.via_domain
+FROM memberships m
+JOIN orgs o ON o.id = m.org_id
+JOIN handles h ON h.id = o.id
+WHERE m.user_id = $1 AND m.state = 'pending' AND o.state = 'active'
+ORDER BY m.created_at
+LIMIT 1
+`
+
+type GetUserPendingOrgRow struct {
+	Handle      string `json:"handle"`
+	DisplayName string `json:"display_name"`
+	ViaScim     bool   `json:"via_scim"`
+	ViaDomain   bool   `json:"via_domain"`
+}
+
+// The organization a person is waiting to be approved by, for GET /user's
+// pendingOrg (agentry#364): every page and client says it until an admin
+// approves or declines. Active organizations only: a suspended one is
+// absent to everyone, its pending members included, and one in its hold
+// can approve nobody, so a notice that its admins have been asked would
+// promise what cannot happen.
+func (q *Queries) GetUserPendingOrg(ctx context.Context, userID uuid.UUID) (GetUserPendingOrgRow, error) {
+	row := q.db.QueryRow(ctx, getUserPendingOrg, userID)
+	var i GetUserPendingOrgRow
+	err := row.Scan(
+		&i.Handle,
+		&i.DisplayName,
+		&i.ViaScim,
+		&i.ViaDomain,
+	)
+	return i, err
+}
+
 const listOpenInvitations = `-- name: ListOpenInvitations :many
 SELECT i.id, i.org_id, i.email, i.role, i.token_sha256, i.invited_by, i.created_at, i.expires_at, i.accepted_at, i.accepted_by, h.handle AS invited_by_handle
 FROM org_invitations i
@@ -757,7 +851,7 @@ func (q *Queries) ListOrgAdminsForMail(ctx context.Context, orgID uuid.UUID) ([]
 }
 
 const listOrgMembers = `-- name: ListOrgMembers :many
-SELECT m.role, m.via_scim, m.state, h.handle, u.display_name
+SELECT m.role, m.via_scim, m.via_domain, m.state, h.handle, u.display_name
 FROM memberships m
 JOIN users u ON u.id = m.user_id
 JOIN handles h ON h.id = u.id
@@ -768,6 +862,7 @@ ORDER BY h.handle
 type ListOrgMembersRow struct {
 	Role        string `json:"role"`
 	ViaScim     bool   `json:"via_scim"`
+	ViaDomain   bool   `json:"via_domain"`
 	State       string `json:"state"`
 	Handle      string `json:"handle"`
 	DisplayName string `json:"display_name"`
@@ -785,6 +880,7 @@ func (q *Queries) ListOrgMembers(ctx context.Context, orgID uuid.UUID) ([]ListOr
 		if err := rows.Scan(
 			&i.Role,
 			&i.ViaScim,
+			&i.ViaDomain,
 			&i.State,
 			&i.Handle,
 			&i.DisplayName,
@@ -820,6 +916,94 @@ func (q *Queries) ListOrgsDueForErasure(ctx context.Context) ([]ListOrgsDueForEr
 	for rows.Next() {
 		var i ListOrgsDueForErasureRow
 		if err := rows.Scan(&i.ID, &i.Handle); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOrgsWithUnnotifiedPending = `-- name: ListOrgsWithUnnotifiedPending :many
+SELECT o.id, h.handle, o.display_name
+FROM orgs o
+JOIN handles h ON h.id = o.id
+WHERE o.state = 'active'
+  AND ($1::uuid IS NULL OR o.id = $1::uuid)
+  AND EXISTS (SELECT 1 FROM memberships m WHERE m.org_id = o.id AND m.state = 'pending' AND m.admins_notified_at IS NULL)
+ORDER BY h.handle
+`
+
+type ListOrgsWithUnnotifiedPendingRow struct {
+	ID          uuid.UUID `json:"id"`
+	Handle      string    `json:"handle"`
+	DisplayName string    `json:"display_name"`
+}
+
+// The organizations the daily digest has something to say to
+// (agentry#364), or the one named: active ones with a pending member no
+// admin has been mailed about. A suspended or held organization gets no
+// digest; its admins can add nobody.
+func (q *Queries) ListOrgsWithUnnotifiedPending(ctx context.Context, orgID *uuid.UUID) ([]ListOrgsWithUnnotifiedPendingRow, error) {
+	rows, err := q.db.Query(ctx, listOrgsWithUnnotifiedPending, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOrgsWithUnnotifiedPendingRow
+	for rows.Next() {
+		var i ListOrgsWithUnnotifiedPendingRow
+		if err := rows.Scan(&i.ID, &i.Handle, &i.DisplayName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPendingMembersUnnotified = `-- name: ListPendingMembersUnnotified :many
+SELECT m.user_id, uh.handle, u.email, m.via_scim, m.via_domain, m.created_at
+FROM memberships m
+JOIN users u ON u.id = m.user_id
+JOIN handles uh ON uh.id = u.id
+WHERE m.org_id = $1 AND m.state = 'pending' AND m.admins_notified_at IS NULL
+ORDER BY m.created_at
+`
+
+type ListPendingMembersUnnotifiedRow struct {
+	UserID    uuid.UUID `json:"user_id"`
+	Handle    string    `json:"handle"`
+	Email     string    `json:"email"`
+	ViaScim   bool      `json:"via_scim"`
+	ViaDomain bool      `json:"via_domain"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// One organization's pending members no admin has been mailed about yet,
+// whichever door they came through. Read under the organization's row
+// lock by the digest, so two runs at once cannot both name them.
+func (q *Queries) ListPendingMembersUnnotified(ctx context.Context, orgID uuid.UUID) ([]ListPendingMembersUnnotifiedRow, error) {
+	rows, err := q.db.Query(ctx, listPendingMembersUnnotified, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPendingMembersUnnotifiedRow
+	for rows.Next() {
+		var i ListPendingMembersUnnotifiedRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Handle,
+			&i.Email,
+			&i.ViaScim,
+			&i.ViaDomain,
+			&i.CreatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -992,6 +1176,55 @@ func (q *Queries) ListUserTeamIDs(ctx context.Context, userID uuid.UUID) ([]uuid
 	return items, nil
 }
 
+const listUsersAtDomainForFoldIn = `-- name: ListUsersAtDomainForFoldIn :many
+SELECT u.id, h.handle, u.email
+FROM users u
+JOIN handles h ON h.id = u.id
+WHERE u.email_verified_at IS NOT NULL
+  AND u.state = 'active'
+  AND lower(rtrim(substring(u.email::text from '[^@]*$'), '.')) = lower($1::text)
+  AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = u.id)
+  AND NOT EXISTS (SELECT 1 FROM fold_in_declines d WHERE d.org_id = $2 AND d.user_id = u.id)
+ORDER BY h.handle
+`
+
+type ListUsersAtDomainForFoldInParams struct {
+	Domain string    `json:"domain"`
+	OrgID  uuid.UUID `json:"org_id"`
+}
+
+type ListUsersAtDomainForFoldInRow struct {
+	ID     uuid.UUID `json:"id"`
+	Handle string    `json:"handle"`
+	Email  string    `json:"email"`
+}
+
+// The accounts the fold-in sweep considers when an organization gains a
+// domain (agentry#364): a verified address at the domain — the part after
+// the last @, a trailing dot dropped, the way maildomains.Of reads it —
+// an active account, a member of nothing, and not declined by this
+// organization before. The sign-in step applies the same rules one
+// person at a time (registry.writePending).
+func (q *Queries) ListUsersAtDomainForFoldIn(ctx context.Context, arg ListUsersAtDomainForFoldInParams) ([]ListUsersAtDomainForFoldInRow, error) {
+	rows, err := q.db.Query(ctx, listUsersAtDomainForFoldIn, arg.Domain, arg.OrgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUsersAtDomainForFoldInRow
+	for rows.Next() {
+		var i ListUsersAtDomainForFoldInRow
+		if err := rows.Scan(&i.ID, &i.Handle, &i.Email); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockKey = `-- name: LockKey :exec
 SELECT pg_advisory_xact_lock(hashtext($1::text))
 `
@@ -1031,6 +1264,24 @@ type MarkInvitationAcceptedParams struct {
 // the same token a no-op rather than a second membership.
 func (q *Queries) MarkInvitationAccepted(ctx context.Context, arg MarkInvitationAcceptedParams) (int64, error) {
 	result, err := q.db.Exec(ctx, markInvitationAccepted, arg.ID, arg.OrgID, arg.AcceptedBy)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const markPendingMembersNotified = `-- name: MarkPendingMembersNotified :execrows
+UPDATE memberships SET admins_notified_at = now()
+WHERE org_id = $1 AND user_id = ANY($2::uuid[]) AND state = 'pending' AND admins_notified_at IS NULL
+`
+
+type MarkPendingMembersNotifiedParams struct {
+	OrgID   uuid.UUID   `json:"org_id"`
+	UserIds []uuid.UUID `json:"user_ids"`
+}
+
+func (q *Queries) MarkPendingMembersNotified(ctx context.Context, arg MarkPendingMembersNotifiedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markPendingMembersNotified, arg.OrgID, arg.UserIds)
 	if err != nil {
 		return 0, err
 	}
@@ -1103,6 +1354,24 @@ func (q *Queries) UpdateOrgDisplayName(ctx context.Context, arg UpdateOrgDisplay
 	return id, err
 }
 
+const upsertFoldInDecline = `-- name: UpsertFoldInDecline :exec
+INSERT INTO fold_in_declines (org_id, user_id, declined_by)
+VALUES ($1, $2, $3)
+ON CONFLICT (org_id, user_id) DO UPDATE SET declined_by = EXCLUDED.declined_by, declined_at = now()
+`
+
+type UpsertFoldInDeclineParams struct {
+	OrgID      uuid.UUID  `json:"org_id"`
+	UserID     uuid.UUID  `json:"user_id"`
+	DeclinedBy *uuid.UUID `json:"declined_by"`
+}
+
+// A decline is remembered for that person at that organization (D25).
+func (q *Queries) UpsertFoldInDecline(ctx context.Context, arg UpsertFoldInDeclineParams) error {
+	_, err := q.db.Exec(ctx, upsertFoldInDecline, arg.OrgID, arg.UserID, arg.DeclinedBy)
+	return err
+}
+
 const upsertMembership = `-- name: UpsertMembership :execrows
 UPDATE memberships SET role = $3, updated_at = now()
 WHERE org_id = $1 AND user_id = $2
@@ -1126,29 +1395,35 @@ func (q *Queries) UpsertMembership(ctx context.Context, arg UpsertMembershipPara
 	return result.RowsAffected(), nil
 }
 
-const upsertPendingMembership = `-- name: UpsertPendingMembership :exec
-INSERT INTO memberships (org_id, user_id, role, via_scim, state)
-VALUES ($1, $2, $3, $4, 'pending')
+const upsertPendingMembership = `-- name: UpsertPendingMembership :execrows
+INSERT INTO memberships (org_id, user_id, role, via_scim, via_domain, state)
+VALUES ($1, $2, $3, $4, $5, 'pending')
 ON CONFLICT (org_id, user_id) DO NOTHING
 `
 
 type UpsertPendingMembershipParams struct {
-	OrgID   uuid.UUID `json:"org_id"`
-	UserID  uuid.UUID `json:"user_id"`
-	Role    string    `json:"role"`
-	ViaScim bool      `json:"via_scim"`
+	OrgID     uuid.UUID `json:"org_id"`
+	UserID    uuid.UUID `json:"user_id"`
+	Role      string    `json:"role"`
+	ViaScim   bool      `json:"via_scim"`
+	ViaDomain bool      `json:"via_domain"`
 }
 
 // The SCIM and fold-in doors: a membership that holds no seat and confers
 // nothing until an admin approves it. An existing membership is left alone
 // — approving twice, or provisioning someone who is already active, must
-// not push them back to pending.
-func (q *Queries) UpsertPendingMembership(ctx context.Context, arg UpsertPendingMembershipParams) error {
-	_, err := q.db.Exec(ctx, upsertPendingMembership,
+// not push them back to pending. Reports 1 when this call wrote the row,
+// which is how the fold-in knows to audit and count it once (agentry#364).
+func (q *Queries) UpsertPendingMembership(ctx context.Context, arg UpsertPendingMembershipParams) (int64, error) {
+	result, err := q.db.Exec(ctx, upsertPendingMembership,
 		arg.OrgID,
 		arg.UserID,
 		arg.Role,
 		arg.ViaScim,
+		arg.ViaDomain,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

@@ -1057,3 +1057,36 @@ func TestStaffOrgFormSuspendsAndReinstates(t *testing.T) {
 		t.Fatalf("decommissioning org page for staff: %d %s", w.Code, body)
 	}
 }
+
+// TestLayoutNamesThePendingOrganization (agentry#364): while GET /user
+// carries pendingOrg, every page says which organization the person is
+// waiting on and that they hold nothing of it yet; the wording names the
+// door. Without it, no notice.
+func TestLayoutNamesThePendingOrganization(t *testing.T) {
+	base := fakeAPI(t)
+	pending := `{"handle":"acme","displayName":"Acme Corp","via":"domain"}`
+	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/user" && pending != "" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"id":"u1","handle":"chris","email":"c@acme.example","displayName":"Chris","emailVerified":true,"pendingOrg":`+pending+`}`)
+			return
+		}
+		base.ServeHTTP(w, r)
+	})
+	h := New(Options{API: api})
+	w := get(h, "/ui/account", sessCookie, csrfCookieV)
+	if body := w.Body.String(); w.Code != http.StatusOK ||
+		!strings.Contains(body, `<p class="flash notice">Your email domain is registered to the <strong>Acme Corp (acme)</strong> organization: its administrators have been asked to add you.`) ||
+		!strings.Contains(body, "you hold nothing of the organization") {
+		t.Fatalf("pending notice: %d %s", w.Code, body)
+	}
+	pending = `{"handle":"acme","displayName":"acme","via":"scim"}`
+	w = get(h, "/ui/account", sessCookie, csrfCookieV)
+	if body := w.Body.String(); !strings.Contains(body, `The <strong>acme</strong> organization's identity provider has provisioned this account`) {
+		t.Fatalf("scim notice: %s", body)
+	}
+	pending = ""
+	if w := get(h, "/ui/account", sessCookie, csrfCookieV); strings.Contains(w.Body.String(), `flash notice`) {
+		t.Fatalf("no pending org, yet a notice: %s", w.Body.String())
+	}
+}

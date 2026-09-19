@@ -59,6 +59,20 @@ func (q *Queries) DeleteOrgDomainClaims(ctx context.Context, orgID uuid.UUID) (i
 	return result.RowsAffected(), nil
 }
 
+const deleteOrgFoldInDeclines = `-- name: DeleteOrgFoldInDeclines :execrows
+DELETE FROM fold_in_declines WHERE org_id = $1
+`
+
+// An erased organization remembers no decline (agentry#364); the rows
+// would go with the organization's row if it were deleted, and it is not.
+func (q *Queries) DeleteOrgFoldInDeclines(ctx context.Context, orgID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteOrgFoldInDeclines, orgID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteOrgInvitations = `-- name: DeleteOrgInvitations :execrows
 DELETE FROM org_invitations WHERE org_id = $1
 `

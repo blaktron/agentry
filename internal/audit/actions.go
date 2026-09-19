@@ -41,6 +41,9 @@ const (
 	ActionOrgInviteRevoke  Action = "org.invite_revoke"
 	ActionOrgInviteAccept  Action = "org.invite_accept"
 	ActionOrgMemberDecline Action = "org.member_decline"
+	// The fold-in (agentry#364): an existing account at the organization's
+	// domain became a pending member, at its sign-in or by the sweep.
+	ActionOrgMemberPending Action = "org.member_pending"
 	// The organization's lifecycle and its domain (agentry#363): a
 	// decommission decided, the erasure that ends its hold, platform
 	// staff's suspension and reinstatement, and a person's request to
@@ -119,7 +122,7 @@ func init() {
 		ActionUserTOTPEnabled, ActionPATCreate, ActionPATRevoke, ActionSSHKeyAdd, ActionSSHKeyRemove, ActionUserDelete, ActionUserDirectoryErase, ActionUserStaffSync,
 		ActionOrgCreate, ActionOrgUpdate, ActionOrgMemberSet,
 		ActionOrgMemberRemove, ActionOrgInviteCreate, ActionOrgInviteRevoke,
-		ActionOrgInviteAccept, ActionOrgMemberDecline,
+		ActionOrgInviteAccept, ActionOrgMemberDecline, ActionOrgMemberPending,
 		ActionOrgDecommission, ActionOrgErase, ActionOrgSuspend, ActionOrgReinstate, ActionOrgAccessRequest,
 		ActionTeamCreate, ActionTeamDelete,
 		ActionTeamMemberAdd, ActionTeamMemberRemove,

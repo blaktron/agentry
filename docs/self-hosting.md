@@ -996,12 +996,27 @@ cancels a hold that has not run. Because a suspended organization's page
 is absent as well, the staff console (`/ui/staff`) carries suspend and
 reinstate by handle.
 
+When an organization holds a domain, the accounts whose verified address
+is at it **fold in**: at the person's next directory sign-in they become a
+*pending* member of the organization — the same state a SCIM-provisioned
+person is in — and a sweep folds in the accounts already known at the
+domain the moment the organization is created there or verifies it. A
+pending member holds nothing and keeps working on their own plan until an
+admin approves them (where the seat is taken) or declines them; a decline
+is remembered, and only an admin's invitation supersedes it. `GET
+/api/v1/user` carries `pendingOrg` while they wait, and the server's own
+pages show the notice. The admins are mailed the pending list in one
+daily digest, each person named once, through the notifier under the
+verified-address rule. The fold-in never fires for an unverified address,
+a public mail domain, or a person who belongs to an organization already.
+
 ```yaml
 orgs:
   decommissionHold: 720h      # 30 days; 0 erases at the next hourly sweep
+  pendingDigestEvery: 24h     # the admins' pending-members digest; 0 keeps a day
 ```
 
-Env: `AGENTRY_ORGS_DECOMMISSION_HOLD`.
+Env: `AGENTRY_ORGS_DECOMMISSION_HOLD`, `AGENTRY_ORGS_PENDING_DIGEST_EVERY`.
 
 ## Operating it
 

@@ -309,6 +309,9 @@ func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st 
 	// The organization decommission sweep (agentry#363): hourly, and once
 	// at start; the handler erases only what is past its hold.
 	go periodicTicker(ctx, q, api.JobOrgDecommissionSweep, "core", time.Hour, log)
+	// The pending members digest (agentry#364): daily by default, and once
+	// at start; the handler mails only what no digest has named yet.
+	go periodicTicker(ctx, q, api.JobPendingMembersDigest, "core", api.PendingDigestPeriod(cfg), log)
 	return q, nil
 }
 

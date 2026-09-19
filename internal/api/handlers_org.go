@@ -264,6 +264,10 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 	// the org's only member at this moment is the person who made it.
 	s.fireEvent(r.Context(), Event{Kind: "org.created", OrgID: out.Id, UserID: p.UserID,
 		Payload: map[string]any{"org": out.Handle, "creator": p.Handle}})
+	// The accounts already known at the domain are folded in now, so the
+	// admins see them at once (agentry#364); the ones that arrive later
+	// fold in at their sign-in.
+	s.enqueueFoldInSweep(r.Context(), orgID, domain)
 	ik.complete(r, http.StatusCreated, out)
 	writeJSON(w, http.StatusCreated, out)
 }
@@ -445,10 +449,10 @@ func (s *Server) ListOrgMembers(w http.ResponseWriter, r *http.Request, org OrgH
 	}
 	out := make([]Membership, 0, len(rows))
 	for _, m := range rows {
-		via, state := m.ViaScim, MembershipState(m.State)
+		via, viaDomain, state := m.ViaScim, m.ViaDomain, MembershipState(m.State)
 		out = append(out, Membership{
 			User: PublicUser{Handle: m.Handle, DisplayName: m.DisplayName},
-			Role: OrgRole(m.Role), ViaScim: &via, State: &state,
+			Role: OrgRole(m.Role), ViaScim: &via, ViaDomain: &viaDomain, State: &state,
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -718,10 +722,10 @@ func (s *Server) ApproveOrgMember(w http.ResponseWriter, r *http.Request, org Or
 		problemInternal(w, r)
 		return
 	}
-	via, state := m.ViaScim, MembershipState("active")
+	via, viaDomain, state := m.ViaScim, m.ViaDomain, MembershipState("active")
 	writeJSON(w, http.StatusOK, Membership{
 		User: PublicUser{Handle: target.Handle, DisplayName: target.DisplayName},
-		Role: OrgRole(role), ViaScim: &via, State: &state,
+		Role: OrgRole(role), ViaScim: &via, ViaDomain: &viaDomain, State: &state,
 	})
 }
 
@@ -758,13 +762,22 @@ func (s *Server) DeclineOrgMember(w http.ResponseWriter, r *http.Request, org Or
 		problemConflict(w, r, target.Handle+" is an active member of "+orgRow.Handle+"; remove them instead.")
 		return
 	}
+	p := principalFrom(r.Context())
 	err = s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
 		if _, err := q.DeleteMembership(r.Context(), storegen.DeleteMembershipParams{OrgID: orgRow.ID, UserID: target.ID}); err != nil {
+			return err
+		}
+		// The decline is remembered (agentry#364, D25): the domain does
+		// not fold this person in again; an admin's invitation supersedes
+		// it. Whichever door they came through — declining someone the
+		// IdP provisioned says the same thing about them.
+		if err := q.UpsertFoldInDecline(r.Context(), storegen.UpsertFoldInDeclineParams{OrgID: orgRow.ID, UserID: target.ID, DeclinedBy: &p.UserID}); err != nil {
 			return err
 		}
 		e := auditEvent(r, audit.ActionOrgMemberDecline)
 		e.OrgID = orgRow.ID
 		e.TargetKind, e.TargetID = "user", target.ID
+		e.Detail = map[string]any{"via": string(registry.DoorOf(m.ViaScim, m.ViaDomain))}
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {

@@ -190,25 +190,17 @@ func (s *Server) mailAccessRequest(r *http.Request, org storegen.GetOrgByDomainR
 	if s.notifier == nil {
 		return 0
 	}
-	admins, err := s.q().ListOrgAdminsForMail(r.Context(), org.ID)
-	if err != nil {
-		s.log.ErrorContext(r.Context(), "org admins", "org", org.ID, "err", err)
-		return 0
-	}
 	mailed := 0
-	for _, a := range admins {
-		if !notify.AllowsEmail(r.Context(), s.q(), s.log, a.ID, notify.KindOrgInvite) {
-			continue
-		}
+	s.forEachMailableAdmin(r.Context(), s.q(), org.ID, func(email string) {
 		if err := s.notifier.OrgAccessRequest(r.Context(), notify.AccessRequestNotice{
-			ToEmail: a.Email, Org: org.Handle, OrgDisplayName: org.DisplayName,
+			ToEmail: email, Org: org.Handle, OrgDisplayName: org.DisplayName,
 			Requester: requester, RequesterEmail: requesterEmail,
 			ConsoleURL: s.paths.orgConsoleURL(org.Handle),
 		}); err != nil {
 			s.log.ErrorContext(r.Context(), "access request mail", "org", org.ID, "err", err)
-			continue
+			return
 		}
 		mailed++
-	}
+	})
 	return mailed
 }

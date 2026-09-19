@@ -306,6 +306,10 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 	if name == "authentik" && s.cfg.Auth.IdPStaffGroup != "" {
 		s.syncPlatformStaff(r, userID, id.Groups)
 	}
+	// The fold-in (agentry#364): an account at an organization's domain
+	// becomes a pending member of it, once, keyed on this token's email
+	// and its verified assertion.
+	s.foldInAtSignIn(r, userID, id)
 
 	user, err := s.q().GetUserByID(r.Context(), userID)
 	if err != nil {
