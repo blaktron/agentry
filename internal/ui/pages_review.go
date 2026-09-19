@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"sort"
@@ -436,6 +437,62 @@ func (h *handler) staffAgentAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.back(w, r, "/ui/staff", ref+" "+done, "")
+}
+
+// orgLifecycle posts one of platform staff's two acts on an organization
+// (agentry#374) and names its consequence, so the org page and the staff
+// console call and say the same thing. Read out of
+// internal/api/handlers_org_lifecycle.go: suspend hides the organization
+// and everything under it from everyone, staff included, and deletes
+// nothing; reinstate ends a suspension or cancels a decommission hold that
+// has not run. Any other action is the caller's mistake, refused here.
+func (c apiCall) orgLifecycle(handle, action, reason string) (res response, ok string, err error) {
+	base := "/orgs/" + url.PathEscape(handle)
+	switch action {
+	case "suspend":
+		res, err = c.do(http.MethodPost, base+"/suspend", map[string]string{"reason": reason})
+		ok = handle + " is suspended: it and everything under it answer as absent until it is reinstated."
+	case "reinstate":
+		res, err = c.do(http.MethodPost, base+"/reinstate", map[string]string{})
+		ok = handle + " is active again."
+	default:
+		err = errors.New("ui: no such organization action " + action)
+	}
+	return res, ok, err
+}
+
+// staffOrgAction is the console's organization form (agentry#374): a
+// suspended organization answers 404 to everyone, platform staff
+// included, so the reinstate form on its page cannot be reached once the
+// suspend form there has been used. The console carries both actions by
+// handle — the actions, not a listing — over the same POST
+// /orgs/{org}/suspend and /reinstate the org page calls; authorization is
+// the API's, which refuses a caller who is not staff before it looks the
+// handle up.
+func (h *handler) staffOrgAction(w http.ResponseWriter, r *http.Request) {
+	if !h.acceptForm(w, r) {
+		return
+	}
+	handle := strings.ToLower(strings.TrimSpace(r.PostFormValue("handle")))
+	action, reason := r.PostFormValue("action"), strings.TrimSpace(r.PostFormValue("reason"))
+	if handle == "" || (action != "suspend" && action != "reinstate") || (action == "suspend" && reason == "") {
+		h.back(w, r, "/ui/staff", "", "Nothing was done: an organization handle and an action are required, and suspending needs a reason.")
+		return
+	}
+	res, ok, err := h.call(r).orgLifecycle(handle, action, reason)
+	if err != nil || !res.OK() {
+		msg := failMsg(res, err)
+		// The API looks the handle up directly, so a suspended organization
+		// is found here; a 404 is a handle nobody holds. An erasure releases
+		// the handle (the row is renamed), so an erased organization answers
+		// 404 too, and the API's bare "Not found" would leave staff guessing.
+		if err == nil && res.Status == http.StatusNotFound {
+			msg = "No organization is called " + handle + ". A suspended one is still found here; one that has been erased is not, and cannot come back."
+		}
+		h.back(w, r, "/ui/staff", "", msg)
+		return
+	}
+	h.back(w, r, "/ui/staff", ok, "")
 }
 
 func (h *handler) staffRulesetRelease(w http.ResponseWriter, r *http.Request) {

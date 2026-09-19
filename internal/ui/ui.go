@@ -123,6 +123,7 @@ func New(opt Options) http.Handler {
 		m.HandleFunc("GET /ui/staff", h.staffPage)
 		m.HandleFunc("POST /ui/staff/abuse", h.staffAbuseTriage)
 		m.HandleFunc("POST /ui/staff/agent-action", h.staffAgentAction)
+		m.HandleFunc("POST /ui/staff/org", h.staffOrgAction)
 		m.HandleFunc("POST /ui/staff/ruleset-release", h.staffRulesetRelease)
 		m.HandleFunc("GET /ui/invitations/{token}", h.invitationPage)
 		m.HandleFunc("POST /ui/invitations/{token}", h.invitationAccept)
