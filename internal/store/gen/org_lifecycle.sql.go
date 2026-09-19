@@ -329,13 +329,18 @@ func (q *Queries) RevokeOrgBoundPATs(ctx context.Context, orgID *uuid.UUID) (int
 
 const scrubDecommissionedOrg = `-- name: ScrubDecommissionedOrg :execrows
 UPDATE orgs SET state = 'decommissioned', display_name = 'decommissioned organization',
-  domain = NULL, sso_required = false, updated_at = now()
+  domain = NULL, sso_required = false, created_by = NULL, updated_at = now()
 WHERE id = $1 AND state = 'decommissioning'
 `
 
 // The row stays for the records that point at its id; everything that
-// named the organization goes. The domain is freed here; the handle is
-// released by ReleaseHandle in the same transaction.
+// named the organization, or its founder, goes. The domain is freed here;
+// the handle is released by ReleaseHandle in the same transaction; and
+// created_by is cleared so an organization created awaiting activation
+// (the hosted product's pending state, agentry#360) stops counting as
+// the founder's pending one once it is erased — the unique partial index
+// on (created_by) WHERE activated_at IS NULL would otherwise refuse them
+// a fresh start forever.
 func (q *Queries) ScrubDecommissionedOrg(ctx context.Context, id uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, scrubDecommissionedOrg, id)
 	if err != nil {
