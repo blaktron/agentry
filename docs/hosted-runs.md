@@ -19,9 +19,11 @@ without the right scope is anywhere else
 `GET /api/v1/x/runs/status` answers anyone: whether this deployment can take
 runs at all (it needs a database, a credit ledger and an object store), how
 many workers were seen within the stale window, and how many runs are queued.
-A signed-in caller also gets `caller` — its tier, that tier's caps, the
-credits a run of theirs holds and the tokens-per-credit rate — so a client
-can state the cost before any run exists.
+A signed-in caller also gets `caller` — the tier a run of theirs is held at,
+`account` (whose row it is held on: their own, or the organization whose
+pool pays for their runs), that tier's caps, the credits a run holds and the
+tokens-per-credit rate — so a client can state the cost, and whose credits
+it is, before any run exists.
 
 ## Who may do what
 
@@ -30,7 +32,9 @@ Three credentials reach these routes and never overlap.
 An **account** acts through a browser session or a personal access token
 carrying `run:read` (list, read, events, outputs) or `run:write` (create,
 input upload, cancel), and reaches only its own runs. Another account's run,
-and another account's artefact, is `404`.
+and another account's artefact, is `404` — a fellow member of the
+organization whose pool paid for the run included: the pool is shared, the
+run is not.
 
 | Route | Credential |
 |---|---|
@@ -78,37 +82,73 @@ the latest published release), the `task` text the harness receives, the
 release's `intake` answers as a JSON object, and up to twenty `inputs` — ids
 from `POST /api/v1/x/runs/inputs?name=<relative name>`, which stores one file
 each and sweeps unclaimed uploads after a day. The response is the run:
-its resolved ref and archive digest, its caps, the credits held, its queue
-position, and `expiresAt`.
+its resolved ref and archive digest, its caps, the credits held and `payer`
+— the handle whose row holds them — its queue position, and `expiresAt`.
+
+The ref must name a release the caller may read, as the registry's own agent
+read decides it: a public release is anyone's; a private one needs `read` on
+the agent — the namespace's owner, an admin or member of the organization
+whose namespace it is, or a grant on the agent — and, on a personal access
+token, the `agent:read` scope beside `run:write`. The agents of an
+organization that is suspended are absent to everyone, public or not.
 
 The mode is `autonomous`. An interactive session is a conversation with a
 terminal on the other end; the hosted run has none.
 
+## Whose credits: the payer
+
+A run is the runner's, and its credits are the **payer's**. The payer is the
+runner's organization when they are an active member of one — membership is
+the person's tier, and the organization's pool pays for its members' work,
+their runs of the organization's agents and of their own alike — and the
+runner themself otherwise. The agent's namespace does not choose the payer:
+an outsider who runs an organization's public release pays from their own
+row. The run records the payer and answers it as `payer`; `caller.account`
+on the status route names it before a run exists.
+
+Everything else about the run stays the runner's: the row, the one-active
+rule, the artefacts under their prefix, and who may read it. An admin of the
+paying organization sees the run's lines in the organization's ledger
+(`run_hold`, `run_release`, `run` under `run:<id>`), not the run.
+
+An organization whose subscription is not in force — pending payment,
+restricted after a lapse, or decommissioning — pays for nothing: a member's
+create is `402 subscription-inactive` naming the organization as `account`
+with its `standing`, and no run is written. The first-party organization is
+unmetered: its members' runs hold nothing (`holdCredits` is 0), settle
+nothing, and write no ledger line.
+
 ## Caps
 
-A run is created with the caps of the account's tier, and the worker gives
+A run is created with the caps of the payer's tier, and the worker gives
 them to the CLI as its `--timeout` and `--max-turns`.
 
 | Tier | Wall time | Turns | Tokens | Credits held |
 |---|---|---|---|---|
 | Standard | 300 s | 20 | 20,000 | 20 |
 | Pro | 900 s | 60 | 200,000 | 200 |
+| Business | Pro's | Pro's | Pro's | 200 |
+| Enterprise | Pro's | Pro's | Pro's | 200 |
 
 Those numbers are a deployment's configuration, not constants:
-`AGENTRY_RUNS_CAPS_STANDARD` and `AGENTRY_RUNS_CAPS_PRO` are
-`seconds,turns,tokens`, and `AGENTRY_RUNS_TOKENS_PER_CREDIT` (1,000) is the
-rate the hold and the settlement are computed at. A deployment that sets a
-zero rate, an empty cap or a zero timeout is stopped at start-up rather than
-making every run free or every run refused. `GET /api/v1/x/runs/status`
-reports the live values for the caller's own tier.
+`AGENTRY_RUNS_CAPS_STANDARD`, `AGENTRY_RUNS_CAPS_PRO`,
+`AGENTRY_RUNS_CAPS_BUSINESS` and `AGENTRY_RUNS_CAPS_ENTERPRISE` are
+`seconds,turns,tokens` — the organization tiers take Pro's numbers unless a
+deployment sets them apart, since a member has everything Pro has — and
+`AGENTRY_RUNS_TOKENS_PER_CREDIT` (1,000) is the rate the hold and the
+settlement are computed at. A deployment that sets a zero rate, an empty cap
+or a zero timeout is stopped at start-up rather than making every run free
+or every run refused. `GET /api/v1/x/runs/status` reports the live values
+for the caller's payer.
 
 ## Credits: a hold, then a settlement or a refund
 
 Nothing is debited before a run. Creating one **holds**
-`ceil(maxTokens ÷ tokensPerCredit)` credits — the tier's token cap priced at
-the rate, so 20 for Standard and 200 for Pro — in the same transaction as the
-run's row. A create the balance cannot cover is `402 credits-exhausted`
-carrying `balance`, `hold`, `resetsAt` and `tier`, and no run is written.
+`ceil(maxTokens ÷ tokensPerCredit)` credits on the payer's row — the tier's
+token cap priced at the rate, so 20 for Standard and 200 for Pro, Business
+and Enterprise — in the same transaction as the run's row. A create the
+payer's balance cannot cover is `402 credits-exhausted` carrying `account`,
+`balance`, `hold`, `resetsAt` and `tier`, and no run is written.
 
 When the worker finishes the run, the runner's exit class becomes the
 outcome, and the outcome decides what the hold becomes.
@@ -145,9 +185,10 @@ changes nothing.
 | The release does not declare the autonomous mode | `409 mode-not-declared` |
 | The release declares `secrets:` | `409 secrets-declared` — the hosted credentials vault is planned; a release that declares a secret runs on your own machine today, where its keys are yours |
 | The account already has a run queued, claimed or running | `409 run-active` — one active run per account, held by a partial unique index rather than a read-then-write |
-| The balance is short of the hold | `402 credits-exhausted`, with `balance`, `hold`, `resetsAt` and `tier` |
+| The payer's balance is short of the hold | `402 credits-exhausted`, with `account`, `balance`, `hold`, `resetsAt` and `tier` |
+| The payer is an organization whose subscription is not in force | `402 subscription-inactive`, with `account`, `standing` and `tier` |
 | A task over 64 KB, more than twenty inputs, or an input over 10 MB | `413 too-large` |
-| The ref names nothing published, or nothing this caller may see | `404` — a private release of another account is `404`, never a leak that it exists |
+| The ref names nothing published, or nothing this caller may read | `404` — a private release the caller holds no `read` on, or any release of a suspended organization, is `404`, never a leak that it exists |
 | Malformed intake, or an input id that is not the caller's | `422 validation` |
 | The deployment has no database, ledger or object store | `503 runs-unavailable` |
 
@@ -211,8 +252,8 @@ walks through what a person sees.
 
 ## What actually bounds a run
 
-The tier's wall time and turn count are the CLI's own budgets, enforced
-inside the run as they are on your own machine (exit 15 and 16).
+The payer's tier's wall time and turn count are the CLI's own budgets,
+enforced inside the run as they are on your own machine (exit 15 and 16).
 
 **The token cap is not live.** Nothing counts tokens while the run is going:
 the CLI narrates no usage until its envelope, so the worker forwards the
@@ -266,6 +307,8 @@ anything you want to keep before then; nothing is archived elsewhere.
 |---|---|---|
 | `AGENTRY_RUNS_CAPS_STANDARD` | `300,20,20000` | the Standard tier's seconds, turns, tokens |
 | `AGENTRY_RUNS_CAPS_PRO` | `900,60,200000` | the Pro tier's seconds, turns, tokens |
+| `AGENTRY_RUNS_CAPS_BUSINESS` | Pro's | the Business tier's seconds, turns, tokens |
+| `AGENTRY_RUNS_CAPS_ENTERPRISE` | Pro's | the Enterprise tier's seconds, turns, tokens |
 | `AGENTRY_RUNS_TOKENS_PER_CREDIT` | `1000` | the rate the hold and the settlement are computed at |
 | `AGENTRY_RUNS_QUEUE_MAX` | `1h` | how long a run may wait for a worker before it is cancelled and refunded |
 | `AGENTRY_RUNS_STALE` | `10m` | how long a claimed run's worker may be silent before the run is closed as `error` and refunded |
