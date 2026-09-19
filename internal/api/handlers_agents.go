@@ -1,7 +1,9 @@
 package api
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -52,55 +54,65 @@ func (s *Server) agentToAPI(a registry.Agent, maintain bool) Agent {
 	return out
 }
 
-// resolveAgentForAction loads the agent and authorizes act against the
-// caller's effective role. Private agents 404 for read-denied callers
-// (existence privacy, §6.4).
-func (s *Server) resolveAgentForAction(w http.ResponseWriter, r *http.Request, ns, name string, act auth.Action) (registry.Agent, auth.AgentRole, bool) {
-	a, err := s.reg.Resolve(r.Context(), ns, name)
+// agentForAction resolves ns/name and authorizes act for p — the one path
+// every agent route takes, and the extensions' read seam (AgentReadable,
+// agentry#381). registry.ErrNotFound for an agent that does not exist or
+// that p may not read: a caller without read on a private agent —
+// anonymous, or signed in without a role on it — gets the answer a
+// missing name gets, before any 401 (which would itself say the name
+// exists), so a private agent's existence is not discoverable by probing
+// (§6.4; agentry#313, operator rule 2026-09-13). auth.ErrUnauthorized or
+// auth.ErrForbidden for a reader the act refuses; a *registry.OrgGateError
+// for the owning organization's state (suspended: absent to everyone; in
+// its decommission hold: read-only), the agent beside it so the caller
+// can name its namespace; anything else an internal error — an
+// organization handle with no organization row included, which is a
+// fault to log, not an absence.
+func (s *Server) agentForAction(ctx context.Context, p *auth.Principal, ns, name string, act auth.Action) (registry.Agent, auth.AgentRole, error) {
+	a, err := s.reg.Resolve(ctx, ns, name)
 	if err != nil {
-		if errors.Is(err, registry.ErrNotFound) {
-			problemNotFound(w, r)
-		} else {
-			s.log.ErrorContext(r.Context(), "agent resolve", "err", err)
-			problemInternal(w, r)
-		}
-		return registry.Agent{}, auth.AgentRoleNone, false
+		return registry.Agent{}, auth.AgentRoleNone, err
 	}
-	p := principalFrom(r.Context())
-	role, err := s.reg.EffectiveRole(r.Context(), p, a)
+	role, err := s.reg.EffectiveRole(ctx, p, a)
 	if err != nil {
-		s.log.ErrorContext(r.Context(), "agent role", "err", err)
-		problemInternal(w, r)
-		return registry.Agent{}, auth.AgentRoleNone, false
+		return registry.Agent{}, auth.AgentRoleNone, err
 	}
 	res := auth.AgentResource{Public: a.Visibility == "public", EffectiveRole: role}
 	if err := auth.CheckAgent(p, res, act); err != nil {
-		switch {
-		case act == auth.ActAgentRead || auth.CheckAgent(p, res, auth.ActAgentRead) != nil:
-			// A caller who cannot read the agent — anonymous or signed in
-			// without a role on it — gets the answer a missing name gets,
-			// so a private agent's existence is not discoverable by
-			// probing (agentry#313, operator rule 2026-09-13). This comes
-			// before the 401, which would itself say the name exists.
-			problemNotFound(w, r)
-		case errors.Is(err, auth.ErrUnauthorized):
-			problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
-		default:
-			problemForbidden(w, r, "This credential does not carry the role or scope this action needs.")
+		if act == auth.ActAgentRead || auth.CheckAgent(p, res, auth.ActAgentRead) != nil {
+			return registry.Agent{}, auth.AgentRoleNone, registry.ErrNotFound
 		}
-		return registry.Agent{}, auth.AgentRoleNone, false
+		return registry.Agent{}, auth.AgentRoleNone, err
 	}
-	// The owning organization's state (agentry#363): under a suspended
-	// organization the agent is absent to everyone, reader or not; under
-	// one in its decommission hold it is read-only.
-	if err := s.reg.OrgGateFor(r.Context(), a, act); err != nil {
-		if !s.orgGateProblem(w, r, a.Namespace, err) {
-			s.log.ErrorContext(r.Context(), "org gate", "agent", a.ID, "err", err)
-			problemInternal(w, r)
+	if err := s.reg.OrgGateFor(ctx, a, act); err != nil {
+		if errors.Is(err, registry.ErrNotFound) {
+			return a, role, fmt.Errorf("org gate: no organization row for the %s namespace: %v", a.Namespace, err)
 		}
-		return registry.Agent{}, auth.AgentRoleNone, false
+		return a, role, err
 	}
-	return a, role, true
+	return a, role, nil
+}
+
+// resolveAgentForAction is agentForAction for a handler: the agent and the
+// caller's role, or the problem written and false.
+func (s *Server) resolveAgentForAction(w http.ResponseWriter, r *http.Request, ns, name string, act auth.Action) (registry.Agent, auth.AgentRole, bool) {
+	a, role, err := s.agentForAction(r.Context(), principalFrom(r.Context()), ns, name, act)
+	switch {
+	case err == nil:
+		return a, role, true
+	case errors.Is(err, registry.ErrNotFound):
+		problemNotFound(w, r)
+	case errors.Is(err, auth.ErrUnauthorized):
+		problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
+	case errors.Is(err, auth.ErrForbidden):
+		problemForbidden(w, r, "This credential does not carry the role or scope this action needs.")
+	case s.orgGateProblem(w, r, a.Namespace, err):
+		// The owning organization's state (agentry#363), written.
+	default:
+		s.log.ErrorContext(r.Context(), "agent access", "agent", ns+"/"+name, "err", err)
+		problemInternal(w, r)
+	}
+	return registry.Agent{}, auth.AgentRoleNone, false
 }
 
 // CreateAgent implements POST /agents (§9.2).
