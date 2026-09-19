@@ -27,6 +27,16 @@
 </form>
 </section>
 <section class="card">
+<h2>Organizations</h2>
+<p class="muted">A suspended organization and everything under it answer as absent to everyone, platform staff included, until it is reinstated; nothing is deleted. Its page is absent too, so it is reinstated here, by handle. Reinstating also cancels a decommission hold that has not run; an organization already erased cannot come back. The reason is recorded in the audit log.</p>
+<form method="post" action="/ui/staff/org">
+  <input type="hidden" name="_csrf" value="{{$.CSRF}}">
+  <label>Organization handle<input name="handle" required placeholder="acme"></label>
+  <label>Reason (to suspend)<input name="reason" maxlength="500" placeholder="why it is suspended; audited"></label>
+  <div class="row"><button type="submit" name="action" value="suspend" class="danger">Suspend</button> <button type="submit" name="action" value="reinstate" class="secondary">Reinstate</button></div>
+</form>
+</section>
+<section class="card">
 <h2>Ruleset releases</h2>
 {{if not .Releases}}<p class="muted">None recorded.</p>{{else}}<ul class="list">{{range .Releases}}<li><strong>{{.Semver}}</strong> <code>{{.BundleDigest}}</code>{{if .PublishedAt}} <span class="muted">{{utc .PublishedAt}}</span>{{end}}{{if .Notes}}<p class="muted">{{.Notes}}</p>{{end}}</li>{{end}}</ul>{{end}}
 <p class="muted">Leave the fields empty to record this server's own bundle. A new semver starts a rescan sweep over the published catalogue; re-recording one changes nothing.</p>

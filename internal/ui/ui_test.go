@@ -908,3 +908,152 @@ func TestOrgsIndexCreateForm(t *testing.T) {
 		t.Fatalf("a member's orgs page: %d %s", w.Code, body)
 	}
 }
+
+// TestStaffOrgFormSuspendsAndReinstates (agentry#374): a suspended
+// organization answers 404 to everyone, platform staff included, so the
+// reinstate form on its page is unreachable once staff have used the
+// suspend form there. The staff console carries the two acts by handle —
+// no listing — and the org page keeps its forms for an organization it
+// can show: suspend while active, reinstate while decommissioning.
+func TestStaffOrgFormSuspendsAndReinstates(t *testing.T) {
+	base := fakeAPI(t)
+	var suspended, reinstated []string
+	// Two sessions: staff, and a signed-in member of the public whom the
+	// API refuses before it looks the handle up.
+	const plainSession = "sess-plain"
+	plainCookie := &http.Cookie{Name: "agentry_session", Value: plainSession}
+	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sess := ""
+		if c, err := r.Cookie("agentry_session"); err == nil {
+			sess = c.Value
+		}
+		if sess != fakeSession && sess != plainSession {
+			http.Error(w, `{"detail":"sign in"}`, http.StatusUnauthorized)
+			return
+		}
+		if r.Method != http.MethodGet && r.Header.Get("X-Agentry-CSRF") != fakeCSRF {
+			http.Error(w, `{"detail":"missing or invalid CSRF token"}`, http.StatusForbidden)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if sess == plainSession {
+			switch {
+			case r.URL.Path == "/api/v1/user":
+				_, _ = io.WriteString(w, `{"id":"u2","handle":"pat","email":"p@example.test","emailVerified":true}`)
+			case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/v1/orgs/"):
+				http.Error(w, `{"detail":"This action is open to platform staff only."}`, http.StatusForbidden)
+			default:
+				base.ServeHTTP(w, r)
+			}
+			return
+		}
+		switch r.Method + " " + r.URL.Path {
+		case "GET /api/v1/user":
+			_, _ = io.WriteString(w, `{"id":"u1","handle":"chris","email":"c@example.test","displayName":"Chris","emailVerified":true,"platformStaff":true}`)
+		case "POST /api/v1/orgs/m4-lifecycle/suspend":
+			var body map[string]string
+			if json.NewDecoder(r.Body).Decode(&body) != nil || body["reason"] == "" {
+				http.Error(w, `{"detail":"Give a reason of 1-500 characters; it is audited."}`, http.StatusUnprocessableEntity)
+				return
+			}
+			suspended = append(suspended, body["reason"])
+			_, _ = io.WriteString(w, `{"handle":"m4-lifecycle","state":"suspended"}`)
+		case "POST /api/v1/orgs/m4-lifecycle/reinstate":
+			reinstated = append(reinstated, "m4-lifecycle")
+			_, _ = io.WriteString(w, `{"handle":"m4-lifecycle","state":"active"}`)
+		case "POST /api/v1/orgs/held/suspend":
+			http.Error(w, `{"detail":"The held organization is decommissioning, not active; only an active organization is suspended."}`, http.StatusConflict)
+		case "POST /api/v1/orgs/erased/reinstate":
+			// An erasure releases the handle, so the API's direct lookup
+			// answers its bare 404 (internal/api problemNotFound), the same
+			// answer a typo gets.
+			http.Error(w, `{"type":"about:blank","title":"Not found"}`, http.StatusNotFound)
+		case "GET /api/v1/orgs/m4-lifecycle":
+			// The invariant the console exists for: absent to staff too.
+			http.Error(w, `{"detail":"org not found"}`, http.StatusNotFound)
+		case "GET /api/v1/orgs/held":
+			_, _ = io.WriteString(w, `{"handle":"held","displayName":"Held","state":"decommissioning","decommissionAt":"2026-10-01T00:00:00Z"}`)
+		case "GET /api/v1/orgs/live":
+			_, _ = io.WriteString(w, `{"handle":"live","displayName":"Live","state":"active"}`)
+		case "GET /api/v1/orgs/held/members", "GET /api/v1/orgs/live/members":
+			_, _ = io.WriteString(w, `[{"user":{"handle":"chris"},"role":"admin","state":"active"}]`)
+		case "GET /api/v1/orgs/held/invitations", "GET /api/v1/orgs/held/teams", "GET /api/v1/orgs/held/sso/connections", "GET /api/v1/orgs/held/scim/tokens", "GET /api/v1/orgs/held/domain-claims", "GET /api/v1/orgs/held/webhooks",
+			"GET /api/v1/orgs/live/invitations", "GET /api/v1/orgs/live/teams", "GET /api/v1/orgs/live/sso/connections", "GET /api/v1/orgs/live/scim/tokens", "GET /api/v1/orgs/live/domain-claims", "GET /api/v1/orgs/live/webhooks":
+			_, _ = io.WriteString(w, `[]`)
+		case "GET /api/v1/orgs/held/policy", "GET /api/v1/orgs/live/policy":
+			_, _ = io.WriteString(w, `{}`)
+		default:
+			base.ServeHTTP(w, r)
+		}
+	})
+	h := New(Options{API: api})
+
+	// The console carries the form: a handle, a reason, the two acts.
+	w := get(h, "/ui/staff", sessCookie, csrfCookieV)
+	body := w.Body.String()
+	for _, want := range []string{`action="/ui/staff/org"`, `name="handle"`, `name="reason"`, `name="action" value="suspend"`, `name="action" value="reinstate"`, "answer as absent"} {
+		if w.Code != http.StatusOK || !strings.Contains(body, want) {
+			t.Fatalf("staff page missing %q: %d %s", want, w.Code, body)
+		}
+	}
+	// Suspending needs a reason; the API is not asked without one.
+	w = post(h, "/ui/staff/org", url.Values{"_csrf": {fakeCSRF}, "handle": {"m4-lifecycle"}, "action": {"suspend"}}, nil, sessCookie, csrfCookieV)
+	if _, errMsg, _ := flashOf(t, w); w.Code != http.StatusSeeOther || !strings.HasPrefix(errMsg, "Nothing was done:") || len(suspended) != 0 {
+		t.Fatalf("suspend without reason: %d %q suspended=%v", w.Code, errMsg, suspended)
+	}
+	// Nor without a handle, nor with an action the console does not offer.
+	w = post(h, "/ui/staff/org", url.Values{"_csrf": {fakeCSRF}, "handle": {" "}, "action": {"reinstate"}}, nil, sessCookie, csrfCookieV)
+	if _, errMsg, _ := flashOf(t, w); w.Code != http.StatusSeeOther || !strings.HasPrefix(errMsg, "Nothing was done:") {
+		t.Fatalf("no handle: %d %q", w.Code, errMsg)
+	}
+	w = post(h, "/ui/staff/org", url.Values{"_csrf": {fakeCSRF}, "handle": {"m4-lifecycle"}, "action": {"decommission"}, "reason": {"x"}}, nil, sessCookie, csrfCookieV)
+	if _, errMsg, _ := flashOf(t, w); w.Code != http.StatusSeeOther || !strings.HasPrefix(errMsg, "Nothing was done:") {
+		t.Fatalf("unknown action: %d %q", w.Code, errMsg)
+	}
+	// A signed-in viewer who is not staff meets the API's refusal, and the
+	// API was asked nothing that would tell them whether the handle exists.
+	w = post(h, "/ui/staff/org", url.Values{"_csrf": {fakeCSRF}, "handle": {"m4-lifecycle"}, "action": {"suspend"}, "reason": {"x"}}, nil, plainCookie, csrfCookieV)
+	if _, errMsg, _ := flashOf(t, w); w.Code != http.StatusSeeOther || errMsg != "This action is open to platform staff only." || len(suspended) != 0 {
+		t.Fatalf("not staff: %d %q suspended=%v", w.Code, errMsg, suspended)
+	}
+	// Suspend, with the reason passed through and the consequence named;
+	// the handle is normalised the way the API stores it.
+	w = post(h, "/ui/staff/org", url.Values{"_csrf": {fakeCSRF}, "handle": {" M4-Lifecycle "}, "action": {"suspend"}, "reason": {" spam "}}, nil, sessCookie, csrfCookieV)
+	if loc, okMsg, errMsg := redirectedTo(t, w); w.Code != http.StatusSeeOther || loc != "/ui/staff" || errMsg != "" ||
+		okMsg != "m4-lifecycle is suspended: it and everything under it answer as absent until it is reinstated." ||
+		len(suspended) != 1 || suspended[0] != "spam" {
+		t.Fatalf("suspend: %d %s ok=%q err=%q suspended=%v", w.Code, loc, okMsg, errMsg, suspended)
+	}
+	// Its page is now absent to staff too — that is the invariant — and
+	// says where the reinstate form lives.
+	w = get(h, "/ui/orgs/m4-lifecycle", sessCookie, csrfCookieV)
+	if w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), "org not found") || !strings.Contains(w.Body.String(), `href="/ui/staff"`) {
+		t.Fatalf("suspended org page for staff: %d %s", w.Code, w.Body.String())
+	}
+	// Reinstate from the console.
+	w = post(h, "/ui/staff/org", url.Values{"_csrf": {fakeCSRF}, "handle": {"m4-lifecycle"}, "action": {"reinstate"}}, nil, sessCookie, csrfCookieV)
+	if loc, okMsg, errMsg := redirectedTo(t, w); w.Code != http.StatusSeeOther || loc != "/ui/staff" || errMsg != "" ||
+		okMsg != "m4-lifecycle is active again." || len(reinstated) != 1 {
+		t.Fatalf("reinstate: %d %s ok=%q err=%q", w.Code, loc, okMsg, errMsg)
+	}
+	// The API's refusal is the flash, word for word — except its bare 404,
+	// which is what an erased organization's released handle answers, and
+	// which the console spells out for staff.
+	w = post(h, "/ui/staff/org", url.Values{"_csrf": {fakeCSRF}, "handle": {"held"}, "action": {"suspend"}, "reason": {"x"}}, nil, sessCookie, csrfCookieV)
+	if _, errMsg, _ := flashOf(t, w); w.Code != http.StatusSeeOther || errMsg != "The held organization is decommissioning, not active; only an active organization is suspended." {
+		t.Fatalf("conflict: %d %q", w.Code, errMsg)
+	}
+	w = post(h, "/ui/staff/org", url.Values{"_csrf": {fakeCSRF}, "handle": {"erased"}, "action": {"reinstate"}}, nil, sessCookie, csrfCookieV)
+	if _, errMsg, _ := flashOf(t, w); w.Code != http.StatusSeeOther || errMsg != "No organization is called erased. A suspended one is still found here; one that has been erased is not, and cannot come back." {
+		t.Fatalf("erased: %d %q", w.Code, errMsg)
+	}
+	// The org page keeps its forms for an organization it can show.
+	w = get(h, "/ui/orgs/live", sessCookie, csrfCookieV)
+	if body := w.Body.String(); w.Code != http.StatusOK || !strings.Contains(body, `name="section" value="suspend"`) || strings.Contains(body, `name="section" value="reinstate"`) {
+		t.Fatalf("active org page for staff: %d %s", w.Code, body)
+	}
+	w = get(h, "/ui/orgs/held", sessCookie, csrfCookieV)
+	if body := w.Body.String(); w.Code != http.StatusOK || !strings.Contains(body, `name="section" value="reinstate"`) || strings.Contains(body, `name="section" value="suspend"`) {
+		t.Fatalf("decommissioning org page for staff: %d %s", w.Code, body)
+	}
+}
