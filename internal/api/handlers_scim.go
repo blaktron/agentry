@@ -207,9 +207,10 @@ func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request, sc scimC
 func (s *Server) scimProvisionUser(ctx context.Context, orgID uuid.UUID, email, displayName string) (uuid.UUID, error) {
 	if u, err := s.q().GetUserByEmail(ctx, email); err == nil {
 		if err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
-			return q.UpsertPendingMembership(ctx, storegen.UpsertPendingMembershipParams{
+			_, err := q.UpsertPendingMembership(ctx, storegen.UpsertPendingMembershipParams{
 				OrgID: orgID, UserID: u.ID, Role: string(auth.RoleMember), ViaScim: true,
 			})
+			return err
 		}); err != nil {
 			return uuid.Nil, err
 		}
@@ -234,9 +235,10 @@ func (s *Server) scimProvisionUser(ctx context.Context, orgID uuid.UUID, email, 
 		if err := q.MarkEmailVerified(ctx, userID); err != nil {
 			return err
 		}
-		return q.UpsertPendingMembership(ctx, storegen.UpsertPendingMembershipParams{
+		_, err := q.UpsertPendingMembership(ctx, storegen.UpsertPendingMembershipParams{
 			OrgID: orgID, UserID: userID, Role: string(auth.RoleMember), ViaScim: true,
 		})
+		return err
 	})
 	if err != nil {
 		return uuid.Nil, err
@@ -382,7 +384,7 @@ func (s *Server) scimPutUser(w http.ResponseWriter, r *http.Request, sc scimCtx)
 		// PENDING member (agentry#361, D7). Deactivating removed the row,
 		// so this is a fresh provisioning, and SCIM provisions; an admin
 		// approves. Someone who is still an active member is untouched.
-		if err := q.UpsertPendingMembership(r.Context(), storegen.UpsertPendingMembershipParams{
+		if _, err := q.UpsertPendingMembership(r.Context(), storegen.UpsertPendingMembershipParams{
 			OrgID: sc.orgID, UserID: id, Role: orDefault(u.Role, string(auth.RoleMember)), ViaScim: true,
 		}); err != nil {
 			return err

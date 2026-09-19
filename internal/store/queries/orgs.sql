@@ -133,21 +133,23 @@ WHERE org_id = $1 AND user_id = $2;
 INSERT INTO memberships (org_id, user_id, role, state)
 VALUES ($1, $2, $3, 'active');
 
--- name: UpsertPendingMembership :exec
+-- name: UpsertPendingMembership :execrows
 -- The SCIM and fold-in doors: a membership that holds no seat and confers
 -- nothing until an admin approves it. An existing membership is left alone
 -- — approving twice, or provisioning someone who is already active, must
--- not push them back to pending.
-INSERT INTO memberships (org_id, user_id, role, via_scim, state)
-VALUES ($1, $2, $3, $4, 'pending')
+-- not push them back to pending. Reports 1 when this call wrote the row,
+-- which is how the fold-in knows to audit and count it once (agentry#364).
+INSERT INTO memberships (org_id, user_id, role, via_scim, via_domain, state)
+VALUES ($1, $2, $3, $4, $5, 'pending')
 ON CONFLICT (org_id, user_id) DO NOTHING;
 
 -- name: ActivateMembership :execrows
 -- The one write that makes a membership active. Returns 0 rows when it was
 -- already active, so the caller can tell a first activation from a repeat
--- and emit member.added exactly once.
-INSERT INTO memberships AS m (org_id, user_id, role, via_scim, state)
-VALUES ($1, $2, $3, $4, 'active')
+-- and emit member.added exactly once. The door flags of a pending row are
+-- kept: the console still says how the person arrived.
+INSERT INTO memberships AS m (org_id, user_id, role, via_scim, via_domain, state)
+VALUES ($1, $2, $3, $4, $5, 'active')
 ON CONFLICT (org_id, user_id) DO UPDATE
   SET role = EXCLUDED.role, state = 'active', updated_at = now()
   WHERE m.state <> 'active';
@@ -159,7 +161,7 @@ SELECT * FROM memberships WHERE org_id = $1 AND user_id = $2;
 DELETE FROM memberships WHERE org_id = $1 AND user_id = $2;
 
 -- name: ListOrgMembers :many
-SELECT m.role, m.via_scim, m.state, h.handle, u.display_name
+SELECT m.role, m.via_scim, m.via_domain, m.state, h.handle, u.display_name
 FROM memberships m
 JOIN users u ON u.id = m.user_id
 JOIN handles h ON h.id = u.id
@@ -206,6 +208,86 @@ FROM memberships m
 JOIN handles h ON h.id = m.org_id
 WHERE m.user_id = $1
 ORDER BY h.handle;
+
+-- name: CountMemberships :one
+-- Every membership row a person holds, pending included: the fold-in
+-- (agentry#364) fires only for a member of no organization, and a person
+-- already waiting somewhere is not folded in elsewhere.
+SELECT count(*) FROM memberships m WHERE m.user_id = $1;
+
+-- name: GetUserPendingOrg :one
+-- The organization a person is waiting to be approved by, for GET /user's
+-- pendingOrg (agentry#364): every page and client says it until an admin
+-- approves or declines. Active organizations only: a suspended one is
+-- absent to everyone, its pending members included, and one in its hold
+-- can approve nobody, so a notice that its admins have been asked would
+-- promise what cannot happen.
+SELECT h.handle, o.display_name, m.via_scim, m.via_domain
+FROM memberships m
+JOIN orgs o ON o.id = m.org_id
+JOIN handles h ON h.id = o.id
+WHERE m.user_id = $1 AND m.state = 'pending' AND o.state = 'active'
+ORDER BY m.created_at
+LIMIT 1;
+
+-- name: ListUsersAtDomainForFoldIn :many
+-- The accounts the fold-in sweep considers when an organization gains a
+-- domain (agentry#364): a verified address at the domain — the part after
+-- the last @, a trailing dot dropped, the way maildomains.Of reads it —
+-- an active account, a member of nothing, and not declined by this
+-- organization before. The sign-in step applies the same rules one
+-- person at a time (registry.writePending).
+SELECT u.id, h.handle, u.email
+FROM users u
+JOIN handles h ON h.id = u.id
+WHERE u.email_verified_at IS NOT NULL
+  AND u.state = 'active'
+  AND lower(rtrim(substring(u.email::text from '[^@]*$'), '.')) = lower(sqlc.arg(domain)::text)
+  AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = u.id)
+  AND NOT EXISTS (SELECT 1 FROM fold_in_declines d WHERE d.org_id = sqlc.arg(org_id) AND d.user_id = u.id)
+ORDER BY h.handle;
+
+-- name: GetFoldInDecline :one
+SELECT * FROM fold_in_declines WHERE org_id = $1 AND user_id = $2;
+
+-- name: UpsertFoldInDecline :exec
+-- A decline is remembered for that person at that organization (D25).
+INSERT INTO fold_in_declines (org_id, user_id, declined_by)
+VALUES ($1, $2, $3)
+ON CONFLICT (org_id, user_id) DO UPDATE SET declined_by = EXCLUDED.declined_by, declined_at = now();
+
+-- name: DeleteFoldInDecline :execrows
+-- An admin's invitation or approval supersedes the decline: the memory
+-- goes when the membership is activated.
+DELETE FROM fold_in_declines WHERE org_id = $1 AND user_id = $2;
+
+-- name: ListOrgsWithUnnotifiedPending :many
+-- The organizations the daily digest has something to say to
+-- (agentry#364), or the one named: active ones with a pending member no
+-- admin has been mailed about. A suspended or held organization gets no
+-- digest; its admins can add nobody.
+SELECT o.id, h.handle, o.display_name
+FROM orgs o
+JOIN handles h ON h.id = o.id
+WHERE o.state = 'active'
+  AND (sqlc.narg(org_id)::uuid IS NULL OR o.id = sqlc.narg(org_id)::uuid)
+  AND EXISTS (SELECT 1 FROM memberships m WHERE m.org_id = o.id AND m.state = 'pending' AND m.admins_notified_at IS NULL)
+ORDER BY h.handle;
+
+-- name: ListPendingMembersUnnotified :many
+-- One organization's pending members no admin has been mailed about yet,
+-- whichever door they came through. Read under the organization's row
+-- lock by the digest, so two runs at once cannot both name them.
+SELECT m.user_id, uh.handle, u.email, m.via_scim, m.via_domain, m.created_at
+FROM memberships m
+JOIN users u ON u.id = m.user_id
+JOIN handles uh ON uh.id = u.id
+WHERE m.org_id = $1 AND m.state = 'pending' AND m.admins_notified_at IS NULL
+ORDER BY m.created_at;
+
+-- name: MarkPendingMembersNotified :execrows
+UPDATE memberships SET admins_notified_at = now()
+WHERE org_id = $1 AND user_id = ANY(sqlc.arg(user_ids)::uuid[]) AND state = 'pending' AND admins_notified_at IS NULL;
 
 -- name: CreateInvitation :one
 INSERT INTO org_invitations (id, org_id, email, role, token_sha256, invited_by, expires_at)

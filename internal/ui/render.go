@@ -59,6 +59,24 @@ type userInfo struct {
 	TotpEnabled   bool      `json:"totpEnabled"`
 	PlatformStaff bool      `json:"platformStaff"`
 	Orgs          []userOrg `json:"orgs"`
+	// PendingOrg is the organization the person is waiting to be
+	// approved by (agentry#364): the layout says so on every page until
+	// an admin approves or declines them.
+	PendingOrg *pendingOrg `json:"pendingOrg"`
+}
+
+type pendingOrg struct {
+	Handle      string `json:"handle"`
+	DisplayName string `json:"displayName"`
+	Via         string `json:"via"`
+}
+
+// Label is the organization as the notice names it.
+func (o pendingOrg) Label() string {
+	if o.DisplayName != "" && o.DisplayName != o.Handle {
+		return o.DisplayName + " (" + o.Handle + ")"
+	}
+	return o.Handle
 }
 
 type userOrg struct {

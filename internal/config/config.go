@@ -444,6 +444,13 @@ type Orgs struct {
 	// deletes its agents, repositories, blobs and invitations and releases
 	// its handle and domain. Zero erases at the next hourly sweep.
 	DecommissionHold time.Duration `yaml:"decommissionHold"`
+	// PendingDigestEvery is how often the worker mails each organization's
+	// admins the pending members they have not been told about
+	// (agentry#364): the domain fold-in and the IdP's provisioning are
+	// batched into one mail per admin, and a person is named once. Zero
+	// keeps the default of a day; the sweep that runs when an organization
+	// gains a domain sends one digest at once regardless.
+	PendingDigestEvery time.Duration `yaml:"pendingDigestEvery"`
 }
 
 // Default returns the development-safe baseline configuration.
@@ -495,7 +502,7 @@ func Default() Config {
 			StreamFlush:   30 * time.Second,
 			RetentionDays: 400,
 		},
-		Orgs:    Orgs{DecommissionHold: 30 * 24 * time.Hour},
+		Orgs:    Orgs{DecommissionHold: 30 * 24 * time.Hour, PendingDigestEvery: 24 * time.Hour},
 		RedTeam: RedTeam{Interval: 24 * time.Hour},
 		Queue:   Queue{Driver: "river", Workers: 1},
 		Telemetry: Telemetry{
@@ -681,6 +688,9 @@ func applyEnv(c *Config) error {
 	}
 	// The organization lifecycle (agentry#363).
 	if err := dur("AGENTRY_ORGS_DECOMMISSION_HOLD", &c.Orgs.DecommissionHold); err != nil {
+		return err
+	}
+	if err := dur("AGENTRY_ORGS_PENDING_DIGEST_EVERY", &c.Orgs.PendingDigestEvery); err != nil {
 		return err
 	}
 	// §17.5 red-team job (agentry#67).
@@ -879,6 +889,9 @@ func (c Config) Validate() error {
 	}
 	if c.Orgs.DecommissionHold < 0 {
 		return fmt.Errorf("config: orgs.decommissionHold must be >= 0")
+	}
+	if c.Orgs.PendingDigestEvery < 0 {
+		return fmt.Errorf("config: orgs.pendingDigestEvery must be >= 0")
 	}
 	if err := c.validateAuthTTLs(); err != nil {
 		return err

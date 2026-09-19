@@ -477,6 +477,24 @@ func (e OrgState) Valid() bool {
 	}
 }
 
+// Defines values for PendingOrgVia.
+const (
+	PendingOrgViaDomain PendingOrgVia = "domain"
+	PendingOrgViaScim   PendingOrgVia = "scim"
+)
+
+// Valid indicates whether the value is a known member of the PendingOrgVia enum.
+func (e PendingOrgVia) Valid() bool {
+	switch e {
+	case PendingOrgViaDomain:
+		return true
+	case PendingOrgViaScim:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ReviewItemQueue.
 const (
 	ReviewItemQueueOrg      ReviewItemQueue = "org"
@@ -1681,13 +1699,16 @@ type Membership struct {
 	// Role An organization role, ordered admin > security_reviewer | member (§12.2 as amended by agentry#360). Admins manage the organization, its members, settings, SSO and SCIM, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; the owner role is retired and every owner became an admin. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
 	Role OrgRole `json:"role"`
 
-	// State Whether the membership is in force. `pending` is someone the organization's IdP provisioned, or its domain folded in, who holds no seat and nothing of the organization until an admin approves them; `active` is a member.
-	State   *MembershipState `json:"state,omitempty"`
-	User    PublicUser       `json:"user"`
-	ViaScim *bool            `json:"viaScim,omitempty"`
+	// State Whether the membership is in force. `pending` is someone the organization's IdP provisioned, or its domain folded in, who holds no seat and nothing of the organization until an admin approves them; `active` is a member. Declining a pending member removes them, and a decline is remembered: the domain does not fold that person in again unless an admin invites them.
+	State *MembershipState `json:"state,omitempty"`
+	User  PublicUser       `json:"user"`
+
+	// ViaDomain The domain folded this person in: their verified address is at a domain the organization holds, and they became pending at a sign-in or by the sweep that runs when the organization gains the domain. An admin's approval keeps the flag; the console says how each member arrived.
+	ViaDomain *bool `json:"viaDomain,omitempty"`
+	ViaScim   *bool `json:"viaScim,omitempty"`
 }
 
-// MembershipState Whether the membership is in force. `pending` is someone the organization's IdP provisioned, or its domain folded in, who holds no seat and nothing of the organization until an admin approves them; `active` is a member.
+// MembershipState Whether the membership is in force. `pending` is someone the organization's IdP provisioned, or its domain folded in, who holds no seat and nothing of the organization until an admin approves them; `active` is a member. Declining a pending member removes them, and a decline is remembered: the domain does not fold that person in again unless an admin invites them.
 type MembershipState string
 
 // Meta defines model for Meta.
@@ -1799,6 +1820,18 @@ type PatCreated struct {
 	// Token The full secret. Shown exactly once.
 	Token string `json:"token"`
 }
+
+// PendingOrg The organization the caller is waiting to be approved by (present on GET /user only, and only while a pending membership exists): the domain folded them in at a sign-in, or the organization's IdP provisioned them. Every page and client can say it until an admin approves or declines them; until then they keep working on their own tier.
+type PendingOrg struct {
+	DisplayName string `json:"displayName"`
+	Handle      string `json:"handle"`
+
+	// Via The door — `domain` (their verified address is at the organization's domain) or `scim`.
+	Via PendingOrgVia `json:"via"`
+}
+
+// PendingOrgVia The door — `domain` (their verified address is at the organization's domain) or `scim`.
+type PendingOrgVia string
 
 // Problem RFC 9457 problem details (D-10).
 type Problem struct {
@@ -2172,11 +2205,14 @@ type User struct {
 		Handle string `json:"handle"`
 		Role   string `json:"role"`
 
-		// State Whether the membership is in force. `pending` is someone the organization's IdP provisioned, or its domain folded in, who holds no seat and nothing of the organization until an admin approves them; `active` is a member.
+		// State Whether the membership is in force. `pending` is someone the organization's IdP provisioned, or its domain folded in, who holds no seat and nothing of the organization until an admin approves them; `active` is a member. Declining a pending member removes them, and a decline is remembered: the domain does not fold that person in again unless an admin invites them.
 		State *MembershipState `json:"state,omitempty"`
 	} `json:"orgs,omitempty"`
-	PlatformStaff *bool `json:"platformStaff,omitempty"`
-	TotpEnabled   bool  `json:"totpEnabled"`
+
+	// PendingOrg The organization the caller is waiting to be approved by (present on GET /user only, and only while a pending membership exists): the domain folded them in at a sign-in, or the organization's IdP provisioned them. Every page and client can say it until an admin approves or declines them; until then they keep working on their own tier.
+	PendingOrg    *PendingOrg `json:"pendingOrg,omitempty"`
+	PlatformStaff *bool       `json:"platformStaff,omitempty"`
+	TotpEnabled   bool        `json:"totpEnabled"`
 }
 
 // UserDirectory defines model for UserDirectory.
