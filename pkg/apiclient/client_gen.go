@@ -2550,6 +2550,12 @@ type OidcCallbackParams struct {
 	State *string `form:"state,omitempty" json:"state,omitempty"`
 }
 
+// OidcStartParams defines parameters for OidcStart.
+type OidcStartParams struct {
+	// Next Where the browser returns after a successful sign-in. A same-origin path only (leading `/`, not `//`); anything else is ignored. It is sealed into the state the callback reads, so the identity provider's round trip cannot change it.
+	Next *string `form:"next,omitempty" json:"next,omitempty"`
+}
+
 // SuspendOrgJSONBody defines parameters for SuspendOrg.
 type SuspendOrgJSONBody struct {
 	Reason string `json:"reason"`
@@ -3566,15 +3572,21 @@ type ClientInterface interface {
 
 	// OidcCallback OIDC redirect URI: exchange the code and establish a session (§12.4).
 	//
+	// When the start carried a `next`, this is browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason. Otherwise the answer is the JSON below. 404 while the organization's subscription does not include SSO.
+	//
 	// Corresponds with GET /orgs/{org}/sso/oidc/callback (the `OidcCallback` operationId).
 	OidcCallback(ctx context.Context, org OrgHandle, params *OidcCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// OidcStart Begin the OIDC auth-code + PKCE flow (redirect to IdP, §12.4).
 	//
+	// 404 while the organization's subscription does not include SSO: the door is not there to be started. `next` puts the callback in browser mode.
+	//
 	// Corresponds with GET /orgs/{org}/sso/oidc/start (the `OidcStart` operationId).
-	OidcStart(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
+	OidcStart(ctx context.Context, org OrgHandle, params *OidcStartParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SamlAcs SAML Assertion Consumer Service: consume a signed assertion (§12.4).
+	//
+	// A `RelayState` form field holding a same-origin path puts this in browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason, because a browser cannot read a problem document. Anything else in `RelayState` is ignored. Without one the answer is the JSON below. 404 while the organization's subscription does not include SSO.
 	//
 	// Corresponds with POST /orgs/{org}/sso/saml/acs (the `SamlAcs` operationId).
 	SamlAcs(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5644,6 +5656,8 @@ func (c *Client) TestSsoConnection(ctx context.Context, org OrgHandle, kind Test
 
 // OidcCallback OIDC redirect URI: exchange the code and establish a session (§12.4).
 //
+// When the start carried a `next`, this is browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason. Otherwise the answer is the JSON below. 404 while the organization's subscription does not include SSO.
+//
 // Corresponds with GET /orgs/{org}/sso/oidc/callback (the `OidcCallback` operationId).
 func (c *Client) OidcCallback(ctx context.Context, org OrgHandle, params *OidcCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewOidcCallbackRequest(c.Server, org, params)
@@ -5659,9 +5673,11 @@ func (c *Client) OidcCallback(ctx context.Context, org OrgHandle, params *OidcCa
 
 // OidcStart Begin the OIDC auth-code + PKCE flow (redirect to IdP, §12.4).
 //
+// 404 while the organization's subscription does not include SSO: the door is not there to be started. `next` puts the callback in browser mode.
+//
 // Corresponds with GET /orgs/{org}/sso/oidc/start (the `OidcStart` operationId).
-func (c *Client) OidcStart(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewOidcStartRequest(c.Server, org)
+func (c *Client) OidcStart(ctx context.Context, org OrgHandle, params *OidcStartParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewOidcStartRequest(c.Server, org, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5673,6 +5689,8 @@ func (c *Client) OidcStart(ctx context.Context, org OrgHandle, reqEditors ...Req
 }
 
 // SamlAcs SAML Assertion Consumer Service: consume a signed assertion (§12.4).
+//
+// A `RelayState` form field holding a same-origin path puts this in browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason, because a browser cannot read a problem document. Anything else in `RelayState` is ignored. Without one the answer is the JSON below. 404 while the organization's subscription does not include SSO.
 //
 // Corresponds with POST /orgs/{org}/sso/saml/acs (the `SamlAcs` operationId).
 func (c *Client) SamlAcs(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -10198,7 +10216,7 @@ func NewOidcCallbackRequest(server string, org OrgHandle, params *OidcCallbackPa
 }
 
 // NewOidcStartRequest constructs an http.Request for the OidcStart method
-func NewOidcStartRequest(server string, org OrgHandle) (*http.Request, error) {
+func NewOidcStartRequest(server string, org OrgHandle, params *OidcStartParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -10221,6 +10239,33 @@ func NewOidcStartRequest(server string, org OrgHandle) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Next != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "next", *params.Next, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -13637,6 +13682,8 @@ type ClientWithResponsesInterface interface {
 
 	// OidcCallbackWithResponse OIDC redirect URI: exchange the code and establish a session (§12.4).
 	//
+	// When the start carried a `next`, this is browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason. Otherwise the answer is the JSON below. 404 while the organization's subscription does not include SSO.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/sso/oidc/callback (the `OidcCallback` operationId).
@@ -13644,12 +13691,16 @@ type ClientWithResponsesInterface interface {
 
 	// OidcStartWithResponse Begin the OIDC auth-code + PKCE flow (redirect to IdP, §12.4).
 	//
+	// 404 while the organization's subscription does not include SSO: the door is not there to be started. `next` puts the callback in browser mode.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/sso/oidc/start (the `OidcStart` operationId).
-	OidcStartWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*OidcStartResponse, error)
+	OidcStartWithResponse(ctx context.Context, org OrgHandle, params *OidcStartParams, reqEditors ...RequestEditorFn) (*OidcStartResponse, error)
 
 	// SamlAcsWithResponse SAML Assertion Consumer Service: consume a signed assertion (§12.4).
+	//
+	// A `RelayState` form field holding a same-origin path puts this in browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason, because a browser cannot read a problem document. Anything else in `RelayState` is ignored. Without one the answer is the JSON below. 404 while the organization's subscription does not include SSO.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -21652,6 +21703,8 @@ func (c *ClientWithResponses) TestSsoConnectionWithResponse(ctx context.Context,
 
 // OidcCallbackWithResponse OIDC redirect URI: exchange the code and establish a session (§12.4).
 //
+// When the start carried a `next`, this is browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason. Otherwise the answer is the JSON below. 404 while the organization's subscription does not include SSO.
+//
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /orgs/{org}/sso/oidc/callback (the `OidcCallback` operationId).
@@ -21665,11 +21718,13 @@ func (c *ClientWithResponses) OidcCallbackWithResponse(ctx context.Context, org 
 
 // OidcStartWithResponse Begin the OIDC auth-code + PKCE flow (redirect to IdP, §12.4).
 //
+// 404 while the organization's subscription does not include SSO: the door is not there to be started. `next` puts the callback in browser mode.
+//
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /orgs/{org}/sso/oidc/start (the `OidcStart` operationId).
-func (c *ClientWithResponses) OidcStartWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*OidcStartResponse, error) {
-	rsp, err := c.OidcStart(ctx, org, reqEditors...)
+func (c *ClientWithResponses) OidcStartWithResponse(ctx context.Context, org OrgHandle, params *OidcStartParams, reqEditors ...RequestEditorFn) (*OidcStartResponse, error) {
+	rsp, err := c.OidcStart(ctx, org, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -21677,6 +21732,8 @@ func (c *ClientWithResponses) OidcStartWithResponse(ctx context.Context, org Org
 }
 
 // SamlAcsWithResponse SAML Assertion Consumer Service: consume a signed assertion (§12.4).
+//
+// A `RelayState` form field holding a same-origin path puts this in browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason, because a browser cannot read a problem document. Anything else in `RelayState` is ignored. Without one the answer is the JSON below. 404 while the organization's subscription does not include SSO.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -24984,6 +25041,9 @@ func ParseOidcCallbackResponse(rsp *http.Response) (*OidcCallbackResponse, error
 		}
 		response.JSON200 = &dest
 
+	case rsp.StatusCode == 303:
+		break // No content-type
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -25045,6 +25105,9 @@ func ParseSamlAcsResponse(rsp *http.Response) (*SamlAcsResponse, error) {
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case rsp.StatusCode == 303:
+		break // No content-type
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
