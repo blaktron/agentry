@@ -67,6 +67,9 @@ func newBedrockJudge(api bedrockConverseAPI, model string) *BedrockJudge {
 // Name implements JudgeProvider.
 func (j *BedrockJudge) Name() string { return "bedrock" }
 
+// ModelID implements JudgeProvider: the Bedrock model id.
+func (j *BedrockJudge) ModelID() string { return j.model }
+
 // RequiresHumanReview implements JudgeProvider: a live judge scores.
 func (j *BedrockJudge) RequiresHumanReview() bool { return false }
 
