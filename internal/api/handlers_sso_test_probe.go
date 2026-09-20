@@ -85,10 +85,12 @@ func (s *Server) TestSsoConnection(w http.ResponseWriter, r *http.Request, org O
 		}
 		_, _, redirect := s.ssoURLs(r, orgRow.Handle)
 		start := time.Now()
-		// Discovery only: no secret in the config, so nothing sensitive is sent.
-		rp, err := oidcrp.New(r.Context(), oidcrp.Config{Issuer: st.Issuer, ClientID: st.ClientID, Scopes: st.Scopes}, redirect)
+		// Discovery only: no secret in the config, so nothing sensitive is
+		// sent. Through the guarded client (oidcContext), and the admin
+		// learns the status, never the body an internal address answered.
+		rp, err := oidcrp.New(s.oidcContext(r.Context()), oidcrp.Config{Issuer: st.Issuer, ClientID: st.ClientID, Scopes: st.Scopes}, redirect)
 		if err != nil {
-			fail("discovery against " + st.Issuer + " failed: " + err.Error())
+			fail(oidcFailureSummary(st.Issuer, err))
 			return
 		}
 		d := rp.Describe()

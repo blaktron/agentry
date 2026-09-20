@@ -76,6 +76,14 @@ type Server struct {
 	// oidcHTTPClient, when set, is the HTTP client OIDC discovery/JWKS/token
 	// calls use (tests point it at an httptest IdP). nil = default client.
 	oidcHTTPClient *http.Client
+	// oidcGuard is the egress policy OIDC discovery, JWKS and token
+	// requests obey when no oidcHTTPClient is injected: the production
+	// guard, loopback allowed in dev mode so a local IdP works. An
+	// organization's issuer is an address any org admin can name, so it is
+	// fetched like a webhook, never with http.DefaultClient (security
+	// review 2026-09-20 §5.8.1).
+	oidcGuard  webhook.Guard
+	oidcEgress *http.Client
 	// imgHTTPClient overrides the image proxy's guarded client (tests).
 	imgHTTPClient *http.Client
 	// extensions and eventHooks are the closed build's additions (extensions.go).
@@ -136,6 +144,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 	// Enterprise defaults, set regardless of database presence (§12.4, §9.3).
 	srv.resolver = dnsx.NewSystemResolver()
 	srv.samlReplay = samlsp.NewMemoryReplayCache()
+	srv.SetOIDCEgressGuard(webhook.Guard{AllowLoopback: cfg.DevMode})
 	if st != nil {
 		srv.reg = registry.NewService(st, aud)
 		// Webhook fan-out (§9.3): enqueue deliveries onto the Postgres queue;
@@ -380,6 +389,14 @@ func (s *Server) SetWebhookDispatcher(d *webhook.Dispatcher) { s.webhooks = d }
 // SetOIDCHTTPClient overrides the HTTP client used for OIDC discovery/JWKS/
 // token calls (tests point it at an in-process IdP).
 func (s *Server) SetOIDCHTTPClient(c *http.Client) { s.oidcHTTPClient = c }
+
+// SetOIDCEgressGuard replaces the egress policy OIDC requests go through
+// (tests answer a name with an address of their choosing through the
+// guard's resolver seam; production keeps the default).
+func (s *Server) SetOIDCEgressGuard(g webhook.Guard) {
+	s.oidcGuard = g
+	s.oidcEgress = webhook.NewHTTPClient(g, nil)
+}
 
 // SetImageProxyClient overrides the guarded client the README image proxy
 // fetches with (tests point it at an in-process server).
