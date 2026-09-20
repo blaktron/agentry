@@ -2,7 +2,7 @@ package api_test
 
 // SSO and SCIM gated on the tier, and the rule that billing state never
 // loosens identity (agentry#365, M13; plan organization-subscriptions.md
-// §5.7, D11; DEV-118).
+// §5.7, D11; DEV-114).
 
 import (
 	"context"
@@ -14,50 +14,16 @@ import (
 	"github.com/blaktron/agentry/internal/entitlements"
 )
 
-// identityResolver is the core resolver with SSO and SCIM switched the way
-// a tier's resolver would answer them; broken fails instead, for the
-// fail-closed cases.
-type identityResolver struct {
-	entitlements.Resolver
-	sso    bool
-	scim   bool
-	broken bool
-}
-
-func (c identityResolver) Features(ctx context.Context, s entitlements.Subject) (entitlements.Features, error) {
-	if c.broken {
-		return entitlements.Features{}, context.DeadlineExceeded
-	}
-	f, err := c.Resolver.Features(ctx, s)
-	if err != nil {
-		return f, err
-	}
-	if s.Kind == entitlements.NamespaceOrg {
-		f.SSO, f.SCIM = c.sso, c.scim
-	}
-	return f, nil
-}
-
+// identityTier is a tier that does or does not include SSO and SCIM.
 func identityTier(sso, scim bool) func(*api.Server) {
-	return func(s *api.Server) {
-		s.SetEntitlements(identityResolver{
-			Resolver: entitlements.NewConfigResolver(config.Default().Limits), sso: sso, scim: scim,
-		})
-	}
+	return onTier(func(f *entitlements.Features) { f.SSO, f.SCIM = sso, scim })
 }
 
-func brokenIdentityTier() func(*api.Server) {
-	return func(s *api.Server) {
-		s.SetEntitlements(identityResolver{
-			Resolver: entitlements.NewConfigResolver(config.Default().Limits), broken: true,
-		})
+func identityResolverFor(sso, scim bool) entitlements.Resolver {
+	return tierResolver{
+		Resolver: entitlements.NewConfigResolver(config.Default().Limits),
+		apply:    func(f *entitlements.Features) { f.SSO, f.SCIM = sso, scim },
 	}
-}
-
-// setEntitlements swaps the resolver after the fixture is built, which is
-// what a subscription changing under a live organization looks like.
-func (env *testEnv) setEntitlements(r entitlements.Resolver) {
-	env.srvObj.SetEntitlements(r)
 }
 
 // identityState is what a downgrade must not touch: the organization's
@@ -121,7 +87,7 @@ func TestIdentityDoorsAreGatedOnTheTier(t *testing.T) {
 // other entitlement gate does: an outage is not a way to add a sign-in
 // door or mint a directory credential.
 func TestIdentityDoorsFailClosed(t *testing.T) {
-	env := newTestEnvWith(t, brokenIdentityTier())
+	env := newTestEnvWith(t, brokenTier())
 	admin := env.register("idf-admin")
 	env.verifyEmail(admin)
 	sess := env.login(admin)
@@ -173,10 +139,20 @@ func TestDowngradeNeverLoosensIdentity(t *testing.T) {
 		t.Fatalf("before the downgrade: %+v", before)
 	}
 
+	// The positive control, without which the assertion after the
+	// downgrade would pass for an organization that was never enforcing:
+	// while the tier includes SSO, this password session is refused the
+	// organization's own settings, because it has not come through the
+	// organization's identity provider.
+	res := env.do(sess, http.MethodPatch, "/api/v1/orgs/"+orgH,
+		map[string]any{"displayName": "Refused While Enforcing"})
+	code, slug, _ := problemOf(t, res)
+	if code != http.StatusForbidden {
+		t.Fatalf("enforced SSO with the tier: %d %s, want 403 — the rest of this test proves nothing otherwise", code, slug)
+	}
+
 	// The subscription stops including either.
-	env.setEntitlements(identityResolver{
-		Resolver: entitlements.NewConfigResolver(config.Default().Limits), sso: false, scim: false,
-	})
+	env.setEntitlements(identityResolverFor(false, false))
 
 	after := env.ssoState(orgID)
 	if after != before {
@@ -191,7 +167,7 @@ func TestDowngradeNeverLoosensIdentity(t *testing.T) {
 
 	// And the doors are shut: the token no longer provisions, and the
 	// start is gone.
-	res := env.do(caller{name: "scim", pat: tok.Token}, http.MethodGet, "/scim/v2/Users", nil)
+	res = env.do(caller{name: "scim", pat: tok.Token}, http.MethodGet, "/scim/v2/Users", nil)
 	_ = res.Body.Close()
 	if res.StatusCode != http.StatusForbidden {
 		t.Fatalf("SCIM after the downgrade: %d, want 403", res.StatusCode)
@@ -201,12 +177,17 @@ func TestDowngradeNeverLoosensIdentity(t *testing.T) {
 	if res.StatusCode != http.StatusNotFound {
 		t.Fatalf("the SSO start after the downgrade: %d, want 404", res.StatusCode)
 	}
+	// And the entry point people paste into an address bar, which is the
+	// one that would otherwise still hand a browser to the IdP.
+	res = env.do(caller{name: "anon"}, http.MethodGet, "/sso/"+orgH, nil)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("the SSO landing after the downgrade: %d, want 404", res.StatusCode)
+	}
 
 	// Back on a tier that includes them, everything works again without
 	// anything being re-entered.
-	env.setEntitlements(identityResolver{
-		Resolver: entitlements.NewConfigResolver(config.Default().Limits), sso: true, scim: true,
-	})
+	env.setEntitlements(identityResolverFor(true, true))
 	res = env.do(caller{name: "scim", pat: tok.Token}, http.MethodGet, "/scim/v2/Users", nil)
 	_ = res.Body.Close()
 	if res.StatusCode != http.StatusOK {

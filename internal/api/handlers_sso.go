@@ -23,8 +23,8 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// identityFeatures answers whether the organization's subscription
-// includes SSO and SCIM (plan organization-subscriptions.md §5.7, D11).
+// orgFeatures answers what the organization's subscription includes (plan
+// organization-subscriptions.md §5.7, D11).
 //
 // Which way an error falls depends on what the caller is deciding, and the
 // two directions are opposite, so every caller says which it wants rather
@@ -34,21 +34,38 @@ import (
 //     while the answer is unknown, like every other entitlement check;
 //   - the enforced-SSO gate fails *enforcing*, because an unknown answer
 //     must never be the reason a person walks past an organization's own
-//     sign-in policy. Billing state does not loosen identity (DEV-118).
-func (s *Server) identityFeatures(ctx context.Context, orgID uuid.UUID) (entitlements.Features, error) {
+//     sign-in policy. Billing state does not loosen identity (DEV-114).
+func (s *Server) orgFeatures(ctx context.Context, orgID uuid.UUID) (entitlements.Features, error) {
 	return s.entitlements().Features(ctx, entitlements.ForOrg(orgID))
 }
 
 // ssoIncluded reports whether the organization may use SSO at all. It is
-// the gate on the sign-in doors themselves — the OIDC start and callback
-// and the SAML ACS — not only on creating a connection: a tier that does
-// not include SSO must not leave a working door standing because a
-// connection was configured while it did. A downgrade keeps the
+// the gate on the sign-in doors themselves — the landing, the OIDC start
+// and callback, the SAML ACS — not only on creating a connection: a tier
+// that does not include SSO must not leave a working door standing because
+// a connection was configured while it did. A downgrade keeps the
 // connection's row, so re-subscribing restores the door without
 // re-entering anything.
+//
+// An unknown answer shuts the door, like every other gate on an act. The
+// one place that reads the entitlement the other way round is enforceSSO,
+// which says why there.
 func (s *Server) ssoIncluded(ctx context.Context, orgID uuid.UUID) bool {
-	f, err := s.identityFeatures(ctx, orgID)
+	f, err := s.orgFeatures(ctx, orgID)
 	return err == nil && f.SSO
+}
+
+// browserFail ends a sign-in that cannot continue. In browser mode — next
+// non-empty — the client is a browser, so the answer is a 303 to the
+// sign-in page carrying the reason, because a problem document would be
+// the page a person lands on. It reports whether it answered; an API
+// caller gets its usual problem from the caller instead.
+func (s *Server) browserFail(w http.ResponseWriter, r *http.Request, next, msg string) bool {
+	if next == "" {
+		return false
+	}
+	http.Redirect(w, r, s.paths.login(msg), http.StatusSeeOther)
+	return true
 }
 
 // ssoURLs returns the SP metadata/ACS and OIDC redirect URLs for an org,
@@ -114,7 +131,7 @@ func (s *Server) PutSsoConnection(w http.ResponseWriter, r *http.Request, org Or
 	// The tier decides whether this organization may have SSO at all
 	// (D11). Unknown refuses: an entitlement outage must not be a way to
 	// add a sign-in door.
-	f, err := s.identityFeatures(r.Context(), orgRow.ID)
+	f, err := s.orgFeatures(r.Context(), orgRow.ID)
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "sso entitlements", "org", orgRow.ID, "err", err)
 		problemInternal(w, r)
@@ -357,13 +374,7 @@ type samlSessionLink struct {
 func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, orgRow storegen.GetOrgByHandleRow, connID uuid.UUID, providerKind, subject, email string, samlLink *samlSessionLink, next string) {
 	ctx := r.Context()
 	q := s.q()
-	browserFail := func(msg string) bool {
-		if next == "" {
-			return false
-		}
-		http.Redirect(w, r, s.paths.login(msg), http.StatusSeeOther)
-		return true
-	}
+	browserFail := func(msg string) bool { return s.browserFail(w, r, next, msg) }
 
 	userID, err := s.resolveSSOUser(ctx, orgRow, connID, providerKind, subject, email)
 	if err != nil {

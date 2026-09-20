@@ -3522,12 +3522,16 @@ type ClientInterface interface {
 
 	// CreateScimTokenWithBody Mint a SCIM bearer token (admin, §12.5).
 	//
+	// 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
+	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
 	CreateScimTokenWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateScimToken Mint a SCIM bearer token (admin, §12.5).
+	//
+	// 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -3551,12 +3555,16 @@ type ClientInterface interface {
 
 	// PutSsoConnectionWithBody Create or update a SAML/OIDC connection (admin, §12.4).
 	//
+	// 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
+	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
 	PutSsoConnectionWithBody(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PutSsoConnection Create or update a SAML/OIDC connection (admin, §12.4).
+	//
+	// 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -5526,6 +5534,8 @@ func (c *Client) ListScimTokens(ctx context.Context, org OrgHandle, reqEditors .
 
 // CreateScimTokenWithBody Mint a SCIM bearer token (admin, §12.5).
 //
+// 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
+//
 // Takes any type of body and a specified content type.
 //
 // Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
@@ -5542,6 +5552,8 @@ func (c *Client) CreateScimTokenWithBody(ctx context.Context, org OrgHandle, con
 }
 
 // CreateScimToken Mint a SCIM bearer token (admin, §12.5).
+//
+// 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -5605,6 +5617,8 @@ func (c *Client) DeleteSsoConnection(ctx context.Context, org OrgHandle, kind De
 
 // PutSsoConnectionWithBody Create or update a SAML/OIDC connection (admin, §12.4).
 //
+// 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
+//
 // Takes any type of body and a specified content type.
 //
 // Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
@@ -5621,6 +5635,8 @@ func (c *Client) PutSsoConnectionWithBody(ctx context.Context, org OrgHandle, ki
 }
 
 // PutSsoConnection Create or update a SAML/OIDC connection (admin, §12.4).
+//
+// 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -13624,12 +13640,16 @@ type ClientWithResponsesInterface interface {
 
 	// CreateScimTokenWithBodyWithResponse Mint a SCIM bearer token (admin, §12.5).
 	//
+	// 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
+	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
 	CreateScimTokenWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateScimTokenResponse, error)
 
 	// CreateScimTokenWithResponse Mint a SCIM bearer token (admin, §12.5).
+	//
+	// 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -13659,12 +13679,16 @@ type ClientWithResponsesInterface interface {
 
 	// PutSsoConnectionWithBodyWithResponse Create or update a SAML/OIDC connection (admin, §12.4).
 	//
+	// 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
+	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
 	PutSsoConnectionWithBodyWithResponse(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutSsoConnectionResponse, error)
 
 	// PutSsoConnectionWithResponse Create or update a SAML/OIDC connection (admin, §12.4).
+	//
+	// 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -21597,6 +21621,8 @@ func (c *ClientWithResponses) ListScimTokensWithResponse(ctx context.Context, or
 
 // CreateScimTokenWithBodyWithResponse Mint a SCIM bearer token (admin, §12.5).
 //
+// 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
+//
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
@@ -21609,6 +21635,8 @@ func (c *ClientWithResponses) CreateScimTokenWithBodyWithResponse(ctx context.Co
 }
 
 // CreateScimTokenWithResponse Mint a SCIM bearer token (admin, §12.5).
+//
+// 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -21662,6 +21690,8 @@ func (c *ClientWithResponses) DeleteSsoConnectionWithResponse(ctx context.Contex
 
 // PutSsoConnectionWithBodyWithResponse Create or update a SAML/OIDC connection (admin, §12.4).
 //
+// 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
+//
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
@@ -21674,6 +21704,8 @@ func (c *ClientWithResponses) PutSsoConnectionWithBodyWithResponse(ctx context.C
 }
 
 // PutSsoConnectionWithResponse Create or update a SAML/OIDC connection (admin, §12.4).
+//
+// 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

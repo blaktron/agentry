@@ -57,7 +57,7 @@ func (s *Server) CreateScimToken(w http.ResponseWriter, r *http.Request, org Org
 	// The tier decides whether this organization may be provisioned over
 	// SCIM at all (D11). Unknown refuses: an entitlement outage must not
 	// be a way to mint a directory credential.
-	f, err := s.identityFeatures(r.Context(), orgRow.ID)
+	f, err := s.orgFeatures(r.Context(), orgRow.ID)
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "scim entitlements", "org", orgRow.ID, "err", err)
 		problemInternal(w, r)

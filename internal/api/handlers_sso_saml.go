@@ -66,13 +66,7 @@ func (s *Server) SamlAcs(w http.ResponseWriter, r *http.Request, org OrgHandle) 
 	// trustworthy field and passes through safeNextPath, which admits a
 	// same-origin path and nothing else (plan §5.7). Empty is API mode.
 	next := safeNextPath(r.PostFormValue("RelayState"))
-	browserFail := func(msg string) bool {
-		if next == "" {
-			return false
-		}
-		http.Redirect(w, r, s.paths.login(msg), http.StatusSeeOther)
-		return true
-	}
+	browserFail := func(msg string) bool { return s.browserFail(w, r, next, msg) }
 	sp, connID, err := s.samlSPForOrg(r, orgRow)
 	if err != nil {
 		const msg = "This organization has no SAML connection enabled."

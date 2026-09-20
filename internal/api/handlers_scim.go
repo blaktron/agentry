@@ -92,7 +92,7 @@ func (s *Server) scimAuth(next scimHandler) http.HandlerFunc {
 		// row survives, so the directory works again the moment the
 		// subscription does — nothing has to be re-issued. Unknown
 		// refuses, like every other entitlement gate.
-		f, ferr := s.identityFeatures(r.Context(), row.OrgID)
+		f, ferr := s.orgFeatures(r.Context(), row.OrgID)
 		if ferr != nil {
 			s.log.ErrorContext(r.Context(), "scim entitlements", "org", row.OrgID, "err", ferr)
 			scimError(w, http.StatusForbidden, "directory provisioning is unavailable for this organization")
