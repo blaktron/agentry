@@ -1582,6 +1582,9 @@ type EmailNotificationSettings struct {
 	// Advisories An advisory naming one of the person's BriefAgents was published.
 	Advisories bool `json:"advisories"`
 
+	// Billing The subscription that pays for the person's work: a checkout confirmed, a payment failed, an organization restricted, seats reached, "your organization covers you" (the hosted product's billing mail; a registry with no billing sends none). Not required on a write: a client that predates the switch leaves it as it was rather than turning it off by omission.
+	Billing *bool `json:"billing,omitempty"`
+
 	// DependencyAlerts A published version declares an MCP server with a newly known vulnerability.
 	DependencyAlerts bool `json:"dependencyAlerts"`
 

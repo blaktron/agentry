@@ -61,6 +61,35 @@ type Notifier interface {
 	// the IdP provisioned, that no digest has named yet. One mail per
 	// admin per organisation, batched daily; a person is named once.
 	OrgPendingMembers(ctx context.Context, n PendingMembersNotice) error
+	// Rendered delivers a message somebody else composed, in this
+	// deployment's frame: the registry's name prefixed to the subject,
+	// the text as the body exactly as given, the registry's footer with
+	// the settings link beneath it. It exists for the extension seam
+	// (agentry#366): the closed build's billing mail is written there and
+	// carried here, so the transport and the frame are the core's and its
+	// copy is not. kind names the mail class in the log line, never the
+	// body.
+	Rendered(ctx context.Context, n RenderedNotice) error
+}
+
+// RenderedNotice is a message composed outside the core, to be carried in
+// the core's frame. Like every notice it is addressed by email, and like
+// every notice the decision that the person may be written to —
+// AllowsEmail, the verified address and the switch — is the caller's
+// before it reaches the transport. What keeps an extension from skipping
+// that decision is not this type but the seam: pkg/extension hands an
+// extension Send(userID, …), never this transport or an address, and the
+// one caller of Rendered is the core's own SendToUser, which decides
+// first.
+type RenderedNotice struct {
+	ToEmail string
+	Subject string
+	// Text is the body, plain text, placed as given: no template runs
+	// over it and nothing in it is interpreted, so nothing the composer
+	// wrote can reach a header or the frame.
+	Text string
+	// Kind is the mail class for the log line and the preference switch.
+	Kind Kind
 }
 
 // PendingMembersNotice is the daily digest delivered to one of the
@@ -311,6 +340,12 @@ func (n LogNotifier) OrgAccessRequest(_ context.Context, notice AccessRequestNot
 	return nil
 }
 
+// Rendered implements Notifier.
+func (n LogNotifier) Rendered(_ context.Context, notice RenderedNotice) error {
+	n.logger().Info("notify: rendered message", "kind", string(notice.Kind), "to", logx.MaskEmail(notice.ToEmail), "subject", notice.Subject)
+	return nil
+}
+
 // OrgPendingMembers implements Notifier.
 func (n LogNotifier) OrgPendingMembers(_ context.Context, notice PendingMembersNotice) error {
 	n.logger().Info("notify: org pending members",
@@ -556,6 +591,16 @@ func orgLabel(handle, displayName string) string {
 		return displayName + " (" + handle + ")"
 	}
 	return handle
+}
+
+// rendered carries a body composed elsewhere in the core's frame: the
+// registry's name prefixed to the subject, so a reader knows who is
+// writing, and the footer beneath the body. The text is placed, not
+// interpreted — no template runs over it, so nothing the composer wrote
+// can reach into the frame.
+func (r renderer) rendered(n RenderedNotice) message {
+	body := strings.TrimRight(n.Text, "\n") + "\n"
+	return message{Subject: r.registry + ": " + strings.TrimSpace(n.Subject), Body: body + r.footer()}
 }
 
 func (r renderer) invite(n InviteOffer) message {
