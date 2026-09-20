@@ -54,7 +54,10 @@ signing:
   kind: none         # none (dev) | file | kms — prod requires file or kms
 
 judge:
-  provider: none     # none | static | openai | anthropic | bedrock | classifier (D-13)
+  provider: none     # none | static | openai | anthropic | bedrock | typesafe | classifier (D-13)
+  # typesafe (TypeSafe AI's Jev, hosted only): apiKey required; model is a
+  # pinned version id, default jev-1.13.0 — an alias such as jev-latest is
+  # refused at startup; baseUrl defaults to https://api.typesafe.ai.
   # openai/anthropic talk to any endpoint speaking that wire protocol
   # (hosted API or self-hosted gateway): set the API root and the key.
   # Env overrides: AGENTRY_JUDGE_TYPE (same as provider), AGENTRY_JUDGE_BASE_URL,

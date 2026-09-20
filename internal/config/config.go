@@ -355,7 +355,7 @@ type SMTP struct {
 // AGENTRY_JUDGE_BASE_URL and AGENTRY_JUDGE_API_KEY environment variables
 // configure the same three values.
 type Judge struct {
-	Provider string `yaml:"provider"` // openai | anthropic | bedrock | classifier | static | none
+	Provider string `yaml:"provider"` // openai | anthropic | bedrock | typesafe | classifier | static | none
 	Model    string `yaml:"model"`
 	Region   string `yaml:"region"`
 	BaseURL  string `yaml:"baseUrl"`
@@ -862,14 +862,22 @@ func (c Config) Validate() error {
 		return fmt.Errorf("config: auth.sealingKey is required outside dev mode")
 	}
 	switch c.Judge.Provider {
-	case "", "none", "static", "openai", "anthropic", "bedrock", "classifier":
+	case "", "none", "static", "openai", "anthropic", "bedrock", "typesafe", "classifier":
 	default:
-		return fmt.Errorf("config: judge.provider must be none|static|openai|anthropic|bedrock|classifier, got %q", c.Judge.Provider)
+		return fmt.Errorf("config: judge.provider must be none|static|openai|anthropic|bedrock|typesafe|classifier, got %q", c.Judge.Provider)
 	}
 	switch c.Judge.Provider {
 	case "openai", "anthropic":
 		if c.Judge.BaseURL == "" || c.Judge.APIKey == "" {
 			return fmt.Errorf("config: judge.baseUrl and judge.apiKey are required when judge.provider is %q", c.Judge.Provider)
+		}
+	case "typesafe":
+		// The key is the deployment fact this package can check. The model
+		// id must be a pinned version (plan judge-jev-provider.md D7); that
+		// rule lives with the provider (scan.PinnedJudgeModel), and the
+		// factory refuses an alias at startup.
+		if c.Judge.APIKey == "" {
+			return fmt.Errorf("config: judge.apiKey is required when judge.provider is %q", c.Judge.Provider)
 		}
 	case "classifier":
 		if c.Judge.BaseURL == "" {
