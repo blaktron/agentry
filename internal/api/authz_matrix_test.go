@@ -337,6 +337,12 @@ func requestFactories(env *testEnv) map[string]opRequest {
 		"getVersionAttestation": {method: "GET", path: agentPath("/versions/9.9.9/attestation")},
 		"getPlatformPolicy":     {method: "GET", path: sPath("/api/v1/platform/policy")},
 		"getOrgPolicy":          {method: "GET", path: orgPath("/policy")},
+		// The logo (agentry#367). The matrix judges authorization, not the
+		// upload: an admin's JSON body is a 400 past the gate, which is a
+		// PASS; the multipart path is org_logo_test.go's.
+		"getOrgLogo":    {method: "GET", path: orgPath("/logo")},
+		"putOrgLogo":    {method: "PUT", path: orgPath("/logo"), body: func(*matrixSeed, string) any { return map[string]any{} }},
+		"deleteOrgLogo": {method: "DELETE", path: orgPath("/logo")},
 		"setOrgPolicy": {
 			method: "PUT", path: orgPath("/policy"),
 			body: func(*matrixSeed, string) any { return map[string]any{"maxAutoPublishSeverity": "info"} },

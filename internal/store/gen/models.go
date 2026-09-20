@@ -307,6 +307,7 @@ type Org struct {
 	Domain             *string    `json:"domain"`
 	DecommissionAt     *time.Time `json:"decommission_at"`
 	DecommissionReason *string    `json:"decommission_reason"`
+	LogoObjectKey      *string    `json:"logo_object_key"`
 }
 
 type OrgInvitation struct {

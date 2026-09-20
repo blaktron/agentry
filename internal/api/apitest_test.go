@@ -78,8 +78,18 @@ func onTier(apply func(*entitlements.Features)) func(*api.Server) {
 
 func brokenTier() func(*api.Server) {
 	return func(s *api.Server) {
-		s.SetEntitlements(tierResolver{Resolver: entitlements.NewConfigResolver(config.Default().Limits), broken: true})
+		s.SetEntitlements(brokenTierResolver())
 	}
+}
+
+// tierResolverFor and brokenTierResolver are the resolvers behind onTier
+// and brokenTier, for a test that swaps the tier under a live server.
+func tierResolverFor(apply func(*entitlements.Features)) entitlements.Resolver {
+	return tierResolver{Resolver: entitlements.NewConfigResolver(config.Default().Limits), apply: apply}
+}
+
+func brokenTierResolver() entitlements.Resolver {
+	return tierResolver{Resolver: entitlements.NewConfigResolver(config.Default().Limits), broken: true}
 }
 
 // setEntitlements swaps the resolver after the fixture is built, which is

@@ -106,11 +106,16 @@ var routeAuthz = map[string]RouteDecl{
 	"getPlatformPolicy":     {Action: auth.ActPublicRead, Anonymous: true},
 	"getOrgPolicy":          {Action: auth.ActOrgUpdate, OrgScoped: true},
 	"setOrgPolicy":          {Action: auth.ActOrgSettingsManage, OrgScoped: true},
-	"platformAgentAction":   {Action: auth.ActPublicRead, SelfAuthorized: true},
-	"listAdvisories":        {Action: auth.ActPublicRead, Anonymous: true},
-	"getMcpServerScan":      {Action: auth.ActPublicRead, Anonymous: true},
-	"searchAgents":          {Action: auth.ActPublicRead, Anonymous: true},
-	"listAgentsByTag":       {Action: auth.ActPublicRead, Anonymous: true},
+	// The logo (agentry#367): readable by anyone who may see the
+	// organization, set and removed by its admins behind Features.Branding.
+	"getOrgLogo":          {Action: auth.ActPublicRead, Anonymous: true},
+	"putOrgLogo":          {Action: auth.ActOrgBrandingManage, OrgScoped: true},
+	"deleteOrgLogo":       {Action: auth.ActOrgBrandingManage, OrgScoped: true},
+	"platformAgentAction": {Action: auth.ActPublicRead, SelfAuthorized: true},
+	"listAdvisories":      {Action: auth.ActPublicRead, Anonymous: true},
+	"getMcpServerScan":    {Action: auth.ActPublicRead, Anonymous: true},
+	"searchAgents":        {Action: auth.ActPublicRead, Anonymous: true},
+	"listAgentsByTag":     {Action: auth.ActPublicRead, Anonymous: true},
 	// Platform-staff surfaces: the staff flag is not an org role, so the
 	// generic chokepoint cannot express them (requireStaff does).
 	"createRulesetRelease": {Action: auth.ActPublicRead, SelfAuthorized: true},
