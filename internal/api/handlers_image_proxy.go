@@ -127,60 +127,98 @@ func (s *Server) serveImageProxy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "image too large", http.StatusRequestEntityTooLarge)
 		return
 	}
-	cfg, format, err := image.DecodeConfig(bytes.NewReader(body))
-	if err != nil {
+	out, ctype, err := reencodeRaster(body, rasterGIF|rasterJPEG|rasterPNG)
+	switch {
+	case errors.Is(err, errRasterUnsupported):
 		http.Error(w, "unsupported image format", http.StatusUnsupportedMediaType)
 		return
-	}
-	if cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width*cfg.Height > imgMaxPixels {
+	case errors.Is(err, errRasterTooLarge):
 		http.Error(w, "image too large", http.StatusRequestEntityTooLarge)
 		return
-	}
-	var out bytes.Buffer
-	var ctype string
-	switch format {
-	case "gif":
-		g, err := gif.DecodeAll(bytes.NewReader(body))
-		if err != nil || len(g.Image) == 0 {
-			http.Error(w, "unsupported image format", http.StatusUnsupportedMediaType)
-			return
-		}
-		if err := gif.EncodeAll(&out, g); err != nil {
-			http.Error(w, "image unavailable", http.StatusBadGateway)
-			return
-		}
-		ctype = "image/gif"
-	case "jpeg":
-		img, err := jpeg.Decode(bytes.NewReader(body))
-		if err != nil {
-			http.Error(w, "unsupported image format", http.StatusUnsupportedMediaType)
-			return
-		}
-		if err := jpeg.Encode(&out, img, &jpeg.Options{Quality: 85}); err != nil {
-			http.Error(w, "image unavailable", http.StatusBadGateway)
-			return
-		}
-		ctype = "image/jpeg"
-	case "png":
-		img, err := png.Decode(bytes.NewReader(body))
-		if err != nil {
-			http.Error(w, "unsupported image format", http.StatusUnsupportedMediaType)
-			return
-		}
-		if err := png.Encode(&out, img); err != nil {
-			http.Error(w, "image unavailable", http.StatusBadGateway)
-			return
-		}
-		ctype = "image/png"
-	default:
-		http.Error(w, "unsupported image format", http.StatusUnsupportedMediaType)
+	case err != nil:
+		http.Error(w, "image unavailable", http.StatusBadGateway)
 		return
 	}
+	writeRaster(w, out, ctype, "public, max-age=86400, immutable")
+}
+
+// rasterFormats names which of the standard library's decoders a caller
+// admits. The proxy takes all three; a logo takes PNG and JPEG only, since
+// an animated GIF is not a logo.
+type rasterFormats uint8
+
+const (
+	rasterGIF rasterFormats = 1 << iota
+	rasterJPEG
+	rasterPNG
+)
+
+var (
+	// errRasterUnsupported is a format no admitted decoder reads: SVG and
+	// everything else. There is no sanitiser for SVG in this repository
+	// and there will not be one by accident; a refused format is a 415.
+	errRasterUnsupported = errors.New("unsupported image format")
+	// errRasterTooLarge is more pixels than the decoder may allocate.
+	errRasterTooLarge = errors.New("image too large")
+)
+
+// reencodeRaster decodes body with the standard library and encodes it
+// again from the decoded pixels, so the bytes a browser receives were
+// written by this process and never by whoever supplied the upload
+// (§10.3; DEV-049.1). The image proxy and the organization logo
+// (agentry#367) share it: one path, one set of refusals. The format is
+// what the bytes are, not what a header or a file name claimed.
+func reencodeRaster(body []byte, admit rasterFormats) ([]byte, string, error) {
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(body))
+	if err != nil {
+		return nil, "", errRasterUnsupported
+	}
+	if cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width*cfg.Height > imgMaxPixels {
+		return nil, "", errRasterTooLarge
+	}
+	var out bytes.Buffer
+	switch {
+	case format == "gif" && admit&rasterGIF != 0:
+		g, err := gif.DecodeAll(bytes.NewReader(body))
+		if err != nil || len(g.Image) == 0 {
+			return nil, "", errRasterUnsupported
+		}
+		if err := gif.EncodeAll(&out, g); err != nil {
+			return nil, "", err
+		}
+		return out.Bytes(), "image/gif", nil
+	case format == "jpeg" && admit&rasterJPEG != 0:
+		img, err := jpeg.Decode(bytes.NewReader(body))
+		if err != nil {
+			return nil, "", errRasterUnsupported
+		}
+		if err := jpeg.Encode(&out, img, &jpeg.Options{Quality: 85}); err != nil {
+			return nil, "", err
+		}
+		return out.Bytes(), "image/jpeg", nil
+	case format == "png" && admit&rasterPNG != 0:
+		img, err := png.Decode(bytes.NewReader(body))
+		if err != nil {
+			return nil, "", errRasterUnsupported
+		}
+		if err := png.Encode(&out, img); err != nil {
+			return nil, "", err
+		}
+		return out.Bytes(), "image/png", nil
+	}
+	return nil, "", errRasterUnsupported
+}
+
+// writeRaster serves re-encoded pixels the only way this registry serves
+// an image: the type pinned and not sniffed, nothing but the image
+// allowed to run or load from it, inline, and cacheable as the caller
+// says.
+func writeRaster(w http.ResponseWriter, out []byte, ctype, cacheControl string) {
 	w.Header().Set("Content-Type", ctype)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Cache-Control", "public, max-age=86400, immutable")
+	w.Header().Set("Cache-Control", cacheControl)
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
 	w.Header().Set("Content-Disposition", "inline")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(out.Bytes())
+	_, _ = w.Write(out)
 }

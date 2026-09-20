@@ -1764,6 +1764,9 @@ type Org struct {
 	Handle string             `json:"handle"`
 	Id     openapi_types.UUID `json:"id"`
 
+	// LogoUrl Where the organization's logo is served, when it has one: a path on this registry, versioned by the logo's content so a replaced logo has a new URL. Absent when there is none.
+	LogoUrl *string `json:"logoUrl,omitempty"`
+
 	// Seats Present for the organization's members only.
 	Seats *Seats `json:"seats,omitempty"`
 
@@ -2052,6 +2055,9 @@ type ScopeGranted = string
 // SearchHit defines model for SearchHit.
 type SearchHit struct {
 	Installs30d *int `json:"installs30d,omitempty"`
+
+	// LogoUrl The publishing organization's logo, when the namespace is an organization with one — beside the publisher's name, never in place of the verdict. Absent for a person's namespace and for an organization without one.
+	LogoUrl *string `json:"logoUrl,omitempty"`
 
 	// Modes The run modes a release supports; at least one.
 	Modes           AgentModes                `json:"modes"`
@@ -2518,6 +2524,11 @@ type VerifyDomainClaimJSONBody struct {
 	Domain string `json:"domain"`
 }
 
+// PutOrgLogoMultipartBody defines parameters for PutOrgLogo.
+type PutOrgLogoMultipartBody struct {
+	File openapi_types.File `json:"file"`
+}
+
 // SetOrgMemberJSONBody defines parameters for SetOrgMember.
 type SetOrgMemberJSONBody struct {
 	// Role The role a PUT assigns. security_reviewer is refused outside a first-party organization, and owner — retired by agentry#360, kept here so an older client's request still parses — is refused with a 422 that names the roles that exist.
@@ -2798,6 +2809,9 @@ type VerifyDomainClaimJSONRequestBody VerifyDomainClaimJSONBody
 
 // CreateInvitationJSONRequestBody defines body for CreateInvitation for application/json ContentType.
 type CreateInvitationJSONRequestBody = CreateInvitationRequest
+
+// PutOrgLogoMultipartRequestBody defines body for PutOrgLogo for multipart/form-data ContentType.
+type PutOrgLogoMultipartRequestBody PutOrgLogoMultipartBody
 
 // SetOrgMemberJSONRequestBody defines body for SetOrgMember for application/json ContentType.
 type SetOrgMemberJSONRequestBody SetOrgMemberJSONBody
@@ -3450,6 +3464,27 @@ type ClientInterface interface {
 	//
 	// Corresponds with DELETE /orgs/{org}/invitations/{id} (the `RevokeInvitation` operationId).
 	RevokeInvitation(ctx context.Context, org OrgHandle, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteOrgLogo Remove the organization's logo (admin).
+	//
+	// Corresponds with DELETE /orgs/{org}/logo (the `DeleteOrgLogo` operationId).
+	DeleteOrgLogo(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOrgLogo The organization's logo, as this registry re-encoded it.
+	//
+	// A raster the core decoded and encoded again from the pixels: the bytes an admin uploaded are never what is served (§10.3). The type is pinned and not sniffed. The URL an organization's resource carries (`logoUrl`) names the content by its `v`, and that URL is served as immutable for a year; the bare path, or one whose `v` is no longer the logo served, answers the current logo with `no-cache`. Clients render `logoUrl` as given and never build the path. 404 when the organization has none, or is not one the caller may see.
+	//
+	// Corresponds with GET /orgs/{org}/logo (the `GetOrgLogo` operationId).
+	GetOrgLogo(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutOrgLogoWithBody Set the organization's logo (admin; the subscription must include branding).
+	//
+	// Multipart, one part named `file`: PNG or JPEG, at most 256 KB. Anything else is 415 `unsupported-image` — SVG in particular, for which this registry has no sanitiser. Over the cap, over 16 million pixels, or larger re-encoded than a logo may be, is 413 `upload-too-large`. The core decodes it and encodes it again; the pixels are kept, the bytes are not. Replaces any logo the organization had. 403 `feature-not-included` while the subscription does not include branding.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /orgs/{org}/logo (the `PutOrgLogo` operationId).
+	PutOrgLogoWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListOrgMembers List members with roles (members can view).
 	//
@@ -5333,6 +5368,57 @@ func (c *Client) CreateInvitation(ctx context.Context, org OrgHandle, body Creat
 // Corresponds with DELETE /orgs/{org}/invitations/{id} (the `RevokeInvitation` operationId).
 func (c *Client) RevokeInvitation(ctx context.Context, org OrgHandle, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRevokeInvitationRequest(c.Server, org, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteOrgLogo Remove the organization's logo (admin).
+//
+// Corresponds with DELETE /orgs/{org}/logo (the `DeleteOrgLogo` operationId).
+func (c *Client) DeleteOrgLogo(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteOrgLogoRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetOrgLogo The organization's logo, as this registry re-encoded it.
+//
+// A raster the core decoded and encoded again from the pixels: the bytes an admin uploaded are never what is served (§10.3). The type is pinned and not sniffed. The URL an organization's resource carries (`logoUrl`) names the content by its `v`, and that URL is served as immutable for a year; the bare path, or one whose `v` is no longer the logo served, answers the current logo with `no-cache`. Clients render `logoUrl` as given and never build the path. 404 when the organization has none, or is not one the caller may see.
+//
+// Corresponds with GET /orgs/{org}/logo (the `GetOrgLogo` operationId).
+func (c *Client) GetOrgLogo(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgLogoRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutOrgLogoWithBody Set the organization's logo (admin; the subscription must include branding).
+//
+// Multipart, one part named `file`: PNG or JPEG, at most 256 KB. Anything else is 415 `unsupported-image` — SVG in particular, for which this registry has no sanitiser. Over the cap, over 16 million pixels, or larger re-encoded than a logo may be, is 413 `upload-too-large`. The core decodes it and encodes it again; the pixels are kept, the bytes are not. Replaces any logo the organization had. 403 `feature-not-included` while the subscription does not include branding.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /orgs/{org}/logo (the `PutOrgLogo` operationId).
+func (c *Client) PutOrgLogoWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutOrgLogoRequestWithBody(c.Server, org, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -9530,6 +9616,110 @@ func NewRevokeInvitationRequest(server string, org OrgHandle, id openapi_types.U
 	return req, nil
 }
 
+// NewDeleteOrgLogoRequest constructs an http.Request for the DeleteOrgLogo method
+func NewDeleteOrgLogoRequest(server string, org OrgHandle) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/logo", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetOrgLogoRequest constructs an http.Request for the GetOrgLogo method
+func NewGetOrgLogoRequest(server string, org OrgHandle) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/logo", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutOrgLogoRequestWithBody constructs an http.Request for the PutOrgLogo method, with any body, and a specified content type
+func NewPutOrgLogoRequestWithBody(server string, org OrgHandle, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/logo", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewListOrgMembersRequest constructs an http.Request for the ListOrgMembers method
 func NewListOrgMembersRequest(server string, org OrgHandle) (*http.Request, error) {
 	var err error
@@ -13557,6 +13747,31 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /orgs/{org}/invitations/{id} (the `RevokeInvitation` operationId).
 	RevokeInvitationWithResponse(ctx context.Context, org OrgHandle, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokeInvitationResponse, error)
 
+	// DeleteOrgLogoWithResponse Remove the organization's logo (admin).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/logo (the `DeleteOrgLogo` operationId).
+	DeleteOrgLogoWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*DeleteOrgLogoResponse, error)
+
+	// GetOrgLogoWithResponse The organization's logo, as this registry re-encoded it.
+	//
+	// A raster the core decoded and encoded again from the pixels: the bytes an admin uploaded are never what is served (§10.3). The type is pinned and not sniffed. The URL an organization's resource carries (`logoUrl`) names the content by its `v`, and that URL is served as immutable for a year; the bare path, or one whose `v` is no longer the logo served, answers the current logo with `no-cache`. Clients render `logoUrl` as given and never build the path. 404 when the organization has none, or is not one the caller may see.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/logo (the `GetOrgLogo` operationId).
+	GetOrgLogoWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*GetOrgLogoResponse, error)
+
+	// PutOrgLogoWithBodyWithResponse Set the organization's logo (admin; the subscription must include branding).
+	//
+	// Multipart, one part named `file`: PNG or JPEG, at most 256 KB. Anything else is 415 `unsupported-image` — SVG in particular, for which this registry has no sanitiser. Over the cap, over 16 million pixels, or larger re-encoded than a logo may be, is 413 `upload-too-large`. The core decodes it and encodes it again; the pixels are kept, the bytes are not. Replaces any logo the organization had. 403 `feature-not-included` while the subscription does not include branding.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /orgs/{org}/logo (the `PutOrgLogo` operationId).
+	PutOrgLogoWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutOrgLogoResponse, error)
+
 	// ListOrgMembersWithResponse List members with roles (members can view).
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -16854,6 +17069,142 @@ func (r RevokeInvitationResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r RevokeInvitationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteOrgLogoResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DeleteOrgLogoResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteOrgLogoResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteOrgLogoResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteOrgLogoResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteOrgLogoResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetOrgLogoResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetOrgLogoResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOrgLogoResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgLogoResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgLogoResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOrgLogoResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PutOrgLogoResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		// LogoUrl Where the logo is served, versioned by its content.
+		LogoUrl string `json:"logoUrl"`
+	}
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PutOrgLogoResponse) GetJSON200() *struct {
+	// LogoUrl Where the logo is served, versioned by its content.
+	LogoUrl string `json:"logoUrl"`
+} {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r PutOrgLogoResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PutOrgLogoResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutOrgLogoResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutOrgLogoResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutOrgLogoResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -21466,6 +21817,49 @@ func (c *ClientWithResponses) RevokeInvitationWithResponse(ctx context.Context, 
 	return ParseRevokeInvitationResponse(rsp)
 }
 
+// DeleteOrgLogoWithResponse Remove the organization's logo (admin).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/logo (the `DeleteOrgLogo` operationId).
+func (c *ClientWithResponses) DeleteOrgLogoWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*DeleteOrgLogoResponse, error) {
+	rsp, err := c.DeleteOrgLogo(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteOrgLogoResponse(rsp)
+}
+
+// GetOrgLogoWithResponse The organization's logo, as this registry re-encoded it.
+//
+// A raster the core decoded and encoded again from the pixels: the bytes an admin uploaded are never what is served (§10.3). The type is pinned and not sniffed. The URL an organization's resource carries (`logoUrl`) names the content by its `v`, and that URL is served as immutable for a year; the bare path, or one whose `v` is no longer the logo served, answers the current logo with `no-cache`. Clients render `logoUrl` as given and never build the path. 404 when the organization has none, or is not one the caller may see.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/logo (the `GetOrgLogo` operationId).
+func (c *ClientWithResponses) GetOrgLogoWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*GetOrgLogoResponse, error) {
+	rsp, err := c.GetOrgLogo(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgLogoResponse(rsp)
+}
+
+// PutOrgLogoWithBodyWithResponse Set the organization's logo (admin; the subscription must include branding).
+//
+// Multipart, one part named `file`: PNG or JPEG, at most 256 KB. Anything else is 415 `unsupported-image` — SVG in particular, for which this registry has no sanitiser. Over the cap, over 16 million pixels, or larger re-encoded than a logo may be, is 413 `upload-too-large`. The core decodes it and encodes it again; the pixels are kept, the bytes are not. Replaces any logo the organization had. 403 `feature-not-included` while the subscription does not include branding.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /orgs/{org}/logo (the `PutOrgLogo` operationId).
+func (c *ClientWithResponses) PutOrgLogoWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutOrgLogoResponse, error) {
+	rsp, err := c.PutOrgLogoWithBody(ctx, org, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutOrgLogoResponse(rsp)
+}
+
 // ListOrgMembersWithResponse List members with roles (members can view).
 //
 // Returns a wrapper object for the known response body format(s).
@@ -24563,6 +24957,97 @@ func ParseRevokeInvitationResponse(rsp *http.Response) (*RevokeInvitationRespons
 	switch {
 	case rsp.StatusCode == 204:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteOrgLogoResponse parses an HTTP response from a DeleteOrgLogoWithResponse call
+func ParseDeleteOrgLogoResponse(rsp *http.Response) (*DeleteOrgLogoResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteOrgLogoResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOrgLogoResponse parses an HTTP response from a GetOrgLogoWithResponse call
+func ParseGetOrgLogoResponse(rsp *http.Response) (*GetOrgLogoResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgLogoResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutOrgLogoResponse parses an HTTP response from a PutOrgLogoWithResponse call
+func ParsePutOrgLogoResponse(rsp *http.Response) (*PutOrgLogoResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutOrgLogoResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			// LogoUrl Where the logo is served, versioned by its content.
+			LogoUrl string `json:"logoUrl"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

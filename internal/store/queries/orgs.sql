@@ -356,3 +356,22 @@ ORDER BY h.handle;
 
 -- name: ListUserTeamIDs :many
 SELECT team_id FROM team_members WHERE user_id = $1;
+
+-- name: SetOrgLogo :one
+-- Records the logo now served for the organization and returns the key
+-- it replaces (NULL for none), so the caller can remove the old object
+-- once the row points at the new one (agentry#367). The previous value
+-- is read under the row lock in the same statement — a departure from
+-- this file's LockOrg-then-write shape, taken so the swap and what it
+-- replaced are one round trip and cannot disagree.
+WITH old AS (SELECT logo_object_key FROM orgs WHERE id = $1 FOR UPDATE)
+UPDATE orgs SET logo_object_key = $2, updated_at = now() FROM old WHERE orgs.id = $1
+RETURNING old.logo_object_key AS previous_key;
+
+-- name: ClearOrgLogo :one
+-- Removes the organization's logo and returns the key that was served,
+-- for the caller to delete the object (agentry#367); the same one-statement
+-- shape as SetOrgLogo. No row when there was no logo.
+WITH old AS (SELECT logo_object_key FROM orgs WHERE id = $1 AND logo_object_key IS NOT NULL FOR UPDATE)
+UPDATE orgs SET logo_object_key = NULL, updated_at = now() FROM old WHERE orgs.id = $1
+RETURNING old.logo_object_key AS previous_key;

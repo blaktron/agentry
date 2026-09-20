@@ -56,6 +56,8 @@ const (
 	ActOrgTeamsManage    Action = "org.teams.manage"    // admin+
 	ActOrgAuditRead      Action = "org.audit.read"      // admin+ (§12.2)
 	ActOrgSettingsManage Action = "org.settings.manage" // admin (SSO/SCIM, policy; once owner-only)
+	// ActOrgBrandingManage sets or removes the organization's logo (agentry#367).
+	ActOrgBrandingManage Action = "org.branding.manage" // admin
 	// ActOrgInvitationsManage is the invitation door (agentry#361): send,
 	// list and revoke. Declared apart from members.manage because an
 	// invitation reserves a seat before any membership exists.
@@ -172,6 +174,7 @@ var scopeFor = map[Action]Scope{
 	ActOrgTeamsRead:         ScopeOrgAdmin,
 	ActOrgTeamsManage:       ScopeOrgAdmin,
 	ActOrgUpdate:            ScopeOrgAdmin,
+	ActOrgBrandingManage:    ScopeOrgAdmin, // the logo is profile, not a secret: as ActOrgUpdate
 	ActOrgAuditRead:         ScopeAuditRead,
 	ActAgentCreate:          ScopeAgentPublish,
 	ActUserSelfRead:         ScopeUserProfile,
@@ -190,6 +193,7 @@ var minRole = map[Action]OrgRole{
 	ActOrgTeamsManage:       RoleAdmin,
 	ActOrgAuditRead:         RoleAdmin,
 	ActOrgSettingsManage:    RoleAdmin,
+	ActOrgBrandingManage:    RoleAdmin,
 	ActOrgInvitationsManage: RoleAdmin,
 	ActOrgDecommission:      RoleAdmin,
 	ActOrgLeave:             RoleMember,

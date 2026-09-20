@@ -88,6 +88,9 @@ func orgToAPI(row storegen.GetOrgByHandleRow, includeSettings bool) Org {
 		sso := row.SsoRequired
 		o.SsoRequired = &sso
 	}
+	if u := logoURL(row.Handle, row.LogoObjectKey); u != "" {
+		o.LogoUrl = &u
+	}
 	return o
 }
 
