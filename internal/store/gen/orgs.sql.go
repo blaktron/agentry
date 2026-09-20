@@ -72,6 +72,22 @@ func (q *Queries) AddTeamMember(ctx context.Context, arg AddTeamMemberParams) er
 	return err
 }
 
+const clearOrgLogo = `-- name: ClearOrgLogo :one
+WITH old AS (SELECT logo_object_key FROM orgs WHERE id = $1 AND logo_object_key IS NOT NULL FOR UPDATE)
+UPDATE orgs SET logo_object_key = NULL, updated_at = now() FROM old WHERE orgs.id = $1
+RETURNING old.logo_object_key AS previous_key
+`
+
+// Removes the organization's logo and returns the key that was served,
+// for the caller to delete the object (agentry#367); the same one-statement
+// shape as SetOrgLogo. No row when there was no logo.
+func (q *Queries) ClearOrgLogo(ctx context.Context, id uuid.UUID) (*string, error) {
+	row := q.db.QueryRow(ctx, clearOrgLogo, id)
+	var previous_key *string
+	err := row.Scan(&previous_key)
+	return previous_key, err
+}
+
 const countActiveMemberships = `-- name: CountActiveMemberships :one
 SELECT count(*) FROM memberships m WHERE m.user_id = $1 AND m.state = 'active'
 `
@@ -220,7 +236,7 @@ const createOrg = `-- name: CreateOrg :one
 
 INSERT INTO orgs (id, display_name, created_by, activated_at, domain)
 VALUES ($1, $2, $3, CASE WHEN $4::boolean THEN now() ELSE NULL END, $5::citext)
-RETURNING id, display_name, sso_required, state, created_at, updated_at, created_by, activated_at, domain, decommission_at, decommission_reason
+RETURNING id, display_name, sso_required, state, created_at, updated_at, created_by, activated_at, domain, decommission_at, decommission_reason, logo_object_key
 `
 
 type CreateOrgParams struct {
@@ -257,6 +273,7 @@ func (q *Queries) CreateOrg(ctx context.Context, arg CreateOrgParams) (Org, erro
 		&i.Domain,
 		&i.DecommissionAt,
 		&i.DecommissionReason,
+		&i.LogoObjectKey,
 	)
 	return i, err
 }
@@ -506,7 +523,7 @@ func (q *Queries) GetMembership(ctx context.Context, arg GetMembershipParams) (M
 }
 
 const getOrgByDomain = `-- name: GetOrgByDomain :one
-SELECT o.id, o.display_name, o.sso_required, o.state, o.created_at, o.updated_at, o.created_by, o.activated_at, o.domain, o.decommission_at, o.decommission_reason, h.handle
+SELECT o.id, o.display_name, o.sso_required, o.state, o.created_at, o.updated_at, o.created_by, o.activated_at, o.domain, o.decommission_at, o.decommission_reason, o.logo_object_key, h.handle
 FROM orgs o JOIN handles h ON h.id = o.id
 WHERE o.domain = $1::citext
    OR EXISTS (SELECT 1 FROM domain_claims dc
@@ -527,6 +544,7 @@ type GetOrgByDomainRow struct {
 	Domain             *string    `json:"domain"`
 	DecommissionAt     *time.Time `json:"decommission_at"`
 	DecommissionReason *string    `json:"decommission_reason"`
+	LogoObjectKey      *string    `json:"logo_object_key"`
 	Handle             string     `json:"handle"`
 }
 
@@ -551,13 +569,14 @@ func (q *Queries) GetOrgByDomain(ctx context.Context, domain string) (GetOrgByDo
 		&i.Domain,
 		&i.DecommissionAt,
 		&i.DecommissionReason,
+		&i.LogoObjectKey,
 		&i.Handle,
 	)
 	return i, err
 }
 
 const getOrgByHandle = `-- name: GetOrgByHandle :one
-SELECT o.id, o.display_name, o.sso_required, o.state, o.created_at, o.updated_at, o.created_by, o.activated_at, o.domain, o.decommission_at, o.decommission_reason, h.handle,
+SELECT o.id, o.display_name, o.sso_required, o.state, o.created_at, o.updated_at, o.created_by, o.activated_at, o.domain, o.decommission_at, o.decommission_reason, o.logo_object_key, h.handle,
   coalesce((SELECT array_agg(dc.domain::text ORDER BY dc.verified_at)
             FROM domain_claims dc WHERE dc.org_id = o.id AND dc.verified_at IS NOT NULL), '{}')::text[] AS verified_domains
 FROM orgs o JOIN handles h ON h.id = o.id WHERE h.handle = $1 AND h.kind = 'org'
@@ -575,6 +594,7 @@ type GetOrgByHandleRow struct {
 	Domain             *string    `json:"domain"`
 	DecommissionAt     *time.Time `json:"decommission_at"`
 	DecommissionReason *string    `json:"decommission_reason"`
+	LogoObjectKey      *string    `json:"logo_object_key"`
 	Handle             string     `json:"handle"`
 	VerifiedDomains    []string   `json:"verified_domains"`
 }
@@ -597,6 +617,7 @@ func (q *Queries) GetOrgByHandle(ctx context.Context, handle string) (GetOrgByHa
 		&i.Domain,
 		&i.DecommissionAt,
 		&i.DecommissionReason,
+		&i.LogoObjectKey,
 		&i.Handle,
 		&i.VerifiedDomains,
 	)
@@ -604,7 +625,7 @@ func (q *Queries) GetOrgByHandle(ctx context.Context, handle string) (GetOrgByHa
 }
 
 const getOrgByID = `-- name: GetOrgByID :one
-SELECT o.id, o.display_name, o.sso_required, o.state, o.created_at, o.updated_at, o.created_by, o.activated_at, o.domain, o.decommission_at, o.decommission_reason, h.handle,
+SELECT o.id, o.display_name, o.sso_required, o.state, o.created_at, o.updated_at, o.created_by, o.activated_at, o.domain, o.decommission_at, o.decommission_reason, o.logo_object_key, h.handle,
   coalesce((SELECT array_agg(dc.domain::text ORDER BY dc.verified_at)
             FROM domain_claims dc WHERE dc.org_id = o.id AND dc.verified_at IS NOT NULL), '{}')::text[] AS verified_domains
 FROM orgs o JOIN handles h ON h.id = o.id WHERE o.id = $1
@@ -622,6 +643,7 @@ type GetOrgByIDRow struct {
 	Domain             *string    `json:"domain"`
 	DecommissionAt     *time.Time `json:"decommission_at"`
 	DecommissionReason *string    `json:"decommission_reason"`
+	LogoObjectKey      *string    `json:"logo_object_key"`
 	Handle             string     `json:"handle"`
 	VerifiedDomains    []string   `json:"verified_domains"`
 }
@@ -641,6 +663,7 @@ func (q *Queries) GetOrgByID(ctx context.Context, id uuid.UUID) (GetOrgByIDRow, 
 		&i.Domain,
 		&i.DecommissionAt,
 		&i.DecommissionReason,
+		&i.LogoObjectKey,
 		&i.Handle,
 		&i.VerifiedDomains,
 	)
@@ -1318,6 +1341,30 @@ func (q *Queries) RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberPara
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const setOrgLogo = `-- name: SetOrgLogo :one
+WITH old AS (SELECT logo_object_key FROM orgs WHERE id = $1 FOR UPDATE)
+UPDATE orgs SET logo_object_key = $2, updated_at = now() FROM old WHERE orgs.id = $1
+RETURNING old.logo_object_key AS previous_key
+`
+
+type SetOrgLogoParams struct {
+	ID            uuid.UUID `json:"id"`
+	LogoObjectKey *string   `json:"logo_object_key"`
+}
+
+// Records the logo now served for the organization and returns the key
+// it replaces (NULL for none), so the caller can remove the old object
+// once the row points at the new one (agentry#367). The previous value
+// is read under the row lock in the same statement — a departure from
+// this file's LockOrg-then-write shape, taken so the swap and what it
+// replaced are one round trip and cannot disagree.
+func (q *Queries) SetOrgLogo(ctx context.Context, arg SetOrgLogoParams) (*string, error) {
+	row := q.db.QueryRow(ctx, setOrgLogo, arg.ID, arg.LogoObjectKey)
+	var previous_key *string
+	err := row.Scan(&previous_key)
+	return previous_key, err
 }
 
 const suspendOrg = `-- name: SuspendOrg :execrows

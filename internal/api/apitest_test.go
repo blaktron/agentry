@@ -78,8 +78,18 @@ func onTier(apply func(*entitlements.Features)) func(*api.Server) {
 
 func brokenTier() func(*api.Server) {
 	return func(s *api.Server) {
-		s.SetEntitlements(tierResolver{Resolver: entitlements.NewConfigResolver(config.Default().Limits), broken: true})
+		s.SetEntitlements(brokenTierResolver())
 	}
+}
+
+// tierResolverFor and brokenTierResolver are the resolvers behind onTier
+// and brokenTier, for a test that swaps the tier under a live server.
+func tierResolverFor(apply func(*entitlements.Features)) entitlements.Resolver {
+	return tierResolver{Resolver: entitlements.NewConfigResolver(config.Default().Limits), apply: apply}
+}
+
+func brokenTierResolver() entitlements.Resolver {
+	return tierResolver{Resolver: entitlements.NewConfigResolver(config.Default().Limits), broken: true}
 }
 
 // setEntitlements swaps the resolver after the fixture is built, which is
@@ -146,6 +156,21 @@ func newTestEnvCfg(t *testing.T, cfgFn func(*config.Config), opts ...func(*api.S
 	}
 }
 
+// authenticate puts a caller's credential on a request the way do does,
+// for a test that builds its own request (a multipart upload, say): a
+// PAT as the bearer, else a session as the cookie with the CSRF header a
+// mutation needs.
+func (env *testEnv) authenticate(req *http.Request, c caller) {
+	if c.pat != "" {
+		req.Header.Set("Authorization", "Bearer "+c.pat)
+	} else if c.session != "" {
+		req.AddCookie(&http.Cookie{Name: "agentry_session", Value: c.session})
+		if req.Method != http.MethodGet && req.Method != http.MethodHead {
+			req.Header.Set("X-Agentry-CSRF", c.csrf)
+		}
+	}
+}
+
 // caller carries credentials for requests.
 type caller struct {
 	name    string
@@ -174,14 +199,7 @@ func (env *testEnv) do(c caller, method, path string, body any) *http.Response {
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if c.pat != "" {
-		req.Header.Set("Authorization", "Bearer "+c.pat)
-	} else if c.session != "" {
-		req.AddCookie(&http.Cookie{Name: "agentry_session", Value: c.session})
-		if method != http.MethodGet && method != http.MethodHead {
-			req.Header.Set("X-Agentry-CSRF", c.csrf)
-		}
-	}
+	env.authenticate(req, c)
 	res, err := env.srv.Client().Do(req)
 	if err != nil {
 		env.t.Fatal(err)

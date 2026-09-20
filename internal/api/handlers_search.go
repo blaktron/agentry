@@ -84,10 +84,14 @@ func (s *Server) SearchAgents(w http.ResponseWriter, r *http.Request, params Sea
 	for _, row := range rows {
 		installs := int(row.Installs)
 		qs := SearchHitQuarantineState(row.QuarantineState)
-		hits = append(hits, SearchHit{
+		hit := SearchHit{
 			Namespace: row.Namespace, Name: row.Name, Modes: apiModes(row.Modes),
 			Summary: row.Summary, Installs30d: &installs, QuarantineState: &qs,
-		})
+		}
+		if u := logoURL(row.Namespace, row.LogoObjectKey); u != "" {
+			hit.LogoUrl = &u
+		}
+		hits = append(hits, hit)
 	}
 
 	// Facet counts describe the unfiltered corpus for this query, so the UI
