@@ -35,15 +35,18 @@ func (q *Queries) GetUserNotificationSettings(ctx context.Context, userID uuid.U
 }
 
 const listOrgAdminIDs = `-- name: ListOrgAdminIDs :many
-SELECT user_id FROM memberships
-WHERE org_id = $1 AND role = 'admin' AND state = 'active'
-ORDER BY created_at
+SELECT m.user_id FROM memberships m
+JOIN users u ON u.id = m.user_id
+WHERE m.org_id = $1 AND m.role = 'admin' AND m.state = 'active' AND u.state = 'active'
+ORDER BY m.created_at
 `
 
 // The active administrators of an organization, for a message an
 // extension addresses to "the admins" (agentry#366): active memberships
-// only — a pending admin holds nothing yet, and a person the
-// organization has not admitted is not told its business.
+// of active accounts only, the same two conditions ListOrgAdminsForMail
+// and the last-admin guard carry — a pending admin holds nothing yet, a
+// suspended one holds nothing any more, and neither is told the
+// organization's business.
 func (q *Queries) ListOrgAdminIDs(ctx context.Context, orgID uuid.UUID) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, listOrgAdminIDs, orgID)
 	if err != nil {
@@ -66,14 +69,14 @@ func (q *Queries) ListOrgAdminIDs(ctx context.Context, orgID uuid.UUID) ([]uuid.
 
 const upsertUserNotificationSettings = `-- name: UpsertUserNotificationSettings :one
 INSERT INTO user_notification_settings (user_id, email_dependency_alerts, email_quarantine, email_review_decisions, email_advisories, email_org_invites, email_billing, web_dependency_alerts)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+VALUES ($1, $2, $3, $4, $5, $6, COALESCE($8::boolean, true), $7)
 ON CONFLICT (user_id) DO UPDATE SET
   email_dependency_alerts = EXCLUDED.email_dependency_alerts,
   email_quarantine = EXCLUDED.email_quarantine,
   email_review_decisions = EXCLUDED.email_review_decisions,
   email_advisories = EXCLUDED.email_advisories,
   email_org_invites = EXCLUDED.email_org_invites,
-  email_billing = EXCLUDED.email_billing,
+  email_billing = COALESCE($8::boolean, user_notification_settings.email_billing),
   web_dependency_alerts = EXCLUDED.web_dependency_alerts,
   updated_at = now()
 RETURNING user_id, email_dependency_alerts, email_quarantine, email_review_decisions, email_advisories, email_org_invites, web_dependency_alerts, updated_at, email_billing
@@ -86,10 +89,14 @@ type UpsertUserNotificationSettingsParams struct {
 	EmailReviewDecisions  bool      `json:"email_review_decisions"`
 	EmailAdvisories       bool      `json:"email_advisories"`
 	EmailOrgInvites       bool      `json:"email_org_invites"`
-	EmailBilling          bool      `json:"email_billing"`
 	WebDependencyAlerts   bool      `json:"web_dependency_alerts"`
+	EmailBilling          *bool     `json:"email_billing"`
 }
 
+// The billing switch is nullable on the way in (agentry#366): a client
+// that predates it omits it, and an omitted switch keeps the row's value
+// — or the default on a first write — in the same statement, so two
+// clients writing at once cannot resurrect a value neither sent.
 func (q *Queries) UpsertUserNotificationSettings(ctx context.Context, arg UpsertUserNotificationSettingsParams) (UserNotificationSetting, error) {
 	row := q.db.QueryRow(ctx, upsertUserNotificationSettings,
 		arg.UserID,
@@ -98,8 +105,8 @@ func (q *Queries) UpsertUserNotificationSettings(ctx context.Context, arg Upsert
 		arg.EmailReviewDecisions,
 		arg.EmailAdvisories,
 		arg.EmailOrgInvites,
-		arg.EmailBilling,
 		arg.WebDependencyAlerts,
+		arg.EmailBilling,
 	)
 	var i UserNotificationSetting
 	err := row.Scan(

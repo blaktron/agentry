@@ -274,11 +274,13 @@ func (s *Server) SendToUser(ctx context.Context, userID uuid.UUID, kind, subject
 	return true, nil
 }
 
-// extensionMailKinds is every class an extension may send as, keyed by
-// the string pkg/extension.NotifyKind carries (that package imports this
-// one, so the constant cannot be named here). One today: the core's own
-// kinds stay the core's, and a new class is added here with its switch,
-// its default and its column, never by a string an extension chooses.
+// extensionMailKinds is every class an extension may send as. It is the
+// trust boundary, which is why the key is a plain string: what arrives
+// here is the extension's word, and the map is the allowlist that turns
+// it into a kind the core recognises — or refuses. One today: the core's
+// own kinds stay the core's, and a new class is added here with its
+// switch, its default and its column, never by a string an extension
+// chooses.
 var extensionMailKinds = map[string]notify.Kind{
 	"billing": notify.KindBilling,
 }

@@ -39,7 +39,7 @@ type accountData struct {
 	NotificationsError string
 }
 
-// notificationSettings is the API's NotificationSettings, the five mail
+// notificationSettings is the API's NotificationSettings, the six mail
 // switches and the one in-app switch.
 type notificationSettings struct {
 	Email struct {
