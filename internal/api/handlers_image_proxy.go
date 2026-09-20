@@ -3,9 +3,11 @@ package api
 import (
 	"bytes"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"image"
 	"image/gif"
 	"image/jpeg"
@@ -40,10 +42,28 @@ const (
 	imgTimeout   = 8 * time.Second
 )
 
-func (s *Server) imgProxyKey() []byte {
-	sum := sha256.Sum256([]byte("img-proxy:" + s.cfg.Auth.SealingKey))
+// newImgProxyKey derives the proxy's signing key. The signature is the
+// route's only gate, so the key must never be a value the open-source tree
+// gives away: with a sealing key it is derived from that, as before; with
+// none — which only dev mode permits, the sealer having refused to start
+// otherwise — it is a random per-process key. It used to be
+// sha256("img-proxy:") in that case, and anyone could sign any destination
+// (security review 2026-09-20 §5.1). Signatures are minted at render time
+// and never stored, so a key that changes at restart costs at most a
+// cached page's images until the edge revalidates.
+func newImgProxyKey(sealingKey string) []byte {
+	if sealingKey == "" {
+		key := make([]byte, 32)
+		if _, err := rand.Read(key); err != nil {
+			panic(fmt.Sprintf("image proxy: no entropy for the signing key: %v", err))
+		}
+		return key
+	}
+	sum := sha256.Sum256([]byte("img-proxy:" + sealingKey))
 	return sum[:]
 }
+
+func (s *Server) imgProxyKey() []byte { return s.imgKey }
 
 func imgSig(key []byte, dest string) string {
 	mac := hmac.New(sha256.New, key)
@@ -51,14 +71,16 @@ func imgSig(key []byte, dest string) string {
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))[:32]
 }
 
-// imageProxyURL signs dest for the renderer; false for non-http(s) or
-// over-long destinations, which then stay placeholders.
+// imageProxyURL signs dest for the renderer; false for non-https or
+// over-long destinations, which then stay placeholders. https only: a
+// signed destination is a GET the registry makes on a publisher's say-so,
+// and it is never a cleartext one.
 func (s *Server) imageProxyURL(dest string) (string, bool) {
 	if len(dest) > 1536 {
 		return "", false
 	}
 	u, err := url.Parse(dest)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+	if err != nil || u.Scheme != "https" || u.Host == "" {
 		return "", false
 	}
 	// Absolute on the registry's own origin: the sanitizer admits URL
@@ -93,7 +115,7 @@ func (s *Server) serveImageProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, err := url.Parse(dest)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+	if err != nil || u.Scheme != "https" {
 		http.NotFound(w, r)
 		return
 	}
