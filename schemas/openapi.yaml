@@ -1165,9 +1165,13 @@ paths:
       description: >
         A raster the core decoded and encoded again from the pixels: the
         bytes an admin uploaded are never what is served (§10.3). The type
-        is pinned and not sniffed. Cached as immutable, because the URL an
-        organization's resource carries changes when the logo does. 404
-        when the organization has none, or is not one the caller may see.
+        is pinned and not sniffed. The URL an organization's resource
+        carries (`logoUrl`) names the content by its `v`, and that URL is
+        served as immutable for a year; the bare path, or one whose `v` is
+        no longer the logo served, answers the current logo with
+        `no-cache`. Clients render `logoUrl` as given and never build the
+        path. 404 when the organization has none, or is not one the
+        caller may see.
       security: []
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
@@ -1191,10 +1195,12 @@ paths:
       summary: Set the organization's logo (admin; the subscription must include branding).
       description: >
         Multipart, one part named `file`: PNG or JPEG, at most 256 KB.
-        Anything else is refused — SVG in particular, for which this
-        registry has no sanitiser (415). The core decodes it and encodes it
-        again; the pixels are kept, the bytes are not. Replaces any logo
-        the organization had. 403 `feature-not-included` while the
+        Anything else is 415 `unsupported-image` — SVG in particular, for
+        which this registry has no sanitiser. Over the cap, over 16
+        million pixels, or larger re-encoded than a logo may be, is 413
+        `upload-too-large`. The core decodes it and encodes it again; the
+        pixels are kept, the bytes are not. Replaces any logo the
+        organization had. 403 `feature-not-included` while the
         subscription does not include branding.
       parameters:
         - $ref: "#/components/parameters/OrgHandle"

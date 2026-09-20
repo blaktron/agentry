@@ -214,6 +214,20 @@ func problemSeatAllowance(w http.ResponseWriter, r *http.Request, org string, se
 		map[string]any{"used": seats.Used, "invited": seats.Invited, "pending": seats.Pending, "max": seats.Max})
 }
 
+// problemUploadTooLarge refuses a body over its cap, with the same slug the
+// release upload uses: one meaning, one slug, wherever a client meets it.
+func problemUploadTooLarge(w http.ResponseWriter, r *http.Request, detail string) {
+	writeProblem(w, r, http.StatusRequestEntityTooLarge, "upload-too-large", "Upload too large", detail)
+}
+
+// problemUnsupportedImage refuses an image the registry will not serve:
+// not a raster the standard library decodes, or not one this route
+// admits. SVG in particular — there is no sanitiser for it here and there
+// will not be one by accident (agentry#367).
+func problemUnsupportedImage(w http.ResponseWriter, r *http.Request, detail string) {
+	writeProblem(w, r, http.StatusUnsupportedMediaType, "unsupported-image", "Not a PNG or JPEG", detail)
+}
+
 // problemFeatureNotIncluded refuses an act the organization's subscription
 // does not include at all — distinct from its allowance being reached.
 func problemFeatureNotIncluded(w http.ResponseWriter, r *http.Request, detail string) {

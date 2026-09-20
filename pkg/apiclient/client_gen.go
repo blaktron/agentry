@@ -3472,14 +3472,14 @@ type ClientInterface interface {
 
 	// GetOrgLogo The organization's logo, as this registry re-encoded it.
 	//
-	// A raster the core decoded and encoded again from the pixels: the bytes an admin uploaded are never what is served (§10.3). The type is pinned and not sniffed. Cached as immutable, because the URL an organization's resource carries changes when the logo does. 404 when the organization has none, or is not one the caller may see.
+	// A raster the core decoded and encoded again from the pixels: the bytes an admin uploaded are never what is served (§10.3). The type is pinned and not sniffed. The URL an organization's resource carries (`logoUrl`) names the content by its `v`, and that URL is served as immutable for a year; the bare path, or one whose `v` is no longer the logo served, answers the current logo with `no-cache`. Clients render `logoUrl` as given and never build the path. 404 when the organization has none, or is not one the caller may see.
 	//
 	// Corresponds with GET /orgs/{org}/logo (the `GetOrgLogo` operationId).
 	GetOrgLogo(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PutOrgLogoWithBody Set the organization's logo (admin; the subscription must include branding).
 	//
-	// Multipart, one part named `file`: PNG or JPEG, at most 256 KB. Anything else is refused — SVG in particular, for which this registry has no sanitiser (415). The core decodes it and encodes it again; the pixels are kept, the bytes are not. Replaces any logo the organization had. 403 `feature-not-included` while the subscription does not include branding.
+	// Multipart, one part named `file`: PNG or JPEG, at most 256 KB. Anything else is 415 `unsupported-image` — SVG in particular, for which this registry has no sanitiser. Over the cap, over 16 million pixels, or larger re-encoded than a logo may be, is 413 `upload-too-large`. The core decodes it and encodes it again; the pixels are kept, the bytes are not. Replaces any logo the organization had. 403 `feature-not-included` while the subscription does not include branding.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -5395,7 +5395,7 @@ func (c *Client) DeleteOrgLogo(ctx context.Context, org OrgHandle, reqEditors ..
 
 // GetOrgLogo The organization's logo, as this registry re-encoded it.
 //
-// A raster the core decoded and encoded again from the pixels: the bytes an admin uploaded are never what is served (§10.3). The type is pinned and not sniffed. Cached as immutable, because the URL an organization's resource carries changes when the logo does. 404 when the organization has none, or is not one the caller may see.
+// A raster the core decoded and encoded again from the pixels: the bytes an admin uploaded are never what is served (§10.3). The type is pinned and not sniffed. The URL an organization's resource carries (`logoUrl`) names the content by its `v`, and that URL is served as immutable for a year; the bare path, or one whose `v` is no longer the logo served, answers the current logo with `no-cache`. Clients render `logoUrl` as given and never build the path. 404 when the organization has none, or is not one the caller may see.
 //
 // Corresponds with GET /orgs/{org}/logo (the `GetOrgLogo` operationId).
 func (c *Client) GetOrgLogo(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5412,7 +5412,7 @@ func (c *Client) GetOrgLogo(ctx context.Context, org OrgHandle, reqEditors ...Re
 
 // PutOrgLogoWithBody Set the organization's logo (admin; the subscription must include branding).
 //
-// Multipart, one part named `file`: PNG or JPEG, at most 256 KB. Anything else is refused — SVG in particular, for which this registry has no sanitiser (415). The core decodes it and encodes it again; the pixels are kept, the bytes are not. Replaces any logo the organization had. 403 `feature-not-included` while the subscription does not include branding.
+// Multipart, one part named `file`: PNG or JPEG, at most 256 KB. Anything else is 415 `unsupported-image` — SVG in particular, for which this registry has no sanitiser. Over the cap, over 16 million pixels, or larger re-encoded than a logo may be, is 413 `upload-too-large`. The core decodes it and encodes it again; the pixels are kept, the bytes are not. Replaces any logo the organization had. 403 `feature-not-included` while the subscription does not include branding.
 //
 // Takes any type of body and a specified content type.
 //
@@ -13756,7 +13756,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetOrgLogoWithResponse The organization's logo, as this registry re-encoded it.
 	//
-	// A raster the core decoded and encoded again from the pixels: the bytes an admin uploaded are never what is served (§10.3). The type is pinned and not sniffed. Cached as immutable, because the URL an organization's resource carries changes when the logo does. 404 when the organization has none, or is not one the caller may see.
+	// A raster the core decoded and encoded again from the pixels: the bytes an admin uploaded are never what is served (§10.3). The type is pinned and not sniffed. The URL an organization's resource carries (`logoUrl`) names the content by its `v`, and that URL is served as immutable for a year; the bare path, or one whose `v` is no longer the logo served, answers the current logo with `no-cache`. Clients render `logoUrl` as given and never build the path. 404 when the organization has none, or is not one the caller may see.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -13765,7 +13765,7 @@ type ClientWithResponsesInterface interface {
 
 	// PutOrgLogoWithBodyWithResponse Set the organization's logo (admin; the subscription must include branding).
 	//
-	// Multipart, one part named `file`: PNG or JPEG, at most 256 KB. Anything else is refused — SVG in particular, for which this registry has no sanitiser (415). The core decodes it and encodes it again; the pixels are kept, the bytes are not. Replaces any logo the organization had. 403 `feature-not-included` while the subscription does not include branding.
+	// Multipart, one part named `file`: PNG or JPEG, at most 256 KB. Anything else is 415 `unsupported-image` — SVG in particular, for which this registry has no sanitiser. Over the cap, over 16 million pixels, or larger re-encoded than a logo may be, is 413 `upload-too-large`. The core decodes it and encodes it again; the pixels are kept, the bytes are not. Replaces any logo the organization had. 403 `feature-not-included` while the subscription does not include branding.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -21832,7 +21832,7 @@ func (c *ClientWithResponses) DeleteOrgLogoWithResponse(ctx context.Context, org
 
 // GetOrgLogoWithResponse The organization's logo, as this registry re-encoded it.
 //
-// A raster the core decoded and encoded again from the pixels: the bytes an admin uploaded are never what is served (§10.3). The type is pinned and not sniffed. Cached as immutable, because the URL an organization's resource carries changes when the logo does. 404 when the organization has none, or is not one the caller may see.
+// A raster the core decoded and encoded again from the pixels: the bytes an admin uploaded are never what is served (§10.3). The type is pinned and not sniffed. The URL an organization's resource carries (`logoUrl`) names the content by its `v`, and that URL is served as immutable for a year; the bare path, or one whose `v` is no longer the logo served, answers the current logo with `no-cache`. Clients render `logoUrl` as given and never build the path. 404 when the organization has none, or is not one the caller may see.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -21847,7 +21847,7 @@ func (c *ClientWithResponses) GetOrgLogoWithResponse(ctx context.Context, org Or
 
 // PutOrgLogoWithBodyWithResponse Set the organization's logo (admin; the subscription must include branding).
 //
-// Multipart, one part named `file`: PNG or JPEG, at most 256 KB. Anything else is refused — SVG in particular, for which this registry has no sanitiser (415). The core decodes it and encodes it again; the pixels are kept, the bytes are not. Replaces any logo the organization had. 403 `feature-not-included` while the subscription does not include branding.
+// Multipart, one part named `file`: PNG or JPEG, at most 256 KB. Anything else is 415 `unsupported-image` — SVG in particular, for which this registry has no sanitiser. Over the cap, over 16 million pixels, or larger re-encoded than a logo may be, is 413 `upload-too-large`. The core decodes it and encodes it again; the pixels are kept, the bytes are not. Replaces any logo the organization had. 403 `feature-not-included` while the subscription does not include branding.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //

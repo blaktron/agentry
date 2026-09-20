@@ -9,7 +9,10 @@ package api
 // is what stands in for one. Stored in the deployment's object store
 // under the organization, keyed by the digest of what is served, so the
 // URL a client renders changes when the logo does and a cache may hold
-// it as immutable. Behind Features.Branding to set, public to read.
+// that URL as immutable. Behind Features.Branding to set, public to read.
+//
+// M18 (the site) renders `logoUrl` as the resource carries it and never
+// builds the path: the version in it is what makes the caching honest.
 
 import (
 	"bytes"
@@ -25,40 +28,92 @@ import (
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
-	"github.com/blaktron/agentry/internal/entitlements"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// logoMaxBytes bounds an upload before it is decoded: a logo is small,
-// and the decoder's own pixel cap (imgMaxPixels) is the other bound.
-const logoMaxBytes = 256 << 10
+const (
+	// logoMaxBytes bounds an upload before a byte of it is decoded; the
+	// decoder's own pixel cap (imgMaxPixels) is the other bound.
+	logoMaxBytes = 256 << 10
+	// logoMaxServedBytes bounds what the re-encode may produce, and so
+	// what GetOrgLogo will read: a PNG encoder can expand a well-chosen
+	// input several times over, and an object the read would truncate
+	// would be served not matching the digest in its URL.
+	logoMaxServedBytes = logoMaxBytes * 4
+	// logoMultipartSlack is what the multipart framing around one 256 KB
+	// part may take — the boundary lines and the part's headers — before
+	// the body is refused as a whole. A very long file name eats into it,
+	// and a full-size file then gets an honest 413.
+	logoMultipartSlack = 1024
+	// logoVersionLen is how much of the served object's digest the URL
+	// carries: a cache key, not a security boundary.
+	logoVersionLen = 16
+)
 
-// logoKey is where an organization's logo lives in the object store:
-// under the organization, named by the digest of the re-encoded bytes.
-func logoKey(orgID uuid.UUID, digest, ext string) string {
-	return "orgs/" + orgID.String() + "/logo/" + digest + ext
+// errLogoTooLarge is an upload over logoMaxBytes, or a re-encode over
+// logoMaxServedBytes.
+var errLogoTooLarge = errors.New("logo too large")
+
+// logoObject is one stored logo: the digest of the bytes served and the
+// format they are in. It is the one place the format's extension and
+// content type meet, so the key this process writes and the type it
+// pins when serving cannot disagree.
+type logoObject struct {
+	digest string // hex sha256 of the served bytes
+	ctype  string // image/png or image/jpeg
+}
+
+func (l logoObject) ext() string {
+	if l.ctype == "image/jpeg" {
+		return ".jpg"
+	}
+	return ".png"
+}
+
+// key is where the object lives in the store: under the organization,
+// named by its content.
+func (l logoObject) key(orgID uuid.UUID) string {
+	return "orgs/" + orgID.String() + "/logo/" + l.digest + l.ext()
+}
+
+// version is the part of the digest a URL carries.
+func (l logoObject) version() string {
+	if len(l.digest) > logoVersionLen {
+		return l.digest[:logoVersionLen]
+	}
+	return l.digest
+}
+
+// parseLogoKey reads a key back into the object it names, or false for
+// a key this code did not write.
+func parseLogoKey(key string) (logoObject, bool) {
+	i := strings.LastIndex(key, "/")
+	if i < 0 || !strings.HasPrefix(key, "orgs/") {
+		return logoObject{}, false
+	}
+	name := key[i+1:]
+	switch {
+	case strings.HasSuffix(name, ".jpg"):
+		return logoObject{digest: strings.TrimSuffix(name, ".jpg"), ctype: "image/jpeg"}, true
+	case strings.HasSuffix(name, ".png"):
+		return logoObject{digest: strings.TrimSuffix(name, ".png"), ctype: "image/png"}, true
+	}
+	return logoObject{}, false
 }
 
 // logoURL is the path a client renders for an organization's logo, or ""
-// for none. The version is the served object's digest, taken from its
-// key, so the URL changes with the content and a cache that holds the
-// old one as immutable is never wrong for longer than the old URL is
-// linked. GetOrgLogo ignores the query: it serves what the row names.
+// for none: versioned by the served object's digest, so the URL changes
+// with the content, and a cache that holds one URL as immutable is never
+// wrong for longer than that URL is linked.
 func logoURL(handle string, key *string) string {
-	if key == nil || *key == "" {
+	if key == nil {
 		return ""
 	}
-	v := *key
-	if i := strings.LastIndex(v, "/"); i >= 0 {
-		v = v[i+1:]
+	l, ok := parseLogoKey(*key)
+	if !ok {
+		return ""
 	}
-	if i := strings.Index(v, "."); i >= 0 {
-		v = v[:i]
-	}
-	if len(v) > 16 {
-		v = v[:16]
-	}
-	return "/api/v1/orgs/" + handle + "/logo?v=" + v
+	return "/api/v1/orgs/" + handle + "/logo?v=" + l.version()
 }
 
 // GetOrgLogo implements GET /orgs/{org}/logo.
@@ -73,7 +128,13 @@ func (s *Server) GetOrgLogo(w http.ResponseWriter, r *http.Request, org OrgHandl
 	if !ok {
 		return
 	}
-	if row.LogoObjectKey == nil || *row.LogoObjectKey == "" || s.blobs == nil {
+	if row.LogoObjectKey == nil || s.blobs == nil {
+		problemNotFound(w, r)
+		return
+	}
+	l, ok := parseLogoKey(*row.LogoObjectKey)
+	if !ok {
+		s.log.ErrorContext(r.Context(), "org logo: key not this code's", "org", row.ID, "key", *row.LogoObjectKey)
 		problemNotFound(w, r)
 		return
 	}
@@ -87,21 +148,30 @@ func (s *Server) GetOrgLogo(w http.ResponseWriter, r *http.Request, org OrgHandl
 		return
 	}
 	defer func() { _ = rc.Close() }()
-	body, err := io.ReadAll(io.LimitReader(rc, logoMaxBytes*4))
+	body, err := io.ReadAll(io.LimitReader(rc, logoMaxServedBytes+1))
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "org logo: read", "org", row.ID, "err", err)
 		problemInternal(w, r)
 		return
 	}
-	// The type is pinned from the key's extension, which this process
-	// wrote when it encoded the object, never sniffed from the bytes.
-	ctype := "image/png"
-	if strings.HasSuffix(*row.LogoObjectKey, ".jpg") {
-		ctype = "image/jpeg"
+	if len(body) > logoMaxServedBytes {
+		// Truncating would serve bytes that do not match the digest in
+		// the URL; an object this size is not one PutOrgLogo wrote.
+		s.log.ErrorContext(r.Context(), "org logo: object over the served bound", "org", row.ID, "key", *row.LogoObjectKey)
+		problemInternal(w, r)
+		return
 	}
-	// A year, immutable: the URL carries the content's digest, so a new
-	// logo is a new URL, and nothing served under an old one changes.
-	writeRaster(w, body, ctype, "public, max-age=31536000, immutable")
+	// A year, immutable — but only for the URL that names this content.
+	// The bare path, or one carrying a version that is no longer served,
+	// is answered with the current logo and told not to keep it: nothing
+	// enforces that a link carried the version, and a browser that cached
+	// the bare path as immutable would show a replaced or removed logo
+	// for a year.
+	cache := "no-cache"
+	if r.URL.Query().Get("v") == l.version() {
+		cache = "public, max-age=31536000, immutable"
+	}
+	writeRaster(w, body, l.ctype, cache)
 }
 
 // PutOrgLogo implements PUT /orgs/{org}/logo.
@@ -117,12 +187,12 @@ func (s *Server) PutOrgLogo(w http.ResponseWriter, r *http.Request, org OrgHandl
 		return
 	}
 	if s.blobs == nil {
-		problemInternal(w, r)
+		problemUnavailable(w, r, "This deployment has no object storage configured, so a logo cannot be stored.")
 		return
 	}
 	// The tier decides whether this organization may carry a logo at all
 	// (D17). Unknown refuses, as every entitlement gate on an act does.
-	f, err := s.entitlements().Features(r.Context(), entitlements.ForOrg(row.ID))
+	f, err := s.orgFeatures(r.Context(), row.ID)
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "org logo: entitlements", "org", row.ID, "err", err)
 		problemInternal(w, r)
@@ -136,8 +206,8 @@ func (s *Server) PutOrgLogo(w http.ResponseWriter, r *http.Request, org OrgHandl
 	if err != nil {
 		var mbe *http.MaxBytesError
 		switch {
-		case errors.As(err, &mbe):
-			writeProblem(w, r, http.StatusRequestEntityTooLarge, "too-large", "Logo too large", "A logo is at most 256 KB.")
+		case errors.Is(err, errLogoTooLarge), errors.As(err, &mbe):
+			problemUploadTooLarge(w, r, "A logo is at most 256 KB.")
 		default:
 			problemBadRequest(w, r, "Send the logo as one multipart part named file.")
 		}
@@ -148,23 +218,23 @@ func (s *Server) PutOrgLogo(w http.ResponseWriter, r *http.Request, org OrgHandl
 	out, ctype, err := reencodeRaster(upload, rasterPNG|rasterJPEG)
 	switch {
 	case errors.Is(err, errRasterUnsupported):
-		writeProblem(w, r, http.StatusUnsupportedMediaType, "unsupported-image", "Not a PNG or JPEG",
-			"A logo is a PNG or a JPEG. SVG is not accepted: the registry has no way to make one safe to serve, so it does not serve any.")
+		problemUnsupportedImage(w, r, "A logo is a PNG or a JPEG. SVG is not accepted: the registry has no way to make one safe to serve, so it does not serve any.")
 		return
 	case errors.Is(err, errRasterTooLarge):
-		writeProblem(w, r, http.StatusRequestEntityTooLarge, "too-large", "Logo too large", "A logo has at most 16 million pixels.")
+		problemUploadTooLarge(w, r, "A logo has at most 16 million pixels.")
 		return
 	case err != nil:
 		s.log.ErrorContext(r.Context(), "org logo: encode", "org", row.ID, "err", err)
 		problemInternal(w, r)
 		return
 	}
-	ext := ".png"
-	if ctype == "image/jpeg" {
-		ext = ".jpg"
+	if len(out) > logoMaxServedBytes {
+		problemUploadTooLarge(w, r, "This image is larger encoded than a logo may be; a smaller one is needed.")
+		return
 	}
 	sum := sha256.Sum256(out)
-	key := logoKey(row.ID, hex.EncodeToString(sum[:]), ext)
+	l := logoObject{digest: hex.EncodeToString(sum[:]), ctype: ctype}
+	key := l.key(row.ID)
 	// The object first, the row second: a row that names an object which
 	// is not there would serve a 404 for a logo the admin was told is set.
 	if err := s.blobs.Put(r.Context(), key, bytes.NewReader(out)); err != nil {
@@ -194,7 +264,7 @@ func (s *Server) PutOrgLogo(w http.ResponseWriter, r *http.Request, org OrgHandl
 	// failure: the row already names the new one, and a sweep can remove
 	// a stray object; a request that failed here after succeeding would
 	// tell the admin the logo is not set when it is.
-	if previous != nil && *previous != "" && *previous != key {
+	if previous != nil && *previous != key {
 		if err := s.blobs.Delete(r.Context(), *previous); err != nil {
 			s.log.WarnContext(r.Context(), "org logo: remove replaced object", "org", row.ID, "key", *previous, "err", err)
 		}
@@ -237,7 +307,7 @@ func (s *Server) DeleteOrgLogo(w http.ResponseWriter, r *http.Request, org OrgHa
 		problemInternal(w, r)
 		return
 	}
-	if previous != nil && *previous != "" && s.blobs != nil {
+	if previous != nil && s.blobs != nil {
 		if err := s.blobs.Delete(r.Context(), *previous); err != nil {
 			s.log.WarnContext(r.Context(), "org logo: remove object", "org", row.ID, "key", *previous, "err", err)
 		}
@@ -246,11 +316,13 @@ func (s *Server) DeleteOrgLogo(w http.ResponseWriter, r *http.Request, org OrgHa
 }
 
 // readLogoUpload reads the one multipart part a logo upload carries,
-// bounded before a byte of it is decoded. The part's own declared type
-// and file name are not consulted: what the bytes are is decided by the
-// decoder, not by the sender.
+// bounded before a byte of it is decoded. It streams the parts rather
+// than calling ParseMultipartForm, which would spool anything over its
+// memory limit to disk: a logo is small and never touches one. The
+// part's own declared type and file name are not consulted — what the
+// bytes are is decided by the decoder, not by the sender.
 func readLogoUpload(w http.ResponseWriter, r *http.Request) ([]byte, error) {
-	r.Body = http.MaxBytesReader(w, r.Body, logoMaxBytes+1024)
+	r.Body = http.MaxBytesReader(w, r.Body, logoMaxBytes+logoMultipartSlack)
 	mr, err := r.MultipartReader()
 	if err != nil {
 		return nil, err
@@ -273,7 +345,7 @@ func readLogoUpload(w http.ResponseWriter, r *http.Request) ([]byte, error) {
 			return nil, err
 		}
 		if len(body) > logoMaxBytes {
-			return nil, &http.MaxBytesError{Limit: logoMaxBytes}
+			return nil, errLogoTooLarge
 		}
 		if len(body) == 0 {
 			return nil, errors.New("empty file part")
