@@ -15,9 +15,11 @@ front of this same server; a registry does not need one, and
 - PostgreSQL 16 (the only hard dependency)
 - Somewhere to put files. A local disk is fine to start; S3 for production
 - The `git` binary on the host running the git role
-- Optionally: an LLM provider for automated adjudication. Without one, the
-  pipeline does **not** skip that step. It routes every version to human
-  review instead (fail toward review, never toward skip).
+- Optionally: a model for AI Review, the pipeline's automated adjudication
+  (TypeSafe AI's Jev with a key, or an Anthropic-, OpenAI-compatible or
+  Bedrock model). Without one, the pipeline does **not** skip that step. It
+  routes every version to human review instead (fail toward review, never
+  toward skip).
 
 ## Quickstart with Docker Compose
 
@@ -131,7 +133,18 @@ brand:
   securityEmail: ""     # shown on the security notes
 
 judge:
-  provider: none        # none | static | openai | anthropic | bedrock | classifier
+  provider: none        # none | static | openai | anthropic | bedrock | typesafe | classifier
+  # typesafe is TypeSafe AI's Jev, the model Agentry's hosted registry uses
+  # for AI Review: a hosted API with no self-hosted build, answering the six
+  # rubric axes with probabilities over the manifest and every text file.
+  # The key is required. The model id is pinned (default jev-1.13.0); an
+  # alias such as jev-latest is refused at startup, because thresholds are
+  # calibrated per version. A clean review lets the release through the
+  # same gate as any other model provider; an error routes it to human
+  # review.
+  # apiKey: ...                       # AGENTRY_JUDGE_API_KEY (required)
+  # model: jev-1.13.0                 # AGENTRY_JUDGE_MODEL (pinned; default shown)
+  # baseUrl: https://api.typesafe.ai  # AGENTRY_JUDGE_BASE_URL (default shown)
   # For openai/anthropic, point at any endpoint speaking that protocol:
   # baseUrl: https://api.openai.com   # AGENTRY_JUDGE_BASE_URL
   # apiKey: sk-...                    # AGENTRY_JUDGE_API_KEY
@@ -1038,9 +1051,10 @@ Running your own registry means you own the trust decisions:
 - the signing key and its backups;
 - who has platform-staff rights (they can quarantine, block, and read
   everything on your instance);
-- whether an LLM judge is configured, and therefore whether adjudication is
-  automated or entirely human. A configured judge's token use is recorded
-  per scan run and shown to platform staff on the report as `judgeUsage`;
+- whether an AI Review model is configured (`judge.provider`), and therefore
+  whether review is automated or entirely human. A configured model's token
+  use is recorded per scan run and shown to platform staff on the report as
+  `judgeUsage`;
 - keeping the ruleset current; a scanner from a year ago is a scanner that
   has not seen this year's techniques.
 
