@@ -21,6 +21,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/entitlements"
 	"github.com/blaktron/agentry/internal/store"
 )
 
@@ -40,6 +41,51 @@ type testEnv struct {
 	// after the fixture is built (a resolver that starts answering and then
 	// fails).
 	srvObj *api.Server
+}
+
+// tierResolver is the core resolver with a tier's answers laid over it,
+// for a test that needs a subject to hold or not hold a feature. broken
+// fails instead, for the fail-closed cases. One type rather than one per
+// feature: the shape was copied twice before this (seats, then identity).
+type tierResolver struct {
+	entitlements.Resolver
+	// apply mutates the org's features; nil leaves the core's answers.
+	apply  func(*entitlements.Features)
+	broken bool
+}
+
+func (c tierResolver) Features(ctx context.Context, s entitlements.Subject) (entitlements.Features, error) {
+	if c.broken {
+		return entitlements.Features{}, context.DeadlineExceeded
+	}
+	f, err := c.Resolver.Features(ctx, s)
+	if err != nil {
+		return f, err
+	}
+	if s.Kind == entitlements.NamespaceOrg && c.apply != nil {
+		c.apply(&f)
+	}
+	return f, nil
+}
+
+// onTier builds a server option putting the org on a tier the test
+// describes; brokenTier answers nothing at all.
+func onTier(apply func(*entitlements.Features)) func(*api.Server) {
+	return func(s *api.Server) {
+		s.SetEntitlements(tierResolver{Resolver: entitlements.NewConfigResolver(config.Default().Limits), apply: apply})
+	}
+}
+
+func brokenTier() func(*api.Server) {
+	return func(s *api.Server) {
+		s.SetEntitlements(tierResolver{Resolver: entitlements.NewConfigResolver(config.Default().Limits), broken: true})
+	}
+}
+
+// setEntitlements swaps the resolver after the fixture is built, which is
+// what a subscription changing under a live organization looks like.
+func (env *testEnv) setEntitlements(r entitlements.Resolver) {
+	env.srvObj.SetEntitlements(r)
 }
 
 func newTestEnv(t *testing.T) *testEnv {

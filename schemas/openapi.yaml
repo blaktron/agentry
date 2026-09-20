@@ -2437,6 +2437,11 @@ paths:
   /orgs/{org}/sso/connections/{kind}:
     put:
       operationId: putSsoConnection
+      description: >
+        403 `feature-not-included` while the organization's subscription
+        does not include single sign-on. An existing connection is left
+        alone by a subscription change and works again the moment the
+        subscription includes SSO.
       tags: [sso]
       summary: Create or update a SAML/OIDC connection (admin, §12.4).
       parameters:
@@ -2517,6 +2522,14 @@ paths:
       operationId: samlAcs
       tags: [sso]
       summary: "SAML Assertion Consumer Service: consume a signed assertion (§12.4)."
+      description: >
+        A `RelayState` form field holding a same-origin path puts this in
+        browser mode: the session and CSRF cookies are set and the answer
+        is a 303 to that path, and a failure is a 303 to the sign-in page
+        carrying the reason, because a browser cannot read a problem
+        document. Anything else in `RelayState` is ignored. Without one the
+        answer is the JSON below. 404 while the organization's subscription
+        does not include SSO.
       security: []
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
@@ -2527,6 +2540,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LoginResult"
+        "303":
+          description: Browser mode — the session is set and the browser returns to the path RelayState named, or to the sign-in page on a failure.
         default:
           $ref: "#/components/responses/Problem"
 
@@ -2570,9 +2585,22 @@ paths:
       operationId: oidcStart
       tags: [sso]
       summary: Begin the OIDC auth-code + PKCE flow (redirect to IdP, §12.4).
+      description: >
+        404 while the organization's subscription does not include SSO: the
+        door is not there to be started. `next` puts the callback in
+        browser mode.
       security: []
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
+        - name: next
+          in: query
+          description: >
+            Where the browser returns after a successful sign-in. A
+            same-origin path only (leading `/`, not `//`); anything else is
+            ignored. It is sealed into the state the callback reads, so the
+            identity provider's round trip cannot change it.
+          schema:
+            type: string
       responses:
         "302":
           description: Redirect to the IdP authorization endpoint.
@@ -2584,6 +2612,12 @@ paths:
       operationId: oidcCallback
       tags: [sso]
       summary: "OIDC redirect URI: exchange the code and establish a session (§12.4)."
+      description: >
+        When the start carried a `next`, this is browser mode: the session
+        and CSRF cookies are set and the answer is a 303 to that path, and
+        a failure is a 303 to the sign-in page carrying the reason.
+        Otherwise the answer is the JSON below. 404 while the
+        organization's subscription does not include SSO.
       security: []
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
@@ -2602,6 +2636,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LoginResult"
+        "303":
+          description: Browser mode — the session is set and the browser returns to the path `next` named, or to the sign-in page on a failure.
         default:
           $ref: "#/components/responses/Problem"
 
@@ -2625,6 +2661,11 @@ paths:
           $ref: "#/components/responses/Problem"
     post:
       operationId: createScimToken
+      description: >
+        403 `feature-not-included` while the organization's subscription
+        does not include directory provisioning. Tokens already issued are
+        left alone by a subscription change and provision again the moment
+        it includes SCIM.
       tags: [scim]
       summary: Mint a SCIM bearer token (admin, §12.5).
       parameters:
