@@ -160,8 +160,9 @@ stronger.
 
 Decided since the plan was written: the product name (**Agentry**, PLAN
 §20 Q1 — this module keeps the `agentry` technical name) and the license
-(**MIT**, Q2). Still needing a human: the SaaS judge provider and region (Q3)
-and how strict the launch baseline policy should be (Q4).
+(**MIT**, Q2), and the hosted registry's judge (Q3: TypeSafe AI's Jev as the
+`typesafe` provider, DEV-113, 2026-09-20). Still needing a human: how strict
+the launch baseline policy should be (Q4).
 
 ## License
 
