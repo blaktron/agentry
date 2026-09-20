@@ -256,6 +256,9 @@ func (s *Server) buildStoredSSOConfig(r *http.Request, handle, kind string, in m
 		if issuer == "" || clientID == "" {
 			return nil, errors.New("an oidc connection needs an issuer and a clientId")
 		}
+		if err := validateOIDCIssuer(issuer, s.oidcGuard); err != nil {
+			return nil, err
+		}
 		out := storedOIDCConfig{Issuer: issuer, ClientID: clientID}
 		if secret, _ := in["clientSecret"].(string); secret != "" {
 			sealed, err := s.sealer.Seal([]byte(secret))
