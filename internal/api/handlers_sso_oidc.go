@@ -14,12 +14,25 @@ import (
 
 const oidcStateCookie = "agentry_oidc_state"
 
+// derefOr reads an optional query parameter as a plain string.
+func derefOr(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
 // oidcState is sealed into a short-lived cookie between start and callback.
 type oidcState struct {
 	State    string `json:"s"`
 	Nonce    string `json:"n"`
 	Verifier string `json:"v"`
 	Org      string `json:"o"`
+	// Next is the same-origin path a browser returns to, sealed here
+	// rather than carried in the query so the IdP round trip cannot
+	// change it (plan organization-subscriptions.md §5.7). Empty is API
+	// mode, which answers JSON as before.
+	Next string `json:"x,omitempty"`
 }
 
 // oidcContext wraps the request context with the configured OIDC HTTP client
@@ -32,12 +45,20 @@ func (s *Server) oidcContext(ctx context.Context) context.Context {
 }
 
 // OidcStart implements GET /orgs/{org}/sso/oidc/start (§12.4): auth-code + PKCE.
-func (s *Server) OidcStart(w http.ResponseWriter, r *http.Request, org OrgHandle) {
+func (s *Server) OidcStart(w http.ResponseWriter, r *http.Request, org OrgHandle, params OidcStartParams) {
 	if !s.requireDB(w, r) {
 		return
 	}
 	orgRow, ok := s.orgOrNotFound(w, r, org)
 	if !ok {
+		return
+	}
+	// A tier that does not include SSO has no door here, and the
+	// organization is not a thing this route will admit to having one: the
+	// answer is the same 404 as an organization with no connection at all
+	// (D11).
+	if !s.ssoIncluded(r.Context(), orgRow.ID) {
+		problemNotFound(w, r)
 		return
 	}
 	ctx := s.oidcContext(r.Context())
@@ -50,7 +71,10 @@ func (s *Server) OidcStart(w http.ResponseWriter, r *http.Request, org OrgHandle
 	nonce, _ := auth.NewToken("")
 	verifier := oauth2.GenerateVerifier()
 
-	blob, err := json.Marshal(oidcState{State: state, Nonce: nonce, Verifier: verifier, Org: orgRow.Handle})
+	blob, err := json.Marshal(oidcState{
+		State: state, Nonce: nonce, Verifier: verifier, Org: orgRow.Handle,
+		Next: safeNextPath(derefOr(params.Next)),
+	})
 	if err != nil {
 		problemInternal(w, r)
 		return
@@ -79,6 +103,10 @@ func (s *Server) OidcCallback(w http.ResponseWriter, r *http.Request, org OrgHan
 	if !ok {
 		return
 	}
+	if !s.ssoIncluded(r.Context(), orgRow.ID) {
+		problemNotFound(w, r)
+		return
+	}
 	c, err := r.Cookie(oidcStateCookie)
 	if err != nil || c.Value == "" {
 		problemValidation(w, r, "The OIDC state cookie is missing. Start sign-in again.")
@@ -102,32 +130,63 @@ func (s *Server) OidcCallback(w http.ResponseWriter, r *http.Request, org OrgHan
 	// Clear the state cookie regardless of outcome (single use).
 	http.SetCookie(w, &http.Cookie{Name: oidcStateCookie, Value: "", Path: "/", MaxAge: -1})
 
+	// From here the sealed state is open, so browser mode is known and a
+	// failure can land on the login page rather than on a problem document
+	// the person cannot read. next was validated by safeNextPath before it
+	// was sealed.
+	browserFail := func(msg string) bool {
+		if st.Next == "" {
+			return false
+		}
+		http.Redirect(w, r, s.paths.login(msg), http.StatusSeeOther)
+		return true
+	}
 	if params.State == nil || *params.State != st.State || st.Org != orgRow.Handle {
-		problemUnauthorized(w, r, "The OIDC state does not match this sign-in. Start again.")
+		const msg = "The OIDC state does not match this sign-in. Start again."
+		if browserFail(msg) {
+			return
+		}
+		problemUnauthorized(w, r, msg)
 		return
 	}
 	if params.Code == nil || *params.Code == "" {
-		problemValidation(w, r, "The IdP returned no authorization code. Start sign-in again.")
+		const msg = "The IdP returned no authorization code. Start sign-in again."
+		if browserFail(msg) {
+			return
+		}
+		problemValidation(w, r, msg)
 		return
 	}
 
 	ctx := s.oidcContext(r.Context())
 	rp, connID, err := s.oidcRPForOrg(ctx, r, orgRow)
 	if err != nil {
-		problemValidation(w, r, "This organization has no OIDC connection enabled.")
+		const msg = "This organization has no OIDC connection enabled."
+		if browserFail(msg) {
+			return
+		}
+		problemValidation(w, r, msg)
 		return
 	}
 	claims, err := rp.Exchange(ctx, *params.Code, st.Verifier, st.Nonce)
 	if err != nil {
 		s.log.WarnContext(r.Context(), "oidc callback rejected", "org", org, "err", err)
-		problemUnauthorized(w, r, "The code exchange with the identity provider failed. Start sign-in again.")
+		const msg = "The code exchange with the identity provider failed. Start sign-in again."
+		if browserFail(msg) {
+			return
+		}
+		problemUnauthorized(w, r, msg)
 		return
 	}
 	// Respect email_verified (§12.4): an unverified email must not drive a
 	// verified-email JIT link.
 	if claims.Email != "" && !claims.EmailVerified {
-		problemUnauthorized(w, r, "The identity provider reports this email address as unverified. Verify it there, then sign in again.")
+		const msg = "The identity provider reports this email address as unverified. Verify it there, then sign in again."
+		if browserFail(msg) {
+			return
+		}
+		problemUnauthorized(w, r, msg)
 		return
 	}
-	s.establishSSOSession(w, r, orgRow, connID, "oidc", claims.Subject, claims.Email, nil)
+	s.establishSSOSession(w, r, orgRow, connID, "oidc", claims.Subject, claims.Email, nil, st.Next)
 }

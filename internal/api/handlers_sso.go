@@ -19,8 +19,37 @@ import (
 	"github.com/blaktron/agentry/internal/auth"
 	oidcrp "github.com/blaktron/agentry/internal/auth/oidc"
 	samlsp "github.com/blaktron/agentry/internal/auth/saml"
+	"github.com/blaktron/agentry/internal/entitlements"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
+
+// identityFeatures answers whether the organization's subscription
+// includes SSO and SCIM (plan organization-subscriptions.md §5.7, D11).
+//
+// Which way an error falls depends on what the caller is deciding, and the
+// two directions are opposite, so every caller says which it wants rather
+// than sharing one default:
+//
+//   - a gate on *creating* a connection or a token fails closed, refusing
+//     while the answer is unknown, like every other entitlement check;
+//   - the enforced-SSO gate fails *enforcing*, because an unknown answer
+//     must never be the reason a person walks past an organization's own
+//     sign-in policy. Billing state does not loosen identity (DEV-118).
+func (s *Server) identityFeatures(ctx context.Context, orgID uuid.UUID) (entitlements.Features, error) {
+	return s.entitlements().Features(ctx, entitlements.ForOrg(orgID))
+}
+
+// ssoIncluded reports whether the organization may use SSO at all. It is
+// the gate on the sign-in doors themselves — the OIDC start and callback
+// and the SAML ACS — not only on creating a connection: a tier that does
+// not include SSO must not leave a working door standing because a
+// connection was configured while it did. A downgrade keeps the
+// connection's row, so re-subscribing restores the door without
+// re-entering anything.
+func (s *Server) ssoIncluded(ctx context.Context, orgID uuid.UUID) bool {
+	f, err := s.identityFeatures(ctx, orgID)
+	return err == nil && f.SSO
+}
 
 // ssoURLs returns the SP metadata/ACS and OIDC redirect URLs for an org,
 // preferring the configured public origin and falling back to the request's
@@ -80,6 +109,19 @@ func (s *Server) PutSsoConnection(w http.ResponseWriter, r *http.Request, org Or
 		return
 	}
 	if !s.authorize(w, r, auth.ActOrgSettingsManage, orgRow.ID) {
+		return
+	}
+	// The tier decides whether this organization may have SSO at all
+	// (D11). Unknown refuses: an entitlement outage must not be a way to
+	// add a sign-in door.
+	f, err := s.identityFeatures(r.Context(), orgRow.ID)
+	if err != nil {
+		s.log.ErrorContext(r.Context(), "sso entitlements", "org", orgRow.ID, "err", err)
+		problemInternal(w, r)
+		return
+	}
+	if !f.SSO {
+		problemFeatureNotIncluded(w, r, "Single sign-on is not included in this organization's subscription. An existing connection keeps working the moment the subscription includes it again.")
 		return
 	}
 	k := string(kind)
@@ -303,16 +345,35 @@ type samlSessionLink struct {
 	SessionIndex string
 }
 
-func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, orgRow storegen.GetOrgByHandleRow, connID uuid.UUID, providerKind, subject, email string, samlLink *samlSessionLink) {
+// establishSSOSession opens the session an organization's IdP just
+// authorized. next non-empty is browser mode (plan
+// organization-subscriptions.md §5.7): the browser is the client, so a
+// JSON body would be the page a person lands on. It answers a 303 to next
+// with the session and CSRF cookies set, exactly as issueSocialSession
+// does, and sends failures back to the login page with the sentence
+// instead of a problem document. next has already been through
+// safeNextPath, so it is a same-origin path and nothing else. API mode —
+// next empty — is unchanged.
+func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, orgRow storegen.GetOrgByHandleRow, connID uuid.UUID, providerKind, subject, email string, samlLink *samlSessionLink, next string) {
 	ctx := r.Context()
 	q := s.q()
+	browserFail := func(msg string) bool {
+		if next == "" {
+			return false
+		}
+		http.Redirect(w, r, s.paths.login(msg), http.StatusSeeOther)
+		return true
+	}
 
 	userID, err := s.resolveSSOUser(ctx, orgRow, connID, providerKind, subject, email)
 	if err != nil {
 		if errors.Is(err, errExplicitLinkRequired) {
+			const msg = "An account here already uses that address, and this organization has not proved it controls the address's domain. Verify the domain (DNS TXT), or sign in with the account's own credentials once so the two are linked."
+			if browserFail(msg) {
+				return
+			}
 			writeProblem(w, r, http.StatusConflict, "sso-link-required",
-				"This organization has not verified that domain",
-				"An account here already uses that address, and this organization has not proved it controls the address's domain. Verify the domain (DNS TXT), or sign in with the account's own credentials once so the two are linked.")
+				"This organization has not verified that domain", msg)
 			return
 		}
 		if errors.Is(err, errNotAMember) {
@@ -320,12 +381,18 @@ func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, org
 			// account, has one that is not a member, or is a member
 			// waiting for approval: the organization's SSO is not a place
 			// to learn who is in it.
+			msg := "This organization signs in its members only. Ask an administrator of " + orgRow.Handle + " to invite you; you will be able to sign in here once you have accepted."
+			if browserFail(msg) {
+				return
+			}
 			writeProblem(w, r, http.StatusForbidden, "not-a-member",
-				"Not a member of this organization",
-				"This organization signs in its members only. Ask an administrator of "+orgRow.Handle+" to invite you; you will be able to sign in here once you have accepted.")
+				"Not a member of this organization", msg)
 			return
 		}
 		s.log.ErrorContext(r.Context(), "sso sign-in", "err", err)
+		if browserFail("Sign-in with this organization's identity provider failed. Try again.") {
+			return
+		}
 		problemInternal(w, r)
 		return
 	}
@@ -392,6 +459,21 @@ func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, org
 		Secure: s.cfg.Auth.CookieSecure, SameSite: http.SameSiteLaxMode,
 		MaxAge: int(s.cfg.Auth.SessionTTL.Seconds()),
 	})
+	if next != "" {
+		// Browser mode has no JSON body to carry the CSRF token, and the
+		// web tier can only echo what it holds, so it goes in the cookie
+		// the web tier's apiSend reads — the same double-submit shape the
+		// native login route produces (agentry#77). httpOnly: page script
+		// never needs it, and a cross-site page can neither read the
+		// cookie nor set the header.
+		http.SetCookie(w, &http.Cookie{
+			Name: csrfCookieName, Value: csrfToken, Path: "/", HttpOnly: true,
+			Secure: s.cfg.Auth.CookieSecure, SameSite: http.SameSiteLaxMode,
+			MaxAge: int(s.cfg.Auth.SessionTTL.Seconds()),
+		})
+		http.Redirect(w, r, next, http.StatusSeeOther)
+		return
+	}
 	u, err := q.GetUserByID(ctx, userID)
 	if err != nil {
 		problemInternal(w, r)

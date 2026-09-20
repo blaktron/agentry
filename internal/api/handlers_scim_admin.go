@@ -54,6 +54,19 @@ func (s *Server) CreateScimToken(w http.ResponseWriter, r *http.Request, org Org
 	if !s.authorize(w, r, auth.ActOrgSettingsManage, orgRow.ID) {
 		return
 	}
+	// The tier decides whether this organization may be provisioned over
+	// SCIM at all (D11). Unknown refuses: an entitlement outage must not
+	// be a way to mint a directory credential.
+	f, err := s.identityFeatures(r.Context(), orgRow.ID)
+	if err != nil {
+		s.log.ErrorContext(r.Context(), "scim entitlements", "org", orgRow.ID, "err", err)
+		problemInternal(w, r)
+		return
+	}
+	if !f.SCIM {
+		problemFeatureNotIncluded(w, r, "Directory provisioning (SCIM) is not included in this organization's subscription. Tokens already issued keep working the moment the subscription includes it again.")
+		return
+	}
 	var req CreateScimTokenJSONBody
 	_ = readJSONOptional(r, &req)
 

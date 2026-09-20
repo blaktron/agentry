@@ -48,6 +48,10 @@ func (s *Server) SamlAcs(w http.ResponseWriter, r *http.Request, org OrgHandle) 
 	if !ok {
 		return
 	}
+	if !s.ssoIncluded(r.Context(), orgRow.ID) {
+		problemNotFound(w, r)
+		return
+	}
 	if err := r.ParseForm(); err != nil {
 		problemBadRequest(w, r, "The server could not parse the form body.")
 		return
@@ -57,22 +61,42 @@ func (s *Server) SamlAcs(w http.ResponseWriter, r *http.Request, org OrgHandle) 
 		problemValidation(w, r, "The POST must carry a SAMLResponse form field.")
 		return
 	}
+	// RelayState is SAML's own way to carry where the browser was going,
+	// and the IdP hands it back untouched — so it is the assertion's least
+	// trustworthy field and passes through safeNextPath, which admits a
+	// same-origin path and nothing else (plan §5.7). Empty is API mode.
+	next := safeNextPath(r.PostFormValue("RelayState"))
+	browserFail := func(msg string) bool {
+		if next == "" {
+			return false
+		}
+		http.Redirect(w, r, s.paths.login(msg), http.StatusSeeOther)
+		return true
+	}
 	sp, connID, err := s.samlSPForOrg(r, orgRow)
 	if err != nil {
-		problemValidation(w, r, "This organization has no SAML connection enabled.")
+		const msg = "This organization has no SAML connection enabled."
+		if browserFail(msg) {
+			return
+		}
+		problemValidation(w, r, msg)
 		return
 	}
 	res, err := sp.ParseAndValidate(r.Context(), samlResponse)
 	if err != nil {
 		s.log.WarnContext(r.Context(), "saml acs rejected", "org", org, "err", err)
-		problemUnauthorized(w, r, "The registry rejected the SAML assertion. Start sign-in again.")
+		const msg = "The registry rejected the SAML assertion. Start sign-in again."
+		if browserFail(msg) {
+			return
+		}
+		problemUnauthorized(w, r, msg)
 		return
 	}
 	// The IdP's displayName was used to name a JIT-created account; since
 	// agentry#361 this path creates nobody, and an existing member's name
 	// is their own to set.
 	s.establishSSOSession(w, r, orgRow, connID, "saml", res.Subject, res.Email,
-		&samlSessionLink{NameID: res.NameID, SessionIndex: res.SessionIndex})
+		&samlSessionLink{NameID: res.NameID, SessionIndex: res.SessionIndex}, next)
 }
 
 // SamlSloRedirect implements GET /orgs/{org}/sso/saml/slo: the HTTP-Redirect

@@ -86,6 +86,22 @@ func (s *Server) scimAuth(next scimHandler) http.HandlerFunc {
 			scimError(w, http.StatusForbidden, "this organization is "+org.State)
 			return
 		}
+		// The data plane closes with the entitlement, not only the door
+		// that mints tokens (D11): a token issued while the tier included
+		// SCIM must stop provisioning when it no longer does. The token's
+		// row survives, so the directory works again the moment the
+		// subscription does — nothing has to be re-issued. Unknown
+		// refuses, like every other entitlement gate.
+		f, ferr := s.identityFeatures(r.Context(), row.OrgID)
+		if ferr != nil {
+			s.log.ErrorContext(r.Context(), "scim entitlements", "org", row.OrgID, "err", ferr)
+			scimError(w, http.StatusForbidden, "directory provisioning is unavailable for this organization")
+			return
+		}
+		if !f.SCIM {
+			scimError(w, http.StatusForbidden, "directory provisioning is not included in this organization's subscription")
+			return
+		}
 		next(w, r, scimCtx{orgID: row.OrgID, orgHandle: org.Handle})
 	}
 }

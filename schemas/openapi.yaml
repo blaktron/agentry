@@ -2517,6 +2517,14 @@ paths:
       operationId: samlAcs
       tags: [sso]
       summary: "SAML Assertion Consumer Service: consume a signed assertion (§12.4)."
+      description: >
+        A `RelayState` form field holding a same-origin path puts this in
+        browser mode: the session and CSRF cookies are set and the answer
+        is a 303 to that path, and a failure is a 303 to the sign-in page
+        carrying the reason, because a browser cannot read a problem
+        document. Anything else in `RelayState` is ignored. Without one the
+        answer is the JSON below. 404 while the organization's subscription
+        does not include SSO.
       security: []
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
@@ -2527,6 +2535,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LoginResult"
+        "303":
+          description: Browser mode — the session is set and the browser returns to the path RelayState named, or to the sign-in page on a failure.
         default:
           $ref: "#/components/responses/Problem"
 
@@ -2570,9 +2580,22 @@ paths:
       operationId: oidcStart
       tags: [sso]
       summary: Begin the OIDC auth-code + PKCE flow (redirect to IdP, §12.4).
+      description: >
+        404 while the organization's subscription does not include SSO: the
+        door is not there to be started. `next` puts the callback in
+        browser mode.
       security: []
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
+        - name: next
+          in: query
+          description: >
+            Where the browser returns after a successful sign-in. A
+            same-origin path only (leading `/`, not `//`); anything else is
+            ignored. It is sealed into the state the callback reads, so the
+            identity provider's round trip cannot change it.
+          schema:
+            type: string
       responses:
         "302":
           description: Redirect to the IdP authorization endpoint.
@@ -2584,6 +2607,12 @@ paths:
       operationId: oidcCallback
       tags: [sso]
       summary: "OIDC redirect URI: exchange the code and establish a session (§12.4)."
+      description: >
+        When the start carried a `next`, this is browser mode: the session
+        and CSRF cookies are set and the answer is a 303 to that path, and
+        a failure is a 303 to the sign-in page carrying the reason.
+        Otherwise the answer is the JSON below. 404 while the
+        organization's subscription does not include SSO.
       security: []
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
@@ -2602,6 +2631,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LoginResult"
+        "303":
+          description: Browser mode — the session is set and the browser returns to the path `next` named, or to the sign-in page on a failure.
         default:
           $ref: "#/components/responses/Problem"
 
