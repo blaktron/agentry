@@ -75,6 +75,27 @@ type JudgeProvider interface {
 	// RequiresHumanReview reports whether this provider forces review
 	// regardless of scores (the `none` provider does, §8.4.6).
 	RequiresHumanReview() bool
+	// ModelID names the model this provider adjudicates with — what §8.4.4
+	// wants recorded per run beside the prompt hash — or "" for a provider
+	// that has no model to name (`none`, `static`, the classifier's
+	// deployment label), in which case the run records Name(). It is known
+	// from configuration, before any verdict exists: the run row is created
+	// before S5 runs, and a run that fails before adjudication still records
+	// a judge. JudgeVerdict.Model stays the provider's own label of what
+	// produced one verdict (the static heuristics' version, say) and is
+	// evidence on the finding, not the record on the run.
+	ModelID() string
+}
+
+// judgeModelOf is the value a scan run, its report and its attestation
+// record as the judge (agentry#321): the model id when the provider has
+// one, else the provider's name. The report digest of a run under a
+// model-less provider is therefore unchanged by the distinction.
+func judgeModelOf(p JudgeProvider) string {
+	if m := p.ModelID(); m != "" {
+		return m
+	}
+	return p.Name()
 }
 
 // JudgeContent is what the judge sees: manifest plus prose files, presented
@@ -119,6 +140,9 @@ func (NoneProvider) Name() string { return "none" }
 // RequiresHumanReview implements JudgeProvider.
 func (NoneProvider) RequiresHumanReview() bool { return true }
 
+// ModelID implements JudgeProvider: no model.
+func (NoneProvider) ModelID() string { return "" }
+
 // Judge implements JudgeProvider: no scores, review forced by the gate. The
 // prompt hash still records WHICH no-op this was, so a run adjudicated by no
 // judge is distinguishable from one adjudicated by a judge that found nothing.
@@ -142,6 +166,10 @@ func (StaticProvider) Name() string { return "static" }
 
 // RequiresHumanReview implements JudgeProvider.
 func (StaticProvider) RequiresHumanReview() bool { return false }
+
+// ModelID implements JudgeProvider: the heuristics are not a model, and the
+// run keeps recording "static" so existing reports keep their digests.
+func (StaticProvider) ModelID() string { return "" }
 
 var (
 	reInjection    = regexp.MustCompile(`(?i)ignore (?:all |your )?(?:previous|prior|above) instructions|disregard (?:the|all) (?:system|previous)`)
@@ -214,6 +242,9 @@ func (u UnconfiguredProvider) Name() string { return u.ProviderName }
 
 // RequiresHumanReview implements JudgeProvider: fail toward review (§8.4.6).
 func (UnconfiguredProvider) RequiresHumanReview() bool { return true }
+
+// ModelID implements JudgeProvider: nothing adjudicated.
+func (UnconfiguredProvider) ModelID() string { return "" }
 
 // Judge implements JudgeProvider: returns an error so the orchestrator
 // records an S5 stage error and fails closed to review.
@@ -331,6 +362,9 @@ func (j *HTTPJudge) Name() string { return j.protocol }
 // RequiresHumanReview implements JudgeProvider: a live judge scores, so its
 // verdicts follow the normal gate.
 func (j *HTTPJudge) RequiresHumanReview() bool { return false }
+
+// ModelID implements JudgeProvider: the configured (or default) model.
+func (j *HTTPJudge) ModelID() string { return j.model }
 
 // judgePromptTemplate is the fixed rubric every HTTP adjudication runs
 // under. Content goes in the delimited blocks as DATA; the model returns
