@@ -340,9 +340,10 @@ func (q *Queries) DeleteFindingsForScanner(ctx context.Context, arg DeleteFindin
 const finishScanRun = `-- name: FinishScanRun :exec
 UPDATE scan_runs
 SET status = $2, finished_at = now(), report_digest = $3,
-    judge_prompt_hash = coalesce($4, judge_prompt_hash),
-    judge_prompt_tokens = coalesce($5, judge_prompt_tokens),
-    judge_completion_tokens = coalesce($6, judge_completion_tokens)
+    judge_model = coalesce($4, judge_model),
+    judge_prompt_hash = coalesce($5, judge_prompt_hash),
+    judge_prompt_tokens = coalesce($6, judge_prompt_tokens),
+    judge_completion_tokens = coalesce($7, judge_completion_tokens)
 WHERE id = $1
 `
 
@@ -350,6 +351,7 @@ type FinishScanRunParams struct {
 	ID                    uuid.UUID `json:"id"`
 	Status                string    `json:"status"`
 	ReportDigest          *string   `json:"report_digest"`
+	JudgeModel            *string   `json:"judge_model"`
 	JudgePromptHash       *string   `json:"judge_prompt_hash"`
 	JudgePromptTokens     *int32    `json:"judge_prompt_tokens"`
 	JudgeCompletionTokens *int32    `json:"judge_completion_tokens"`
@@ -359,12 +361,16 @@ type FinishScanRunParams struct {
 // must exist before stages run (stage results reference it), and S5 only
 // reports which rubric version it used once it has run (§8.4.4).
 // The judge's token use is written the same way: known only once S5 ran,
-// NULL when the provider reported none.
+// NULL when the provider reported none. judge_model is re-stated at finish
+// with the value the report and the attestation carry, so a row created by
+// an earlier binary and resumed after an upgrade ends up agreeing with them
+// (agentry#321).
 func (q *Queries) FinishScanRun(ctx context.Context, arg FinishScanRunParams) error {
 	_, err := q.db.Exec(ctx, finishScanRun,
 		arg.ID,
 		arg.Status,
 		arg.ReportDigest,
+		arg.JudgeModel,
 		arg.JudgePromptHash,
 		arg.JudgePromptTokens,
 		arg.JudgeCompletionTokens,

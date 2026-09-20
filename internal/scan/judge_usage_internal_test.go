@@ -13,6 +13,7 @@ type usageJudge struct{ usage *JudgeUsage }
 
 func (usageJudge) Name() string              { return "usage-test" }
 func (usageJudge) RequiresHumanReview() bool { return false }
+func (usageJudge) ModelID() string           { return "" }
 func (u usageJudge) Judge(context.Context, JudgeContent) (JudgeVerdict, error) {
 	return JudgeVerdict{Scores: map[JudgeCategory]int{}, Model: "m", PromptHash: "sha256:x", Usage: u.usage}, nil
 }

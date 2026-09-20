@@ -219,7 +219,7 @@ func (p *Pipeline) resumeOrCreateRun(ctx context.Context, v storegen.AgentVersio
 	if _, err := q.CreateScanRun(ctx, storegen.CreateScanRunParams{
 		ID: runID, VersionID: v.ID, Trigger: trigger,
 		RulesetReleaseID: p.rulesetID, PolicySnapshot: snapshot,
-		JudgeModel: strptr(p.orch.judge.Name()),
+		JudgeModel: strptr(judgeModelOf(p.orch.judge)),
 	}); err != nil {
 		return uuid.Nil, Resume{}, fmt.Errorf("scan: create run: %w", err)
 	}
@@ -619,6 +619,7 @@ func (p *Pipeline) finishRun(ctx context.Context, runID uuid.UUID, result RunRes
 		}
 		return q.FinishScanRun(ctx, storegen.FinishScanRunParams{
 			ID: runID, Status: status, ReportDigest: strptr(result.ReportDigest),
+			JudgeModel:      strptr(result.JudgeModel),
 			JudgePromptHash: promptHash, JudgePromptTokens: promptTokens, JudgeCompletionTokens: completionTokens,
 		})
 	})
@@ -811,7 +812,7 @@ func (p *Pipeline) FailToReview(ctx context.Context, v storegen.AgentVersion, ag
 	if _, err := q.CreateScanRun(ctx, storegen.CreateScanRunParams{
 		ID: runID, VersionID: v.ID, Trigger: trigger,
 		RulesetReleaseID: p.rulesetID, PolicySnapshot: snapshot,
-		JudgeModel: strptr(p.orch.judge.Name()),
+		JudgeModel: strptr(judgeModelOf(p.orch.judge)),
 	}); err != nil {
 		return fmt.Errorf("scan: create failure run: %w", err)
 	}

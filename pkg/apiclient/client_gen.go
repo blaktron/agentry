@@ -2000,7 +2000,9 @@ type ScanReport struct {
 
 	// FinishedAt When this scan run completed: the date the report describes.
 	FinishedAt *time.Time `json:"finishedAt,omitempty"`
-	JudgeModel *string    `json:"judgeModel,omitempty"`
+
+	// JudgeModel The judge that adjudicated this run, as the attestation records it: the model id when the provider has one (openai, anthropic, bedrock), else the provider's name (static, none, classifier). Recorded per run for reproducibility beside the rubric hash.
+	JudgeModel *string `json:"judgeModel,omitempty"`
 
 	// JudgeUsage The token use the LLM judge's provider reported for this scan run — what the review cost, as measured. Present for platform staff only, and absent when the provider reported none (the static and classifier judges, an endpoint without a usage block); absent means unknown, not zero. Not part of the signed report.
 	JudgeUsage     *JudgeUsage         `json:"judgeUsage,omitempty"`

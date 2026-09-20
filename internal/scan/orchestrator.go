@@ -288,13 +288,13 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 		SchemaVersion: "1",
 		Findings:      allFindings,
 		StageErrors:   stageErrs,
-		JudgeModel:    o.judge.Name(),
+		JudgeModel:    judgeModelOf(o.judge),
 		Decision:      decision,
 	}
 	digest, digestErr := reportDigest(report)
 	out := RunResult{
 		Report: report, ReportDigest: digest,
-		Findings: allFindings, Decision: decision, JudgeModel: o.judge.Name(),
+		Findings: allFindings, Decision: decision, JudgeModel: judgeModelOf(o.judge),
 		JudgePromptHash: judgePromptHash, JudgeUsage: judgeUsage, Ran: ran, Skipped: skipped,
 	}
 	if digestErr != nil {
