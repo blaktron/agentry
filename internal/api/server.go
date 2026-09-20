@@ -86,6 +86,8 @@ type Server struct {
 	oidcEgress *http.Client
 	// imgHTTPClient overrides the image proxy's guarded client (tests).
 	imgHTTPClient *http.Client
+	// imgKey signs image-proxy URLs (newImgProxyKey).
+	imgKey []byte
 	// extensions and eventHooks are the closed build's additions (extensions.go).
 	extensions []extensionMount
 	eventHooks []func(ctx context.Context, ev Event)
@@ -145,6 +147,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 	srv.resolver = dnsx.NewSystemResolver()
 	srv.samlReplay = samlsp.NewMemoryReplayCache()
 	srv.SetOIDCEgressGuard(webhook.Guard{AllowLoopback: cfg.DevMode})
+	srv.imgKey = newImgProxyKey(cfg.Auth.SealingKey)
 	if st != nil {
 		srv.reg = registry.NewService(st, aud)
 		// Webhook fan-out (§9.3): enqueue deliveries onto the Postgres queue;
