@@ -39,7 +39,7 @@ type accountData struct {
 	NotificationsError string
 }
 
-// notificationSettings is the API's NotificationSettings, the five mail
+// notificationSettings is the API's NotificationSettings, the six mail
 // switches and the one in-app switch.
 type notificationSettings struct {
 	Email struct {
@@ -48,6 +48,11 @@ type notificationSettings struct {
 		ReviewDecisions  bool `json:"reviewDecisions"`
 		Advisories       bool `json:"advisories"`
 		OrgInvites       bool `json:"orgInvites"`
+		// Billing is the hosted product's subscription mail (agentry#366).
+		// This page renders every switch it is given and sends every one
+		// back, so it names the field; a registry with no billing sends
+		// none of these and the switch simply governs nothing.
+		Billing bool `json:"billing"`
 	} `json:"email"`
 	Web struct {
 		DependencyAlerts bool `json:"dependencyAlerts"`
@@ -156,6 +161,7 @@ func (h *handler) notificationsSave(w http.ResponseWriter, r *http.Request) {
 	ns.Email.ReviewDecisions = on("email.reviewDecisions")
 	ns.Email.Advisories = on("email.advisories")
 	ns.Email.OrgInvites = on("email.orgInvites")
+	ns.Email.Billing = on("email.billing")
 	ns.Web.DependencyAlerts = on("web.dependencyAlerts")
 	res, err := h.call(r).do(http.MethodPut, "/user/notifications", ns)
 	if err != nil || !res.OK() {

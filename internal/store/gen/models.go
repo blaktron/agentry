@@ -505,6 +505,7 @@ type UserNotificationSetting struct {
 	EmailOrgInvites       bool      `json:"email_org_invites"`
 	WebDependencyAlerts   bool      `json:"web_dependency_alerts"`
 	UpdatedAt             time.Time `json:"updated_at"`
+	EmailBilling          bool      `json:"email_billing"`
 }
 
 type UserSshKey struct {

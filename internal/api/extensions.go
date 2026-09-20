@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/notify"
 	"github.com/blaktron/agentry/internal/registry"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
@@ -236,4 +238,65 @@ func (s *Server) mountExtensions(mux *http.ServeMux) {
 		}
 		mux.Handle(prefix+"/", s.principalMiddlewareOpts(http.StripPrefix(prefix, sub), principalOpts{unthrottled: unthrottled}))
 	}
+}
+
+// SendToUser is the core's side of pkg/extension.Deps.Notifier.Send
+// (agentry#366, plan organization-subscriptions §5.8): a message an
+// extension composed goes to the person only under the core's rule —
+// notify.AllowsEmail, which is the verified-address rule of DEV-099 and
+// the person's switch for the kind — and only as a kind the core knows.
+// It reports whether the message went; a suppression is false with no
+// error, and the extension is not told why, because the address is the
+// person's business and the switch is their choice. An unknown kind is
+// refused outright: an extension sends as the classes it was given, so a
+// billing notice cannot dress itself as a quarantine.
+func (s *Server) SendToUser(ctx context.Context, userID uuid.UUID, kind, subject, text string) (bool, error) {
+	if s.st == nil {
+		return false, errors.New("api: no database to read the recipient from")
+	}
+	k, ok := extensionMailKinds[kind]
+	if !ok {
+		return false, fmt.Errorf("api: %q is not a kind an extension may send as", kind)
+	}
+	if strings.TrimSpace(subject) == "" || strings.TrimSpace(text) == "" {
+		return false, errors.New("api: a message needs a subject and a body")
+	}
+	if !notify.AllowsEmail(ctx, s.q(), s.log, userID, k) {
+		return false, nil
+	}
+	u, err := s.q().GetUserByID(ctx, userID)
+	if err != nil {
+		return false, fmt.Errorf("api: recipient: %w", err)
+	}
+	if err := s.notifier.Rendered(ctx, notify.RenderedNotice{ToEmail: u.Email, Subject: subject, Text: text, Kind: k}); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// extensionMailKinds is every class an extension may send as. It is the
+// trust boundary, which is why the key is a plain string: what arrives
+// here is the extension's word, and the map is the allowlist that turns
+// it into a kind the core recognises — or refuses. One today: the core's
+// own kinds stay the core's, and a new class is added here with its
+// switch, its default and its column, never by a string an extension
+// chooses.
+var extensionMailKinds = map[string]notify.Kind{
+	"billing": notify.KindBilling,
+}
+
+// OrgAdminIDs is pkg/extension.Deps.Notifier.OrgAdmins: the active
+// administrators of an organization. Pending administrators are left
+// out — they hold nothing of the organization until approved — and an
+// organization that does not exist is an empty list, not an error, so
+// the seam cannot be used to tell one from the other.
+func (s *Server) OrgAdminIDs(ctx context.Context, orgID uuid.UUID) ([]uuid.UUID, error) {
+	if s.st == nil {
+		return nil, errors.New("api: no database to read memberships from")
+	}
+	ids, err := s.q().ListOrgAdminIDs(ctx, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("api: org admins: %w", err)
+	}
+	return ids, nil
 }
