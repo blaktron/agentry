@@ -356,3 +356,20 @@ ORDER BY h.handle;
 
 -- name: ListUserTeamIDs :many
 SELECT team_id FROM team_members WHERE user_id = $1;
+
+-- name: SetOrgLogo :one
+-- Records the logo now served for the organization and returns the key
+-- it replaces (NULL for none), read under the row lock before the write,
+-- so the caller can remove the old object once the row points at the new
+-- one (agentry#367).
+WITH old AS (SELECT logo_object_key FROM orgs WHERE id = $1 FOR UPDATE)
+UPDATE orgs SET logo_object_key = $2 FROM old WHERE orgs.id = $1
+RETURNING old.logo_object_key AS previous_key;
+
+-- name: ClearOrgLogo :one
+-- Removes the organization's logo and returns the key that was served,
+-- for the caller to delete the object (agentry#367). No row when there
+-- was no logo.
+WITH old AS (SELECT logo_object_key FROM orgs WHERE id = $1 AND logo_object_key IS NOT NULL FOR UPDATE)
+UPDATE orgs SET logo_object_key = NULL FROM old WHERE orgs.id = $1
+RETURNING old.logo_object_key AS previous_key;

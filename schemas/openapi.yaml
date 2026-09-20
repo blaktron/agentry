@@ -1157,6 +1157,84 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /orgs/{org}/logo:
+    get:
+      operationId: getOrgLogo
+      tags: [orgs]
+      summary: The organization's logo, as this registry re-encoded it.
+      description: >
+        A raster the core decoded and encoded again from the pixels: the
+        bytes an admin uploaded are never what is served (§10.3). The type
+        is pinned and not sniffed. Cached as immutable, because the URL an
+        organization's resource carries changes when the logo does. 404
+        when the organization has none, or is not one the caller may see.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      responses:
+        "200":
+          description: The logo.
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      operationId: putOrgLogo
+      tags: [orgs]
+      summary: Set the organization's logo (admin; the subscription must include branding).
+      description: >
+        Multipart, one part named `file`: PNG or JPEG, at most 256 KB.
+        Anything else is refused — SVG in particular, for which this
+        registry has no sanitiser (415). The core decodes it and encodes it
+        again; the pixels are kept, the bytes are not. Replaces any logo
+        the organization had. 403 `feature-not-included` while the
+        subscription does not include branding.
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: The logo is set.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [logoUrl]
+                properties:
+                  logoUrl:
+                    type: string
+                    description: Where the logo is served, versioned by its content.
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteOrgLogo
+      tags: [orgs]
+      summary: Remove the organization's logo (admin).
+      parameters:
+        - $ref: "#/components/parameters/OrgHandle"
+      responses:
+        "204":
+          description: Removed, or there was none.
+        default:
+          $ref: "#/components/responses/Problem"
+
   /orgs/{org}/members:
     get:
       operationId: listOrgMembers
@@ -3997,6 +4075,12 @@ components:
           allOf:
             - $ref: "#/components/schemas/Seats"
           description: Present for the organization's members only.
+        logoUrl:
+          type: string
+          description: >
+            Where the organization's logo is served, when it has one: a
+            path on this registry, versioned by the logo's content so a
+            replaced logo has a new URL. Absent when there is none.
         createdAt:
           type: string
           format: date-time
@@ -5031,6 +5115,13 @@ components:
         quarantineState:
           type: string
           enum: [none, quarantined, blocked]
+        logoUrl:
+          type: string
+          description: >
+            The publishing organization's logo, when the namespace is an
+            organization with one — beside the publisher's name, never in
+            place of the verdict. Absent for a person's namespace and for
+            an organization without one.
 
     Problem:
       type: object

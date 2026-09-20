@@ -41,6 +41,10 @@ const (
 	ActionOrgInviteRevoke  Action = "org.invite_revoke"
 	ActionOrgInviteAccept  Action = "org.invite_accept"
 	ActionOrgMemberDecline Action = "org.member_decline"
+	// The logo set or removed (agentry#367); the detail carries the object
+	// key served, never the bytes.
+	ActionOrgLogoSet     Action = "org.logo_set"
+	ActionOrgLogoRemoved Action = "org.logo_removed"
 	// The fold-in (agentry#364): an existing account at the organization's
 	// domain became a pending member, at its sign-in or by the sweep.
 	ActionOrgMemberPending Action = "org.member_pending"
@@ -123,6 +127,7 @@ func init() {
 		ActionOrgCreate, ActionOrgUpdate, ActionOrgMemberSet,
 		ActionOrgMemberRemove, ActionOrgInviteCreate, ActionOrgInviteRevoke,
 		ActionOrgInviteAccept, ActionOrgMemberDecline, ActionOrgMemberPending,
+		ActionOrgLogoSet, ActionOrgLogoRemoved,
 		ActionOrgDecommission, ActionOrgErase, ActionOrgSuspend, ActionOrgReinstate, ActionOrgAccessRequest,
 		ActionTeamCreate, ActionTeamDelete,
 		ActionTeamMemberAdd, ActionTeamMemberRemove,

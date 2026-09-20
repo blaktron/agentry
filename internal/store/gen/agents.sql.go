@@ -634,6 +634,9 @@ func (q *Queries) ListAgentsByTag(ctx context.Context, arg ListAgentsByTagParams
 const searchAgents = `-- name: SearchAgents :many
 SELECT a.id, a.name, a.modes, a.visibility, a.summary, a.quarantine_state,
        a.created_at, h.handle AS namespace,
+       -- The publishing organization's logo key, for the badge beside its
+       -- name on a hit (agentry#367); NULL for a person's namespace.
+       o.logo_object_key,
        coalesce(d.installs, 0)::bigint AS installs,
        ts_rank_cd(a.search_tsv, websearch_to_tsquery('english', $3::text)) AS rank,
        -- §10.4: relevance × log(1+installs_30d) × recency_decay, as one
@@ -746,6 +749,7 @@ type SearchAgentsRow struct {
 	QuarantineState string    `json:"quarantine_state"`
 	CreatedAt       time.Time `json:"created_at"`
 	Namespace       string    `json:"namespace"`
+	LogoObjectKey   *string   `json:"logo_object_key"`
 	Installs        int64     `json:"installs"`
 	Rank            float32   `json:"rank"`
 	Score           float64   `json:"score"`
@@ -784,6 +788,7 @@ func (q *Queries) SearchAgents(ctx context.Context, arg SearchAgentsParams) ([]S
 			&i.QuarantineState,
 			&i.CreatedAt,
 			&i.Namespace,
+			&i.LogoObjectKey,
 			&i.Installs,
 			&i.Rank,
 			&i.Score,
