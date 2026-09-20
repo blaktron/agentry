@@ -104,7 +104,7 @@ config:
     #     -----END PUBLIC KEY-----
     #   notAfter: "2026-12-31T00:00:00Z"
   judge:
-    provider: bedrock # bedrock | anthropic | classifier | none
+    provider: bedrock # bedrock | anthropic | openai | typesafe | classifier | none (typesafe: apiKey required, model a pinned id such as jev-1.13.0)
     model: ""
     region: ""
   telemetry:

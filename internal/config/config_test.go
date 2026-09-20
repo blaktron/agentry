@@ -300,6 +300,25 @@ func TestJudgeEnvConfig(t *testing.T) {
 	if _, err := Load(""); err == nil {
 		t.Error("anthropic judge without apiKey must fail validation")
 	}
+
+	// The typesafe judge (plan judge-jev-provider.md, D7): the key is
+	// required and the model id is pinned — an alias is refused at startup.
+	t.Setenv("AGENTRY_JUDGE_TYPE", "typesafe")
+	t.Setenv("AGENTRY_JUDGE_BASE_URL", "")
+	t.Setenv("AGENTRY_JUDGE_MODEL", "")
+	if _, err := Load(""); err == nil {
+		t.Error("typesafe judge without apiKey must fail validation")
+	}
+	t.Setenv("AGENTRY_JUDGE_API_KEY", "apikey_test")
+	if cfg, err := Load(""); err != nil || cfg.Judge.Provider != "typesafe" {
+		t.Errorf("typesafe judge with a key and no model must load (the provider pins the default): %v", err)
+	}
+	t.Setenv("AGENTRY_JUDGE_MODEL", "jev-1.13.0")
+	if cfg, err := Load(""); err != nil || cfg.Judge.Model != "jev-1.13.0" {
+		t.Errorf("a pinned typesafe model id must load: %v", err)
+	}
+	// An alias loads here and is refused by the judge factory at startup
+	// (scan.PinnedJudgeModel): one rule, where the provider is.
 }
 
 // The five social providers all wire from env: id/secret everywhere, plus

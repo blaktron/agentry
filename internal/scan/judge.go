@@ -47,6 +47,11 @@ type JudgeVerdict struct {
 	// Manipulated is set when the provider detected instruction-following
 	// symptoms in its own output (§8.4.3) — always routes to review.
 	Manipulated bool `json:"manipulated"`
+	// Samples are every probability a provider drew per axis for the chunk
+	// that set the axis's score, when it samples more than once (the
+	// typesafe provider's borderline band); they go on the finding's detail
+	// as evidence for an appeal.
+	Samples map[JudgeCategory][]float64 `json:"samples,omitempty"`
 	// Model and PromptHash record reproducibility (§8.4.4).
 	Model      string `json:"model"`
 	PromptHash string `json:"promptHash"`
@@ -68,7 +73,7 @@ type JudgeUsage struct {
 
 // JudgeProvider is the D-13 provider interface.
 type JudgeProvider interface {
-	// Name identifies the provider (bedrock|anthropic|classifier|none|static).
+	// Name identifies the provider (openai|anthropic|bedrock|typesafe|classifier|none|static).
 	Name() string
 	// Judge adjudicates the presented content (manifest + prose files).
 	Judge(ctx context.Context, content JudgeContent) (JudgeVerdict, error)
@@ -85,6 +90,29 @@ type JudgeProvider interface {
 	// produced one verdict (the static heuristics' version, say) and is
 	// evidence on the finding, not the record on the run.
 	ModelID() string
+}
+
+// scoreFromProbability maps a provider's positive-class probability onto the
+// rubric's 0–3 scale: 0.5/0.7/0.9 → 1/2/3, the ladder every probability
+// provider (classifier, typesafe) shares and names in its hash.
+func scoreFromProbability(p float64) int {
+	switch {
+	case p >= 0.9:
+		return 3
+	case p >= 0.7:
+		return 2
+	case p >= 0.5:
+		return 1
+	}
+	return 0
+}
+
+// excerptLine bounds one cited line for a finding's excerpt.
+func excerptLine(line string) string {
+	if len(line) > 120 {
+		return line[:120] + "…"
+	}
+	return line
 }
 
 // judgeModelOf is the value a scan run, its report and its attestation
@@ -259,7 +287,7 @@ func (u UnconfiguredProvider) Judge(_ context.Context, _ JudgeContent) (JudgeVer
 // JudgeConfig is everything NewJudgeProvider needs from the deployment
 // config (internal/config.Judge, projected by the API layer).
 type JudgeConfig struct {
-	Provider string // openai | anthropic | bedrock | classifier | static | none
+	Provider string // openai | anthropic | bedrock | typesafe | classifier | static | none
 	Model    string
 	BaseURL  string
 	APIKey   string
@@ -292,6 +320,14 @@ func BuildJudgeProvider(ctx context.Context, cfg JudgeConfig) (JudgeProvider, er
 		return NewHTTPJudge(cfg), nil
 	case "bedrock":
 		return NewBedrockJudge(ctx, cfg)
+	case "typesafe":
+		if strings.TrimSpace(cfg.APIKey) == "" {
+			return nil, errors.New("scan: typesafe judge needs an api key (AGENTRY_JUDGE_API_KEY)")
+		}
+		if m := strings.TrimSpace(cfg.Model); m != "" && !PinnedJudgeModel(m) {
+			return nil, fmt.Errorf("scan: typesafe judge model %q is not a pinned version id; use one such as %s", m, typesafeDefaultModel)
+		}
+		return NewTypeSafeJudge(cfg), nil
 	case "classifier":
 		if strings.TrimSpace(cfg.BaseURL) == "" {
 			return nil, errors.New("scan: classifier judge needs a base url (AGENTRY_JUDGE_BASE_URL)")
@@ -578,9 +614,12 @@ func (S5Judge) Run(sc stageContext, in *Input) StageResult {
 	if sc.judge == nil {
 		return StageResult{Scanner: "S5", Err: errors.New("scan: no judge provider")}
 	}
+	// Every text file S1 inventoried reaches the judge — prose, manifests
+	// and the scripts S6 reads — so an instruction hidden in a shell file is
+	// adjudicated like one in SKILL.md (plan judge-jev-provider.md D2).
 	files := make([]JudgeFile, 0, len(in.Files))
 	for _, f := range in.Files {
-		if f.IsText && f.Content != nil && isProse(f.Path) {
+		if f.IsText && f.Content != nil {
 			files = append(files, JudgeFile{Path: f.Path, Content: string(f.Content)})
 		}
 	}
@@ -611,11 +650,15 @@ func (S5Judge) Run(sc stageContext, in *Input) StageResult {
 		if s >= 3 {
 			sev = SevHigh
 		}
+		detail := map[string]any{"category": string(cat), "score": s, "model": verdict.Model}
+		if samples := verdict.Samples[cat]; len(samples) > 1 {
+			detail["samples"] = samples
+		}
 		findings = append(findings, Finding{
 			Scanner: "S5/" + string(cat), Severity: sev, Confidence: ConfMedium,
 			Title:    "Judge: " + catTitle[cat],
 			Excerpt:  verdict.Excerpts[cat],
-			Detail:   map[string]any{"category": string(cat), "score": s, "model": verdict.Model},
+			Detail:   detail,
 			Taxonomy: []string{"LLM01", "ASI06"},
 		})
 	}
@@ -628,21 +671,4 @@ func (S5Judge) Run(sc stageContext, in *Input) StageResult {
 		})
 	}
 	return StageResult{Scanner: "S5", Findings: findings, PromptHash: promptHash, JudgeUsage: verdict.Usage}
-}
-
-func isProse(path string) bool {
-	switch strings.ToLower(pathExt(path)) {
-	case ".md", ".markdown", ".txt", ".text", ".yaml", ".yml", ".json", "":
-		return true
-	}
-	return false
-}
-
-func pathExt(p string) string {
-	for i := len(p) - 1; i >= 0 && p[i] != '/'; i-- {
-		if p[i] == '.' {
-			return p[i:]
-		}
-	}
-	return ""
 }
