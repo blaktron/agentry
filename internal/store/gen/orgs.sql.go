@@ -74,13 +74,13 @@ func (q *Queries) AddTeamMember(ctx context.Context, arg AddTeamMemberParams) er
 
 const clearOrgLogo = `-- name: ClearOrgLogo :one
 WITH old AS (SELECT logo_object_key FROM orgs WHERE id = $1 AND logo_object_key IS NOT NULL FOR UPDATE)
-UPDATE orgs SET logo_object_key = NULL FROM old WHERE orgs.id = $1
+UPDATE orgs SET logo_object_key = NULL, updated_at = now() FROM old WHERE orgs.id = $1
 RETURNING old.logo_object_key AS previous_key
 `
 
 // Removes the organization's logo and returns the key that was served,
-// for the caller to delete the object (agentry#367). No row when there
-// was no logo.
+// for the caller to delete the object (agentry#367); the same one-statement
+// shape as SetOrgLogo. No row when there was no logo.
 func (q *Queries) ClearOrgLogo(ctx context.Context, id uuid.UUID) (*string, error) {
 	row := q.db.QueryRow(ctx, clearOrgLogo, id)
 	var previous_key *string
@@ -1345,7 +1345,7 @@ func (q *Queries) RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberPara
 
 const setOrgLogo = `-- name: SetOrgLogo :one
 WITH old AS (SELECT logo_object_key FROM orgs WHERE id = $1 FOR UPDATE)
-UPDATE orgs SET logo_object_key = $2 FROM old WHERE orgs.id = $1
+UPDATE orgs SET logo_object_key = $2, updated_at = now() FROM old WHERE orgs.id = $1
 RETURNING old.logo_object_key AS previous_key
 `
 
@@ -1355,9 +1355,11 @@ type SetOrgLogoParams struct {
 }
 
 // Records the logo now served for the organization and returns the key
-// it replaces (NULL for none), read under the row lock before the write,
-// so the caller can remove the old object once the row points at the new
-// one (agentry#367).
+// it replaces (NULL for none), so the caller can remove the old object
+// once the row points at the new one (agentry#367). The previous value
+// is read under the row lock in the same statement — a departure from
+// this file's LockOrg-then-write shape, taken so the swap and what it
+// replaced are one round trip and cannot disagree.
 func (q *Queries) SetOrgLogo(ctx context.Context, arg SetOrgLogoParams) (*string, error) {
 	row := q.db.QueryRow(ctx, setOrgLogo, arg.ID, arg.LogoObjectKey)
 	var previous_key *string

@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"image"
 	"image/color"
+	"image/gif"
 	"image/jpeg"
 	"image/png"
 	"io"
@@ -49,6 +50,17 @@ func tinyJPEG(t *testing.T) []byte {
 
 const tinySVG = `<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`
 
+// tinyGIF is a raster the proxy serves and a logo does not.
+func tinyGIF(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewPaletted(image.Rect(0, 0, 1, 1), color.Palette{color.Black, color.White})
+	var b bytes.Buffer
+	if err := gif.Encode(&b, img, nil); err != nil {
+		t.Fatal(err)
+	}
+	return b.Bytes()
+}
+
 // putLogo uploads bytes as the one multipart part and returns the status
 // and the body.
 func putLogo(t *testing.T, env *testEnv, who caller, org string, body []byte, filename string) (int, string) {
@@ -60,12 +72,7 @@ func putLogo(t *testing.T, env *testEnv, who caller, org string, body []byte, fi
 	_ = mw.Close()
 	req, _ := http.NewRequest(http.MethodPut, env.srv.URL+"/api/v1/orgs/"+org+"/logo", &buf)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
-	if who.pat != "" {
-		req.Header.Set("Authorization", "Bearer "+who.pat)
-	} else if who.session != "" {
-		req.AddCookie(&http.Cookie{Name: "agentry_session", Value: who.session})
-		req.Header.Set("X-Agentry-CSRF", who.csrf)
-	}
+	env.authenticate(req, who)
 	res, err := env.srv.Client().Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -127,7 +134,8 @@ func TestOrgLogoIsReencodedStoredAndServed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("served logo does not decode as PNG: %v", err)
 	}
-	if c := img.At(1, 2); !colorClose(c, color.NRGBA{R: 200, G: 30, B: 40, A: 255}) {
+	// PNG is lossless and an opaque NRGBA pixel round-trips exactly.
+	if c := color.NRGBAModel.Convert(img.At(1, 2)); c != (color.NRGBA{R: 200, G: 30, B: 40, A: 255}) {
 		t.Fatalf("the pixels changed: %v", c)
 	}
 	for k, want := range map[string]string{
@@ -140,16 +148,36 @@ func TestOrgLogoIsReencodedStoredAndServed(t *testing.T) {
 			t.Errorf("%s = %q, want %q", k, got, want)
 		}
 	}
-	if cc := res.Header.Get("Cache-Control"); !strings.Contains(cc, "immutable") || !strings.Contains(cc, "max-age=31536000") {
-		t.Errorf("Cache-Control = %q, want a year, immutable", cc)
+	// The bare path is answered but not kept: nothing enforces that a
+	// link carried the version, and a browser holding the bare path as
+	// immutable would show a replaced logo for a year.
+	if cc := res.Header.Get("Cache-Control"); cc != "no-cache" {
+		t.Errorf("bare path Cache-Control = %q, want no-cache", cc)
 	}
 
-	// The resource and a search hit carry the URL, versioned by content.
+	// The resource carries the URL, versioned by content, and that URL —
+	// and only that URL — is served as immutable for a year.
 	env.doJSON(anonymous, http.MethodGet, "/api/v1/orgs/"+orgH, nil, &o, http.StatusOK)
 	if o.LogoUrl == nil || !strings.HasPrefix(*o.LogoUrl, "/api/v1/orgs/"+orgH+"/logo?v=") {
 		t.Fatalf("resource logoUrl = %v", o.LogoUrl)
 	}
 	first := *o.LogoUrl
+	vres, err := env.srv.Client().Get(env.srv.URL + first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = vres.Body.Close()
+	if cc := vres.Header.Get("Cache-Control"); !strings.Contains(cc, "immutable") || !strings.Contains(cc, "max-age=31536000") {
+		t.Errorf("versioned URL Cache-Control = %q, want a year, immutable", cc)
+	}
+	sres, err := env.srv.Client().Get(env.srv.URL + "/api/v1/orgs/" + orgH + "/logo?v=notthisone")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = sres.Body.Close()
+	if cc := sres.Header.Get("Cache-Control"); cc != "no-cache" {
+		t.Errorf("a stale version's Cache-Control = %q, want no-cache", cc)
+	}
 
 	// Replace with a JPEG: a new URL, the old object gone, JPEG served.
 	code, _ = putLogo(t, env, admin, orgH, tinyJPEG(t), "photo.jpg")
@@ -190,15 +218,6 @@ func TestOrgLogoIsReencodedStoredAndServed(t *testing.T) {
 	}
 }
 
-func colorClose(a color.Color, want color.NRGBA) bool {
-	r, g, b, _ := a.RGBA()
-	near := func(x uint32, y uint8) bool {
-		d := int(x>>8) - int(y)
-		return d >= -2 && d <= 2
-	}
-	return near(r, want.R) && near(g, want.G) && near(b, want.B)
-}
-
 func TestOrgLogoRefusesWhatItCannotMakeSafe(t *testing.T) {
 	env := newTestEnv(t)
 	adminH := env.register("lgr-admin")
@@ -215,7 +234,7 @@ func TestOrgLogoRefusesWhatItCannotMakeSafe(t *testing.T) {
 		}
 	}
 	// A GIF is a raster the proxy serves and a logo does not: 415.
-	if code, _ := putLogo(t, env, admin, orgH, gifBytes(), "logo.gif"); code != http.StatusUnsupportedMediaType {
+	if code, _ := putLogo(t, env, admin, orgH, tinyGIF(t), "logo.gif"); code != http.StatusUnsupportedMediaType {
 		t.Fatalf("GIF: %d", code)
 	}
 	if res, _ := getLogo(t, env, orgH); res.StatusCode != http.StatusNotFound {
@@ -224,7 +243,7 @@ func TestOrgLogoRefusesWhatItCannotMakeSafe(t *testing.T) {
 
 	// Over the size cap: 413 before a byte is decoded.
 	big := append(tinyPNG(t), bytes.Repeat([]byte{0}, 300<<10)...)
-	if code, body := putLogo(t, env, admin, orgH, big, "big.png"); code != http.StatusRequestEntityTooLarge {
+	if code, body := putLogo(t, env, admin, orgH, big, "big.png"); code != http.StatusRequestEntityTooLarge || !strings.Contains(body, "upload-too-large") {
 		t.Fatalf("300 KB: %d %s", code, body)
 	}
 
@@ -243,11 +262,6 @@ func TestOrgLogoRefusesWhatItCannotMakeSafe(t *testing.T) {
 	if code, _ := putLogo(t, env, anonymous, orgH, tinyPNG(t), "logo.png"); code != http.StatusUnauthorized {
 		t.Fatalf("anonymous set the logo: %d", code)
 	}
-}
-
-// gifBytes is the smallest valid GIF.
-func gifBytes() []byte {
-	return []byte("GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff\x21\xf9\x04\x01\x00\x00\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b")
 }
 
 // The tier decides: without branding the upload is refused with the
@@ -283,7 +297,7 @@ func TestOrgLogoIsGatedOnTheTier(t *testing.T) {
 
 	// An unknown entitlement refuses the upload, as every gate does.
 	env.setEntitlements(brokenTierResolver())
-	if code, _ := putLogo(t, env, admin, orgH, tinyPNG(t), "logo.png"); code < 400 {
-		t.Fatalf("an unknown entitlement admitted an upload: %d", code)
+	if code, _ := putLogo(t, env, admin, orgH, tinyPNG(t), "logo.png"); code != http.StatusInternalServerError {
+		t.Fatalf("an unknown entitlement: %d, want the 500 every unknown entitlement answers", code)
 	}
 }
