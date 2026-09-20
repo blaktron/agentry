@@ -1630,7 +1630,7 @@ type InvitationOffer struct {
 	Role OrgRole `json:"role"`
 }
 
-// JudgeUsage The token use the LLM judge's provider reported for this scan run — what the review cost, as measured. Present for platform staff only, and absent when the provider reported none (the static and classifier judges, an endpoint without a usage block); absent means unknown, not zero. Not part of the signed report.
+// JudgeUsage The token use the AI Review model's provider reported for this scan run — what the review cost, as measured. Present for platform staff only, and absent when the provider reported none (the static and classifier judges, an endpoint without a usage block); absent means unknown, not zero. Not part of the signed report.
 type JudgeUsage struct {
 	CompletionTokens int `json:"completionTokens"`
 	PromptTokens     int `json:"promptTokens"`
@@ -2001,10 +2001,10 @@ type ScanReport struct {
 	// FinishedAt When this scan run completed: the date the report describes.
 	FinishedAt *time.Time `json:"finishedAt,omitempty"`
 
-	// JudgeModel The judge that adjudicated this run, as the attestation records it: the model id when the provider has one (openai, anthropic, bedrock), else the provider's name (static, none, classifier). Recorded per run for reproducibility beside the rubric hash.
+	// JudgeModel The judge that adjudicated this run — the AI Review model — as the attestation records it: the model id when the provider has one (typesafe, openai, anthropic, bedrock), else the provider's name (static, none, classifier). Recorded per run for reproducibility beside the rubric hash.
 	JudgeModel *string `json:"judgeModel,omitempty"`
 
-	// JudgeUsage The token use the LLM judge's provider reported for this scan run — what the review cost, as measured. Present for platform staff only, and absent when the provider reported none (the static and classifier judges, an endpoint without a usage block); absent means unknown, not zero. Not part of the signed report.
+	// JudgeUsage The token use the AI Review model's provider reported for this scan run — what the review cost, as measured. Present for platform staff only, and absent when the provider reported none (the static and classifier judges, an endpoint without a usage block); absent means unknown, not zero. Not part of the signed report.
 	JudgeUsage     *JudgeUsage         `json:"judgeUsage,omitempty"`
 	ReportDigest   *string             `json:"reportDigest,omitempty"`
 	RulesetVersion *string             `json:"rulesetVersion,omitempty"`
