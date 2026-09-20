@@ -218,6 +218,60 @@ func TestOrgLogoIsReencodedStoredAndServed(t *testing.T) {
 	}
 }
 
+// A search hit for an organization's agent carries the organization's
+// logo, versioned as the resource carries it; a person's namespace and an
+// organization without one carry nothing.
+func TestSearchHitCarriesTheOrganizationsLogo(t *testing.T) {
+	env := newTestEnv(t)
+	adminH := env.register("lgs-admin")
+	env.verifyEmail(adminH)
+	admin := env.login(adminH)
+	orgH := "lgsorg" + env.sfx
+	env.createOrg(admin, orgH)
+	// Search lists published agents only, so each goes through the
+	// pipeline; the term is the name, which is unique to this test.
+	name := "logo-hit-" + env.sfx
+	env.publishSearchable(t, admin, orgH, name, "an agent with a logo beside it", "# "+name)
+	env.publishSearchable(t, admin, adminH, name, "an agent with no logo beside it", "# "+name)
+
+	type hit struct {
+		Namespace string  `json:"namespace"`
+		LogoUrl   *string `json:"logoUrl"`
+	}
+	find := func(ns string) *hit {
+		t.Helper()
+		var out struct {
+			Results []hit `json:"results"`
+		}
+		env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+name+"&limit=100", nil, &out, http.StatusOK)
+		for i := range out.Results {
+			if out.Results[i].Namespace == ns {
+				return &out.Results[i]
+			}
+		}
+		t.Fatalf("no hit in %s for %q: %+v", ns, name, out.Results)
+		return nil
+	}
+
+	if h := find(orgH); h.LogoUrl != nil {
+		t.Fatalf("an organization without a logo carries one on a hit: %q", *h.LogoUrl)
+	}
+	if code, _ := putLogo(t, env, admin, orgH, tinyPNG(t), "logo.png"); code != http.StatusOK {
+		t.Fatalf("upload: %d", code)
+	}
+	var o struct {
+		LogoUrl *string `json:"logoUrl"`
+	}
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/orgs/"+orgH, nil, &o, http.StatusOK)
+	h := find(orgH)
+	if h.LogoUrl == nil || o.LogoUrl == nil || *h.LogoUrl != *o.LogoUrl {
+		t.Fatalf("the hit's logoUrl = %v, the resource's = %v; want the same versioned URL", h.LogoUrl, o.LogoUrl)
+	}
+	if h := find(adminH); h.LogoUrl != nil {
+		t.Fatalf("a person's namespace carries a logo on a hit: %q", *h.LogoUrl)
+	}
+}
+
 func TestOrgLogoRefusesWhatItCannotMakeSafe(t *testing.T) {
 	env := newTestEnv(t)
 	adminH := env.register("lgr-admin")
