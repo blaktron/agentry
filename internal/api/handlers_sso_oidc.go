@@ -27,13 +27,16 @@ type oidcState struct {
 	Next string `json:"x,omitempty"`
 }
 
-// oidcContext wraps the request context with the configured OIDC HTTP client
-// (tests point discovery/JWKS/token at an in-process IdP).
+// oidcContext wraps the request context with the HTTP client every OIDC
+// request (discovery, JWKS, the code exchange) goes through: the injected
+// one when a test points at an in-process IdP, otherwise the guarded egress
+// client. Never the bare context — go-oidc would then use
+// http.DefaultClient, which follows redirects and refuses nothing.
 func (s *Server) oidcContext(ctx context.Context) context.Context {
 	if s.oidcHTTPClient != nil {
 		return coreoidc.ClientContext(ctx, s.oidcHTTPClient)
 	}
-	return ctx
+	return coreoidc.ClientContext(ctx, s.oidcEgress)
 }
 
 // OidcStart implements GET /orgs/{org}/sso/oidc/start (§12.4): auth-code + PKCE.
