@@ -14,14 +14,6 @@ import (
 
 const oidcStateCookie = "agentry_oidc_state"
 
-// derefOr reads an optional query parameter as a plain string.
-func derefOr(p *string) string {
-	if p == nil {
-		return ""
-	}
-	return *p
-}
-
 // oidcState is sealed into a short-lived cookie between start and callback.
 type oidcState struct {
 	State    string `json:"s"`
@@ -71,9 +63,12 @@ func (s *Server) OidcStart(w http.ResponseWriter, r *http.Request, org OrgHandle
 	nonce, _ := auth.NewToken("")
 	verifier := oauth2.GenerateVerifier()
 
+	next := ""
+	if params.Next != nil {
+		next = safeNextPath(*params.Next)
+	}
 	blob, err := json.Marshal(oidcState{
-		State: state, Nonce: nonce, Verifier: verifier, Org: orgRow.Handle,
-		Next: safeNextPath(derefOr(params.Next)),
+		State: state, Nonce: nonce, Verifier: verifier, Org: orgRow.Handle, Next: next,
 	})
 	if err != nil {
 		problemInternal(w, r)
@@ -134,13 +129,7 @@ func (s *Server) OidcCallback(w http.ResponseWriter, r *http.Request, org OrgHan
 	// failure can land on the login page rather than on a problem document
 	// the person cannot read. next was validated by safeNextPath before it
 	// was sealed.
-	browserFail := func(msg string) bool {
-		if st.Next == "" {
-			return false
-		}
-		http.Redirect(w, r, s.paths.login(msg), http.StatusSeeOther)
-		return true
-	}
+	browserFail := func(msg string) bool { return s.browserFail(w, r, st.Next, msg) }
 	if params.State == nil || *params.State != st.State || st.Org != orgRow.Handle {
 		const msg = "The OIDC state does not match this sign-in. Start again."
 		if browserFail(msg) {

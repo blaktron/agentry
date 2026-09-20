@@ -284,8 +284,8 @@ func (s *Server) enforceSSO(ctx context.Context, p *auth.Principal, orgID uuid.U
 	// that fails that way round: everywhere else "unknown" refuses an act,
 	// but here refusing means *not* applying the organization's own
 	// sign-in policy, and an entitlement outage must never be what lets
-	// someone past it (DEV-118).
-	if f, err := s.identityFeatures(ctx, orgID); err == nil && !f.SSO {
+	// someone past it (DEV-114).
+	if f, err := s.orgFeatures(ctx, orgID); err == nil && !f.SSO {
 		return true
 	}
 	return p.SSOSatisfied(orgID, s.cfg.Auth.SSOMaxAge)

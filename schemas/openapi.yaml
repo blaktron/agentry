@@ -2437,6 +2437,11 @@ paths:
   /orgs/{org}/sso/connections/{kind}:
     put:
       operationId: putSsoConnection
+      description: >
+        403 `feature-not-included` while the organization's subscription
+        does not include single sign-on. An existing connection is left
+        alone by a subscription change and works again the moment the
+        subscription includes SSO.
       tags: [sso]
       summary: Create or update a SAML/OIDC connection (admin, §12.4).
       parameters:
@@ -2656,6 +2661,11 @@ paths:
           $ref: "#/components/responses/Problem"
     post:
       operationId: createScimToken
+      description: >
+        403 `feature-not-included` while the organization's subscription
+        does not include directory provisioning. Tokens already issued are
+        left alone by a subscription change and provision again the moment
+        it includes SCIM.
       tags: [scim]
       summary: Mint a SCIM bearer token (admin, §12.5).
       parameters:

@@ -86,6 +86,15 @@ func safeNextPath(v string) string {
 	if len(v) > 1 && (v[1] == '/' || v[1] == '\\') {
 		return ""
 	}
+	// A bound, because this value is carried through the round trip: the
+	// org OIDC flow seals it into a state cookie, and a long enough path
+	// pushes that cookie past what a browser will store, so it is dropped
+	// and the callback fails on a missing state. A link alone would then
+	// deny someone their organization's sign-in (agentry#365). No real
+	// return path is anywhere near this long.
+	if len(v) > maxNextPathBytes {
+		return ""
+	}
 	for _, c := range v {
 		if c < 0x20 || c == 0x7f {
 			return ""
@@ -93,6 +102,11 @@ func safeNextPath(v string) string {
 	}
 	return v
 }
+
+// maxNextPathBytes bounds a return path. The sealed OIDC state also holds
+// the state, nonce, verifier and org handle, and browsers cap a cookie
+// near 4 KB.
+const maxNextPathBytes = 512
 
 // totpChallengeBlob is the sealed payload behind a pending 2FA challenge. It
 // names the user and expires; possessing it is not authentication, which is
