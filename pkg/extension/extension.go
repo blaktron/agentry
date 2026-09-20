@@ -197,7 +197,48 @@ type Deps struct {
 	// Agents is the core's read of an agent as an extension may ask it
 	// (agentry#381). nil when the server runs without a database.
 	Agents Agents
+	// Notifier carries a message an extension composed to a person, under
+	// the core's rules and through the core's transport (agentry#366).
+	// nil when the server runs without a database, as DB is.
+	Notifier Notifier
 }
+
+// Notifier lets an extension tell a person something by mail without
+// owning a transport, an address book or the rule about who may be
+// written to. The core keeps all three (plan organization-subscriptions
+// §5.8, D17): the address must be verified — nothing is ever sent to an
+// unverified one, DEV-099's rule — and the person's preference for the
+// message's kind must be on. An extension composes the words; the core
+// decides whether they go and frames them with the registry's name and
+// the settings link. The closed product's copy therefore stays out of the
+// open repository, and the open repository's rule about addresses cannot
+// be bypassed by an extension that holds one.
+type Notifier interface {
+	// Send delivers subject and text to the person, if the core's rules
+	// allow it. It reports whether the message went: false with no error
+	// is a suppression — an unverified address, or the kind switched off
+	// — which is not the extension's failure and not a state it must
+	// react to. An error is a delivery failure the extension may retry.
+	// A kind the core does not know is refused: an extension may not
+	// send as a class it was not given.
+	Send(ctx context.Context, userID uuid.UUID, kind NotifyKind, subject, text string) (bool, error)
+	// OrgAdmins names the active administrators of an organization, so
+	// a message about the organization's subscription reaches the people
+	// who manage it. Pending administrators are not among them: they hold
+	// nothing of the organization yet.
+	OrgAdmins(ctx context.Context, orgID uuid.UUID) ([]uuid.UUID, error)
+}
+
+// NotifyKind names the class a message is sent as, which is the switch a
+// person turns off. Only the kinds the core lists here may be used: the
+// extension's mail is billing, and a message about billing is what the
+// person's billing switch governs.
+type NotifyKind string
+
+// NotifyBilling is the closed build's billing mail (plan §5.8): a
+// checkout confirmed, a payment failed, an organization restricted, seats
+// reached, "your organization covers you".
+const NotifyBilling NotifyKind = "billing"
 
 // Agents answers whether a principal may read an agent the way the core's
 // own routes decide it — the effective role over the namespace and the

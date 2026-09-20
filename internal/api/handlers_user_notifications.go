@@ -47,6 +47,21 @@ func (s *Server) UpdateUserNotificationSettings(w http.ResponseWriter, r *http.R
 		return
 	}
 	p := principalFrom(r.Context())
+	// The billing switch is the one a client may omit (agentry#366): the
+	// site and the apps predate it, and a full replace that read an absent
+	// field as false would switch billing mail off for everyone who saved
+	// any other setting — the hazard agentry#344 names. Omitted keeps what
+	// the row has; a row that does not exist yet has the default.
+	current, err := notify.Settings(r.Context(), s.q(), p.UserID)
+	if err != nil {
+		s.log.ErrorContext(r.Context(), "notification settings: read", "user", p.UserID, "err", err)
+		problemInternal(w, r)
+		return
+	}
+	billing := current.EmailBilling
+	if req.Email.Billing != nil {
+		billing = *req.Email.Billing
+	}
 	row, err := s.q().UpsertUserNotificationSettings(r.Context(), storegen.UpsertUserNotificationSettingsParams{
 		UserID:                p.UserID,
 		EmailDependencyAlerts: req.Email.DependencyAlerts,
@@ -54,6 +69,7 @@ func (s *Server) UpdateUserNotificationSettings(w http.ResponseWriter, r *http.R
 		EmailReviewDecisions:  req.Email.ReviewDecisions,
 		EmailAdvisories:       req.Email.Advisories,
 		EmailOrgInvites:       req.Email.OrgInvites,
+		EmailBilling:          billing,
 		WebDependencyAlerts:   req.Web.DependencyAlerts,
 	})
 	if err != nil {
@@ -69,6 +85,7 @@ func notificationSettingsToAPI(row storegen.UserNotificationSetting) Notificatio
 		Email: EmailNotificationSettings{
 			DependencyAlerts: row.EmailDependencyAlerts, Quarantine: row.EmailQuarantine,
 			ReviewDecisions: row.EmailReviewDecisions, Advisories: row.EmailAdvisories, OrgInvites: row.EmailOrgInvites,
+			Billing: &row.EmailBilling,
 		},
 		Web: WebNotificationSettings{DependencyAlerts: row.WebDependencyAlerts},
 	}

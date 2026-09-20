@@ -4500,6 +4500,15 @@ components:
         orgInvites:
           type: boolean
           description: The person was added to an organization.
+        billing:
+          type: boolean
+          description: >
+            The subscription that pays for the person's work: a checkout
+            confirmed, a payment failed, an organization restricted, seats
+            reached, "your organization covers you" (the hosted product's
+            billing mail; a registry with no billing sends none). Not
+            required on a write: a client that predates the switch leaves
+            it as it was rather than turning it off by omission.
     WebNotificationSettings:
       type: object
       description: In-app alerts.

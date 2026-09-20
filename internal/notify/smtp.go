@@ -130,6 +130,13 @@ func (n *SMTPNotifier) OrgPendingMembers(ctx context.Context, notice PendingMemb
 	return n.deliver(ctx, notice.ToEmail, n.render.pendingMembers(notice), "org_pending_members")
 }
 
+// Rendered implements Notifier. The subject and the address are checked
+// for header injection in compose like every other message's; the body is
+// text and cannot carry a header.
+func (n *SMTPNotifier) Rendered(ctx context.Context, notice RenderedNotice) error {
+	return n.deliver(ctx, notice.ToEmail, n.render.rendered(notice), string(notice.Kind))
+}
+
 // deliver renders and sends one message.
 func (n *SMTPNotifier) deliver(ctx context.Context, to string, m message, kind string) error {
 	addr, err := mail.ParseAddress(to)
