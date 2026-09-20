@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -32,8 +34,21 @@ func TestGuard_IsAllowedIP(t *testing.T) {
 		{"fe80::1", false},             // link-local v6
 		{"100.64.0.1", false},          // CGNAT
 		{"0.0.0.0", false},             // unspecified
+		{"0.1.2.3", false},             // 0.0.0.0/8: Linux routes the whole /8 to lo
+		{"0.255.255.255", false},       // 0.0.0.0/8, top of the range
+		{"::ffff:0.1.2.3", false},      // v4-mapped 0/8
 		{"224.0.0.1", false},           // multicast
 		{"::ffff:10.0.0.1", false},     // v4-mapped private
+		{"::", false},                  // unspecified v6
+		{"2002:7f00:1::1", false},      // 6to4 embedding 127.0.0.1
+		{"2002:0a00:1::1", false},      // 6to4 embedding 10.0.0.1
+		{"2002:0001:0203::1", false},   // 6to4 embedding 0.1.2.3
+		{"2002:0808:0808::1", true},    // 6to4 embedding 8.8.8.8 stays public
+		{"64:ff9b::a00:1", false},      // NAT64 well-known prefix embedding 10.0.0.1
+		{"64:ff9b::7f00:1", false},     // NAT64 embedding 127.0.0.1
+		{"64:ff9b::808:808", true},     // NAT64 embedding 8.8.8.8 stays public
+		{"64:ff9b:1::a00:1", false},    // NAT64 local-use prefix (RFC 8215) is never public
+		{"::a00:1", false},             // deprecated IPv4-compatible form of 10.0.0.1
 	}
 	for _, c := range cases {
 		ip := netip.MustParseAddr(c.ip)
@@ -63,6 +78,56 @@ func TestGuard_DialBlocksNonPublic(t *testing.T) {
 			t.Errorf("dial %s should be blocked", addr)
 		}
 	}
+}
+
+// TestGuard_DialPinsTheResolvedAddress exercises the resolve-then-check-then-pin
+// half of dialContext against a resolver the test controls: the "DNS rebinding
+// defeated" claim of ARCHITECTURE §9 is that a hostname's answer is checked
+// per candidate and the dial goes to the checked literal, never back through
+// DNS. A public-looking name that resolves to a private address is refused
+// before any connection; padding the answer with one public address does not
+// help; and when every candidate clears, the dial reaches the first one.
+func TestGuard_DialPinsTheResolvedAddress(t *testing.T) {
+	answers := map[string][]netip.Addr{
+		"private.example":   {netip.MustParseAddr("10.0.0.1")},
+		"padded.example":    {netip.MustParseAddr("8.8.8.8"), netip.MustParseAddr("169.254.169.254")},
+		"zeronet.example":   {netip.MustParseAddr("0.1.2.3")},
+		"sixtofour.example": {netip.MustParseAddr("2002:7f00:1::1")},
+	}
+	g := Guard{LookupNetIP: func(_ context.Context, host string) ([]netip.Addr, error) {
+		if a, ok := answers[host]; ok {
+			return a, nil
+		}
+		t.Fatalf("unexpected lookup %q", host)
+		return nil, nil
+	}}
+	for host := range answers {
+		_, err := g.dialContext(context.Background(), "tcp", host+":443")
+		var blocked *ErrBlockedAddress
+		if !errors.As(err, &blocked) {
+			t.Errorf("dial %s: err = %v, want ErrBlockedAddress", host, err)
+			continue
+		}
+		if blocked.Host != host {
+			t.Errorf("dial %s: blocked host = %q", host, blocked.Host)
+		}
+	}
+
+	// Every candidate public: the dial goes to the first checked literal. A
+	// loopback httptest listener stands in for it through the test seam, and
+	// the resolver answers a name the listener never registered — proof the
+	// connect used the literal, not a second lookup.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	defer ts.Close()
+	lis := netip.MustParseAddrPort(ts.Listener.Addr().String())
+	pinned := Guard{AllowLoopback: true, LookupNetIP: func(context.Context, string) ([]netip.Addr, error) {
+		return []netip.Addr{lis.Addr()}, nil
+	}}
+	conn, err := pinned.dialContext(context.Background(), "tcp", fmt.Sprintf("pinned.example:%d", lis.Port()))
+	if err != nil {
+		t.Fatalf("dial through the pinned literal: %v", err)
+	}
+	_ = conn.Close()
 }
 
 func TestClient_NoRedirectFollowing(t *testing.T) {
