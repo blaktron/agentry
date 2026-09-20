@@ -15,6 +15,7 @@ package api
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 
 	samlsp "github.com/blaktron/agentry/internal/auth/saml"
@@ -55,6 +56,21 @@ func (s *Server) ssoLanding(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// A tier that does not include SSO has no door here either, and this
+	// is the door people paste into an address bar — leaving it open would
+	// hand the browser to an IdP for a sign-in the ACS then refuses
+	// (agentry#365, D11).
+	if !s.ssoIncluded(r.Context(), orgRow.ID) {
+		problemNotFound(w, r)
+		return
+	}
+	// Where the browser was going before it was asked to sign in. This is
+	// the entry point the product links to, so it is the one place that
+	// can put the round trip in browser mode at all: SAML carries it in
+	// RelayState, OIDC in the start's `next`, and both are read back
+	// through safeNextPath at the other end. Empty means API mode, which
+	// is what an IdP-initiated sign-in gets.
+	next := safeNextPath(r.URL.Query().Get("next"))
 
 	// SAML first when both are configured: an org that has stood up a SAML
 	// connection has told its IdP about this SP, and that is the path its
@@ -68,7 +84,15 @@ func (s *Server) ssoLanding(w http.ResponseWriter, r *http.Request) {
 			problemValidation(w, r, "This organization's SAML connection is not usable. Ask an admin to check it.")
 			return
 		}
-		redirect, err := sp.AuthnRequest(orgRow.Handle)
+		// RelayState carried the org handle, which the ACS never read: it
+		// takes the organization from its own path. A same-origin path
+		// goes there instead when there is one, and the handle stays the
+		// default so an IdP-initiated sign-in looks exactly as it did.
+		relay := orgRow.Handle
+		if next != "" {
+			relay = next
+		}
+		redirect, err := sp.AuthnRequest(relay)
 		if err != nil {
 			s.log.WarnContext(r.Context(), "sso landing: authn request", "org", org, "err", err)
 			problemValidation(w, r, "The registry could not start SAML login for this organization. Ask an admin to check the connection.")
@@ -81,7 +105,11 @@ func (s *Server) ssoLanding(w http.ResponseWriter, r *http.Request) {
 	if _, err := s.q().GetEnabledSSOConnection(r.Context(), storegen.GetEnabledSSOConnectionParams{
 		OrgID: orgRow.ID, Kind: "oidc",
 	}); err == nil {
-		http.Redirect(w, r, "/api/v1/orgs/"+orgRow.Handle+"/sso/oidc/start", http.StatusFound)
+		start := "/api/v1/orgs/" + orgRow.Handle + "/sso/oidc/start"
+		if next != "" {
+			start += "?next=" + url.QueryEscape(next)
+		}
+		http.Redirect(w, r, start, http.StatusFound)
 		return
 	}
 

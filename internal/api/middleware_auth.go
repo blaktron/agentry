@@ -273,5 +273,20 @@ func (s *Server) enforceSSO(ctx context.Context, p *auth.Principal, orgID uuid.U
 	if !org.SsoRequired {
 		return true
 	}
+	// A tier that does not include SSO cannot enforce it: the organization
+	// would have no door to satisfy the demand through, so every member
+	// would be locked out of the organization's own resources by a
+	// subscription change (D11). The flag stays in the row untouched —
+	// billing never writes it — and enforcement resumes the moment the
+	// subscription includes SSO again.
+	//
+	// An unknown answer keeps enforcing. This is the one entitlement gate
+	// that fails that way round: everywhere else "unknown" refuses an act,
+	// but here refusing means *not* applying the organization's own
+	// sign-in policy, and an entitlement outage must never be what lets
+	// someone past it (DEV-114).
+	if f, err := s.orgFeatures(ctx, orgID); err == nil && !f.SSO {
+		return true
+	}
 	return p.SSOSatisfied(orgID, s.cfg.Auth.SSOMaxAge)
 }
