@@ -246,6 +246,10 @@ services:
       AGENTRY_JUDGE_MODEL: ${AGENTRY_JUDGE_MODEL:-}
       # bedrock needs a region (and AWS credentials on the host/task);
       # classifier needs AGENTRY_JUDGE_BASE_URL = the classify endpoint.
+      # typesafe (TypeSafe AI's Jev, hosted only) needs AGENTRY_JUDGE_API_KEY;
+      # AGENTRY_JUDGE_MODEL is a pinned version id (default jev-1.13.0, an
+      # alias such as jev-latest is refused) and AGENTRY_JUDGE_BASE_URL
+      # defaults to https://api.typesafe.ai.
       AGENTRY_JUDGE_REGION: ${AGENTRY_JUDGE_REGION:-}
       # External scanner tools (§8.3, agentry#40). gitleaks ships in the
       AGENTRY_SCAN_GITLEAKS_BIN: ${AGENTRY_SCAN_GITLEAKS_BIN:-/usr/bin/gitleaks}

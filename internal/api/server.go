@@ -190,6 +190,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		if jerr != nil {
 			panic(jerr)
 		}
+		log.Info("scan: judge configured", "provider", judge.Name(), "model", judge.ModelID())
 		signer, serr := scan.NewSigner(context.Background(), scan.SignerOptions{
 			Kind:      cfg.Signing.Kind,
 			KeyFile:   cfg.Signing.KeyFile,

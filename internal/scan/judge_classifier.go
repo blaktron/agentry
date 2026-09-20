@@ -101,23 +101,12 @@ func (j *ClassifierJudge) Judge(ctx context.Context, content JudgeContent) (Judg
 			}
 			if p > best {
 				best = p
-				bestExcerpt = firstLine(chunk)
-				if len(bestExcerpt) > 120 {
-					bestExcerpt = bestExcerpt[:120] + "…"
-				}
-				bestExcerpt = f.Path + ": " + bestExcerpt
+				bestExcerpt = f.Path + ": " + excerptLine(firstLine(chunk))
 			}
 		}
 	}
-	switch {
-	case best >= 0.9:
-		v.Scores[CatInjection] = 3
-	case best >= 0.7:
-		v.Scores[CatInjection] = 2
-	case best >= 0.5:
-		v.Scores[CatInjection] = 1
-	}
-	if v.Scores[CatInjection] > 0 {
+	if s := scoreFromProbability(best); s > 0 {
+		v.Scores[CatInjection] = s
 		v.Excerpts[CatInjection] = fmt.Sprintf("p=%.2f %s", best, bestExcerpt)
 	}
 	return v, nil
