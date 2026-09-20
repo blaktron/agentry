@@ -4768,10 +4768,11 @@ components:
         judgeModel:
           type: string
           description: >-
-            The judge that adjudicated this run, as the attestation records it:
-            the model id when the provider has one (openai, anthropic, bedrock),
-            else the provider's name (static, none, classifier). Recorded per
-            run for reproducibility beside the rubric hash.
+            The judge that adjudicated this run — the AI Review model — as the
+            attestation records it: the model id when the provider has one
+            (typesafe, openai, anthropic, bedrock), else the provider's name
+            (static, none, classifier). Recorded per run for reproducibility
+            beside the rubric hash.
         judgeUsage:
           $ref: "#/components/schemas/JudgeUsage"
         scanStatus:
@@ -4792,8 +4793,8 @@ components:
     JudgeUsage:
       type: object
       description: >-
-        The token use the LLM judge's provider reported for this scan run —
-        what the review cost, as measured. Present for platform staff only,
+        The token use the AI Review model's provider reported for this scan
+        run — what the review cost, as measured. Present for platform staff only,
         and absent when the provider reported none (the static and
         classifier judges, an endpoint without a usage block); absent means
         unknown, not zero. Not part of the signed report.
