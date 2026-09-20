@@ -31,10 +31,14 @@ RETURNING *;
 -- must exist before stages run (stage results reference it), and S5 only
 -- reports which rubric version it used once it has run (§8.4.4).
 -- The judge's token use is written the same way: known only once S5 ran,
--- NULL when the provider reported none.
+-- NULL when the provider reported none. judge_model is re-stated at finish
+-- with the value the report and the attestation carry, so a row created by
+-- an earlier binary and resumed after an upgrade ends up agreeing with them
+-- (agentry#321).
 -- name: FinishScanRun :exec
 UPDATE scan_runs
 SET status = $2, finished_at = now(), report_digest = $3,
+    judge_model = coalesce(sqlc.narg('judge_model'), judge_model),
     judge_prompt_hash = coalesce(sqlc.narg('judge_prompt_hash'), judge_prompt_hash),
     judge_prompt_tokens = coalesce(sqlc.narg('judge_prompt_tokens'), judge_prompt_tokens),
     judge_completion_tokens = coalesce(sqlc.narg('judge_completion_tokens'), judge_completion_tokens)

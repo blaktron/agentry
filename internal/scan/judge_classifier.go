@@ -60,6 +60,11 @@ func (j *ClassifierJudge) Name() string { return "classifier" }
 // RequiresHumanReview implements JudgeProvider: one axis is not the rubric.
 func (j *ClassifierJudge) RequiresHumanReview() bool { return true }
 
+// ModelID implements JudgeProvider: the classifier's Model is a deployment
+// label ("prompt-guard" by default), not a versioned model id, so the run
+// keeps recording the provider's name (agentry#321).
+func (j *ClassifierJudge) ModelID() string { return "" }
+
 // injectionLabel reports whether a classifier label names the positive
 // class. PromptGuard uses INJECTION/JAILBREAK; others use LABEL_1 with the
 // positive class second, or "unsafe".

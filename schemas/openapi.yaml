@@ -4767,6 +4767,11 @@ components:
           type: string
         judgeModel:
           type: string
+          description: >-
+            The judge that adjudicated this run, as the attestation records it:
+            the model id when the provider has one (openai, anthropic, bedrock),
+            else the provider's name (static, none, classifier). Recorded per
+            run for reproducibility beside the rubric hash.
         judgeUsage:
           $ref: "#/components/schemas/JudgeUsage"
         scanStatus:

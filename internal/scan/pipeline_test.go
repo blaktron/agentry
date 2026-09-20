@@ -7,6 +7,10 @@ package scan_test
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strconv"
 	"testing"
@@ -20,6 +24,7 @@ import (
 	"github.com/blaktron/agentry/internal/scan"
 	"github.com/blaktron/agentry/internal/store"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/pkg/attest"
 	"github.com/blaktron/agentry/pkg/ruleset"
 )
 
@@ -250,4 +255,88 @@ func mustV7(t *testing.T) uuid.UUID {
 
 func suffix() string {
 	return strconv.FormatInt(time.Now().UnixNano()%1_000_000_000, 36)
+}
+
+// TestPipelineRecordsTheJudgesModelID pins agentry#321 through the pipeline:
+// the scan run row and the signed attestation carry the model that
+// adjudicated (the configured id of an HTTP judge), not the provider's name;
+// and under the static judge both keep saying "static", so nothing already
+// signed changes meaning.
+func TestPipelineRecordsTheJudgesModelID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{"message": map[string]any{"content": `{"scores":{},"excerpts":{},"manipulated":false}`}}},
+		})
+	}))
+	defer srv.Close()
+	bundle, err := ruleset.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	benign := func(e *pipeEnv, name string) map[string]string {
+		u, _ := e.st.Queries().GetUserByID(context.Background(), e.owner)
+		return map[string]string{
+			"agent.yaml": skillManifest(u.Handle, name, "1.0.0"),
+			"README.md":  "# benign\nA helpful, well-behaved skill.\n",
+			"SKILL.md":   "Summarize the input politely and cite sources.\n",
+			"LICENSE":    "Apache-2.0\n",
+		}
+	}
+	judgeOf := func(t *testing.T, e *pipeEnv, v storegen.AgentVersion) (run, attested string) {
+		t.Helper()
+		ctx := context.Background()
+		r, err := e.st.Queries().LatestScanRunForVersion(ctx, v.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r.JudgeModel != nil {
+			run = *r.JudgeModel
+		}
+		att, err := e.st.Queries().GetAttestation(ctx, v.ID)
+		if err != nil {
+			t.Fatalf("no attestation: %v", err)
+		}
+		var env attest.DSSEEnvelope
+		if err := json.Unmarshal(att.DsseEnvelope, &env); err != nil {
+			t.Fatal(err)
+		}
+		payload, err := base64.StdEncoding.DecodeString(env.Payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var stmt struct {
+			Predicate attest.PublishPredicate `json:"predicate"`
+		}
+		if err := json.Unmarshal(payload, &stmt); err != nil {
+			t.Fatal(err)
+		}
+		return run, stmt.Predicate.ScanRun.JudgeModel
+	}
+
+	t.Run("http judge: the configured model id", func(t *testing.T) {
+		e := newPipeEnv(t, func(d *scan.PipelineDeps) {
+			d.Orchestrator = scan.NewOrchestrator(bundle,
+				scan.NewHTTPJudge(scan.JudgeConfig{Provider: "openai", BaseURL: srv.URL, APIKey: "k", Model: "qwen-test"}), nil)
+		})
+		v := e.publish("model-id-http", "public", benign(e, "model-id-http"))
+		if v.Status != "published" {
+			t.Fatalf("status = %s, want published", v.Status)
+		}
+		run, attested := judgeOf(t, e, v)
+		if run != "qwen-test" || attested != "qwen-test" {
+			t.Fatalf("run %q, attestation %q, want qwen-test (not the provider name)", run, attested)
+		}
+	})
+	t.Run("static judge: the provider name, unchanged", func(t *testing.T) {
+		e := newPipeEnv(t)
+		v := e.publish("model-id-static", "public", benign(e, "model-id-static"))
+		if v.Status != "published" {
+			t.Fatalf("status = %s, want published", v.Status)
+		}
+		run, attested := judgeOf(t, e, v)
+		if run != "static" || attested != "static" {
+			t.Fatalf("run %q, attestation %q, want static", run, attested)
+		}
+	})
 }
