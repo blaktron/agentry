@@ -94,21 +94,6 @@ func TestNotifierSeamSendsUnderTheCoresRule(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				_ = json.NewEncoder(w).Encode(notifierProbe{Sent: sent})
 			})
-			// GET /admins/{org} → [ids].
-			mux.HandleFunc("GET /admins/{org}", func(w http.ResponseWriter, r *http.Request) {
-				oid, err := uuid.Parse(r.PathValue("org"))
-				if err != nil {
-					w.WriteHeader(http.StatusBadRequest)
-					return
-				}
-				ids, err := s.OrgAdminIDs(r.Context(), oid)
-				if err != nil {
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
-				w.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(w).Encode(ids)
-			})
 		})
 	})
 	staff := env.register("ns-staff")
@@ -220,12 +205,21 @@ func TestNotifierSeamNamesActiveAdminsOnly(t *testing.T) {
 	secondAdminH := env.register("na-second-admin")
 	env.verifyEmail(secondAdminH)
 	env.seedMembership(orgH, secondAdminH, "admin", "active")
+	// A suspended account is not told the organization's business, even
+	// with an active admin membership and a verified address: the same
+	// condition ListOrgAdminsForMail and the last-admin guard carry.
+	suspendedH := env.register("na-suspended-admin")
+	env.verifyEmail(suspendedH)
+	env.seedMembership(orgH, suspendedH, "admin", "active")
+	if _, err := env.st.Pool().Exec(context.Background(), `UPDATE users SET state = 'suspended' WHERE id = $1`, env.userID(suspendedH)); err != nil {
+		t.Fatal(err)
+	}
 
 	var ids []string
 	env.doJSON(admin, http.MethodGet, "/api/v1/x/probe/admins/"+orgID, nil, &ids, http.StatusOK)
 	want := map[string]bool{env.userID(founderH): true, env.userID(secondAdminH): true}
 	if len(ids) != 2 || !want[ids[0]] || !want[ids[1]] {
-		t.Fatalf("admins = %v, want the founder and the second admin only (no member, no pending admin)", ids)
+		t.Fatalf("admins = %v, want the founder and the second admin only (no member, no pending admin, no suspended admin)", ids)
 	}
 
 	// An organization that does not exist is nobody, not an error: the

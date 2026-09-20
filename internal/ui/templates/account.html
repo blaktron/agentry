@@ -44,7 +44,7 @@
   <label class="check"><input type="checkbox" name="email.reviewDecisions" value="true"{{if .Email.ReviewDecisions}} checked{{end}}> a reviewer decides one of my submissions, or the gate holds one for review</label>
   <label class="check"><input type="checkbox" name="email.advisories" value="true"{{if .Email.Advisories}} checked{{end}}> we publish an advisory naming one of my BriefAgents</label>
   <label class="check"><input type="checkbox" name="email.orgInvites" value="true"{{if .Email.OrgInvites}} checked{{end}}> I am added to an organization</label>
-  <label class="check"><input type="checkbox" name="email.billing" value="true"{{if .Email.Billing}} checked{{end}}> the subscription that pays for my work changes: a payment goes through or fails, seats run out, an organization is restricted</label>
+  <label class="check"><input type="checkbox" name="email.billing" value="true"{{if .Email.Billing}} checked{{end}}> the subscription that pays for my work changes — a payment goes through or fails, seats run out, or we restrict an organization</label>
   <p class="muted">In the app</p>
   <label class="check"><input type="checkbox" name="web.dependencyAlerts" value="true"{{if .Web.DependencyAlerts}} checked{{end}}> show the dependency-alert banner on every page while an alert is open</label>
   {{end}}

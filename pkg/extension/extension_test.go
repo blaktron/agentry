@@ -127,6 +127,9 @@ func TestApplyExtensionsBindsAndRegistersActions(t *testing.T) {
 	if ext.deps.Blobs != nil {
 		t.Fatal("a server without a database handed out an object store")
 	}
+	if ext.deps.Notifier != nil {
+		t.Fatal("a server without a database handed out a notifier: the rule about who may be written to reads the user's row")
+	}
 	if !audit.Registered("bound.tier_set") {
 		t.Fatal("the extension's audit action is not in the catalog")
 	}

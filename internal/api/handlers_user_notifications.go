@@ -33,8 +33,13 @@ func (s *Server) GetUserNotificationSettings(w http.ResponseWriter, r *http.Requ
 }
 
 // UpdateUserNotificationSettings implements PUT /user/notifications: a full
-// replace, so a client never has to know which fields exist to keep the
-// others as they were — it sends what it read back, changed.
+// replace of the switches every client knows, sent back as read and
+// changed — with one exception. billing (agentry#366) may be omitted, and
+// an omitted billing keeps the row's value: every client predates it, and
+// reading its absence as false would switch billing mail off for anyone
+// who saved any other setting, the hazard agentry#344 names. The keep is
+// the statement's own (COALESCE in the upsert), so two clients writing at
+// once cannot resurrect a value neither sent.
 func (s *Server) UpdateUserNotificationSettings(w http.ResponseWriter, r *http.Request) {
 	if !s.authorize(w, r, auth.ActUserSelfUpdate, uuid.Nil) {
 		return
@@ -47,21 +52,6 @@ func (s *Server) UpdateUserNotificationSettings(w http.ResponseWriter, r *http.R
 		return
 	}
 	p := principalFrom(r.Context())
-	// The billing switch is the one a client may omit (agentry#366): the
-	// site and the apps predate it, and a full replace that read an absent
-	// field as false would switch billing mail off for everyone who saved
-	// any other setting — the hazard agentry#344 names. Omitted keeps what
-	// the row has; a row that does not exist yet has the default.
-	current, err := notify.Settings(r.Context(), s.q(), p.UserID)
-	if err != nil {
-		s.log.ErrorContext(r.Context(), "notification settings: read", "user", p.UserID, "err", err)
-		problemInternal(w, r)
-		return
-	}
-	billing := current.EmailBilling
-	if req.Email.Billing != nil {
-		billing = *req.Email.Billing
-	}
 	row, err := s.q().UpsertUserNotificationSettings(r.Context(), storegen.UpsertUserNotificationSettingsParams{
 		UserID:                p.UserID,
 		EmailDependencyAlerts: req.Email.DependencyAlerts,
@@ -69,7 +59,7 @@ func (s *Server) UpdateUserNotificationSettings(w http.ResponseWriter, r *http.R
 		EmailReviewDecisions:  req.Email.ReviewDecisions,
 		EmailAdvisories:       req.Email.Advisories,
 		EmailOrgInvites:       req.Email.OrgInvites,
-		EmailBilling:          billing,
+		EmailBilling:          req.Email.Billing, // nil keeps the row's value
 		WebDependencyAlerts:   req.Web.DependencyAlerts,
 	})
 	if err != nil {
