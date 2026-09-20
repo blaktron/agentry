@@ -364,6 +364,25 @@ func (a serverAgents) Readable(ctx context.Context, p *Principal, namespace, nam
 	return AgentRef{ID: ag.ID, NamespaceID: ag.NamespaceID, NamespaceKind: NamespaceKind(ag.NamespaceKind), Public: ag.Visibility == "public"}, true, nil
 }
 
+// notifierOf adapts the server's notifier to Notifier: nil without a
+// database, the way Deps.DB is, since the rule reads the user's row.
+func notifierOf(srv *api.Server, pool *pgxpool.Pool) Notifier {
+	if pool == nil {
+		return nil
+	}
+	return serverNotifier{srv}
+}
+
+type serverNotifier struct{ srv *api.Server }
+
+func (n serverNotifier) Send(ctx context.Context, userID uuid.UUID, kind NotifyKind, subject, text string) (bool, error) {
+	return n.srv.SendToUser(ctx, userID, string(kind), subject, text)
+}
+
+func (n serverNotifier) OrgAdmins(ctx context.Context, orgID uuid.UUID) ([]uuid.UUID, error) {
+	return n.srv.OrgAdminIDs(ctx, orgID)
+}
+
 // periodicTicker enqueues a job once now and then on its period. Every
 // replica running this enqueues on its own clock; the queue's claim runs
 // each row once, so the handler must tolerate a run that finds nothing to
@@ -584,7 +603,8 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 		if b, ok := e.(Binds); ok {
 			pool, log, write, writeIn := srv.ExtensionDeps()
 			b.Bind(Deps{DB: pool, Log: log.With("extension", e.Name()), Audit: auditWriter{write: write, writeIn: writeIn},
-				Entitlements: srv.CoreEntitlements(), Blobs: srv.Blobs(), Orgs: orgsOf(srv, pool), Agents: agentsOf(srv, pool)})
+				Entitlements: srv.CoreEntitlements(), Blobs: srv.Blobs(), Orgs: orgsOf(srv, pool), Agents: agentsOf(srv, pool),
+				Notifier: notifierOf(srv, pool)})
 		}
 		srv.RegisterExtension(e.Name(), e.Routes)
 		if u, ok := e.(Unthrottles); ok {

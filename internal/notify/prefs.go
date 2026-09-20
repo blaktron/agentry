@@ -33,13 +33,19 @@ const (
 	KindReviewDecision  Kind = "reviewDecisions"
 	KindAdvisory        Kind = "advisories"
 	KindOrgInvite       Kind = "orgInvites"
+	// KindBilling is the closed build's billing mail, sent through the
+	// extension seam (agentry#366): a checkout confirmed, a payment
+	// failed, an organization restricted, seats reached, "your
+	// organization covers you". The core sends none itself; the kind is
+	// here so the switch, the default and the rule are the core's.
+	KindBilling Kind = "billing"
 )
 
 // Defaults is the settings row a user without one is treated as having.
 func Defaults(userID uuid.UUID) storegen.UserNotificationSetting {
 	return storegen.UserNotificationSetting{
 		UserID: userID, EmailDependencyAlerts: true, EmailQuarantine: true, EmailReviewDecisions: true,
-		EmailAdvisories: true, EmailOrgInvites: true, WebDependencyAlerts: true,
+		EmailAdvisories: true, EmailOrgInvites: true, EmailBilling: true, WebDependencyAlerts: true,
 	}
 }
 
@@ -57,6 +63,8 @@ func EmailAllowed(row storegen.UserNotificationSetting, kind Kind) bool {
 		return row.EmailAdvisories
 	case KindOrgInvite:
 		return row.EmailOrgInvites
+	case KindBilling:
+		return row.EmailBilling
 	}
 	return true
 }
