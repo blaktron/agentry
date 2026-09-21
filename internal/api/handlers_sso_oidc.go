@@ -125,8 +125,12 @@ func (s *Server) OidcCallback(w http.ResponseWriter, r *http.Request, org OrgHan
 		problemUnauthorized(w, r, "The OIDC state cookie could not be read. Start sign-in again.")
 		return
 	}
-	// Clear the state cookie regardless of outcome (single use).
-	http.SetCookie(w, &http.Cookie{Name: oidcStateCookie, Value: "", Path: "/", MaxAge: -1})
+	// Clear the state cookie regardless of outcome (single use), with the
+	// attributes it was set with: a clear is a Set-Cookie like any other.
+	http.SetCookie(w, &http.Cookie{
+		Name: oidcStateCookie, Value: "", Path: "/", HttpOnly: true,
+		Secure: s.cfg.Auth.CookieSecure, SameSite: http.SameSiteLaxMode, MaxAge: -1,
+	})
 
 	// From here the sealed state is open, so browser mode is known and a
 	// failure can land on the login page rather than on a problem document

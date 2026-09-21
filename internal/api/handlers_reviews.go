@@ -250,6 +250,13 @@ func (s *Server) reviewItemAccess(w http.ResponseWriter, r *http.Request, id uui
 			problemForbidden(w, r, "This review item needs the organization's security_reviewer role or higher.")
 			return storegen.ReviewItem{}, false
 		}
+	default:
+		// A queue this code does not know is nobody's to read: the DDL's
+		// CHECK names the two queues today, and this switch does not lean
+		// on it staying that way (agentry#413).
+		s.log.WarnContext(r.Context(), "review item of an unknown queue", "item", ri.ID, "queue", ri.Queue)
+		problemForbidden(w, r, "This review item belongs to a queue this server does not serve.")
+		return storegen.ReviewItem{}, false
 	}
 	return ri, true
 }
