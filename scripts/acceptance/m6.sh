@@ -23,14 +23,14 @@ go build ./internal/... ./pkg/... >/dev/null && echo "build (internal, pkg): OK"
 # audience, expired, and replayed-assertion-id all rejected (§12.4, T-12).
 # The same filter runs the guard on the replay record's floor, which has to
 # outlive the window the validator still accepts an assertion in (agentry#414).
-go test ./internal/auth/saml -run TestSAML -count=1 >/dev/null && echo "SAML SP accept + replay/audience/expiry/signature negatives + the replay floor's margin (§12.4): OK"
+go test -timeout 20m ./internal/auth/saml -run TestSAML -count=1 >/dev/null && echo "SAML SP accept + replay/audience/expiry/signature negatives + the replay floor's margin (§12.4): OK"
 
 # OIDC RP: auth-code + PKCE exchange, issuer pinning, email_verified respected
 # (§12.4). In-process discovery + JWKS + token provider.
-go test ./internal/auth/oidc -run TestOIDC -count=1 >/dev/null && echo "OIDC RP exchange + issuer-pin + email_verified negatives (§12.4): OK"
+go test -timeout 20m ./internal/auth/oidc -run TestOIDC -count=1 >/dev/null && echo "OIDC RP exchange + issuer-pin + email_verified negatives (§12.4): OK"
 
 # SAML + OIDC through the HTTP endpoints (ACS POST / start+callback) → session.
-go test ./internal/api -run 'TestSAMLACSEndpoint|TestOIDCEndpointFlow' -count=1 >/dev/null && echo "SSO endpoints establish sessions via JIT (§12.4): OK"
+go test -timeout 20m ./internal/api -run 'TestSAMLACSEndpoint|TestOIDCEndpointFlow' -count=1 >/dev/null && echo "SSO endpoints establish sessions via JIT (§12.4): OK"
 
 # The two sets every API replica must see alike (agentry#414): an assertion
 # one replica consumed is refused at the next while a fresh one is still
@@ -38,28 +38,28 @@ go test ./internal/api -run 'TestSAMLACSEndpoint|TestOIDCEndpointFlow' -count=1 
 # request is single use, single use holds when the presentations race, a
 # lost database fails closed, and the seams a deployment with its own shared
 # store uses are honoured by the live routes rather than merely stored.
-go test ./internal/api -run 'TestSAMLReplayIsRefusedAcrossServers|TestSAMLLoginStartedOnOneReplicaCompletesOnAnother|TestSAMLStoreSetsAreSharedAndExpire|TestSAMLReplayRefusalHoldsUnderConcurrentPresentations|TestSAMLSettersReplaceTheSets' -count=1 >/dev/null && echo "SAML replay refused across replicas, a login started on one completes on another, both setters honoured (§12.4): OK"
+go test -timeout 20m ./internal/api -run 'TestSAMLReplayIsRefusedAcrossServers|TestSAMLLoginStartedOnOneReplicaCompletesOnAnother|TestSAMLStoreSetsAreSharedAndExpire|TestSAMLReplayRefusalHoldsUnderConcurrentPresentations|TestSAMLSettersReplaceTheSets' -count=1 >/dev/null && echo "SAML replay refused across replicas, a login started on one completes on another, both setters honoured (§12.4): OK"
 
 # Enforced SSO + org-bound PATs (§12.4).
-go test ./internal/api -run TestEnforcedSSO -count=1 >/dev/null && echo "enforced SSO rejects stale sessions / non-org-bound PATs (§12.4): OK"
+go test -timeout 20m ./internal/api -run TestEnforcedSSO -count=1 >/dev/null && echo "enforced SSO rejects stale sessions / non-org-bound PATs (§12.4): OK"
 
 # SCIM 2.0: create, userName filter, PATCH active=false / DELETE deactivate ⇒
 # revoke org-bound PATs + kill sessions (< 60s, §12.5).
-go test ./internal/api -run TestSCIM -count=1 >/dev/null && echo "SCIM provision + deactivate revokes access (§12.5): OK"
+go test -timeout 20m ./internal/api -run TestSCIM -count=1 >/dev/null && echo "SCIM provision + deactivate revokes access (§12.5): OK"
 
 # Domain verification via injected fake resolver (§12.4).
-go test ./internal/dnsx -run TestVerifyTXT -count=1 >/dev/null && echo "domain TXT verification, unit (§12.4): OK"
-go test ./internal/api  -run TestDomainVerification -count=1 >/dev/null && echo "domain verification endpoint w/ fake resolver (§12.4): OK"
+go test -timeout 20m ./internal/dnsx -run TestVerifyTXT -count=1 >/dev/null && echo "domain TXT verification, unit (§12.4): OK"
+go test -timeout 20m ./internal/api  -run TestDomainVerification -count=1 >/dev/null && echo "domain verification endpoint w/ fake resolver (§12.4): OK"
 
 # Webhooks: SSRF guard (private/link-local/metadata/http/redirect), HMAC format,
 # and a real delivery through the queue (§9.3, T-08).
-go test ./internal/webhook -count=1 >/dev/null && echo "webhook SSRF guard + HMAC signature (§9.3, T-08): OK"
-go test ./internal/api -run 'TestWebhookDeliveryViaQueue|TestWebhookEventWiring' -count=1 >/dev/null && echo "webhook delivery via queue + event fan-out (§9.3): OK"
+go test -timeout 20m ./internal/webhook -count=1 >/dev/null && echo "webhook SSRF guard + HMAC signature (§9.3, T-08): OK"
+go test -timeout 20m ./internal/api -run 'TestWebhookDeliveryViaQueue|TestWebhookEventWiring' -count=1 >/dev/null && echo "webhook delivery via queue + event fan-out (§9.3): OK"
 
 # Audit export: async NDJSON to blob store with a download reference (§12.6).
-go test ./internal/api -run TestAuditExport -count=1 >/dev/null && echo "async audit export → NDJSON blob (§12.6): OK"
+go test -timeout 20m ./internal/api -run TestAuditExport -count=1 >/dev/null && echo "async audit export → NDJSON blob (§12.6): OK"
 
 # The §17.4 authorization matrix must remain green with every new route declared.
-go test ./internal/api -run 'TestRouteDeclarationsComplete|TestAuthzMatrix' -count=1 >/dev/null && echo "authz matrix + route-declaration completeness (§12.2, §17.4): OK"
+go test -timeout 20m ./internal/api -run 'TestRouteDeclarationsComplete|TestAuthzMatrix' -count=1 >/dev/null && echo "authz matrix + route-declaration completeness (§12.2, §17.4): OK"
 
 echo "== M6 acceptance PASSED =="

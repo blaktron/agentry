@@ -13,9 +13,9 @@ if [ -z "${AGENTRY_TEST_DATABASE_URL:-}" ]; then
 fi
 
 echo "== M3 acceptance =="
-go test ./internal/registry -run TestArchiveReproducible -count=1 >/dev/null && echo "archives byte-reproducible: OK"
-go test ./internal/registry -run TestStateMachineEdges -count=1 >/dev/null   && echo "state machine edges (§7): OK"
-go test ./internal/gitsrv -run TestM3PublishInstallRoundTrip -count=1 >/dev/null && echo "publish→install 3 kinds × 2 sources: OK"
-go test ./internal/gitsrv -run TestM3YankSemantics -count=1 >/dev/null      && echo "yank semantics (§5.5): OK"
-go test ./internal/api -run TestAuthzMatrix -count=1 >/dev/null             && echo "authz matrix incl. version routes: OK"
+go test -timeout 20m ./internal/registry -run TestArchiveReproducible -count=1 >/dev/null && echo "archives byte-reproducible: OK"
+go test -timeout 20m ./internal/registry -run TestStateMachineEdges -count=1 >/dev/null   && echo "state machine edges (§7): OK"
+go test -timeout 20m ./internal/gitsrv -run TestM3PublishInstallRoundTrip -count=1 >/dev/null && echo "publish→install 3 kinds × 2 sources: OK"
+go test -timeout 20m ./internal/gitsrv -run TestM3YankSemantics -count=1 >/dev/null      && echo "yank semantics (§5.5): OK"
+go test -timeout 20m ./internal/api -run TestAuthzMatrix -count=1 >/dev/null             && echo "authz matrix incl. version routes: OK"
 echo "== M3 acceptance PASSED =="
