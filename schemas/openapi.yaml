@@ -4885,6 +4885,15 @@ components:
         yanked:
           type: boolean
           description: True only for exact pins of yanked versions (§5.5).
+        scanStatus:
+          type: string
+          enum: [pipeline, skipped]
+          description: >-
+            How the resolved version was admitted (plan
+            organization-subscriptions §4): `skipped` is a version published
+            without a scan — no attestation exists for it, which is not the
+            same as an unsigned registry — and a client installs or runs it
+            only with the person's consent.
 
     ScanFinding:
       type: object

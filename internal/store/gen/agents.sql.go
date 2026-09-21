@@ -143,16 +143,19 @@ func (q *Queries) CountSearchAgents(ctx context.Context, arg CountSearchAgentsPa
 	return column_1, err
 }
 
-const countUnscannedPublishedVersions = `-- name: CountUnscannedPublishedVersions :one
+const countUnscannedVersionsStanding = `-- name: CountUnscannedVersionsStanding :one
 SELECT count(*)::bigint FROM agent_versions
-WHERE agent_id = $1 AND status = 'published' AND scan_status = 'skipped'
+WHERE agent_id = $1 AND scan_status = 'skipped'
+  AND status IN ('published', 'quarantined', 'blocked')
 `
 
-// The versions of an agent that were published without a scan (M21):
-// while one exists the agent cannot become public, since only a version
-// that passed the gate is ever public.
-func (q *Queries) CountUnscannedPublishedVersions(ctx context.Context, agentID uuid.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countUnscannedPublishedVersions, agentID)
+// The versions of an agent that were admitted without a scan and could
+// still be, or return to being, published (M21): published, quarantined
+// or blocked — a reinstate walks the last two back to published. While
+// one stands the agent cannot become public, since only a version that
+// passed the gate is ever public; yanking is what ends it.
+func (q *Queries) CountUnscannedVersionsStanding(ctx context.Context, agentID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countUnscannedVersionsStanding, agentID)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -393,6 +396,63 @@ func (q *Queries) GetAgentByPath(ctx context.Context, arg GetAgentByPathParams) 
 		&i.NamespaceKind,
 		&i.DefaultBranch,
 		&i.SizeBytes,
+	)
+	return i, err
+}
+
+const getAgentForUpdate = `-- name: GetAgentForUpdate :one
+SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, h.handle AS namespace, h.kind AS namespace_kind
+FROM agents a JOIN handles h ON h.id = a.namespace_id
+WHERE a.id = $1
+FOR UPDATE OF a
+`
+
+type GetAgentForUpdateRow struct {
+	ID                       uuid.UUID   `json:"id"`
+	NamespaceID              uuid.UUID   `json:"namespace_id"`
+	Name                     string      `json:"name"`
+	Visibility               string      `json:"visibility"`
+	RepoID                   uuid.UUID   `json:"repo_id"`
+	Summary                  string      `json:"summary"`
+	LatestPublishedVersionID *uuid.UUID  `json:"latest_published_version_id"`
+	QuarantineState          string      `json:"quarantine_state"`
+	AutoPublishTags          bool        `json:"auto_publish_tags"`
+	SearchTsv                interface{} `json:"search_tsv"`
+	CreatedAt                time.Time   `json:"created_at"`
+	UpdatedAt                time.Time   `json:"updated_at"`
+	ReadmeText               string      `json:"readme_text"`
+	AllowForcePush           bool        `json:"allow_force_push"`
+	Modes                    []string    `json:"modes"`
+	PipelineSkip             bool        `json:"pipeline_skip"`
+	Namespace                string      `json:"namespace"`
+	NamespaceKind            string      `json:"namespace_kind"`
+}
+
+// The agent row under the row lock, with its namespace, for a decision
+// that must not race another writer of the row: the flag's refusals and
+// the private → public change (M21), and the gate-skipping edge.
+func (q *Queries) GetAgentForUpdate(ctx context.Context, id uuid.UUID) (GetAgentForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, getAgentForUpdate, id)
+	var i GetAgentForUpdateRow
+	err := row.Scan(
+		&i.ID,
+		&i.NamespaceID,
+		&i.Name,
+		&i.Visibility,
+		&i.RepoID,
+		&i.Summary,
+		&i.LatestPublishedVersionID,
+		&i.QuarantineState,
+		&i.AutoPublishTags,
+		&i.SearchTsv,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ReadmeText,
+		&i.AllowForcePush,
+		&i.Modes,
+		&i.PipelineSkip,
+		&i.Namespace,
+		&i.NamespaceKind,
 	)
 	return i, err
 }

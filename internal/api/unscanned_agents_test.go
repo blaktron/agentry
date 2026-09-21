@@ -25,15 +25,6 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-func probeFiles(ns, name, version string) map[string]string {
-	return map[string]string{
-		"agent.yaml": skillYAML(ns, name, version),
-		"README.md":  "# " + name + "\n",
-		"SKILL.md":   "Summarize politely.\n",
-		"LICENSE":    "Apache-2.0\n",
-	}
-}
-
 // unscannedOn answers the tier as including unscanned agents, or not.
 func unscannedOn(on bool) func(*entitlements.Features) {
 	return func(f *entitlements.Features) { f.UnscannedAgents = on }
@@ -50,20 +41,9 @@ func TestPipelineSkipIsRefusedWhereItMustBe(t *testing.T) {
 	env.verifyEmail(memberH)
 	env.seedMembership(orgH, memberH, "member", "active")
 	member := env.login(memberH)
-	slug := func(res *http.Response) string {
-		var p struct {
-			Type string `json:"type"`
-		}
-		_ = json.NewDecoder(res.Body).Decode(&p)
-		return p.Type[strings.LastIndex(p.Type, "/")+1:]
-	}
 	patch := func(c caller, ns, name string, body map[string]any) (int, string) {
-		res := env.do(c, http.MethodPatch, "/api/v1/agents/"+ns+"/"+name, body)
-		defer func() { _ = res.Body.Close() }()
-		if res.StatusCode == http.StatusOK {
-			return res.StatusCode, ""
-		}
-		return res.StatusCode, slug(res)
+		code, slug, _ := problemOf(t, env.do(c, http.MethodPatch, "/api/v1/agents/"+ns+"/"+name, body))
+		return code, slug
 	}
 
 	// A personal namespace has no organization to answer for what it
@@ -146,7 +126,7 @@ func TestAnUnscannedSubmissionIsPublishedWithoutTheGate(t *testing.T) {
 	_, pat := env.mintPAT(admin, "pub", "agent:publish", "agent:read")
 
 	// Submitted, and published as submitted: no scan run anywhere.
-	status, body := env.uploadVersionCLI(orgH, "internal", pat, probeFiles(orgH, "internal", "1.0.0"))
+	status, body := env.uploadVersionCLI(orgH, "internal", pat, skillFiles(orgH, "internal", "1.0.0", nil))
 	if status != http.StatusAccepted {
 		t.Fatalf("upload: %d %s", status, body)
 	}
@@ -249,23 +229,49 @@ func TestAnUnscannedSubmissionIsPublishedWithoutTheGate(t *testing.T) {
 		}
 	}
 
-	// Public is refused while a version published unscanned stands, even
-	// after the flag is cleared; yanked, it stands no more.
+	// Resolve says how the version was admitted, so a client asks for
+	// consent from the field and not from a missing attestation.
+	var resolved struct {
+		ScanStatus     *string `json:"scanStatus"`
+		AttestationUrl *string `json:"attestationUrl"`
+	}
+	env.doJSON(admin, http.MethodGet, "/api/v1/resolve?ref="+orgH+"/internal@1.0.0", nil, &resolved, http.StatusOK)
+	if resolved.ScanStatus == nil || *resolved.ScanStatus != "skipped" || resolved.AttestationUrl != nil {
+		t.Fatalf("resolve = %+v, want scanStatus skipped and no attestation", resolved)
+	}
+
+	// Public is refused while a version admitted unscanned stands, even
+	// after the flag is cleared — and quarantined counts as standing,
+	// since a reinstate would walk it back to published without the gate.
 	env.doJSON(admin, http.MethodPatch, "/api/v1/agents/"+orgH+"/internal", map[string]any{"pipelineSkip": false}, nil, http.StatusOK)
 	res := env.do(admin, http.MethodPatch, "/api/v1/agents/"+orgH+"/internal", map[string]any{"visibility": "public"})
 	var p struct {
-		Type, Detail string
+		Type      string `json:"type"`
+		Unscanned int    `json:"unscanned"`
 	}
 	_ = json.NewDecoder(res.Body).Decode(&p)
 	_ = res.Body.Close()
-	if res.StatusCode != http.StatusConflict || !strings.HasSuffix(p.Type, "/agent-unscanned") || !strings.Contains(p.Detail, "1 published version of this BriefAgent was never scanned") {
+	if res.StatusCode != http.StatusConflict || !strings.HasSuffix(p.Type, "/agent-unscanned") || p.Unscanned != 1 {
 		t.Fatalf("public with an unscanned version standing: %d %+v", res.StatusCode, p)
 	}
+	staffH := env.register("uv-staff")
+	env.makePlatformStaff(t, staffH)
+	staff := env.login(staffH)
+	env.doJSON(staff, http.MethodPost, "/api/v1/platform/agents/"+orgH+"/internal/quarantine", map[string]any{"reason": "looking"}, nil, http.StatusNoContent)
+	if code, slug, _ := problemOf(t, env.do(admin, http.MethodPatch, "/api/v1/agents/"+orgH+"/internal", map[string]any{"visibility": "public"})); code != http.StatusConflict || slug != "agent-unscanned" {
+		t.Fatalf("public with an unscanned version quarantined: %d %s, want 409 agent-unscanned", code, slug)
+	}
+	env.doJSON(staff, http.MethodPost, "/api/v1/platform/agents/"+orgH+"/internal/reinstate", map[string]any{"reason": "done"}, nil, http.StatusNoContent)
+	env.doJSON(admin, http.MethodGet, "/api/v1/agents/"+orgH+"/internal/versions/1.0.0", nil, &v, http.StatusOK)
+	if v.Status != "published" {
+		t.Fatalf("reinstated on a private agent: %s, want published", v.Status)
+	}
+	// Yanked, it stands no more.
 	env.doJSON(admin, http.MethodPost, "/api/v1/agents/"+orgH+"/internal/versions/1.0.0/yank", map[string]any{"reason": "unscanned"}, nil, http.StatusNoContent)
 
 	// With the flag cleared the next submission goes through the pipeline
 	// like any other: scanning, a run, a scanned verdict.
-	status, body = env.uploadVersionCLI(orgH, "internal", pat, probeFiles(orgH, "internal", "1.1.0"))
+	status, body = env.uploadVersionCLI(orgH, "internal", pat, skillFiles(orgH, "internal", "1.1.0", nil))
 	if status != http.StatusAccepted {
 		t.Fatalf("upload after clearing: %d %s", status, body)
 	}
@@ -303,5 +309,44 @@ func TestAnUnscannedSubmissionIsPublishedWithoutTheGate(t *testing.T) {
 	err = reg.Transition(context.Background(), pending, registry.StatusPublished, "by hand", audit.Event{ActorKind: audit.ActorSystem, OrgID: uuid.MustParse(orgID)})
 	if !errors.Is(err, registry.ErrBadTransition) {
 		t.Fatalf("submitted → published on a version not marked skipped: %v, want ErrBadTransition", err)
+	}
+
+	// And to a version marked skipped whose agent is public now — the
+	// gate-skipping edge and a reinstate from quarantine alike — the
+	// choke point refuses under the agent's lock.
+	if _, err := env.st.Pool().Exec(context.Background(), `UPDATE agent_versions SET scan_status = 'skipped' WHERE id = $1`, pending); err != nil {
+		t.Fatal(err)
+	}
+	err = reg.Transition(context.Background(), pending, registry.StatusPublished, "by hand", audit.Event{ActorKind: audit.ActorSystem, OrgID: uuid.MustParse(orgID)})
+	if !errors.Is(err, registry.ErrUnscannedOnPublic) {
+		t.Fatalf("submitted → published of a skipped version on a public agent: %v, want ErrUnscannedOnPublic", err)
+	}
+	if _, err := env.st.Pool().Exec(context.Background(), `UPDATE agent_versions SET status = 'quarantined' WHERE id = $1`, pending); err != nil {
+		t.Fatal(err)
+	}
+	err = reg.Transition(context.Background(), pending, registry.StatusPublished, "reinstate", audit.Event{ActorKind: audit.ActorSystem, OrgID: uuid.MustParse(orgID)})
+	if !errors.Is(err, registry.ErrUnscannedOnPublic) {
+		t.Fatalf("quarantined → published of a skipped version on a public agent: %v, want ErrUnscannedOnPublic", err)
+	}
+}
+
+// The flag and public never meet in a row: the handler refuses each
+// under the agent's row lock, and the table's CHECK is the wall behind
+// it — a writer that bypassed the handler is refused by the database.
+func TestTheFlagAndPublicNeverMeetInARow(t *testing.T) {
+	env := newTestEnvWith(t, onTier(unscannedOn(true)))
+	adminH := env.register("ul-admin")
+	env.verifyEmail(adminH)
+	admin := env.login(adminH)
+	orgH := "ulorg" + env.sfx
+	env.createOrg(admin, orgH)
+	env.doJSON(admin, http.MethodPost, "/api/v1/agents",
+		map[string]any{"namespace": orgH, "name": "racy", "modes": []string{"autonomous"}, "visibility": "private"}, nil, http.StatusCreated)
+	env.doJSON(admin, http.MethodPatch, "/api/v1/agents/"+orgH+"/racy", map[string]any{"pipelineSkip": true}, nil, http.StatusOK)
+	if _, err := env.st.Pool().Exec(context.Background(), `UPDATE agents SET visibility = 'public' WHERE name = 'racy' AND pipeline_skip`); err == nil {
+		t.Fatal("the table let the flag and public meet in a row")
+	}
+	if _, err := env.st.Pool().Exec(context.Background(), `UPDATE agents SET pipeline_skip = true WHERE name = 'racy' AND visibility = 'public'`); err != nil {
+		t.Fatalf("an update that matched no row: %v", err)
 	}
 }

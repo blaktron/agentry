@@ -1115,8 +1115,9 @@ type ListPublishedVersionsForRescanRow struct {
 }
 
 // Keyset, not LIMIT/OFFSET: the sweep quarantines rows out of `published` as
-// it goes, so an offset-paged sweep skips one unscanned version per row it
-// acted on. The cursor is the primary key, which no sweep action changes.
+// it goes, so an offset-paged sweep would pass over one not-yet-rescanned
+// version per row it acted on. The cursor is the primary key, which no
+// sweep action changes.
 // A version published without a scan, and every version of an agent whose
 // administrator has set pipeline_skip, is not rescanned (M21): a rescan
 // would put a report on a version whose verdict is "unscanned", and the

@@ -179,16 +179,16 @@ func (e AgentVersionManifestSchemaVersion) Valid() bool {
 
 // Defines values for AgentVersionScanStatus.
 const (
-	Pipeline AgentVersionScanStatus = "pipeline"
-	Skipped  AgentVersionScanStatus = "skipped"
+	AgentVersionScanStatusPipeline AgentVersionScanStatus = "pipeline"
+	AgentVersionScanStatusSkipped  AgentVersionScanStatus = "skipped"
 )
 
 // Valid indicates whether the value is a known member of the AgentVersionScanStatus enum.
 func (e AgentVersionScanStatus) Valid() bool {
 	switch e {
-	case Pipeline:
+	case AgentVersionScanStatusPipeline:
 		return true
-	case Skipped:
+	case AgentVersionScanStatusSkipped:
 		return true
 	default:
 		return false
@@ -507,6 +507,24 @@ func (e PendingOrgVia) Valid() bool {
 	case PendingOrgViaDomain:
 		return true
 	case PendingOrgViaScim:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ResolveResultScanStatus.
+const (
+	ResolveResultScanStatusPipeline ResolveResultScanStatus = "pipeline"
+	ResolveResultScanStatusSkipped  ResolveResultScanStatus = "skipped"
+)
+
+// Valid indicates whether the value is a known member of the ResolveResultScanStatus enum.
+func (e ResolveResultScanStatus) Valid() bool {
+	switch e {
+	case ResolveResultScanStatusPipeline:
+		return true
+	case ResolveResultScanStatusSkipped:
 		return true
 	default:
 		return false
@@ -1948,11 +1966,17 @@ type ResolveResult struct {
 	Manifest       map[string]interface{} `json:"manifest"`
 	Name           string                 `json:"name"`
 	Namespace      string                 `json:"namespace"`
-	Version        string                 `json:"version"`
+
+	// ScanStatus How the resolved version was admitted (plan organization-subscriptions §4): `skipped` is a version published without a scan — no attestation exists for it, which is not the same as an unsigned registry — and a client installs or runs it only with the person's consent.
+	ScanStatus *ResolveResultScanStatus `json:"scanStatus,omitempty"`
+	Version    string                   `json:"version"`
 
 	// Yanked True only for exact pins of yanked versions (§5.5).
 	Yanked bool `json:"yanked"`
 }
+
+// ResolveResultScanStatus How the resolved version was admitted (plan organization-subscriptions §4): `skipped` is a version published without a scan — no attestation exists for it, which is not the same as an unsigned registry — and a client installs or runs it only with the person's consent.
+type ResolveResultScanStatus string
 
 // ReviewBundle defines model for ReviewBundle.
 type ReviewBundle struct {

@@ -174,8 +174,9 @@ JOIN handles h ON h.id = a.namespace_id
 WHERE adv.id = $1 AND a.visibility = 'public' AND adv.published_at IS NOT NULL;
 
 -- Keyset, not LIMIT/OFFSET: the sweep quarantines rows out of `published` as
--- it goes, so an offset-paged sweep skips one unscanned version per row it
--- acted on. The cursor is the primary key, which no sweep action changes.
+-- it goes, so an offset-paged sweep would pass over one not-yet-rescanned
+-- version per row it acted on. The cursor is the primary key, which no
+-- sweep action changes.
 -- name: ListPublishedVersionsForRescan :many
 -- A version published without a scan, and every version of an agent whose
 -- administrator has set pipeline_skip, is not rescanned (M21): a rescan
