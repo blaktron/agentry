@@ -548,15 +548,32 @@ entries:
   # Seamless integration (agentry#164): every flow ends back in Agentry and
   # the directory never shows its own panels
   # ==========================================================================
-  # Two redirect stages carry the return paths, read from the container
-  # environment so the same file serves every deployment (DEV-091):
-  # AGENTRY_PUBLIC_WEB_URL is where sign-out lands (the site's home, or the
-  # server's own /ui/ page when nothing fronts it) and AGENTRY_ACCOUNT_URL
-  # is where a password change or an authenticator enrolment returns (the
-  # site's Settings → Authentication, or the server's /ui/account/directory).
-  # compose defaults both to the server's own pages; a site's overlay points
-  # them at itself. `?next=` cannot do this job: authentik only honours a
-  # same-host `next`, and the app lives elsewhere.
+  # The return paths are read from the container environment so the same
+  # file serves every deployment (DEV-091): AGENTRY_PUBLIC_WEB_URL is where
+  # sign-out lands (the site's home, or the server's own /ui/ page when
+  # nothing fronts it) and AGENTRY_ACCOUNT_URL is where a password change or
+  # an authenticator enrolment returns (the site's Settings → Authentication,
+  # or the server's /ui/account/directory). compose defaults both to the
+  # server's own pages; a site's overlay points them at itself. `?next=`
+  # cannot do this job: authentik only honours a same-host `next`, and the
+  # app lives elsewhere.
+  #
+  # Two mechanisms carry them, and the difference matters (agentry#441):
+  #
+  # - Sign-out keeps a redirect STAGE. The provider's end-session endpoint
+  #   appends its own session-end stage after the flow's, so the flow never
+  #   reaches the executor's flow-done path; the redirect stage is what sends
+  #   the browser home, and the plan it leaves behind sits in the anonymous
+  #   post-logout session, where the next sign-in's flow deletes it.
+  # - The stage-configuration flows (password change, authenticator app,
+  #   security key) must NOT end on a redirect stage. A redirect stage hands
+  #   the browser a redirect challenge that is never answered, so the flow's
+  #   plan stays parked in the still-signed-in directory session — and
+  #   authentik's end-session endpoint answers an empty 200 to a session that
+  #   holds a plan, which blanked sign-out after every authenticator
+  #   enrolment. Instead, an expression policy on each flow's first stage
+  #   sets the plan context's `redirect`, which the executor honours as an
+  #   absolute URL when the flow finishes — and finishing clears the plan.
   - model: authentik_stages_redirect.redirectstage
     id: stage-redirect-site
     identifiers:
@@ -565,14 +582,27 @@ entries:
       mode: static
       target_static: !Env AGENTRY_PUBLIC_WEB_URL
       keep_context: false
+  - model: authentik_policies_expression.expressionpolicy
+    id: policy-return-to-settings
+    identifiers:
+      name: agentry-return-to-settings
+    attrs:
+      # AGENTRY_ACCOUNT_URL and the flash are formatted in at apply time, like
+      # the rate limit's budget above. The policy always passes: it exists for
+      # its side effect on the plan, not to gate the stage it is bound to.
+      expression: !Format
+        - |
+          context["flow_plan"].context["redirect"] = "%s?ok=%s"
+          return True
+        - !Env AGENTRY_ACCOUNT_URL
+        - "Saved%20in%20the%20directory."
+  # The redirect stage those flows ended on until agentry#441. Deleting it
+  # drops its bindings with it on a deployment that applied the earlier
+  # version; a no-op on a fresh install.
   - model: authentik_stages_redirect.redirectstage
-    id: stage-redirect-settings
+    state: absent
     identifiers:
       name: agentry-redirect-settings
-    attrs:
-      mode: static
-      target_static: !Format ["%s?ok=%s", !Env AGENTRY_ACCOUNT_URL, "Saved%20in%20the%20directory."]
-      keep_context: false
 
   # Sign-out: the provider's invalidation flow ends the directory session
   # and sends the browser straight back to the site — no "you've logged
@@ -604,7 +634,8 @@ entries:
       order: 20
 
   # Password change: the same two password fields and the same strength
-  # rule as enrollment and recovery, then straight back to Settings.
+  # rule as enrollment and recovery, then straight back to Settings (the
+  # return-to-settings policy on the first stage).
   - model: authentik_stages_prompt.promptstage
     id: stage-password-change-prompt
     identifiers:
@@ -632,6 +663,7 @@ entries:
       authentication: require_authenticated
       denied_action: message_continue
   - model: authentik_flows.flowstagebinding
+    id: binding-password-change-prompt
     identifiers:
       target: !KeyOf flow-password-change
       stage: !KeyOf stage-password-change-prompt
@@ -641,14 +673,18 @@ entries:
       target: !KeyOf flow-password-change
       stage: !KeyOf stage-password-change-write
       order: 20
-  - model: authentik_flows.flowstagebinding
+  - model: authentik_policies.policybinding
     identifiers:
-      target: !KeyOf flow-password-change
-      stage: !KeyOf stage-redirect-settings
-      order: 30
+      policy: !KeyOf policy-return-to-settings
+      target: !KeyOf binding-password-change-prompt
+      order: 0
+    attrs:
+      enabled: true
+      negate: false
+      timeout: 30
 
   # Authenticator app: the enrollment TOTP stage, bound again as a
-  # configuration flow that returns to Settings.
+  # configuration flow that returns to Settings the same way.
   - model: authentik_flows.flow
     id: flow-totp-setup
     identifiers:
@@ -660,15 +696,20 @@ entries:
       authentication: require_authenticated
       denied_action: message_continue
   - model: authentik_flows.flowstagebinding
+    id: binding-totp-setup
     identifiers:
       target: !KeyOf flow-totp-setup
       stage: !KeyOf stage-totp-setup
       order: 10
-  - model: authentik_flows.flowstagebinding
+  - model: authentik_policies.policybinding
     identifiers:
-      target: !KeyOf flow-totp-setup
-      stage: !KeyOf stage-redirect-settings
-      order: 20
+      policy: !KeyOf policy-return-to-settings
+      target: !KeyOf binding-totp-setup
+      order: 0
+    attrs:
+      enabled: true
+      negate: false
+      timeout: 30
 
   # Security key / passkey, likewise.
   - model: authentik_stages_authenticator_webauthn.authenticatorwebauthnstage
@@ -688,15 +729,20 @@ entries:
       authentication: require_authenticated
       denied_action: message_continue
   - model: authentik_flows.flowstagebinding
+    id: binding-webauthn-setup
     identifiers:
       target: !KeyOf flow-webauthn-setup
       stage: !KeyOf stage-webauthn-setup
       order: 10
-  - model: authentik_flows.flowstagebinding
+  - model: authentik_policies.policybinding
     identifiers:
-      target: !KeyOf flow-webauthn-setup
-      stage: !KeyOf stage-redirect-settings
-      order: 20
+      policy: !KeyOf policy-return-to-settings
+      target: !KeyOf binding-webauthn-setup
+      order: 0
+    attrs:
+      enabled: true
+      negate: false
+      timeout: 30
 
   # The brand: no user-settings flow (the directory's own settings panel is
   # not offered anywhere), sign-out and recovery go through the flows
