@@ -92,3 +92,79 @@ func TestSanitizeRuleID(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+// TestRunGitleaksAlwaysPassesTheRegistrysConfig: gitleaks reads a
+// .gitleaks.toml from the scanned source when no --config is given, so a
+// submission could ship one with no rules and scan clean. Every invocation
+// carries --config: the embedded default-rules file, or the operator's
+// Rules path (security review 2026-09-20 §5.7).
+func TestRunGitleaksAlwaysPassesTheRegistrysConfig(t *testing.T) {
+	argsFile := filepath.Join(t.TempDir(), "args")
+	bin := fakeTool(t, `printf '%s\n' "$@" > `+argsFile+`
+for a in "$@"; do last="$a"; done; : > "$last"`)
+	_ = runGitleaks(context.Background(), &ExecTool{Bin: bin}, t.TempDir(), nil)
+	args := strings.Split(strings.TrimSpace(mustRead(t, argsFile)), "\n")
+	cfg := ""
+	for i, a := range args {
+		if a == "--config" && i+1 < len(args) {
+			cfg = args[i+1]
+		}
+	}
+	if cfg == "" {
+		t.Fatalf("no --config in %v", args)
+	}
+	if _, err := os.Stat(cfg); err == nil {
+		t.Fatalf("the embedded config file %s outlived the run", cfg)
+	}
+	if !strings.Contains(string(gitleaksConfig), "useDefault = true") {
+		t.Fatal("the embedded config must extend gitleaks' default rules")
+	}
+	// An operator's rules file is passed as given.
+	rules := filepath.Join(t.TempDir(), "rules.toml")
+	if err := os.WriteFile(rules, []byte("[extend]\nuseDefault = true\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_ = runGitleaks(context.Background(), &ExecTool{Bin: bin, Rules: rules}, t.TempDir(), nil)
+	if !strings.Contains(mustRead(t, argsFile), "--config\n"+rules+"\n") {
+		t.Fatalf("Rules not passed as --config: %s", mustRead(t, argsFile))
+	}
+}
+
+// TestRunGitleaksIgnoresTheArchivesOwnConfig runs the real binary when it
+// is on PATH: a tree carrying a .gitleaks.toml whose one rule matches
+// nothing, beside a file with a key-shaped string, still yields an S2 hit.
+func TestRunGitleaksIgnoresTheArchivesOwnConfig(t *testing.T) {
+	tool, err := ResolveExecTool("gitleaks", "auto", "", 0)
+	if err != nil || tool == nil {
+		t.Skip("gitleaks not on PATH")
+	}
+	dir := t.TempDir()
+	hostile := "title = \"empty\"\n[[rules]]\nid = \"never\"\ndescription = \"never matches\"\nregex = \"zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\"\n"
+	for name, body := range map[string]string{
+		".gitleaks.toml": hostile,
+		"config.js":      "const key = \"AKIAQ3F7Z9K2M8N4P6R1\";\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := runGitleaks(context.Background(), tool, dir, nil)
+	hit := false
+	for _, f := range got {
+		if f.FilePath == "config.js" && f.Scanner != "S2/tool-error" {
+			hit = true
+		}
+	}
+	if !hit {
+		t.Fatalf("the archive's .gitleaks.toml governed the scan: %+v", got)
+	}
+}
+
+func mustRead(t *testing.T, p string) string {
+	t.Helper()
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
