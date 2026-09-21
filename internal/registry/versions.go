@@ -46,8 +46,18 @@ const (
 )
 
 // allowedTransitions encodes the §7 diagram. Keys are from-states.
+//
+// submitted → published is the one edge that does not pass the gate
+// (M21, agentry#368; plan organization-subscriptions §4, D16): it is
+// taken only by a version an organization's administrator chose to have
+// admitted unscanned — scan_status = skipped, which SubmitVersion sets
+// before the edge and TransitionInTx checks under the row lock — and such
+// a version exists only on a private agent of the organization's, which
+// cannot become public while it is published. For public content the §7
+// property is unchanged: nothing reaches published except from scanning,
+// needs_review or quarantined (TestNoPathToPublishedSkipsTheGateForAPublicAgent).
 var allowedTransitions = map[Status][]Status{
-	StatusSubmitted:   {StatusScanning},
+	StatusSubmitted:   {StatusScanning, StatusPublished},
 	StatusScanning:    {StatusPublished, StatusNeedsReview, StatusRejected},
 	StatusNeedsReview: {StatusPublished, StatusRejected},
 	// published → blocked is not drawn in the §7 diagram, which reaches
@@ -67,6 +77,22 @@ func transitionAllowed(from, to Status) bool {
 		}
 	}
 	return false
+}
+
+// The scan statuses a version carries (agent_versions.scan_status, M21):
+// admitted through the pipeline, or skipped — no run, no findings, no
+// attestation, the verdict "unscanned".
+const (
+	ScanStatusPipeline = "pipeline"
+	ScanStatusSkipped  = "skipped"
+)
+
+// skipsTheGate says whether an edge reaches published without the gate.
+// One does; it is open only to a version marked skipped, and the marking
+// is SubmitVersion's alone, for an agent whose administrator set the
+// flag. Every other edge into published is the gate's.
+func skipsTheGate(from, to Status) bool {
+	return from == StatusSubmitted && to == StatusPublished
 }
 
 // ErrBadTransition reports a §7 state-machine violation.
@@ -186,6 +212,12 @@ func (s *Service) TransitionInTx(ctx context.Context, q *storegen.Queries, versi
 	}
 	if !transitionAllowed(from, to) {
 		return TransitionResult{}, fmt.Errorf("%w: %s → %s", ErrBadTransition, from, to)
+	}
+	if skipsTheGate(from, to) && row.ScanStatus != ScanStatusSkipped {
+		// The gate-skipping edge is for a version admitted unscanned and
+		// nothing else: a submitted version that was not so marked goes
+		// through scanning like every other.
+		return TransitionResult{}, fmt.Errorf("%w: %s → %s without a skipped scan", ErrBadTransition, from, to)
 	}
 	var reasonPtr, yankPtr *string
 	if reason != "" {
@@ -311,6 +343,23 @@ type SubmitInput struct {
 // entitlements Resolver (§14.2). subjectFor maps an agent onto the subject
 // whose plan governs it: the owning org, or the user whose personal namespace
 // holds it.
+// skipsPipeline says whether a submission to the agent is admitted
+// without a scan (M21): the administrator's flag is set, the agent is a
+// private one of an organization's, and the organization's tier includes
+// unscanned agents now. A resolver that cannot answer is "no": the
+// version is scanned.
+func (s *Service) skipsPipeline(ctx context.Context, a Agent) bool {
+	if !a.PipelineSkip || a.Visibility != "private" || a.NamespaceKind != "org" {
+		return false
+	}
+	f, err := s.Entitlements().Features(ctx, entitlements.ForOrg(a.NamespaceID))
+	if err != nil {
+		s.logger().Error("registry: unscanned agents: features", "agent", a.Namespace+"/"+a.Name, "err", err)
+		return false
+	}
+	return f.UnscannedAgents
+}
+
 func subjectFor(a Agent) entitlements.Subject {
 	if a.NamespaceKind == "org" {
 		return entitlements.ForOrg(a.NamespaceID)
@@ -517,11 +566,6 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 	}
 	admitted = true // the row is committed; the ticket is spent
 
-	// Enter the machine (§7): submitted → scanning, then hand off.
-	sysEvent := actorEvent
-	if err := s.Transition(ctx, versionID, StatusScanning, "archive built", sysEvent); err != nil {
-		return Version{}, err
-	}
 	// §9.3 catalog (agentry#56): the submission itself is an event, before
 	// any scan outcome.
 	submitted := map[string]any{
@@ -532,6 +576,32 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 		// version the core created for it (plan subscription-tiers §5.1).
 		submitted["admissionTicket"] = ticket.ID
 		submitted["versionId"] = versionID.String()
+	}
+	sysEvent := actorEvent
+
+	// An agent its organization's administrator took off the pipeline
+	// (M21, D16): the version is published as submitted, marked skipped
+	// first so the one gate-skipping edge will take it, with no scan run
+	// and no attestation, and served everywhere as unscanned. Only while
+	// the agent is still private, still an organization's, and the tier
+	// still includes it — each read again here, since the flag was set
+	// earlier and any of them may have changed; otherwise the version
+	// goes through the pipeline like every other (fail closed).
+	if s.skipsPipeline(ctx, a) {
+		if err := s.st.Queries().MarkVersionScanSkipped(ctx, versionID); err != nil {
+			return Version{}, fmt.Errorf("registry: mark version unscanned: %w", err)
+		}
+		if err := s.Transition(ctx, versionID, StatusPublished, "published unscanned: the organization's administrator set pipeline: skip on this agent", sysEvent); err != nil {
+			return Version{}, err
+		}
+		submitted["scanStatus"] = ScanStatusSkipped
+		s.EmitAgentEvent(ctx, a.ID, "version.submitted", submitted)
+		return s.st.Queries().GetVersionByID(ctx, versionID)
+	}
+
+	// Enter the machine (§7): submitted → scanning, then hand off.
+	if err := s.Transition(ctx, versionID, StatusScanning, "archive built", sysEvent); err != nil {
+		return Version{}, err
 	}
 	s.EmitAgentEvent(ctx, a.ID, "version.submitted", submitted)
 	if s.pipeline != nil {

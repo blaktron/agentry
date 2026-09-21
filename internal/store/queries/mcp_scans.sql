@@ -26,7 +26,12 @@ VALUES ($1, $2, $3, $4)
 ON CONFLICT DO NOTHING;
 
 -- name: ListPublishedVersionsUsingMCPServer :many
+-- The MCP sweep leaves out a version published without a scan and every
+-- version of an agent with pipeline_skip set (M21): no alert is opened on
+-- what the organization chose not to have scanned.
 SELECT v.* FROM agent_versions v
 JOIN agent_version_mcp_servers m ON m.version_id = v.id
+JOIN agents a ON a.id = v.agent_id
 WHERE m.ecosystem = $1 AND m.package = $2 AND m.version = $3 AND v.status = 'published'
+  AND v.scan_status <> 'skipped' AND NOT a.pipeline_skip
 ORDER BY v.created_at;

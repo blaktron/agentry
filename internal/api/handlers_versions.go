@@ -39,6 +39,10 @@ func versionToAPI(v registry.Version) AgentVersion {
 	if v.StatusReason != nil {
 		out.StatusReason = v.StatusReason
 	}
+	// How the version was admitted (M21): a skipped one is what a client
+	// asks consent for before it installs or runs it.
+	scan := AgentVersionScanStatus(v.ScanStatus)
+	out.ScanStatus = &scan
 	// Which manifest schema the snapshot follows (DEV-088): clients read a
 	// v1 snapshot through the kind mapping and a v2 one by its modes.
 	var snap struct {

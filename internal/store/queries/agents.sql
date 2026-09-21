@@ -27,9 +27,17 @@ UPDATE agents SET
   visibility = coalesce(sqlc.narg('visibility'), visibility),
   auto_publish_tags = coalesce(sqlc.narg('auto_publish_tags'), auto_publish_tags),
   allow_force_push = coalesce(sqlc.narg('allow_force_push'), allow_force_push),
+  pipeline_skip = coalesce(sqlc.narg('pipeline_skip'), pipeline_skip),
   modes = coalesce(sqlc.narg('modes')::text[], modes),
   updated_at = now()
 WHERE id = $1;
+
+-- name: CountUnscannedPublishedVersions :one
+-- The versions of an agent that were published without a scan (M21):
+-- while one exists the agent cannot become public, since only a version
+-- that passed the gate is ever public.
+SELECT count(*)::bigint FROM agent_versions
+WHERE agent_id = $1 AND status = 'published' AND scan_status = 'skipped';
 
 -- name: ListAgentsByNamespace :many
 -- A suspended or erased organization's agents are absent (agentry#363);
