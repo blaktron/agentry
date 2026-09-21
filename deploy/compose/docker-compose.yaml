@@ -138,10 +138,11 @@ services:
       AUTHENTIK_REDIS__HOST: redis
       AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
       # Where the directory's flows return (agentry#164, DEV-091), read by
-      # the account-flows blueprint's redirect stages via !Env: sign-out to
-      # AGENTRY_PUBLIC_WEB_URL, password/authenticator changes to
-      # AGENTRY_ACCOUNT_URL. Both default to the server's own /ui/ pages; a
-      # site in front sets them to its own (its compose overlay does).
+      # the account-flows blueprint via !Env: sign-out to
+      # AGENTRY_PUBLIC_WEB_URL (its redirect stage), password/authenticator
+      # changes to AGENTRY_ACCOUNT_URL (the return-to-settings policy,
+      # DEV-118). Both default to the server's own /ui/ pages; a site in
+      # front sets them to its own (its compose overlay does).
       AGENTRY_PUBLIC_WEB_URL: ${AGENTRY_PUBLIC_WEB_URL:-${AGENTRY_PUBLIC_URL:-http://localhost:8080}/ui/}
       AGENTRY_ACCOUNT_URL: ${AGENTRY_ACCOUNT_URL:-${AGENTRY_PUBLIC_URL:-http://localhost:8080}/ui/account/directory}
       # What the flows call this deployment (titles, mail subjects).

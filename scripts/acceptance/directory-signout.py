@@ -25,8 +25,10 @@ deletes it on the way out; nothing else in the directory is touched.
 Environment:
   AUTHENTIK_URL              the directory's public origin, e.g. https://auth.example.com
   AUTHENTIK_BOOTSTRAP_TOKEN  an admin API token (the one authentik-bootstrap.sh uses)
-  AGENTRY_ACCOUNT_URL        where the stage-configuration flows return
-                             (the value the authentik containers were given)
+  AGENTRY_ACCOUNT_URL        where the stage-configuration flows return (the
+                             value the authentik containers were given); when
+                             unset the return is only checked to be a final,
+                             absolute redirect
   AGENTRY_IDP_LOGOUT_URL     the sign-out URL the site and the server are
                              configured with; default: the cancel-wrapped
                              end-session URL docs/self-hosting.md recommends
@@ -51,7 +53,7 @@ import urllib.request
 
 BASE = os.environ["AUTHENTIK_URL"].rstrip("/")
 TOKEN = os.environ["AUTHENTIK_BOOTSTRAP_TOKEN"]
-ACCOUNT_URL = os.environ["AGENTRY_ACCOUNT_URL"]
+ACCOUNT_URL = os.environ.get("AGENTRY_ACCOUNT_URL", "")
 APP = os.environ.get("AGENTRY_AUTHENTIK_APP_SLUG", "agentry")
 AUTH_FLOW = os.environ.get("AUTHENTIK_AUTH_FLOW", "default-authentication-flow")
 END_SESSION = f"/application/o/{APP}/end-session/"
@@ -111,11 +113,16 @@ def browser(method, path, body=None):
         return e.code, e.headers.get("Location", ""), e.read()
 
 
-def challenge(path):
+def challenge(path, hops=6):
     st, loc, raw = browser("GET", path)
-    if st == 302:
-        return challenge(loc)
+    if st == 302 and hops:
+        return challenge(loc, hops - 1)
     return json.loads(raw)
+
+
+def hop(st, loc, n):
+    """One line for what an endpoint answered: the redirect, or the size of the body it served instead."""
+    return f"{st} {loc}" if loc else f"{st} {n}-byte body"
 
 
 def run_flow(slug, answers):
@@ -166,11 +173,15 @@ def walk(url, hops=6):
     return 302, url
 
 
-def signed_out():
+def whoami():
+    st, _, raw = browser("GET", "/api/v3/core/users/me/")
+    return json.loads(raw)["user"]["username"] if st == 200 else None
+
+
+def signed_out(user):
     """True once the invalidation flow has run and the directory no longer knows the session."""
     run_flow("agentry-invalidation", {})
-    st, _, raw = browser("GET", "/api/v3/core/users/me/")
-    return st != 200 or json.loads(raw)["user"]["username"] != username
+    return whoami() != user
 
 
 print("== directory sign-out acceptance ==")
@@ -178,8 +189,8 @@ username = "signout-acceptance-" + secrets.token_hex(4)
 password = secrets.token_urlsafe(24)
 _, user = admin("POST", "/api/v3/core/users/", {"username": username, "name": "sign-out acceptance", "is_active": True, "type": "internal"})
 pk = user["pk"]
-admin("POST", f"/api/v3/core/users/{pk}/set_password/", {"password": password})
 try:
+    admin("POST", f"/api/v3/core/users/{pk}/set_password/", {"password": password})
     answers = {
         "ak-stage-identification": lambda ch: {"component": "ak-stage-identification", "uid_field": username, **({"password": password} if ch.get("password_fields") else {})},
         "ak-stage-password": lambda ch: {"component": "ak-stage-password", "password": password},
@@ -187,14 +198,13 @@ try:
 
     def sign_in():
         run_flow(AUTH_FLOW, answers)
-        st, _, raw = browser("GET", "/api/v3/core/users/me/")
-        return st == 200 and json.loads(raw)["user"]["username"] == username
+        return whoami() == username
 
     # 1. control
     check("sign-in", sign_in(), username)
     st, loc, n = end_session()
-    check("control: end-session after sign-in redirects into the invalidation flow", st == 302 and INVALIDATION in loc, f"{st} {loc or f'{n}-byte body'}")
-    check("control: the invalidation flow ends the directory session", signed_out(), "/users/me no longer answers for the user")
+    check("control: end-session after sign-in redirects into the invalidation flow", st == 302 and INVALIDATION in loc, hop(st, loc, n))
+    check("control: the invalidation flow ends the directory session", signed_out(username), "/users/me no longer answers for the user")
 
     # 2. abandoned flow, then the configured sign-out URL
     check("sign-in again", sign_in(), username)
@@ -202,22 +212,26 @@ try:
     ch = challenge("/api/v3/flows/executor/agentry-totp-setup/")
     check("authenticator-app flow starts", ch.get("component") == "ak-stage-authenticator-totp", ch.get("component"))
     st, loc, n = end_session()
-    print(f"info  plain end-session after the abandoned flow: {st} {loc or f'{n}-byte body'} (authentik's plan guard; the sign-out URL below is what the site uses)")
+    print(f"info  plain end-session after the abandoned flow: {hop(st, loc, n)} (authentik's plan guard; the sign-out URL below is what the site uses)")
     st, final = walk(SIGNOUT_URL)
     check("sign-out URL after an ABANDONED flow reaches the invalidation flow", INVALIDATION in final, f"{st} {final}")
-    check("…and it ends the directory session", signed_out(), "/users/me no longer answers for the user")
+    check("…and it ends the directory session", signed_out(username), "/users/me no longer answers for the user")
 
     # 3. completed flow: the return is a final redirect, and plain end-session works
     check("sign-in a third time", sign_in(), username)
     browser("GET", "/if/flow/agentry-totp-setup/")
     red = run_flow("agentry-totp-setup", {"ak-stage-authenticator-totp": lambda ch: {"component": "ak-stage-authenticator-totp", "code": totp_code(ch["config_url"])}})
-    check("authenticator-app flow ends on a FINAL redirect to AGENTRY_ACCOUNT_URL", red.get("final_redirect") is True and red.get("to", "").startswith(ACCOUNT_URL), f"to={red.get('to')!r} final_redirect={red.get('final_redirect')!r}")
+    to = red.get("to", "")
+    returned = to.startswith(ACCOUNT_URL) if ACCOUNT_URL else to.startswith(("https://", "http://"))
+    check("authenticator-app flow ends on a FINAL redirect to " + (ACCOUNT_URL or "an absolute URL"), red.get("final_redirect") is True and returned, f"to={to!r} final_redirect={red.get('final_redirect')!r}")
     st, loc, n = end_session()
-    check("end-session after a COMPLETED authenticator-app flow redirects into the invalidation flow", st == 302 and INVALIDATION in loc, f"{st} {loc or f'{n}-byte body'}")
-    check("…and the invalidation flow ends the directory session", signed_out(), "/users/me no longer answers for the user")
+    check("end-session after a COMPLETED authenticator-app flow redirects into the invalidation flow", st == 302 and INVALIDATION in loc, hop(st, loc, n))
+    check("…and the invalidation flow ends the directory session", signed_out(username), "/users/me no longer answers for the user")
 finally:
     admin("DELETE", f"/api/v3/core/users/{pk}/")
     print(f"throwaway user {username} deleted")
 
-print("DIRECTORY SIGN-OUT FAILED: " + ", ".join(fails) if fails else "DIRECTORY SIGN-OUT OK")
-sys.exit(1 if fails else 0)
+if fails:
+    print("== directory sign-out acceptance FAILED: " + "; ".join(fails) + " ==")
+    sys.exit(1)
+print("== directory sign-out acceptance PASSED ==")

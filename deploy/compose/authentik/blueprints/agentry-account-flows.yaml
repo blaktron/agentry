@@ -588,8 +588,11 @@ entries:
       name: agentry-return-to-settings
     attrs:
       # AGENTRY_ACCOUNT_URL and the flash are formatted in at apply time, like
-      # the rate limit's budget above. The policy always passes: it exists for
-      # its side effect on the plan, not to gate the stage it is bound to.
+      # the rate limit's budget above — into Python source, so the value is
+      # the deployment's own (a quote or a backslash in it breaks the policy,
+      # and a broken policy skips the stage: the flow turns up empty). The
+      # policy always passes: it exists for its side effect on the plan, not
+      # to gate the stage it is bound to.
       expression: !Format
         - |
           context["flow_plan"].context["redirect"] = "%s?ok=%s"
@@ -598,7 +601,8 @@ entries:
         - "Saved%20in%20the%20directory."
   # The redirect stage those flows ended on until agentry#441. Deleting it
   # drops its bindings with it on a deployment that applied the earlier
-  # version; a no-op on a fresh install.
+  # version; a no-op on a fresh install, removable once every deployment
+  # has applied this once (like the cleanup entries above).
   - model: authentik_stages_redirect.redirectstage
     state: absent
     identifiers:
