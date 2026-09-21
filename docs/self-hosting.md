@@ -163,6 +163,9 @@ scan:
   # The one external scanner tool behind the §8.3 seam. Optional: unset,
   # the native Go secret detectors run alone.
   gitleaksBin: /usr/bin/gitleaks      # AGENTRY_SCAN_GITLEAKS_BIN ("auto" = PATH lookup); shipped in the image
+  # gitleaks runs with the registry's own rule configuration (its built-in
+  # default rules, passed as --config on every scan); a .gitleaks.toml inside
+  # a submitted archive is scanned as a file and never read as configuration.
   # toolTimeout: 2m                   # AGENTRY_SCAN_TOOL_TIMEOUT per invocation
   # The vulnerability database S7 asks about the MCP servers a manifest
   # declares. Default api.osv.dev; point it at a mirror, or set "none" to
