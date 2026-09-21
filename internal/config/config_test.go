@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -12,13 +13,21 @@ func TestLoadDefaults(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for explicit missing file")
 	}
-	// Empty path with no agentry.yaml in cwd yields pure defaults.
-	cfg, err = Load("")
-	if err != nil {
-		t.Fatalf("Load: %v", err)
+	// Empty path with no agentry.yaml in cwd yields pure defaults — and the
+	// pure defaults refuse to run: dev mode is opt-in (DEV-116), so with no
+	// sealing key configured the load fails at the validation, naming it,
+	// rather than starting on a public constant.
+	if _, err = Load(""); err == nil || !strings.Contains(err.Error(), "sealingKey") {
+		t.Fatalf("Load of pure defaults: err = %v, want the sealing-key refusal", err)
 	}
-	if cfg.Env != "dev" || !cfg.DevMode {
+	cfg = Default()
+	if cfg.Env != "dev" || cfg.DevMode {
 		t.Errorf("defaults wrong: %+v", cfg)
+	}
+	// Opting in is one line, and then the defaults load.
+	t.Setenv("AGENTRY_DEV_MODE", "true")
+	if cfg, err = Load(""); err != nil || !cfg.DevMode {
+		t.Fatalf("Load with AGENTRY_DEV_MODE=true: %v %+v", err, cfg.DevMode)
 	}
 	if cfg.HTTP.Addr != ":8080" {
 		t.Errorf("default addr: %q", cfg.HTTP.Addr)
@@ -63,12 +72,22 @@ func TestLoadRejectsUnknownKeys(t *testing.T) {
 	}
 }
 
+// devDefault is the baseline with dev mode opted in: what a throwaway
+// stack runs, and what tests of the OTHER guards start from.
+func devDefault() Config {
+	c := Default()
+	c.DevMode = true
+	return c
+}
+
 func TestValidateGuards(t *testing.T) {
 	cases := []struct {
 		name   string
 		mutate func(*Config)
 	}{
 		{"prod devMode", func(c *Config) { c.Env = "prod"; c.DevMode = true }},
+		{"staging devMode", func(c *Config) { c.Env = "staging"; c.DevMode = true }},
+		{"no sealing key outside dev mode", func(c *Config) { c.DevMode = false; c.Auth.SealingKey = "" }},
 		{"prod unsigned", func(c *Config) { c.Env = "prod"; c.DevMode = false; c.Signing.Kind = "none" }},
 		{"bad env", func(c *Config) { c.Env = "yolo" }},
 		{"bad storage", func(c *Config) { c.Storage.Kind = "ftp" }},
@@ -80,7 +99,7 @@ func TestValidateGuards(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := Default()
+			cfg := devDefault()
 			tc.mutate(&cfg)
 			if err := cfg.Validate(); err == nil {
 				t.Fatalf("expected validation error")
@@ -120,7 +139,7 @@ func TestValidateCapsCredentialTTLs(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := Default()
+			cfg := devDefault()
 			tc.mutate(&cfg)
 			err := cfg.Validate()
 			if tc.wantErr && err == nil {
@@ -172,7 +191,7 @@ func TestValidateGuardsTheNewSurfaces(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := Default()
+			cfg := devDefault()
 			tc.mutate(&cfg)
 			if err := cfg.Validate(); err == nil {
 				t.Fatal("expected a validation error")
@@ -184,7 +203,7 @@ func TestValidateGuardsTheNewSurfaces(t *testing.T) {
 // mailpit speaks plaintext on 1025 and needs no credentials; the dev default
 // must not be refused by the guard that protects real relays.
 func TestSMTPWithoutAuthNeedsNoTLS(t *testing.T) {
-	cfg := Default()
+	cfg := devDefault()
 	cfg.Notify.Kind = "smtp"
 	cfg.SMTP.Host, cfg.SMTP.Port, cfg.SMTP.From = "mailpit", 1025, "a@b.test"
 	cfg.SMTP.StartTLS = false
@@ -233,6 +252,7 @@ func TestNewEnvOverridesApply(t *testing.T) {
 	t.Setenv("AGENTRY_STORAGE_S3_PREFIX", "staging")
 	t.Setenv("AGENTRY_STORAGE_S3_USE_PATH_STYLE", "true")
 	t.Setenv("AGENTRY_SIGNING_NOT_AFTER", "2027-01-01T00:00:00Z")
+	t.Setenv("AGENTRY_DEV_MODE", "true") // the knobs under test, on the dev baseline (DEV-116)
 
 	cfg, err := Load("")
 	if err != nil {
@@ -272,6 +292,7 @@ func TestJudgeEnvConfig(t *testing.T) {
 	t.Setenv("AGENTRY_JUDGE_BASE_URL", "https://llm.example.internal")
 	t.Setenv("AGENTRY_JUDGE_API_KEY", "sk-test")
 	t.Setenv("AGENTRY_JUDGE_MODEL", "gpt-test")
+	t.Setenv("AGENTRY_DEV_MODE", "true") // the knobs under test, on the dev baseline (DEV-116)
 
 	cfg, err := Load("")
 	if err != nil {
@@ -333,6 +354,7 @@ func TestSocialProviderEnv(t *testing.T) {
 	t.Setenv("AGENTRY_SOCIAL_OPENAI_ISSUER", "https://issuer.example/oai")
 	t.Setenv("AGENTRY_SOCIAL_CLAUDE_CLIENT_ID", "claude-id")
 	t.Setenv("AGENTRY_SOCIAL_CLAUDE_ISSUER", "https://issuer.example/claude")
+	t.Setenv("AGENTRY_DEV_MODE", "true") // the knobs under test, on the dev baseline (DEV-116)
 
 	cfg, err := Load("")
 	if err != nil {

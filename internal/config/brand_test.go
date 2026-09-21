@@ -19,17 +19,17 @@ func TestDisplayName(t *testing.T) {
 }
 
 func TestValidateUIAndWeb(t *testing.T) {
-	c := Default()
+	c := devDefault()
 	c.UI.Mode = "sideways"
 	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "ui.mode") {
 		t.Fatalf("ui.mode: %v", err)
 	}
-	c = Default()
+	c = devDefault()
 	c.Web.URL = "site.example/path?x"
 	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "web.url") {
 		t.Fatalf("web.url: %v", err)
 	}
-	c = Default()
+	c = devDefault()
 	c.Web.URL = "https://site.example"
 	c.UI.Mode = "authorize"
 	if err := c.Validate(); err != nil {

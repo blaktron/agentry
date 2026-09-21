@@ -14,6 +14,7 @@ import (
 // talking to the assembled handler (spec-first contract round-trip).
 func TestM0Smoke(t *testing.T) {
 	cfg := config.Default()
+	cfg.DevMode = true
 	srv := httptest.NewServer(api.NewHandler(api.New(cfg, nil, nil)))
 	defer srv.Close()
 
@@ -39,6 +40,7 @@ func TestM0Smoke(t *testing.T) {
 // TestHealthEndpoints covers the non-spec endpoints the LB and deploys use.
 func TestHealthEndpoints(t *testing.T) {
 	cfg := config.Default()
+	cfg.DevMode = true
 	srv := httptest.NewServer(api.NewHandler(api.New(cfg, nil, nil)))
 	defer srv.Close()
 
