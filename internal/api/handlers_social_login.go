@@ -367,12 +367,8 @@ func (s *Server) peekSocialState(w http.ResponseWriter, r *http.Request, provide
 	if err != nil || c.Value == "" {
 		return socialState{}, "The sign-in state cookie is missing. Start the sign-in again.", false
 	}
-	// Single use regardless of outcome; cleared with the attributes it was
-	// set with, as every other cookie here is.
-	http.SetCookie(w, &http.Cookie{
-		Name: socialStateCookie, Value: "", Path: "/", HttpOnly: true,
-		Secure: s.cfg.Auth.CookieSecure, SameSite: http.SameSiteLaxMode, MaxAge: -1,
-	})
+	// Single use regardless of outcome.
+	clearCookie(w, socialStateCookie, s.cfg.Auth.CookieSecure)
 	sealed, err := base64.RawURLEncoding.DecodeString(c.Value)
 	if err != nil {
 		return socialState{}, "The sign-in state is invalid. Start the sign-in again.", false

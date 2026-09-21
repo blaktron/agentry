@@ -188,10 +188,7 @@ func (s *Server) samlSlo(w http.ResponseWriter, r *http.Request, org OrgHandle) 
 	s.log.InfoContext(r.Context(), "saml slo: sessions revoked", "org", org, "sessions", revoked)
 	// Clear this browser's cookie too: the request may arrive front-channel
 	// through the user's own browser.
-	http.SetCookie(w, &http.Cookie{
-		Name: sessionCookieName, Value: "", Path: "/", HttpOnly: true,
-		Secure: s.cfg.Auth.CookieSecure, SameSite: http.SameSiteLaxMode, MaxAge: -1,
-	})
+	clearCookie(w, sessionCookieName, s.cfg.Auth.CookieSecure)
 	if u, ok := sp.LogoutResponseURL(info.ID, relayState); ok {
 		http.Redirect(w, r, u, http.StatusSeeOther)
 		return

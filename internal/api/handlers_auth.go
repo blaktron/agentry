@@ -384,10 +384,7 @@ func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 		problemInternal(w, r)
 		return
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name: sessionCookieName, Value: "", Path: "/", HttpOnly: true,
-		Secure: s.cfg.Auth.CookieSecure, SameSite: http.SameSiteLaxMode, MaxAge: -1,
-	})
+	clearCookie(w, sessionCookieName, s.cfg.Auth.CookieSecure)
 	if idpLogout != "" {
 		writeJSON(w, http.StatusOK, LogoutResult{IdpLogoutUrl: idpLogout})
 		return
