@@ -90,7 +90,12 @@ type Database struct {
 	MigrateOnStart bool `yaml:"migrateOnStart"`
 }
 
-// Redis is an optional dependency (D-06); empty URL = in-memory fallbacks.
+// Redis is an optional dependency (D-06), and nothing in the core reads the
+// URL today: it is reported as features.redis on GET /api/v1/meta and that is
+// all. The state a replica set must share lives in Postgres — sessions, the
+// queue, and the SAML replay and request sets (agentry#414) — so there is no
+// in-memory fallback this would replace. The rate-limit buckets stay per
+// process either way (docs/self-hosting.md).
 type Redis struct {
 	URL string `yaml:"url"`
 }

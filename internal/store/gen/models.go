@@ -386,6 +386,16 @@ type RulesetRelease struct {
 	PublishedAt  time.Time `json:"published_at"`
 }
 
+type SamlConsumedAssertion struct {
+	ID        string    `json:"id"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+type SamlRequest struct {
+	ID        string    `json:"id"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
 type ScanResultCache struct {
 	ArchiveDigest    string    `json:"archive_digest"`
 	Scanner          string    `json:"scanner"`

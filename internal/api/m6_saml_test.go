@@ -221,12 +221,24 @@ func TestSAMLACSEndpoint(t *testing.T) {
 
 func (env *testEnv) postForm(t *testing.T, u string, form url.Values) *http.Response {
 	t.Helper()
+	return env.postFormAs(t, u, form, "")
+}
+
+// postFormAs posts a form and captures the response without following
+// redirects. A non-empty host is sent as the request's Host: that is how one
+// public URL reaches whichever replica sits behind it (agentry#414), and the
+// server derives its own ACS URL from the header, so an assertion addressed
+// to that URL still matches the SP it lands on.
+func (env *testEnv) postFormAs(t *testing.T, u string, form url.Values, host string) *http.Response {
+	t.Helper()
 	req, err := http.NewRequest(http.MethodPost, u, strings.NewReader(form.Encode()))
 	if err != nil {
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	// Do not follow redirects; capture the response directly.
+	if host != "" {
+		req.Host = host
+	}
 	client := *env.srv.Client()
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	resp, err := client.Do(req)
@@ -379,4 +391,91 @@ func TestSAMLSingleLogout(t *testing.T) {
 	if r := env.do(sess, http.MethodPost, "/api/v1/auth/logout", nil); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("native logout: got %d want 204", r.StatusCode)
 	}
+}
+
+// TestSAMLReplayIsRefusedAcrossServers (agentry#414): an assertion consumed
+// by one API replica is refused by every other. Two servers share the
+// database and, since this test, the record of consumed assertions; the
+// second is reached with the first's Host, as replicas behind one public
+// URL are.
+func TestSAMLReplayIsRefusedAcrossServers(t *testing.T) {
+	a := newTestEnv(t)
+	b := newTestEnv(t)
+	owner := a.register("saml-rep-owner")
+	a.verifyEmail(owner)
+	sess := a.login(owner)
+	orgH := "samlrep" + a.sfx
+	a.createOrg(sess, orgH)
+	a.verifyOrgDomain(orgH, "acme.example")
+	idp := newSAMLTestIdP(t)
+	metadataXML, err := samlsp.BuildIDPMetadataXML(idp.entityID, "https://acs-idp.test/sso", idp.certPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.doJSON(sess, http.MethodPut, "/api/v1/orgs/"+orgH+"/sso/connections/saml", map[string]any{
+		"enabled": true,
+		"config":  map[string]any{"idpMetadataXml": metadataXML, "emailAttribute": "email"},
+	}, nil, http.StatusOK)
+	metadataURL := a.srv.URL + "/api/v1/orgs/" + orgH + "/sso/saml/metadata"
+	acsURL := a.srv.URL + "/api/v1/orgs/" + orgH + "/sso/saml/acs"
+	nameID := "sso-rep-" + a.sfx + "@acme.example"
+	memberH := a.registerEmail("saml-rep-member", nameID)
+	a.seedMembership(orgH, memberH, "member", "active")
+
+	resp := idp.signedResponse(t, metadataURL, acsURL, nameID, false)
+	first := a.postForm(t, acsURL, url.Values{"SAMLResponse": {resp}})
+	_ = first.Body.Close()
+	if first.StatusCode != http.StatusOK {
+		t.Fatalf("the assertion at the first server: %d, want 200", first.StatusCode)
+	}
+
+	// postAtB presents an assertion to the other replica under the first's
+	// Host, the way replicas behind one public URL are reached.
+	acsAtB := b.srv.URL + "/api/v1/orgs/" + orgH + "/sso/saml/acs"
+	publicHost := strings.TrimPrefix(a.srv.URL, "http://")
+	postAtB := func(samlResponse string) (*http.Response, []byte) {
+		res := b.postFormAs(t, acsAtB, url.Values{"SAMLResponse": {samlResponse}}, publicHost)
+		body, _ := io.ReadAll(res.Body)
+		_ = res.Body.Close()
+		return res, body
+	}
+
+	// The control: a *fresh* assertion is accepted at the other replica by
+	// this same route, so the 401 that follows is the shared record of
+	// consumed assertions refusing it, and not the Host failing to reach
+	// that replica's own SP.
+	fresh := idp.signedResponse(t, metadataURL, acsURL, nameID, false)
+	accepted, body := postAtB(fresh)
+	if accepted.StatusCode != http.StatusOK {
+		t.Fatalf("a fresh assertion at the other server: %d %s, want 200", accepted.StatusCode, body)
+	}
+
+	// The assertion the first replica consumed, captured, presented to the second.
+	second, body := postAtB(resp)
+	if second.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("the replay at the other server: %d %s, want 401", second.StatusCode, body)
+	}
+	if minted := sessionCookie(second); minted {
+		t.Fatal("the replay at the other server minted a session")
+	}
+
+	// And the assertion the second replica consumed is refused there too:
+	// the set is one, whichever replica wrote to it.
+	third, body := postAtB(fresh)
+	if third.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("replaying the other server's own assertion: %d %s, want 401", third.StatusCode, body)
+	}
+	if minted := sessionCookie(third); minted {
+		t.Fatal("replaying the other server's own assertion minted a session")
+	}
+}
+
+// sessionCookie reports whether a response set a live session cookie.
+func sessionCookie(res *http.Response) bool {
+	for _, c := range res.Cookies() {
+		if c.Name == "agentry_session" && c.Value != "" {
+			return true
+		}
+	}
+	return false
 }

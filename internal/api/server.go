@@ -59,11 +59,17 @@ type Server struct {
 	blobs     registry.BlobStore
 	pipeline  *scan.Pipeline
 	renderer  *render.Renderer
-	// Enterprise (M6/WG-J): webhook fan-out, DNS resolver for domain
-	// verification, and the shared SAML assertion replay cache.
-	webhooks   *webhook.Dispatcher
-	resolver   dnsx.Resolver
-	samlReplay samlsp.ReplayCache
+	// Enterprise (M6/WG-J): webhook fan-out and the DNS resolver for domain
+	// verification.
+	webhooks *webhook.Dispatcher
+	resolver dnsx.Resolver
+	// samlReplay and samlRequests are the sets every API replica must
+	// see alike: the assertions consumed, the logins started. In the
+	// database whenever there is one; in memory for a server without
+	// (agentry#414). SetSAMLReplayCache and SetSAMLRequestTracker take
+	// another implementation.
+	samlReplay   samlsp.ReplayCache
+	samlRequests samlsp.RequestTracker
 	// jobs is the enqueue-side queue client (webhook deliveries, audit
 	// exports). The worker role drains it; nil without a database.
 	jobs queue.Client
@@ -146,9 +152,15 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 	// Enterprise defaults, set regardless of database presence (§12.4, §9.3).
 	srv.resolver = dnsx.NewSystemResolver()
 	srv.samlReplay = samlsp.NewMemoryReplayCache()
+	srv.samlRequests = samlsp.NewMemoryRequestTracker()
 	srv.SetOIDCEgressGuard(webhook.Guard{AllowLoopback: cfg.DevMode})
 	srv.imgKey = newImgProxyKey(cfg.Auth.SealingKey)
 	if st != nil {
+		// With a database the SAML sets live there, so a second replica
+		// refuses what the first consumed and completes what the first
+		// started (agentry#414).
+		srv.samlReplay = samlsp.NewStoreReplayCache(st.Queries(), srv.log)
+		srv.samlRequests = samlsp.NewStoreRequestTracker(st.Queries(), srv.log)
 		srv.reg = registry.NewService(st, aud)
 		// Webhook fan-out (§9.3): enqueue deliveries onto the Postgres queue;
 		// the worker role runs the delivery handler. Wired before the blobs
@@ -393,6 +405,15 @@ func (s *Server) SetWebhookDispatcher(d *webhook.Dispatcher) { s.webhooks = d }
 // SetOIDCHTTPClient overrides the HTTP client used for OIDC discovery/JWKS/
 // token calls (tests point it at an in-process IdP).
 func (s *Server) SetOIDCHTTPClient(c *http.Client) { s.oidcHTTPClient = c }
+
+// SetSAMLReplayCache replaces the record of consumed SAML assertions (the
+// database's by default; a deployment may bring its own, shared the same
+// way across replicas).
+func (s *Server) SetSAMLReplayCache(c samlsp.ReplayCache) { s.samlReplay = c }
+
+// SetSAMLRequestTracker replaces the record of outstanding SAML
+// AuthnRequests, the replay cache's mirror image.
+func (s *Server) SetSAMLRequestTracker(t samlsp.RequestTracker) { s.samlRequests = t }
 
 // SetOIDCEgressGuard replaces the egress policy OIDC requests go through
 // (tests answer a name with an address of their choosing through the
