@@ -57,8 +57,21 @@ func (s *RepoStore) ArchiveTag(ctx context.Context, repoID uuid.UUID, tag string
 		return nil, "", err
 	}
 
-	// Resolve the commit the tag points at (annotated tags peel).
-	rev := exec.CommandContext(ctx, s.gitBin, "-C", dir, "rev-list", "-n1", tag)
+	// The tag is a publisher's string and an argv element to git twice
+	// over; git reads a leading dash as an option. Qualified to
+	// refs/tags/<tag> it cannot start with one, and safeRefName keeps it a
+	// plain name — no whitespace, globs or revision syntax — so what
+	// reaches git is a literal ref and nothing else (security review
+	// 2026-09-20 §5.6).
+	ref, err := tagRef(tag)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// Resolve the commit the tag points at (annotated tags peel). The
+	// trailing "--" ends the revision list so nothing after it is read as
+	// one, whatever the ref name was.
+	rev := exec.CommandContext(ctx, s.gitBin, "-C", dir, "rev-list", "-n1", ref, "--")
 	revOut, err := rev.Output()
 	if err != nil {
 		return nil, "", fmt.Errorf("gitsrv: tag %s not found: %w", tag, err)
@@ -77,7 +90,7 @@ func (s *RepoStore) ArchiveTag(ctx context.Context, repoID uuid.UUID, tag string
 	}()
 
 	args := append([]string{"-C", dir}, archiveArgs...)
-	cmd := exec.CommandContext(ctx, s.gitBin, append(args, tag)...) //nolint:gosec // fixed binary; tag resolved above
+	cmd := exec.CommandContext(ctx, s.gitBin, append(args, ref)...) //nolint:gosec // fixed binary; ref is a qualified refs/tags/ name that passed safeRefName
 	cmd.Env = archiveEnv()
 	var stderr strings.Builder
 	cmd.Stdout, cmd.Stderr = f, &stderr
@@ -276,6 +289,26 @@ func (s *RepoStore) MaterializeTag(ctx context.Context, repoID uuid.UUID, tag, d
 		return "", err
 	}
 	return commit, nil
+}
+
+// tagRef qualifies a submitted tag name to the ref git will be given:
+// refs/tags/<tag>, or the name itself when already under refs/tags/. The
+// result must be a plain ref name (safeRefName) with no "." segment
+// tricks, or the tag is refused before any git process starts.
+func tagRef(tag string) (string, error) {
+	ref := tag
+	if strings.HasPrefix(ref, "refs/") && !strings.HasPrefix(ref, "refs/tags/") {
+		return "", fmt.Errorf("gitsrv: %q is not a tag name", tag)
+	}
+	if !strings.HasPrefix(ref, "refs/tags/") {
+		ref = "refs/tags/" + tag
+	}
+	name := strings.TrimPrefix(ref, "refs/tags/")
+	if name == "" || !safeRefName(ref) || strings.HasPrefix(name, "-") || strings.Contains(ref, "..") ||
+		strings.HasSuffix(name, "/") || strings.Contains(ref, "//") || strings.ContainsAny(name, "{}@") {
+		return "", fmt.Errorf("gitsrv: %q is not a tag name", tag)
+	}
+	return ref, nil
 }
 
 // extractPlainTar unpacks an uncompressed tar defensively: no traversal, no
