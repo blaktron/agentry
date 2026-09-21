@@ -27,14 +27,25 @@ front of this same server; a registry does not need one, and
 git clone https://github.com/blaktron/agentry.git
 cd agentry/deploy/compose
 printf 'AUTHENTIK_SECRET_KEY=%s\n' "$(openssl rand -base64 48)" >> .env
+printf 'AGENTRY_AUTH_SEALING_KEY=%s\n' "$(openssl rand -base64 32)" >> .env   # encrypts TOTP seeds and webhook secrets at rest
+mkdir -p keys && openssl ecparam -name prime256v1 -genkey -noout -out keys/signing-key.pem
+chmod 600 keys/signing-key.pem && sudo chown 65532 keys/signing-key.pem  # the server's uid inside the container
+printf 'AGENTRY_SIGNING_KEY_FILE=/etc/agentry/signing-key.pem\nAGENTRY_SIGNING_KEY_DIR=%s/keys\n' "$PWD" >> .env
 mkdir -p edge/certs                # edge.crt + edge.key for the edge (self-signed is fine locally),
                                    # or point AGENTRY_EDGE_CERT_DIR at yours
 docker compose up -d               # postgres, minio, mailpit, authentik
 docker compose --profile server up -d
 ```
 
-The stack refuses to start without `AUTHENTIK_SECRET_KEY` in `.env`, and
-the edge needs its certificate pair; both are one-time.
+The stack refuses to start without `AUTHENTIK_SECRET_KEY`, the sealing
+key and the signing key in `.env`, and the edge needs its certificate
+pair; all are one-time. **Back up the two keys**: the sealing key is the
+only way to read the TOTP seeds and webhook secrets it encrypted, and every
+attestation the signing key signed verifies only against it. Dev mode
+(`AGENTRY_DEV_MODE=true` in `.env`) does without both — a constant from the
+public source stands in for the sealing key, a signing key is minted at
+every start, 2FA before a public publish is skipped — and is for a
+throwaway stack only; the server refuses it outside `env: dev`.
 
 The server's own pages are at http://localhost:8080/ui/ — sign-in, your
 account, tokens and SSH keys, the review queue, the staff console and
@@ -102,7 +113,7 @@ overrides; environment always wins. The authoritative list is
 
 ```yaml
 env: prod
-devMode: false          # refused in prod anyway
+devMode: false          # the default; allowed only with env: dev, and one boolean switches five controls off
 
 database:
   url: postgres://…
@@ -228,19 +239,20 @@ deliberately before it verifies anything published afterwards. Rotate on
 purpose, not by accident; the rotation runbook in `docs/ops/runbooks.md`
 has the steps.
 
-With the compose stack, three lines in `.env` wire the key in without leaving
-dev mode (agentry#308): `AGENTRY_SIGNING_KIND=file`,
+With the compose stack, two lines in `.env` wire the key in (the quickstart
+above writes them; `AGENTRY_SIGNING_KIND` is `file` by default):
 `AGENTRY_SIGNING_KEY_FILE=/etc/agentry/signing-key.pem` and
 `AGENTRY_SIGNING_KEY_DIR=/path/to/the/directory/holding/signing-key.pem` (the
 host directory, mounted read-only at `/etc/agentry`). The server runs as uid
 65532 inside the container, so a `0600` key has to be owned by that uid
-(`chown 65532 signing-key.pem`) or the server refuses to start. Without
-these lines dev mode mints a key at every start, so every restart is a
-rotation: the previous key is retired, the whole catalogue is queued for
-countersigning, and every client that pinned the stack warns about a changed
-key set until it re-pins — fine for a throwaway stack, not for one anyone
-installs from; and `kind: file` with no `keyFile` in dev mode is the same
-ephemeral key, not an error.
+(`chown 65532 signing-key.pem`) or the server refuses to start. In dev mode
+(`AGENTRY_DEV_MODE=true`, opt-in) `AGENTRY_SIGNING_KIND=none` is accepted and
+the server mints a key at every start, so every restart is a rotation: the
+previous key is retired, the whole catalogue is queued for countersigning,
+and every client that pinned the stack warns about a changed key set until
+it re-pins — fine for a throwaway stack, not for one anyone installs from;
+and `kind: file` with no `keyFile` in dev mode is the same ephemeral key,
+not an error.
 
 Generate a sealing key:
 

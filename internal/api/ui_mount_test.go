@@ -17,6 +17,7 @@ import (
 // found it). Both must route with git mounted.
 func TestUIMountsBesideGitPatterns(t *testing.T) {
 	cfg := config.Default()
+	cfg.DevMode = true
 	srv := api.New(cfg, nil, nil)
 	gitHits := 0
 	h := api.NewHandlerWithGit(srv, func(mux *http.ServeMux) {

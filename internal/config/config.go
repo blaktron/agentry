@@ -18,8 +18,15 @@ import (
 type Config struct {
 	// Env names the deployment environment: dev | staging | prod.
 	Env string `yaml:"env"`
-	// DevMode enables development conveniences (auto-approve pipeline stub in
-	// M3 per §18.2, verbose errors). MUST be false in prod; Validate enforces it.
+	// DevMode enables development conveniences, and is opt-in: false unless
+	// the configuration says otherwise, and refused unless env is dev
+	// (Validate enforces both, DEV-115). One boolean switches five
+	// controls off at once — the at-rest sealing key (a public constant
+	// stands in), 2FA before a public publish, release signing (an
+	// ephemeral key at every start), the scan judge (none becomes static)
+	// and the S8 IP-cluster signal (a fixed literal) — so a deployment that
+	// did not ask for it must never get it (security review 2026-09-20
+	// §3.6).
 	DevMode bool `yaml:"devMode"`
 
 	HTTP      HTTP      `yaml:"http"`
@@ -453,11 +460,14 @@ type Orgs struct {
 	PendingDigestEvery time.Duration `yaml:"pendingDigestEvery"`
 }
 
-// Default returns the development-safe baseline configuration.
+// Default returns the baseline configuration: a development environment
+// with dev mode OFF. A config that names no sealing key and no signing key
+// therefore fails at boot rather than running on public constants; a
+// throwaway stack opts in with devMode: true (DEV-115).
 func Default() Config {
 	return Config{
 		Env:     "dev",
-		DevMode: true,
+		DevMode: false,
 		HTTP:    HTTP{Addr: ":8080"},
 		Database: Database{
 			URL:            "postgres://agentry:agentry@localhost:5477/agentry_dev?sslmode=disable",
@@ -831,8 +841,8 @@ func (c Config) Validate() error {
 	if c.Queue.Workers < 1 {
 		return fmt.Errorf("config: queue.workers must be at least 1, got %d", c.Queue.Workers)
 	}
-	if c.Env == "prod" && c.DevMode {
-		return fmt.Errorf("config: devMode must be false in prod")
+	if c.DevMode && c.Env != "dev" {
+		return fmt.Errorf("config: devMode is allowed only with env: dev (got env %q)", c.Env)
 	}
 	switch c.Storage.Kind {
 	case "local", "s3":

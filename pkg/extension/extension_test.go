@@ -113,7 +113,9 @@ func (bound) AuditActions() []AuditAction { return []AuditAction{"bound.tier_set
 // before anything else of it is wired.
 func TestApplyExtensionsBindsAndRegistersActions(t *testing.T) {
 	ext := &bound{}
-	srv := api.New(config.Default(), nil, slog.New(slog.DiscardHandler))
+	cfg := config.Default()
+	cfg.DevMode = true
+	srv := api.New(cfg, nil, slog.New(slog.DiscardHandler))
 	applyExtensions(srv, []Extension{ext})
 	if ext.deps.Log == nil || ext.deps.Audit == nil || ext.deps.Entitlements == nil {
 		t.Fatalf("Bind did not deliver the deps: %+v", ext.deps)

@@ -23,6 +23,7 @@ import (
 func contractServer(t *testing.T, trustedProxies int, proxyRequestID bool) (*httptest.Server, *bytes.Buffer) {
 	t.Helper()
 	cfg := config.Default()
+	cfg.DevMode = true
 	cfg.HTTP.TrustedProxies = trustedProxies
 	cfg.HTTP.ProxyRequestID = proxyRequestID
 	var buf bytes.Buffer
@@ -155,6 +156,7 @@ func TestInboundRequestIDHonouredOnlyWhenTheHopSetsIt(t *testing.T) {
 // deployment answers with a request id and logs an access line too.
 func TestWrapMiddlewareGivesABareMuxTheContract(t *testing.T) {
 	cfg := config.Default()
+	cfg.DevMode = true
 	var buf bytes.Buffer
 	log := logx.New(logx.Options{W: &buf, Role: "git"})
 	s := api.New(cfg, nil, log)

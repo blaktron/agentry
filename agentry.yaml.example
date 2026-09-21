@@ -3,7 +3,7 @@
 # internal/config/config.go for the full mapping.
 
 env: dev            # dev | staging | prod
-devMode: true       # MUST be false in prod (config validation enforces)
+devMode: false      # opt-in, and only with env: dev; true switches off the sealing key, 2FA-on-publish, signing, the judge and the abuse signal at once
 
 http:
   addr: ":8080"

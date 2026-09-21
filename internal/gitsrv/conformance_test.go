@@ -84,6 +84,7 @@ func newGitEnvCfg(t *testing.T, cfgFn func(*config.Config)) *gitEnv {
 	t.Cleanup(st.Close)
 
 	cfg := config.Default()
+	cfg.DevMode = true
 	cfg.Git.DataDir = t.TempDir()
 	cfg.Limits.RepoMaxBlobBytes = 1 << 20 // 1 MB single-object cap for tests
 	cfg.Limits.RepoQuotaBytes = 100 << 20
