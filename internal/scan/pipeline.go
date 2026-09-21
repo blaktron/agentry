@@ -675,11 +675,45 @@ func (p *Pipeline) applyDecision(ctx context.Context, agent storegen.GetAgentByI
 	switch result.Decision.Outcome {
 	case OutcomePublish:
 		p.mx.RecordVerdict(ctx, metrics.VerdictClean)
-		if err := p.reg.TransitionFrom(ctx, v.ID, registry.StatusScanning, registry.StatusPublished, result.Decision.Reason, sysEvent, registry.TransitionCause{}); err != nil {
+		// The attestation and the transition to `published` are one
+		// transaction under the version's row lock. When the transition
+		// came first and the signature last, a signing failure (a KMS
+		// outage, the empty-digest refusal) left a published, unattested
+		// version, and the retry's fresh run found the row moved and
+		// swallowed the verdict — "scanned, N findings, signed" false for
+		// it forever (security review 2026-09-20 §5.4). Signing before
+		// the transition, outside a transaction, would sign a version the
+		// watchdog had meanwhile held for review. So: lock the row, refuse
+		// a version no longer in `scanning`, sign, transition, commit — a
+		// failure anywhere leaves the version in `scanning` with no
+		// attestation, and the queue's retry finishes the job. The attest
+		// sweep backfills anything that still slips through.
+		var res registry.TransitionResult
+		err := p.st.WithTx(ctx, func(q *storegen.Queries) error {
+			row, err := q.GetVersionForUpdate(ctx, v.ID)
+			if err != nil {
+				return fmt.Errorf("scan: lock version: %w", err)
+			}
+			if registry.Status(row.Status) != registry.StatusScanning {
+				return fmt.Errorf("%w: %s is %s, the decision was made from scanning", registry.ErrVersionMoved, row.Version, row.Status)
+			}
+			if err := p.sign(ctx, q, agent, v, runID, result.ReportDigest, result.JudgeModel, policyVer); err != nil {
+				return err
+			}
+			r, err := p.reg.TransitionInTx(ctx, q, v.ID, registry.StatusPublished, result.Decision.Reason, sysEvent)
+			if err != nil {
+				return err
+			}
+			res = r
+			return nil
+		})
+		if err != nil {
 			return moved(err)
 		}
+		res.Cause = registry.TransitionCause{}
+		p.reg.EmitTransition(ctx, res)
 		p.indexReadme(ctx, agent.ID, v)
-		return p.sign(ctx, p.st.Queries(), agent, v, runID, result.ReportDigest, result.JudgeModel, policyVer)
+		return nil
 
 	case OutcomeRejected:
 		p.mx.RecordVerdict(ctx, metrics.VerdictBlocked)

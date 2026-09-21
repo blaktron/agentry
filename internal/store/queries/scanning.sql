@@ -124,6 +124,23 @@ RETURNING *;
 -- name: GetAttestation :one
 SELECT * FROM attestations WHERE version_id = $1;
 
+-- A published version with no attestation row is the shape a signing
+-- failure after the transition used to leave (agentry#407); the attest
+-- sweep signs each from its latest finished scan run.
+-- name: ListPublishedVersionsWithoutAttestation :many
+SELECT av.*
+FROM agent_versions av
+LEFT JOIN attestations at ON at.version_id = av.id
+WHERE av.status = 'published' AND at.id IS NULL
+ORDER BY av.id
+LIMIT $1;
+
+-- name: CountPublishedVersionsWithoutAttestation :one
+SELECT count(*)
+FROM agent_versions av
+LEFT JOIN attestations at ON at.version_id = av.id
+WHERE av.status = 'published' AND at.id IS NULL;
+
 -- name: CreateAdvisory :one
 INSERT INTO advisories (id, agent_id, affected_versions, severity, summary, detail, published_at)
 VALUES ($1, $2, $3, $4, $5, $6, now())

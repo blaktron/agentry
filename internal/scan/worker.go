@@ -19,6 +19,9 @@ import (
 const (
 	JobScanVersion = "scan.version"
 	JobRescanSweep = "scan.rescan_sweep"
+	// JobAttestSweep signs every published version that has no
+	// attestation (agentry#407).
+	JobAttestSweep = "scan.attest_sweep"
 	// JobScanReconcile is the §7 watchdog: sweep versions parked in
 	// `scanning` past the 30-minute cap into review.
 	JobScanReconcile = "scan.reconcile"
@@ -65,6 +68,18 @@ func (p *Pipeline) RegisterHandlers(q queue.Client) {
 			p.log.Info("scan: rescan sweep starting", "ruleset", args.RulesetSemver)
 		}
 		return p.RescanSweep(ctx)
+	})
+	q.Register(JobAttestSweep, func(ctx context.Context, _ queue.Job) error {
+		sum, err := p.AttestSweep(ctx)
+		if err != nil {
+			return err
+		}
+		if sum.Failed > 0 {
+			p.log.Error("attest sweep completed with versions it could not sign", "signed", sum.Signed, "failed", sum.Failed)
+		} else {
+			p.log.Info("attest sweep complete", "signed", sum.Signed)
+		}
+		return nil
 	})
 	q.Register(JobReattestSweep, func(ctx context.Context, job queue.Job) error {
 		var args ReattestSweepArgs
@@ -148,6 +163,80 @@ func (p *Pipeline) RescanSweep(ctx context.Context) error {
 			"scanned", sum.Scanned, "quarantined", sum.Quarantined, "cached_stages", sum.CachedStages)
 	}
 	return nil
+}
+
+// AttestSummary is what an attest sweep did.
+type AttestSummary struct {
+	Signed int
+	Failed int
+}
+
+// AttestSweep signs every published version that has no attestation row,
+// from its latest finished scan run: the report digest and judge model the
+// attestation names are that run's, and the policy version is the agent's
+// effective one at sweep time (the run's snapshot carries the policy
+// itself, not its version). A version whose latest run has no report
+// digest is skipped and counted as failed — signing an empty digest
+// asserts nothing (§8.8) — and the log names it. Exactly once per
+// version still holds: the insert's ON CONFLICT (version_id) does nothing
+// for a row that appeared meanwhile.
+func (p *Pipeline) AttestSweep(ctx context.Context) (AttestSummary, error) {
+	var sum AttestSummary
+	if p.signer == nil {
+		return sum, nil
+	}
+	q := p.st.Queries()
+	batch := p.rescanBatch
+	if batch <= 0 {
+		batch = 100
+	}
+	for {
+		rows, err := q.ListPublishedVersionsWithoutAttestation(ctx, batch)
+		if err != nil {
+			return sum, fmt.Errorf("scan: attest list: %w", err)
+		}
+		if len(rows) == 0 {
+			return sum, nil
+		}
+		progressed := false
+		for _, v := range rows {
+			if err := p.attestOne(ctx, q, v); err != nil {
+				sum.Failed++
+				p.log.Error("attest sweep: version left unattested", "version", v.ID, "err", err)
+				continue
+			}
+			sum.Signed++
+			progressed = true
+		}
+		if !progressed {
+			// Every row in this page failed; the next page would be the
+			// same rows. Stop rather than spin.
+			return sum, nil
+		}
+	}
+}
+
+func (p *Pipeline) attestOne(ctx context.Context, q *storegen.Queries, v storegen.AgentVersion) error {
+	run, err := q.LatestScanRunForVersion(ctx, v.ID)
+	if err != nil {
+		return fmt.Errorf("latest scan run: %w", err)
+	}
+	if run.ReportDigest == nil || *run.ReportDigest == "" {
+		return fmt.Errorf("latest scan run %s has no report digest", run.ID)
+	}
+	agent, err := q.GetAgentByID(ctx, v.AgentID)
+	if err != nil {
+		return fmt.Errorf("agent: %w", err)
+	}
+	_, policyVer, err := p.effectivePolicy(ctx, agent)
+	if err != nil {
+		return err
+	}
+	judge := ""
+	if run.JudgeModel != nil {
+		judge = *run.JudgeModel
+	}
+	return p.sign(ctx, q, agent, v, run.ID, *run.ReportDigest, judge, policyVer)
 }
 
 // RescanSweepWithSummary is RescanSweep with the counts returned.

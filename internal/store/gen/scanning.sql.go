@@ -32,6 +32,20 @@ func (q *Queries) CountIPClusterSubmissions(ctx context.Context, submitterIpHash
 	return i, err
 }
 
+const countPublishedVersionsWithoutAttestation = `-- name: CountPublishedVersionsWithoutAttestation :one
+SELECT count(*)
+FROM agent_versions av
+LEFT JOIN attestations at ON at.version_id = av.id
+WHERE av.status = 'published' AND at.id IS NULL
+`
+
+func (q *Queries) CountPublishedVersionsWithoutAttestation(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countPublishedVersionsWithoutAttestation)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countRecentAbuseReportsByReporter = `-- name: CountRecentAbuseReportsByReporter :one
 SELECT count(*) FROM abuse_reports
 WHERE reporter_id = $1 AND created_at >= now() - interval '1 hour'
@@ -1120,6 +1134,59 @@ func (q *Queries) ListPublishedVersionsForRescan(ctx context.Context, arg ListPu
 			&i.Capabilities,
 			&i.Modes,
 			&i.Visibility,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPublishedVersionsWithoutAttestation = `-- name: ListPublishedVersionsWithoutAttestation :many
+SELECT av.id, av.agent_id, av.version, av.commit_sha, av.manifest, av.capabilities, av.archive_digest, av.archive_key, av.archive_size, av.status, av.status_reason, av.published_at, av.yanked_at, av.yank_reason, av.channel, av.submitted_by, av.source, av.created_at, av.updated_at, av.submitter_ip_hash
+FROM agent_versions av
+LEFT JOIN attestations at ON at.version_id = av.id
+WHERE av.status = 'published' AND at.id IS NULL
+ORDER BY av.id
+LIMIT $1
+`
+
+// A published version with no attestation row is the shape a signing
+// failure after the transition used to leave (agentry#407); the attest
+// sweep signs each from its latest finished scan run.
+func (q *Queries) ListPublishedVersionsWithoutAttestation(ctx context.Context, limit int32) ([]AgentVersion, error) {
+	rows, err := q.db.Query(ctx, listPublishedVersionsWithoutAttestation, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AgentVersion
+	for rows.Next() {
+		var i AgentVersion
+		if err := rows.Scan(
+			&i.ID,
+			&i.AgentID,
+			&i.Version,
+			&i.CommitSha,
+			&i.Manifest,
+			&i.Capabilities,
+			&i.ArchiveDigest,
+			&i.ArchiveKey,
+			&i.ArchiveSize,
+			&i.Status,
+			&i.StatusReason,
+			&i.PublishedAt,
+			&i.YankedAt,
+			&i.YankReason,
+			&i.Channel,
+			&i.SubmittedBy,
+			&i.Source,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.SubmitterIpHash,
 		); err != nil {
 			return nil, err
 		}

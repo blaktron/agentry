@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
@@ -339,4 +341,125 @@ func TestPipelineRecordsTheJudgesModelID(t *testing.T) {
 			t.Fatalf("run %q, attestation %q, want static", run, attested)
 		}
 	})
+}
+
+// flakySigner fails its first n Sign calls, then signs for real: a KMS
+// outage that clears on the retry.
+type flakySigner struct {
+	scan.Signer
+	failures int
+	calls    int
+}
+
+func (f *flakySigner) Sign(stmt scan.InTotoStatement) (scan.DSSEEnvelope, error) {
+	f.calls++
+	if f.calls <= f.failures {
+		return scan.DSSEEnvelope{}, errors.New("kms: temporarily unavailable")
+	}
+	return f.Signer.Sign(stmt)
+}
+
+// TestPipelineSigningFailureLeavesNothingPublished: a version is never
+// `published` without its attestation. The transition used to come first
+// and the signature last, so a signing failure left a published,
+// unattested version the retry then swallowed as "moved" (security review
+// 2026-09-20 §5.4, M13). Signing comes first now, and the retry finds a
+// version still in `scanning` and finishes the job.
+func TestPipelineSigningFailureLeavesNothingPublished(t *testing.T) {
+	var flaky *flakySigner
+	e := newPipeEnv(t, func(d *scan.PipelineDeps) {
+		flaky = &flakySigner{Signer: d.Signer, failures: 1}
+		d.Signer = flaky
+	})
+	ctx := context.Background()
+	u, _ := e.st.Queries().GetUserByID(ctx, e.owner)
+	p := &auth.Principal{UserID: e.owner, Handle: u.Handle, Via: "session", EmailVerified: true, OrgRoles: map[uuid.UUID]auth.OrgRole{}}
+	a, err := e.reg.CreateAgent(ctx, p, registry.CreateAgentInput{
+		Namespace: u.Handle, Name: "flaky", Modes: []string{"autonomous"}, Visibility: "public",
+	}, audit.Event{Actor: e.owner, ActorKind: audit.ActorUser})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws := t.TempDir()
+	for path, content := range map[string]string{
+		"agent.yaml": skillManifest(u.Handle, "flaky", "1.0.0"),
+		"README.md":  "# flaky\n", "SKILL.md": "Be brief.\n", "LICENSE": "Apache-2.0\n",
+	} {
+		if err := os.WriteFile(ws+"/"+path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	v, err := e.reg.SubmitVersion(ctx, p, a, registry.SubmitInput{Source: "cli-upload", Workspace: ws},
+		audit.Event{Actor: e.owner, ActorKind: audit.ActorUser})
+	if err == nil {
+		t.Fatal("the first scan should have failed at the signer")
+	}
+	if flaky.calls != 1 {
+		t.Fatalf("signer calls after the first scan = %d, want 1", flaky.calls)
+	}
+	after, err := e.st.Queries().GetVersionByID(ctx, v.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Status == "published" {
+		t.Fatalf("a version whose signing failed is published")
+	}
+	if _, err := e.st.Queries().GetAttestation(ctx, v.ID); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("attestation after a failed signing: %v", err)
+	}
+
+	// The queue's retry.
+	if err := e.pipe.Scan(ctx, v.ID, "publish"); err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+	final, _ := e.st.Queries().GetVersionByID(ctx, v.ID)
+	if final.Status != "published" {
+		t.Fatalf("after the retry: status %s, want published", final.Status)
+	}
+	att, err := e.st.Queries().GetAttestation(ctx, v.ID)
+	if err != nil || att.KeyID == "" {
+		t.Fatalf("after the retry: attestation %v %v", att, err)
+	}
+}
+
+// TestAttestSweepSignsAPublishedVersionWithoutOne: the reconciler for
+// versions that reached `published` unattested before the ordering above
+// (or through any path that skips the pipeline's signer).
+func TestAttestSweepSignsAPublishedVersionWithoutOne(t *testing.T) {
+	e := newPipeEnv(t)
+	ctx := context.Background()
+	u, _ := e.st.Queries().GetUserByID(ctx, e.owner)
+	v := e.publish("orphan", "public", map[string]string{
+		"agent.yaml": skillManifest(u.Handle, "orphan", "1.0.0"),
+		"README.md":  "# orphan\n", "SKILL.md": "Be brief.\n", "LICENSE": "Apache-2.0\n",
+	})
+	if v.Status != "published" {
+		t.Fatalf("status = %s", v.Status)
+	}
+	// Make it the shape the review found: published, no attestation row.
+	if _, err := e.st.Pool().Exec(ctx, `DELETE FROM attestations WHERE version_id = $1`, v.ID); err != nil {
+		t.Fatal(err)
+	}
+	// The test database is shared with every other test in the package, so
+	// the counts below are about this version, not the table.
+	n, err := e.st.Queries().CountPublishedVersionsWithoutAttestation(ctx)
+	if err != nil || n < 1 {
+		t.Fatalf("count without attestation = %d, %v", n, err)
+	}
+	sum, err := e.pipe.AttestSweep(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.Signed < 1 {
+		t.Fatalf("sweep summary = %+v", sum)
+	}
+	att, err := e.st.Queries().GetAttestation(ctx, v.ID)
+	if err != nil || att.KeyID == "" {
+		t.Fatalf("no attestation after the sweep: %v", err)
+	}
+	// Idempotent: a second sweep signs nothing more (exactly once per
+	// version); it may still report the versions it cannot sign.
+	if again, _ := e.pipe.AttestSweep(ctx); again.Signed != 0 {
+		t.Fatalf("second sweep signed %d", again.Signed)
+	}
 }
