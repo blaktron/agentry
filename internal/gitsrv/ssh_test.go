@@ -7,6 +7,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,6 +18,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/config"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
@@ -177,4 +179,66 @@ func (e *gitEnv) sshKeyIDFor(c *sshClient) uuid.UUID {
 		e.t.Fatal(err)
 	}
 	return row.ID
+}
+
+// startSSH serves the env's git handler over SSH on a random loopback port
+// and returns the port.
+func (e *gitEnv) startSSH(t *testing.T) int {
+	t.Helper()
+	if _, err := exec.LookPath("ssh"); err != nil {
+		t.Skip("ssh client not installed")
+	}
+	sshSrv, err := e.git.NewSSHServer("127.0.0.1:0", filepath.Join(t.TempDir(), "hostkey"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go func() { _ = sshSrv.Serve(ctx) }()
+	t.Cleanup(func() { _ = sshSrv.Close() })
+	return sshSrv.Addr().(*net.TCPAddr).Port
+}
+
+// TestSSHPushBudgetIsTheHTTPBudget (§19, agentry#410): the per-repository
+// push budget is one number on both transports. A budget spent over HTTPS
+// refuses the next push over SSH with the same words, and a push over SSH
+// spends the budget HTTPS then finds empty.
+func TestSSHPushBudgetIsTheHTTPBudget(t *testing.T) {
+	env := newGitEnvCfg(t, func(c *config.Config) { c.Limits.GitPushesPerHour = 1 })
+	port := env.startSSH(t)
+	owner := newSSHClient(t)
+	env.seedSSHKey(env.owner.id, owner)
+	ownerEnv := []string{"GIT_SSH_COMMAND=" + owner.gitSSHCommand()}
+
+	t.Run("spent over HTTPS, refused over SSH", func(t *testing.T) {
+		agent := env.seedAgent("sshbudget-a", "public")
+		res := env.receivePackAttempt(t, env.owner.handle, agent.Name, env.owner.patRW)
+		_ = res.Body.Close()
+		if res.StatusCode == http.StatusTooManyRequests {
+			t.Fatal("the first push of the budget was refused")
+		}
+		work := seedWorkdir(t, kindFixture("skill", env.owner.handle, agent.Name, "0.1.0"))
+		url := fmt.Sprintf("ssh://git@127.0.0.1:%d/%s/%s.git", port, env.owner.handle, agent.Name)
+		out, err := gitRunWithEnv(t, work, ownerEnv, "push", "-q", url, "HEAD:main")
+		if err == nil || !strings.Contains(out, "over its hourly push limit") {
+			t.Fatalf("push over SSH past the budget: err=%v\n%s", err, out)
+		}
+		if n := env.pushAudits(agent.ID); n != 0 {
+			t.Fatalf("a refused push was bookkept: %d repo.push audits", n)
+		}
+	})
+
+	t.Run("spent over SSH, refused over HTTPS", func(t *testing.T) {
+		agent := env.seedAgent("sshbudget-b", "public")
+		work := seedWorkdir(t, kindFixture("skill", env.owner.handle, agent.Name, "0.1.0"))
+		url := fmt.Sprintf("ssh://git@127.0.0.1:%d/%s/%s.git", port, env.owner.handle, agent.Name)
+		if out, err := gitRunWithEnv(t, work, ownerEnv, "push", "-q", url, "HEAD:main"); err != nil {
+			t.Fatalf("push over SSH within the budget: %v\n%s", err, out)
+		}
+		res := env.receivePackAttempt(t, env.owner.handle, agent.Name, env.owner.patRW)
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusTooManyRequests {
+			t.Fatalf("push over HTTPS after SSH spent the budget: %d, want 429", res.StatusCode)
+		}
+	})
 }
