@@ -10,8 +10,9 @@ import (
 // SP records each accepted assertion's ID keyed until its NotOnOrAfter; a
 // second presentation of the same ID is rejected.
 //
-// The interface is the commitment; SaaS backs it with Redis (shared across
-// API replicas), self-host with the in-memory implementation below. A single
+// The interface is the commitment. A server with a database keeps the set
+// there (StoreReplayCache, agentry#414), shared by every API replica; the
+// in-memory implementation below serves a server without one. A single
 // replica losing its cache (restart) is bounded by the short assertion
 // lifetime, so the exposure window is minutes, not the session lifetime.
 type ReplayCache interface {

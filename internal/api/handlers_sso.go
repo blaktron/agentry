@@ -322,7 +322,7 @@ func (s *Server) samlSPFromConfig(r *http.Request, orgHandle string, raw []byte)
 	if err != nil {
 		return nil, err
 	}
-	return sp.WithRequestTracker(samlRequests).WithSLO(s.samlSloURL(r, orgHandle)), nil
+	return sp.WithRequestTracker(s.samlRequests).WithSLO(s.samlSloURL(r, orgHandle)), nil
 }
 
 // oidcRPForOrg builds the OIDC RP for an org's enabled connection. ctx should
