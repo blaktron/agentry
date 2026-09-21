@@ -454,6 +454,12 @@ func (s *Server) ResolveRef(w http.ResponseWriter, r *http.Request, params Resol
 		Manifest:   manifestDoc,
 		Yanked:     res.Yanked,
 	}
+	// How the version was admitted (M21): a client that installs or runs
+	// a skipped one asks for consent first, and reads it here rather than
+	// inferring it from a missing attestation, which an unsigned registry
+	// also has.
+	scan := ResolveResultScanStatus(v.ScanStatus)
+	out.ScanStatus = &scan
 	// §9.4 step 1: point verifiers at the attestation whenever one exists
 	// (signing happens exactly once, on publish — §7).
 	if _, err := s.q().GetAttestation(r.Context(), v.ID); err == nil {

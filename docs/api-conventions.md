@@ -73,20 +73,19 @@ change to an organization in its decommission hold, and to anything under
 it, carrying `org` and `decommissionAt`; reads, the audit log and its
 export go on until then, and a member may still leave. A suspended organization, and everything under
 it, answers `404` to everyone until platform staff reinstate it.
-`409 pipeline-skip-public` and `409 pipeline-skip-personal` refuse
-`pipelineSkip: true` on `PATCH /agents/{ns}/{name}` for a public agent and
-for one in a personal namespace: only a private agent of an organization's
-is admitted without a scan, and only where the tier includes it
-(`403 feature-not-included` otherwise). `409 agent-unscanned` refuses
-making an agent public while the flag is set or a version published
-unscanned stands — only a version that passed the gate is ever public; the
-detail says how many stand and that yanking them opens the way. A version
-admitted without a scan carries `scanStatus: skipped`, its report
-`verdict: unscanned`, and has no attestation.
 
-Reserved for the milestone that builds it, so a client can be written
-against the catalogue now: `422 pipeline-skip-refused` (the unscanned
-flag on a public agent, or a private→public change while it is set).
+Unscanned private agents (plan organization-subscriptions §4) have three
+refusals of their own, all `409`. `pipeline-skip-public` and
+`pipeline-skip-personal` refuse `pipelineSkip: true` on `PATCH
+/agents/{ns}/{name}` for a public agent and for one in a personal
+namespace; only a private agent of an organization's is admitted without
+a scan, and only where the tier includes it (`403 feature-not-included`
+otherwise). `agent-unscanned` refuses making an agent public while it
+holds versions admitted unscanned that are published or quarantined,
+carrying their count as `unscanned`; yanking them opens the way, since
+only a version that passed the gate is ever public. A version admitted
+without a scan carries `scanStatus: skipped` on the version and on
+resolve, its report `verdict: unscanned`, and has no attestation.
 
 ## Idempotency-Key
 

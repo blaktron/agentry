@@ -93,8 +93,13 @@ func (s *Server) scanReportFrom(r *http.Request, run storegen.ScanRun, versionSt
 	}
 	if run.FinishedAt != nil {
 		rep.FinishedAt = run.FinishedAt
-		// A run that finished stands behind this report: scanned, and the
-		// findings say the rest. A run still going has no verdict yet.
+	}
+	// A run that passed, or found things, stands behind this report:
+	// scanned, and the findings say the rest. A run still going has no
+	// verdict yet, and one that errored is not called scanned — that
+	// would be "scanned with a known gap" wearing the clean word; its
+	// scanStatus says error and the gate has sent the version to review.
+	if run.Status == "passed" || run.Status == "findings" {
 		scanned := Scanned
 		rep.Verdict = &scanned
 	}

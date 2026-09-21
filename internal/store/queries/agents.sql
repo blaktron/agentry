@@ -32,12 +32,24 @@ UPDATE agents SET
   updated_at = now()
 WHERE id = $1;
 
--- name: CountUnscannedPublishedVersions :one
--- The versions of an agent that were published without a scan (M21):
--- while one exists the agent cannot become public, since only a version
--- that passed the gate is ever public.
+-- name: GetAgentForUpdate :one
+-- The agent row under the row lock, with its namespace, for a decision
+-- that must not race another writer of the row: the flag's refusals and
+-- the private → public change (M21), and the gate-skipping edge.
+SELECT a.*, h.handle AS namespace, h.kind AS namespace_kind
+FROM agents a JOIN handles h ON h.id = a.namespace_id
+WHERE a.id = $1
+FOR UPDATE OF a;
+
+-- name: CountUnscannedVersionsStanding :one
+-- The versions of an agent that were admitted without a scan and could
+-- still be, or return to being, published (M21): published, quarantined
+-- or blocked — a reinstate walks the last two back to published. While
+-- one stands the agent cannot become public, since only a version that
+-- passed the gate is ever public; yanking is what ends it.
 SELECT count(*)::bigint FROM agent_versions
-WHERE agent_id = $1 AND status = 'published' AND scan_status = 'skipped';
+WHERE agent_id = $1 AND scan_status = 'skipped'
+  AND status IN ('published', 'quarantined', 'blocked');
 
 -- name: ListAgentsByNamespace :many
 -- A suspended or erased organization's agents are absent (agentry#363);

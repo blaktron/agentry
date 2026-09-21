@@ -9,6 +9,10 @@
 -- cannot become public: only a version that passed the gate is ever
 -- public (ARCHITECTURE §9, qualified by the DEV entry).
 ALTER TABLE agents ADD COLUMN pipeline_skip boolean NOT NULL DEFAULT false;
+-- The flag and public never meet in a row: the handler refuses each under
+-- the agent's row lock, and this is the wall behind it.
+ALTER TABLE agents ADD CONSTRAINT agents_pipeline_skip_private
+  CHECK (NOT pipeline_skip OR visibility = 'private');
 
 -- scan_status says how the version was admitted: through the pipeline
 -- (every version before this migration, and every version of an agent
@@ -19,4 +23,5 @@ ALTER TABLE agent_versions ADD COLUMN scan_status text NOT NULL DEFAULT 'pipelin
 
 -- +goose Down
 ALTER TABLE agent_versions DROP COLUMN scan_status;
+ALTER TABLE agents DROP CONSTRAINT agents_pipeline_skip_private;
 ALTER TABLE agents DROP COLUMN pipeline_skip;
