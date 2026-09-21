@@ -11,6 +11,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"log/slog"
+	"net"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
@@ -27,8 +28,8 @@ func TestSSHKeyOffersAreBudgetedPerSourceBeforeTheLookup(t *testing.T) {
 	const budget = 3
 	cfg := config.Default()
 	cfg.Limits.SSHKeyOffersPerMin = budget
-	h := &Handler{cfg: cfg, limits: ratelimit.New(time.Hour), log: slog.Default()}
-	t.Cleanup(func() { _ = h.limits.Close() })
+	h := &Handler{cfg: cfg, keyOffers: ratelimit.New(time.Hour), log: slog.Default()}
+	t.Cleanup(func() { _ = h.keyOffers.Close() })
 	srv, err := h.NewSSHServer("127.0.0.1:0", filepath.Join(t.TempDir(), "hostkey"))
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +44,10 @@ func TestSSHKeyOffersAreBudgetedPerSourceBeforeTheLookup(t *testing.T) {
 	go func() { _ = srv.Serve(ctx) }()
 	t.Cleanup(func() { _ = srv.Close() })
 
-	offer := func() {
+	// offer connects from the given loopback address with a fresh key
+	// nobody registered; the dial must fail either way, and whether it
+	// cost a lookup is the test.
+	offer := func(from string) {
 		t.Helper()
 		_, priv, err := ed25519.GenerateKey(rand.Reader)
 		if err != nil {
@@ -53,7 +57,13 @@ func TestSSHKeyOffersAreBudgetedPerSourceBeforeTheLookup(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		c, err := ssh.Dial("tcp", srv.Addr().String(), &ssh.ClientConfig{
+		d := net.Dialer{Timeout: 5 * time.Second, LocalAddr: &net.TCPAddr{IP: net.ParseIP(from)}}
+		nc, err := d.Dial("tcp", srv.Addr().String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = nc.Close() }()
+		c, _, _, err := ssh.NewClientConn(nc, srv.Addr().String(), &ssh.ClientConfig{
 			User:            "git",
 			Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
 			HostKeyCallback: ssh.InsecureIgnoreHostKey(), //nolint:gosec // test against an in-process server
@@ -66,13 +76,19 @@ func TestSSHKeyOffersAreBudgetedPerSourceBeforeTheLookup(t *testing.T) {
 	}
 
 	for i := range budget {
-		offer()
+		offer("127.0.0.1")
 		if n := lookups.Load(); n != int32(i+1) {
 			t.Fatalf("offer %d: %d lookups, want %d (one per offer within the budget)", i+1, n, i+1)
 		}
 	}
-	offer()
+	offer("127.0.0.1")
 	if n := lookups.Load(); n != budget {
 		t.Fatalf("offer %d past a budget of %d cost a lookup: %d lookups", budget+1, budget, n)
+	}
+	// The budget is the address's, not the listener's: another source is
+	// still looked up.
+	offer("127.0.0.2")
+	if n := lookups.Load(); n != budget+1 {
+		t.Fatalf("an offer from a second address was refused without a lookup: %d lookups, want %d", n, budget+1)
 	}
 }

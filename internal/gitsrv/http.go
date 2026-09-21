@@ -56,11 +56,16 @@ type Handler struct {
 	// PostReceive is invoked after a successful push with the updated refs
 	// (M3 wires tag→submission here).
 	PostReceive func(ctx context.Context, agent registry.Agent, refs []RefUpdate, pusher *auth.Principal)
-	// limits holds the transport's §19 buckets: the 60-pushes-per-hour-
-	// per-repo budget, and the SSH key offers a source may make before a
-	// lookup (ssh.go). Per process, so an N-replica git fleet allows
-	// roughly N× each (D-06: Redis replaces this on multi-node SaaS).
-	limits *ratelimit.Buckets
+	// pushes enforces the §19 60-pushes-per-hour-per-repo budget on both
+	// transports; keyOffers bounds the public keys one source address may
+	// offer the SSH listener (ssh.go). Per process, so an N-replica git
+	// fleet allows roughly N× each (D-06: Redis replaces this on
+	// multi-node SaaS). Two stores because their windows differ by two
+	// orders of magnitude and the idle TTL must exceed the window: a
+	// stranger's address is forgotten two minutes after it stops offering
+	// keys, a repository's budget only two hours after its last push.
+	pushes    *ratelimit.Buckets
+	keyOffers *ratelimit.Buckets
 	// mx records §16.2 git op counts, durations, concurrency and the §16.1
 	// clone first-byte SLI. nil is a working no-op.
 	mx *metrics.Metrics
@@ -71,12 +76,12 @@ type Handler struct {
 // SetMetrics wires the §16.2 instrument set.
 func (h *Handler) SetMetrics(m *metrics.Metrics) { h.mx = m }
 
-// Close releases the push-limiter's collector goroutine.
+// Close releases the two bucket stores' collector goroutines.
 func (h *Handler) Close() error {
 	if h == nil {
 		return nil
 	}
-	return h.limits.Close()
+	return errors.Join(h.pushes.Close(), h.keyOffers.Close())
 }
 
 // NewHandler assembles the git HTTP layer.
@@ -97,7 +102,8 @@ func NewHandler(cfg config.Config, st *store.Store, repos *RepoStore, reg *regis
 		// The idle TTL must exceed the one-hour push window: a bucket evicted
 		// sooner comes back full, which would let a repo at its limit reset
 		// the budget simply by pausing.
-		limits: ratelimit.New(2 * time.Hour),
+		pushes:    ratelimit.New(2 * time.Hour),
+		keyOffers: ratelimit.New(2 * time.Minute),
 	}
 }
 
@@ -369,7 +375,7 @@ func (h *Handler) receivePack(w http.ResponseWriter, r *http.Request) {
 // Burst is the full hourly budget: §19 says "60 pushes/h", not "one per
 // minute", and a developer landing a run of commits should not be paced.
 func (h *Handler) admitPush(ctx context.Context, agent registry.Agent) (retry time.Duration, ok bool) {
-	res := h.limits.Allow("push", agent.RepoID.String(),
+	res := h.pushes.Allow("push", agent.RepoID.String(),
 		ratelimit.PerHour(h.pushesPerHour()), h.pushesPerHour())
 	if res.OK {
 		return 0, true

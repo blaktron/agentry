@@ -61,18 +61,18 @@ func (h *Handler) sshKeyOffersPerMin() int {
 
 // admitKeyOffer spends one public-key offer from the source address's
 // budget and reports whether the key may be looked up. The listener is
-// the one service the shipped stack publishes beyond loopback, and each
-// offer used to cost a database lookup before anything bounded the
-// source; MaxAuthTries bounds a connection, not a stranger opening many
-// (agentry#410). Keyed by address, not by key: the point is what one
-// source can make the registry do.
+// the one service the shipped stack publishes beyond loopback, so what
+// one address can make the registry do before it holds a credential is
+// bounded here, in front of the lookup; MaxAuthTries bounds a
+// connection, not a stranger opening many (agentry#410). Keyed by
+// address, not by key, for the same reason.
 func (h *Handler) admitKeyOffer(remote net.Addr) bool {
 	source := remote.String()
 	if host, _, err := net.SplitHostPort(source); err == nil {
 		source = host
 	}
 	n := h.sshKeyOffersPerMin()
-	res := h.limits.Allow("ssh-key-offer", source, ratelimit.PerMinute(n), n)
+	res := h.keyOffers.Allow("ssh-key-offer", source, ratelimit.PerMinute(n), n)
 	if !res.OK {
 		h.log.Info("rate limited", logevent.HTTPRateLimited.Attr(), "class", "ssh-key-offer", "source", source)
 	}
@@ -103,8 +103,10 @@ func (h *Handler) NewSSHServer(addr, hostKeyFile string) (*SSHServer, error) {
 		MaxAuthTries:  sshMaxAuthTries,
 		ServerVersion: "SSH-2.0-agentry",
 		PublicKeyCallback: func(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
+			// An error here reaches the client only as the generic
+			// authentication failure; the log line is the record.
 			if !h.admitKeyOffer(conn.RemoteAddr()) {
-				return nil, errors.New("too many key offers from this address; retry later")
+				return nil, errors.New("key offers over budget")
 			}
 			fp := ssh.FingerprintSHA256(key)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

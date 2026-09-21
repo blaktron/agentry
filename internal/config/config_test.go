@@ -246,6 +246,7 @@ func TestNewEnvOverridesApply(t *testing.T) {
 	t.Setenv("AGENTRY_SMTP_FROM", "Agentry <no-reply@example.test>")
 	t.Setenv("AGENTRY_SMTP_STARTTLS", "true")
 	t.Setenv("AGENTRY_LIMITS_GIT_PUSHES_PER_HOUR", "120")
+	t.Setenv("AGENTRY_LIMITS_SSH_KEY_OFFERS_PER_MIN", "30")
 	t.Setenv("AGENTRY_LIMITS_ARCHIVE_MAX_BYTES", "20971520")
 	t.Setenv("AGENTRY_LIMITS_REPO_WARN_BYTES", "31457280")
 	t.Setenv("AGENTRY_LIMITS_ARCHIVE_MAX_TEXT_BYTES", "2097152")
@@ -267,8 +268,8 @@ func TestNewEnvOverridesApply(t *testing.T) {
 	if cfg.Notify.Kind != "smtp" || cfg.SMTP.Port != 2525 || !cfg.SMTP.StartTLS {
 		t.Errorf("smtp config = %+v", cfg.SMTP)
 	}
-	if cfg.Limits.GitPushesPerHour != 120 {
-		t.Errorf("gitPushesPerHour = %d", cfg.Limits.GitPushesPerHour)
+	if cfg.Limits.GitPushesPerHour != 120 || cfg.Limits.SSHKeyOffersPerMin != 30 {
+		t.Errorf("gitPushesPerHour = %d, sshKeyOffersPerMin = %d", cfg.Limits.GitPushesPerHour, cfg.Limits.SSHKeyOffersPerMin)
 	}
 	if cfg.Limits.RepoWarnBytes != 31457280 || cfg.Limits.ArchiveMaxTextBytes != 2097152 {
 		t.Errorf("repoWarnBytes = %d, archiveMaxTextBytes = %d", cfg.Limits.RepoWarnBytes, cfg.Limits.ArchiveMaxTextBytes)
