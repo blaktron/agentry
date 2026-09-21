@@ -15,7 +15,9 @@ import (
 // the site takes 404 as "nobody holds this handle", so a query error must
 // answer 500 and only a missing row 404.
 func TestLookupFailedDistinguishesAbsenceFromError(t *testing.T) {
-	s := New(config.Default(), nil, nil)
+	cfg := config.Default()
+	cfg.DevMode = true
+	s := New(cfg, nil, nil)
 	cases := []struct {
 		name string
 		err  error
