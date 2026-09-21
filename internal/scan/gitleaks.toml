@@ -1,0 +1,11 @@
+# The configuration S2 runs gitleaks with, passed as --config on every
+# invocation. gitleaks resolves its configuration in this order: --config,
+# GITLEAKS_CONFIG, a .gitleaks.toml in the scanned source, then its built-in
+# defaults — so with no --config a submission could ship its own file with
+# no rules and scan clean (security review 2026-09-20 §5.7). This file
+# extends the built-in default rule set and adds nothing; it exists so the
+# choice of rules is the registry's, never the archive's.
+title = "agentry S2 (gitleaks default rules)"
+
+[extend]
+useDefault = true

@@ -3,6 +3,7 @@ package scan
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -184,6 +185,37 @@ type gitleaksFinding struct {
 	Tags        []string
 }
 
+// gitleaksConfig is the rule configuration every S2 invocation carries
+// (gitleaks.toml beside this file): the built-in default rules, chosen by
+// the registry rather than by whatever .gitleaks.toml the archive ships.
+//
+//go:embed gitleaks.toml
+var gitleaksConfig []byte
+
+// gitleaksConfigPath returns the --config path for a run: the operator's
+// rules file when one is configured, else the embedded default written to
+// a temp file (removed by the returned func). The path is never inside the
+// scanned tree.
+func gitleaksConfigPath(t *ExecTool) (string, func(), error) {
+	if t.Rules != "" {
+		return t.Rules, func() {}, nil
+	}
+	f, err := os.CreateTemp("", "gitleaks-config-*.toml")
+	if err != nil {
+		return "", nil, err
+	}
+	if _, err := f.Write(gitleaksConfig); err != nil {
+		_ = f.Close()
+		_ = os.Remove(f.Name())
+		return "", nil, err
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(f.Name())
+		return "", nil, err
+	}
+	return f.Name(), func() { _ = os.Remove(f.Name()) }, nil
+}
+
 // runGitleaks scans dir with gitleaks and returns S2 findings. `seen` holds
 // the native rules' file|line keys; a gitleaks hit on the same line
 // corroborates rather than duplicates.
@@ -194,10 +226,19 @@ func runGitleaks(ctx context.Context, t *ExecTool, dir string, seen map[string]b
 	}
 	_ = report.Close()
 	defer func() { _ = os.Remove(report.Name()) }()
+	cfg, cleanup, err := gitleaksConfigPath(t)
+	if err != nil {
+		return []Finding{gitleaksErrorFinding(err)}
+	}
+	defer cleanup()
 
 	// `detect --no-git` reads the tree as files (the archive is not a repo);
-	// --exit-code 0 keeps "leaks found" from reading as a crash.
+	// --exit-code 0 keeps "leaks found" from reading as a crash; --config
+	// is always given, so a .gitleaks.toml in the archive is scanned as a
+	// file and never read as configuration (security review 2026-09-20
+	// §5.7).
 	_, err = t.run(ctx, dir, "detect", "--no-git", "--source", ".", "--no-banner",
+		"--config", cfg,
 		"--exit-code", "0", "--report-format", "json", "--report-path", report.Name())
 	if err != nil {
 		return []Finding{gitleaksErrorFinding(err)}
