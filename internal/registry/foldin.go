@@ -127,10 +127,11 @@ func (s *Service) FoldInSweep(ctx context.Context, orgID uuid.UUID, domain strin
 // anywhere, no decline by this organization — so two fold-ins of one
 // person (a sign-in and a sweep at once) cannot both pass. An activation
 // elsewhere at the same moment is not serialised against this (the
-// chokepoint locks the organization's row, not the person's); the worst
-// of it is a pending row beside an active membership, which the approval
-// then refuses with already-a-member and an admin declines. Reports
-// whether the row was written by this call.
+// chokepoint takes the person's row lock, agentry#412, and this takes an
+// advisory lock on the person: different locks); the worst of it is a
+// pending row beside an active membership, which the approval then
+// refuses with already-a-member and an admin declines. Reports whether
+// the row was written by this call.
 func (s *Service) writePending(ctx context.Context, orgID, userID uuid.UUID, domain string, actor audit.Event) (bool, error) {
 	fired := false
 	err := s.st.WithTx(ctx, func(q *storegen.Queries) error {

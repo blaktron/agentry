@@ -257,6 +257,10 @@ func problemAlreadyAMember(w http.ResponseWriter, r *http.Request, detail string
 // alreadyAMemberDetail is the sentence for the doors an admin drives.
 const alreadyAMemberDetail = "That person is already a member of another organization. A person belongs to one organization at a time; they leave the other first."
 
+// alreadyAMemberCreatorDetail is the sentence for the door a person opens
+// for themselves: creating an organization while belonging to one.
+const alreadyAMemberCreatorDetail = "This account is already a member of an organization. A person belongs to one organization at a time: leave it before creating another."
+
 // problemDomainClaimed refuses an organization at a domain another one
 // holds (D21, D26: one organization per domain). It names the holder,
 // whose handle is public, so the person can ask its administrators — the
