@@ -93,6 +93,10 @@ func (s *Server) scanReportFrom(r *http.Request, run storegen.ScanRun, versionSt
 	}
 	if run.FinishedAt != nil {
 		rep.FinishedAt = run.FinishedAt
+		// A run that finished stands behind this report: scanned, and the
+		// findings say the rest. A run still going has no verdict yet.
+		scanned := Scanned
+		rep.Verdict = &scanned
 	}
 	if rs, err := q.GetRulesetByID(r.Context(), run.RulesetReleaseID); err == nil {
 		rep.RulesetVersion = &rs.Semver
@@ -107,6 +111,14 @@ func (s *Server) GetVersionReport(w http.ResponseWriter, r *http.Request, ns Nam
 	}
 	_, v, ok := s.versionOrNotFound(w, r, ns, name, version, auth.ActAgentRead)
 	if !ok {
+		return
+	}
+	if v.ScanStatus == registry.ScanStatusSkipped {
+		// Admitted without a scan (M21): no run, no findings, no
+		// attestation, and the report says so as its own verdict —
+		// never an empty report a reader could take for a clean one.
+		skipped, unscanned := registry.ScanStatusSkipped, Unscanned
+		writeJSON(w, http.StatusOK, ScanReport{VersionStatus: VersionStatus(v.Status), ScanStatus: &skipped, Verdict: &unscanned, Findings: []ScanFinding{}})
 		return
 	}
 	run, err := s.q().LatestScanRunForVersion(r.Context(), v.ID)

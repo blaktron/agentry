@@ -50,6 +50,8 @@ func (s *Server) agentToAPI(a registry.Agent, maintain bool) Agent {
 		out.AutoPublishTags = &ap
 		fp := a.AllowForcePush
 		out.AllowForcePush = &fp
+		ps := a.PipelineSkip
+		out.PipelineSkip = &ps
 	}
 	return out
 }
@@ -285,6 +287,48 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 		problemForbidden(w, r, "Allowing force pushes rewrites history everyone else is working from, so it needs the "+a.Namespace+" namespace's administrators.")
 		return
 	}
+	// Taking the agent off the pipeline (M21, D16) is the administrators'
+	// too, and only for a private agent of an organization's whose tier
+	// includes it: a public agent is always scanned, a personal namespace
+	// has no organization to answer for what it skips, and a tier without
+	// the switch refuses as the core's feature gates do. Turning the flag
+	// off is never refused: nothing published changes, the next submission
+	// goes through the pipeline.
+	if req.PipelineSkip != nil && *req.PipelineSkip != a.PipelineSkip {
+		if !administers() {
+			problemForbidden(w, r, "Taking this BriefAgent off the pipeline needs the "+a.Namespace+" namespace's administrators.")
+			return
+		}
+		if *req.PipelineSkip {
+			if !s.pipelineSkipAllowed(w, r, a, req.Visibility) {
+				return
+			}
+		}
+	}
+	// A private → public change exposes every published version: refused
+	// while the flag is set, and while a version published unscanned
+	// stands, since only a version that passed the gate is ever public.
+	if req.Visibility != nil && string(*req.Visibility) == "public" && a.Visibility != "public" {
+		skipping := a.PipelineSkip
+		if req.PipelineSkip != nil {
+			skipping = *req.PipelineSkip
+		}
+		if skipping {
+			problemAgentUnscanned(w, r, "This BriefAgent is off the pipeline: clear pipeline: skip before making it public.")
+			return
+		}
+		n, err := s.q().CountUnscannedPublishedVersions(r.Context(), a.ID)
+		if err != nil {
+			s.log.ErrorContext(r.Context(), "update agent: count unscanned versions", "err", err)
+			problemInternal(w, r)
+			return
+		}
+		if n > 0 {
+			problemAgentUnscanned(w, r, fmt.Sprintf("%d published %s of this BriefAgent %s never scanned; yank %s, then make it public. Only a version that passed the gate is ever public.",
+				n, plural(n, "version", "versions"), plural(n, "was", "were"), plural(n, "it", "them")))
+			return
+		}
+	}
 	params := storegen.UpdateAgentSettingsParams{ID: a.ID}
 	detail := map[string]any{}
 	if req.Summary != nil {
@@ -321,6 +365,10 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	if req.AllowForcePush != nil {
 		params.AllowForcePush = req.AllowForcePush
 		detail["allowForcePush"] = *req.AllowForcePush
+	}
+	if req.PipelineSkip != nil {
+		params.PipelineSkip = req.PipelineSkip
+		detail["pipelineSkip"] = *req.PipelineSkip
 	}
 	if len(detail) == 0 {
 		problemValidation(w, r, "Send at least one field to update.")
@@ -560,4 +608,42 @@ func apiModes(modes []string) []AgentMode {
 		out = append(out, AgentMode(m))
 	}
 	return out
+}
+
+// pipelineSkipAllowed says whether the flag may be set on this agent, and
+// writes the refusal when it may not: a public agent — or one this same
+// request makes public — is always scanned; a personal namespace has no
+// organization behind it; and the organization's subscription must
+// include unscanned agents. The gate fails closed on a resolver error.
+func (s *Server) pipelineSkipAllowed(w http.ResponseWriter, r *http.Request, a registry.Agent, visibility *UpdateAgentJSONBodyVisibility) bool {
+	public := a.Visibility == "public"
+	if visibility != nil {
+		public = string(*visibility) == "public"
+	}
+	if public {
+		writeProblem(w, r, http.StatusConflict, "pipeline-skip-public", "A public BriefAgent is always scanned", "pipeline: skip is for a private BriefAgent of an organization's. Make it private first, or leave it on the pipeline.")
+		return false
+	}
+	if a.NamespaceKind != "org" {
+		writeProblem(w, r, http.StatusConflict, "pipeline-skip-personal", "Only an organization's BriefAgent can skip the pipeline", "pipeline: skip is set by an organization's administrators on the organization's own private BriefAgents; a personal namespace stays on the pipeline.")
+		return false
+	}
+	f, err := s.orgFeatures(r.Context(), a.NamespaceID)
+	if err != nil {
+		s.log.ErrorContext(r.Context(), "update agent: features", "org", a.NamespaceID, "err", err)
+		problemInternal(w, r)
+		return false
+	}
+	if !f.UnscannedAgents {
+		problemFeatureNotIncluded(w, r, "Unscanned private BriefAgents are not included in this organization's subscription.")
+		return false
+	}
+	return true
+}
+
+func plural(n int64, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }

@@ -160,6 +160,14 @@ func (p *Pipeline) Scan(ctx context.Context, versionID uuid.UUID, trigger string
 	if err != nil {
 		return fmt.Errorf("scan: load agent: %w", err)
 	}
+	// A version admitted without a scan (M21) is never scanned after the
+	// fact: a run on it would put a report on a version whose verdict is
+	// "unscanned" and make the two say different things. The sweeps leave
+	// it out by their queries; a scan asked for by name stops here.
+	if v.ScanStatus == registry.ScanStatusSkipped {
+		p.log.Info("scan: version admitted unscanned; not scanned", "version", versionID, "trigger", trigger)
+		return nil
+	}
 
 	effPolicy, policyVer, err := p.effectivePolicy(ctx, agent)
 	if err != nil {

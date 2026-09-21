@@ -1719,6 +1719,22 @@ paths:
                     Allow non-fast-forward pushes to the default branch
                     (§6.3). Off by default; maintain only.
                   type: boolean
+                pipelineSkip:
+                  description: >-
+                    Admit submissions to this agent without a scan (plan
+                    organization-subscriptions §4, D16). Settable by the
+                    namespace's administrators on a private agent of an
+                    organization's whose subscription includes unscanned
+                    agents; refused on a public agent
+                    (`pipeline-skip-public`) and in a personal namespace
+                    (`pipeline-skip-personal`), and with
+                    `feature-not-included` where the tier lacks it. While
+                    it is set, and while a version published unscanned
+                    stands, the agent cannot be made public
+                    (`agent-unscanned`). Clearing it changes nothing
+                    already published; the next submission goes through
+                    the whole pipeline.
+                  type: boolean
                 modes:
                   description: >
                     Replace the run modes the agent advertises (maintain
@@ -4747,6 +4763,14 @@ components:
         allowForcePush:
           type: boolean
           description: Present for callers with maintain; whether force-push to the default branch is allowed (§6.3).
+        pipelineSkip:
+          type: boolean
+          description: >-
+            Present for callers with maintain; whether submissions are
+            admitted without a scan (an organization's private agent only,
+            plan organization-subscriptions §4). A version so admitted is
+            served with `scanStatus: skipped` and the report's verdict
+            `unscanned`.
         createdAt:
           type: string
           format: date-time
@@ -4792,6 +4816,15 @@ components:
         source:
           type: string
           enum: [git-tag, cli-upload]
+        scanStatus:
+          type: string
+          enum: [pipeline, skipped]
+          description: >-
+            How the version was admitted: through the pipeline, or skipped
+            — no scan run, no findings, no attestation, the report's
+            verdict `unscanned` (plan organization-subscriptions §4). A
+            skipped version is a private organization agent's; a client
+            that installs or runs one asks for consent first.
         manifestSchemaVersion:
           type: integer
           description: >
@@ -4917,6 +4950,17 @@ components:
           $ref: "#/components/schemas/JudgeUsage"
         scanStatus:
           type: string
+          description: >-
+            The scan run's status; `skipped` for a version admitted without
+            a scan (M21), which has no run.
+        verdict:
+          type: string
+          enum: [scanned, unscanned]
+          description: >-
+            What the report is: `scanned` when a scan run stands behind it
+            (the findings say the rest), `unscanned` when the version was
+            admitted without one — never conflated with "scanned with a
+            known gap". Absent while a scan is still pending.
         finishedAt:
           type: string
           format: date-time

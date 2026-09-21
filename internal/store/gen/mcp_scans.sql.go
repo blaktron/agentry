@@ -113,9 +113,11 @@ func (q *Queries) ListMCPServerScansCheckedBefore(ctx context.Context, arg ListM
 }
 
 const listPublishedVersionsUsingMCPServer = `-- name: ListPublishedVersionsUsingMCPServer :many
-SELECT v.id, v.agent_id, v.version, v.commit_sha, v.manifest, v.capabilities, v.archive_digest, v.archive_key, v.archive_size, v.status, v.status_reason, v.published_at, v.yanked_at, v.yank_reason, v.channel, v.submitted_by, v.source, v.created_at, v.updated_at, v.submitter_ip_hash FROM agent_versions v
+SELECT v.id, v.agent_id, v.version, v.commit_sha, v.manifest, v.capabilities, v.archive_digest, v.archive_key, v.archive_size, v.status, v.status_reason, v.published_at, v.yanked_at, v.yank_reason, v.channel, v.submitted_by, v.source, v.created_at, v.updated_at, v.submitter_ip_hash, v.scan_status FROM agent_versions v
 JOIN agent_version_mcp_servers m ON m.version_id = v.id
+JOIN agents a ON a.id = v.agent_id
 WHERE m.ecosystem = $1 AND m.package = $2 AND m.version = $3 AND v.status = 'published'
+  AND v.scan_status <> 'skipped' AND NOT a.pipeline_skip
 ORDER BY v.created_at
 `
 
@@ -125,6 +127,9 @@ type ListPublishedVersionsUsingMCPServerParams struct {
 	Version   string `json:"version"`
 }
 
+// The MCP sweep leaves out a version published without a scan and every
+// version of an agent with pipeline_skip set (M21): no alert is opened on
+// what the organization chose not to have scanned.
 func (q *Queries) ListPublishedVersionsUsingMCPServer(ctx context.Context, arg ListPublishedVersionsUsingMCPServerParams) ([]AgentVersion, error) {
 	rows, err := q.db.Query(ctx, listPublishedVersionsUsingMCPServer, arg.Ecosystem, arg.Package, arg.Version)
 	if err != nil {
@@ -155,6 +160,7 @@ func (q *Queries) ListPublishedVersionsUsingMCPServer(ctx context.Context, arg L
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.SubmitterIpHash,
+			&i.ScanStatus,
 		); err != nil {
 			return nil, err
 		}
