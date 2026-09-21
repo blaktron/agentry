@@ -83,6 +83,7 @@ prose-check:
 dev:
 	@if command -v docker >/dev/null 2>&1; then docker compose -f deploy/compose/docker-compose.yaml up -d; \
 	else ./scripts/dev/pg.sh up; fi
+	AGENTRY_DEV_MODE=$${AGENTRY_DEV_MODE:-true} \
 	AGENTRY_DATABASE_URL=$$(./scripts/dev/pg.sh url 2>/dev/null || echo "postgres://agentry:agentry@localhost:5432/agentry_dev?sslmode=disable") \
 	  $(GO) run ./cmd/agentryd all
 

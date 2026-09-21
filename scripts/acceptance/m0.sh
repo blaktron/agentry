@@ -23,6 +23,10 @@ make build >/dev/null
 ./bin/agentryd --version
 # The CLI moved to github.com/blaktron/agentry-cli (built via scripts/dev/cli-bin.sh).
 
+# A throwaway server: dev mode, opted in — the default is off and would
+# ask for a sealing key and a signing key (DEV-116).
+export AGENTRY_DEV_MODE=true
+
 # 3. Migrations against a clean-ish DB.
 AGENTRY_DATABASE_URL="$AGENTRY_TEST_DATABASE_URL" ./bin/agentryd migrate
 echo "migrations: OK"

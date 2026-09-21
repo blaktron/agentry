@@ -14,6 +14,8 @@ if [ -z "${AGENTRY_TEST_DATABASE_URL:-}" ]; then
   export AGENTRY_TEST_DATABASE_URL
 fi
 make build >/dev/null
+# A throwaway server: dev mode, opted in (DEV-116).
+export AGENTRY_DEV_MODE=true
 AGENTRY_DATABASE_URL="$AGENTRY_TEST_DATABASE_URL" ./bin/agentryd migrate
 BASE="http://localhost:$PORT"
 AGENTRY_DATABASE_URL="$AGENTRY_TEST_DATABASE_URL" AGENTRY_HTTP_ADDR=":$PORT" AGENTRY_BASE_URL="$BASE" \
