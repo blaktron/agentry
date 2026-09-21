@@ -235,7 +235,7 @@ services:
       context: ../..
       dockerfile: deploy/compose/Dockerfile
     environment:
-      # Dev mode is opt-in (DEV-115, security review 2026-09-20 §3.6): off,
+      # Dev mode is opt-in (DEV-116, security review 2026-09-20 §3.6): off,
       # the server needs a sealing key (AGENTRY_AUTH_SEALING_KEY, 32 random
       # bytes base64 — `openssl rand -base64 32`) and a signing key
       # (AGENTRY_SIGNING_KIND=file plus the two lines below it), and refuses
