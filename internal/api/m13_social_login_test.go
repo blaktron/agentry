@@ -421,6 +421,7 @@ func TestSocialLoginBrowserModeRedirectsToNext(t *testing.T) {
 	if res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("browser-mode callback: got %d want 303", res.StatusCode)
 	}
+	requireClearedCookie(t, res.Cookies(), "agentry_social_state", cookie.Secure)
 	if loc := res.Header.Get("Location"); loc != "/dashboard?tab=agents" {
 		t.Fatalf("browser-mode callback: Location %q want /dashboard?tab=agents", loc)
 	}

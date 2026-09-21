@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strings"
+	"sync"
 
 	"golang.org/x/crypto/argon2"
 )
@@ -34,6 +35,30 @@ func HashPassword(password string) (string, error) {
 		argon2.Version, argonMemory, argonTime, argonThreads,
 		base64.RawStdEncoding.EncodeToString(salt),
 		base64.RawStdEncoding.EncodeToString(key)), nil
+}
+
+// decoyHash is a real argon2id hash of a secret nobody knows, made once,
+// for the comparison a login pays when it has no password to check. Made
+// on first use rather than at init: the hash costs 64 MiB and ~100 ms,
+// which every process importing this package would otherwise pay.
+var decoyHash = sync.OnceValue(func() string {
+	secret := make([]byte, 32)
+	if _, err := rand.Read(secret); err != nil {
+		panic("auth: decoy secret: " + err.Error())
+	}
+	h, err := HashPassword(base64.RawStdEncoding.EncodeToString(secret))
+	if err != nil {
+		panic("auth: decoy hash: " + err.Error())
+	}
+	return h
+})
+
+// SpendPasswordCheck runs the argon2id comparison against a decoy, so a
+// login that found no account, an inactive one, or one without a password
+// takes as long to refuse as a wrong password does; otherwise the time a
+// refusal takes says which of those it was (agentry#413).
+func SpendPasswordCheck(password string) {
+	_ = VerifyPassword(password, decoyHash())
 }
 
 // VerifyPassword checks password against a PHC argon2id hash in constant
