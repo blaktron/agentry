@@ -213,8 +213,13 @@ type Limits struct {
 	RepoQuotaBytes   int `yaml:"repoQuotaBytes"`
 	RepoWarnBytes    int `yaml:"repoWarnBytes"`
 	RepoMaxBlobBytes int `yaml:"repoMaxBlobBytes"`
-	// GitPushesPerHour is the §19 per-repo push budget (60/h).
+	// GitPushesPerHour is the §19 per-repo push budget (60/h), one number
+	// on both transports.
 	GitPushesPerHour int `yaml:"gitPushesPerHour"`
+	// SSHKeyOffersPerMin bounds the public keys one source address may
+	// offer the git SSH listener per minute, spent before the key is looked
+	// up (60/min; agentry#410).
+	SSHKeyOffersPerMin int `yaml:"sshKeyOffersPerMin"`
 
 	// Namespace + publish-velocity quotas (§19).
 	AgentsPerUserNamespace int `yaml:"agentsPerUserNamespace"` // 200
@@ -492,6 +497,7 @@ func Default() Config {
 			RepoWarnBytes:              25 << 20,
 			RepoMaxBlobBytes:           25 << 20,
 			GitPushesPerHour:           60,
+			SSHKeyOffersPerMin:         60,
 			AgentsPerUserNamespace:     200,
 			AgentsPerOrgNamespace:      500,
 			VersionsPerDay:             20,
@@ -781,6 +787,7 @@ func applyEnv(c *Config) error {
 		{"AGENTRY_LIMITS_ANONYMOUS_PER_MIN", &c.Limits.AnonymousPerMin},
 		{"AGENTRY_LIMITS_LOGIN_PER_MIN", &c.Limits.LoginPerMin},
 		{"AGENTRY_LIMITS_GIT_PUSHES_PER_HOUR", &c.Limits.GitPushesPerHour},
+		{"AGENTRY_LIMITS_SSH_KEY_OFFERS_PER_MIN", &c.Limits.SSHKeyOffersPerMin},
 		{"AGENTRY_LIMITS_REPO_WARN_BYTES", &c.Limits.RepoWarnBytes},
 		{"AGENTRY_LIMITS_AGENTS_PER_USER_NAMESPACE", &c.Limits.AgentsPerUserNamespace},
 		{"AGENTRY_LIMITS_AGENTS_PER_ORG_NAMESPACE", &c.Limits.AgentsPerOrgNamespace},
@@ -1030,6 +1037,7 @@ func (c Config) validateLimits() error {
 		{"limits.repoWarnBytes", int64(c.Limits.RepoWarnBytes)},
 		{"limits.repoMaxBlobBytes", int64(c.Limits.RepoMaxBlobBytes)},
 		{"limits.gitPushesPerHour", int64(c.Limits.GitPushesPerHour)},
+		{"limits.sshKeyOffersPerMin", int64(c.Limits.SSHKeyOffersPerMin)},
 		{"limits.agentsPerUserNamespace", int64(c.Limits.AgentsPerUserNamespace)},
 		{"limits.agentsPerOrgNamespace", int64(c.Limits.AgentsPerOrgNamespace)},
 		{"limits.versionsPerDay", int64(c.Limits.VersionsPerDay)},

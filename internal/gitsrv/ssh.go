@@ -29,6 +29,8 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/logevent"
+	"github.com/blaktron/agentry/internal/ratelimit"
 	"github.com/blaktron/agentry/internal/registry"
 )
 
@@ -40,10 +42,42 @@ type SSHServer struct {
 	wg              sync.WaitGroup
 	closed          chan struct{}
 	hostFingerprint string
+	// resolveKey is the credential lookup, a fingerprint to its principal;
+	// the database in production, faked in tests that count it.
+	resolveKey func(ctx context.Context, fingerprint string) (*auth.Principal, error)
 }
 
 // sshMaxAuthTries bounds public-key attempts per connection.
 const sshMaxAuthTries = 6
+
+// sshKeyOffersPerMin is the per-source budget on public-key offers from
+// config, with the shipped default when unset.
+func (h *Handler) sshKeyOffersPerMin() int {
+	if n := h.cfg.Limits.SSHKeyOffersPerMin; n > 0 {
+		return n
+	}
+	return 60
+}
+
+// admitKeyOffer spends one public-key offer from the source address's
+// budget and reports whether the key may be looked up. The listener is
+// the one service the shipped stack publishes beyond loopback, so what
+// one address can make the registry do before it holds a credential is
+// bounded here, in front of the lookup; MaxAuthTries bounds a
+// connection, not a stranger opening many (agentry#410). Keyed by
+// address, not by key, for the same reason.
+func (h *Handler) admitKeyOffer(remote net.Addr) bool {
+	source := remote.String()
+	if host, _, err := net.SplitHostPort(source); err == nil {
+		source = host
+	}
+	n := h.sshKeyOffersPerMin()
+	res := h.keyOffers.Allow("ssh-key-offer", source, ratelimit.PerMinute(n), n)
+	if !res.OK {
+		h.log.Info("rate limited", logevent.HTTPRateLimited.Attr(), "class", "ssh-key-offer", "source", source)
+	}
+	return res.OK
+}
 
 // sshPermFingerprint carries the authenticated key from the auth callback
 // to the session (the principal is resolved again at exec time so a key
@@ -62,14 +96,22 @@ func (h *Handler) NewSSHServer(addr, hostKeyFile string) (*SSHServer, error) {
 		return nil, err
 	}
 	s := &SSHServer{h: h, closed: make(chan struct{}), hostFingerprint: ssh.FingerprintSHA256(signer.PublicKey())}
+	s.resolveKey = func(ctx context.Context, fp string) (*auth.Principal, error) {
+		return auth.ResolveSSHKey(ctx, h.st.Queries(), fp)
+	}
 	s.config = &ssh.ServerConfig{
 		MaxAuthTries:  sshMaxAuthTries,
 		ServerVersion: "SSH-2.0-agentry",
 		PublicKeyCallback: func(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
+			// An error here reaches the client only as the generic
+			// authentication failure; the log line is the record.
+			if !h.admitKeyOffer(conn.RemoteAddr()) {
+				return nil, errors.New("key offers over budget")
+			}
 			fp := ssh.FingerprintSHA256(key)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			if _, err := auth.ResolveSSHKey(ctx, h.st.Queries(), fp); err != nil {
+			if _, err := s.resolveKey(ctx, fp); err != nil {
 				return nil, errors.New("unknown key")
 			}
 			return &ssh.Permissions{Extensions: map[string]string{sshPermFingerprint: fp}}, nil
@@ -245,7 +287,7 @@ func (s *SSHServer) runGit(ctx context.Context, ch ssh.Channel, fp, gitProtocol,
 	ctx, cancel := context.WithTimeout(ctx, h.opTimeout)
 	defer cancel()
 
-	principal, err := auth.ResolveSSHKey(ctx, h.st.Queries(), fp)
+	principal, err := s.resolveKey(ctx, fp)
 	if err != nil {
 		_, _ = fmt.Fprintf(ch.Stderr(), "agentry: key no longer accepted\n")
 		return 1
@@ -262,6 +304,14 @@ func (s *SSHServer) runGit(ctx context.Context, ch ssh.Channel, fp, gitProtocol,
 		}
 		_, _ = fmt.Fprintf(ch.Stderr(), "agentry: %s\n", msg)
 		return 1
+	}
+	// The §19 push budget is the HTTP transport's, spent at the same
+	// admission point, before git runs (agentry#410).
+	if service == "receive-pack" {
+		if retry, ok := h.admitPush(ctx, agent); !ok {
+			_, _ = fmt.Fprintf(ch.Stderr(), "agentry: %s\n", pushBudgetRefusal(retry))
+			return 1
+		}
 	}
 	return s.execGit(ctx, ch, service, gitProtocol, agent, principal, role)
 }

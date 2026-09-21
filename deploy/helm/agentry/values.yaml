@@ -130,6 +130,7 @@ config:
   # authedPerHour: 5000
   # webhookDeliveriesPerSecond: 5
   # gitPushesPerHour: 60
+  # sshKeyOffersPerMin: 60
   # agentsPerOrgNamespace: 500
 
 # Sensitive values. In production prefer existingSecret (e.g. managed by
