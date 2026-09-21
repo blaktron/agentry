@@ -123,6 +123,32 @@ func RegisterSigningKey(ctx context.Context, st *store.Store, signer Signer) (Si
 	return SigningKeyRegistration{KeyID: row.KeyID, New: row.Inserted, Retired: retired}, nil
 }
 
+// EnqueueAttestSweepIfBehind enqueues the attest sweep when any published
+// version has no attestation (agentry#407) — the state of the table is the
+// trigger, as for the re-attestation sweep, so a sweep that failed part way
+// completes at the next start and a clean table enqueues nothing.
+func EnqueueAttestSweepIfBehind(ctx context.Context, st *store.Store, q queue.Client, log *slog.Logger, signer Signer) {
+	if st == nil || q == nil || signer == nil {
+		return
+	}
+	if log == nil {
+		log = slog.Default()
+	}
+	pending, err := st.Queries().CountPublishedVersionsWithoutAttestation(ctx)
+	if err != nil {
+		log.Error("scan: could not count published versions without an attestation", "err", err)
+		return
+	}
+	if pending == 0 {
+		return
+	}
+	if _, err := q.Enqueue(ctx, JobAttestSweep, "sandbox", struct{}{}); err != nil {
+		log.Error("scan: could not enqueue the attest sweep", "pending", pending, "err", err)
+		return
+	}
+	log.Warn("scan: published versions without an attestation; attest sweep enqueued", "pending", pending)
+}
+
 // EnqueueReattestSweepIfBehind enqueues the re-attestation sweep when any
 // attestation lacks the signer's signature (agentry#350): a rotation, a key
 // rolled back to, a sweep that failed part way, or an enqueue that was
