@@ -81,8 +81,8 @@ refusals of their own, all `409`. `pipeline-skip-public` and
 namespace; only a private agent of an organization's is admitted without
 a scan, and only where the tier includes it (`403 feature-not-included`
 otherwise). `agent-unscanned` refuses making an agent public while it
-holds versions admitted unscanned that are published or quarantined,
-carrying their count as `unscanned`; yanking them opens the way, since
+holds versions admitted unscanned that are published, quarantined or
+blocked, carrying their count as `unscanned`; yanking them opens the way, since
 only a version that passed the gate is ever public. A version admitted
 without a scan carries `scanStatus: skipped` on the version and on
 resolve, its report `verdict: unscanned`, and has no attestation.

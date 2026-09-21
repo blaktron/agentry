@@ -128,8 +128,14 @@ func unscannedMayPublish(ctx context.Context, q *storegen.Queries, agentID uuid.
 func (s *Service) publishUnscanned(ctx context.Context, versionID uuid.UUID, reason string, actorEvent audit.Event) (bool, error) {
 	var res TransitionResult
 	err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
-		if err := q.MarkVersionScanSkipped(ctx, versionID); err != nil {
+		n, err := q.MarkVersionScanSkipped(ctx, versionID)
+		if err != nil {
 			return fmt.Errorf("registry: mark version unscanned: %w", err)
+		}
+		if n != 1 {
+			// Not submitted any more: something moved it, and the
+			// gate's own edges are the only way on from here.
+			return fmt.Errorf("%w: the version is no longer submitted", ErrBadTransition)
 		}
 		var terr error
 		res, terr = s.TransitionInTx(ctx, q, versionID, StatusPublished, reason, actorEvent)

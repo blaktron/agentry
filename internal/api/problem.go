@@ -234,9 +234,9 @@ func problemUnsupportedImage(w http.ResponseWriter, r *http.Request, detail stri
 // quarantine (M21): only a version that passed the gate is ever public.
 // The count travels as `unscanned` beside the words.
 func problemAgentUnscanned(w http.ResponseWriter, r *http.Request, standing int64) {
-	detail := "One version of this BriefAgent was admitted unscanned and stands published or quarantined. Yank it, then make the BriefAgent public: only a version that passed the gate is ever public."
+	detail := "One version of this BriefAgent was admitted unscanned and stands published, quarantined or blocked. Yank it, then make the BriefAgent public: only a version that passed the gate is ever public."
 	if standing != 1 {
-		detail = fmt.Sprintf("%d versions of this BriefAgent were admitted unscanned and stand published or quarantined. Yank them, then make the BriefAgent public: only a version that passed the gate is ever public.", standing)
+		detail = fmt.Sprintf("%d versions of this BriefAgent were admitted unscanned and stand published, quarantined or blocked. Yank them, then make the BriefAgent public: only a version that passed the gate is ever public.", standing)
 	}
 	writeProblemWith(w, r, http.StatusConflict, "agent-unscanned", "Unscanned versions cannot be made public", detail, map[string]any{"unscanned": standing})
 }

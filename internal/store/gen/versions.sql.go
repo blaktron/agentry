@@ -365,16 +365,21 @@ func (q *Queries) ListVersionsByStatus(ctx context.Context, arg ListVersionsBySt
 	return items, nil
 }
 
-const markVersionScanSkipped = `-- name: MarkVersionScanSkipped :exec
+const markVersionScanSkipped = `-- name: MarkVersionScanSkipped :execrows
 UPDATE agent_versions SET scan_status = 'skipped', updated_at = now()
 WHERE id = $1 AND status = 'submitted'
 `
 
-// The version was admitted without a scan (M21): recorded before the
-// submitted → published edge, which refuses a version not so marked.
-func (q *Queries) MarkVersionScanSkipped(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, markVersionScanSkipped, id)
-	return err
+// The version was admitted without a scan (M21): recorded in the same
+// transaction as the submitted → published edge, which refuses a version
+// not so marked. Only a submitted version is marked; the caller requires
+// the one row, so a version that has moved on is never marked.
+func (q *Queries) MarkVersionScanSkipped(ctx context.Context, id uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, markVersionScanSkipped, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const recomputeAgentLatestPublished = `-- name: RecomputeAgentLatestPublished :exec
