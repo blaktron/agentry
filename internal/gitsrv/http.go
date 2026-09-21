@@ -56,10 +56,11 @@ type Handler struct {
 	// PostReceive is invoked after a successful push with the updated refs
 	// (M3 wires tag→submission here).
 	PostReceive func(ctx context.Context, agent registry.Agent, refs []RefUpdate, pusher *auth.Principal)
-	// pushes enforces the §19 60-pushes-per-hour-per-repo budget. Per
-	// process, so an N-replica git fleet allows roughly N× that (D-06:
-	// Redis replaces this on multi-node SaaS).
-	pushes *ratelimit.Buckets
+	// limits holds the transport's §19 buckets: the 60-pushes-per-hour-
+	// per-repo budget, and the SSH key offers a source may make before a
+	// lookup (ssh.go). Per process, so an N-replica git fleet allows
+	// roughly N× each (D-06: Redis replaces this on multi-node SaaS).
+	limits *ratelimit.Buckets
 	// mx records §16.2 git op counts, durations, concurrency and the §16.1
 	// clone first-byte SLI. nil is a working no-op.
 	mx *metrics.Metrics
@@ -75,7 +76,7 @@ func (h *Handler) Close() error {
 	if h == nil {
 		return nil
 	}
-	return h.pushes.Close()
+	return h.limits.Close()
 }
 
 // NewHandler assembles the git HTTP layer.
@@ -96,7 +97,7 @@ func NewHandler(cfg config.Config, st *store.Store, repos *RepoStore, reg *regis
 		// The idle TTL must exceed the one-hour push window: a bucket evicted
 		// sooner comes back full, which would let a repo at its limit reset
 		// the budget simply by pausing.
-		pushes: ratelimit.New(2 * time.Hour),
+		limits: ratelimit.New(2 * time.Hour),
 	}
 }
 
@@ -346,25 +347,51 @@ func (h *Handler) receivePack(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	// §19: 60 pushes/h per repo. Enforced HERE, at the admission point, rather
-	// than in the pre-receive hook: the hook is a fresh process per push with
-	// no shared state, so a bucket there would be empty every time. Refusing
-	// before the git subprocess starts also means a repo being hammered costs
-	// nothing but a 429.
-	//
-	// Burst is the full hourly budget: §19 says "60 pushes/h", not "one per
-	// minute", and a developer landing a run of commits should not be paced.
-	res := h.pushes.Allow("push", agent.RepoID.String(),
-		ratelimit.PerHour(h.pushesPerHour()), h.pushesPerHour())
-	if !res.OK {
-		h.mx.RecordGitOp(r.Context(), "receive-pack", "throttled", 0)
-		h.log.InfoContext(r.Context(), "rate limited", logevent.HTTPRateLimited.Attr(), "class", "push", "agent", agent.ID)
-		w.Header().Set("Retry-After", strconv.Itoa(int(res.Reset.Round(time.Second)/time.Second)))
-		http.Error(w, "This repository is over its hourly push limit. Retry after the delay in the Retry-After header.", http.StatusTooManyRequests)
+	if retry, ok := h.admitPush(r.Context(), agent); !ok {
+		w.Header().Set("Retry-After", strconv.Itoa(retrySeconds(retry)))
+		http.Error(w, pushBudgetRefusal(retry), http.StatusTooManyRequests)
 		return
 	}
 	var cmds bytes.Buffer
 	h.rpc(w, r, agent, principal, role, "receive-pack", &cmds)
+}
+
+// admitPush spends one push from the repository's §19 budget (60/h per
+// repo) and reports whether the push may proceed; when it may not, retry
+// is how long until the budget next admits one. It is the one admission
+// point for every transport — smart HTTP and SSH both call it — so the
+// budget is one number wherever the push arrives (agentry#410). It sits
+// here rather than in the pre-receive hook because the hook is a fresh
+// process per push with no shared state, so a bucket there would be
+// empty every time; refusing before the git subprocess starts also means
+// a repository being hammered costs nothing but the refusal.
+//
+// Burst is the full hourly budget: §19 says "60 pushes/h", not "one per
+// minute", and a developer landing a run of commits should not be paced.
+func (h *Handler) admitPush(ctx context.Context, agent registry.Agent) (retry time.Duration, ok bool) {
+	res := h.limits.Allow("push", agent.RepoID.String(),
+		ratelimit.PerHour(h.pushesPerHour()), h.pushesPerHour())
+	if res.OK {
+		return 0, true
+	}
+	h.mx.RecordGitOp(ctx, "receive-pack", "throttled", 0)
+	h.log.InfoContext(ctx, "rate limited", logevent.HTTPRateLimited.Attr(), "class", "push", "agent", agent.ID)
+	return res.Reset, false
+}
+
+// pushBudgetRefusal is what the pusher reads on either transport when the
+// repository's push budget is spent.
+func pushBudgetRefusal(retry time.Duration) string {
+	return fmt.Sprintf("This repository is over its hourly push limit. Retry in %d seconds.", retrySeconds(retry))
+}
+
+// retrySeconds rounds a wait to whole seconds, never below one: a
+// Retry-After of zero has the client spin.
+func retrySeconds(d time.Duration) int {
+	if n := int(d.Round(time.Second) / time.Second); n > 0 {
+		return n
+	}
+	return 1
 }
 
 // rpc runs the stateless git service, streaming request→stdin, stdout→response.

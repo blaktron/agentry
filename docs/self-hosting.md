@@ -453,7 +453,8 @@ through the entitlements resolver. The defaults:
 | `limits.archiveMaxFiles` | 2000 | files in the archive |
 | `limits.archiveMaxFileBytes` / `archiveMaxImageFileBytes` | 2 MiB / 5 MiB | any one file, images by extension |
 | `limits.archiveMaxTextBytes` | 1 MiB | the text files in total — the prose the scanners read in full; a package cannot spread an oversized instruction set across many files (V8) |
-| `limits.gitPushesPerHour` | 60 | per repository |
+| `limits.gitPushesPerHour` | 60 | per repository, spent at one admission point whichever transport the push arrives on — smart HTTP or SSH |
+| `limits.sshKeyOffersPerMin` | 60 | public keys one source address may offer the git SSH listener per minute, spent before the key is looked up; past it the offer is refused without a database lookup |
 | `limits.agentsPerUserNamespace` / `agentsPerOrgNamespace` | 200 / 500 | |
 | `limits.versionsPerDay` | 20 | per agent |
 | `limits.webhookEndpointsPerOrg` / `webhookDeliveriesPerSecond` | 20 / 5 | |
@@ -1107,6 +1108,12 @@ same authorization, hooks and quotas as HTTPS.
   `ssh://git@git.example.com:2222`) and agent pages show the SSH clone URL next to HTTPS.
 - **Enforced SSO:** an organization that requires SSO takes pushes only over HTTPS with an
   org-bound token; over SSH the push is refused with that message.
+- **Budgets:** a push over SSH spends the same per-repository hourly budget as a push over
+  HTTPS (`limits.gitPushesPerHour`) and is refused with the same words when it is spent. The
+  listener also bounds what one source address may make the registry do before it has a
+  credential: `limits.sshKeyOffersPerMin` public-key offers a minute, refused past that
+  without a lookup. The port is the one service the compose stack publishes beyond loopback
+  (`AGENTRY_SSH_BIND`), so the edge's rate limits do not cover it; this budget is what does.
 
 ## Fronting it with a site
 
