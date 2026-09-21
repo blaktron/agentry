@@ -366,8 +366,9 @@ cannot sign in.
    and `AGENTRY_ACCOUNT_URL` (password and authenticator changes) must reach
    the `authentik-*` containers (compose passes them through, defaulting to
    the server's own `/ui/` pages; a site's overlay sets its own); the
-   account-flows blueprint formats them into the redirect stages. After
-   changing them, recreate the authentik containers, not the registry alone.
+   account-flows blueprint formats them into sign-out's redirect stage and
+   the settings flows' return-to-settings policy (DEV-118). After changing
+   them, recreate the authentik containers, not the registry alone.
 5. A user who cannot complete MFA is an operator action in the authentik
    admin console (`/if/admin/` still serves); email alone never resets both
    factors.

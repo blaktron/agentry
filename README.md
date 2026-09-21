@@ -134,8 +134,9 @@ The enterprise build is one such module; the core carries none.
 ## Status
 
 Milestones **M0–M7** of the v1 plan are implemented, with automated
-acceptance scripts in `scripts/acceptance/` (`m0`–`m4`, `m6`, `m7`, and
-`ui.sh` for the core's own pages): scaffolding and CI (M0), identity
+acceptance scripts in `scripts/acceptance/` (`m0`–`m4`, `m6`, `m7`,
+`ui.sh` for the core's own pages, and `directory-signout.py` against a live
+directory): scaffolding and CI (M0), identity
 and authorization (M1), git hosting (M2), the registry and publication state
 machine (M3), the security pipeline (M4), the web UI (M5 — since moved to the
 closed site repository; the core keeps its own `/ui/` pages), enterprise
