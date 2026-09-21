@@ -156,27 +156,56 @@ func (d *Dispatcher) Emit(ctx context.Context, orgID uuid.UUID, eventType string
 	}
 	var firstErr error
 	for _, ep := range eps {
-		deliveryID, _ := uuid.NewV7()
-		payload, err := json.Marshal(wirePayload{
-			Event: eventType, ID: deliveryID, CreatedAt: d.deps.Now().UTC(), Data: dataRaw,
-		})
-		if err != nil {
-			firstErr = err
-			continue
-		}
-		if _, err := q.CreateWebhookDelivery(ctx, storegen.CreateWebhookDeliveryParams{
-			ID: deliveryID, EndpointID: ep.ID, EventType: eventType, Payload: payload,
-		}); err != nil {
-			firstErr = err
-			continue
-		}
-		if _, err := d.deps.Queue.Enqueue(ctx, JobDeliver, "core",
-			deliverArgs{DeliveryID: deliveryID}, queue.WithMaxAttempts(5)); err != nil {
-			d.deps.Log.Error("webhook: enqueue", "err", err, "delivery", deliveryID)
+		if err := d.deliverTo(ctx, ep.ID, eventType, dataRaw); err != nil {
 			firstErr = err
 		}
 	}
 	return firstErr
+}
+
+// Deliver records one delivery of eventType to the endpoint a caller named
+// and enqueues its job: what Emit does for each subscribed endpoint, for
+// one endpoint chosen by something other than its subscriptions — an
+// extension routing an event to the destination an organization picked
+// for it (pkg/extension.Webhooks). Whose endpoint it is, and whether it
+// is active, is the caller's to have checked; the transport is the same
+// from here on. Without a store or a queue there is nothing to record,
+// which — unlike Emit's silent best effort — is an error, because a
+// caller that named one endpoint expects the delivery to exist.
+func (d *Dispatcher) Deliver(ctx context.Context, endpointID uuid.UUID, eventType string, data any) error {
+	if d.deps.Store == nil || d.deps.Queue == nil {
+		return errors.New("webhook: no store or queue to record a delivery in")
+	}
+	dataRaw, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("webhook: marshal data: %w", err)
+	}
+	return d.deliverTo(ctx, endpointID, eventType, dataRaw)
+}
+
+// deliverTo writes the ledger row and enqueues the delivery job for one
+// endpoint. The row is written first so a delivery the queue never claims
+// is at least visible in the endpoint's log.
+func (d *Dispatcher) deliverTo(ctx context.Context, endpointID uuid.UUID, eventType string, dataRaw json.RawMessage) error {
+	q := d.deps.Store.Queries()
+	deliveryID, _ := uuid.NewV7()
+	payload, err := json.Marshal(wirePayload{
+		Event: eventType, ID: deliveryID, CreatedAt: d.deps.Now().UTC(), Data: dataRaw,
+	})
+	if err != nil {
+		return err
+	}
+	if _, err := q.CreateWebhookDelivery(ctx, storegen.CreateWebhookDeliveryParams{
+		ID: deliveryID, EndpointID: endpointID, EventType: eventType, Payload: payload,
+	}); err != nil {
+		return err
+	}
+	if _, err := d.deps.Queue.Enqueue(ctx, JobDeliver, "core",
+		deliverArgs{DeliveryID: deliveryID}, queue.WithMaxAttempts(5)); err != nil {
+		d.deps.Log.Error("webhook: enqueue", "err", err, "delivery", deliveryID)
+		return err
+	}
+	return nil
 }
 
 type deliverArgs struct {
