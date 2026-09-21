@@ -18,6 +18,7 @@ import (
 	"github.com/blaktron/agentry/internal/notify"
 	"github.com/blaktron/agentry/internal/registry"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/internal/webhook"
 )
 
 // The extension seam (DEV-091, pkg/extension): a closed build mounts routes
@@ -283,6 +284,12 @@ func (s *Server) SendToUser(ctx context.Context, userID uuid.UUID, kind, subject
 // chooses.
 var extensionMailKinds = map[string]notify.Kind{
 	"billing": notify.KindBilling,
+	// A dependency alert an extension routes to the person an
+	// organization chose for it (agentry#430, M19) goes under the same
+	// switch as the alert the core mails the author: it is the same
+	// news, and the person's choice about that news holds wherever it
+	// comes from.
+	"dependency_alert": notify.KindDependencyAlert,
 }
 
 // OrgAdminIDs is pkg/extension.Deps.Notifier.OrgAdmins: the active
@@ -299,4 +306,66 @@ func (s *Server) OrgAdminIDs(ctx context.Context, orgID uuid.UUID) ([]uuid.UUID,
 		return nil, fmt.Errorf("api: org admins: %w", err)
 	}
 	return ids, nil
+}
+
+// WebhookEndpointRef is an organization's webhook endpoint as an
+// extension may name one (pkg/extension.Webhooks): what identifies it
+// and what it subscribes to, and nothing that could deliver to it
+// outside the core's transport — the secret stays in the row.
+type WebhookEndpointRef struct {
+	ID     uuid.UUID
+	URL    string
+	Events []string
+	Active bool
+}
+
+// WebhookEndpoints is pkg/extension.Deps.Webhooks.Endpoints: the
+// organization's endpoints, active or not, newest first. An organization
+// that does not exist has none, not an error, the shape OrgAdminIDs has.
+func (s *Server) WebhookEndpoints(ctx context.Context, orgID uuid.UUID) ([]WebhookEndpointRef, error) {
+	if s.st == nil {
+		return nil, errors.New("api: no database to read endpoints from")
+	}
+	rows, err := s.q().ListWebhookEndpoints(ctx, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("api: org webhook endpoints: %w", err)
+	}
+	out := make([]WebhookEndpointRef, 0, len(rows))
+	for _, ep := range rows {
+		out = append(out, WebhookEndpointRef{ID: ep.ID, URL: ep.Url, Events: ep.Events, Active: ep.Active})
+	}
+	return out, nil
+}
+
+// DeliverWebhook is pkg/extension.Deps.Webhooks.Deliver (agentry#430):
+// one delivery of event to the endpoint an extension named, through the
+// core's transport — the ledger row, the queued job with its signature,
+// its retries and its SSRF guard — so a destination an organization
+// chose for an extension's purpose is written to exactly the way its
+// subscriptions are. It reports whether a delivery was recorded: an
+// endpoint that is not this organization's, or is switched off, is false
+// with no error — a destination that has gone stale, which the extension
+// may report but cannot repair — and an event outside the catalog is
+// refused, because a consumer's documentation is the core's promise.
+func (s *Server) DeliverWebhook(ctx context.Context, orgID, endpointID uuid.UUID, event string, data any) (bool, error) {
+	if s.st == nil || s.webhooks == nil {
+		return false, errors.New("api: no webhook transport to deliver through")
+	}
+	if !webhook.ValidEvent(event) {
+		return false, fmt.Errorf("api: %q is not an event of the webhook catalog", event)
+	}
+	ep, err := s.q().GetWebhookEndpoint(ctx, storegen.GetWebhookEndpointParams{ID: endpointID, OrgID: orgID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("api: webhook endpoint: %w", err)
+	}
+	if !ep.Active {
+		return false, nil
+	}
+	if err := s.webhooks.Deliver(ctx, ep.ID, event, data); err != nil {
+		return false, err
+	}
+	return true, nil
 }
