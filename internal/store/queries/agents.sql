@@ -63,6 +63,13 @@ WHERE h.handle = $1
   AND (h.kind <> 'org' OR o.state IN ('active','decommissioning'))
 ORDER BY a.name;
 
+-- LockNamespace serialises the per-namespace counts — the agent quota and
+-- the private-agent cap — inside the transaction that inserts or flips:
+-- the count and the write commit together, as the seat cap's do under the
+-- org row's lock (agentry#411).
+-- name: LockNamespace :exec
+SELECT id FROM handles WHERE id = $1 FOR UPDATE;
+
 -- name: CountAgentsInNamespace :one
 SELECT count(*) FROM agents WHERE namespace_id = $1;
 
