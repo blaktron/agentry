@@ -29,6 +29,7 @@ import (
 	"github.com/blaktron/agentry/internal/entitlements"
 	"github.com/blaktron/agentry/internal/queue"
 	"github.com/blaktron/agentry/internal/registry"
+	"github.com/blaktron/agentry/internal/webhook"
 )
 
 // Extension is what a closed build adds. Every method may return the zero
@@ -262,7 +263,7 @@ type Webhooks interface {
 	// Endpoints lists the organization's endpoints as an extension may
 	// name one, active or not. An organization that does not exist has
 	// none, not an error.
-	Endpoints(ctx context.Context, orgID uuid.UUID) ([]WebhookEndpoint, error)
+	Endpoints(ctx context.Context, orgID uuid.UUID) ([]WebhookEndpointRef, error)
 	// Deliver records one delivery of event with data to the endpoint
 	// and queues it, the way the core's own emit does for a subscribed
 	// endpoint. It reports whether a delivery was recorded: false with
@@ -273,9 +274,16 @@ type Webhooks interface {
 	Deliver(ctx context.Context, orgID, endpointID uuid.UUID, event string, data any) (bool, error)
 }
 
-// WebhookEndpoint is an endpoint as the seam describes it: its id, its
-// URL, the events it subscribes to and whether it is active. No secret.
-type WebhookEndpoint = api.WebhookEndpointRef
+// WebhookEndpointRef is an endpoint as the seam describes it: its id,
+// its URL, the events it subscribes to and whether it is active. No
+// secret.
+type WebhookEndpointRef = api.WebhookEndpointRef
+
+// EventAgentDependencyAlert is the catalog event a dependency alert is
+// fanned out as (DEV-090): what the hook hears as Event.Kind, and what an
+// extension routing the alert delivers it as, so the destination it
+// names reads the same event a subscription would have given it.
+const EventAgentDependencyAlert = webhook.EventAgentDependencyAlert
 
 // Agents answers whether a principal may read an agent the way the core's
 // own routes decide it — the effective role over the namespace and the

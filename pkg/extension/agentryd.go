@@ -394,7 +394,7 @@ func webhooksOf(srv *api.Server, pool *pgxpool.Pool) Webhooks {
 
 type serverWebhooks struct{ srv *api.Server }
 
-func (w serverWebhooks) Endpoints(ctx context.Context, orgID uuid.UUID) ([]WebhookEndpoint, error) {
+func (w serverWebhooks) Endpoints(ctx context.Context, orgID uuid.UUID) ([]WebhookEndpointRef, error) {
 	return w.srv.WebhookEndpoints(ctx, orgID)
 }
 

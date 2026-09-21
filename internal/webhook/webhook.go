@@ -157,7 +157,10 @@ func (d *Dispatcher) Emit(ctx context.Context, orgID uuid.UUID, eventType string
 	var firstErr error
 	for _, ep := range eps {
 		if err := d.deliverTo(ctx, ep.ID, eventType, dataRaw); err != nil {
-			firstErr = err
+			d.deps.Log.Error("webhook: record delivery", "endpoint", ep.ID, "event", eventType, "err", err)
+			if firstErr == nil {
+				firstErr = err
+			}
 		}
 	}
 	return firstErr
@@ -193,17 +196,16 @@ func (d *Dispatcher) deliverTo(ctx context.Context, endpointID uuid.UUID, eventT
 		Event: eventType, ID: deliveryID, CreatedAt: d.deps.Now().UTC(), Data: dataRaw,
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("webhook: marshal payload: %w", err)
 	}
 	if _, err := q.CreateWebhookDelivery(ctx, storegen.CreateWebhookDeliveryParams{
 		ID: deliveryID, EndpointID: endpointID, EventType: eventType, Payload: payload,
 	}); err != nil {
-		return err
+		return fmt.Errorf("webhook: record delivery: %w", err)
 	}
 	if _, err := d.deps.Queue.Enqueue(ctx, JobDeliver, "core",
 		deliverArgs{DeliveryID: deliveryID}, queue.WithMaxAttempts(5)); err != nil {
-		d.deps.Log.Error("webhook: enqueue", "err", err, "delivery", deliveryID)
-		return err
+		return fmt.Errorf("webhook: enqueue delivery %s: %w", deliveryID, err)
 	}
 	return nil
 }
