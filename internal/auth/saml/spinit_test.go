@@ -24,7 +24,7 @@ func TestSAML_AuthnRequestIsTracked(t *testing.T) {
 	idp := newTestIdP(t)
 	sp, tracker := spWithTracker(t, idp)
 
-	redirect, err := sp.AuthnRequest("acme")
+	redirect, err := sp.AuthnRequest(context.Background(), "acme")
 	if err != nil {
 		t.Fatalf("AuthnRequest: %v", err)
 	}
@@ -43,10 +43,10 @@ func TestSAML_AuthnRequestIsTracked(t *testing.T) {
 	}
 	// Exactly one id is outstanding, and it is single use.
 	id := onlyTrackedID(t, tracker)
-	if !tracker.Consume(id) {
+	if !tracker.Consume(context.Background(), id) {
 		t.Fatal("the tracked request id must be consumable once")
 	}
-	if tracker.Consume(id) {
+	if tracker.Consume(context.Background(), id) {
 		t.Fatal("a request id must not be consumable twice")
 	}
 }
@@ -55,7 +55,7 @@ func TestSAML_SPInitiatedRoundTrip(t *testing.T) {
 	idp := newTestIdP(t)
 	sp, tracker := spWithTracker(t, idp)
 
-	if _, err := sp.AuthnRequest("acme"); err != nil {
+	if _, err := sp.AuthnRequest(context.Background(), "acme"); err != nil {
 		t.Fatalf("AuthnRequest: %v", err)
 	}
 	requestID := onlyTrackedID(t, tracker)
@@ -115,11 +115,11 @@ func TestSAML_InResponseToRejectedWithoutTracker(t *testing.T) {
 
 func TestSAML_RequestTrackerExpires(t *testing.T) {
 	tracker := NewMemoryRequestTracker()
-	tracker.Track("_expired", time.Now().Add(-time.Second))
-	if tracker.Consume("_expired") {
+	tracker.Track(context.Background(), "_expired", time.Now().Add(-time.Second))
+	if tracker.Consume(context.Background(), "_expired") {
 		t.Fatal("an expired request id must not be consumable")
 	}
-	if tracker.Consume("") {
+	if tracker.Consume(context.Background(), "") {
 		t.Fatal("an empty request id must never be consumable")
 	}
 }

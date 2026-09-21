@@ -125,7 +125,7 @@ func (sp *SP) WithRequestTracker(rt RequestTracker) *SP {
 // AuthnRequest starts an SP-initiated login (§12.4). It returns the IdP
 // redirect URL and records the request id with the tracker so the eventual
 // assertion's InResponseTo can be matched to it.
-func (sp *SP) AuthnRequest(relayState string) (string, error) {
+func (sp *SP) AuthnRequest(ctx context.Context, relayState string) (string, error) {
 	loc := sp.inner.GetSSOBindingLocation(saml.HTTPRedirectBinding)
 	if loc == "" {
 		return "", fmt.Errorf("saml: IdP publishes no HTTP-Redirect SSO endpoint")
@@ -139,7 +139,7 @@ func (sp *SP) AuthnRequest(relayState string) (string, error) {
 		return "", fmt.Errorf("saml: encode AuthnRequest: %w", err)
 	}
 	if sp.requests != nil {
-		sp.requests.Track(req.ID, time.Now().Add(defaultRequestTTL))
+		sp.requests.Track(ctx, req.ID, time.Now().Add(defaultRequestTTL))
 	}
 	return u.String(), nil
 }
@@ -202,7 +202,7 @@ func (sp *SP) SPMetadataXML() ([]byte, error) {
 
 // ParseAndValidate decodes and validates a base64 SAMLResponse from the ACS
 // POST, enforces the assertion-ID replay guard, and extracts the identity.
-func (sp *SP) ParseAndValidate(_ context.Context, samlResponseB64 string) (*Result, error) {
+func (sp *SP) ParseAndValidate(ctx context.Context, samlResponseB64 string) (*Result, error) {
 	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(samlResponseB64))
 	if err != nil {
 		return nil, fmt.Errorf("saml: decode SAMLResponse: %w", err)
@@ -223,7 +223,7 @@ func (sp *SP) ParseAndValidate(_ context.Context, samlResponseB64 string) (*Resu
 	// none is IdP-initiated and stays allowed (§12.4). This is what stops a
 	// response to someone else's login from being pasted into our ACS.
 	if inResponseTo := assertionInResponseTo(assertion); inResponseTo != "" {
-		if sp.requests == nil || !sp.requests.Consume(inResponseTo) {
+		if sp.requests == nil || !sp.requests.Consume(ctx, inResponseTo) {
 			return nil, fmt.Errorf("saml: InResponseTo %q matches no pending AuthnRequest", inResponseTo)
 		}
 	}
@@ -233,7 +233,7 @@ func (sp *SP) ParseAndValidate(_ context.Context, samlResponseB64 string) (*Resu
 	if assertion.Conditions != nil {
 		exp = assertion.Conditions.NotOnOrAfter
 	}
-	if sp.replay.SeenBefore(assertion.ID, exp) {
+	if sp.replay.SeenBefore(ctx, assertion.ID, exp) {
 		return nil, fmt.Errorf("saml: assertion %q replayed", assertion.ID)
 	}
 

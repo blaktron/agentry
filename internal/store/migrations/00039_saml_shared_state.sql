@@ -8,17 +8,20 @@
 -- stays possible behind the same interfaces. Expired rows are swept by
 -- the writers themselves, now and then, so the sets stay the size of
 -- what is live — minutes of assertions.
+-- An id is the identity provider's, so its length is bounded here: a
+-- longer one is refused before it is stored, and the writers refuse it
+-- before they ask.
 CREATE TABLE saml_consumed_assertions (
-  id         text PRIMARY KEY,
+  id         text PRIMARY KEY CHECK (length(id) <= 1024),
   expires_at timestamptz NOT NULL
 );
-CREATE INDEX saml_consumed_assertions_expiry ON saml_consumed_assertions (expires_at);
+CREATE INDEX saml_consumed_assertions_expires_at_idx ON saml_consumed_assertions (expires_at);
 
 CREATE TABLE saml_requests (
-  id         text PRIMARY KEY,
+  id         text PRIMARY KEY CHECK (length(id) <= 1024),
   expires_at timestamptz NOT NULL
 );
-CREATE INDEX saml_requests_expiry ON saml_requests (expires_at);
+CREATE INDEX saml_requests_expires_at_idx ON saml_requests (expires_at);
 
 -- +goose Down
 DROP TABLE IF EXISTS saml_requests;

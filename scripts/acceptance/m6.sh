@@ -21,7 +21,11 @@ go build ./internal/... ./pkg/... >/dev/null && echo "build (internal, pkg): OK"
 
 # SAML 2.0 SP: signed assertion accepted; bad-signature, unsigned, wrong
 # audience, expired, and replayed-assertion-id all rejected (§12.4, T-12).
-go test ./internal/auth/saml -run TestSAML -count=1 >/dev/null && echo "SAML SP accept + replay/audience/expiry/signature negatives (§12.4): OK"
+# The same filter runs the shared sets in the database (agentry#414): two
+# instances over one database see one set, a consumed id is kept for the
+# floor, single use holds when the presentations race, and a database that
+# cannot be reached fails closed.
+go test ./internal/auth/saml -run TestSAML -count=1 >/dev/null && echo "SAML SP accept + replay/audience/expiry/signature negatives, shared replay+request sets (§12.4): OK"
 
 # OIDC RP: auth-code + PKCE exchange, issuer pinning, email_verified respected
 # (§12.4). In-process discovery + JWKS + token provider.
@@ -29,6 +33,12 @@ go test ./internal/auth/oidc -run TestOIDC -count=1 >/dev/null && echo "OIDC RP 
 
 # SAML + OIDC through the HTTP endpoints (ACS POST / start+callback) → session.
 go test ./internal/api -run 'TestSAMLACSEndpoint|TestOIDCEndpointFlow' -count=1 >/dev/null && echo "SSO endpoints establish sessions via JIT (§12.4): OK"
+
+# The two sets every API replica must see alike (agentry#414): an assertion
+# one replica consumed is refused at the next, a fresh one is still accepted
+# there, and the seams a deployment with its own shared store uses are
+# honoured by the live routes rather than merely stored.
+go test ./internal/api -run 'TestSAMLReplayIsRefusedAcrossServers|TestSAMLSettersReplaceTheSets' -count=1 >/dev/null && echo "SAML replay refused across replicas; both setters honoured (§12.4): OK"
 
 # Enforced SSO + org-bound PATs (§12.4).
 go test ./internal/api -run TestEnforcedSSO -count=1 >/dev/null && echo "enforced SSO rejects stale sessions / non-org-bound PATs (§12.4): OK"

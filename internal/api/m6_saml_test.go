@@ -220,13 +220,24 @@ func TestSAMLACSEndpoint(t *testing.T) {
 }
 
 func (env *testEnv) postForm(t *testing.T, u string, form url.Values) *http.Response {
+	return env.postFormAs(t, u, form, "")
+}
+
+// postFormAs posts a form and captures the response without following
+// redirects. A non-empty host is sent as the request's Host: that is how one
+// public URL reaches whichever replica sits behind it (agentry#414), and the
+// server derives its own ACS URL from the header, so an assertion addressed
+// to that URL still matches the SP it lands on.
+func (env *testEnv) postFormAs(t *testing.T, u string, form url.Values, host string) *http.Response {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodPost, u, strings.NewReader(form.Encode()))
 	if err != nil {
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	// Do not follow redirects; capture the response directly.
+	if host != "" {
+		req.Host = host
+	}
 	client := *env.srv.Client()
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	resp, err := client.Do(req)
@@ -416,24 +427,54 @@ func TestSAMLReplayIsRefusedAcrossServers(t *testing.T) {
 	if first.StatusCode != http.StatusOK {
 		t.Fatalf("the assertion at the first server: %d, want 200", first.StatusCode)
 	}
-	// The same assertion, captured, presented to the other replica.
-	req, _ := http.NewRequest(http.MethodPost, b.srv.URL+"/api/v1/orgs/"+orgH+"/sso/saml/acs", strings.NewReader(url.Values{"SAMLResponse": {resp}}.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Host = strings.TrimPrefix(a.srv.URL, "http://")
-	client := *b.srv.Client()
-	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	second, err := client.Do(req)
-	if err != nil {
-		t.Fatal(err)
+
+	// postAtB presents an assertion to the other replica under the first's
+	// Host, the way replicas behind one public URL are reached.
+	acsAtB := b.srv.URL + "/api/v1/orgs/" + orgH + "/sso/saml/acs"
+	publicHost := strings.TrimPrefix(a.srv.URL, "http://")
+	postAtB := func(samlResponse string) (*http.Response, []byte) {
+		res := b.postFormAs(t, acsAtB, url.Values{"SAMLResponse": {samlResponse}}, publicHost)
+		body, _ := io.ReadAll(res.Body)
+		_ = res.Body.Close()
+		return res, body
 	}
-	body, _ := io.ReadAll(second.Body)
-	_ = second.Body.Close()
+
+	// The control: a *fresh* assertion is accepted at the other replica by
+	// this same route, so the 401 that follows is the shared record of
+	// consumed assertions refusing it, and not the Host failing to reach
+	// that replica's own SP.
+	fresh := idp.signedResponse(t, metadataURL, acsURL, nameID, false)
+	accepted, body := postAtB(fresh)
+	if accepted.StatusCode != http.StatusOK {
+		t.Fatalf("a fresh assertion at the other server: %d %s, want 200", accepted.StatusCode, body)
+	}
+
+	// The assertion the first replica consumed, captured, presented to the second.
+	second, body := postAtB(resp)
 	if second.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("the replay at the other server: %d %s, want 401", second.StatusCode, body)
 	}
-	for _, c := range second.Cookies() {
+	if minted := sessionCookie(second); minted {
+		t.Fatal("the replay at the other server minted a session")
+	}
+
+	// And the assertion the second replica consumed is refused there too:
+	// the set is one, whichever replica wrote to it.
+	third, body := postAtB(fresh)
+	if third.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("replaying the other server's own assertion: %d %s, want 401", third.StatusCode, body)
+	}
+	if minted := sessionCookie(third); minted {
+		t.Fatal("replaying the other server's own assertion minted a session")
+	}
+}
+
+// sessionCookie reports whether a response set a live session cookie.
+func sessionCookie(res *http.Response) bool {
+	for _, c := range res.Cookies() {
 		if c.Name == "agentry_session" && c.Value != "" {
-			t.Fatal("the replay at the other server minted a session")
+			return true
 		}
 	}
+	return false
 }

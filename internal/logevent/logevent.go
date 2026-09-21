@@ -23,6 +23,12 @@ const (
 	AuthLoginFailed Event = "auth.login_failed"
 	// AuthSocialRejected is a social or directory sign-in the server rejected.
 	AuthSocialRejected Event = "auth.social_rejected"
+	// SAMLStateUnavailable is a SAML login refused because the shared state
+	// it depends on — the consumed-assertion set or the outstanding-request
+	// set — could not be read or written (agentry#414). The refusal is the
+	// fail-closed answer; this line is what separates it from a replay that
+	// was really presented.
+	SAMLStateUnavailable Event = "saml.state_unavailable"
 	// SSRFRefused is an outbound target the private-range guard refused.
 	SSRFRefused Event = "ssrf.refused"
 	// GateVerdict is the gate deciding a version: published, rejected or
@@ -62,7 +68,7 @@ func Audit(action string) Event { return Event(AuditPrefix + action) }
 
 // All lists every catalogued name, for the completeness test and the docs.
 var All = []Event{
-	HTTPRequest, HTTPRateLimited, AuthLoginFailed, AuthSocialRejected, SSRFRefused,
+	HTTPRequest, HTTPRateLimited, AuthLoginFailed, AuthSocialRejected, SAMLStateUnavailable, SSRFRefused,
 	GateVerdict, GateError, ScanStage,
 	FailOpenAuditStreamDrop, FailOpenHistoryNotScanned, FailOpenOSVNotChecked, FailOpenOSVError,
 	GitPushRefused, MailSuppressed, WebhookDelivered,

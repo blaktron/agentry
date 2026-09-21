@@ -79,7 +79,7 @@ func (s *Server) ssoLanding(w http.ResponseWriter, r *http.Request) {
 		if next != "" {
 			relay = next
 		}
-		redirect, err := sp.AuthnRequest(relay)
+		redirect, err := sp.AuthnRequest(r.Context(), relay)
 		if err != nil {
 			s.log.WarnContext(r.Context(), "sso landing: authn request", "org", org, "err", err)
 			problemValidation(w, r, "The registry could not start SAML login for this organization. Ask an admin to check the connection.")
