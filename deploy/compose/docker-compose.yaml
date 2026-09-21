@@ -379,6 +379,13 @@ services:
     profiles: ["server"]
     image: nginx:1.27-alpine
     restart: unless-stopped
+    # Two networks: the stack's, to reach the services it fronts, and
+    # `ingress`, shared with cloudflared alone. The edge trusts a visitor
+    # address from CF-Connecting-IP only when the TCP peer is on `ingress`
+    # (edge/nginx.conf set_real_ip_from) — it used to trust all of
+    # 172.16.0.0/12, which is every container on every docker network on
+    # the host, run containers included (security review 2026-09-20 §5.7).
+    networks: [default, ingress]
     ports:
       - "${AGENTRY_EDGE_BIND:-0.0.0.0}:80:80"
       - "${AGENTRY_EDGE_BIND:-0.0.0.0}:443:443"
@@ -419,8 +426,23 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
+    # Only the ingress network: it reaches edge:443 there, and nothing else
+    # in the stack; the edge trusts CF-Connecting-IP from this network only.
+    networks: [ingress]
     depends_on:
       - edge
+
+networks:
+  default: {}
+  # The tunnel's own network, with a fixed subnet so the edge can name it in
+  # set_real_ip_from. Outside docker's default address pool (which starts at
+  # 172.17.0.0), so it is never handed to another network on the host; set
+  # AGENTRY_INGRESS_SUBNET when it collides with a LAN of yours, and change
+  # edge/nginx.conf's set_real_ip_from to match — the two must agree.
+  ingress:
+    ipam:
+      config:
+        - subnet: ${AGENTRY_INGRESS_SUBNET:-172.16.255.240/28}
 
 volumes:
   pgdata:
