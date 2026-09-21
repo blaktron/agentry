@@ -324,19 +324,10 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	}
 	if req.Visibility != nil {
 		v := string(*req.Visibility)
-		if v == "private" && a.Visibility != "private" {
-			// Turning an agent private holds one more private agent, which
-			// the namespace's tier may cap (plan subscription-tiers §5.3).
-			if err := s.reg.CheckPrivateAgentCap(r.Context(), a); err != nil {
-				if errors.Is(err, registry.ErrPrivateAgentCap) {
-					problemPrivateAgentCap(w, r)
-					return
-				}
-				s.log.ErrorContext(r.Context(), "update agent: private agent cap", "err", err)
-				problemInternal(w, r)
-				return
-			}
-		}
+		// Turning an agent private holds one more private agent, which the
+		// namespace's tier may cap (plan subscription-tiers §5.3): counted
+		// inside the transaction below, under the namespace's lock
+		// (agentry#411).
 		params.Visibility = &v
 		detail["visibility"] = v
 	}
@@ -366,6 +357,15 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 		locked, err := q.GetAgentForUpdate(r.Context(), a.ID)
 		if err != nil {
 			return err
+		}
+		if req.Visibility != nil && string(*req.Visibility) == "private" && locked.Visibility != "private" {
+			if err := s.reg.CheckPrivateAgentCapInTx(r.Context(), q, a); err != nil {
+				if errors.Is(err, registry.ErrPrivateAgentCap) {
+					refuse = func() { problemPrivateAgentCap(w, r) }
+					return errRefused
+				}
+				return err
+			}
 		}
 		visibility, skip := locked.Visibility, locked.PipelineSkip
 		if req.Visibility != nil {
