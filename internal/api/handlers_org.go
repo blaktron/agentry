@@ -189,7 +189,7 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if elsewhere > 0 {
-		problemAlreadyAMember(w, r, "This account is already a member of an organization. A person belongs to one organization at a time: leave it before creating another.")
+		problemAlreadyAMember(w, r, alreadyAMemberCreatorDetail)
 		return
 	}
 	domain, ok := s.orgDomainFor(w, r, p.UserID, req.Domain)
@@ -227,7 +227,7 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		if elsewhere, err := q.CountActiveMemberships(r.Context(), p.UserID); err != nil {
 			return err
 		} else if elsewhere > 0 {
-			return errAlreadyAMemberLocked
+			return registry.ErrAlreadyAMember
 		}
 		if err := q.CreateHandle(r.Context(), storegen.CreateHandleParams{ID: orgID, Handle: req.Handle, Kind: "org"}); err != nil {
 			return err
@@ -249,8 +249,8 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
-		if errors.Is(err, errAlreadyAMemberLocked) || uniqueViolationOn(err, "memberships_one_active_per_user") {
-			problemAlreadyAMember(w, r, "This account is already a member of an organization. A person belongs to one organization at a time: leave it before creating another.")
+		if errors.Is(err, registry.ErrAlreadyAMember) || uniqueViolationOn(err, "memberships_one_active_per_user") {
+			problemAlreadyAMember(w, r, alreadyAMemberCreatorDetail)
 			return
 		}
 		if uniqueViolationOn(err, "orgs_pending_by_creator_idx") {
@@ -331,10 +331,6 @@ func (s *Server) orgDomainFor(w http.ResponseWriter, r *http.Request, userID uui
 
 // errDomainClaimed is what a transaction returns when the domain it was
 // about to record belongs to another organization.
-// errAlreadyAMemberLocked is the D26 refusal taken under the person's
-// row lock inside CreateOrg's transaction.
-var errAlreadyAMemberLocked = errors.New("api: already a member, under the lock")
-
 var errDomainClaimed = errors.New("api: the domain belongs to another organization")
 
 // domainLockKey is the advisory-lock name for a domain.

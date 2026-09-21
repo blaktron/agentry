@@ -6,7 +6,12 @@
 -- accepted at the same moment, ended up active in both, with two seats
 -- debited across two tenants (security review 2026-09-20 §5.8.3;
 -- agentry#412). The doors now lock the person's row first; this index is
--- the wall behind them, as orgs_pipeline_skip_private is behind the flag.
+-- the wall behind them, as agents_pipeline_skip_private is behind the
+-- flag. It refuses to be built over a database that already holds a
+-- person active in two organizations: that is a data question for the
+-- operator to settle (which membership stands), not one for a migration
+-- to guess at, so the migration stops there and the server does not start
+-- until it is settled.
 CREATE UNIQUE INDEX memberships_one_active_per_user
   ON memberships (user_id) WHERE state = 'active';
 
