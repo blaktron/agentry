@@ -257,6 +257,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		// by older rules (§8.7).
 		scan.EnqueueRescanSweepOnNewRuleset(context.Background(), srv.jobs, log, rulesetReg)
 		scan.EnqueueReattestSweepIfBehind(context.Background(), st, srv.jobs, log, signer, keyReg)
+		scan.EnqueueAttestSweepIfBehind(context.Background(), st, srv.jobs, log, signer)
 	}
 	return srv
 }
