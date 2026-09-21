@@ -116,13 +116,16 @@ func clientIPWithProxies(r *http.Request, trusted int) string {
 	// header, so N trusted hops means N-1 trusted entries at the tail.
 	idx := len(fwd) - trusted
 	if idx < 0 {
-		// Fewer entries than hops: the chain is shorter than configured
-		// (a health check, or a direct connection that bypassed the edge).
-		// Fall back to the oldest entry we have, or the peer.
-		if len(fwd) == 0 {
-			return peer
-		}
-		idx = 0
+		// Fewer entries than hops: the chain is shorter than configured —
+		// a health check, a direct connection that bypassed the edge, or
+		// a hop count set one too high. Whatever is in the header then
+		// was not written by a hop this server trusts, so the peer is
+		// the only address a client cannot have chosen. Falling back to
+		// the oldest entry, as this once did, let a client on a direct
+		// connection name a fresh address per request and land in a
+		// fresh rate-limit bucket each time (security review 2026-09-20
+		// §5.8.2).
+		return peer
 	}
 	return fwd[idx]
 }
