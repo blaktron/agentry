@@ -64,9 +64,11 @@ config:
       clientId: ""
       issuer: "" # https://auth.example.com/application/o/agentry/
   idp:
-    # End-session URL sign-out sends the browser through (the server's own
-    # /ui/ sign-out, and a site's; DEV-082, DEV-091).
-    logoutUrl: "" # https://auth.example.com/application/o/agentry/end-session/
+    # Where sign-out sends the browser (the server's own /ui/ sign-out, and a
+    # site's; DEV-082, DEV-091): the provider's end-session endpoint behind
+    # authentik's cancel view, which drops a parked flow plan first
+    # (agentry#441).
+    logoutUrl: "" # https://auth.example.com/flows/-/cancel/?next=/application/o/agentry/end-session/
   # DEV-091: a site fronting this server (its origin; empty = the server's
   # own /ui/ pages), how much of /ui/ to serve (full | authorize | off), and
   # what the server calls itself.

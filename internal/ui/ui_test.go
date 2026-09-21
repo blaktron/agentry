@@ -1090,3 +1090,19 @@ func TestLayoutNamesThePendingOrganization(t *testing.T) {
 		t.Fatalf("no pending org, yet a notice: %s", w.Body.String())
 	}
 }
+
+// The directory's sign-out URL is a redirect chain that browsers hold to the
+// page's form-action (DEV-082); the policy admits its origin and nothing more
+// of it, so the cancel-view shape of agentry#441 — a path and a query on the
+// same host — changes nothing here.
+func TestCSPAdmitsTheSignOutOrigin(t *testing.T) {
+	h := newUI(t, Options{IdPLogoutURL: "https://auth.site.example/flows/-/cancel/?next=/application/o/agentry/end-session/", SiteURL: "https://site.example"})
+	w := get(h, "/ui/login")
+	csp := w.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "form-action 'self' http://127.0.0.1:* https://auth.site.example https://site.example") {
+		t.Fatalf("csp: %q", csp)
+	}
+	if strings.Contains(csp, "cancel") || strings.Contains(csp, "end-session") {
+		t.Fatalf("csp carries more than the origin: %q", csp)
+	}
+}

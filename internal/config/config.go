@@ -160,9 +160,11 @@ type Auth struct {
 	// can enrol a native TOTP factor while this is set (see
 	// internal/api/publish_gate.go).
 	ExternalOnly bool `yaml:"externalOnly"`
-	// IdPLogoutURL is the directory's end-session flow: where sign-out sends
-	// the browser once the session is revoked, so the next sign-in asks
-	// again (DEV-057). Empty means sign-out ends on the home page.
+	// IdPLogoutURL is the directory's sign-out URL: where sign-out sends the
+	// browser once the session is revoked, so the next sign-in asks again
+	// (DEV-057). For authentik that is the provider's end-session endpoint
+	// behind the cancel view (docs/self-hosting.md, agentry#441). Empty means
+	// sign-out ends on the home page.
 	IdPLogoutURL string `yaml:"idpLogoutURL"`
 	// IdPAdminURL / IdPAdminToken let account erasure (§12.7) reach into the
 	// directory service and delete the sign-in account there too — authentik's

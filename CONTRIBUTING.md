@@ -51,6 +51,7 @@ Everyday commands:
 | `make test` | Go tests (DB tests need `AGENTRY_TEST_DATABASE_URL`) |
 | `./scripts/acceptance/mN.sh` | the acceptance script for milestone N |
 | `./scripts/acceptance/ui.sh` | the server's own `/ui/` pages, driven with curl and a cookie jar |
+| `./scripts/acceptance/directory-signout.py` | sign-out against a live directory (needs its URL and the bootstrap token; a throwaway user it deletes) |
 
 Docker is optional; `scripts/dev/pg.sh` manages a private Postgres cluster if
 you would rather not run a container.

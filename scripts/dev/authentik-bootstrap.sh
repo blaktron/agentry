@@ -143,6 +143,11 @@ BRAND_PK=$(curlx "$API/core/brands/?domain=authentik-default" | jget "d['results
 curlx -X PATCH "$API/core/brands/$BRAND_PK/" -d "$(APP_PK="$APP_PK" python3 -c "import json,os;print(json.dumps({'default_application':os.environ['APP_PK'],'flow_user_settings':None}))")" -o /dev/null
 echo "brand $BRAND_PK: default_application=$APP_PK, flow_user_settings=null"
 
-echo "== issuer =="
+echo "== issuer (AGENTRY_SOCIAL_AUTHENTIK_ISSUER) =="
 echo "$AUTHENTIK_URL/application/o/agentry/"
+# The cancel view drops a flow plan the session may still hold before the
+# provider's end-session runs; without it that plan turns sign-out into an
+# empty page (agentry#441).
+echo "== sign-out URL (AGENTRY_IDP_LOGOUT_URL) =="
+echo "$AUTHENTIK_URL/flows/-/cancel/?next=/application/o/agentry/end-session/"
 echo "BOOTSTRAP OK"
