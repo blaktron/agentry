@@ -130,6 +130,9 @@ func TestApplyExtensionsBindsAndRegistersActions(t *testing.T) {
 	if ext.deps.Notifier != nil {
 		t.Fatal("a server without a database handed out a notifier: the rule about who may be written to reads the user's row")
 	}
+	if ext.deps.Webhooks != nil {
+		t.Fatal("a server without a database handed out a webhook transport: an endpoint is a row and a delivery is another")
+	}
 	if !audit.Registered("bound.tier_set") {
 		t.Fatal("the extension's audit action is not in the catalog")
 	}
