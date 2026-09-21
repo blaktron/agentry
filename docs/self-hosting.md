@@ -589,11 +589,11 @@ Env: `AGENTRY_TRUSTED_PROXIES` (an integer hop count, not a CIDR list).
 
 Set it to the real number of hops, and keep agentryd's own port off any
 network a client can reach directly (the compose stack binds it to
-loopback; the chart's service is cluster-internal). A hop count trusts
+loopback; the chart's service is cluster-internal). A hop count reads
 the last N entries of `X-Forwarded-For` from whoever connects, so a
 client that reaches the port directly with N = 1 can name its own
-address; a chain *shorter* than N is never trusted and resolves to the
-connecting peer.
+address; a chain *shorter* than N did not come from the hop in front,
+and resolves to the connecting peer.
 
 `http.proxyRequestID: true` (`AGENTRY_PROXY_REQUEST_ID=true`) additionally
 says the hop in front **sets** `X-Request-Id` on every request it forwards
