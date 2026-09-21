@@ -10,6 +10,7 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -399,6 +400,116 @@ func TestOneOrgPerPerson(t *testing.T) {
 	res = env.do(secondAdmin, http.MethodPost, "/api/v1/orgs/"+secondOrg+"/members/"+personH+"/approve", nil)
 	if code, slug, _ := problemOf(t, res); code != http.StatusConflict || slug != "already-a-member" {
 		t.Fatalf("approving someone else's member: %d %s, want 409 already-a-member", code, slug)
+	}
+}
+
+// TestOneOrgPerPersonHoldsUnderConcurrentDoors: four organizations
+// approve the same pending person at the same moment, and then a second
+// person accepts four invitations at once. Each door used to count the
+// person's memberships under its own organization's row lock, which does
+// not serialise against the other organization's, so both counted zero
+// and both activated — two seats across two tenants for one person
+// (security review 2026-09-20 §5.8.3; agentry#412). The doors now lock the
+// person's row after the organization's, and the partial unique index on
+// active memberships is the wall behind them.
+func TestOneOrgPerPersonHoldsUnderConcurrentDoors(t *testing.T) {
+	env := newTestEnv(t)
+	type door struct {
+		admin caller
+		org   string
+	}
+	doors := make([]door, 4)
+	for i := range doors {
+		adminH := env.register(fmt.Sprintf("race-admin-%d", i))
+		env.verifyEmail(adminH)
+		admin := env.login(adminH)
+		org := fmt.Sprintf("raceorg%d%s", i, env.sfx)
+		env.createOrg(admin, org)
+		doors[i] = door{admin: admin, org: org}
+	}
+
+	// race opens every door at once and sorts the answers: one admission,
+	// the rest refused with the D26 problem, nothing else.
+	race := func(what string, open func(i int) *http.Response) {
+		t.Helper()
+		codes := make([]int, len(doors))
+		slugs := make([]string, len(doors))
+		var wg sync.WaitGroup
+		for i := range doors {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				codes[i], slugs[i], _ = problemOf(t, open(i))
+			}(i)
+		}
+		wg.Wait()
+		ok, refused := 0, 0
+		for i, c := range codes {
+			switch {
+			case c == http.StatusOK || c == http.StatusCreated:
+				ok++
+			case c == http.StatusConflict && slugs[i] == "already-a-member":
+				refused++
+			default:
+				t.Fatalf("%s: unexpected answer %d %s in %v %v", what, c, slugs[i], codes, slugs)
+			}
+		}
+		if ok != 1 || refused != len(doors)-1 {
+			t.Fatalf("%s: %d admitted, %d refused (%v); want 1, %d", what, ok, refused, codes, len(doors)-1)
+		}
+	}
+	activeMemberships := func(handle string) int {
+		t.Helper()
+		var n int
+		if err := env.st.Pool().QueryRow(context.Background(),
+			`SELECT count(*) FROM memberships m JOIN handles h ON h.id = m.user_id WHERE h.handle = $1 AND m.state = 'active'`, handle).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+
+	// The approval door: four admins wave the same pending person through.
+	approvedH := env.register("race-approved")
+	for _, d := range doors {
+		env.seedMembership(d.org, approvedH, "member", "pending")
+	}
+	race("concurrent approvals", func(i int) *http.Response {
+		return env.do(doors[i].admin, http.MethodPost, "/api/v1/orgs/"+doors[i].org+"/members/"+approvedH+"/approve", nil)
+	})
+	if n := activeMemberships(approvedH); n != 1 {
+		t.Fatalf("approved person is active in %d organizations, want 1", n)
+	}
+
+	// The invitation door: one person holds four invitations and accepts
+	// them all at once.
+	inviteeH := env.register("race-invitee")
+	env.verifyEmail(inviteeH)
+	invitee := env.login(inviteeH)
+	tokens := make([]string, len(doors))
+	for i, d := range doors {
+		var invited struct {
+			Token string `json:"token"`
+		}
+		env.doJSON(d.admin, http.MethodPost, "/api/v1/orgs/"+d.org+"/invitations",
+			map[string]any{"email": inviteeH + "@example.test", "role": "member"}, &invited, http.StatusCreated)
+		tokens[i] = invited.Token
+	}
+	race("concurrent acceptances", func(i int) *http.Response {
+		return env.do(invitee, http.MethodPost, "/api/v1/invitations/"+tokens[i], nil)
+	})
+	if n := activeMemberships(inviteeH); n != 1 {
+		t.Fatalf("invitee is active in %d organizations, want 1", n)
+	}
+
+	// The wall itself: a second active row for the person is refused by the
+	// database whatever the code above did.
+	var orgID string
+	if err := env.st.Pool().QueryRow(context.Background(), `SELECT org_id FROM memberships WHERE state = 'pending' AND user_id = (SELECT id FROM handles WHERE handle = $1) LIMIT 1`, approvedH).Scan(&orgID); err != nil {
+		t.Fatal(err)
+	}
+	tag, err := env.st.Pool().Exec(context.Background(), `UPDATE memberships SET state = 'active' WHERE org_id = $1 AND user_id = (SELECT id FROM handles WHERE handle = $2)`, orgID, approvedH)
+	if err == nil || !strings.Contains(err.Error(), "memberships_one_active_per_user") {
+		t.Fatalf("the index let a second active membership through: %v (%s)", err, tag)
 	}
 }
 

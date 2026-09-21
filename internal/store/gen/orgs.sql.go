@@ -1272,6 +1272,19 @@ func (q *Queries) LockOrg(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const lockUser = `-- name: LockUser :exec
+SELECT id FROM users WHERE id = $1 FOR UPDATE
+`
+
+// Serialises the membership doors of one PERSON across organizations: the
+// one-organization-per-person count runs under this lock, after the
+// organization's (always in that order), so two organizations admitting
+// the same person at once cannot both count zero (agentry#412).
+func (q *Queries) LockUser(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, lockUser, id)
+	return err
+}
+
 const markInvitationAccepted = `-- name: MarkInvitationAccepted :execrows
 UPDATE org_invitations SET accepted_at = now(), accepted_by = $3
 WHERE id = $1 AND org_id = $2 AND accepted_at IS NULL

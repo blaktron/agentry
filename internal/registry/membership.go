@@ -18,6 +18,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
@@ -139,6 +140,19 @@ func (s *Service) ActivateMember(ctx context.Context, req ActivateMemberRequest)
 		if err := q.LockOrg(ctx, req.OrgID); err != nil {
 			return err
 		}
+		// A person is active in at most one organization at a time (D26).
+		// The person's row lock — after the organization's, always in
+		// that order — serialises the count below against every other
+		// organization's door; the partial unique index on active
+		// memberships is the wall behind it (agentry#412). It is taken
+		// here, before anything in this transaction touches the person's
+		// row: spending an invitation records accepted_by, whose foreign
+		// key holds the row KEY SHARE, and two doors each holding that and
+		// each then asking FOR UPDATE deadlock — a person accepting two
+		// invitations at once got 500 for the one that should be refused.
+		if err := q.LockUser(ctx, req.UserID); err != nil {
+			return err
+		}
 		current, err := q.GetMembership(ctx, storegen.GetMembershipParams{OrgID: req.OrgID, UserID: req.UserID})
 		switch {
 		case err == nil:
@@ -172,7 +186,8 @@ func (s *Service) ActivateMember(ctx context.Context, req ActivateMemberRequest)
 			return err
 		}
 
-		// A person is active in at most one organization at a time (D26).
+		// The one-organization count, under the person's row lock taken
+		// at the top.
 		elsewhere, err := q.CountActiveMembershipsElsewhere(ctx, storegen.CountActiveMembershipsElsewhereParams{UserID: req.UserID, OrgID: req.OrgID})
 		if err != nil {
 			return err
@@ -189,6 +204,9 @@ func (s *Service) ActivateMember(ctx context.Context, req ActivateMemberRequest)
 			OrgID: req.OrgID, UserID: req.UserID, Role: string(req.Role), ViaScim: viaSCIM, ViaDomain: viaDomain,
 		})
 		if err != nil {
+			if isOneOrgPerPersonViolation(err) {
+				return ErrAlreadyAMember
+			}
 			return err
 		}
 		activated = n > 0
@@ -277,4 +295,13 @@ func (s *Service) seats(ctx context.Context, q *storegen.Queries, orgID uuid.UUI
 		return Seats{}, fmt.Errorf("registry: seat count: %w", err)
 	}
 	return Seats{Used: row.Used, Invited: row.Invited, Pending: row.Pending, Max: max}, nil
+}
+
+// isOneOrgPerPersonViolation recognises the database refusing a second
+// active membership for one person (memberships_one_active_per_user): the
+// doors count under the person's lock and should never reach it, and when
+// something does, the answer is the same 409 the count gives.
+func isOneOrgPerPersonViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "memberships_one_active_per_user"
 }

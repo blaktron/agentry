@@ -51,13 +51,16 @@ type gitEnv struct {
 	repos *gitsrv.RepoStore
 	git   *gitsrv.Handler
 	sfx   string
-	owner struct {
-		handle string
-		id     uuid.UUID
-		patRW  string // repo:read+repo:write+agent:publish
-		patRO  string // repo:read
-		patW   string // repo:read+repo:write (no publish)
-	}
+	owner person
+}
+
+// person is a seeded user with the three PAT shapes the git tests drive.
+type person struct {
+	handle string
+	id     uuid.UUID
+	patRW  string // repo:read+repo:write+agent:publish
+	patRO  string // repo:read
+	patW   string // repo:read+repo:write (no publish)
 }
 
 func newGitEnv(t *testing.T) *gitEnv {
@@ -114,12 +117,21 @@ func newGitEnvCfg(t *testing.T, cfgFn func(*config.Config)) *gitEnv {
 
 	// Seed the owner directly through the store (API flows are covered by
 	// internal/api tests; here git transport is the subject).
-	env.owner.handle = "gito" + env.sfx
-	env.owner.id = env.seedUser(env.owner.handle)
-	env.owner.patRW = env.seedPAT(env.owner.id, "rw", "repo:read", "repo:write", "agent:publish")
-	env.owner.patRO = env.seedPAT(env.owner.id, "ro", "repo:read")
-	env.owner.patW = env.seedPAT(env.owner.id, "w", "repo:read", "repo:write")
+	env.owner = env.seedPerson("gito" + env.sfx)
 	return env
+}
+
+// seedPerson seeds a user with the three PAT shapes. A test that needs a
+// second organization needs a second person to found it: a person belongs
+// to one organization (D26), and since agentry#412 the memberships index
+// refuses a second active membership outright.
+func (e *gitEnv) seedPerson(handle string) person {
+	e.t.Helper()
+	p := person{handle: handle, id: e.seedUser(handle)}
+	p.patRW = e.seedPAT(p.id, "rw", "repo:read", "repo:write", "agent:publish")
+	p.patRO = e.seedPAT(p.id, "ro", "repo:read")
+	p.patW = e.seedPAT(p.id, "w", "repo:read", "repo:write")
+	return p
 }
 
 func (e *gitEnv) seedUser(handle string) uuid.UUID {
@@ -193,10 +205,17 @@ func (e *gitEnv) cloneURLNS(ns, agent, pat string) string {
 	return fmt.Sprintf("http://token:%s@%s/%s/%s.git", pat, host, ns, agent)
 }
 
-// seedOrg creates an org the owner belongs to, optionally enforcing SSO
+// seedOrg creates an org the owner founds, optionally enforcing SSO
 // (§12.4). Enforcement is set directly: the API surface for it belongs to
 // internal/api's org settings, not to the git layer under test.
 func (e *gitEnv) seedOrg(handle string, ssoRequired bool) uuid.UUID {
+	e.t.Helper()
+	return e.seedOrgFoundedBy(e.owner, handle, ssoRequired)
+}
+
+// seedOrgFoundedBy is seedOrg with an explicit founder; one person founds
+// at most one organization (D26, memberships_one_active_per_user).
+func (e *gitEnv) seedOrgFoundedBy(founder person, handle string, ssoRequired bool) uuid.UUID {
 	e.t.Helper()
 	ctx := context.Background()
 	q := e.st.Queries()
@@ -207,7 +226,7 @@ func (e *gitEnv) seedOrg(handle string, ssoRequired bool) uuid.UUID {
 	if _, err := q.CreateOrg(ctx, storegen.CreateOrgParams{ID: id, DisplayName: handle}); err != nil {
 		e.t.Fatal(err)
 	}
-	if err := q.CreateFounderMembership(ctx, storegen.CreateFounderMembershipParams{OrgID: id, UserID: e.owner.id, Role: "admin"}); err != nil {
+	if err := q.CreateFounderMembership(ctx, storegen.CreateFounderMembershipParams{OrgID: id, UserID: founder.id, Role: "admin"}); err != nil {
 		e.t.Fatal(err)
 	}
 	if ssoRequired {
@@ -219,19 +238,23 @@ func (e *gitEnv) seedOrg(handle string, ssoRequired bool) uuid.UUID {
 }
 
 // seedOrgAgent creates an agent in an org namespace, owned by the org owner.
-func (e *gitEnv) seedOrgAgent(orgHandle string, orgID uuid.UUID, name, visibility string) registry.Agent {
+func (e *gitEnv) seedOrgAgent(orgHandle string, orgID uuid.UUID, name, visibility string) {
+	e.t.Helper()
+	e.seedOrgAgentBy(e.owner, orgHandle, orgID, name, visibility)
+}
+
+// seedOrgAgentBy is seedOrgAgent acting as the given org admin.
+func (e *gitEnv) seedOrgAgentBy(admin person, orgHandle string, orgID uuid.UUID, name, visibility string) {
 	e.t.Helper()
 	p := &auth.Principal{
-		UserID: e.owner.id, Handle: e.owner.handle, Via: "session", EmailVerified: true,
+		UserID: admin.id, Handle: admin.handle, Via: "session", EmailVerified: true,
 		OrgRoles: map[uuid.UUID]auth.OrgRole{orgID: auth.RoleAdmin},
 	}
-	a, err := e.reg.CreateAgent(context.Background(), p, registry.CreateAgentInput{
+	if _, err := e.reg.CreateAgent(context.Background(), p, registry.CreateAgentInput{
 		Namespace: orgHandle, Name: name, Modes: []string{"autonomous"}, Visibility: visibility,
-	}, audit.Event{Actor: e.owner.id, ActorKind: audit.ActorUser, OrgID: orgID})
-	if err != nil {
+	}, audit.Event{Actor: admin.id, ActorKind: audit.ActorUser, OrgID: orgID}); err != nil {
 		e.t.Fatal(err)
 	}
-	return a
 }
 
 // seedOrgPAT mints an org-bound PAT (pats.org_id — minted during an SSO-fresh
@@ -708,9 +731,12 @@ func TestGitEnforcedSSO(t *testing.T) {
 	env.seedOrgAgent(entHandle, entID, "ssoagent", "public")
 	bound := env.seedOrgPAT(env.owner.id, entID, "bound", "repo:read", "repo:write", "agent:publish")
 
+	// The non-enforcing organization has its own founder: the owner already
+	// belongs to the enforcing one, and a person belongs to one organization.
+	openOwner := env.seedPerson("gitopo" + env.sfx)
 	openHandle := "gitopen" + env.sfx
-	openID := env.seedOrg(openHandle, false)
-	env.seedOrgAgent(openHandle, openID, "openagent", "public")
+	openID := env.seedOrgFoundedBy(openOwner, openHandle, false)
+	env.seedOrgAgentBy(openOwner, openHandle, openID, "openagent", "public")
 
 	work := seedWorkdir(t, kindFixture("skill", entHandle, "ssoagent", "1.0.0"))
 
@@ -736,7 +762,7 @@ func TestGitEnforcedSSO(t *testing.T) {
 
 	t.Run("non-enforcing org unaffected", func(t *testing.T) {
 		other := seedWorkdir(t, kindFixture("skill", openHandle, "openagent", "1.0.0"))
-		mustGit(t, other, "push", env.cloneURLNS(openHandle, "openagent", env.owner.patRW), "main")
+		mustGit(t, other, "push", env.cloneURLNS(openHandle, "openagent", openOwner.patRW), "main")
 	})
 }
 
