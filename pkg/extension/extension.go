@@ -29,6 +29,7 @@ import (
 	"github.com/blaktron/agentry/internal/entitlements"
 	"github.com/blaktron/agentry/internal/queue"
 	"github.com/blaktron/agentry/internal/registry"
+	"github.com/blaktron/agentry/internal/webhook"
 )
 
 // Extension is what a closed build adds. Every method may return the zero
@@ -201,6 +202,10 @@ type Deps struct {
 	// the core's rules and through the core's transport (agentry#366).
 	// nil when the server runs without a database, as DB is.
 	Notifier Notifier
+	// Webhooks delivers an event to one of an organization's webhook
+	// endpoints through the core's transport (agentry#430). nil when the
+	// server runs without a database, as DB is.
+	Webhooks Webhooks
 }
 
 // Notifier lets an extension tell a person something by mail without
@@ -230,15 +235,55 @@ type Notifier interface {
 }
 
 // NotifyKind names the class a message is sent as, which is the switch a
-// person turns off. Only the kinds the core lists here may be used: the
-// extension's mail is billing, and a message about billing is what the
-// person's billing switch governs.
+// person turns off. Only the kinds the core lists here may be used: a
+// message about billing is what the person's billing switch governs, and
+// a dependency alert routed to them is what their dependency-alert
+// switch governs, wherever it came from.
 type NotifyKind string
 
-// NotifyBilling is the closed build's billing mail (plan §5.8): a
-// checkout confirmed, a payment failed, an organization restricted, seats
-// reached, "your organization covers you".
-const NotifyBilling NotifyKind = "billing"
+const (
+	// NotifyBilling is the closed build's billing mail (plan §5.8): a
+	// checkout confirmed, a payment failed, an organization restricted,
+	// seats reached, "your organization covers you".
+	NotifyBilling NotifyKind = "billing"
+	// NotifyDependencyAlert is a dependency alert an extension routes to
+	// the person an organization chose for it (plan
+	// organization-subscriptions §6 "Alert routing", agentry#430): the
+	// same news the core mails the author, under the same switch.
+	NotifyDependencyAlert NotifyKind = "dependency_alert"
+)
+
+// Webhooks lets an extension deliver an event to one of an organization's
+// webhook endpoints — a destination the organization named for the
+// extension's purpose, not one chosen by its subscriptions — through the
+// core's transport: the delivery ledger the endpoint's log reads, the
+// signed request, the retries, the SSRF guard. The endpoint's secret and
+// the transport stay the core's; an extension holds an endpoint by id.
+type Webhooks interface {
+	// Endpoints lists the organization's endpoints as an extension may
+	// name one, active or not. An organization that does not exist has
+	// none, not an error.
+	Endpoints(ctx context.Context, orgID uuid.UUID) ([]WebhookEndpointRef, error)
+	// Deliver records one delivery of event with data to the endpoint
+	// and queues it, the way the core's own emit does for a subscribed
+	// endpoint. It reports whether a delivery was recorded: false with
+	// no error means the endpoint is not the organization's or is
+	// switched off — a destination gone stale, which the extension may
+	// report but cannot repair. An event outside the core's catalog is
+	// refused: what a consumer is told to expect is the core's promise.
+	Deliver(ctx context.Context, orgID, endpointID uuid.UUID, event string, data any) (bool, error)
+}
+
+// WebhookEndpointRef is an endpoint as the seam describes it: its id,
+// its URL, the events it subscribes to and whether it is active. No
+// secret.
+type WebhookEndpointRef = api.WebhookEndpointRef
+
+// EventAgentDependencyAlert is the catalog event a dependency alert is
+// fanned out as (DEV-090): what the hook hears as Event.Kind, and what an
+// extension routing the alert delivers it as, so the destination it
+// names reads the same event a subscription would have given it.
+const EventAgentDependencyAlert = webhook.EventAgentDependencyAlert
 
 // Agents answers whether a principal may read an agent the way the core's
 // own routes decide it — the effective role over the namespace and the

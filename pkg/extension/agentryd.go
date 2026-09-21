@@ -383,6 +383,25 @@ func (n serverNotifier) OrgAdmins(ctx context.Context, orgID uuid.UUID) ([]uuid.
 	return n.srv.OrgAdminIDs(ctx, orgID)
 }
 
+// webhooksOf adapts the server's webhook transport to Webhooks: nil
+// without a database, the way Deps.DB is.
+func webhooksOf(srv *api.Server, pool *pgxpool.Pool) Webhooks {
+	if pool == nil {
+		return nil
+	}
+	return serverWebhooks{srv}
+}
+
+type serverWebhooks struct{ srv *api.Server }
+
+func (w serverWebhooks) Endpoints(ctx context.Context, orgID uuid.UUID) ([]WebhookEndpointRef, error) {
+	return w.srv.WebhookEndpoints(ctx, orgID)
+}
+
+func (w serverWebhooks) Deliver(ctx context.Context, orgID, endpointID uuid.UUID, event string, data any) (bool, error) {
+	return w.srv.DeliverWebhook(ctx, orgID, endpointID, event, data)
+}
+
 // periodicTicker enqueues a job once now and then on its period. Every
 // replica running this enqueues on its own clock; the queue's claim runs
 // each row once, so the handler must tolerate a run that finds nothing to
@@ -604,7 +623,7 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 			pool, log, write, writeIn := srv.ExtensionDeps()
 			b.Bind(Deps{DB: pool, Log: log.With("extension", e.Name()), Audit: auditWriter{write: write, writeIn: writeIn},
 				Entitlements: srv.CoreEntitlements(), Blobs: srv.Blobs(), Orgs: orgsOf(srv, pool), Agents: agentsOf(srv, pool),
-				Notifier: notifierOf(srv, pool)})
+				Notifier: notifierOf(srv, pool), Webhooks: webhooksOf(srv, pool)})
 		}
 		srv.RegisterExtension(e.Name(), e.Routes)
 		if u, ok := e.(Unthrottles); ok {

@@ -173,6 +173,25 @@ func TestNotifierSeamSendsUnderTheCoresRule(t *testing.T) {
 	if mails.count() != 1 {
 		t.Fatal("a refused kind reached the transport")
 	}
+
+	// The dependency-alert kind (agentry#430, M19): a routed alert goes
+	// under the person's dependency-alert switch — on, it goes as that
+	// kind; off, it does not; and an unverified address gets nothing.
+	code, out, _ = send(t, verifiedID, "dependency_alert", "acme/thing declares a vulnerable server", "npm:left-pad@1.0.0 carries GHSA-x.")
+	if code != http.StatusOK || !out.Sent || mails.count() != 2 || mails.last().Kind != notify.KindDependencyAlert {
+		t.Fatalf("a routed alert to a verified, opted-in person: %d sent=%t, %d messages, last kind %q", code, out.Sent, mails.count(), mails.last().Kind)
+	}
+	code, out, _ = send(t, env.userID(unverifiedH), "dependency_alert", "acme/thing declares a vulnerable server", "x")
+	if code != http.StatusOK || out.Sent || mails.count() != 2 {
+		t.Fatal("an unverified address was sent a routed alert")
+	}
+	env.doJSON(env.login(verifiedH), http.MethodPut, "/api/v1/user/notifications", map[string]any{
+		"email": map[string]any{"dependencyAlerts": false},
+	}, nil, http.StatusOK)
+	code, out, _ = send(t, verifiedID, "dependency_alert", "acme/thing declares a vulnerable server", "x")
+	if code != http.StatusOK || out.Sent || mails.count() != 2 {
+		t.Fatal("the dependency-alert switch off, and a routed alert went anyway")
+	}
 }
 
 func TestNotifierSeamNamesActiveAdminsOnly(t *testing.T) {
