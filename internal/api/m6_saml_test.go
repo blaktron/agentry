@@ -380,3 +380,60 @@ func TestSAMLSingleLogout(t *testing.T) {
 		t.Fatalf("native logout: got %d want 204", r.StatusCode)
 	}
 }
+
+// TestSAMLReplayIsRefusedAcrossServers (agentry#414): an assertion consumed
+// by one API replica is refused by every other. Two servers share the
+// database and, since this test, the record of consumed assertions; the
+// second is reached with the first's Host, as replicas behind one public
+// URL are.
+func TestSAMLReplayIsRefusedAcrossServers(t *testing.T) {
+	a := newTestEnv(t)
+	b := newTestEnv(t)
+	owner := a.register("saml-rep-owner")
+	a.verifyEmail(owner)
+	sess := a.login(owner)
+	orgH := "samlrep" + a.sfx
+	a.createOrg(sess, orgH)
+	a.verifyOrgDomain(orgH, "acme.example")
+	idp := newSAMLTestIdP(t)
+	metadataXML, err := samlsp.BuildIDPMetadataXML(idp.entityID, "https://acs-idp.test/sso", idp.certPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.doJSON(sess, http.MethodPut, "/api/v1/orgs/"+orgH+"/sso/connections/saml", map[string]any{
+		"enabled": true,
+		"config":  map[string]any{"idpMetadataXml": metadataXML, "emailAttribute": "email"},
+	}, nil, http.StatusOK)
+	metadataURL := a.srv.URL + "/api/v1/orgs/" + orgH + "/sso/saml/metadata"
+	acsURL := a.srv.URL + "/api/v1/orgs/" + orgH + "/sso/saml/acs"
+	nameID := "sso-rep-" + a.sfx + "@acme.example"
+	memberH := a.registerEmail("saml-rep-member", nameID)
+	a.seedMembership(orgH, memberH, "member", "active")
+
+	resp := idp.signedResponse(t, metadataURL, acsURL, nameID, false)
+	first := a.postForm(t, acsURL, url.Values{"SAMLResponse": {resp}})
+	_ = first.Body.Close()
+	if first.StatusCode != http.StatusOK {
+		t.Fatalf("the assertion at the first server: %d, want 200", first.StatusCode)
+	}
+	// The same assertion, captured, presented to the other replica.
+	req, _ := http.NewRequest(http.MethodPost, b.srv.URL+"/api/v1/orgs/"+orgH+"/sso/saml/acs", strings.NewReader(url.Values{"SAMLResponse": {resp}}.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Host = strings.TrimPrefix(a.srv.URL, "http://")
+	client := *b.srv.Client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	second, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(second.Body)
+	_ = second.Body.Close()
+	if second.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("the replay at the other server: %d %s, want 401", second.StatusCode, body)
+	}
+	for _, c := range second.Cookies() {
+		if c.Name == "agentry_session" && c.Value != "" {
+			t.Fatal("the replay at the other server minted a session")
+		}
+	}
+}

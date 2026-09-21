@@ -105,6 +105,14 @@ The `git` role is the only one that needs repo storage mounted, and the
 `worker` role is the only one that needs to reach the LLM provider. That is
 what lets you give the scanning workers a no-egress security group.
 
+Whatever `api` replicas must see alike lives in the database, not in any one
+process: sessions, the job queue, and — since agentry#414 — the SAML sets, so
+an assertion consumed by one replica is refused by every other and a login
+started on one completes on another. Nothing has to be enabled for that;
+Redis (`AGENTRY_REDIS_URL`) remains optional and unused by these. What is
+still per process is the §19 rate-limit buckets, which an N-replica
+deployment multiplies by N (the edge's limits are the ones that hold).
+
 ## Configuration
 
 `agentry.yaml` (copy `agentry.yaml.example`) plus `AGENTRY_*` environment

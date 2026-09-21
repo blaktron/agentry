@@ -18,21 +18,8 @@ import (
 	"net/url"
 	"strings"
 
-	samlsp "github.com/blaktron/agentry/internal/auth/saml"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
-
-// samlRequests holds the AuthnRequest ids this process has issued, so the ACS
-// can match an assertion's InResponseTo to a login we actually started.
-//
-// It is process-wide rather than a field on Server for the same reason
-// saml.MaxClockSkew is a package-level setting in the crewjam library: the
-// contents are unguessable opaque ids with a 15-minute TTL, so sharing the
-// set between Server instances in one process leaks nothing (accepting an id
-// still requires a validly signed assertion for that server's own ACS URL and
-// audience). SaaS replaces it with the Redis-backed implementation behind
-// samlsp.RequestTracker, exactly as it does the replay cache.
-var samlRequests samlsp.RequestTracker = samlsp.NewMemoryRequestTracker()
 
 // mountSSOLanding registers the root-level SSO landing route.
 func (s *Server) mountSSOLanding(mux *http.ServeMux) {
