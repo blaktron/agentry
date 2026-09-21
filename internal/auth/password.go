@@ -38,7 +38,9 @@ func HashPassword(password string) (string, error) {
 }
 
 // decoyHash is a real argon2id hash of a secret nobody knows, made once,
-// for the comparison a login pays when it has no password to check.
+// for the comparison a login pays when it has no password to check. Made
+// on first use rather than at init: the hash costs 64 MiB and ~100 ms,
+// which every process importing this package would otherwise pay.
 var decoyHash = sync.OnceValue(func() string {
 	secret := make([]byte, 32)
 	if _, err := rand.Read(secret); err != nil {

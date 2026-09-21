@@ -10,19 +10,24 @@ import (
 
 // TestLoginMissCostsAsMuchAsAWrongPassword (agentry#413): a login that
 // finds no password to check — an unknown login, an account without a
-// password, an inactive one — still pays the argon2id comparison, so the
+// password, a suspended one — still pays the argon2id comparison, so the
 // time a refusal takes does not say which of those it was. The wrong-
-// password path is the reference; the miss paths must take a comparable
-// time (well above what the database lookup alone costs).
+// password path is the reference; each miss path must take at least half
+// of it, which no path that skipped the comparison could (the lookup
+// alone is a few milliseconds against argon2id's hundred).
 func TestLoginMissCostsAsMuchAsAWrongPassword(t *testing.T) {
 	env := newTestEnv(t)
 	knownH := env.register("lt-known")
 	env.verifyEmail(knownH)
 	ssoH := env.register("lt-sso")
 	env.verifyEmail(ssoH)
-	if _, err := env.st.Pool().Exec(context.Background(),
-		`UPDATE users SET password_hash = NULL WHERE id = (SELECT id FROM handles WHERE handle = $1)`, ssoH); err != nil {
-		t.Fatal(err)
+	suspendedH := env.register("lt-suspended")
+	env.verifyEmail(suspendedH)
+	for handle, set := range map[string]string{ssoH: "password_hash = NULL", suspendedH: "state = 'suspended'"} {
+		if _, err := env.st.Pool().Exec(context.Background(),
+			`UPDATE users SET `+set+` WHERE id = (SELECT id FROM handles WHERE handle = $1)`, handle); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	attempt := func(login string) time.Duration {
@@ -42,23 +47,29 @@ func TestLoginMissCostsAsMuchAsAWrongPassword(t *testing.T) {
 		}
 		return took
 	}
-	// The smallest of a few samples stands for each path: a slow sample
-	// from a busy machine only ever makes a path look more expensive.
-	fastest := func(login string) time.Duration {
-		best := time.Duration(1<<63 - 1)
-		for range 3 {
-			if d := attempt(login); d < best {
-				best = d
-			}
-		}
-		return best
-	}
-	reference := fastest(knownH)
-	for name, login := range map[string]string{
+	// The smallest of a few samples stands for each path, and the paths
+	// are sampled in turn rather than one after another, so a load swing
+	// on the machine lands on all of them alike; a slow sample only ever
+	// makes a path look more expensive.
+	misses := map[string]string{
 		"unknown account":          "lt-nobody" + env.sfx,
 		"account with no password": ssoH,
-	} {
-		if took := fastest(login); took*3 < reference {
+		"suspended account":        suspendedH,
+	}
+	best := map[string]time.Duration{}
+	for range 3 {
+		for name, login := range misses {
+			if d := attempt(login); best[name] == 0 || d < best[name] {
+				best[name] = d
+			}
+		}
+		if d := attempt(knownH); best["reference"] == 0 || d < best["reference"] {
+			best["reference"] = d
+		}
+	}
+	reference := best["reference"]
+	for name := range misses {
+		if took := best[name]; took*2 < reference {
 			t.Errorf("%s: refused in %v, the wrong-password path takes %v — the miss is visible in the timing", name, took, reference)
 		}
 	}

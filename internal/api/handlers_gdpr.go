@@ -256,10 +256,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 	// does not undo the erasure that already happened.
 	s.eraseDirectoryAccount(r, p.UserID, user.Email)
 
-	http.SetCookie(w, &http.Cookie{
-		Name: sessionCookieName, Value: "", Path: "/", HttpOnly: true,
-		Secure: s.cfg.Auth.CookieSecure, SameSite: http.SameSiteLaxMode, MaxAge: -1,
-	})
+	clearCookie(w, sessionCookieName, s.cfg.Auth.CookieSecure)
 	w.WriteHeader(http.StatusNoContent)
 }
 
