@@ -160,8 +160,16 @@ func (s *Server) RevokeOtherUserSessions(w http.ResponseWriter, r *http.Request)
 
 // clearSessionCookie expires the session cookie (shared with logout).
 func clearSessionCookie(w http.ResponseWriter, secure bool) {
+	clearCookie(w, sessionCookieName, secure)
+}
+
+// clearCookie expires one of this server's cookies with the attributes
+// every one of them is set with. A clear is a Set-Cookie like any other:
+// one written bare carries nothing today and a value the day someone
+// edits it (agentry#413).
+func clearCookie(w http.ResponseWriter, name string, secure bool) {
 	http.SetCookie(w, &http.Cookie{
-		Name: sessionCookieName, Value: "", Path: "/", HttpOnly: true,
+		Name: name, Value: "", Path: "/", HttpOnly: true,
 		Secure: secure, SameSite: http.SameSiteLaxMode, MaxAge: -1,
 	})
 }

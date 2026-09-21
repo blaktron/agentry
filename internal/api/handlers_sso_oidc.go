@@ -126,7 +126,7 @@ func (s *Server) OidcCallback(w http.ResponseWriter, r *http.Request, org OrgHan
 		return
 	}
 	// Clear the state cookie regardless of outcome (single use).
-	http.SetCookie(w, &http.Cookie{Name: oidcStateCookie, Value: "", Path: "/", MaxAge: -1})
+	clearCookie(w, oidcStateCookie, s.cfg.Auth.CookieSecure)
 
 	// From here the sealed state is open, so browser mode is known and a
 	// failure can land on the login page rather than on a problem document

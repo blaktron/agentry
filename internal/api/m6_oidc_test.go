@@ -168,6 +168,7 @@ func TestOIDCEndpointFlow(t *testing.T) {
 	if cbResp.StatusCode != http.StatusOK {
 		t.Fatalf("callback: got %d want 200", cbResp.StatusCode)
 	}
+	requireClearedCookie(t, cbResp.Cookies(), "agentry_oidc_state", stateCookie.Secure)
 	var session string
 	for _, c := range cbResp.Cookies() {
 		if c.Name == "agentry_session" {
