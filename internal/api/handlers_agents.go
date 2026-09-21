@@ -50,6 +50,8 @@ func (s *Server) agentToAPI(a registry.Agent, maintain bool) Agent {
 		out.AutoPublishTags = &ap
 		fp := a.AllowForcePush
 		out.AllowForcePush = &fp
+		ps := a.PipelineSkip
+		out.PipelineSkip = &ps
 	}
 	return out
 }
@@ -285,6 +287,30 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 		problemForbidden(w, r, "Allowing force pushes rewrites history everyone else is working from, so it needs the "+a.Namespace+" namespace's administrators.")
 		return
 	}
+	// Taking the agent off the pipeline (M21, D16) is the administrators'
+	// too; whether the agent may be — private, an organization's, the tier
+	// including it — and whether it may become public are decided below,
+	// under the agent's row lock, beside the write.
+	if req.PipelineSkip != nil && *req.PipelineSkip != a.PipelineSkip && !administers() {
+		problemForbidden(w, r, "Taking this BriefAgent off the pipeline needs the "+a.Namespace+" namespace's administrators.")
+		return
+	}
+	if req.PipelineSkip != nil && *req.PipelineSkip && a.NamespaceKind != "org" {
+		writeProblem(w, r, http.StatusConflict, "pipeline-skip-personal", "Only an organization's BriefAgent can skip the pipeline", "pipeline: skip is set by an organization's administrators on the organization's own private BriefAgents; a personal namespace stays on the pipeline.")
+		return
+	}
+	if req.PipelineSkip != nil && *req.PipelineSkip && !a.PipelineSkip {
+		f, err := s.orgFeatures(r.Context(), a.NamespaceID)
+		if err != nil {
+			s.log.ErrorContext(r.Context(), "update agent: features", "org", a.NamespaceID, "err", err)
+			problemInternal(w, r)
+			return
+		}
+		if !f.UnscannedAgents {
+			problemFeatureNotIncluded(w, r, "Unscanned private BriefAgents are not included in this organization's subscription.")
+			return
+		}
+	}
 	params := storegen.UpdateAgentSettingsParams{ID: a.ID}
 	detail := map[string]any{}
 	if req.Summary != nil {
@@ -322,11 +348,57 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 		params.AllowForcePush = req.AllowForcePush
 		detail["allowForcePush"] = *req.AllowForcePush
 	}
+	if req.PipelineSkip != nil {
+		params.PipelineSkip = req.PipelineSkip
+		detail["pipelineSkip"] = *req.PipelineSkip
+	}
 	if len(detail) == 0 {
 		problemValidation(w, r, "Send at least one field to update.")
 		return
 	}
+	// The two states DEV-115 rules out — the flag on a public agent, and
+	// a public agent holding a version admitted unscanned — are decided
+	// on the row as it is under the lock, not as it was read above, so
+	// two requests cannot each pass on a stale row; the table's CHECK is
+	// the wall behind the first.
+	var refuse func()
 	err := s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
+		locked, err := q.GetAgentForUpdate(r.Context(), a.ID)
+		if err != nil {
+			return err
+		}
+		visibility, skip := locked.Visibility, locked.PipelineSkip
+		if req.Visibility != nil {
+			visibility = string(*req.Visibility)
+		}
+		if req.PipelineSkip != nil {
+			skip = *req.PipelineSkip
+		}
+		if skip && visibility == "public" {
+			if req.PipelineSkip != nil && *req.PipelineSkip {
+				// The request sets the flag on an agent that is, or
+				// becomes, public.
+				refuse = func() {
+					writeProblem(w, r, http.StatusConflict, "pipeline-skip-public", "A public BriefAgent is always scanned", "pipeline: skip is for a private BriefAgent of an organization's. Make it private first, or leave it on the pipeline.")
+				}
+			} else {
+				// The request makes public an agent whose flag is set.
+				refuse = func() {
+					writeProblem(w, r, http.StatusConflict, "agent-unscanned", "Unscanned versions cannot be made public", "This BriefAgent is off the pipeline: clear pipeline: skip before making it public.")
+				}
+			}
+			return errRefused
+		}
+		if visibility == "public" && locked.Visibility != "public" {
+			n, err := q.CountUnscannedVersionsStanding(r.Context(), a.ID)
+			if err != nil {
+				return err
+			}
+			if n > 0 {
+				refuse = func() { problemAgentUnscanned(w, r, n) }
+				return errRefused
+			}
+		}
 		if err := q.UpdateAgentSettings(r.Context(), params); err != nil {
 			return err
 		}
@@ -338,6 +410,10 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 		e.Detail = detail
 		return s.auditW.Write(r.Context(), q, e)
 	})
+	if errors.Is(err, errRefused) {
+		refuse()
+		return
+	}
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "update agent", "err", err)
 		problemInternal(w, r)
@@ -561,3 +637,8 @@ func apiModes(modes []string) []AgentMode {
 	}
 	return out
 }
+
+// errRefused is a decision taken inside a transaction that the handler
+// answers with the problem the closure holds, once the transaction has
+// rolled back.
+var errRefused = errors.New("api: refused under the lock")

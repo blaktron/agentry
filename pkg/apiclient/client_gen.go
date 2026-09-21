@@ -177,6 +177,24 @@ func (e AgentVersionManifestSchemaVersion) Valid() bool {
 	}
 }
 
+// Defines values for AgentVersionScanStatus.
+const (
+	AgentVersionScanStatusPipeline AgentVersionScanStatus = "pipeline"
+	AgentVersionScanStatusSkipped  AgentVersionScanStatus = "skipped"
+)
+
+// Valid indicates whether the value is a known member of the AgentVersionScanStatus enum.
+func (e AgentVersionScanStatus) Valid() bool {
+	switch e {
+	case AgentVersionScanStatusPipeline:
+		return true
+	case AgentVersionScanStatusSkipped:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentVersionSource.
 const (
 	CliUpload AgentVersionSource = "cli-upload"
@@ -495,6 +513,24 @@ func (e PendingOrgVia) Valid() bool {
 	}
 }
 
+// Defines values for ResolveResultScanStatus.
+const (
+	ResolveResultScanStatusPipeline ResolveResultScanStatus = "pipeline"
+	ResolveResultScanStatusSkipped  ResolveResultScanStatus = "skipped"
+)
+
+// Valid indicates whether the value is a known member of the ResolveResultScanStatus enum.
+func (e ResolveResultScanStatus) Valid() bool {
+	switch e {
+	case ResolveResultScanStatusPipeline:
+		return true
+	case ResolveResultScanStatusSkipped:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ReviewItemQueue.
 const (
 	ReviewItemQueueOrg      ReviewItemQueue = "org"
@@ -600,6 +636,24 @@ func (e ScanFindingVerdict) Valid() bool {
 	case ScanFindingVerdictDismissedFalsePositive:
 		return true
 	case ScanFindingVerdictOpen:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScanReportVerdict.
+const (
+	Scanned   ScanReportVerdict = "scanned"
+	Unscanned ScanReportVerdict = "unscanned"
+)
+
+// Valid indicates whether the value is a known member of the ScanReportVerdict enum.
+func (e ScanReportVerdict) Valid() bool {
+	switch e {
+	case Scanned:
+		return true
+	case Unscanned:
 		return true
 	default:
 		return false
@@ -1303,9 +1357,12 @@ type Agent struct {
 	Id        openapi_types.UUID `json:"id"`
 
 	// Modes The run modes a release supports; at least one.
-	Modes           AgentModes           `json:"modes"`
-	Name            string               `json:"name"`
-	Namespace       string               `json:"namespace"`
+	Modes     AgentModes `json:"modes"`
+	Name      string     `json:"name"`
+	Namespace string     `json:"namespace"`
+
+	// PipelineSkip Present for callers with maintain; whether submissions are admitted without a scan (an organization's private agent only, plan organization-subscriptions §4). A version so admitted is served with `scanStatus: skipped` and the report's verdict `unscanned`.
+	PipelineSkip    *bool                `json:"pipelineSkip,omitempty"`
 	QuarantineState AgentQuarantineState `json:"quarantineState"`
 	Summary         string               `json:"summary"`
 	Visibility      AgentVisibility      `json:"visibility"`
@@ -1365,7 +1422,10 @@ type AgentVersion struct {
 	// ManifestSchemaVersion Schema major of the manifest snapshot this version carries: 1 (kind-classified, read through the v1 mapping) or 2 (modes). Clients that show a version's manifest read it accordingly.
 	ManifestSchemaVersion *AgentVersionManifestSchemaVersion `json:"manifestSchemaVersion,omitempty"`
 	PublishedAt           *time.Time                         `json:"publishedAt,omitempty"`
-	Source                AgentVersionSource                 `json:"source"`
+
+	// ScanStatus How the version was admitted: through the pipeline, or skipped — no scan run, no findings, no attestation, the report's verdict `unscanned` (plan organization-subscriptions §4). A skipped version is a private organization agent's; a client that installs or runs one asks for consent first.
+	ScanStatus *AgentVersionScanStatus `json:"scanStatus,omitempty"`
+	Source     AgentVersionSource      `json:"source"`
 
 	// Status Publication state machine states (§7). `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change (DEV-046).
 	Status       VersionStatus `json:"status"`
@@ -1380,6 +1440,9 @@ type AgentVersionChannel string
 
 // AgentVersionManifestSchemaVersion Schema major of the manifest snapshot this version carries: 1 (kind-classified, read through the v1 mapping) or 2 (modes). Clients that show a version's manifest read it accordingly.
 type AgentVersionManifestSchemaVersion int
+
+// AgentVersionScanStatus How the version was admitted: through the pipeline, or skipped — no scan run, no findings, no attestation, the report's verdict `unscanned` (plan organization-subscriptions §4). A skipped version is a private organization agent's; a client that installs or runs one asks for consent first.
+type AgentVersionScanStatus string
 
 // AgentVersionSource defines model for AgentVersion.Source.
 type AgentVersionSource string
@@ -1903,11 +1966,17 @@ type ResolveResult struct {
 	Manifest       map[string]interface{} `json:"manifest"`
 	Name           string                 `json:"name"`
 	Namespace      string                 `json:"namespace"`
-	Version        string                 `json:"version"`
+
+	// ScanStatus How the resolved version was admitted (plan organization-subscriptions §4): `skipped` is a version published without a scan — no attestation exists for it, which is not the same as an unsigned registry — and a client installs or runs it only with the person's consent.
+	ScanStatus *ResolveResultScanStatus `json:"scanStatus,omitempty"`
+	Version    string                   `json:"version"`
 
 	// Yanked True only for exact pins of yanked versions (§5.5).
 	Yanked bool `json:"yanked"`
 }
+
+// ResolveResultScanStatus How the resolved version was admitted (plan organization-subscriptions §4): `skipped` is a version published without a scan — no attestation exists for it, which is not the same as an unsigned registry — and a client installs or runs it only with the person's consent.
+type ResolveResultScanStatus string
 
 // ReviewBundle defines model for ReviewBundle.
 type ReviewBundle struct {
@@ -2015,11 +2084,19 @@ type ScanReport struct {
 	ReportDigest   *string             `json:"reportDigest,omitempty"`
 	RulesetVersion *string             `json:"rulesetVersion,omitempty"`
 	ScanRunId      *openapi_types.UUID `json:"scanRunId,omitempty"`
-	ScanStatus     *string             `json:"scanStatus,omitempty"`
+
+	// ScanStatus The scan run's status; `skipped` for a version admitted without a scan (M21), which has no run.
+	ScanStatus *string `json:"scanStatus,omitempty"`
+
+	// Verdict What the report is: `scanned` when a scan run stands behind it (the findings say the rest), `unscanned` when the version was admitted without one — never conflated with "scanned with a known gap". Absent while a scan is still pending.
+	Verdict *ScanReportVerdict `json:"verdict,omitempty"`
 
 	// VersionStatus Publication state machine states (§7). `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change (DEV-046).
 	VersionStatus VersionStatus `json:"versionStatus"`
 }
+
+// ScanReportVerdict What the report is: `scanned` when a scan run stands behind it (the findings say the rest), `unscanned` when the version was admitted without one — never conflated with "scanned with a known gap". Absent while a scan is still pending.
+type ScanReportVerdict string
 
 // ScimToken defines model for ScimToken.
 type ScimToken struct {
@@ -2363,9 +2440,12 @@ type UpdateAgentJSONBody struct {
 	AutoPublishTags *bool `json:"autoPublishTags,omitempty"`
 
 	// Modes The run modes a release supports; at least one.
-	Modes      *AgentModes                    `json:"modes,omitempty"`
-	Summary    *string                        `json:"summary,omitempty"`
-	Visibility *UpdateAgentJSONBodyVisibility `json:"visibility,omitempty"`
+	Modes *AgentModes `json:"modes,omitempty"`
+
+	// PipelineSkip Admit submissions to this agent without a scan (plan organization-subscriptions §4, D16). Settable by the namespace's administrators on a private agent of an organization's whose subscription includes unscanned agents; refused on a public agent (`pipeline-skip-public`) and in a personal namespace (`pipeline-skip-personal`), and with `feature-not-included` where the tier lacks it. While it is set, and while a version published unscanned stands, the agent cannot be made public (`agent-unscanned`). Clearing it changes nothing already published; the next submission goes through the whole pipeline.
+	PipelineSkip *bool                          `json:"pipelineSkip,omitempty"`
+	Summary      *string                        `json:"summary,omitempty"`
+	Visibility   *UpdateAgentJSONBodyVisibility `json:"visibility,omitempty"`
 }
 
 // UpdateAgentJSONBodyVisibility defines parameters for UpdateAgent.

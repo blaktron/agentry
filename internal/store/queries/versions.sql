@@ -5,6 +5,14 @@ INSERT INTO agent_versions (id, agent_id, version, commit_sha, manifest, capabil
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 RETURNING *;
 
+-- name: MarkVersionScanSkipped :execrows
+-- The version was admitted without a scan (M21): recorded in the same
+-- transaction as the submitted → published edge, which refuses a version
+-- not so marked. Only a submitted version is marked; the caller requires
+-- the one row, so a version that has moved on is never marked.
+UPDATE agent_versions SET scan_status = 'skipped', updated_at = now()
+WHERE id = $1 AND status = 'submitted';
+
 -- name: SetVersionArchive :exec
 UPDATE agent_versions
 SET archive_digest = $2, archive_key = $3, archive_size = $4, updated_at = now()

@@ -17,6 +17,7 @@ import (
 func TestStateMachineEdges(t *testing.T) {
 	allowed := []struct{ from, to Status }{
 		{StatusSubmitted, StatusScanning},
+		{StatusSubmitted, StatusPublished}, // unscanned, a private org agent's only (M21)
 		{StatusScanning, StatusPublished},
 		{StatusScanning, StatusNeedsReview},
 		{StatusScanning, StatusRejected},
@@ -34,9 +35,8 @@ func TestStateMachineEdges(t *testing.T) {
 		}
 	}
 	denied := []struct{ from, to Status }{
-		{StatusSubmitted, StatusPublished}, // no path skips the gate
-		{StatusRejected, StatusPublished},  // rejected is terminal
-		{StatusYanked, StatusPublished},    // yank is permanent
+		{StatusRejected, StatusPublished}, // rejected is terminal
+		{StatusYanked, StatusPublished},   // yank is permanent
 		{StatusScanning, StatusYanked},
 		{StatusNeedsReview, StatusScanning},
 		{StatusBlocked, StatusPublished}, // reinstate goes via quarantine
@@ -46,18 +46,43 @@ func TestStateMachineEdges(t *testing.T) {
 			t.Errorf("%s → %s must be denied", tc.from, tc.to)
 		}
 	}
-	// Property: nothing reaches published except from scanning,
-	// needs_review, or quarantined (§7 "no path skips the gate").
+}
+
+// TestNoPathToPublishedSkipsTheGateForAPublicAgent is the §7 property as
+// M21 qualifies it (plan organization-subscriptions §4, D16): every edge
+// into published is the gate's — from scanning, needs_review or
+// quarantined — except one, submitted → published, which skipsTheGate
+// names and TransitionInTx opens only to a version marked skipped. The
+// marking is SubmitVersion's, for an agent whose administrator set the
+// flag, which the API refuses on a public agent and in a personal
+// namespace, and the private → public change is refused while the flag
+// is set or a version published unscanned stands (the api package's
+// tests). So for a public agent the property reads as it always did.
+func TestNoPathToPublishedSkipsTheGateForAPublicAgent(t *testing.T) {
+	gated := map[Status]bool{StatusScanning: true, StatusNeedsReview: true, StatusQuarantined: true}
+	skipping := 0
 	for from := range allowedTransitions {
 		for _, to := range allowedTransitions[from] {
-			if to == StatusPublished {
-				switch from {
-				case StatusScanning, StatusNeedsReview, StatusQuarantined:
-				default:
-					t.Errorf("published reachable from %s", from)
+			if to != StatusPublished {
+				if skipsTheGate(from, to) {
+					t.Errorf("%s → %s is not an edge into published, yet skipsTheGate says so", from, to)
 				}
+				continue
+			}
+			switch {
+			case gated[from]:
+				if skipsTheGate(from, to) {
+					t.Errorf("%s → %s is the gate's edge, yet skipsTheGate says otherwise", from, to)
+				}
+			case skipsTheGate(from, to):
+				skipping++
+			default:
+				t.Errorf("published reachable from %s by an edge that is neither the gate's nor the one for unscanned versions", from)
 			}
 		}
+	}
+	if skipping != 1 || !skipsTheGate(StatusSubmitted, StatusPublished) {
+		t.Fatalf("%d gate-skipping edges, want exactly one: submitted → published", skipping)
 	}
 }
 
