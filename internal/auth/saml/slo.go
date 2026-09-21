@@ -22,6 +22,7 @@ package saml
 import (
 	"bytes"
 	"compress/flate"
+	"context"
 	"crypto"
 	"crypto/rsa"
 	"crypto/sha1" //nolint:gosec // RSA-SHA1 is a binding-defined SigAlg an IdP may still use
@@ -112,7 +113,7 @@ func (sp *SP) ValidateLogoutResponse(rawQuery, samlResponseForm string) error {
 // ParseLogoutRequestPost validates a LogoutRequest delivered by the
 // HTTP-POST binding: the base64 XML must carry an enveloped signature by
 // one of the IdP's signing certificates.
-func (sp *SP) ParseLogoutRequestPost(samlRequestB64 string) (*LogoutRequestInfo, error) {
+func (sp *SP) ParseLogoutRequestPost(ctx context.Context, samlRequestB64 string) (*LogoutRequestInfo, error) {
 	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(samlRequestB64))
 	if err != nil {
 		return nil, fmt.Errorf("saml: decode SAMLRequest: %w", err)
@@ -134,14 +135,14 @@ func (sp *SP) ParseLogoutRequestPost(samlRequestB64 string) (*LogoutRequestInfo,
 	if err != nil {
 		return nil, fmt.Errorf("saml: LogoutRequest signature rejected: %w", err)
 	}
-	return sp.logoutRequestFrom(validated)
+	return sp.logoutRequestFrom(ctx, validated)
 }
 
 // ParseLogoutRequestRedirect validates a LogoutRequest delivered by the
 // HTTP-Redirect binding: SAMLRequest is deflated+base64 XML and the
 // signature covers the query string ("SAMLRequest=…&RelayState=…&SigAlg=…"
 // in the encoding the IdP sent).
-func (sp *SP) ParseLogoutRequestRedirect(rawQuery string) (*LogoutRequestInfo, error) {
+func (sp *SP) ParseLogoutRequestRedirect(ctx context.Context, rawQuery string) (*LogoutRequestInfo, error) {
 	q, err := url.ParseQuery(rawQuery)
 	if err != nil {
 		return nil, fmt.Errorf("saml: parse query: %w", err)
@@ -182,7 +183,7 @@ func (sp *SP) ParseLogoutRequestRedirect(rawQuery string) (*LogoutRequestInfo, e
 	if root == nil || root.Tag != "LogoutRequest" {
 		return nil, errors.New("saml: not a LogoutRequest")
 	}
-	return sp.logoutRequestFrom(root)
+	return sp.logoutRequestFrom(ctx, root)
 }
 
 // signedQueryString rebuilds the exact signed portion from the raw query,
@@ -230,7 +231,7 @@ func verifyQuerySignature(certs []*x509.Certificate, sigAlg, signed string, sig 
 
 // logoutRequestFrom checks the validated element's issuer, destination and
 // freshness and extracts the identifiers.
-func (sp *SP) logoutRequestFrom(el *etree.Element) (*LogoutRequestInfo, error) {
+func (sp *SP) logoutRequestFrom(ctx context.Context, el *etree.Element) (*LogoutRequestInfo, error) {
 	issuer := ""
 	if is := el.FindElement("./Issuer"); is != nil {
 		issuer = strings.TrimSpace(is.Text())
@@ -262,7 +263,7 @@ func (sp *SP) logoutRequestFrom(el *etree.Element) (*LogoutRequestInfo, error) {
 	if info.ID == "" || info.NameID == "" {
 		return nil, errors.New("saml: LogoutRequest lacks ID or NameID")
 	}
-	if sp.replay.SeenBefore("slo:"+info.ID, time.Now().Add(sloMaxAge)) {
+	if sp.replay.SeenBefore(ctx, "slo:"+info.ID, time.Now().Add(sloMaxAge)) {
 		return nil, fmt.Errorf("saml: LogoutRequest %q replayed", info.ID)
 	}
 	return info, nil

@@ -1,24 +1,37 @@
 package saml
 
 import (
+	"context"
 	"sync"
 	"time"
 )
 
 // ReplayCache records assertion IDs that have been consumed so a captured
 // assertion cannot be replayed within its validity window (§12.4, T-12). The
-// SP records each accepted assertion's ID keyed until its NotOnOrAfter; a
-// second presentation of the same ID is rejected.
+// SP records each accepted assertion's ID until at least its NotOnOrAfter
+// (replayFloor is the least time either implementation keeps one); a second
+// presentation of the same ID is rejected.
 //
-// The interface is the commitment; SaaS backs it with Redis (shared across
-// API replicas), self-host with the in-memory implementation below. A single
+// The interface is the commitment. A server with a database keeps the set
+// there (StoreReplayCache, agentry#414), shared by every API replica; the
+// in-memory implementation below serves a server without one. A single
 // replica losing its cache (restart) is bounded by the short assertion
 // lifetime, so the exposure window is minutes, not the session lifetime.
 type ReplayCache interface {
 	// SeenBefore atomically reports whether id was already recorded and, if
-	// not, records it until exp. It returns true when id is a replay.
-	SeenBefore(id string, exp time.Time) bool
+	// not, records it until exp. It returns true when id is a replay. The
+	// context is the request's, for an implementation that asks a store.
+	SeenBefore(ctx context.Context, id string, exp time.Time) bool
 }
+
+// replayFloor is the least time a consumed assertion's id is kept, in both
+// implementations. The validator goes on accepting an assertion for its
+// clock skew past the expiry the assertion carries — and crewjam's
+// MaxIssueDelay bounds how long after issue that can be — so a record that
+// lapsed at that expiry would leave the tail of the window unprotected.
+// Ten minutes outlives both by a wide margin; the store-backed cache
+// applies it on the database's clock.
+const replayFloor = 10 * time.Minute
 
 // MemoryReplayCache is an in-process TTL set of assertion IDs.
 type MemoryReplayCache struct {
@@ -32,7 +45,7 @@ func NewMemoryReplayCache() *MemoryReplayCache {
 }
 
 // SeenBefore implements ReplayCache.
-func (c *MemoryReplayCache) SeenBefore(id string, exp time.Time) bool {
+func (c *MemoryReplayCache) SeenBefore(_ context.Context, id string, exp time.Time) bool {
 	if id == "" {
 		// An assertion with no ID cannot be replay-protected; treat as replay
 		// to fail closed rather than silently accept.
@@ -45,8 +58,10 @@ func (c *MemoryReplayCache) SeenBefore(id string, exp time.Time) bool {
 	if until, ok := c.seen[id]; ok && until.After(now) {
 		return true
 	}
-	if !exp.After(now) {
-		exp = now.Add(10 * time.Minute) // floor for assertions with no/old expiry
+	// The record outlives the window the validator still accepts this
+	// assertion in, which runs past the expiry the assertion carries.
+	if floor := now.Add(replayFloor); exp.Before(floor) {
+		exp = floor
 	}
 	c.seen[id] = exp
 	return false

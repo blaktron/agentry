@@ -3,6 +3,7 @@ package saml
 import (
 	"bytes"
 	"compress/flate"
+	"context"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
@@ -103,14 +104,14 @@ func TestSLO_PostBindingAcceptsSignedRefusesTamperedUnsignedForeignReplayed(t *t
 	idp := newTestIdP(t)
 	sp := newSLOSP(t, idp)
 	doc, id := idp.mintLogoutRequest(t, "user@acme.example", "idx-1", idp.entityID, true, time.Now())
-	info, err := sp.ParseLogoutRequestPost(docB64(t, doc))
+	info, err := sp.ParseLogoutRequestPost(context.Background(), docB64(t, doc))
 	if err != nil {
 		t.Fatalf("signed request rejected: %v", err)
 	}
 	if info.ID != id || info.NameID != "user@acme.example" || info.SessionIndex != "idx-1" {
 		t.Fatalf("info = %+v", info)
 	}
-	if _, err := sp.ParseLogoutRequestPost(docB64(t, doc)); err == nil || !strings.Contains(err.Error(), "replayed") {
+	if _, err := sp.ParseLogoutRequestPost(context.Background(), docB64(t, doc)); err == nil || !strings.Contains(err.Error(), "replayed") {
 		t.Fatalf("replay must be refused: %v", err)
 	}
 	if u, ok := sp.LogoutResponseURL(id, "rs"); !ok || !strings.HasPrefix(u, "https://idp.test/slo?") || !strings.Contains(u, "SAMLResponse=") {
@@ -120,24 +121,24 @@ func TestSLO_PostBindingAcceptsSignedRefusesTamperedUnsignedForeignReplayed(t *t
 	tampered, _ := idp.mintLogoutRequest(t, "user@acme.example", "", idp.entityID, true, time.Now())
 	s, _ := tampered.WriteToString()
 	s = strings.Replace(s, "user@acme.example", "victim@acme.example", 1)
-	if _, err := sp.ParseLogoutRequestPost(base64.StdEncoding.EncodeToString([]byte(s))); err == nil {
+	if _, err := sp.ParseLogoutRequestPost(context.Background(), base64.StdEncoding.EncodeToString([]byte(s))); err == nil {
 		t.Fatal("tampered request must be refused")
 	}
 	unsigned, _ := idp.mintLogoutRequest(t, "user@acme.example", "", idp.entityID, false, time.Now())
-	if _, err := sp.ParseLogoutRequestPost(docB64(t, unsigned)); err == nil {
+	if _, err := sp.ParseLogoutRequestPost(context.Background(), docB64(t, unsigned)); err == nil {
 		t.Fatal("unsigned request must be refused")
 	}
 	other := newTestIdP(t)
 	foreign, _ := other.mintLogoutRequest(t, "victim@acme.example", "", idp.entityID, true, time.Now())
-	if _, err := sp.ParseLogoutRequestPost(docB64(t, foreign)); err == nil {
+	if _, err := sp.ParseLogoutRequestPost(context.Background(), docB64(t, foreign)); err == nil {
 		t.Fatal("request signed by another key must be refused")
 	}
 	wrongIssuer, _ := idp.mintLogoutRequest(t, "user@acme.example", "", "https://someone-else.test", true, time.Now())
-	if _, err := sp.ParseLogoutRequestPost(docB64(t, wrongIssuer)); err == nil || !strings.Contains(err.Error(), "issuer") {
+	if _, err := sp.ParseLogoutRequestPost(context.Background(), docB64(t, wrongIssuer)); err == nil || !strings.Contains(err.Error(), "issuer") {
 		t.Fatalf("wrong issuer must be refused: %v", err)
 	}
 	stale, _ := idp.mintLogoutRequest(t, "user@acme.example", "", idp.entityID, true, time.Now().Add(-time.Hour))
-	if _, err := sp.ParseLogoutRequestPost(docB64(t, stale)); err == nil || !strings.Contains(err.Error(), "stale") {
+	if _, err := sp.ParseLogoutRequestPost(context.Background(), docB64(t, stale)); err == nil || !strings.Contains(err.Error(), "stale") {
 		t.Fatalf("stale request must be refused: %v", err)
 	}
 }
@@ -172,7 +173,7 @@ func TestSLO_RedirectBindingVerifiesQuerySignature(t *testing.T) {
 	idp := newTestIdP(t)
 	sp := newSLOSP(t, idp)
 	doc, id := idp.mintLogoutRequest(t, "user@acme.example", "idx-2", idp.entityID, false, time.Now())
-	info, err := sp.ParseLogoutRequestRedirect(idp.redirectQuery(t, doc, "back", false))
+	info, err := sp.ParseLogoutRequestRedirect(context.Background(), idp.redirectQuery(t, doc, "back", false))
 	if err != nil {
 		t.Fatalf("signed redirect request rejected: %v", err)
 	}
@@ -180,12 +181,12 @@ func TestSLO_RedirectBindingVerifiesQuerySignature(t *testing.T) {
 		t.Fatalf("info = %+v", info)
 	}
 	doc2, _ := idp.mintLogoutRequest(t, "user@acme.example", "", idp.entityID, false, time.Now())
-	if _, err := sp.ParseLogoutRequestRedirect(idp.redirectQuery(t, doc2, "", true)); err == nil {
+	if _, err := sp.ParseLogoutRequestRedirect(context.Background(), idp.redirectQuery(t, doc2, "", true)); err == nil {
 		t.Fatal("broken query signature must be refused")
 	}
 	q := idp.redirectQuery(t, doc2, "", false)
 	q = strings.SplitN(q, "&SigAlg=", 2)[0] // strip SigAlg and Signature
-	if _, err := sp.ParseLogoutRequestRedirect(q); err == nil || !strings.Contains(err.Error(), "signed") {
+	if _, err := sp.ParseLogoutRequestRedirect(context.Background(), q); err == nil || !strings.Contains(err.Error(), "signed") {
 		t.Fatalf("unsigned redirect request must be refused: %v", err)
 	}
 }

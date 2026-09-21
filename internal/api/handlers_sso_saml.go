@@ -149,9 +149,9 @@ func (s *Server) samlSlo(w http.ResponseWriter, r *http.Request, org OrgHandle) 
 
 	var info *samlsp.LogoutRequestInfo
 	if r.Method == http.MethodPost {
-		info, err = sp.ParseLogoutRequestPost(r.PostFormValue("SAMLRequest"))
+		info, err = sp.ParseLogoutRequestPost(r.Context(), r.PostFormValue("SAMLRequest"))
 	} else {
-		info, err = sp.ParseLogoutRequestRedirect(r.URL.RawQuery)
+		info, err = sp.ParseLogoutRequestRedirect(r.Context(), r.URL.RawQuery)
 	}
 	if err != nil {
 		s.log.WarnContext(r.Context(), "saml slo request rejected", "org", org, "err", err)
