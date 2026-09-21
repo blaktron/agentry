@@ -95,7 +95,11 @@ func TestClientIPHonorsTrustedProxyDepth(t *testing.T) {
 		{"one hop", "203.0.113.7, 198.51.100.2", 1, "198.51.100.2"},
 		// A client prepending junk cannot push the real entry out of range.
 		{"spoofed prefix ignored", "9.9.9.9, 203.0.113.7, 198.51.100.2", 2, "203.0.113.7"},
-		{"chain shorter than configured falls back", "203.0.113.7", 3, "203.0.113.7"},
+		// A chain shorter than the hop count was not written by a trusted
+		// hop, so the peer is the answer — never the leftmost entry, which
+		// is the one a client on a direct connection writes itself.
+		{"chain shorter than configured falls back to the peer", "203.0.113.7", 3, "10.0.0.9"},
+		{"hop count one too high: the peer, not the client's entry", "9.9.9.9", 2, "10.0.0.9"},
 		{"no header at all falls back to the peer", "", 2, "10.0.0.9"},
 		{"non-IP entries are dropped", "junk, 203.0.113.7, 198.51.100.2", 2, "203.0.113.7"},
 		{"ip:port form is tolerated", "203.0.113.7:9999, 198.51.100.2", 2, "203.0.113.7"},
