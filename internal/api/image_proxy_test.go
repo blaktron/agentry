@@ -24,7 +24,7 @@ func TestImageProxy(t *testing.T) {
 	if err := png.Encode(&pngBytes, img); err != nil {
 		t.Fatal(err)
 	}
-	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/logo.png":
 			w.Header().Set("Content-Type", "image/png")
