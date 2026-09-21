@@ -220,6 +220,7 @@ func TestSAMLACSEndpoint(t *testing.T) {
 }
 
 func (env *testEnv) postForm(t *testing.T, u string, form url.Values) *http.Response {
+	t.Helper()
 	return env.postFormAs(t, u, form, "")
 }
 

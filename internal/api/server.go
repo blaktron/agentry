@@ -59,8 +59,8 @@ type Server struct {
 	blobs     registry.BlobStore
 	pipeline  *scan.Pipeline
 	renderer  *render.Renderer
-	// Enterprise (M6/WG-J): webhook fan-out, DNS resolver for domain
-	// verification, and the shared SAML assertion replay cache.
+	// Enterprise (M6/WG-J): webhook fan-out and the DNS resolver for domain
+	// verification.
 	webhooks *webhook.Dispatcher
 	resolver dnsx.Resolver
 	// samlReplay and samlRequests are the sets every API replica must

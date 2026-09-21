@@ -24,10 +24,7 @@ const (
 	// AuthSocialRejected is a social or directory sign-in the server rejected.
 	AuthSocialRejected Event = "auth.social_rejected"
 	// SAMLStateUnavailable is a SAML login refused because the shared state
-	// it depends on — the consumed-assertion set or the outstanding-request
-	// set — could not be read or written (agentry#414). The refusal is the
-	// fail-closed answer; this line is what separates it from a replay that
-	// was really presented.
+	// behind it could not be read or written (agentry#414).
 	SAMLStateUnavailable Event = "saml.state_unavailable"
 	// SSRFRefused is an outbound target the private-range guard refused.
 	SSRFRefused Event = "ssrf.refused"
