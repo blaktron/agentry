@@ -52,6 +52,7 @@ type Agent struct {
 	ReadmeText               string      `json:"readme_text"`
 	AllowForcePush           bool        `json:"allow_force_push"`
 	Modes                    []string    `json:"modes"`
+	PipelineSkip             bool        `json:"pipeline_skip"`
 }
 
 type AgentTeamGrant struct {
@@ -91,6 +92,7 @@ type AgentVersion struct {
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 	SubmitterIpHash *string    `json:"submitter_ip_hash"`
+	ScanStatus      string     `json:"scan_status"`
 }
 
 type AgentVersionMcpServer struct {

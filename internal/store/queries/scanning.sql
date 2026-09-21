@@ -128,10 +128,12 @@ SELECT * FROM attestations WHERE version_id = $1;
 -- failure after the transition used to leave (agentry#407); the attest
 -- sweep signs each from its latest finished scan run.
 -- name: ListPublishedVersionsWithoutAttestation :many
+-- A version published without a scan (M21) has no attestation to backfill:
+-- it attests nothing, and is left out here as it is by every sweep.
 SELECT av.*
 FROM agent_versions av
 LEFT JOIN attestations at ON at.version_id = av.id
-WHERE av.status = 'published' AND at.id IS NULL
+WHERE av.status = 'published' AND at.id IS NULL AND av.scan_status <> 'skipped'
 ORDER BY av.id
 LIMIT $1;
 
@@ -139,7 +141,7 @@ LIMIT $1;
 SELECT count(*)
 FROM agent_versions av
 LEFT JOIN attestations at ON at.version_id = av.id
-WHERE av.status = 'published' AND at.id IS NULL;
+WHERE av.status = 'published' AND at.id IS NULL AND av.scan_status <> 'skipped';
 
 -- name: CreateAdvisory :one
 INSERT INTO advisories (id, agent_id, affected_versions, severity, summary, detail, published_at)
@@ -172,12 +174,18 @@ JOIN handles h ON h.id = a.namespace_id
 WHERE adv.id = $1 AND a.visibility = 'public' AND adv.published_at IS NOT NULL;
 
 -- Keyset, not LIMIT/OFFSET: the sweep quarantines rows out of `published` as
--- it goes, so an offset-paged sweep skips one unscanned version per row it
--- acted on. The cursor is the primary key, which no sweep action changes.
+-- it goes, so an offset-paged sweep would pass over one not-yet-rescanned
+-- version per row it acted on. The cursor is the primary key, which no
+-- sweep action changes.
 -- name: ListPublishedVersionsForRescan :many
+-- A version published without a scan, and every version of an agent whose
+-- administrator has set pipeline_skip, is not rescanned (M21): a rescan
+-- would put a report on a version whose verdict is "unscanned", and the
+-- flag says the organization has taken the pipeline off this agent.
 SELECT av.id, av.agent_id, av.archive_digest, av.archive_key, av.archive_size, av.manifest, av.capabilities, a.modes, a.visibility
 FROM agent_versions av JOIN agents a ON a.id = av.agent_id
 WHERE av.status = 'published'
+  AND av.scan_status <> 'skipped' AND NOT a.pipeline_skip
   AND (sqlc.narg('after')::uuid IS NULL OR av.id < sqlc.narg('after'))
 ORDER BY av.id DESC
 LIMIT $1;
