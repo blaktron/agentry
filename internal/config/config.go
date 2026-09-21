@@ -20,7 +20,7 @@ type Config struct {
 	Env string `yaml:"env"`
 	// DevMode enables development conveniences, and is opt-in: false unless
 	// the configuration says otherwise, and refused unless env is dev
-	// (Validate enforces both, DEV-115). One boolean switches five
+	// (Validate enforces both, DEV-116). One boolean switches five
 	// controls off at once — the at-rest sealing key (a public constant
 	// stands in), 2FA before a public publish, release signing (an
 	// ephemeral key at every start), the scan judge (none becomes static)
@@ -463,7 +463,7 @@ type Orgs struct {
 // Default returns the baseline configuration: a development environment
 // with dev mode OFF. A config that names no sealing key and no signing key
 // therefore fails at boot rather than running on public constants; a
-// throwaway stack opts in with devMode: true (DEV-115).
+// throwaway stack opts in with devMode: true (DEV-116).
 func Default() Config {
 	return Config{
 		Env:     "dev",

@@ -130,7 +130,7 @@ func newTestEnvCfg(t *testing.T, cfgFn func(*config.Config), opts ...func(*api.S
 	}
 
 	cfg := config.Default()
-	cfg.DevMode = true       // the test server is a dev instance; dev mode is opt-in (DEV-115)
+	cfg.DevMode = true       // the test server is a dev instance; dev mode is opt-in (DEV-116)
 	cfg.Scan.OSVURL = "none" // S7 never dials out of a test; TestS7 installs a fake
 	cfg.Auth.SessionTTL = time.Hour
 	// Tests hammer auth endpoints from one IP; keep prod defaults out of the way.

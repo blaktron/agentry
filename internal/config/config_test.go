@@ -14,7 +14,7 @@ func TestLoadDefaults(t *testing.T) {
 		t.Fatalf("expected error for explicit missing file")
 	}
 	// Empty path with no agentry.yaml in cwd yields pure defaults — and the
-	// pure defaults refuse to run: dev mode is opt-in (DEV-115), so with no
+	// pure defaults refuse to run: dev mode is opt-in (DEV-116), so with no
 	// sealing key configured the load fails at the validation, naming it,
 	// rather than starting on a public constant.
 	if _, err = Load(""); err == nil || !strings.Contains(err.Error(), "sealingKey") {
@@ -252,7 +252,7 @@ func TestNewEnvOverridesApply(t *testing.T) {
 	t.Setenv("AGENTRY_STORAGE_S3_PREFIX", "staging")
 	t.Setenv("AGENTRY_STORAGE_S3_USE_PATH_STYLE", "true")
 	t.Setenv("AGENTRY_SIGNING_NOT_AFTER", "2027-01-01T00:00:00Z")
-	t.Setenv("AGENTRY_DEV_MODE", "true") // the knobs under test, on the dev baseline (DEV-115)
+	t.Setenv("AGENTRY_DEV_MODE", "true") // the knobs under test, on the dev baseline (DEV-116)
 
 	cfg, err := Load("")
 	if err != nil {
@@ -292,7 +292,7 @@ func TestJudgeEnvConfig(t *testing.T) {
 	t.Setenv("AGENTRY_JUDGE_BASE_URL", "https://llm.example.internal")
 	t.Setenv("AGENTRY_JUDGE_API_KEY", "sk-test")
 	t.Setenv("AGENTRY_JUDGE_MODEL", "gpt-test")
-	t.Setenv("AGENTRY_DEV_MODE", "true") // the knobs under test, on the dev baseline (DEV-115)
+	t.Setenv("AGENTRY_DEV_MODE", "true") // the knobs under test, on the dev baseline (DEV-116)
 
 	cfg, err := Load("")
 	if err != nil {
@@ -354,7 +354,7 @@ func TestSocialProviderEnv(t *testing.T) {
 	t.Setenv("AGENTRY_SOCIAL_OPENAI_ISSUER", "https://issuer.example/oai")
 	t.Setenv("AGENTRY_SOCIAL_CLAUDE_CLIENT_ID", "claude-id")
 	t.Setenv("AGENTRY_SOCIAL_CLAUDE_ISSUER", "https://issuer.example/claude")
-	t.Setenv("AGENTRY_DEV_MODE", "true") // the knobs under test, on the dev baseline (DEV-115)
+	t.Setenv("AGENTRY_DEV_MODE", "true") // the knobs under test, on the dev baseline (DEV-116)
 
 	cfg, err := Load("")
 	if err != nil {
