@@ -872,3 +872,38 @@ func TestOrgStateGatesGit(t *testing.T) {
 	setState("active", false)
 	mustGit(t, work, "push", env.cloneURLNS(orgH, "org-agent", env.owner.patRW), "main")
 }
+
+// TestArchiveTagRefusesAnOptionShapedName: the tag a publisher submits is
+// an argv element to git twice, and git reads a leading dash as an option.
+// The archiver qualifies it to refs/tags/<tag> — a name that cannot start
+// with a dash — and refuses anything that is not a plain ref name before
+// git ever sees it (security review 2026-09-20 §5.6, M15).
+func TestArchiveTagRefusesAnOptionShapedName(t *testing.T) {
+	env := newGitEnv(t)
+	const name = "optiontag"
+	agent := env.seedAgent(name, "public")
+	work := seedWorkdir(t, kindFixture("skill", env.owner.handle, name, "1.2.0"))
+	mustGit(t, work, "push", env.cloneURL(name, env.owner.patRW), "main")
+	mustGit(t, work, "tag", "v1.2.0")
+	mustGit(t, work, "push", env.cloneURL(name, env.owner.patRW), "v1.2.0")
+
+	out := filepath.Join(t.TempDir(), "out.tar")
+	for _, tag := range []string{"--output=" + out, "-n1", "--all", "v1.2.0 --output=" + out, "v1.2.0\n--all", "", "refs/heads/main", "v1.2.0^{}", "..", "v1.2.0:x"} {
+		_, err := env.repos.MaterializeTag(context.Background(), agent.RepoID, tag, t.TempDir())
+		if err == nil {
+			t.Fatalf("tag %q was accepted", tag)
+		}
+		if !strings.Contains(err.Error(), "not a tag name") {
+			t.Fatalf("tag %q: refused by git rather than by the archiver: %v", tag, err)
+		}
+	}
+	if _, err := os.Stat(out); err == nil {
+		t.Fatal("git archive wrote where an option-shaped tag pointed")
+	}
+	// The plain name and its qualified form both resolve.
+	for _, tag := range []string{"v1.2.0", "refs/tags/v1.2.0"} {
+		if _, err := env.repos.MaterializeTag(context.Background(), agent.RepoID, tag, t.TempDir()); err != nil {
+			t.Fatalf("materialize %q: %v", tag, err)
+		}
+	}
+}
