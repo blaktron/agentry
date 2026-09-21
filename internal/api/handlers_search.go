@@ -178,8 +178,15 @@ func (s *Server) GetAgentReadme(w http.ResponseWriter, r *http.Request, ns Names
 	writeHTMLFragment(w, out)
 }
 
+// writeHTMLFragment serves rendered markdown for a page to embed. It is
+// text/html on the API origin, where the session cookie lives, so it
+// carries the image proxy's policy: nothing loads, nothing runs,
+// sandboxed — a browser that renders it directly gets a document that
+// can do nothing, whatever the sanitiser let through (agentry#413). The
+// site embeds the body server-side and never sees the header.
 func writeHTMLFragment(w http.ResponseWriter, html string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
 	_, _ = w.Write([]byte(html))
 }

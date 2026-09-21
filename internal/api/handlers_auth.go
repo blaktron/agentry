@@ -267,6 +267,10 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		row = storegen.GetUserByEmailRow(hrow)
 	}
 	if err != nil || row.State != "active" || row.PasswordHash == nil {
+		// The miss pays the same comparison as a wrong password, so the
+		// refusal's timing does not say whether the account exists, is
+		// active, or signs in another way (agentry#413).
+		auth.SpendPasswordCheck(req.Password)
 		deny(uuid.Nil)
 		return
 	}
