@@ -30,6 +30,13 @@ SELECT pg_advisory_xact_lock(hashtext(sqlc.arg(key)::text));
 -- transaction (the last-admin guard counts under this lock).
 SELECT id FROM orgs WHERE id = $1 FOR UPDATE;
 
+-- name: LockUser :exec
+-- Serialises the membership doors of one PERSON across organizations: the
+-- one-organization-per-person count runs under this lock, after the
+-- organization's (always in that order), so two organizations admitting
+-- the same person at once cannot both count zero (agentry#412).
+SELECT id FROM users WHERE id = $1 FOR UPDATE;
+
 -- name: GetOrgByHandle :one
 -- verified_domains is every domain the organization proved control of
 -- over DNS (domain_claims.verified_at), oldest first: the T-12 auto-link
