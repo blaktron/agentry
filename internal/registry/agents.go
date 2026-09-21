@@ -301,23 +301,31 @@ func (s *Service) CreateAgent(ctx context.Context, p *auth.Principal, in CreateA
 		// Fail closed: an unresolvable entitlement is not permission.
 		return Agent{}, fmt.Errorf("registry: entitlements: %w", err)
 	}
-	n, err := q.CountAgentsInNamespace(ctx, ns.ID)
-	if err != nil {
-		return Agent{}, fmt.Errorf("registry: quota count: %w", err)
-	}
-	if n >= lim.AgentsPerNamespace {
-		return Agent{}, fmt.Errorf("%w: namespace agent quota reached", ErrDenied)
-	}
-	if in.Visibility == "private" {
-		if err := s.checkPrivateAgentCap(ctx, subject, ns.ID); err != nil {
-			return Agent{}, err
-		}
-	}
 
 	repoID := newUUID()
 	agentID := newUUID()
 
 	err = s.st.WithTx(ctx, func(q *storegen.Queries) error {
+		// The namespace's counts and the insert commit together, under the
+		// namespace's row lock: read on the pool before the transaction,
+		// as they were, N concurrent creates at the quota or the cap each
+		// saw the same count and every one landed (agentry#411; the seat
+		// cap in membership.go has always done it this way).
+		if err := q.LockNamespace(ctx, ns.ID); err != nil {
+			return fmt.Errorf("registry: lock namespace: %w", err)
+		}
+		n, err := q.CountAgentsInNamespace(ctx, ns.ID)
+		if err != nil {
+			return fmt.Errorf("registry: quota count: %w", err)
+		}
+		if n >= lim.AgentsPerNamespace {
+			return fmt.Errorf("%w: namespace agent quota reached", ErrDenied)
+		}
+		if in.Visibility == "private" {
+			if err := s.checkPrivateAgentCapFor(ctx, q, subject, ns.ID, 1); err != nil {
+				return err
+			}
+		}
 		if _, err := q.CreateRepo(ctx, repoID); err != nil {
 			return err
 		}
@@ -356,10 +364,21 @@ func newUUID() uuid.UUID {
 // be added and nothing already private is touched.
 var ErrPrivateAgentCap = errors.New("registry: this namespace holds as many private agents as its tier allows")
 
+// CheckPrivateAgentCapInTx is the private-agent cap for the handler that
+// flips an agent's visibility, inside that handler's transaction: it takes
+// the namespace's row lock first, so the count and the update commit
+// together (agentry#411).
+func (s *Service) CheckPrivateAgentCapInTx(ctx context.Context, q *storegen.Queries, a Agent) error {
+	if err := q.LockNamespace(ctx, a.NamespaceID); err != nil {
+		return fmt.Errorf("registry: lock namespace: %w", err)
+	}
+	return s.checkPrivateAgentCapFor(ctx, q, subjectFor(a), a.NamespaceID, 1)
+}
+
 // CheckPrivateAgentCap is checkPrivateAgentCap for the handler that flips
 // an existing agent to private.
 func (s *Service) CheckPrivateAgentCap(ctx context.Context, a Agent) error {
-	return s.checkPrivateAgentCapFor(ctx, subjectFor(a), a.NamespaceID, 1)
+	return s.checkPrivateAgentCapFor(ctx, s.st.Queries(), subjectFor(a), a.NamespaceID, 1)
 }
 
 // CheckPrivateAgentCapFor refuses adding n more private agents to an
@@ -370,16 +389,15 @@ func (s *Service) CheckPrivateAgentCapFor(ctx context.Context, orgID uuid.UUID, 
 	if n <= 0 {
 		return nil
 	}
-	return s.checkPrivateAgentCapFor(ctx, entitlements.ForOrg(orgID), orgID, n)
+	return s.checkPrivateAgentCapFor(ctx, s.st.Queries(), entitlements.ForOrg(orgID), orgID, n)
 }
 
 // checkPrivateAgentCap refuses one more private agent when the subject's
 // Features cap is reached. An unresolvable entitlement is not permission.
-func (s *Service) checkPrivateAgentCap(ctx context.Context, subject entitlements.Subject, nsID uuid.UUID) error {
-	return s.checkPrivateAgentCapFor(ctx, subject, nsID, 1)
-}
-
-func (s *Service) checkPrivateAgentCapFor(ctx context.Context, subject entitlements.Subject, nsID uuid.UUID, adding int64) error {
+// checkPrivateAgentCapFor counts on q — the caller's transaction, after
+// LockNamespace, when the count must commit with a write; the pool for a
+// pre-check whose write is elsewhere (the fold-in's bulk count).
+func (s *Service) checkPrivateAgentCapFor(ctx context.Context, q *storegen.Queries, subject entitlements.Subject, nsID uuid.UUID, adding int64) error {
 	f, err := s.Entitlements().Features(ctx, subject)
 	if err != nil {
 		return fmt.Errorf("registry: entitlements: %w", err)
@@ -390,7 +408,7 @@ func (s *Service) checkPrivateAgentCapFor(ctx context.Context, subject entitleme
 	if f.PrivateAgents.Max <= 0 {
 		return nil
 	}
-	n, err := s.st.Queries().CountPrivateAgentsInNamespace(ctx, nsID)
+	n, err := q.CountPrivateAgentsInNamespace(ctx, nsID)
 	if err != nil {
 		return fmt.Errorf("registry: private agent count: %w", err)
 	}
