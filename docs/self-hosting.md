@@ -654,12 +654,16 @@ COMPOSE_PROFILES=server,tunnel     # so a plain `docker compose up -d` includes 
 ```
 
 Visitors' addresses survive the tunnel: cloudflared forwards Cloudflare's
-`CF-Connecting-IP`, the edge trusts that header only when the peer is a
-container of this stack (docker's `172.16.0.0/12` pools), and it writes
-the resolved address as the single `X-Forwarded-For` entry agentryd and
-authentik read. Keep `AGENTRY_TRUSTED_PROXIES=1`; a direct connection to
-the edge cannot forge the header because the edge replaces it rather than
-appending to it.
+`CF-Connecting-IP`, the edge reads that header only when the peer is on
+the `ingress` network the compose file gives cloudflared and the edge
+alone (`AGENTRY_INGRESS_SUBNET`, default `172.16.255.240/28`, outside
+docker's own address pool; if you change it, change
+`set_real_ip_from` in `deploy/compose/edge/nginx.conf` to match), and it
+writes the resolved address as the single `X-Forwarded-For` entry agentryd
+and authentik read. Keep `AGENTRY_TRUSTED_PROXIES=1`; a direct connection
+to the edge — from the internet or from another container on the host —
+cannot forge the header, because the edge replaces it rather than
+appending to it and ignores `CF-Connecting-IP` from any other peer.
 
 The `cloudflared` service is behind the `tunnel` profile so a stack without
 a token still starts. The token reaches the connector only as the
