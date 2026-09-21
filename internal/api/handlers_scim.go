@@ -12,6 +12,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/httpmux"
 	"github.com/blaktron/agentry/internal/registry"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
@@ -41,19 +42,19 @@ type scimCtx struct {
 type scimHandler func(w http.ResponseWriter, r *http.Request, sc scimCtx)
 
 // mountSCIM registers the SCIM routes on the mux.
-func (s *Server) mountSCIM(mux *http.ServeMux) {
-	mux.HandleFunc("POST /scim/v2/Users", s.scimAuth(s.scimCreateUser))
-	mux.HandleFunc("GET /scim/v2/Users", s.scimAuth(s.scimListUsers))
-	mux.HandleFunc("GET /scim/v2/Users/{id}", s.scimAuth(s.scimGetUser))
-	mux.HandleFunc("PATCH /scim/v2/Users/{id}", s.scimAuth(s.scimPatchUser))
-	mux.HandleFunc("PUT /scim/v2/Users/{id}", s.scimAuth(s.scimPutUser))
-	mux.HandleFunc("DELETE /scim/v2/Users/{id}", s.scimAuth(s.scimDeleteUser))
+func (s *Server) mountSCIM(mux httpmux.Mux) {
+	MountFunc(mux, "POST /scim/v2/Users", s.scimAuth(s.scimCreateUser))
+	MountFunc(mux, "GET /scim/v2/Users", s.scimAuth(s.scimListUsers))
+	MountFunc(mux, "GET /scim/v2/Users/{id}", s.scimAuth(s.scimGetUser))
+	MountFunc(mux, "PATCH /scim/v2/Users/{id}", s.scimAuth(s.scimPatchUser))
+	MountFunc(mux, "PUT /scim/v2/Users/{id}", s.scimAuth(s.scimPutUser))
+	MountFunc(mux, "DELETE /scim/v2/Users/{id}", s.scimAuth(s.scimDeleteUser))
 
-	mux.HandleFunc("POST /scim/v2/Groups", s.scimAuth(s.scimCreateGroup))
-	mux.HandleFunc("GET /scim/v2/Groups", s.scimAuth(s.scimListGroups))
-	mux.HandleFunc("GET /scim/v2/Groups/{id}", s.scimAuth(s.scimGetGroup))
-	mux.HandleFunc("PATCH /scim/v2/Groups/{id}", s.scimAuth(s.scimPatchGroup))
-	mux.HandleFunc("DELETE /scim/v2/Groups/{id}", s.scimAuth(s.scimDeleteGroup))
+	MountFunc(mux, "POST /scim/v2/Groups", s.scimAuth(s.scimCreateGroup))
+	MountFunc(mux, "GET /scim/v2/Groups", s.scimAuth(s.scimListGroups))
+	MountFunc(mux, "GET /scim/v2/Groups/{id}", s.scimAuth(s.scimGetGroup))
+	MountFunc(mux, "PATCH /scim/v2/Groups/{id}", s.scimAuth(s.scimPatchGroup))
+	MountFunc(mux, "DELETE /scim/v2/Groups/{id}", s.scimAuth(s.scimDeleteGroup))
 }
 
 // scimAuth resolves the SCIM bearer token to an org and invokes next.

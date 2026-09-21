@@ -17,37 +17,136 @@ import (
 
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/gitsrv"
 )
 
-// TestRouteDeclarationsComplete fails when an OpenAPI operation lacks a
-// RouteDecl — a new route cannot ship without an authorization declaration.
+// rateClasses is the set of §19 bucket names the code emits, catalogued in
+// docs/logging.md's http.rate_limited row, plus the two sentinels a
+// declaration uses when no single bucket applies. A declaration naming
+// anything else is a typo that reads as a claim about enforcement.
+var rateClasses = map[string]bool{
+	"login": true, "anon": true, "authed": true, "abuse_reports": true,
+	"push": true, "ssh-key-offer": true,
+	api.RateNone: true, api.RatePerPrincipal: true,
+}
+
+// TestRouteDeclarationsComplete is the §12.2 completeness gate: every
+// pattern the public mux was actually given declares its authorization, and
+// every declaration names a pattern the mux serves. The generated surface
+// declares through RouteDecl, keyed by operationId; a root mount declares
+// through MountDecl, keyed by its pattern. Before agentry#415 this gate
+// walked the spec, so the root mounts — SCIM, the image proxy, git smart
+// HTTP, the SSO landing, the probes, /metrics, the .well-known documents —
+// were invisible to it, and a new root mount shipped with no declaration and
+// no failure.
 func TestRouteDeclarationsComplete(t *testing.T) {
 	spec, err := api.GetSwagger()
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The spec's operations, keyed by the pattern the generated handler
+	// registers: the method, then BaseURL, then the spec's path.
+	const baseURL = "/api/v1"
+	specOps := make(map[string]string)
 	for path, item := range spec.Paths.Map() {
 		for method, op := range item.Operations() {
 			if op.OperationID == "" {
 				t.Errorf("%s %s: missing operationId", method, path)
 				continue
 			}
-			if _, ok := api.RouteAuthzDecl(op.OperationID); !ok {
-				t.Errorf("%s %s (%s): no RouteDecl — declare it in authz_routes.go", method, path, op.OperationID)
+			id := api.NormalizeOpID(op.OperationID)
+			specOps[method+" "+baseURL+path] = id
+			// Declared from the spec, not from the recording: an operation
+			// the spec promises and the generated handler never registered
+			// would otherwise pass unseen.
+			if _, ok := api.RouteAuthzDecl(id); !ok {
+				t.Errorf("%s %s (%s): no RouteDecl — declare it in authz_routes.go", method, path, id)
 			}
 		}
 	}
-	// And the reverse: no stale declarations.
-	ops := map[string]bool{}
-	for _, item := range spec.Paths.Map() {
-		for _, op := range item.Operations() {
-			ops[api.NormalizeOpID(op.OperationID)] = true
+
+	// What the mux was given. Git's routes arrive through gitsrv's own Mount
+	// rather than a copy of its patterns here, so a route added there enters
+	// this gate the moment it exists; the handlers are registered and never
+	// called.
+	cfg := config.Default()
+	cfg.DevMode = true // a fixture has no sealing key
+	srv := api.New(cfg, nil, nil)
+	api.NewHandlerWithGit(srv, (&gitsrv.Handler{}).Mount)
+	mounted := srv.MountedRoutes()
+	recorded := make(map[string]bool, len(mounted))
+	for _, pattern := range mounted {
+		recorded[pattern] = true
+	}
+	for pattern := range specOps {
+		if !recorded[pattern] {
+			t.Errorf("%s: the spec declares it and the public mux does not serve it", pattern)
 		}
 	}
+
+	seenSpec := map[string]bool{}
+	seenMount := map[string]bool{}
+	for _, pattern := range mounted {
+		if opID, ok := specOps[pattern]; ok {
+			seenSpec[opID] = true // declared from the spec side, above
+			continue
+		}
+		decl, ok := api.MountAuthzDecl(pattern)
+		if !ok {
+			t.Errorf("%s: registered on the public mux and undeclared — name its gate and its §19 rate class in authz_routes.go", pattern)
+			continue
+		}
+		seenMount[pattern] = true
+		if decl.Gate == "" {
+			t.Errorf("%s: declares no gate", pattern)
+		}
+		if !rateClasses[decl.Class] {
+			t.Errorf("%s: declares rate class %q, which no bucket uses (docs/logging.md catalogues the set)", pattern, decl.Class)
+		}
+		// Naming no gate and naming no fixed bucket are the two claims that
+		// go stale silently, so each carries its reason.
+		if (decl.Gate == api.GatePublic || decl.Class == api.RateNone || decl.Class == api.RatePerPrincipal) && decl.Why == "" {
+			t.Errorf("%s: gate %q, class %q — a declaration with no gate or no fixed bucket has to say why", pattern, decl.Gate, decl.Class)
+		}
+	}
+
+	// And the reverse, for both tables: no declaration names a route that
+	// nothing serves.
 	for id := range api.AllRouteAuthzDecls() {
-		if !ops[id] {
+		if !seenSpec[id] {
 			t.Errorf("RouteDecl %q has no matching OpenAPI operation", id)
 		}
+	}
+	for pattern := range api.AllMountAuthzDecls() {
+		if !seenMount[pattern] {
+			t.Errorf("MountDecl %q names a route the public mux does not serve", pattern)
+		}
+	}
+}
+
+// TestExtensionMountIsDeclaredByPrefix covers the one declaration made at
+// run time: an extension's routes are registered under /api/v1/x/<name>/
+// behind the principal middleware, and the extension's own matrix test
+// declares each route behind it (DEV-091). The core build loads no
+// extensions, so without this the prefix rule is dead code here that the
+// closed build depends on.
+func TestExtensionMountIsDeclaredByPrefix(t *testing.T) {
+	decl, ok := api.MountAuthzDecl("/api/v1/x/billing/")
+	if !ok {
+		t.Fatal("an extension's mount point has no declaration")
+	}
+	if decl.Gate != api.GatePrincipal {
+		t.Errorf("an extension's mount point: gate %q, want %q", decl.Gate, api.GatePrincipal)
+	}
+	if decl.Why == "" {
+		t.Error("an extension's mount point declares no reason")
+	}
+	if _, ok := api.MountAuthzDecl("/api/v1/x/billing/status"); !ok {
+		t.Error("a route under an extension's mount point has no declaration")
+	}
+	if _, ok := api.MountAuthzDecl("GET /healthzx"); ok {
+		t.Error("a pattern no mount serves is declared")
 	}
 }
 

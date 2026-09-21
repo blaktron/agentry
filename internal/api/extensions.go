@@ -15,6 +15,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/httpmux"
 	"github.com/blaktron/agentry/internal/notify"
 	"github.com/blaktron/agentry/internal/registry"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
@@ -225,7 +226,7 @@ func (s *Server) emitOrgEvent(ctx context.Context, orgID uuid.UUID, kind string,
 	s.fireEvent(ctx, Event{Kind: kind, OrgID: orgID, Payload: payload})
 }
 
-func (s *Server) mountExtensions(mux *http.ServeMux) {
+func (s *Server) mountExtensions(mux httpmux.Mux) {
 	for _, m := range s.extensions {
 		sub := http.NewServeMux()
 		m.routes(sub)
@@ -237,6 +238,9 @@ func (s *Server) mountExtensions(mux *http.ServeMux) {
 			method, path, _ := strings.Cut(rt, " ")
 			unthrottled[method+" "+prefix+path] = true
 		}
+		// Not Mount: the names are the extensions', so no entry in
+		// authz_routes.go can list them. The prefix rule declares this mount
+		// point and the extension's own matrix declares what sits behind it.
 		mux.Handle(prefix+"/", s.principalMiddlewareOpts(http.StripPrefix(prefix, sub), principalOpts{unthrottled: unthrottled}))
 	}
 }

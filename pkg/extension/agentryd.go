@@ -557,14 +557,18 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		}
 		if role == "git" {
 			mux := http.NewServeMux()
-			mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+			// Through api.Mount rather than mux.HandleFunc: this mux is not
+			// the recorded one the completeness gate reads, so the
+			// declaration check at start-up is the only thing tying these
+			// two patterns to the gate and the api role (agentry#415).
+			api.MountFunc(mux, "GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = w.Write([]byte(`{"status":"ok"}`))
 			})
 			// The git role has no /api/v1 surface, so /metrics is mounted
 			// here too — a git deployment is exactly the one whose clone
 			// first-byte SLI (§16.1) needs scraping.
-			mux.Handle("GET /metrics", mx.Handler())
+			api.Mount(mux, "GET /metrics", mx.Handler())
 			git.Mount(mux)
 			// The same middleware stack as the api role: a git deployment
 			// gets request ids and the access line too (docs/logging.md).
