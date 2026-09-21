@@ -14,7 +14,7 @@ database:
   migrateOnStart: true
 
 # redis:
-#   url: redis://localhost:6379/0   # optional (D-06); absent = in-memory fallbacks
+#   url: redis://localhost:6379/0   # optional (D-06); nothing in the core reads it today — the state replicas share is in Postgres (agentry#414, #447)
 
 storage:
   kind: local        # local | s3

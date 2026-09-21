@@ -25,8 +25,10 @@ import (
 const sweepEvery = 64
 
 // storeCallTimeout bounds one round trip to the database; the deletions
-// that sweep expired rows share it with the consume they ride on. A login
-// whose database has gone slow is refused after this, not held open.
+// that sweep expired rows share it with the write they ride on. A slow
+// database decides the call after this rather than holding a login open: a
+// consume is refused, and a request goes out untracked, which the assertion
+// answering it then refuses.
 const storeCallTimeout = 5 * time.Second
 
 // maxIDLen is the longest id the tables take (their CHECK); an identity
@@ -53,6 +55,20 @@ func newStoreSet(q *storegen.Queries, log *slog.Logger) *storeSet {
 // sweepDue counts one write and reports whether it is the sweep's turn.
 func (s *storeSet) sweepDue() bool { return s.calls.Add(1)%sweepEvery == 0 }
 
+// logRefusal says why a call failed closed. A database that cannot be
+// reached is the catalogued signal an operator's alert keys on; a request
+// that was already gone — a person who navigated away, a replica shutting
+// down mid-login — is a refusal too, but not an outage, and a rolling
+// deploy must not emit a burst of the line whose meaning it exists to
+// protect.
+func (s *storeSet) logRefusal(ctx, reqCtx context.Context, what, set string, err error) {
+	if reqCtx.Err() != nil {
+		s.log.WarnContext(ctx, "saml: the login ended while "+what, "err", err)
+		return
+	}
+	s.log.ErrorContext(ctx, "saml: "+what, logevent.SAMLStateUnavailable.Attr(), "set", set, "err", err)
+}
+
 // StoreReplayCache is the replay cache in the database.
 type StoreReplayCache struct{ *storeSet }
 
@@ -74,8 +90,7 @@ func (c *StoreReplayCache) SeenBefore(reqCtx context.Context, id string, exp tim
 		ID: id, ExpiresAt: exp, FloorSeconds: replayFloor.Seconds(),
 	})
 	if err != nil {
-		c.log.ErrorContext(ctx, "saml: recording the consumed assertion",
-			logevent.SAMLStateUnavailable.Attr(), "set", "assertions", "err", err)
+		c.logRefusal(ctx, reqCtx, "recording the consumed assertion", "assertions", err)
 		return true
 	}
 	if c.sweepDue() {
@@ -106,12 +121,11 @@ func (t *StoreRequestTracker) Track(reqCtx context.Context, id string, exp time.
 		// The request goes out untracked; the assertion that answers it
 		// finds no outstanding id and is refused, so the person retries a
 		// login that could not complete rather than one that should not.
-		t.log.ErrorContext(ctx, "saml: recording the login request",
-			logevent.SAMLStateUnavailable.Attr(), "set", "requests", "err", err)
+		t.logRefusal(ctx, reqCtx, "recording the request", "requests", err)
 	}
 	if t.sweepDue() {
 		if _, err := t.q.DeleteExpiredSAMLRequests(ctx); err != nil {
-			t.log.WarnContext(ctx, "saml: dropping expired login requests", "err", err)
+			t.log.WarnContext(ctx, "saml: dropping expired requests", "err", err)
 		}
 	}
 }
@@ -125,8 +139,7 @@ func (t *StoreRequestTracker) Consume(reqCtx context.Context, id string) bool {
 	defer cancel()
 	n, err := t.q.ConsumeSAMLRequest(ctx, id)
 	if err != nil {
-		t.log.ErrorContext(ctx, "saml: consuming the login request",
-			logevent.SAMLStateUnavailable.Attr(), "set", "requests", "err", err)
+		t.logRefusal(ctx, reqCtx, "consuming the request", "requests", err)
 		return false
 	}
 	return n == 1

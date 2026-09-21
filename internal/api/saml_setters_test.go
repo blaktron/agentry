@@ -17,11 +17,11 @@ import (
 // somewhere else — a Redis, a sidecar — uses instead of the database. Both
 // are honoured by the live routes, the landing that issues an AuthnRequest
 // and the ACS that consumes it, not merely stored on the server. The sets'
-// own behaviour, including the direction they fail in, is tested beside
-// them in internal/auth/saml.
+// own behaviour, including the direction they fail in, is the subject of
+// saml_store_sets_test.go beside this one.
 func TestSAMLSettersReplaceTheSets(t *testing.T) {
-	replay := &stubReplayCache{}
-	tracker := &stubRequestTracker{}
+	replay := &fakeReplayCache{}
+	tracker := &fakeRequestTracker{}
 	env := newTestEnvWith(t, func(s *api.Server) {
 		s.SetSAMLReplayCache(replay)
 		s.SetSAMLRequestTracker(tracker)
@@ -78,11 +78,11 @@ func TestSAMLSettersReplaceTheSets(t *testing.T) {
 	}
 }
 
-// stubReplayCache behaves as the in-memory cache does and records that the
+// fakeReplayCache behaves as the in-memory cache does and records that the
 // server consulted it.
-type stubReplayCache struct{ seen []string }
+type fakeReplayCache struct{ seen []string }
 
-func (c *stubReplayCache) SeenBefore(_ context.Context, id string, _ time.Time) bool {
+func (c *fakeReplayCache) SeenBefore(_ context.Context, id string, _ time.Time) bool {
 	if slices.Contains(c.seen, id) {
 		return true
 	}
@@ -90,18 +90,18 @@ func (c *stubReplayCache) SeenBefore(_ context.Context, id string, _ time.Time) 
 	return false
 }
 
-// stubRequestTracker behaves as the in-memory tracker does — an id it was
+// fakeRequestTracker behaves as the in-memory tracker does — an id it was
 // told of is outstanding once — and records both sides.
-type stubRequestTracker struct {
+type fakeRequestTracker struct {
 	tracked  []string
 	consumed []string
 }
 
-func (t *stubRequestTracker) Track(_ context.Context, id string, _ time.Time) {
+func (t *fakeRequestTracker) Track(_ context.Context, id string, _ time.Time) {
 	t.tracked = append(t.tracked, id)
 }
 
-func (t *stubRequestTracker) Consume(_ context.Context, id string) bool {
+func (t *fakeRequestTracker) Consume(_ context.Context, id string) bool {
 	i := slices.Index(t.tracked, id)
 	if i < 0 {
 		return false

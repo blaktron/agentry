@@ -3,6 +3,9 @@ package api_test
 import (
 	"context"
 	"errors"
+	"io"
+	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -21,11 +24,12 @@ import (
 //
 // They belong to internal/auth/saml and are tested here, against this
 // fixture's database, on purpose: the fixture migrates one database and
-// every package test shares its pool, while a test in the owning package
-// would make internal/auth/saml a fourth package migrating and querying
-// beside this suite. On the self-hosted runner internal/api already runs
-// close to go test's default ten-minute package timeout (agentry#137 is the
-// same contention), so the placement is worth less than the margin.
+// every test in this package shares its pool, while a test in the owning
+// package would make it one more package migrating and querying beside
+// this suite, and four others already do. On the self-hosted runner
+// internal/api runs close to go test's default ten-minute package timeout
+// (agentry#137 is the same contention), so the margin is worth more than
+// the placement.
 
 // TestSAMLStoreSetsAreSharedAndExpire: two instances over one database see
 // one set, which is what makes the sets one across replicas; an id seen
@@ -166,6 +170,75 @@ func TestSAMLReplayRefusalHoldsUnderConcurrentPresentations(t *testing.T) {
 		tracker := samlsp.NewStoreRequestTracker(q, nil)
 		return tracker.Consume(ctx, request)
 	})
+}
+
+// TestSAMLLoginStartedOnOneReplicaCompletesOnAnother (agentry#414): the
+// other half of the shared state. The AuthnRequest one replica's landing
+// issues is recorded where every replica reads it, so the assertion
+// answering it is accepted at a replica that never issued it — and, the
+// request being single use, a second answer to it is refused there too.
+func TestSAMLLoginStartedOnOneReplicaCompletesOnAnother(t *testing.T) {
+	a := newTestEnv(t)
+	b := newTestEnv(t)
+	owner := a.register("saml-xrep-owner")
+	a.verifyEmail(owner)
+	sess := a.login(owner)
+	orgH := "samlxrep" + a.sfx
+	a.createOrg(sess, orgH)
+	a.verifyOrgDomain(orgH, "acme.example")
+	idp := newSAMLTestIdP(t)
+	metadataXML, err := samlsp.BuildIDPMetadataXML(idp.entityID, "https://acs-idp.test/sso", idp.certPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.doJSON(sess, http.MethodPut, "/api/v1/orgs/"+orgH+"/sso/connections/saml", map[string]any{
+		"enabled": true,
+		"config":  map[string]any{"idpMetadataXml": metadataXML, "emailAttribute": "email"},
+	}, nil, http.StatusOK)
+	nameID := "saml-xrep-" + a.sfx + "@acme.example"
+	a.seedMembership(orgH, a.registerEmail("saml-xrep-member", nameID), "member", "active")
+
+	// The login starts at the first replica, which records the request it
+	// issued in the set both replicas read.
+	started := a.getNoRedirect(t, "/sso/"+orgH)
+	location := started.Header.Get("Location")
+	_ = started.Body.Close()
+	if started.StatusCode != http.StatusFound {
+		t.Fatalf("/sso/%s at the first replica: got %d want 302", orgH, started.StatusCode)
+	}
+	requestID := authnRequestID(t, location)
+
+	// The identity provider's answer arrives at the other replica, under
+	// the public Host they share.
+	metadataURL := a.srv.URL + "/api/v1/orgs/" + orgH + "/sso/saml/metadata"
+	acsURL := a.srv.URL + "/api/v1/orgs/" + orgH + "/sso/saml/acs"
+	publicHost := strings.TrimPrefix(a.srv.URL, "http://")
+	postAtB := func(samlResponse string) (*http.Response, []byte) {
+		res := b.postFormAs(t, b.srv.URL+"/api/v1/orgs/"+orgH+"/sso/saml/acs", url.Values{"SAMLResponse": {samlResponse}}, publicHost)
+		body, _ := io.ReadAll(res.Body)
+		_ = res.Body.Close()
+		return res, body
+	}
+
+	answer := idp.signedResponseFor(t, metadataURL, acsURL, nameID, requestID, false)
+	completed, body := postAtB(answer)
+	if completed.StatusCode != http.StatusOK {
+		t.Fatalf("the assertion answering the other replica's request: %d %s, want 200", completed.StatusCode, body)
+	}
+	if !sessionCookie(completed) {
+		t.Fatal("a login started at one replica and answered at another minted no session")
+	}
+
+	// The request is single use across replicas too, and one neither
+	// replica issued was never outstanding.
+	reused, body := postAtB(idp.signedResponseFor(t, metadataURL, acsURL, nameID, requestID, false))
+	if reused.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("answering the other replica's request twice: %d %s, want 401", reused.StatusCode, body)
+	}
+	foreign, body := postAtB(idp.signedResponseFor(t, metadataURL, acsURL, nameID, "_id_neither_replica_issued", false))
+	if foreign.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("an assertion naming a request no replica issued: %d %s, want 401", foreign.StatusCode, body)
+	}
 }
 
 // deadDB is a database that answers nothing.
