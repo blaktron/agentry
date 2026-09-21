@@ -1112,8 +1112,12 @@ same authorization, hooks and quotas as HTTPS.
   HTTPS (`limits.gitPushesPerHour`) and is refused with the same words when it is spent. The
   listener also bounds what one source address may make the registry do before it has a
   credential: `limits.sshKeyOffersPerMin` public-key offers a minute, refused past that
-  without a lookup. The port is the one service the compose stack publishes beyond loopback
+  without a lookup. The client sees the ordinary `Permission denied (publickey)`; the
+  server's log carries the refusal (`http.rate_limited`, class `ssh-key-offer`, with the
+  address). The port is the one service the compose stack publishes beyond loopback
   (`AGENTRY_SSH_BIND`), so the edge's rate limits do not cover it; this budget is what does.
+  It is keyed by the peer address the listener sees, so a TCP proxy in front of it that
+  does not preserve the source puts every client in one bucket.
 
 ## Fronting it with a site
 

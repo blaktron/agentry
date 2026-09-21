@@ -207,18 +207,19 @@ type Limits struct {
 	AuthedBurstPerMin int `yaml:"authedBurstPerMin"` // authed burst
 	AnonymousPerMin   int `yaml:"anonymousPerMin"`   // anonymous per-IP
 	LoginPerMin       int `yaml:"loginPerMin"`       // login/register per-IP
-	// SSHKeyOffersPerMin bounds the public keys one source address may
-	// offer the git SSH listener per minute, spent before the key is looked
-	// up (60/min; agentry#410).
-	SSHKeyOffersPerMin int `yaml:"sshKeyOffersPerMin"`
 
 	// Git/repo quotas (§19): 100 MB hard, 25 MB warn (the pre-receive hook
 	// tells the pusher), 25 MB single-object cap.
 	RepoQuotaBytes   int `yaml:"repoQuotaBytes"`
 	RepoWarnBytes    int `yaml:"repoWarnBytes"`
 	RepoMaxBlobBytes int `yaml:"repoMaxBlobBytes"`
-	// GitPushesPerHour is the §19 per-repo push budget (60/h).
+	// GitPushesPerHour is the §19 per-repo push budget (60/h), one number
+	// on both transports.
 	GitPushesPerHour int `yaml:"gitPushesPerHour"`
+	// SSHKeyOffersPerMin bounds the public keys one source address may
+	// offer the git SSH listener per minute, spent before the key is looked
+	// up (60/min; agentry#410).
+	SSHKeyOffersPerMin int `yaml:"sshKeyOffersPerMin"`
 
 	// Namespace + publish-velocity quotas (§19).
 	AgentsPerUserNamespace int `yaml:"agentsPerUserNamespace"` // 200
@@ -492,11 +493,11 @@ func Default() Config {
 			AuthedBurstPerMin:          100,
 			AnonymousPerMin:            60,
 			LoginPerMin:                10,
-			SSHKeyOffersPerMin:         60,
 			RepoQuotaBytes:             100 << 20,
 			RepoWarnBytes:              25 << 20,
 			RepoMaxBlobBytes:           25 << 20,
 			GitPushesPerHour:           60,
+			SSHKeyOffersPerMin:         60,
 			AgentsPerUserNamespace:     200,
 			AgentsPerOrgNamespace:      500,
 			VersionsPerDay:             20,
@@ -785,8 +786,8 @@ func applyEnv(c *Config) error {
 		{"AGENTRY_LIMITS_AUTHED_BURST_PER_MIN", &c.Limits.AuthedBurstPerMin},
 		{"AGENTRY_LIMITS_ANONYMOUS_PER_MIN", &c.Limits.AnonymousPerMin},
 		{"AGENTRY_LIMITS_LOGIN_PER_MIN", &c.Limits.LoginPerMin},
-		{"AGENTRY_LIMITS_SSH_KEY_OFFERS_PER_MIN", &c.Limits.SSHKeyOffersPerMin},
 		{"AGENTRY_LIMITS_GIT_PUSHES_PER_HOUR", &c.Limits.GitPushesPerHour},
+		{"AGENTRY_LIMITS_SSH_KEY_OFFERS_PER_MIN", &c.Limits.SSHKeyOffersPerMin},
 		{"AGENTRY_LIMITS_REPO_WARN_BYTES", &c.Limits.RepoWarnBytes},
 		{"AGENTRY_LIMITS_AGENTS_PER_USER_NAMESPACE", &c.Limits.AgentsPerUserNamespace},
 		{"AGENTRY_LIMITS_AGENTS_PER_ORG_NAMESPACE", &c.Limits.AgentsPerOrgNamespace},
@@ -1032,11 +1033,11 @@ func (c Config) validateLimits() error {
 		{"limits.authedBurstPerMin", int64(c.Limits.AuthedBurstPerMin)},
 		{"limits.anonymousPerMin", int64(c.Limits.AnonymousPerMin)},
 		{"limits.loginPerMin", int64(c.Limits.LoginPerMin)},
-		{"limits.sshKeyOffersPerMin", int64(c.Limits.SSHKeyOffersPerMin)},
 		{"limits.repoQuotaBytes", int64(c.Limits.RepoQuotaBytes)},
 		{"limits.repoWarnBytes", int64(c.Limits.RepoWarnBytes)},
 		{"limits.repoMaxBlobBytes", int64(c.Limits.RepoMaxBlobBytes)},
 		{"limits.gitPushesPerHour", int64(c.Limits.GitPushesPerHour)},
+		{"limits.sshKeyOffersPerMin", int64(c.Limits.SSHKeyOffersPerMin)},
 		{"limits.agentsPerUserNamespace", int64(c.Limits.AgentsPerUserNamespace)},
 		{"limits.agentsPerOrgNamespace", int64(c.Limits.AgentsPerOrgNamespace)},
 		{"limits.versionsPerDay", int64(c.Limits.VersionsPerDay)},

@@ -19,6 +19,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/gitsrv"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
@@ -76,22 +77,12 @@ func (e *gitEnv) seedSSHKey(userID uuid.UUID, c *sshClient) {
 // refused at the next command; a read-only member cannot push; the server
 // answers nothing but the two git services.
 func TestSSHTransportCloneAndPush(t *testing.T) {
-	if _, err := exec.LookPath("ssh"); err != nil {
-		t.Skip("ssh client not installed")
-	}
 	env := newGitEnv(t)
-	sshSrv, err := env.git.NewSSHServer("127.0.0.1:0", filepath.Join(t.TempDir(), "hostkey"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-	go func() { _ = sshSrv.Serve(ctx) }()
-	t.Cleanup(func() { _ = sshSrv.Close() })
+	sshSrv := env.startSSH(t)
 	if !strings.HasPrefix(sshSrv.HostKeyFingerprint(), "SHA256:") {
 		t.Fatalf("host key fingerprint = %q", sshSrv.HostKeyFingerprint())
 	}
-	port := sshSrv.Addr().(*net.TCPAddr).Port
+	port := sshPort(sshSrv)
 	agent := env.seedAgent("sshagent", "public")
 	sshURL := fmt.Sprintf("ssh://git@127.0.0.1:%d/%s/%s.git", port, env.owner.handle, agent.Name)
 
@@ -181,9 +172,8 @@ func (e *gitEnv) sshKeyIDFor(c *sshClient) uuid.UUID {
 	return row.ID
 }
 
-// startSSH serves the env's git handler over SSH on a random loopback port
-// and returns the port.
-func (e *gitEnv) startSSH(t *testing.T) int {
+// startSSH serves the env's git handler over SSH on a random loopback port.
+func (e *gitEnv) startSSH(t *testing.T) *gitsrv.SSHServer {
 	t.Helper()
 	if _, err := exec.LookPath("ssh"); err != nil {
 		t.Skip("ssh client not installed")
@@ -196,8 +186,10 @@ func (e *gitEnv) startSSH(t *testing.T) int {
 	t.Cleanup(cancel)
 	go func() { _ = sshSrv.Serve(ctx) }()
 	t.Cleanup(func() { _ = sshSrv.Close() })
-	return sshSrv.Addr().(*net.TCPAddr).Port
+	return sshSrv
 }
+
+func sshPort(s *gitsrv.SSHServer) int { return s.Addr().(*net.TCPAddr).Port }
 
 // TestSSHPushBudgetIsTheHTTPBudget (§19, agentry#410): the per-repository
 // push budget is one number on both transports. A budget spent over HTTPS
@@ -205,7 +197,7 @@ func (e *gitEnv) startSSH(t *testing.T) int {
 // spends the budget HTTPS then finds empty.
 func TestSSHPushBudgetIsTheHTTPBudget(t *testing.T) {
 	env := newGitEnvCfg(t, func(c *config.Config) { c.Limits.GitPushesPerHour = 1 })
-	port := env.startSSH(t)
+	port := sshPort(env.startSSH(t))
 	owner := newSSHClient(t)
 	env.seedSSHKey(env.owner.id, owner)
 	ownerEnv := []string{"GIT_SSH_COMMAND=" + owner.gitSSHCommand()}
