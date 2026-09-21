@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -310,6 +311,84 @@ func TestPrivateAgentCapNeverDeletes(t *testing.T) {
 	for _, name := range []string{"a", "b", "c"} {
 		plain.doJSON(s2, http.MethodPost, "/api/v1/agents",
 			map[string]any{"namespace": u2, "name": name, "modes": []string{"autonomous"}, "visibility": "private"}, nil, http.StatusCreated)
+	}
+}
+
+// TestPrivateAgentCapHoldsUnderConcurrentCreates: the cap is counted
+// inside the creating transaction under the namespace's row lock, so N
+// concurrent creates at the cap admit exactly one — and N concurrent flips
+// to private likewise (security review 2026-09-20 §7.2; agentry#411). The
+// count used to run on the pool before the transaction, and every request
+// saw the same number.
+func TestPrivateAgentCapHoldsUnderConcurrentCreates(t *testing.T) {
+	env := newTestEnvWith(t, func(s *api.Server) {
+		s.SetEntitlements(cappedResolver{Resolver: entitlements.NewConfigResolver(config.Default().Limits), max: 1})
+	})
+	user := env.register("cap-race")
+	env.verifyEmail(user)
+	sess := env.login(user)
+	const n = 8
+	codes := make([]int, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			res := env.do(sess, http.MethodPost, "/api/v1/agents",
+				map[string]any{"namespace": user, "name": fmt.Sprintf("race-%d", i), "modes": []string{"autonomous"}, "visibility": "private"})
+			_ = res.Body.Close()
+			codes[i] = res.StatusCode
+		}(i)
+	}
+	wg.Wait()
+	created, refused := 0, 0
+	survivor := ""
+	for i, c := range codes {
+		switch c {
+		case http.StatusCreated:
+			created++
+			survivor = fmt.Sprintf("race-%d", i)
+		case http.StatusUnprocessableEntity:
+			refused++
+		default:
+			t.Fatalf("unexpected status %d in %v", c, codes)
+		}
+	}
+	if created != 1 || refused != n-1 {
+		t.Fatalf("concurrent private creates at a cap of 1: created %d refused %d (%v)", created, refused, codes)
+	}
+	var have int
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM agents a JOIN handles h ON h.id = a.namespace_id WHERE h.handle = $1 AND a.visibility = 'private'`, user).Scan(&have); err != nil || have != 1 {
+		t.Fatalf("private agents after the race = %d (%v), want 1", have, err)
+	}
+
+	// The flip: several public agents, all turned private at once.
+	for i := 0; i < 4; i++ {
+		env.doJSON(sess, http.MethodPost, "/api/v1/agents",
+			map[string]any{"namespace": user, "name": fmt.Sprintf("pub-%d", i), "modes": []string{"autonomous"}, "visibility": "public"}, nil, http.StatusCreated)
+	}
+	env.doJSON(sess, http.MethodPatch, "/api/v1/agents/"+user+"/"+survivor, map[string]any{"visibility": "public"}, nil, http.StatusOK) // free the one slot
+	flips := make([]int, 4)
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			res := env.do(sess, http.MethodPatch, "/api/v1/agents/"+user+fmt.Sprintf("/pub-%d", i), map[string]any{"visibility": "private"})
+			_ = res.Body.Close()
+			flips[i] = res.StatusCode
+		}(i)
+	}
+	wg.Wait()
+	ok := 0
+	for _, c := range flips {
+		if c == http.StatusOK {
+			ok++
+		}
+	}
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM agents a JOIN handles h ON h.id = a.namespace_id WHERE h.handle = $1 AND a.visibility = 'private'`, user).Scan(&have); err != nil || have != 1 || ok != 1 {
+		t.Fatalf("concurrent flips at a cap of 1: %d succeeded, %d private after (%v, %v)", ok, have, flips, err)
 	}
 }
 

@@ -713,6 +713,19 @@ func (q *Queries) ListAgentsByTag(ctx context.Context, arg ListAgentsByTagParams
 	return items, nil
 }
 
+const lockNamespace = `-- name: LockNamespace :exec
+SELECT id FROM handles WHERE id = $1 FOR UPDATE
+`
+
+// LockNamespace serialises the per-namespace counts — the agent quota and
+// the private-agent cap — inside the transaction that inserts or flips:
+// the count and the write commit together, as the seat cap's do under the
+// org row's lock (agentry#411).
+func (q *Queries) LockNamespace(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, lockNamespace, id)
+	return err
+}
+
 const searchAgents = `-- name: SearchAgents :many
 SELECT a.id, a.name, a.modes, a.visibility, a.summary, a.quarantine_state,
        a.created_at, h.handle AS namespace,
