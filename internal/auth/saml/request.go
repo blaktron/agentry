@@ -1,6 +1,7 @@
 package saml
 
 import (
+	"context"
 	"sync"
 	"time"
 )
@@ -18,10 +19,10 @@ import (
 // completed.
 type RequestTracker interface {
 	// Track records id as an outstanding AuthnRequest until exp.
-	Track(id string, exp time.Time)
+	Track(ctx context.Context, id string, exp time.Time)
 	// Consume reports whether id is outstanding and, if so, removes it.
 	// Single use: an assertion answers exactly one request.
-	Consume(id string) bool
+	Consume(ctx context.Context, id string) bool
 }
 
 // MemoryRequestTracker is an in-process TTL set of outstanding request ids.
@@ -36,7 +37,7 @@ func NewMemoryRequestTracker() *MemoryRequestTracker {
 }
 
 // Track implements RequestTracker.
-func (t *MemoryRequestTracker) Track(id string, exp time.Time) {
+func (t *MemoryRequestTracker) Track(_ context.Context, id string, exp time.Time) {
 	if id == "" {
 		return
 	}
@@ -51,7 +52,7 @@ func (t *MemoryRequestTracker) Track(id string, exp time.Time) {
 }
 
 // Consume implements RequestTracker.
-func (t *MemoryRequestTracker) Consume(id string) bool {
+func (t *MemoryRequestTracker) Consume(_ context.Context, id string) bool {
 	if id == "" {
 		return false
 	}

@@ -11,21 +11,35 @@ import (
 )
 
 const consumeSAMLAssertion = `-- name: ConsumeSAMLAssertion :execrows
-INSERT INTO saml_consumed_assertions (id, expires_at) VALUES ($1, $2)
+
+INSERT INTO saml_consumed_assertions (id, expires_at)
+VALUES ($1, GREATEST($2::timestamptz, now() + make_interval(secs => $3::double precision)))
 ON CONFLICT (id) DO UPDATE SET expires_at = EXCLUDED.expires_at
 WHERE saml_consumed_assertions.expires_at <= now()
 `
 
 type ConsumeSAMLAssertionParams struct {
-	ID        string    `json:"id"`
-	ExpiresAt time.Time `json:"expires_at"`
+	ID           string    `json:"id"`
+	ExpiresAt    time.Time `json:"expires_at"`
+	FloorSeconds float64   `json:"floor_seconds"`
 }
 
-// Records the assertion id until its expiry, or renews a row whose expiry
-// has passed; a live row stays as it is, and the zero rows affected then
-// say the assertion was seen before.
+// SAML shared state: the consumed-assertion replay set and the
+// outstanding-AuthnRequest tracker, shared by every API replica (agentry#414).
+// Records the assertion id, or renews a row whose recorded expiry has
+// passed; a live row stays as it is, and the zero rows affected then say
+// the assertion was seen before. Two replicas presenting one id
+// concurrently cannot both win: the loser of the insert waits on the
+// winner's row and re-reads it against the WHERE, which by then finds it
+// live.
+// The record is kept for at least the caller's floor, on the database's
+// own clock — the one the WHERE reads — because the validator goes on
+// accepting an assertion for its clock skew past the expiry the assertion
+// carries, so a record that lapsed at that expiry would leave the tail of
+// the window unprotected. Flooring on the database clock keeps the margin
+// whatever the replicas' clocks say.
 func (q *Queries) ConsumeSAMLAssertion(ctx context.Context, arg ConsumeSAMLAssertionParams) (int64, error) {
-	result, err := q.db.Exec(ctx, consumeSAMLAssertion, arg.ID, arg.ExpiresAt)
+	result, err := q.db.Exec(ctx, consumeSAMLAssertion, arg.ID, arg.ExpiresAt, arg.FloorSeconds)
 	if err != nil {
 		return 0, err
 	}
@@ -45,24 +59,24 @@ func (q *Queries) ConsumeSAMLRequest(ctx context.Context, id string) (int64, err
 	return result.RowsAffected(), nil
 }
 
-const sweepSAMLAssertions = `-- name: SweepSAMLAssertions :execrows
+const deleteExpiredSAMLAssertions = `-- name: DeleteExpiredSAMLAssertions :execrows
 DELETE FROM saml_consumed_assertions WHERE expires_at <= now()
 `
 
-func (q *Queries) SweepSAMLAssertions(ctx context.Context) (int64, error) {
-	result, err := q.db.Exec(ctx, sweepSAMLAssertions)
+func (q *Queries) DeleteExpiredSAMLAssertions(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteExpiredSAMLAssertions)
 	if err != nil {
 		return 0, err
 	}
 	return result.RowsAffected(), nil
 }
 
-const sweepSAMLRequests = `-- name: SweepSAMLRequests :execrows
+const deleteExpiredSAMLRequests = `-- name: DeleteExpiredSAMLRequests :execrows
 DELETE FROM saml_requests WHERE expires_at <= now()
 `
 
-func (q *Queries) SweepSAMLRequests(ctx context.Context) (int64, error) {
-	result, err := q.db.Exec(ctx, sweepSAMLRequests)
+func (q *Queries) DeleteExpiredSAMLRequests(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteExpiredSAMLRequests)
 	if err != nil {
 		return 0, err
 	}

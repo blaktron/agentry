@@ -9,11 +9,13 @@
 #     config.storage.s3Bucket / s3Region and provide credentials via
 #     serviceAccount IRSA (recommended on EKS) or extraEnv (AWS_ACCESS_KEY_ID,
 #     AWS_SECRET_ACCESS_KEY, AWS_ENDPOINT_URL_S3 for non-AWS stores).
-#   * Redis (optional, D-06) — set secret.redisUrl for implementations that
-#     take it; nothing the chart runs requires it today. Sessions, the queue
-#     and the SAML replay and request sets are in Postgres, shared by every
-#     api replica as they are (agentry#414); the rate-limit buckets are per
-#     process, so N replicas allow N times the budget behind the edge's own.
+#   * Redis (optional, D-06) — nothing the chart runs requires it, and
+#     nothing in the core reads secret.redisUrl today: setting it only
+#     reports features.redis on GET /api/v1/meta. The state a replica set
+#     must share — sessions, the queue, and the SAML replay and request
+#     sets — is in Postgres, so every api replica shares it as it is
+#     (agentry#414). What stays per process is the rate-limit buckets, so N
+#     replicas allow N times the budget behind the edge's own.
 
 nameOverride: ""
 fullnameOverride: ""
