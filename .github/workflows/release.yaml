@@ -41,7 +41,7 @@ jobs:
       - run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
       - run: make check
       - name: attack-corpus gate must be green to release
-        run: go test ./internal/scan -run TestAttackCorpusGate -count=1
+        run: go test -timeout 20m ./internal/scan -run TestAttackCorpusGate -count=1
       - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
   binaries:

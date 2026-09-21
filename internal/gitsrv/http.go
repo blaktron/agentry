@@ -21,6 +21,7 @@ import (
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/httpmux"
 	"github.com/blaktron/agentry/internal/logevent"
 	"github.com/blaktron/agentry/internal/metrics"
 	"github.com/blaktron/agentry/internal/queue"
@@ -117,7 +118,11 @@ func (h *Handler) pushesPerHour() int {
 }
 
 // Mount registers the git routes on a mux (shared in `all`, alone in `git`).
-func (h *Handler) Mount(mux *http.ServeMux) {
+// The mux is an interface so the api role can hand over one that records what
+// it was given: that recording is what its authorization completeness gate
+// reads, and these routes are not part of the OpenAPI surface the gate used
+// to walk (agentry#415).
+func (h *Handler) Mount(mux httpmux.Mux) {
 	mux.HandleFunc("GET /{ns}/{repo}/info/refs", h.infoRefs)
 	mux.HandleFunc("POST /{ns}/{repo}/git-upload-pack", h.uploadPack)
 	mux.HandleFunc("POST /{ns}/{repo}/git-receive-pack", h.receivePack)

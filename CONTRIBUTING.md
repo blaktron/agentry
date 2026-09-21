@@ -69,6 +69,19 @@ against every role. If a handler needs authorization the chokepoint cannot
 express (platform staff, org reviewer, "not the author"), mark it
 `SelfAuthorized: true` and write a dedicated test for it.
 
+A route that is not part of the OpenAPI surface — a root mount, like SCIM,
+the image proxy, git smart HTTP, the SSO landing or a probe — declares in
+`mountAuthz` in the same file instead: its gate (`MountGate`) and the §19
+rate class it draws from, with a `Why` whenever the gate is `GatePublic` or
+the class is one of the two sentinels. Register it through `api.Mount`,
+which refuses an undeclared pattern at start-up; the completeness test
+enumerates what the mux was actually given rather than what the spec lists,
+so a mount registered behind `Mount`'s back fails CI too. Two exceptions,
+both deliberate: an extension's routes sit behind a mount point that the
+`/api/v1/x/` prefix rule declares and the extension's own matrix enumerates,
+and the `git` role's separate mux is not enumerated at all — its mounts go
+through `api.Mount`, so the start-up declaration check is what covers them.
+
 **All SQL lives in `internal/store/queries/` and goes through sqlc.** No
 string-built SQL anywhere else.
 

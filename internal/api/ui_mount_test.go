@@ -9,6 +9,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/httpmux"
 )
 
 // The /ui/ surface is dispatched in front of the mux, not registered on it:
@@ -20,7 +21,10 @@ func TestUIMountsBesideGitPatterns(t *testing.T) {
 	cfg.DevMode = true
 	srv := api.New(cfg, nil, nil)
 	gitHits := 0
-	h := api.NewHandlerWithGit(srv, func(mux *http.ServeMux) {
+	// Registered behind api.Mount's back, on purpose: the recorder still sees
+	// the patterns, which is what makes an undeclared mount fail the
+	// completeness gate rather than only a missing declaration panic here.
+	h := api.NewHandlerWithGit(srv, func(mux httpmux.Mux) {
 		mux.HandleFunc("GET /{ns}/{repo}/info/refs", func(w http.ResponseWriter, _ *http.Request) { gitHits++; w.WriteHeader(http.StatusOK) })
 		mux.HandleFunc("POST /{ns}/{repo}/git-upload-pack", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 		mux.HandleFunc("POST /{ns}/{repo}/git-receive-pack", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })

@@ -18,9 +18,14 @@ build:
 	$(GO) build ./...
 	$(GO) build -ldflags '$(LDFLAGS)' -o $(BIN_DIR)/agentryd ./cmd/agentryd
 
-## test: run all Go tests (DB tests honor AGENTRY_TEST_DATABASE_URL)
+## test: run all Go tests (DB tests honor AGENTRY_TEST_DATABASE_URL). The
+## timeout is explicit at every `go test` in the tree because Go's 10m default
+## sits inside the self-hosted runner's noise: internal/api takes 366-421s when
+## the host is quiet and the host varies about fourfold, which failed four runs
+## on 2026-09-21 with no failing test in any of them — only the package
+## overrunning. 20m leaves a slow host room and still bounds a genuine hang.
 test:
-	$(GO) test ./...
+	$(GO) test -timeout 20m ./...
 
 ## lint: gofmt + go vet + golangci-lint (if installed)
 lint:
@@ -59,9 +64,9 @@ sync-rules-check:
 ## fuzz: run each §17.5 fuzz target briefly (the committed corpora always run
 ## as ordinary tests; this exercises the mutator)
 fuzz:
-	$(GO) test ./internal/scan   -run FuzzExtract  -fuzz FuzzExtract  -fuzztime $(FUZZTIME)
-	$(GO) test ./pkg/manifest    -run FuzzParse    -fuzz FuzzParse    -fuzztime $(FUZZTIME)
-	$(GO) test ./internal/render -run FuzzSanitize -fuzz FuzzSanitize -fuzztime $(FUZZTIME)
+	$(GO) test -timeout 20m ./internal/scan   -run FuzzExtract  -fuzz FuzzExtract  -fuzztime $(FUZZTIME)
+	$(GO) test -timeout 20m ./pkg/manifest    -run FuzzParse    -fuzz FuzzParse    -fuzztime $(FUZZTIME)
+	$(GO) test -timeout 20m ./internal/render -run FuzzSanitize -fuzz FuzzSanitize -fuzztime $(FUZZTIME)
 FUZZTIME ?= 30s
 
 ## deps-audit: our own dependency hygiene (§17.5, T-13)
