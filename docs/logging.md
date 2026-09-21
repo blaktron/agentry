@@ -75,7 +75,7 @@ is a name missing from this table.
 | Event | Level | When | Fields beside the common ones |
 |---|---|---|---|
 | `http.request` | INFO | the access line | see above |
-| `http.rate_limited` | INFO | a request refused by a rate class | `class` (`login`, `anon`, `authed`, `abuse_reports`), `route` |
+| `http.rate_limited` | INFO | a request refused by a rate class | `class` (`login`, `anon`, `authed`, `abuse_reports`), `route`; for the git transports, `class` `push` with `agent` (the repository's push budget, over HTTP or SSH) and `class` `ssh-key-offer` with `source` (the address's public-key offers to the SSH listener) |
 | `auth.login_failed` | INFO | a native sign-in failed | `user` (the id when the login named an account; the zero id otherwise). The login as typed is on the audit row, not here |
 | `auth.social_rejected` | WARN | a social or directory sign-in was rejected at the token exchange | `provider`, `err` |
 | `ssrf.refused` | WARN | the private-range guard refused a webhook target | `org`, `delivery`, `endpoint`, `host` |
