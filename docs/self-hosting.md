@@ -716,8 +716,14 @@ AGENTRY_AUTH_EXTERNAL_ONLY=true
 AGENTRY_SOCIAL_AUTHENTIK_CLIENT_ID=agentry-registry
 AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET=…   # what you gave the bootstrap script
 AGENTRY_SOCIAL_AUTHENTIK_ISSUER=https://<host>:8443/application/o/agentry/
-AGENTRY_IDP_LOGOUT_URL=https://<host>:8443/application/o/agentry/end-session/
+AGENTRY_IDP_LOGOUT_URL=https://<host>:8443/flows/-/cancel/?next=/application/o/agentry/end-session/
 ```
+
+The sign-out URL is the provider's `end-session/` endpoint wrapped in
+authentik's cancel view. authentik answers an empty page, and does not sign
+out, when the directory session still holds a flow plan (a flow the person
+walked away from, for one); the cancel view drops that plan first and then
+continues to `next` (agentry#441). The bootstrap script prints the value.
 
 The bootstrap script attaches the `openid`, `profile`, and `email`
 scope mappings to the provider — without them authentik issues an ID
@@ -919,10 +925,20 @@ URL at the registry's sign-in start and the brand's default application
 at it, so a sign-in, sign-up or recovery that ends without a return lands
 in the app signed in. Sign-out goes through the blueprint's
 `agentry-invalidation` flow, which ends the directory session and
-redirects to the site; keep `AGENTRY_IDP_LOGOUT_URL` on the provider's
-`end-session/` endpoint. The blueprint also unsets the brand's
-user-settings flow. Re-run the bootstrap script after upgrading a
-deployment that predates this (agentry#164).
+redirects to the site; `AGENTRY_IDP_LOGOUT_URL` is the provider's
+`end-session/` endpoint wrapped in authentik's cancel view (above). The
+password-change and authenticator flows return to `AGENTRY_ACCOUNT_URL`
+through the flow plan's `redirect`, set by the blueprint's
+`agentry-return-to-settings` policy, not through a redirect stage: a
+redirect stage leaves the flow's plan parked in the session, and the next
+sign-out then answers an empty page (agentry#441). The blueprint also
+unsets the brand's user-settings flow. Re-run the bootstrap script after
+upgrading a deployment that predates this (agentry#164).
+`scripts/acceptance/directory-signout.py` proves sign-out against a live
+directory — after a fresh sign-in, after an abandoned authenticator flow
+and after a completed one — with a throwaway user it deletes on the way
+out; it needs the directory's URL, the bootstrap token and
+`AGENTRY_ACCOUNT_URL`.
 
 ## Hosting the downloads
 
@@ -1150,7 +1166,8 @@ entirely configuration:
   returns) default to the server's own pages; a site sets them to its home
   and its settings page, and applies its own brand object to the directory
   through the directory's API (the flows stay the core's blueprint).
-  `AGENTRY_IDP_LOGOUT_URL` stays on the provider's end-session endpoint.
+  `AGENTRY_IDP_LOGOUT_URL` is the provider's end-session endpoint behind
+  authentik's cancel view (agentry#441).
 - **The edge** — a site replaces `edge/nginx.conf` with one that sends
   `/api/`, git, `/ui/` and `/downloads/` to the server and everything else to
   the site, and adds rate-limit zones for its own forms.
