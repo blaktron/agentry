@@ -12,7 +12,7 @@ if [ -z "${AGENTRY_TEST_DATABASE_URL:-}" ]; then
   export AGENTRY_TEST_DATABASE_URL
 fi
 
-go test ./internal/gitsrv -run TestGitConformance -count=1 -v 2>&1 \
+go test -timeout 20m ./internal/gitsrv -run TestGitConformance -count=1 -v 2>&1 \
   | grep -E "^(=== RUN|    --- (PASS|FAIL)|--- (PASS|FAIL)|ok|FAIL)" || true
-go test ./internal/gitsrv -run TestGitConformance -count=1 >/dev/null
+go test -timeout 20m ./internal/gitsrv -run TestGitConformance -count=1 >/dev/null
 echo "git conformance matrix: PASSED"

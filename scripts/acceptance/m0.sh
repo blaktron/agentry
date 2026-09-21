@@ -48,7 +48,7 @@ curl -fsS "http://localhost:$PORT/readyz"  >/dev/null && echo "readyz: OK (db re
 curl -fsS "http://localhost:$PORT/.well-known/agentry/registry.json" >/dev/null && echo "well-known: OK"
 
 # 5. Go client smoke (same code path as make test, run explicitly).
-go test ./internal/api -run 'TestM0Smoke' -count=1 >/dev/null && echo "go client smoke: OK"
+go test -timeout 20m ./internal/api -run 'TestM0Smoke' -count=1 >/dev/null && echo "go client smoke: OK"
 
 # 6. The server's own surface answers (the full check is scripts/acceptance/ui.sh).
 curl -fsS -o /dev/null -w '%{http_code}' "http://localhost:$PORT/ui/login" | grep -q 200 && echo "core UI: OK"

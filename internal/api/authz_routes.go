@@ -230,3 +230,163 @@ var routeAuthz = map[string]RouteDecl{
 	"updateOrg":         {Action: auth.ActOrgUpdate, OrgScoped: true},
 	"verifyEmail":       {NoAuthz: true, Anonymous: true},
 }
+
+// MountGate is what stands between a caller and a root mount. A route on the
+// generated surface states its gate through RouteDecl's action and flags; a
+// root mount has no operationId to key a RouteDecl on, so it states it here
+// (§12.2, agentry#415).
+type MountGate string
+
+const (
+	// GatePublic takes no credential: the handler's own checks are all
+	// there is.
+	GatePublic MountGate = "public"
+	// GateSignature's only gate is an HMAC over the request.
+	GateSignature MountGate = "signature"
+	// GateSCIMToken is gated by a SCIM bearer token, hashed at rest, bound
+	// to an active organization that holds the entitlement.
+	GateSCIMToken MountGate = "scim-token"
+	// GateGit is gated by git's own authorization: a PAT over Basic auth,
+	// then the effective agent role, existence privacy and the org-state
+	// gate.
+	GateGit MountGate = "git"
+	// GatePrincipal is behind the principal middleware, as the generated
+	// surface is.
+	GatePrincipal MountGate = "principal"
+)
+
+// RateNone says a mount draws from no §19 bucket. It is a claim rather than
+// an omission: Why has to say what stands in for one, and the completeness
+// gate fails without it.
+const RateNone = "none"
+
+// RatePerPrincipal says the bucket is the principal middleware's choice per
+// request rather than a class the mount fixes: `anon` for a caller with no
+// credential, `authed` for one with. An extension's mount point is the only
+// route that declares it, being the only one whose handler is a sub-mux of
+// routes the middleware classifies one by one.
+const RatePerPrincipal = "per-principal"
+
+// MountDecl declares one root mount: what gates it, and which §19 rate class
+// it draws from. Why is required when the gate is public or the class is one
+// of the two sentinels — the declaration is where a reviewer looks for the
+// reason, and both are choices that go stale silently.
+type MountDecl struct {
+	Gate MountGate
+	// Class is the §19 bucket the mount's own code applies, or one of the
+	// two sentinels. The gate checks the name against the catalogued set, so
+	// a typo fails; it cannot check the wiring. That the handler really
+	// draws from the bucket named here is the handler's own tests' job, and
+	// a declaration that lies about it passes.
+	Class string
+	Why   string
+}
+
+// extensionMountPrefix is the one prefix whose mounts are declared at run
+// time instead of in the table below: an extension's routes are registered
+// under it behind the principal middleware, and the extension's own matrix
+// test declares each of them (DEV-091). The completeness gate treats a
+// recorded pattern under this prefix as declared, and asserts the gate.
+const extensionMountPrefix = "/api/v1/x/"
+
+// MountAuthzDecl returns the declaration for a root mount's pattern, falling
+// back to the extension prefix's for a pattern under it.
+func MountAuthzDecl(pattern string) (MountDecl, bool) {
+	if d, ok := mountAuthz[pattern]; ok {
+		return d, true
+	}
+	if strings.HasPrefix(pattern, extensionMountPrefix) {
+		return MountDecl{
+			Gate:  GatePrincipal,
+			Class: RatePerPrincipal,
+			Why:   "the principal middleware picks the bucket per request, and an extension's route opts out of the anonymous one exactly by method and path (DEV-091)",
+		}, true
+	}
+	return MountDecl{}, false
+}
+
+// AllMountAuthzDecls returns a copy of the root-mount table (tests, docs).
+func AllMountAuthzDecls() map[string]MountDecl {
+	out := make(map[string]MountDecl, len(mountAuthz))
+	for k, v := range mountAuthz {
+		out[k] = v
+	}
+	return out
+}
+
+// scimDataPlane is what every SCIM route declares. §19 names no bucket for
+// SCIM, and a directory's provisioning burst is legitimate traffic that no
+// bucket distinguishes from an abusive one, so the class is a stated gap
+// rather than an oversight.
+var scimDataPlane = MountDecl{
+	Gate: GateSCIMToken, Class: RateNone,
+	Why: "no §19 bucket covers SCIM; a directory's provisioning burst is legitimate traffic and nothing today distinguishes it",
+}
+
+// mountAuthz maps a root mount's pattern → declaration. These are the
+// registrations that are not part of the generated surface. A pattern here
+// that nothing registers fails the completeness gate, and a registration
+// with no entry here panics at start-up.
+var mountAuthz = map[string]MountDecl{
+	// Git smart HTTP, registered by internal/gitsrv's own Mount. The gate is
+	// git's: a PAT over Basic auth, then the effective agent role. Pushes
+	// draw from the `push` bucket inside admitPush, which is the code that
+	// says so. The read side names no bucket because none applies — git's
+	// concurrency is bounded per repository and instance-wide by acquireGit,
+	// and §19's per-IP figure is the part that was never implemented.
+	"GET /{ns}/{repo}/info/refs": {
+		Gate: GateGit, Class: RateNone,
+		Why: "no §19 bucket; acquireGit bounds a clone at 4 per repository and 32 instance-wide, and §19's 20-concurrent-per-IP is unimplemented",
+	},
+	"POST /{ns}/{repo}/git-upload-pack": {
+		Gate: GateGit, Class: RateNone,
+		Why: "no §19 bucket; acquireGit bounds a fetch at 4 per repository and 32 instance-wide, and §19's 20-concurrent-per-IP is unimplemented",
+	},
+	"POST /{ns}/{repo}/git-receive-pack": {Gate: GateGit, Class: "push"},
+
+	// The image proxy: the signature is the route's only gate (agentry#64).
+	"GET /api/v1/img/{sig}/{ref}": {
+		Gate: GateSignature, Class: RateNone,
+		Why: "the HMAC bounds what can be asked for, and the proxy's own exposure is agentry#403",
+	},
+
+	// The probes: infrastructure, not a principal. The access log skips
+	// them, and the RBAC chokepoint has no way to express one.
+	"GET /healthz": {Gate: GatePublic, Class: RateNone, Why: "a liveness probe answers whoever asks, by design"},
+	"GET /readyz":  {Gate: GatePublic, Class: RateNone, Why: "a readiness probe answers whoever asks, by design"},
+
+	// Prometheus exposition (D-25). server.go carries the reasoning and
+	// agentry#408 the exposure; this is the declaration's own claim.
+	"GET /metrics": {
+		Gate: GatePublic, Class: RateNone,
+		Why: "a scraper is infrastructure, not a principal; the mitigation is a private interface (agentry#408)",
+	},
+
+	// The discovery documents are what a client reads before it holds
+	// anything to authenticate with; the signing keys are public by
+	// construction, since verification needs them.
+	"GET /.well-known/agentry/registry.json":     {Gate: GatePublic, Class: RateNone, Why: "discovery: read before a caller holds a credential"},
+	"GET /.well-known/agentry/signing-keys.json": {Gate: GatePublic, Class: RateNone, Why: "the keys are public by construction; a verifier needs them"},
+
+	// SCIM 2.0's data plane (§12.5): its own base path, media type and
+	// credential, so it is deliberately not part of the OpenAPI surface.
+	"POST /scim/v2/Users":         scimDataPlane,
+	"GET /scim/v2/Users":          scimDataPlane,
+	"GET /scim/v2/Users/{id}":     scimDataPlane,
+	"PATCH /scim/v2/Users/{id}":   scimDataPlane,
+	"PUT /scim/v2/Users/{id}":     scimDataPlane,
+	"DELETE /scim/v2/Users/{id}":  scimDataPlane,
+	"POST /scim/v2/Groups":        scimDataPlane,
+	"GET /scim/v2/Groups":         scimDataPlane,
+	"GET /scim/v2/Groups/{id}":    scimDataPlane,
+	"PATCH /scim/v2/Groups/{id}":  scimDataPlane,
+	"DELETE /scim/v2/Groups/{id}": scimDataPlane,
+
+	// The org SSO landing (§12.4) is a browser destination, reachable by
+	// definition without a session: it is the door to making one. It draws
+	// from the `login` bucket, which the handler applies.
+	"GET /sso/{org}": {
+		Gate: GatePublic, Class: "login",
+		Why: "the door to a session cannot require one; the handler checks that login is allowed at all, that the organization exists and holds the entitlement, and the `login` bucket bounds how often",
+	},
+}

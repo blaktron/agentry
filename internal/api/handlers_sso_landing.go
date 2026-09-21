@@ -18,12 +18,13 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/blaktron/agentry/internal/httpmux"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 // mountSSOLanding registers the root-level SSO landing route.
-func (s *Server) mountSSOLanding(mux *http.ServeMux) {
-	mux.HandleFunc("GET /sso/{org}", s.ssoLanding)
+func (s *Server) mountSSOLanding(mux httpmux.Mux) {
+	MountFunc(mux, "GET /sso/{org}", s.ssoLanding)
 }
 
 // ssoLanding implements GET /sso/{org}: start the org's configured SSO.

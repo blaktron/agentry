@@ -22,6 +22,7 @@ import (
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/dnsx"
 	"github.com/blaktron/agentry/internal/entitlements"
+	"github.com/blaktron/agentry/internal/httpmux"
 	"github.com/blaktron/agentry/internal/metrics"
 	"github.com/blaktron/agentry/internal/notify"
 	"github.com/blaktron/agentry/internal/queue"
@@ -97,7 +98,15 @@ type Server struct {
 	// extensions and eventHooks are the closed build's additions (extensions.go).
 	extensions []extensionMount
 	eventHooks []func(ctx context.Context, ev Event)
+	// mounted is every pattern the recorder was given, in registration
+	// order; empty until NewHandler builds the handler.
+	mounted []string
 }
+
+// MountedRoutes returns what the public mux was actually given — the root
+// mounts and the generated surface — which is what the completeness gate
+// enumerates (§12.2, agentry#415).
+func (s *Server) MountedRoutes() []string { return append([]string(nil), s.mounted...) }
 
 // New creates the API server. st may be nil in database-less dev mode; any
 // handler that needs the store fails closed with 503 in that case.
@@ -714,19 +723,22 @@ func NewHandler(s *Server) http.Handler {
 	return NewHandlerWithGit(s, nil)
 }
 
-// NewHandlerWithGit additionally mounts git smart-HTTP routes on the same
-// mux (the `all` role / self-host single binary). mountGit may be nil.
-func NewHandlerWithGit(s *Server, mountGit func(*http.ServeMux)) http.Handler {
-	mux := http.NewServeMux()
+// NewHandlerWithGit additionally registers the git smart-HTTP routes on the
+// same mux (the `all` role / self-host single binary). mountGit may be nil.
+func NewHandlerWithGit(s *Server, mountGit func(httpmux.Mux)) http.Handler {
+	// Every pattern that reaches the public mux goes through the recorder,
+	// which is what the completeness gate enumerates: what the mux serves,
+	// not what the OpenAPI spec says should (§12.2, agentry#415).
+	mux := newRecordingMux()
 	if mountGit != nil {
 		mountGit(mux)
 	}
 
-	mux.HandleFunc("GET /api/v1/img/{sig}/{ref}", s.serveImageProxy) // agentry#64
-	mux.HandleFunc("GET /healthz", s.healthz)
-	mux.HandleFunc("GET /readyz", s.readyz)
-	mux.HandleFunc("GET /.well-known/agentry/registry.json", s.wellKnownRegistry)
-	mux.HandleFunc("GET /.well-known/agentry/signing-keys.json", s.wellKnownSigningKeys)
+	MountFunc(mux, "GET /api/v1/img/{sig}/{ref}", s.serveImageProxy) // agentry#64
+	MountFunc(mux, "GET /healthz", s.healthz)
+	MountFunc(mux, "GET /readyz", s.readyz)
+	MountFunc(mux, "GET /.well-known/agentry/registry.json", s.wellKnownRegistry)
+	MountFunc(mux, "GET /.well-known/agentry/signing-keys.json", s.wellKnownSigningKeys)
 
 	// Prometheus exposition (D-25). Mounted outside /api/v1 alongside the
 	// health endpoints and, like them, unauthenticated: a scraper is
@@ -735,7 +747,7 @@ func NewHandlerWithGit(s *Server, mountGit func(*http.ServeMux)) http.Handler {
 	// stage timings) and carry no user content, but they do describe traffic
 	// shape — bind agentryd to a private interface, or keep /metrics off the
 	// public listener at the proxy. docs/ops/deployment.md says so too.
-	mux.Handle("GET /metrics", s.metricsHandler())
+	Mount(mux, "GET /metrics", s.metricsHandler())
 
 	// SCIM 2.0 data plane (§12.5). Mounted outside the generated /api/v1
 	// handler: it uses its own base path, application/scim+json media type, and
@@ -762,6 +774,7 @@ func NewHandlerWithGit(s *Server, mountGit func(*http.ServeMux)) http.Handler {
 		},
 		Middlewares: []MiddlewareFunc{s.principalMiddleware},
 	})
+	s.mounted = mux.recorded()
 
 	// The server's own browser surface (DEV-091, internal/ui): the device
 	// authorize page, sign-in, the account basics and the operator pages,

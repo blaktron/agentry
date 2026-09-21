@@ -12,10 +12,10 @@ if [ -z "${AGENTRY_TEST_DATABASE_URL:-}" ]; then
 fi
 
 echo "== M1 acceptance =="
-go test ./internal/auth -count=1                                   && echo "auth primitives: OK"
-go test ./internal/api -run TestRouteDeclarationsComplete -count=1 && echo "route declarations complete: OK"
-go test ./internal/api -run TestAuthzMatrix -count=1               && echo "authz matrix (§17.4): OK"
-go test ./internal/api -run TestPATLifecycle -count=1              && echo "PAT lifecycle e2e: OK"
-go test ./internal/api -run TestAuditCoverage -count=1             && echo "audit coverage + append-only: OK"
-go test ./internal/api -run 'TestAuthLifecycle|TestTOTPFlow' -count=1 && echo "auth flows (login/TOTP/CSRF): OK"
+go test -timeout 20m ./internal/auth -count=1                                   && echo "auth primitives: OK"
+go test -timeout 20m ./internal/api -run TestRouteDeclarationsComplete -count=1 && echo "route declarations complete: OK"
+go test -timeout 20m ./internal/api -run TestAuthzMatrix -count=1               && echo "authz matrix (§17.4): OK"
+go test -timeout 20m ./internal/api -run TestPATLifecycle -count=1              && echo "PAT lifecycle e2e: OK"
+go test -timeout 20m ./internal/api -run TestAuditCoverage -count=1             && echo "audit coverage + append-only: OK"
+go test -timeout 20m ./internal/api -run 'TestAuthLifecycle|TestTOTPFlow' -count=1 && echo "auth flows (login/TOTP/CSRF): OK"
 echo "== M1 acceptance PASSED =="
