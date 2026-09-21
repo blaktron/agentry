@@ -195,7 +195,7 @@ hints: validation warns, and they never apply.
 | Field | Meaning |
 |---|---|
 | `runtime.models` | free-form model hint patterns (e.g. `["claude-*"]`). A hint, never a lock: the **operator's** runner policy chooses the model and owns the API key |
-| `runtime.interfaces` | which install targets the package supports: `claude-skill`, `agents-md`. Independent of mode — an interactive agent still exports as a Claude skill; what it loses in that host is the Agentry session, not its instructions. The first listed interface picks the default `agentry install` target |
+| `runtime.interfaces` | which coding-agent exports the package supports: `claude-skill`, `agents-md`. Independent of mode — an interactive agent still exports as a Claude skill; what it loses in that host is the Agentry session, not its instructions. It does not pick `agentry install`'s default, which is the runner home (below); the exports are asked for by name |
 
 ### `capabilities`: the security contract
 
@@ -336,11 +336,36 @@ recorded and displayed, not auto-installed.
 | `publish.include` | **required**; the release archive allowlist of glob patterns (`path.Match` segments; a whole segment `**` matches any depth). Nothing outside it ships, and a v2 manifest must match `agent.yaml` itself: the runner reads the manifest from the installed archive |
 | `publish.channel` | `stable` (default) or `beta` |
 
+## Installing on this machine
+
+`agentry install ns/name` resolves the release, verifies its sha256
+digest and its DSSE attestation against the keys pinned for the registry
+(unsigned requires `--allow-unsigned`; a version admitted without a scan
+requires `--allow-unscanned`), shows the declared capability contract
+diffed against the version installed here — declared egress or exec
+needs typed consent on a first install, and so does anything widened
+since (`--yes` for CI; off a terminal, without it, the install refuses)
+— and lays the release down in the runner home:
+`~/.agentry/runner/agents/<ns>/<name>/<version>-<digest12>/`, the
+directory `agentry run` reads, so a run after the install fetches
+nothing and the consent given here covers it. Inside it, under
+`export/`, lands the shape a coding agent reads, in the style the
+operator policy implies: a Claude skill when the policy names Claude
+Code (`harness.claude`), AGENTS.md when it names Codex, else a Claude
+skill for an Anthropic key and AGENTS.md for any other provider. A newer
+version replaces the older; one record per BriefAgent in the install
+state (`agentry list`; `--check` asks the registry whether a newer
+version exists). `--dir` is for the two exports; the runner home is one
+(`AGENTRY_RUNNER_HOME`). `agentry uninstall ns/name` removes the
+directory, the record and, unless `--keep-mcp`, the MCP profile.
+Installing into an existing coding agent instead is `--target` or
+`--provider`, [below](#installing-into-an-existing-coding-agent).
+
 ## What a BriefAgent gets at run time
 
-`agentry run` verifies the release exactly like `agentry install`
-(sha256 digest + DSSE attestation against pinned keys; unsigned requires
-`--allow-unsigned`), asks the registry whether any declared MCP server
+`agentry run` verifies a release it has not installed exactly like
+`agentry install` (sha256 digest + DSSE attestation against pinned keys;
+unsigned requires `--allow-unsigned`), asks the registry whether any declared MCP server
 version carries a known high or critical vulnerability (refusing if so,
 unless the operator overrides it), compiles manifest + operator policy into
 a deterministic run plan, then executes one container tree. That is an
@@ -415,7 +440,8 @@ agentry install ns/name --provider openclaw  # OpenClaw
 
 `--provider` picks the right target below (distribution through each
 provider's plugin system is planned; the web Downloads page lists these
-flows); the explicit `--target` forms remain:
+flows); the explicit `--target` forms remain, and either names the
+export — with neither, `agentry install` goes to the runner home:
 
 | Target | What lands | Contract mapping |
 |---|---|---|

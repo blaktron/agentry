@@ -170,13 +170,30 @@ mcp / agents-md exports) are separate state and untouched.
 secret *names*, last use — never values). `remove <ns/name[@version]>`
 or `remove --all` deletes them.
 
+### `agentry install <ref>`
+
+The default target is the runner home (explicitly, `--target runner`):
+the release verified (digest, attestation, the capability contract
+diffed against the installed version, the same consent gate as a first
+run) and laid down in `~/.agentry/runner/agents/<ns>/<name>/<version>-<digest12>/`,
+where `agentry run` reads it — a run after the install fetches nothing,
+and the consent given at install covers the run. Inside it, under
+`export/`, lands the coding-agent shape the operator policy implies
+(`harness.claude` → a Claude skill; `harness.codex` → AGENTS.md; else an
+Anthropic key → a Claude skill, any other provider → AGENTS.md), where a
+host adapter can read it. `--dir` is refused for this target. A newer
+version replaces the older; `agentry uninstall` removes the directory
+and the record; `agentry list --check` asks the registry (the configured
+one for these records; the credential goes to it alone) whether a newer
+version exists.
+
 ### `agentry install <ref> --provider claude|codex|openclaw`
 
 Embedded mode: the BriefAgent installs into a host agent application and
 runs on **its** MCP servers and built-in tools — no docker gateway
 involved. `--provider` picks the target (`claude`→claude-skill,
 `codex`→agents-md, `openclaw`→claude-skill today); explicit `--target
-claude-skill|mcp|agents-md` remains. The claude-skill target compiles the
+claude-skill|agents-md` remains. The claude-skill target compiles the
 capability contract into `allowed-tools` frontmatter; agents-md records
 it as a Tools note. Plugin-system distribution per provider is planned.
 
@@ -536,10 +553,10 @@ key variable's **name** only.
 | `info ns/name --json` | `agent`, `latest` (the resolved release: `manifest` — the capabilities live under it — `digest`, `attestationUrl`, `yanked`, …), or `latestError` when the resolve itself failed |
 | `verify ns/name@v --json` | `ref`, `version`, `registryDigest`, `computedDigest`, `digestMatch`, `yanked`, `attestation` (`state`, `detail`, `keyId`) |
 | `doctor --json` | `ref`, `checks[]` (`name`, `status` ok\|warn\|fail, `detail`); the report prints and the exit is 1 when a check fails |
-| `install ns/name --plan --json` | `ref`, `namespace`, `name`, `version`, `digest`, `modes`, `summary`, `yanked`, `contract` (the capabilities as canonical JSON), `contractDigest` (sha256 of exactly those bytes — the document is compact so they arrive unchanged), `attestation` verified\|unsigned\|mismatch\|unverifiable, `keyId`, `signed`, `installed` (`version`, `dir`, when a record exists), `diff` (`widened[]`, `narrowed[]`), `needsConfirmation`, `reason`, `target`, `dir`, `managed`, `refusal` (what an install would stop on: an attestation verdict, or unsigned without `--allow-unsigned`). Nothing is written; the exit is 0 whether or not an install would be refused |
+| `install ns/name --plan --json` | `ref`, `namespace`, `name`, `version`, `digest`, `modes`, `summary`, `yanked`, `contract` (the capabilities as canonical JSON), `contractDigest` (sha256 of exactly those bytes — the document is compact so they arrive unchanged), `attestation` verified\|unsigned\|unscanned\|mismatch\|unverifiable, `keyId`, `signed`, `installed` (`version`, `dir`, when a record exists), `diff` (`widened[]`, `narrowed[]`), `needsConfirmation`, `reason`, `target` runner\|claude-skill\|agents-md, `dir`, `managed`, `refusal` (what an install would stop on: an attestation verdict, unsigned without `--allow-unsigned`, or unscanned without `--allow-unscanned`). Nothing is written; the exit is 0 whether or not an install would be refused |
 | `install ns/name --json` | `ref`, `namespace`, `name`, `version`, `digest`, `target`, `dir`, `managed`, `attestation`, `signed`, `contract`, `contractDigest`, `recorded` |
 | `uninstall ns/name [--plan] --json` | `ref`, `plan`, `installs[]`, `profiles[]`, `keptProfiles[]` (under `--keep-mcp`), `consentRecord` — with `--plan`, what would be removed and nothing removed |
-| `list --json` | `path` (the state file), `records[]` (each `installed.yaml` record plus `present`: its directory exists) |
+| `list [--check] --json` | `path` (the state file), `records[]` (each `installed.yaml` record plus `present`: its directory exists; with `--check`, `latest`, `updateAvailable` and `checkError` per record) |
 | `validate DIR --json` | `passed`, `manifest`, `issues[]` (`rule`, `severity`, `path`, `message`), `inventory[]`, `findings[]` (`ruleId`, `scanner`, `severity`, `confidence`, `title`, `filePath`, `lineStart`, `lineEnd`, `excerpt`, `detail`), `readErrors[]`, `fileCount`, `bundle`, `counts`, `strict`; the report prints and the exit is 1 when it failed |
 | `setup --json` | `policyPath`, `provider`, `model`, `apiKeyEnv` (a name), `baseUrl`, `images` ready\|skipped |
 | `run ns/name --plan --json` (or `--local DIR`) | the consent-free preview a client shows before a person consents: `ref`, `version`, `digest`, `mode`, `modes`, `plan` (the compiled plan, canonical — what a run would enforce), `planSha256` (the receipt's `runPlanSha256`, over the plan's canonical indented form — match it, do not re-derive it from the compact `plan` bytes), `contract`, `contractDigest`, `attestation` verified\|unsigned\|local\|mismatch\|unverifiable, `keyId`, `signed`, `installed`, `diff`, `needsConfirmation`, `reason`, `refusal`. Asks nothing, records nothing, materializes into a temp home; exit 0 whether or not a run would be refused (`--dry-run` is the plan for a person who consented on the terminal) |
