@@ -13,13 +13,18 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/blaktron/agentry/internal/api"
-	"github.com/blaktron/agentry/internal/notify"
+	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/queue"
+	"github.com/blaktron/agentry/internal/webhook"
 )
 
 type deliverProbe struct {
@@ -188,60 +193,71 @@ func TestWebhookSeamDeliversToTheEndpointNamed(t *testing.T) {
 	}
 }
 
-// The dependency-alert kind: a routed alert goes under the person's
-// dependency-alert switch, and DEV-099's rule holds for it as for billing.
-func TestNotifierSeamSendsAsTheDependencyAlertKind(t *testing.T) {
-	mails := &renderedNotifier{Notifier: notify.LogNotifier{}}
-	env := newTestEnvWith(t, func(s *api.Server) {
-		s.SetNotifier(mails)
-		s.RegisterExtension("probe", func(mux *http.ServeMux) {
-			mux.HandleFunc("POST /send", func(w http.ResponseWriter, r *http.Request) {
-				var in struct {
-					User string `json:"user"`
-				}
-				if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-					w.WriteHeader(http.StatusBadRequest)
-					return
-				}
-				uid, _ := uuid.Parse(in.User)
-				sent, err := s.SendToUser(r.Context(), uid, "dependency_alert", "acme/thing declares a vulnerable server", "npm:left-pad@1.0.0 carries GHSA-x.")
-				if err != nil {
-					http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-					return
-				}
-				w.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(w).Encode(notifierProbe{Sent: sent})
-			})
-		})
+// A delivery the seam records rides the core's transport: the queued job
+// signs it with the endpoint's secret and posts it with the event header
+// a subscription's delivery carries, and the ledger records the outcome.
+func TestWebhookSeamDeliveryRidesTheCoresTransport(t *testing.T) {
+	env := newTestEnv(t)
+	ownerH := env.register("wt-owner")
+	env.verifyEmail(ownerH)
+	owner := env.login(ownerH)
+	orgH := "wtorg" + env.sfx
+	env.createOrg(owner, orgH)
+
+	var mu sync.Mutex
+	var gotSig, gotEvent string
+	var gotBody []byte
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		gotSig = r.Header.Get(webhook.SignatureHeader)
+		gotEvent = r.Header.Get("X-Agentry-Event")
+		gotBody, _ = io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	// Subscribed to nothing the alert would reach on its own.
+	var created struct {
+		Id     string `json:"id"`
+		Secret string `json:"secret"`
+	}
+	env.doJSON(owner, http.MethodPost, "/api/v1/orgs/"+orgH+"/webhooks",
+		map[string]any{"url": ts.URL, "events": []string{"version.published"}}, &created, http.StatusCreated)
+
+	sealer, err := auth.NewSealer("", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := queue.NewRiverClient(env.st, nil)
+	q.SetTestOnly(true)
+	disp := webhook.NewDispatcher(webhook.Deps{
+		Store: env.st, Sealer: sealer, Queue: q,
+		Client: webhook.NewHTTPClient(webhook.Guard{AllowLoopback: true}, tlsTrusting(ts)),
 	})
-	staff := env.register("da-staff")
-	env.makePlatformStaff(t, staff)
-	caller := env.login(staff)
-	send := func(userID string) notifierProbe {
-		var out notifierProbe
-		env.doJSON(caller, http.MethodPost, "/api/v1/x/probe/send", map[string]any{"user": userID}, &out, http.StatusOK)
-		return out
-	}
+	disp.RegisterHandlers(q)
 
-	verifiedH := env.register("da-verified")
-	env.verifyEmail(verifiedH)
-	if out := send(env.userID(verifiedH)); !out.Sent {
-		t.Fatal("a verified person with the switch on was not sent the alert")
+	if err := disp.Deliver(context.Background(), uuid.MustParse(created.Id), "agent.dependency_alert",
+		map[string]any{"agent": orgH + "/thing", "severity": "critical"}); err != nil {
+		t.Fatalf("deliver: %v", err)
 	}
-	if mails.count() != 1 || mails.last().Kind != notify.KindDependencyAlert {
-		t.Fatalf("the transport was handed %d messages, last %+v; want one as the dependency-alert kind", mails.count(), mails.last())
-	}
+	q.Drain(context.Background(), "core")
 
-	unverifiedH := env.register("da-unverified")
-	if out := send(env.userID(unverifiedH)); out.Sent || mails.count() != 1 {
-		t.Fatal("an unverified address was sent a routed alert")
+	mu.Lock()
+	defer mu.Unlock()
+	if gotEvent != "agent.dependency_alert" {
+		t.Fatalf("event header = %q, want the event the extension delivered", gotEvent)
 	}
-
-	env.doJSON(env.login(verifiedH), http.MethodPut, "/api/v1/user/notifications", map[string]any{
-		"email": map[string]any{"dependencyAlerts": false, "quarantine": true, "reviewDecisions": true, "advisories": true, "orgInvites": true, "billing": true},
-		"web":   map[string]any{"dependencyAlerts": true},
-	}, nil, http.StatusOK)
-	if out := send(env.userID(verifiedH)); out.Sent || mails.count() != 1 {
-		t.Fatal("the dependency-alert switch off, and a routed alert went anyway")
+	if err := webhook.Verify([]byte(created.Secret), gotBody, gotSig, time.Now()); err != nil {
+		t.Fatalf("the routed delivery's signature does not verify with the endpoint's secret: %v", err)
+	}
+	var deliveries []struct {
+		EventType   string     `json:"eventType"`
+		StatusCode  *int       `json:"statusCode"`
+		DeliveredAt *time.Time `json:"deliveredAt"`
+	}
+	env.doJSON(owner, http.MethodGet, "/api/v1/orgs/"+orgH+"/webhooks/"+created.Id+"/deliveries", nil, &deliveries, http.StatusOK)
+	if len(deliveries) != 1 || deliveries[0].EventType != "agent.dependency_alert" || deliveries[0].DeliveredAt == nil || deliveries[0].StatusCode == nil || *deliveries[0].StatusCode != 200 {
+		t.Fatalf("the endpoint's log = %+v, want the one routed delivery, delivered", deliveries)
 	}
 }
