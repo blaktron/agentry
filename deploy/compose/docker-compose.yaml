@@ -235,6 +235,18 @@ services:
       context: ../..
       dockerfile: deploy/compose/Dockerfile
     environment:
+      # Dev mode is opt-in (DEV-116, security review 2026-09-20 §3.6): off,
+      # the server needs a sealing key (AGENTRY_AUTH_SEALING_KEY, 32 random
+      # bytes base64 — `openssl rand -base64 32`) and a signing key
+      # (AGENTRY_SIGNING_KIND=file plus the two lines below it), and refuses
+      # to start without them, naming the one it lacks. On, it encrypts
+      # TOTP seeds and webhook secrets with a constant from the public
+      # source, mints a signing key at every start, skips 2FA before a
+      # public publish, and lets a `none` judge pass as `static`: a
+      # throwaway stack, never one anyone installs from.
+      AGENTRY_ENV: ${AGENTRY_ENV:-dev}
+      AGENTRY_DEV_MODE: ${AGENTRY_DEV_MODE:-false}
+      AGENTRY_AUTH_SEALING_KEY: ${AGENTRY_AUTH_SEALING_KEY:-}
       AGENTRY_DATABASE_URL: postgres://agentry:${AGENTRY_PG_PASSWORD:-agentry}@postgres:5432/agentry_dev?sslmode=disable
       AGENTRY_HTTP_ADDR: ":8080"
       # Optional AI Review model (S5, the judge): typesafe (TypeSafe AI's Jev,
@@ -337,15 +349,16 @@ services:
       # keep the transport reachable but unadvertised.
       AGENTRY_GIT_SSH_ADDR: ${AGENTRY_GIT_SSH_ADDR:-:2222}
       AGENTRY_GIT_SSH_PUBLIC_URL: ${AGENTRY_GIT_SSH_PUBLIC_URL:-}
-      # Release signing (agentry#308). Unset, dev mode signs with a key it
-      # mints at every start, and an attestation stops verifying at the
-      # next restart. A stable key: AGENTRY_SIGNING_KIND=file, the key at
+      # Release signing (agentry#308). With dev mode off (the default) a
+      # stable key is required: AGENTRY_SIGNING_KIND=file, the key at
       # AGENTRY_SIGNING_KEY_FILE inside the container, and the host
       # directory that holds it in AGENTRY_SIGNING_KEY_DIR (mounted
       # read-only at /etc/agentry). Generate it as self-hosting.md says,
-      # 0600, and back it up: every attestation it signed verifies only
-      # against it.
-      AGENTRY_SIGNING_KIND: ${AGENTRY_SIGNING_KIND:-none}
+      # 0600 and owned by uid 65532, and back it up: every attestation it
+      # signed verifies only against it. `none` is accepted only in dev
+      # mode, where the server mints a key at every start and an
+      # attestation stops verifying at the next restart.
+      AGENTRY_SIGNING_KIND: ${AGENTRY_SIGNING_KIND:-file}
       AGENTRY_SIGNING_KEY_FILE: ${AGENTRY_SIGNING_KEY_FILE:-}
     ports:
       - "${AGENTRY_BIND:-127.0.0.1}:8080:8080"
