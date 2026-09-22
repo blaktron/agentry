@@ -31,6 +31,10 @@ log:
 auth:
   sessionTTL: 24h
   patMaxTTL: 8760h   # 1 year (§12.3)
+  trustedDeviceTTL: 720h  # 30 days, and 30 days is also the ceiling: how long
+                          # a browser that answered the second factor may skip
+                          # it. A second credential class — it never lengthens
+                          # a session (DEV-123).
   cookieSecure: false  # true outside local dev
   # DEV-057: true hands credentials to the directory service — native
   # register/password/TOTP endpoints answer 410; configure social.authentik.

@@ -467,6 +467,15 @@ func (s *Server) scimDeactivate(ctx context.Context, orgID, userID uuid.UUID) er
 		if _, err := q.RevokeUserSessions(ctx, userID); err != nil {
 			return err
 		}
+		// A remembered browser is a way back in that outlives the sessions
+		// killed just above, and deactivation leaves the account's password and
+		// state untouched on purpose — the person may exist outside the
+		// organization. Without this the deprovisioned user could sign in again
+		// and be asked for *less* than before, the second factor skipped, which
+		// is the opposite of what this function promises (agentry#461).
+		if _, err := q.RevokeTrustedDevicesForUser(ctx, userID); err != nil {
+			return err
+		}
 		return s.auditW.Write(ctx, q, s.scimEvent(orgID, audit.ActionSCIMUserDeactivate, "user", userID))
 	})
 }

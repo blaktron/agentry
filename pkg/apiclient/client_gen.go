@@ -1781,6 +1781,11 @@ type LoginRequest struct {
 	Login    string `json:"login"`
 	Password string `json:"password"`
 
+	// RememberDevice Remember this browser as a trusted device, so a later password sign-in from it skips the TOTP code. Defaults to false.
+	//
+	// What it does: on a sign-in that answered the code, issues an opaque httpOnly cookie recorded against the account, and later password sign-ins presenting it are not asked for the code. What it does not do: it is not a session, does not lengthen one, and carries no scope — the password is still required on every sign-in. It cannot be earned by a sign-in that skipped the code, so its lifetime is absolute rather than sliding, and it expires after auth.trustedDeviceTTL (30 days by default and by maximum). It has no effect on an account with no TOTP factor, where no code was answered, and on a deployment whose credentials are delegated to an external directory, where this endpoint answers 410.
+	RememberDevice *bool `json:"rememberDevice,omitempty"`
+
 	// TotpCode Required when the account has TOTP enabled.
 	TotpCode *string `json:"totpCode,omitempty"`
 }

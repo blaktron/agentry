@@ -150,6 +150,14 @@ type Auth struct {
 	// SSOMaxAge is how fresh a session's SSO assertion must be to act on an
 	// enforced-SSO org's resources (§12.4, default 8h).
 	SSOMaxAge time.Duration `yaml:"ssoMaxAge"`
+	// TrustedDeviceTTL is how long a browser remembered at sign-in skips the
+	// second factor (agentry#461, plan trusted-devices.md). This is a second
+	// browser credential class and it deliberately outlives the session cap:
+	// a session still has to be earned by password on every sign-in and is
+	// still capped at MaxSessionTTL, so raising this does not lengthen any
+	// session. The lifetime is absolute — using it does not extend it — and
+	// the ceiling below is a hard product limit like the others.
+	TrustedDeviceTTL time.Duration `yaml:"trustedDeviceTTL"`
 	// CookieSecure marks session cookies Secure (default true outside dev).
 	CookieSecure bool `yaml:"cookieSecure"`
 	// SealingKey is a base64 32-byte key encrypting small secrets at rest
@@ -493,6 +501,7 @@ func Default() Config {
 			PATMaxTTL:         365 * 24 * time.Hour,
 			PATOrgBoundMaxTTL: 90 * 24 * time.Hour,
 			SSOMaxAge:         8 * time.Hour,
+			TrustedDeviceTTL:  30 * 24 * time.Hour,
 			CookieSecure:      false,
 		},
 		Limits: Limits{
@@ -746,6 +755,9 @@ func applyEnv(c *Config) error {
 	if err := dur("AGENTRY_AUTH_SSO_MAX_AGE", &c.Auth.SSOMaxAge); err != nil {
 		return err
 	}
+	if err := dur("AGENTRY_AUTH_TRUSTED_DEVICE_TTL", &c.Auth.TrustedDeviceTTL); err != nil {
+		return err
+	}
 
 	// Telemetry (§16.2, D-25).
 	str("AGENTRY_MIN_CLI_VERSION", &c.MinCLIVersion)
@@ -971,6 +983,15 @@ const (
 	MaxPATTTL = 365 * 24 * time.Hour
 	// MaxPATOrgBoundTTL — §12.3: 90 days if org-bound under enforced SSO.
 	MaxPATOrgBoundTTL = 90 * 24 * time.Hour
+	// MaxTrustedDeviceTTL bounds how long a remembered browser skips the
+	// second factor (agentry#461, plan trusted-devices.md D2). It exceeds
+	// MaxSessionTTL by design and is the second browser credential class
+	// §12.4 names: PATs (1y) and org-bound PATs (90d) already exceed the
+	// session cap the same way. What keeps this honest is that the credential
+	// is narrow — it skips one factor on one sign-in path, mints only after
+	// that factor was actually answered, expires absolutely rather than
+	// sliding, and grants no session and no scope of its own.
+	MaxTrustedDeviceTTL = 30 * 24 * time.Hour
 	// MaxSSOMaxAge bounds the enforced-SSO freshness window. §12.4 gives 8 h
 	// as the DEFAULT and leaves the value org-configurable, so the ceiling is
 	// derived rather than quoted: a freshness requirement longer than the
@@ -989,6 +1010,7 @@ func (c Config) validateAuthTTLs() error {
 		{"auth.patMaxTTL", c.Auth.PATMaxTTL, MaxPATTTL},
 		{"auth.patOrgBoundMaxTTL", c.Auth.PATOrgBoundMaxTTL, MaxPATOrgBoundTTL},
 		{"auth.ssoMaxAge", c.Auth.SSOMaxAge, MaxSSOMaxAge},
+		{"auth.trustedDeviceTTL", c.Auth.TrustedDeviceTTL, MaxTrustedDeviceTTL},
 	} {
 		if b.value <= 0 {
 			return fmt.Errorf("config: %s must be > 0", b.name)
