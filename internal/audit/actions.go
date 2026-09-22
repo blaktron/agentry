@@ -19,8 +19,16 @@ const (
 	ActionUserEmailVerified Action = "user.email_verified"
 	ActionUserUpdate        Action = "user.update"
 	ActionUserTOTPEnabled   Action = "user.totp_enabled"
-	ActionPATCreate         Action = "pat.create"
-	ActionPATRevoke         Action = "pat.revoke"
+	// Trusted devices (plan trusted-devices.md, agentry#461): a browser
+	// remembered after it answered the second factor, and the removal of one.
+	// A second credential class gets its own audit trail, because "signed in"
+	// and "signed in without being asked for the second factor" are different
+	// facts and an investigator needs to tell them apart. The sign-in row
+	// itself carries the skip in its detail.
+	ActionTrustedDeviceAdd    Action = "user.trusted_device_add"
+	ActionTrustedDeviceRevoke Action = "user.trusted_device_revoke"
+	ActionPATCreate           Action = "pat.create"
+	ActionPATRevoke           Action = "pat.revoke"
 	// SSH keys for the git transport (agentry#70).
 	ActionSSHKeyAdd          Action = "ssh_key.add"
 	ActionSSHKeyRemove       Action = "ssh_key.remove"
@@ -128,6 +136,7 @@ func init() {
 		ActionUserRegister, ActionUserLogin, ActionUserLoginFailed,
 		ActionUserLogout, ActionUserEmailVerified, ActionUserUpdate,
 		ActionUserTOTPEnabled, ActionPATCreate, ActionPATRevoke, ActionSSHKeyAdd, ActionSSHKeyRemove, ActionUserDelete, ActionUserDirectoryErase, ActionUserStaffSync,
+		ActionTrustedDeviceAdd, ActionTrustedDeviceRevoke,
 		ActionOrgCreate, ActionOrgUpdate, ActionOrgMemberSet,
 		ActionOrgMemberRemove, ActionOrgInviteCreate, ActionOrgInviteRevoke,
 		ActionOrgInviteAccept, ActionOrgMemberDecline, ActionOrgMemberPending,
