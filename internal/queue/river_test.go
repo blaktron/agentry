@@ -47,6 +47,9 @@ type riverRow struct {
 	ScheduledAt time.Time
 	Errors      int
 	LastError   string
+	// LastErrorAt is the start of the attempt that failed last, as River
+	// recorded it in errors[].at.
+	LastErrorAt time.Time
 }
 
 func riverJob(t *testing.T, st *store.Store, queue string) riverRow {
@@ -62,12 +65,14 @@ func riverJob(t *testing.T, st *store.Store, queue string) riverRow {
 		t.Fatalf("river_job row for %s: %v", queue, err)
 	}
 	var list []struct {
-		Error string `json:"error"`
+		At    time.Time `json:"at"`
+		Error string    `json:"error"`
 	}
 	_ = json.Unmarshal([]byte(errs), &list)
 	r.Errors = len(list)
 	if len(list) > 0 {
 		r.LastError = list[len(list)-1].Error
+		r.LastErrorAt = list[len(list)-1].At
 	}
 	return r
 }
@@ -132,8 +137,14 @@ func TestRiverRetriesWithBackoffThenFails(t *testing.T) {
 	if (r.State != "retryable" && r.State != "available") || r.Attempt != 1 || calls.Load() != 1 {
 		t.Fatalf("after first attempt: %+v calls=%d", r, calls.Load())
 	}
-	if wait := time.Until(r.ScheduledAt); wait < 500*time.Millisecond || wait > 5*time.Second {
-		t.Fatalf("retry backoff %v, want about 2s", wait)
+	// Measure the backoff River recorded, not the distance from now: the
+	// attempt's error is stamped with its start time and NextRetry adds 2^1 s
+	// after the handler returns, so the gap is 2 s plus the handler's own
+	// (instant) run however late this read lands on a loaded runner
+	// (agentry#394). The millisecond of slack covers scheduled_at's
+	// microsecond storage.
+	if backoff := r.ScheduledAt.Sub(r.LastErrorAt); backoff < 2*time.Second-time.Millisecond || backoff > 3*time.Second {
+		t.Fatalf("retry backoff %v (scheduled %v, attempt started %v), want 2s", backoff, r.ScheduledAt, r.LastErrorAt)
 	}
 	// Bring the retry forward rather than sleeping through the backoff.
 	if _, err := st.Pool().Exec(ctx, `UPDATE river_job SET scheduled_at = now() WHERE queue = $1`, q); err != nil {
