@@ -473,6 +473,18 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			method: "DELETE",
 			path:   func(s *matrixSeed, _ string) string { return "/api/v1/user/stars/" + s.orgH + "/mx-agent" },
 		},
+		"listAccountInstalls": {method: "GET", path: sPath("/api/v1/user/installs")},
+		// The fixture agent has no published version, so an authorized
+		// caller gets 404 (not denied) and nothing is recorded.
+		"putAccountInstall": {
+			method: "PUT",
+			path:   func(s *matrixSeed, _ string) string { return "/api/v1/user/installs/" + s.orgH + "/mx-agent" },
+			body:   func(*matrixSeed, string) any { return map[string]any{"version": "1.0.0", "acceptCapabilities": true} },
+		},
+		"deleteAccountInstall": {
+			method: "DELETE",
+			path:   func(s *matrixSeed, _ string) string { return "/api/v1/user/installs/" + s.orgH + "/mx-agent" },
+		},
 		"deleteAgent": {
 			method: "DELETE",
 			path: func(s *matrixSeed, _ string) string {

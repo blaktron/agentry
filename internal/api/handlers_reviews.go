@@ -94,12 +94,7 @@ func (s *Server) scanReportFrom(r *http.Request, run storegen.ScanRun, versionSt
 	if run.FinishedAt != nil {
 		rep.FinishedAt = run.FinishedAt
 	}
-	// A run that passed, or found things, stands behind this report:
-	// scanned, and the findings say the rest. A run still going has no
-	// verdict yet, and one that errored is not called scanned — that
-	// would be "scanned with a known gap" wearing the clean word; its
-	// scanStatus says error and the gate has sent the version to review.
-	if run.Status == "passed" || run.Status == "findings" {
+	if scanRunStandsBehindReport(run.Status) {
 		scanned := Scanned
 		rep.Verdict = &scanned
 	}
@@ -107,6 +102,17 @@ func (s *Server) scanReportFrom(r *http.Request, run storegen.ScanRun, versionSt
 		rep.RulesetVersion = &rs.Semver
 	}
 	return rep, nil
+}
+
+// scanRunStandsBehindReport reports whether a run's status lets a report
+// call the version scanned: a run that passed, or found things, stands
+// behind it, and the findings say the rest. A run still going has no
+// verdict yet, and one that errored is not called scanned — that would be
+// "scanned with a known gap" wearing the clean word; its scanStatus says
+// error and the gate has sent the version to review. One rule for the
+// version's report and for the account install list (agentry#448).
+func scanRunStandsBehindReport(status string) bool {
+	return status == "passed" || status == "findings"
 }
 
 // GetVersionReport implements GET .../versions/{version}/report (§8, public).

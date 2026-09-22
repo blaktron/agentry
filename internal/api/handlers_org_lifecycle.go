@@ -370,6 +370,7 @@ func (s *Server) eraseOrg(ctx context.Context, orgID uuid.UUID, handle string) e
 			{"audit_exports", func() (int64, error) { return tq.DeleteOrgAuditExports(ctx, orgID) }},
 			{"agent_user_grants", func() (int64, error) { return tq.DeleteOrgAgentUserGrants(ctx, orgID) }},
 			{"stars", func() (int64, error) { return tq.DeleteOrgAgentStars(ctx, orgID) }},
+			{"account_installs", func() (int64, error) { return tq.DeleteOrgAgentAccountInstalls(ctx, orgID) }},
 			{"patsRevoked", func() (int64, error) { return tq.RevokeOrgBoundPATs(ctx, &orgID) }},
 		}
 		for _, st := range steps {

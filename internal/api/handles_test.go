@@ -12,6 +12,12 @@ func TestOrgHandleReserved(t *testing.T) {
 	}{
 		{"ui", false, true},
 		{"ui", true, true},
+		// The site's own root paths (plan web-dashboard-shell §4, agentry#448):
+		// a person named `runs` would shadow the runs pages.
+		{"runs", false, true},
+		{"runs", true, true},
+		{"invitations", true, true},
+		{"pricing", true, true},
 		{"agentry", false, true},
 		{"agentry", true, false},
 		{"secureagentry", true, false},
@@ -22,7 +28,7 @@ func TestOrgHandleReserved(t *testing.T) {
 			t.Errorf("orgHandleReserved(%q, staff=%v) = %v, want %v", tc.handle, tc.staff, got, tc.want)
 		}
 	}
-	for _, h := range []string{"ui", "agentry", "secureagentry"} {
+	for _, h := range []string{"ui", "runs", "invitations", "pricing", "agentry", "secureagentry"} {
 		if !handleReserved(h) {
 			t.Errorf("handleReserved(%q) = false; sign-up must refuse it", h)
 		}
