@@ -32,5 +32,9 @@ jobs:
           # and tag are still created, but see the TOKEN NOTE above — the tag
           # will not auto-trigger release.yaml under the default token.
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          # Releases are cut from main (production); dev is the integration
+          # branch and may become the repository's default, which this action
+          # would otherwise target (agentry-notes#156).
+          target-branch: main
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
