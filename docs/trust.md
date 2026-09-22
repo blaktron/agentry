@@ -102,7 +102,11 @@ rule about honesty, and these are the specific things behind it:
   subprocess execution, secrets. The registry checks that claim against the
   manifest and gates on it (§8.6 policy), but it cannot enforce anything
   once the agent is running on your machine. Your runtime should read the
-  manifest and sandbox accordingly. That is what it is for.
+  manifest and sandbox accordingly. That is what it is for. Agentry's own
+  runner (`agentry run`, [runner.md](runner.md)) does for everything that
+  goes through its gateway; a harness it runs on the host is bounded by its
+  configuration and the proxy variables, not by Docker, and another runtime
+  may enforce nothing.
 - **Scanning happens at publication, not at push and not at run time.** A
   private repository's contents are not scanned until a version is submitted.
 - **The shipped scanners are good, not identical to the tools PLAN §8.3

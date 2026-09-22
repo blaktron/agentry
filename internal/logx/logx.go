@@ -46,12 +46,13 @@ const truncatedMarker = "…[truncated]"
 
 // tokenRE matches every token the registry mints through auth.NewToken: 52
 // lowercase base32 characters, with or without a kind prefix — `agy_` PATs,
-// `agys_` sessions, `agyv_` verification tokens, `agyscim_` SCIM tokens,
-// `agd_` desktop grants, `whsec_` webhook secrets, `csrf_` CSRF tokens, and
-// the bare form used for OIDC state and nonce and domain verification. The
-// 12-character display prefix a PAT is identified by is shorter than this
-// and stays. A 52-character run of [a-z2-7] is nothing else in practice: a
-// hex digest has a 0, 1, 8 or 9 in every such window.
+// `agys_` sessions, `agyv_` verification tokens, `agyi_` invitations,
+// `agyd_` remembered browsers, `agyscim_` SCIM tokens, `agd_` desktop grants,
+// `whsec_` webhook secrets, `csrf_` CSRF tokens, and the bare form used for
+// OIDC state and nonce and domain verification. The 12-character display
+// prefix a PAT is identified by is shorter than this and stays. A
+// 52-character run of [a-z2-7] is nothing else in practice: a hex digest has
+// a 0, 1, 8 or 9 in every such window.
 var tokenRE = regexp.MustCompile(`(?i)\b(?:agy[a-z]*_|agd_|whsec_|csrf_)?[a-z2-7]{52}\b`)
 
 // tokenDisplayLen mirrors auth.PATDisplayPrefixLen: what survives a mask so

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/blaktron/agentry/internal/audit"
+	"github.com/blaktron/agentry/internal/metrics"
 	"github.com/blaktron/agentry/internal/registry"
 	"github.com/blaktron/agentry/internal/scan"
 )
@@ -184,4 +185,33 @@ func TestMCPSweepRespectsEmailPreference(t *testing.T) {
 	if len(open) != 1 {
 		t.Fatalf("alert must still open: %+v", open)
 	}
+}
+
+// A sweep that stops on an error is counted as McpSweepRuns{outcome="error"},
+// the series runbook 12 tells operators to watch; it used to record every
+// run as "ok" whatever it returned.
+func TestMCPSweepCountsAFailedRunAsAnError(t *testing.T) {
+	e := newPipeEnv(t)
+	m, err := metrics.New(t.Context(), metrics.Config{ServiceName: "agentryd", Role: "all", Env: "dev"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = m.Shutdown(context.Background()) })
+	e.pipe.SetMetrics(m)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := e.pipe.MCPSweep(ctx); err == nil {
+		t.Fatal("a sweep on a cancelled context returned no error")
+	}
+	out, err := m.Gather(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.HasPrefix(line, "McpSweepRuns{") && strings.Contains(line, `outcome="error"`) && strings.HasSuffix(line, " 1") {
+			return
+		}
+	}
+	t.Fatalf("no McpSweepRuns{outcome=\"error\"} 1 sample in:\n%s", out)
 }

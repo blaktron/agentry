@@ -45,7 +45,7 @@ func (s Severity) String() string {
 // Issue is one validation finding. All errors returned by Validate and
 // ValidateInContext are *Issue values.
 type Issue struct {
-	// Rule is the §5.3 rule id, "V1" through "V9".
+	// Rule is the §5.3 rule id, "V1" through "V10".
 	Rule string
 	// Severity distinguishes blocking errors from flags such as the
 	// policy-gated "*" egress.
