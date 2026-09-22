@@ -1,18 +1,20 @@
-# The agentryd image of the current main (DEV-091, plan core-web-split
-# §3.5): every merge publishes ghcr.io/blaktron/agentry/agentryd:main and
-# :sha-<short>, so the site's and the enterprise build's CI can boot a real
-# API without building Go. Releases keep publishing the tagged images from
-# release.yaml; this is the moving tag in between.
+# The agentryd image of the current main and dev (DEV-091, plan core-web-split
+# §3.5; the branch model of agentry-notes#156): every merge publishes
+# ghcr.io/blaktron/agentry/agentryd:<branch> — :main for production, :dev for
+# the integration branch — and :sha-<short>, so the site's and the enterprise
+# build's CI can boot a real API without building Go, against the branch they
+# are on. Releases keep publishing the tagged images from release.yaml; these
+# are the moving tags in between.
 name: image-main
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
 permissions:
   contents: read
   packages: write
   id-token: write   # keyless signing (OIDC)
 concurrency:
-  group: image-main
+  group: image-main-${{ github.ref_name }}
   cancel-in-progress: true
 jobs:
   image:
@@ -34,9 +36,9 @@ jobs:
           file: deploy/compose/Dockerfile
           push: true
           build-args: |
-            VERSION=main-${{ env.SHORT }}
+            VERSION=${{ github.ref_name }}-${{ env.SHORT }}
           tags: |
-            ghcr.io/${{ github.repository }}/agentryd:main
+            ghcr.io/${{ github.repository }}/agentryd:${{ github.ref_name }}
             ghcr.io/${{ github.repository }}/agentryd:sha-${{ env.SHORT }}
           provenance: true
       - uses: sigstore/cosign-installer@v3
