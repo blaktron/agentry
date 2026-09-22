@@ -42,6 +42,7 @@ func TestLoadFileAndEnvPrecedence(t *testing.T) {
 	}
 	t.Setenv("AGENTRY_HTTP_ADDR", ":7777")
 	t.Setenv("AGENTRY_AUTH_SESSION_TTL", "8h")
+	t.Setenv("AGENTRY_AUTH_TRUSTED_DEVICE_TTL", "72h")
 
 	cfg, err := Load(path)
 	if err != nil {
@@ -55,6 +56,9 @@ func TestLoadFileAndEnvPrecedence(t *testing.T) {
 	}
 	if cfg.Auth.SessionTTL != 8*time.Hour {
 		t.Errorf("duration env: %v", cfg.Auth.SessionTTL)
+	}
+	if cfg.Auth.TrustedDeviceTTL != 72*time.Hour {
+		t.Errorf("trusted-device duration env: %v, want 72h", cfg.Auth.TrustedDeviceTTL)
 	}
 	if cfg.Log.Level != "debug" {
 		t.Errorf("nested file value: %q", cfg.Log.Level)
@@ -136,6 +140,17 @@ func TestValidateCapsCredentialTTLs(t *testing.T) {
 
 		{"sso max age at the session cap", func(c *Config) { c.Auth.SSOMaxAge = MaxSSOMaxAge }, false},
 		{"sso max age past any session's life", func(c *Config) { c.Auth.SSOMaxAge = MaxSSOMaxAge + time.Hour }, true},
+
+		// A trusted device is the second browser credential class (agentry#461,
+		// plan trusted-devices.md D2). It exceeds MaxSessionTTL by design — that
+		// is precisely what makes it its own class rather than a longer session
+		// — so what these cases prove is that its OWN ceiling binds, and that a
+		// deployment cannot price in a credential the threat model never
+		// considered by raising the knob.
+		{"trusted device at the 30d cap", func(c *Config) { c.Auth.TrustedDeviceTTL = MaxTrustedDeviceTTL }, false},
+		{"trusted device over the 30d cap", func(c *Config) { c.Auth.TrustedDeviceTTL = MaxTrustedDeviceTTL + time.Hour }, true},
+		{"trusted device zero", func(c *Config) { c.Auth.TrustedDeviceTTL = 0 }, true},
+		{"trusted device negative", func(c *Config) { c.Auth.TrustedDeviceTTL = -time.Hour }, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -149,6 +164,33 @@ func TestValidateCapsCredentialTTLs(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+// TestTrustedDeviceIsASecondClassNotALongerSession guards the amendment rather
+// than the feature (agentry#461, plan trusted-devices.md D2). Introducing a
+// browser credential that outlives the session cap is only honest if the
+// session cap itself is untouched, so a reader of §12.4 sees one ceiling of two
+// rather than a limit that was quietly raised. If someone later "simplifies"
+// the two constants into one, this fails and the simplification has to be
+// argued rather than slipped in.
+func TestTrustedDeviceIsASecondClassNotALongerSession(t *testing.T) {
+	if MaxSessionTTL != 24*time.Hour {
+		t.Fatalf("MaxSessionTTL is %s, want 24h: §12.4's session cap moved", MaxSessionTTL)
+	}
+	if MaxTrustedDeviceTTL != 30*24*time.Hour {
+		t.Fatalf("MaxTrustedDeviceTTL is %s, want 30d", MaxTrustedDeviceTTL)
+	}
+	if MaxTrustedDeviceTTL <= MaxSessionTTL {
+		t.Fatal("a trusted device must outlive a session, or it is not a second credential class and remembering one grants nothing")
+	}
+	if got := Default().Auth.TrustedDeviceTTL; got != MaxTrustedDeviceTTL {
+		t.Fatalf("the default trusted-device lifetime is %s, want the %s ceiling — the default is what a deployment gets without asking", got, MaxTrustedDeviceTTL)
+	}
+	// The session default is unchanged: adding the second class must not have
+	// moved the first one's default either.
+	if got := Default().Auth.SessionTTL; got != 24*time.Hour {
+		t.Fatalf("the default session lifetime is %s, want 24h", got)
 	}
 }
 

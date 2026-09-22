@@ -19,6 +19,14 @@ const (
 	// JSON body carries the token (agentry#77).
 	csrfCookieName = "agentry_csrf"
 	csrfHeader     = "X-Agentry-CSRF"
+	// trustedDeviceCookieName carries the credential a browser earns by
+	// answering the second factor (agentry#461). It is not the session
+	// cookie and never stands in for one: it skips the second factor on a
+	// password sign-in and grants nothing else. The name says "trusted
+	// device" rather than "device" because in this estate a *device* is an
+	// authenticator enrolled in the external directory (DEV-089), and the
+	// two are being separated (agentry#466).
+	trustedDeviceCookieName = "agentry_trusted_device"
 )
 
 type principalKeyType struct{}

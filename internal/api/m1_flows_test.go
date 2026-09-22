@@ -219,6 +219,22 @@ func TestTOTPFlow(t *testing.T) {
 	code2, _ := totpCode(setup.Secret)
 	env.doJSON(anonymous, http.MethodPost, "/api/v1/auth/login",
 		map[string]any{"login": h, "password": "hunter2hunter2", "totpCode": code2}, nil, http.StatusOK)
+
+	// Extended for trusted devices (agentry#461): answering the code is not by
+	// itself consent to be remembered. A sign-in that did not ask earns
+	// nothing, and the next one is asked for the code again — which is the
+	// assertion above, now reached a second time on purpose.
+	res = env.do(anonymous, http.MethodPost, "/api/v1/auth/login",
+		map[string]any{"login": h, "password": "hunter2hunter2", "totpCode": code2})
+	requireNoCookie(t, res.Cookies(), trustedDeviceCookie)
+	_ = res.Body.Close()
+
+	res = env.do(anonymous, http.MethodPost, "/api/v1/auth/login",
+		map[string]any{"login": h, "password": "hunter2hunter2"})
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("a sign-in that never asked to be remembered must still be asked for the code, got %d", res.StatusCode)
+	}
 }
 
 // totpCode computes a current code for a base32 secret using the same

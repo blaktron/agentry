@@ -18,6 +18,11 @@ const (
 	// It is a credential like the others: shown once, stored as its hash.
 	InvitePrefix       = "agyi_"
 	VerificationPrefix = "agyv_"
+	// TrustedDevicePrefix marks the cookie a browser earns by answering the
+	// second factor, so a later password sign-in from it skips the code
+	// (agentry#461). A distinct prefix so a leaked string identifies itself
+	// as a 30-day browser credential rather than a session or a PAT.
+	TrustedDevicePrefix = "agyd_"
 
 	// PATDisplayPrefixLen is how many characters of a PAT are stored and
 	// shown for identification (§4.2 pats.token_prefix).

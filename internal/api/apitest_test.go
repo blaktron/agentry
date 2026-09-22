@@ -160,7 +160,9 @@ func newTestEnvCfg(t *testing.T, cfgFn func(*config.Config), opts ...func(*api.S
 // authenticate puts a caller's credential on a request the way do does,
 // for a test that builds its own request (a multipart upload, say): a
 // PAT as the bearer, else a session as the cookie with the CSRF header a
-// mutation needs.
+// mutation needs. The trusted-device cookie rides alongside either, because
+// the request that presents one is an anonymous sign-in — it has no session
+// yet, and that is the whole point of the credential.
 func (env *testEnv) authenticate(req *http.Request, c caller) {
 	if c.pat != "" {
 		req.Header.Set("Authorization", "Bearer "+c.pat)
@@ -170,6 +172,9 @@ func (env *testEnv) authenticate(req *http.Request, c caller) {
 			req.Header.Set("X-Agentry-CSRF", c.csrf)
 		}
 	}
+	if c.device != "" {
+		req.AddCookie(&http.Cookie{Name: "agentry_trusted_device", Value: c.device})
+	}
 }
 
 // caller carries credentials for requests.
@@ -178,6 +183,11 @@ type caller struct {
 	session string // session cookie value
 	csrf    string
 	pat     string // bearer token
+	// device is a trusted-device cookie value (agentry#461): a browser
+	// remembered after it answered the second factor, so a later password
+	// sign-in from it is not asked for the code. Empty means the request
+	// carries none, which is what an unremembered browser looks like.
+	device string
 }
 
 var anonymous = caller{name: "anonymous"}
@@ -228,14 +238,10 @@ func (env *testEnv) doWithHeaders(c caller, method, path string, body any, heade
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if c.pat != "" {
-		req.Header.Set("Authorization", "Bearer "+c.pat)
-	} else if c.session != "" {
-		req.AddCookie(&http.Cookie{Name: "agentry_session", Value: c.session})
-		if method != http.MethodGet && method != http.MethodHead {
-			req.Header.Set("X-Agentry-CSRF", c.csrf)
-		}
-	}
+	// One helper rather than a second copy of the credential rules: this used
+	// to duplicate authenticate(), which is how a cookie added to one would
+	// have been silently missing from the other.
+	env.authenticate(req, c)
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
@@ -425,8 +431,34 @@ func (env *testEnv) seedMembership(org, handle, role, state string) {
 // login opens a session for a registered user.
 func (env *testEnv) login(handle string) caller {
 	env.t.Helper()
+	c, _ := env.loginWith(handle, loginOpts{})
+	return c
+}
+
+// loginOpts are the optional parts of a password sign-in: a second-factor
+// code, and the opt-in that asks the server to remember this browser
+// (agentry#461). The zero value is today's sign-in — no code, nothing
+// remembered — which is what makes the opt-in's default testable.
+type loginOpts struct {
+	totpCode       string
+	rememberDevice bool
+}
+
+// loginWith signs in and returns the caller plus every cookie the server set,
+// so a test can assert on the attributes of a cookie being issued and not only
+// read the session value it already knew about. It fails the test on a non-200;
+// a sign-in that is expected to be refused goes through do() instead.
+func (env *testEnv) loginWith(handle string, o loginOpts) (caller, []*http.Cookie) {
+	env.t.Helper()
+	body := map[string]any{"login": handle, "password": "hunter2hunter2"}
+	if o.totpCode != "" {
+		body["totpCode"] = o.totpCode
+	}
+	if o.rememberDevice {
+		body["rememberDevice"] = true
+	}
 	req, _ := http.NewRequest(http.MethodPost, env.srv.URL+"/api/v1/auth/login",
-		bytes.NewReader(mustJSON(map[string]any{"login": handle, "password": "hunter2hunter2"})))
+		bytes.NewReader(mustJSON(body)))
 	req.Header.Set("Content-Type", "application/json")
 	res, err := env.srv.Client().Do(req)
 	if err != nil {
@@ -443,16 +475,20 @@ func (env *testEnv) login(handle string) caller {
 	if err := json.Unmarshal(raw, &out); err != nil {
 		env.t.Fatal(err)
 	}
+	cookies := res.Cookies()
 	c := caller{name: handle, csrf: out.CsrfToken}
-	for _, ck := range res.Cookies() {
-		if ck.Name == "agentry_session" {
+	for _, ck := range cookies {
+		switch ck.Name {
+		case "agentry_session":
 			c.session = ck.Value
+		case "agentry_trusted_device":
+			c.device = ck.Value
 		}
 	}
 	if c.session == "" {
 		env.t.Fatal("login: no session cookie")
 	}
-	return c
+	return c, cookies
 }
 
 // mintPAT creates a PAT via the caller's session.

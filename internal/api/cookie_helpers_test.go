@@ -26,3 +26,66 @@ func requireClearedCookie(t *testing.T, cookies []*http.Cookie, name string, sec
 	}
 	t.Fatalf("no Set-Cookie clearing %s", name)
 }
+
+// requireSetCookie asserts that among a response's cookies the named one is
+// issued with the attributes this server sets every cookie with, and a Max-Age
+// equal to wantMaxAge. It returns the cookie so a caller can assert on its
+// value too.
+//
+// This is requireClearedCookie's twin, and the pair is what makes agentry#413's
+// rule checkable: a cookie must be cleared with the attributes it was set with,
+// which is only provable if both directions are assertable. Nothing in
+// internal/api asserted a cookie being *set* before this (agentry#461), so a
+// cookie issued without HttpOnly — auth material readable by browser
+// JavaScript, which DEV-012 forbids — would have passed every test in the
+// package.
+func requireSetCookie(t *testing.T, cookies []*http.Cookie, name string, wantMaxAge int, secure bool) *http.Cookie {
+	t.Helper()
+	for _, c := range cookies {
+		if c.Name != name {
+			continue
+		}
+		if c.Value == "" {
+			t.Fatalf("%s was issued empty", name)
+		}
+		if !c.HttpOnly {
+			t.Fatalf("%s issued without HttpOnly: readable by browser JavaScript, which DEV-012 forbids for auth material", name)
+		}
+		if c.SameSite != http.SameSiteLaxMode {
+			t.Fatalf("%s issued with SameSite=%v, want Lax", name, c.SameSite)
+		}
+		if c.Path != "/" {
+			t.Fatalf("%s issued with Path=%q, want \"/\": a narrower path is not presented on the sign-in form, where it is read", name, c.Path)
+		}
+		if c.Secure != secure {
+			t.Fatalf("%s issued with Secure=%v, want %v (the server's cookieSecure setting)", name, c.Secure, secure)
+		}
+		if c.MaxAge != wantMaxAge {
+			t.Fatalf("%s issued with Max-Age=%d, want %d", name, c.MaxAge, wantMaxAge)
+		}
+		return c
+	}
+	t.Fatalf("no Set-Cookie issuing %s", name)
+	return nil
+}
+
+// requireNoCookie asserts the response issued no cookie of this name. It is the
+// negative half of requireSetCookie, and the one that proves an opt-in really
+// defaults to off: a sign-in that did not ask to be remembered must not be
+// remembered anyway, and a sign-in that skipped the second factor must not
+// silently extend the trust it used.
+//
+// The name parameter takes the cookie's name so that all three helpers read as
+// one family at the call site. Every caller today passes the trusted-device
+// cookie; the second name arrives with the revoke route, which has to clear it
+// (agentry#462).
+//
+//nolint:unparam // one caller today, a second with agentry#462
+func requireNoCookie(t *testing.T, cookies []*http.Cookie, name string) {
+	t.Helper()
+	for _, c := range cookies {
+		if c.Name == name {
+			t.Fatalf("%s was issued when it should not have been (value %q, max-age %d)", name, c.Value, c.MaxAge)
+		}
+	}
+}

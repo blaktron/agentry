@@ -213,6 +213,18 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		if _, err := tq.RevokeUserSessions(r.Context(), p.UserID); err != nil {
 			return err
 		}
+		// Deleted rather than revoked, unlike SCIM deactivation: the erased
+		// account cannot sign in again — PseudonymizeUser above set
+		// state='deleted' and nulled the password hash — so a surviving record
+		// is inert as a credential. What it still holds is an address and a
+		// user agent belonging to a person who asked to be deleted, and the
+		// users row survives erasure only because audit events and immutable
+		// published content need a stable actor id. Nothing needs that of a
+		// browser credential, and that one was issued is already in the audit
+		// log (agentry#461).
+		if _, err := tq.DeleteTrustedDevicesForUser(r.Context(), p.UserID); err != nil {
+			return err
+		}
 		// An erased account holds no seat anywhere (agentry#363): the
 		// last-admin guard above has already passed, so nothing is left
 		// headless by this.
