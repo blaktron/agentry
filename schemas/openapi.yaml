@@ -94,6 +94,12 @@ tags:
       daily sweep refreshes (agentry#177).
   - name: stars
     description: Stars and per-agent counters (§9.2).
+  - name: installs
+    description: >-
+      Account installs (agentry#448): a signed-in person's record of a
+      BriefAgent release they accepted for their account and the contract
+      they consented to. Not a star, not the desktop's or the CLI's
+      per-machine record; no download counter moves.
 
 paths:
   /meta:
@@ -541,6 +547,88 @@ paths:
       responses:
         "204":
           description: Unstarred (not-starred is also 204).
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /user/installs:
+    get:
+      operationId: listAccountInstalls
+      tags: [installs]
+      summary: The caller's account installs, composed for a list.
+      description: >-
+        Every record the caller holds, newest change first. A record whose
+        BriefAgent the caller can no longer read — made private to them,
+        its organization suspended — is listed as the bare `ref` with
+        `readable: false` and nothing else, so the list tells a former
+        reader nothing they did not already know. A PAT needs
+        `user:profile`.
+      responses:
+        "200":
+          description: The list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AccountInstall"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /user/installs/{ns}/{name}:
+    put:
+      operationId: putAccountInstall
+      tags: [installs]
+      summary: Record a BriefAgent release as installed to the account, or move the record to another version.
+      description: >-
+        The version must be a published release the caller can read: a
+        non-reader gets the missing name's 404, an unpublished version `409
+        version-not-published`, a blocked BriefAgent `410 blocked`. The
+        request carries the acceptances the release needs and is refused
+        with `409 install-consent-required`, naming the missing ones in
+        `missing`, when it lacks any: `capabilities` on a first install and,
+        on an update, when the new version's declared capabilities widened
+        against the accepted snapshot (`widened` lists what did); `unsigned`
+        whenever the release carries no attestation; `unscanned` whenever it
+        was admitted without a scan. A PUT on an existing record is the
+        update, to any published version, an older one included: the
+        version moves and the snapshot follows it. The action is
+        audited as `agent.install`; no download counter moves. A PAT needs
+        `user:profile`, and `agent:read` for a private BriefAgent.
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountInstallRequest"
+      responses:
+        "200":
+          description: The record, composed as the list composes it.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountInstall"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteAccountInstall
+      tags: [installs]
+      summary: Remove the caller's record for a BriefAgent (idempotent).
+      description: >-
+        204 whether or not a record existed, and whether or not the name
+        resolves: the row is the caller's own, so no BriefAgent is read and
+        nothing is learned about one — a record whose BriefAgent the caller
+        can no longer read is removed by the ref the list shows for it.
+        Audited as `agent.uninstall` when a record went. A PAT needs
+        `user:profile`.
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+      responses:
+        "204":
+          description: Removed, or nothing to remove.
         default:
           $ref: "#/components/responses/Problem"
 
@@ -4963,13 +5051,7 @@ components:
             The scan run's status; `skipped` for a version admitted without
             a scan (M21), which has no run.
         verdict:
-          type: string
-          enum: [scanned, unscanned]
-          description: >-
-            What the report is: `scanned` when a scan run stands behind it
-            (the findings say the rest), `unscanned` when the version was
-            admitted without one — never conflated with "scanned with a
-            known gap". Absent while a scan is still pending.
+          $ref: "#/components/schemas/ReportVerdict"
         finishedAt:
           type: string
           format: date-time
@@ -4982,6 +5064,15 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ScanFinding"
+
+    ReportVerdict:
+      type: string
+      enum: [scanned, unscanned]
+      description: >-
+        What a report is: `scanned` when a scan run stands behind it (the
+        findings say the rest), `unscanned` when the version was admitted
+        without one — never conflated with "scanned with a known gap".
+        Absent while a scan is still pending.
 
     JudgeUsage:
       type: object
@@ -5156,6 +5247,75 @@ components:
             capability, license, verified) before limit and offset — what
             "2 of 8 results" counts. Blocked and never-published agents are
             outside it, as they are outside the results.
+
+    AccountInstallRequest:
+      type: object
+      required: [version]
+      properties:
+        version:
+          type: string
+          description: The published version to record, exactly (no range).
+        acceptCapabilities:
+          type: boolean
+          description: >-
+            The caller accepts the declared capabilities of this version.
+            Required true on a first install and on an update whose
+            capabilities widened; not read otherwise.
+        acceptUnsigned:
+          type: boolean
+          description: Required true when the release carries no attestation.
+        acceptUnscanned:
+          type: boolean
+          description: Required true when the release was admitted without a scan.
+
+    AccountInstall:
+      type: object
+      description: >-
+        One account install, composed for a list. Only `ref` and `readable`
+        are always present: a record whose BriefAgent the caller can no
+        longer read carries nothing else.
+      required: [ref, readable]
+      properties:
+        ref:
+          type: string
+          description: "`ns/name`."
+        readable:
+          type: boolean
+          description: Whether the caller can read the BriefAgent today.
+        installedVersion:
+          type: string
+        capabilities:
+          type: object
+          additionalProperties: true
+          description: The declared capability block the caller accepted, as the version declared it.
+        acceptedUnsigned:
+          type: boolean
+          description: The release carried no attestation and the caller accepted that.
+        acceptedUnscanned:
+          type: boolean
+          description: The release was admitted without a scan and the caller accepted that.
+        latestVersion:
+          type: string
+          description: The newest published version; absent when none is.
+        verdict:
+          $ref: "#/components/schemas/ReportVerdict"
+        findingCounts:
+          type: object
+          additionalProperties:
+            type: integer
+          description: The installed version's finding counts by severity; present with a `scanned` verdict.
+        signed:
+          type: boolean
+          description: Whether the installed version carries an attestation.
+        quarantineState:
+          type: string
+          enum: [none, quarantined, blocked]
+        installedAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
 
     SearchHit:
       type: object

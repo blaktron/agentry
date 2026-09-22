@@ -614,6 +614,13 @@ func TestOrgDecommissionErasesAfterTheHold(t *testing.T) {
 	memberH := env.register("er-member")
 	env.joinOrg(admin, orgH, memberH)
 	env.publishUnder(t, admin, orgH, "er-agent")
+	// A member's account install of the organization's BriefAgent
+	// (agentry#448): erased with the organization, as a star is, rather
+	// than left as a bare ref to a retired name.
+	member := env.login(memberH)
+	if code, _, _ := env.putInstall(t, member, orgH+"/er-agent", map[string]any{"version": "1.0.0", "acceptCapabilities": true}); code != http.StatusOK {
+		t.Fatalf("member's account install: %d", code)
+	}
 	inviteTo(t, env, admin, orgH, "someone@"+domain)
 	env.doJSON(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/teams", map[string]any{"slug": "er-team"}, nil, http.StatusCreated)
 
@@ -647,6 +654,9 @@ func TestOrgDecommissionErasesAfterTheHold(t *testing.T) {
 	env.doJSON(admin, http.MethodGet, "/api/v1/user", nil, &me, http.StatusOK)
 	if len(me.Orgs) != 0 {
 		t.Fatalf("the admin's memberships after erasure: %v", me.Orgs)
+	}
+	if installs := env.listInstalls(t, member); len(installs) != 0 {
+		t.Fatalf("the member's account installs after erasure: %+v, want none", installs)
 	}
 	// The founder is free to start again — the erased organization was
 	// never activated, and must not count as their pending one — and the

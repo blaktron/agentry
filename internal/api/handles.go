@@ -12,6 +12,9 @@ var pathHandles = map[string]bool{
 	"new": true, "review": true, "staff": true, "orgs": true, "tags": true, "trust": true, "advisories": true,
 	"download": true, "downloads": true, "docs": true, "about": true, "contact": true, "privacy": true, "terms": true,
 	"cookies": true, "agent-template": true, "admin": true, "static": true, "img": true,
+	// The site's runs, invitations and pricing pages (plan web-dashboard-shell
+	// §4, agentry#448): served before they were reserved.
+	"runs": true, "invitations": true, "pricing": true,
 }
 
 // firstPartyHandles are the product's own names, reserved so that nobody

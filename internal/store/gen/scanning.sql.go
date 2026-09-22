@@ -12,6 +12,38 @@ import (
 	"github.com/google/uuid"
 )
 
+const countFindingsBySeverity = `-- name: CountFindingsBySeverity :many
+SELECT severity, count(*)::bigint AS count
+FROM findings WHERE scan_run_id = $1
+GROUP BY severity
+`
+
+type CountFindingsBySeverityRow struct {
+	Severity string `json:"severity"`
+	Count    int64  `json:"count"`
+}
+
+// The finding counts a report carries, without loading the findings.
+func (q *Queries) CountFindingsBySeverity(ctx context.Context, scanRunID uuid.UUID) ([]CountFindingsBySeverityRow, error) {
+	rows, err := q.db.Query(ctx, countFindingsBySeverity, scanRunID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountFindingsBySeverityRow
+	for rows.Next() {
+		var i CountFindingsBySeverityRow
+		if err := rows.Scan(&i.Severity, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countIPClusterSubmissions = `-- name: CountIPClusterSubmissions :one
 SELECT count(DISTINCT submitted_by)::bigint AS accounts, count(*)::bigint AS versions
 FROM agent_versions
