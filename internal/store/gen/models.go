@@ -26,6 +26,19 @@ type AbuseReport struct {
 	CreatedAt  time.Time  `json:"created_at"`
 }
 
+type AccountInstall struct {
+	UserID            uuid.UUID `json:"user_id"`
+	AgentID           uuid.UUID `json:"agent_id"`
+	VersionID         uuid.UUID `json:"version_id"`
+	RefNamespace      string    `json:"ref_namespace"`
+	RefName           string    `json:"ref_name"`
+	Capabilities      []byte    `json:"capabilities"`
+	AcceptedUnsigned  bool      `json:"accepted_unsigned"`
+	AcceptedUnscanned bool      `json:"accepted_unscanned"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}
+
 type Advisory struct {
 	ID               uuid.UUID  `json:"id"`
 	AgentID          uuid.UUID  `json:"agent_id"`

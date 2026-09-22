@@ -42,6 +42,27 @@ func (e AbuseReportState) Valid() bool {
 	}
 }
 
+// Defines values for AccountInstallQuarantineState.
+const (
+	AccountInstallQuarantineStateBlocked     AccountInstallQuarantineState = "blocked"
+	AccountInstallQuarantineStateNone        AccountInstallQuarantineState = "none"
+	AccountInstallQuarantineStateQuarantined AccountInstallQuarantineState = "quarantined"
+)
+
+// Valid indicates whether the value is a known member of the AccountInstallQuarantineState enum.
+func (e AccountInstallQuarantineState) Valid() bool {
+	switch e {
+	case AccountInstallQuarantineStateBlocked:
+		return true
+	case AccountInstallQuarantineStateNone:
+		return true
+	case AccountInstallQuarantineStateQuarantined:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentQuarantineState.
 const (
 	AgentQuarantineStateBlocked     AgentQuarantineState = "blocked"
@@ -513,6 +534,24 @@ func (e PendingOrgVia) Valid() bool {
 	}
 }
 
+// Defines values for ReportVerdict.
+const (
+	Scanned   ReportVerdict = "scanned"
+	Unscanned ReportVerdict = "unscanned"
+)
+
+// Valid indicates whether the value is a known member of the ReportVerdict enum.
+func (e ReportVerdict) Valid() bool {
+	switch e {
+	case Scanned:
+		return true
+	case Unscanned:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ResolveResultScanStatus.
 const (
 	ResolveResultScanStatusPipeline ResolveResultScanStatus = "pipeline"
@@ -636,24 +675,6 @@ func (e ScanFindingVerdict) Valid() bool {
 	case ScanFindingVerdictDismissedFalsePositive:
 		return true
 	case ScanFindingVerdictOpen:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ScanReportVerdict.
-const (
-	Scanned   ScanReportVerdict = "scanned"
-	Unscanned ScanReportVerdict = "unscanned"
-)
-
-// Valid indicates whether the value is a known member of the ScanReportVerdict enum.
-func (e ScanReportVerdict) Valid() bool {
-	switch e {
-	case Scanned:
-		return true
-	case Unscanned:
 		return true
 	default:
 		return false
@@ -1280,6 +1301,58 @@ type AccessRequestResult struct {
 	// MailedAdmins How many of the organization's admins were mailed. Zero when none has a verified address that accepts organization mail; the request is still audited.
 	MailedAdmins int    `json:"mailedAdmins"`
 	Org          string `json:"org"`
+}
+
+// AccountInstall One account install, composed for a list. Only `ref` and `readable` are always present: a record whose BriefAgent the caller can no longer read carries nothing else.
+type AccountInstall struct {
+	// AcceptedUnscanned The release was admitted without a scan and the caller accepted that.
+	AcceptedUnscanned *bool `json:"acceptedUnscanned,omitempty"`
+
+	// AcceptedUnsigned The release carried no attestation and the caller accepted that.
+	AcceptedUnsigned *bool `json:"acceptedUnsigned,omitempty"`
+
+	// Capabilities The declared capability block the caller accepted, as the version declared it.
+	Capabilities *map[string]interface{} `json:"capabilities,omitempty"`
+
+	// FindingCounts The installed version's finding counts by severity; present with a `scanned` verdict.
+	FindingCounts    *map[string]int `json:"findingCounts,omitempty"`
+	InstalledAt      *time.Time      `json:"installedAt,omitempty"`
+	InstalledVersion *string         `json:"installedVersion,omitempty"`
+
+	// LatestVersion The newest published version; absent when none is.
+	LatestVersion   *string                        `json:"latestVersion,omitempty"`
+	QuarantineState *AccountInstallQuarantineState `json:"quarantineState,omitempty"`
+
+	// Readable Whether the caller can read the BriefAgent today.
+	Readable bool `json:"readable"`
+
+	// Ref `ns/name`.
+	Ref string `json:"ref"`
+
+	// Signed Whether the installed version carries an attestation.
+	Signed    *bool      `json:"signed,omitempty"`
+	UpdatedAt *time.Time `json:"updatedAt,omitempty"`
+
+	// Verdict What a report is: `scanned` when a scan run stands behind it (the findings say the rest), `unscanned` when the version was admitted without one — never conflated with "scanned with a known gap". Absent while a scan is still pending.
+	Verdict *ReportVerdict `json:"verdict,omitempty"`
+}
+
+// AccountInstallQuarantineState defines model for AccountInstall.QuarantineState.
+type AccountInstallQuarantineState string
+
+// AccountInstallRequest defines model for AccountInstallRequest.
+type AccountInstallRequest struct {
+	// AcceptCapabilities The caller accepts the declared capabilities of this version. Required true on a first install and on an update whose capabilities widened; not read otherwise.
+	AcceptCapabilities *bool `json:"acceptCapabilities,omitempty"`
+
+	// AcceptUnscanned Required true when the release was admitted without a scan.
+	AcceptUnscanned *bool `json:"acceptUnscanned,omitempty"`
+
+	// AcceptUnsigned Required true when the release carries no attestation.
+	AcceptUnsigned *bool `json:"acceptUnsigned,omitempty"`
+
+	// Version The published version to record, exactly (no range).
+	Version string `json:"version"`
 }
 
 // ActivityEvent One agent-scoped entry from the audit log (§9.2 activity).
@@ -1955,6 +2028,9 @@ type RegisterRequest struct {
 	Password    string              `json:"password"`
 }
 
+// ReportVerdict What a report is: `scanned` when a scan run stands behind it (the findings say the rest), `unscanned` when the version was admitted without one — never conflated with "scanned with a known gap". Absent while a scan is still pending.
+type ReportVerdict string
+
 // ResolveResult defines model for ResolveResult.
 type ResolveResult struct {
 	// ArchiveUrl Where to fetch the archive (CDN on SaaS; API path self-host).
@@ -2088,15 +2164,12 @@ type ScanReport struct {
 	// ScanStatus The scan run's status; `skipped` for a version admitted without a scan (M21), which has no run.
 	ScanStatus *string `json:"scanStatus,omitempty"`
 
-	// Verdict What the report is: `scanned` when a scan run stands behind it (the findings say the rest), `unscanned` when the version was admitted without one — never conflated with "scanned with a known gap". Absent while a scan is still pending.
-	Verdict *ScanReportVerdict `json:"verdict,omitempty"`
+	// Verdict What a report is: `scanned` when a scan run stands behind it (the findings say the rest), `unscanned` when the version was admitted without one — never conflated with "scanned with a known gap". Absent while a scan is still pending.
+	Verdict *ReportVerdict `json:"verdict,omitempty"`
 
 	// VersionStatus Publication state machine states (§7). `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change (DEV-046).
 	VersionStatus VersionStatus `json:"versionStatus"`
 }
-
-// ScanReportVerdict What the report is: `scanned` when a scan run stands behind it (the findings say the rest), `unscanned` when the version was admitted without one — never conflated with "scanned with a known gap". Absent while a scan is still pending.
-type ScanReportVerdict string
 
 // ScimToken defines model for ScimToken.
 type ScimToken struct {
@@ -2934,6 +3007,9 @@ type DecideReviewItemJSONRequestBody DecideReviewItemJSONBody
 
 // UpdateCurrentUserJSONRequestBody defines body for UpdateCurrentUser for application/json ContentType.
 type UpdateCurrentUserJSONRequestBody UpdateCurrentUserJSONBody
+
+// PutAccountInstallJSONRequestBody defines body for PutAccountInstall for application/json ContentType.
+type PutAccountInstallJSONRequestBody = AccountInstallRequest
 
 // UpdateUserNotificationSettingsJSONRequestBody defines body for UpdateUserNotificationSettings for application/json ContentType.
 type UpdateUserNotificationSettingsJSONRequestBody = NotificationSettings
@@ -4049,6 +4125,38 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /user/domain-org/request-access (the `RequestDomainOrgAccess` operationId).
 	RequestDomainOrgAccess(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListAccountInstalls The caller's account installs, composed for a list.
+	//
+	// Every record the caller holds, newest change first. A record whose BriefAgent the caller can no longer read — made private to them, its organization suspended — is listed as the bare `ref` with `readable: false` and nothing else, so the list tells a former reader nothing they did not already know. A PAT needs `user:profile`.
+	//
+	// Corresponds with GET /user/installs (the `ListAccountInstalls` operationId).
+	ListAccountInstalls(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteAccountInstall Remove the caller's record for a BriefAgent (idempotent).
+	//
+	// 204 whether or not a record existed, and whether or not the name resolves: the row is the caller's own, so no BriefAgent is read and nothing is learned about one — a record whose BriefAgent the caller can no longer read is removed by the ref the list shows for it. Audited as `agent.uninstall` when a record went. A PAT needs `user:profile`.
+	//
+	// Corresponds with DELETE /user/installs/{ns}/{name} (the `DeleteAccountInstall` operationId).
+	DeleteAccountInstall(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutAccountInstallWithBody Record a BriefAgent release as installed to the account, or move the record to another version.
+	//
+	// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked BriefAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private BriefAgent.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /user/installs/{ns}/{name} (the `PutAccountInstall` operationId).
+	PutAccountInstallWithBody(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutAccountInstall Record a BriefAgent release as installed to the account, or move the record to another version.
+	//
+	// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked BriefAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private BriefAgent.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /user/installs/{ns}/{name} (the `PutAccountInstall` operationId).
+	PutAccountInstall(ctx context.Context, ns Namespace, name AgentName, body PutAccountInstallJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetUserNotificationSettings How the registry's alerts reach the caller (agentry#190).
 	//
@@ -6743,6 +6851,78 @@ func (c *Client) GetDomainOrg(ctx context.Context, reqEditors ...RequestEditorFn
 // Corresponds with POST /user/domain-org/request-access (the `RequestDomainOrgAccess` operationId).
 func (c *Client) RequestDomainOrgAccess(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRequestDomainOrgAccessRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListAccountInstalls The caller's account installs, composed for a list.
+//
+// Every record the caller holds, newest change first. A record whose BriefAgent the caller can no longer read — made private to them, its organization suspended — is listed as the bare `ref` with `readable: false` and nothing else, so the list tells a former reader nothing they did not already know. A PAT needs `user:profile`.
+//
+// Corresponds with GET /user/installs (the `ListAccountInstalls` operationId).
+func (c *Client) ListAccountInstalls(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAccountInstallsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteAccountInstall Remove the caller's record for a BriefAgent (idempotent).
+//
+// 204 whether or not a record existed, and whether or not the name resolves: the row is the caller's own, so no BriefAgent is read and nothing is learned about one — a record whose BriefAgent the caller can no longer read is removed by the ref the list shows for it. Audited as `agent.uninstall` when a record went. A PAT needs `user:profile`.
+//
+// Corresponds with DELETE /user/installs/{ns}/{name} (the `DeleteAccountInstall` operationId).
+func (c *Client) DeleteAccountInstall(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteAccountInstallRequest(c.Server, ns, name)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutAccountInstallWithBody Record a BriefAgent release as installed to the account, or move the record to another version.
+//
+// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked BriefAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private BriefAgent.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /user/installs/{ns}/{name} (the `PutAccountInstall` operationId).
+func (c *Client) PutAccountInstallWithBody(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutAccountInstallRequestWithBody(c.Server, ns, name, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutAccountInstall Record a BriefAgent release as installed to the account, or move the record to another version.
+//
+// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked BriefAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private BriefAgent.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /user/installs/{ns}/{name} (the `PutAccountInstall` operationId).
+func (c *Client) PutAccountInstall(ctx context.Context, ns Namespace, name AgentName, body PutAccountInstallJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutAccountInstallRequest(c.Server, ns, name, body)
 	if err != nil {
 		return nil, err
 	}
@@ -12678,6 +12858,128 @@ func NewRequestDomainOrgAccessRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewListAccountInstallsRequest constructs an http.Request for the ListAccountInstalls method
+func NewListAccountInstallsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/installs")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDeleteAccountInstallRequest constructs an http.Request for the DeleteAccountInstall method
+func NewDeleteAccountInstallRequest(server string, ns Namespace, name AgentName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/installs/%s/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutAccountInstallRequest calls the generic PutAccountInstall builder with application/json body
+func NewPutAccountInstallRequest(server string, ns Namespace, name AgentName, body PutAccountInstallJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutAccountInstallRequestWithBody(server, ns, name, "application/json", bodyReader)
+}
+
+// NewPutAccountInstallRequestWithBody constructs an http.Request for the PutAccountInstall method, with any body, and a specified content type
+func NewPutAccountInstallRequestWithBody(server string, ns Namespace, name AgentName, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/installs/%s/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewGetUserNotificationSettingsRequest constructs an http.Request for the GetUserNotificationSettings method
 func NewGetUserNotificationSettingsRequest(server string) (*http.Request, error) {
 	var err error
@@ -14431,6 +14733,42 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /user/domain-org/request-access (the `RequestDomainOrgAccess` operationId).
 	RequestDomainOrgAccessWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*RequestDomainOrgAccessResponse, error)
+
+	// ListAccountInstallsWithResponse The caller's account installs, composed for a list.
+	//
+	// Every record the caller holds, newest change first. A record whose BriefAgent the caller can no longer read — made private to them, its organization suspended — is listed as the bare `ref` with `readable: false` and nothing else, so the list tells a former reader nothing they did not already know. A PAT needs `user:profile`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /user/installs (the `ListAccountInstalls` operationId).
+	ListAccountInstallsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListAccountInstallsResponse, error)
+
+	// DeleteAccountInstallWithResponse Remove the caller's record for a BriefAgent (idempotent).
+	//
+	// 204 whether or not a record existed, and whether or not the name resolves: the row is the caller's own, so no BriefAgent is read and nothing is learned about one — a record whose BriefAgent the caller can no longer read is removed by the ref the list shows for it. Audited as `agent.uninstall` when a record went. A PAT needs `user:profile`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /user/installs/{ns}/{name} (the `DeleteAccountInstall` operationId).
+	DeleteAccountInstallWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*DeleteAccountInstallResponse, error)
+
+	// PutAccountInstallWithBodyWithResponse Record a BriefAgent release as installed to the account, or move the record to another version.
+	//
+	// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked BriefAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private BriefAgent.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /user/installs/{ns}/{name} (the `PutAccountInstall` operationId).
+	PutAccountInstallWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutAccountInstallResponse, error)
+
+	// PutAccountInstallWithResponse Record a BriefAgent release as installed to the account, or move the record to another version.
+	//
+	// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked BriefAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private BriefAgent.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /user/installs/{ns}/{name} (the `PutAccountInstall` operationId).
+	PutAccountInstallWithResponse(ctx context.Context, ns Namespace, name AgentName, body PutAccountInstallJSONRequestBody, reqEditors ...RequestEditorFn) (*PutAccountInstallResponse, error)
 
 	// GetUserNotificationSettingsWithResponse How the registry's alerts reach the caller (agentry#190).
 	//
@@ -20157,6 +20495,143 @@ func (r RequestDomainOrgAccessResponse) ContentType() string {
 	return ""
 }
 
+type ListAccountInstallsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]AccountInstall
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListAccountInstallsResponse) GetJSON200() *[]AccountInstall {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListAccountInstallsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListAccountInstallsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAccountInstallsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAccountInstallsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListAccountInstallsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteAccountInstallResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DeleteAccountInstallResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteAccountInstallResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteAccountInstallResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteAccountInstallResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteAccountInstallResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PutAccountInstallResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AccountInstall
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PutAccountInstallResponse) GetJSON200() *AccountInstall {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r PutAccountInstallResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PutAccountInstallResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutAccountInstallResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutAccountInstallResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutAccountInstallResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetUserNotificationSettingsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -22974,6 +23449,66 @@ func (c *ClientWithResponses) RequestDomainOrgAccessWithResponse(ctx context.Con
 		return nil, err
 	}
 	return ParseRequestDomainOrgAccessResponse(rsp)
+}
+
+// ListAccountInstallsWithResponse The caller's account installs, composed for a list.
+//
+// Every record the caller holds, newest change first. A record whose BriefAgent the caller can no longer read — made private to them, its organization suspended — is listed as the bare `ref` with `readable: false` and nothing else, so the list tells a former reader nothing they did not already know. A PAT needs `user:profile`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /user/installs (the `ListAccountInstalls` operationId).
+func (c *ClientWithResponses) ListAccountInstallsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListAccountInstallsResponse, error) {
+	rsp, err := c.ListAccountInstalls(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAccountInstallsResponse(rsp)
+}
+
+// DeleteAccountInstallWithResponse Remove the caller's record for a BriefAgent (idempotent).
+//
+// 204 whether or not a record existed, and whether or not the name resolves: the row is the caller's own, so no BriefAgent is read and nothing is learned about one — a record whose BriefAgent the caller can no longer read is removed by the ref the list shows for it. Audited as `agent.uninstall` when a record went. A PAT needs `user:profile`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /user/installs/{ns}/{name} (the `DeleteAccountInstall` operationId).
+func (c *ClientWithResponses) DeleteAccountInstallWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*DeleteAccountInstallResponse, error) {
+	rsp, err := c.DeleteAccountInstall(ctx, ns, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteAccountInstallResponse(rsp)
+}
+
+// PutAccountInstallWithBodyWithResponse Record a BriefAgent release as installed to the account, or move the record to another version.
+//
+// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked BriefAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private BriefAgent.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /user/installs/{ns}/{name} (the `PutAccountInstall` operationId).
+func (c *ClientWithResponses) PutAccountInstallWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutAccountInstallResponse, error) {
+	rsp, err := c.PutAccountInstallWithBody(ctx, ns, name, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutAccountInstallResponse(rsp)
+}
+
+// PutAccountInstallWithResponse Record a BriefAgent release as installed to the account, or move the record to another version.
+//
+// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked BriefAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private BriefAgent.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /user/installs/{ns}/{name} (the `PutAccountInstall` operationId).
+func (c *ClientWithResponses) PutAccountInstallWithResponse(ctx context.Context, ns Namespace, name AgentName, body PutAccountInstallJSONRequestBody, reqEditors ...RequestEditorFn) (*PutAccountInstallResponse, error) {
+	rsp, err := c.PutAccountInstall(ctx, ns, name, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutAccountInstallResponse(rsp)
 }
 
 // GetUserNotificationSettingsWithResponse How the registry's alerts reach the caller (agentry#190).
@@ -27142,6 +27677,101 @@ func ParseRequestDomainOrgAccessResponse(rsp *http.Response) (*RequestDomainOrgA
 			return nil, err
 		}
 		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListAccountInstallsResponse parses an HTTP response from a ListAccountInstallsWithResponse call
+func ParseListAccountInstallsResponse(rsp *http.Response) (*ListAccountInstallsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAccountInstallsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []AccountInstall
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteAccountInstallResponse parses an HTTP response from a DeleteAccountInstallWithResponse call
+func ParseDeleteAccountInstallResponse(rsp *http.Response) (*DeleteAccountInstallResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteAccountInstallResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutAccountInstallResponse parses an HTTP response from a PutAccountInstallWithResponse call
+func ParsePutAccountInstallResponse(rsp *http.Response) (*PutAccountInstallResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutAccountInstallResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AccountInstall
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

@@ -360,6 +360,11 @@ version exists). `--dir` is for the two exports; the runner home is one
 directory, the record and, unless `--keep-mcp`, the MCP profile.
 Installing into an existing coding agent instead is `--target` or
 `--provider`, [below](#installing-into-an-existing-coding-agent).
+This record is this machine's. The registry keeps a separate one per
+account — the release a signed-in person accepted on the web and the
+contract they consented to, `GET /user/installs` in the
+[API conventions](api-conventions.md#account-installs) — and the two are
+never synced: installing here records nothing there, and the reverse.
 
 ## What a BriefAgent gets at run time
 

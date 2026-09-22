@@ -106,8 +106,12 @@ const (
 	ActionAuditExport         Action = "audit.export"
 
 	// Stars, agent lifecycle, and platform operations.
-	ActionAgentStar         Action = "agent.star"
-	ActionAgentUnstar       Action = "agent.unstar"
+	ActionAgentStar   Action = "agent.star"
+	ActionAgentUnstar Action = "agent.unstar"
+	// An account install and its removal (plan web-dashboard-shell §5,
+	// agentry#448): the caller's own record, beside the star.
+	ActionAgentInstall      Action = "agent.install"
+	ActionAgentUninstall    Action = "agent.uninstall"
 	ActionAgentDelete       Action = "agent.delete"
 	ActionAgentTransfer     Action = "agent.transfer"
 	ActionWebhookPing       Action = "webhook.ping"
@@ -143,7 +147,7 @@ func init() {
 		ActionSCIMUserDeactivate, ActionSCIMGroupSync,
 		ActionWebhookCreate, ActionWebhookUpdate, ActionWebhookDelete,
 		ActionDomainClaim, ActionDomainVerified, ActionAuditExport,
-		ActionAgentStar, ActionAgentUnstar, ActionAgentDelete,
+		ActionAgentStar, ActionAgentUnstar, ActionAgentInstall, ActionAgentUninstall, ActionAgentDelete,
 		ActionAgentTransfer, ActionWebhookPing, ActionAuditPlatformRead,
 		ActionAuditPrune, ActionSocialLogin,
 	} {
