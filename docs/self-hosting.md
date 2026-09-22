@@ -919,7 +919,8 @@ lengthens none of them.
 
 **What is not built yet.** The credential exists; the surface for managing it
 does not. The page that lists remembered browsers and removes one is agentry#462,
-and the expiry sweep and the delete on account erasure are agentry#464. Until
+and the expiry sweep is agentry#464; account erasure already deletes the
+account's records in the erasure transaction (`handlers_gdpr.go`). Until
 those land there is no product surface for withdrawing a remembered browser:
 deleting that browser's `agentry_trusted_device` cookie stops it being
 presented, and a record can be revoked in SQL
@@ -1030,7 +1031,11 @@ rest; a `SHA256SUMS` beside it, written by the Mac, is checked before the
 copy. It writes `SHA256SUMS` and `manifest.json`; the page renders from
 the manifest, shows every target on the release matrix, and marks the ones
 without an artifact as not yet available instead of linking to nothing.
-None of the desktop builds is code-signed yet; the page says so. Point `AGENTRY_DOWNLOADS_DIR` in `.env` at the directory — the
+The Windows artifacts are Authenticode-signed since desktop 0.5.0 (D-032):
+the import re-verifies each signature with `osslsigncode` against the name
+the bundle's `BUILD-INFO` states before the manifest marks it `signed`, and
+refuses a mismatch. The macOS bundle is ad-hoc signed and the Linux packages
+carry no OS signature; a card says "signed" only when the manifest does. Point `AGENTRY_DOWNLOADS_DIR` in `.env` at the directory — the
 edge serves it at `/downloads/`, and a site's `web` container reads the
 manifest from it — and re-create the `edge` service (and the site's `web`,
 when one is in front) once so the mount exists. Versions come from

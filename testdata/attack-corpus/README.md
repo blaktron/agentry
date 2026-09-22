@@ -115,9 +115,9 @@ values were generated for the corpus.
    benign non-match twin (§17.3 CI gate).
 2. Keep fixtures defanged: text patterns only; `*.invalid.example` hosts;
    placeholder tokens only (never real credentials); nothing executable. Where
-   a fixture references a script (`incident-shai-hulud`'s postinstall hook),
-   that script is deliberately *absent* — the shape is the fixture, not a
-   working payload.
+   a fixture carries a script (the `script-*` fixtures S6 reads), it is a
+   text pattern that could not do what it describes — the shape is the
+   fixture, not a working payload.
 3. New incident reproductions reproduce the *pattern*, never the payload, and
    add a row to the Appendix A table above.
 4. Both runners walk every directory here; a directory without `expected.yaml`

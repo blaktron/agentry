@@ -111,8 +111,11 @@ budget while it runs, rather than discovering the cost when the run is over
 First run of a release **is** the install: verify (sha256 digest + DSSE
 attestation against TOFU-pinned keys — the same gate as
 `agentry install`), extract, compile the run plan, cache it all per
-digest. Later runs of the same digest reuse everything; a changed
-operator policy recompiles the plan.
+digest. Later runs of the same digest reuse everything; each run mode keeps
+its own plan. A plan is recompiled when anything it was compiled from
+changes — the operator policy, the adapter, the declared MCP servers, the
+plan schema, the CLI build or the runner image — or when its files fail
+their integrity check. The last four say so on stderr.
 
 Runs compose like processes: `agentry run a … | agentry run b …`.
 
