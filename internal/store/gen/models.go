@@ -505,6 +505,18 @@ type TeamMember struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type TrustedDevice struct {
+	ID          uuid.UUID   `json:"id"`
+	UserID      uuid.UUID   `json:"user_id"`
+	TokenSha256 []byte      `json:"token_sha256"`
+	Ip          *netip.Addr `json:"ip"`
+	UserAgent   *string     `json:"user_agent"`
+	CreatedAt   time.Time   `json:"created_at"`
+	LastSeenAt  time.Time   `json:"last_seen_at"`
+	ExpiresAt   time.Time   `json:"expires_at"`
+	RevokedAt   *time.Time  `json:"revoked_at"`
+}
+
 type User struct {
 	ID               uuid.UUID  `json:"id"`
 	Email            string     `json:"email"`

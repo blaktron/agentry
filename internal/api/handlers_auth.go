@@ -64,6 +64,21 @@ func auditEvent(r *http.Request, action audit.Action) audit.Event {
 	return e
 }
 
+// requestFacts are the two things a credential row records about the request
+// that presented it: the address it came from and the user agent it claimed.
+// Both are display facts for the pages that list credentials — a session, a
+// trusted device — and neither takes part in any decision, so a value the
+// client can choose never influences what the server trusts. agentry#429 is
+// about that address being choosable; keeping it out of every decision is what
+// makes it harmless here. Both are best-effort: an address that does not parse
+// is left nil rather than refused.
+func requestFacts(r *http.Request) (ip *netip.Addr, ua string) {
+	if a, err := netip.ParseAddr(clientIP(r)); err == nil {
+		ip = &a
+	}
+	return ip, r.UserAgent()
+}
+
 // Register implements POST /auth/register (§12.1).
 // nativeCredsGone enforces auth.externalOnly (DEV-057): with an external
 // directory service owning credentials, the native register / password /
@@ -279,20 +294,32 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A trusted device skips the second factor; answering the factor earns
+	// one. The two are kept apart here because the difference is the whole
+	// security model: a skip never mints, which is what makes the credential's
+	// lifetime absolute rather than sliding (plan trusted-devices.md D9). The
+	// password above has already been verified, so the cookie is never itself
+	// an authentication — it only stands in for the code.
+	var totpAnswered, totpSkipped bool
 	if row.TotpEnabled {
-		if req.TotpCode == nil || *req.TotpCode == "" {
+		switch {
+		case s.trustedDeviceSkip(ctx, r, row.ID):
+			totpSkipped = true
+		case req.TotpCode == nil || *req.TotpCode == "":
 			writeProblem(w, r, http.StatusUnauthorized, "totp-required", "TOTP code required", "Send totpCode with the current code from the authenticator app.")
 			return
-		}
-		secret, err := s.sealer.Open(row.TotpSecretEnc)
-		if err != nil {
-			s.log.ErrorContext(r.Context(), "login: unseal totp", "err", err)
-			problemInternal(w, r)
-			return
-		}
-		if !auth.ValidateTOTP(*req.TotpCode, string(secret)) {
-			deny(row.ID)
-			return
+		default:
+			secret, err := s.sealer.Open(row.TotpSecretEnc)
+			if err != nil {
+				s.log.ErrorContext(r.Context(), "login: unseal totp", "err", err)
+				problemInternal(w, r)
+				return
+			}
+			if !auth.ValidateTOTP(*req.TotpCode, string(secret)) {
+				deny(row.ID)
+				return
+			}
+			totpAnswered = true
 		}
 	}
 
@@ -307,11 +334,8 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var ipPtr *netip.Addr
-	if ip, err := netip.ParseAddr(clientIP(r)); err == nil {
-		ipPtr = &ip
-	}
-	ua := r.UserAgent()
+	ipPtr, ua := requestFacts(r)
+	var deviceToken string
 	err = s.st.WithTx(ctx, func(q *storegen.Queries) error {
 		_, err := q.CreateSession(ctx, storegen.CreateSessionParams{
 			ID:          newUUID(),
@@ -328,7 +352,27 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		e := auditEvent(r, audit.ActionUserLogin)
 		e.Actor, e.ActorKind = row.ID, audit.ActorUser
 		e.TargetKind, e.TargetID = "user", row.ID
-		return s.auditW.Write(ctx, q, e)
+		if totpSkipped {
+			// The sign-in row names that the second factor was not asked for
+			// and what stood in for it, so "signed in" and "signed in without
+			// the code" stay distinguishable in the audit trail.
+			e.Detail = map[string]any{"totp": "skipped_trusted_device"}
+		}
+		if err := s.auditW.Write(ctx, q, e); err != nil {
+			return err
+		}
+		// Trust is earned only by answering the factor, and only when asked
+		// for; the opt-in defaults to false. Both are inside this transaction
+		// so a sign-in that earns trust records the session, the device and
+		// the audit rows together, or none of them.
+		if totpAnswered && req.RememberDevice != nil && *req.RememberDevice {
+			tok, err := s.createTrustedDevice(ctx, q, r, row.ID)
+			if err != nil {
+				return err
+			}
+			deviceToken = tok
+		}
+		return nil
 	})
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "login: session", "err", err)
@@ -345,6 +389,9 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   int(s.cfg.Auth.SessionTTL.Seconds()),
 	})
+	if deviceToken != "" {
+		setTrustedDeviceCookie(w, deviceToken, s.cfg.Auth.TrustedDeviceTTL, s.cfg.Auth.CookieSecure)
+	}
 	writeJSON(w, http.StatusOK, LoginResult{
 		CsrfToken: csrfToken,
 		User: User{

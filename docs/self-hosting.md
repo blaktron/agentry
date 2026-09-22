@@ -892,6 +892,55 @@ Whichever way it is set, `GET /api/v1/meta` reports the gate's state as
 `features.publicPublish2FA`, which is what a front end reads before it
 tells anyone that publishing needs a second factor.
 
+**Remembering a browser that answered the second factor.** On a deployment
+running the native flows — `AGENTRY_AUTH_EXTERNAL_ONLY` unset or false —
+`POST /api/v1/auth/login` accepts a `rememberDevice` flag. Set on a sign-in
+that actually answered a TOTP code, it issues an `agentry_trusted_device`
+cookie and records the browser; a later password sign-in presenting that
+cookie is not asked for the code. The flag defaults to false, and nothing is
+remembered unless it is asked for.
+
+The credential is narrow on purpose. It skips the second factor and nothing
+else: the password is still required at every sign-in, it is not a session, it
+does not lengthen one, and it carries no scope. Its lifetime is absolute —
+using it does not extend it — so it expires `AGENTRY_AUTH_TRUSTED_DEVICE_TTL`
+after it was issued. That defaults to 30 days, and 30 days is also the ceiling:
+a larger value is refused at startup rather than honoured, because a deployment
+that raised it would be issuing a credential the threat model never priced in.
+Only the token's SHA-256 is stored, beside the issuing address and user agent;
+those two are recorded so that a page listing remembered browsers can describe
+them to their owner, and neither is consulted in the decision. A lookup that
+cannot be answered — an outage, a revoked record, an expired one, somebody
+else's — demands the code rather than skipping it.
+
+A remembered browser is a second credential class, not a longer session:
+§12.4's 24-hour cap still binds every session, and a `trusted_devices` record
+lengthens none of them.
+
+**What is not built yet.** The credential exists; the surface for managing it
+does not. The page that lists remembered browsers and removes one is agentry#462,
+and the expiry sweep and the delete on account erasure are agentry#464. Until
+those land there is no product surface for withdrawing a remembered browser:
+deleting that browser's `agentry_trusted_device` cookie stops it being
+presented, and a record can be revoked in SQL
+(`UPDATE trusted_devices SET revoked_at = now() WHERE …`), but an account
+holder can do neither from a page. Anything not revoked expires at the end of
+its lifetime.
+
+In practice nothing mints one yet either. The flag is per-request and no
+shipped client sends it — the browser-facing checkbox is agentry#463 — so a
+record is only created by a hand-written API call that asks for one. A
+deployment that wants the credential off until the management surface exists
+has no switch to turn, but also has nothing turning it on.
+
+None of this applies under `AGENTRY_AUTH_EXTERNAL_ONLY=true`. The native login
+endpoint answers 410, the directory performs the second-factor challenge, and
+the registry never sees it, so there is no native code to skip and nothing for
+it to remember. The directory's own remember-this-device behaviour is its
+configuration to make, and it is not equivalent: it keeps no server-side record
+of the browsers it remembers, so they can be neither listed nor individually
+revoked (agentry#460).
+
 The directory's flows are unbranded here and call the deployment
 `AGENTRY_BRAND_NAME`; a site that fronts the registry applies its own
 brand (title, wordmark, favicon, flow background, custom CSS) through the

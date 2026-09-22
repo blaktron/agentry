@@ -59,6 +59,11 @@ func TestTokensAreMaskedEverywhere(t *testing.T) {
 	kinds := map[string]string{
 		"pat": auth.PATPrefix, "session": auth.SessionPrefix, "verification": auth.VerificationPrefix,
 		"scim": "agyscim_", "desktop grant": "agd_", "webhook secret": "whsec_", "csrf": "csrf_", "bare (oidc state, domain verification)": "",
+		// Pinned rather than left to the regex's shape: tokenRE's `agy[a-z]*_`
+		// happens to cover both of these, and "happens to" is not a guarantee
+		// anyone would notice breaking. The invitation was already missing from
+		// this table when the trusted device joined it (agentry#461).
+		"trusted device": auth.TrustedDevicePrefix, "invitation": auth.InvitePrefix,
 	}
 	for name, prefix := range kinds {
 		tok, err := auth.NewToken(prefix)
