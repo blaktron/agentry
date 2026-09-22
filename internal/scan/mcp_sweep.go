@@ -45,10 +45,9 @@ type MCPSweepSummary struct {
 }
 
 // MCPSweep re-checks the scanned-server registry and reconciles alerts.
-func (p *Pipeline) MCPSweep(ctx context.Context) (MCPSweepSummary, error) {
-	var sum MCPSweepSummary
+func (p *Pipeline) MCPSweep(ctx context.Context) (sum MCPSweepSummary, err error) {
 	q := p.st.Queries()
-	defer func() { p.mx.RecordMCPSweep(ctx, sum.AlertsOpened, nil) }()
+	defer func() { p.mx.RecordMCPSweep(ctx, sum.AlertsOpened, err) }()
 
 	// Versions that left `published` since the last sweep (belt and braces:
 	// the transition itself resolves them too).

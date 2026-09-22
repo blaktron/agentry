@@ -256,8 +256,9 @@ The payer's tier's wall time and turn count are the CLI's own budgets,
 enforced inside the run as they are on your own machine (exit 15 and 16).
 
 **The token cap is not live.** Nothing counts tokens while the run is going:
-the CLI narrates no usage until its envelope, so the worker forwards the
-usage once, at the end (agentry-cli#138 is the narration). A run can
+the CLI narrates its usage as the run goes (agentry-cli#138, `--events`),
+but the worker does not read that narration yet and forwards the usage once,
+at the end (agentry-enterprise#27 is the live cap). A run can
 therefore spend past its tier's token cap; what it cannot do is cost more
 than the hold, because the settlement is capped there. `--max-cost` is not
 derived either — an OpenAI-compatible endpoint of the deployment's choosing
@@ -297,8 +298,9 @@ receipt.
 ## Retention
 
 A run and its artefacts are deleted thirty days after the run was created
-(`AGENTRY_RUNS_RETENTION`, `720h`), and immediately when the account is
-erased. Uploaded inputs that no run claims are swept after a day. Download
+(`AGENTRY_RUNS_RETENTION`, `720h`), and, once the run has finished, within a
+minute of the account being erased (the runs sweep deletes a closed run of an
+erased account). Uploaded inputs that no run claims are swept after a day. Download
 anything you want to keep before then; nothing is archived elsewhere.
 
 ## The deployment's configuration

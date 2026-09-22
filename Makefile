@@ -64,7 +64,7 @@ sync-rules-check:
 ## fuzz: run each §17.5 fuzz target briefly (the committed corpora always run
 ## as ordinary tests; this exercises the mutator)
 fuzz:
-	$(GO) test -timeout 20m ./internal/scan   -run FuzzExtract  -fuzz FuzzExtract  -fuzztime $(FUZZTIME)
+	$(GO) test -timeout 20m ./pkg/archive     -run FuzzExtract  -fuzz FuzzExtract  -fuzztime $(FUZZTIME)
 	$(GO) test -timeout 20m ./pkg/manifest    -run FuzzParse    -fuzz FuzzParse    -fuzztime $(FUZZTIME)
 	$(GO) test -timeout 20m ./internal/render -run FuzzSanitize -fuzz FuzzSanitize -fuzztime $(FUZZTIME)
 FUZZTIME ?= 30s

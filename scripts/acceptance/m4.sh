@@ -23,7 +23,6 @@ go test -timeout 20m ./internal/scan -run TestAttackCorpusGate -count=1 >/dev/nu
 go test -timeout 20m ./internal/scan -run 'TestAttackCorpusGate/incident-postmark-v1$' -count=1 >/dev/null    && echo "  incident: postmark v1 baseline clean: OK"
 go test -timeout 20m ./internal/scan -run 'TestAttackCorpusGate/incident-postmark-v2$' -count=1 >/dev/null    && echo "  incident: postmark v2 rug-pull diff (S9+S6): OK"
 go test -timeout 20m ./internal/scan -run 'TestAttackCorpusGate/incident-amazonq-wiper' -count=1 >/dev/null   && echo "  incident: Amazon Q wiper prose (S4 destructive): OK"
-go test -timeout 20m ./internal/scan -run 'TestAttackCorpusGate/incident-shai-hulud' -count=1 >/dev/null      && echo "  incident: Shai-Hulud install script (S7): OK"
 go test -timeout 20m ./internal/scan -run 'TestAttackCorpusGate/incident-clawhavoc' -count=1 >/dev/null       && echo "  incident: ClawHavoc publisher anomaly (S8): OK"
 go test -timeout 20m ./internal/scan -run 'TestAttackCorpusGate/incident-glassworm' -count=1 >/dev/null       && echo "  incident: GlassWorm invisible payload (S3): OK"
 

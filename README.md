@@ -144,11 +144,14 @@ SSO/SCIM and webhooks (M6), and the AWS reference deployment (M7 — Terraform
 validated, never applied to a live account; it now lives with the site).
 
 **M8 (launch hardening) is partial.** Done: SECURITY.md and coordinated
-disclosure, CONTRIBUTING/DCO, signed reproducible releases with SBOM,
+disclosure, CONTRIBUTING/DCO, signed releases with SBOM (built with
+reproducible-build flags; no step yet rebuilds and compares),
 release-please automation, GDPR erasure, abuse intake and the trust & safety
 console, the operational runbooks. Remaining: an external penetration test, a
-status page, seed content beyond the four example agents (blocked on PLAN §20
-Q10), and `security@` / `abuse@` addresses live before launch.
+status page, and `security@` / `abuse@` addresses live before launch. Seed
+content is decided: PLAN §20 Q10 named the forty worked BriefAgents in
+`agentry-examples` (DEV-093), and production launches with none published
+(`production-on-vultr.md` D14).
 
 An independent audit of this repository found the tracking documents
 overstating completeness, and roughly nineteen departures from the plan that
@@ -162,8 +165,8 @@ stronger.
 Decided since the plan was written: the product name (**Agentry**, PLAN
 §20 Q1 — this module keeps the `agentry` technical name) and the license
 (**MIT**, Q2), and the hosted registry's judge (Q3: TypeSafe AI's Jev as the
-`typesafe` provider, DEV-113, 2026-09-20). Still needing a human: how strict
-the launch baseline policy should be (Q4).
+`typesafe` provider, DEV-113, 2026-09-20). The launch baseline policy (Q4)
+is decided: the built defaults stand (DEV-093, 2026-09-07).
 
 ## License
 
