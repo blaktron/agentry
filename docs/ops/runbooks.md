@@ -421,10 +421,13 @@ own when the author yanks the version or the advisory is withdrawn.
    doctor` warns on the same status). The install step itself is not
    refused, and copies already installed keep the server until their next
    run meets the check.
-4. **Watch the sweep itself.** `McpSweepRuns{outcome="error"}` or a
-   `mcp sweep: vulnerability lookup failed for a batch` line means the
-   database was unreachable: rows keep their last answer and are retried
-   tomorrow; check egress from the worker to `AGENTRY_SCAN_OSV_URL`.
+4. **Watch the sweep itself.** A `mcp sweep: vulnerability lookup failed
+   for a batch` line (and a non-zero `lookupErrors` on the `mcp sweep: done`
+   line) means the vulnerability database was unreachable: rows keep their
+   last answer and are retried tomorrow; check egress from the worker to
+   `AGENTRY_SCAN_OSV_URL`. `McpSweepRuns{outcome="error"}` counts a sweep
+   that stopped on the registry's own database (listing, recording or
+   opening alerts); the job is retried like any other.
 5. **Tell people once.** Authors already got one mail per alert; a status
    note is for consumers, who see the alert on the agent page but get no
    mail.

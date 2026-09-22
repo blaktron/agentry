@@ -1,8 +1,9 @@
 // Package queue is the async job abstraction (D-05). The interface is the
-// commitment; the default backend is a Postgres SELECT … FOR UPDATE SKIP
-// LOCKED implementation (the same mechanism River uses). River slots in
-// behind Client without changing enqueue sites or handlers — see
-// DEVIATIONS DEV-005.
+// commitment; the default backend is River (river.go, Postgres-backed; the
+// config's default queue.driver, DEV-095), and the Postgres SELECT … FOR
+// UPDATE SKIP LOCKED implementation in this file remains selectable as the
+// "pg" driver. Either sits behind Client without changing enqueue sites or
+// handlers — see DEVIATIONS DEV-005.
 package queue
 
 import (
