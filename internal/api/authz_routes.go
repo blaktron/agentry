@@ -77,6 +77,14 @@ var routeAuthz = map[string]RouteDecl{
 	// anonymous callers in the handler — there is no anonymous star list.
 	"starAgent":   {Action: auth.ActAgentRead, AgentScoped: true},
 	"unstarAgent": {Action: auth.ActAgentRead, AgentScoped: true},
+	// Account installs (agentry#448) are the CALLER's own record, so they
+	// carry the self actions — a PAT needs user:profile, as it does for
+	// the notification settings — and the handler resolves the BriefAgent
+	// for read first, so a non-reader gets the missing name's 404 and a
+	// PAT recording a private BriefAgent needs agent:read as well.
+	"listAccountInstalls":  {Action: auth.ActUserSelfRead},
+	"putAccountInstall":    {Action: auth.ActUserSelfUpdate},
+	"deleteAccountInstall": {Action: auth.ActUserSelfUpdate},
 	// The grants are administrative: handing someone access to an
 	// organization's private agent is a disclosure, so it belongs with the
 	// admins rather than with everyone who may publish (agentry#362).

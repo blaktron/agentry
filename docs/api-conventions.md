@@ -277,7 +277,7 @@ scopes:
 | `agent:publish` | create BriefAgents and submit versions |
 | `repo:read` | fetch from a BriefAgent's git repository |
 | `repo:write` | push to a BriefAgent's git repository |
-| `user:profile` | read and change the account's own settings, tokens, keys and sessions |
+| `user:profile` | read and change the account's own settings, tokens, keys, sessions and account installs |
 | `org:admin` | manage an organization's members, teams and settings |
 | `review:act` | work the review queue and record decisions (platform staff or a security reviewer) |
 | `audit:read` | read an organization's audit log |
@@ -330,6 +330,64 @@ registry's last vulnerability check of one exact package version (`safe`
 means "no known advisories at `lastCheckedAt`", never "safe"); `404` means
 no manifest has ever declared that version. The runner asks here before it
 installs a declared server.
+
+## Account installs
+
+An account install is a signed-in person's record, on the registry, of a
+BriefAgent release they accepted for their account: the version, the
+declared capabilities they consented to as that release declared them,
+and the unsigned or unscanned consents the release needed. It is an
+acceptance, not a laying-down — nothing is written on any machine — and
+it is distinct from a star (public approval, a public count) and from the
+per-machine record `agentry install` and the desktop app keep in
+`installed.yaml`, which is never synced with it. An account install bumps
+no download counter: `installsTotal` and `installs30d` on `GET
+/agents/{ns}/{name}/stats` stay download rollups. One record per
+BriefAgent per account.
+
+`PUT /user/installs/{ns}/{name}` with `{version, acceptCapabilities,
+acceptUnsigned?, acceptUnscanned?}` records a published release the caller
+can read, or moves an existing record to it. A caller who cannot read the
+BriefAgent gets the missing name's `404`, never a `401` or `403` that
+would confirm the name; an unpublished version is `409
+version-not-published` (carrying `status`), a blocked BriefAgent `410
+blocked`. The request must carry the acceptances the release needs, or
+it is `409 install-consent-required` with `missing` naming them:
+`capabilities` on a first install and on an update whose declared
+capabilities widened against the accepted snapshot (`widened` then lists
+what did, one line each, the way the CLI and the desktop phrase it — an
+update whose contract is unchanged or narrower asks nothing);
+`unsigned` whenever the release carries no attestation; `unscanned`
+whenever it was admitted without a scan. A PUT on an existing record is
+the update, to any published version, an older one included; the
+response is the record composed as the list composes it. `DELETE
+/user/installs/{ns}/{name}` removes the caller's own row and reads no
+BriefAgent, so it answers `204` whether or not a record existed and
+whether or not the name resolves — nothing about a BriefAgent is learned
+there, and a record whose BriefAgent the caller can no longer read is
+removed by the ref the list shows for it. `GET
+/user/installs` lists the caller's records, newest change first: `ref`,
+`installedVersion` with its `capabilities` and the consents recorded
+(`acceptedUnsigned`, `acceptedUnscanned`), `latestVersion` (the newest
+published), the installed version's `verdict` (`scanned` with
+`findingCounts`, or `unscanned`; absent while a scan is pending) and
+`signed`, the BriefAgent's `quarantineState`, `installedAt` and
+`updatedAt`. A record whose BriefAgent the caller can no longer read —
+made private to them, its organization suspended — is the bare `ref`
+with `readable: false` and nothing else, and that ref is the name the
+caller installed it under, never where the BriefAgent has gone since, so
+the list tells a former reader nothing they did not already know. A
+blocked BriefAgent stays readable and the row says so in
+`quarantineState`. An organization's erasure removes the records of its
+BriefAgents, as it does their stars.
+
+The three routes are the caller's own account data, so a token needs
+`user:profile` — and `agent:read` to record a private BriefAgent, since
+the PUT reads it first. The actions are audited as `agent.install` and
+`agent.uninstall` beside `agent.star`, so `GET /user/activity` shows
+them; the BriefAgent's own activity feed does not, at any role — whose
+account holds a BriefAgent is that person's business, where a star is
+public approval.
 
 ## Enterprise SSO
 

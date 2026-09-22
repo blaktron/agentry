@@ -55,6 +55,12 @@ INSERT INTO scan_stage_results (scan_run_id, scanner, status, detail)
 VALUES ($1, $2, $3, $4)
 ON CONFLICT (scan_run_id, scanner) DO UPDATE SET status = EXCLUDED.status, detail = EXCLUDED.detail, finished_at = now();
 
+-- name: CountFindingsBySeverity :many
+-- The finding counts a report carries, without loading the findings.
+SELECT severity, count(*)::bigint AS count
+FROM findings WHERE scan_run_id = $1
+GROUP BY severity;
+
 -- name: InsertFinding :one
 INSERT INTO findings (id, scan_run_id, scanner, severity, confidence, title, file_path, line_start, line_end, excerpt, detail)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)

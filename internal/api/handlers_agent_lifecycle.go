@@ -38,6 +38,16 @@ var publicActivityActions = []string{
 	string(audit.ActionAdvisoryPublish),
 }
 
+// ownActivityActions are the actions that target a BriefAgent but describe
+// a person's own choice rather than the BriefAgent's history: an account
+// install and its removal (agentry#448). They stay on the person's own
+// activity (GET /user/activity) and off the BriefAgent's feed at every
+// role — a star is public approval, an install a private acceptance.
+var ownActivityActions = map[string]bool{
+	string(audit.ActionAgentInstall):   true,
+	string(audit.ActionAgentUninstall): true,
+}
+
 // publicTransitionStates limits the public view of version.transition to the
 // edges a consumer can already observe from the version list.
 var publicTransitionStates = map[string]bool{
@@ -161,6 +171,9 @@ func (s *Server) ListAgentActivity(w http.ResponseWriter, r *http.Request, ns Na
 
 	events := make([]ActivityEvent, 0, len(rows))
 	for _, row := range rows {
+		if ownActivityActions[row.Action] {
+			continue
+		}
 		var detail map[string]interface{}
 		if len(row.Detail) > 0 {
 			_ = json.Unmarshal(row.Detail, &detail)
