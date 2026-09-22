@@ -118,7 +118,8 @@ drop accounting.
   `access_key`, `client_secret` or `credential(s)` becomes `[redacted]`,
   and any token the registry minted — 52 base32 characters, with the kind's
   prefix (`agy_` PATs, `agys_` sessions, `agyv_` verification tokens,
-  `agyscim_` SCIM tokens, `agd_` desktop grants, `whsec_` webhook secrets,
+  `agyi_` invitations, `agyd_` remembered browsers, `agyscim_` SCIM tokens,
+  `agd_` desktop grants, `whsec_` webhook secrets,
   `csrf_` CSRF tokens) or bare (OIDC state and nonce, domain verification)
   — is masked wherever it appears (in a message, a value, an error, a
   nested object), keeping its 12-character display prefix so an incident

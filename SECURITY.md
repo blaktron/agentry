@@ -77,6 +77,10 @@ discussion, but they will not be treated as security bugs:
   rescanned, and why the product never says "safe" (see `/trust`).
 - **Declared capabilities are not runtime-enforced.** The manifest is a
   contract and a policy input; the consuming runtime does the sandboxing.
+  Agentry's own runner (`agentry run`) is one such runtime: it enforces them
+  for everything that goes through its gateway, while a harness it runs on
+  the host is bounded by its configuration and the proxy variables, not by
+  Docker (`docs/runner.md`). A third-party runtime may enforce nothing.
 - **No transparency log in v1.** Signing-key misuse is detectable after the
   fact through audit logs and KMS alerting, not through a Rekor-style log.
   That is planned, not shipped.

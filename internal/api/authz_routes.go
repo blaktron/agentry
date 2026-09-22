@@ -355,7 +355,7 @@ var mountAuthz = map[string]MountDecl{
 	// The image proxy: the signature is the route's only gate (agentry#64).
 	"GET /api/v1/img/{sig}/{ref}": {
 		Gate: GateSignature, Class: RateNone,
-		Why: "the HMAC bounds what can be asked for, and the proxy's own exposure is agentry#403",
+		Why: "the HMAC bounds what can be asked for; its key is never a public constant and the fetch is https only (agentry#403)",
 	},
 
 	// The probes: infrastructure, not a principal. The access log skips
@@ -363,11 +363,14 @@ var mountAuthz = map[string]MountDecl{
 	"GET /healthz": {Gate: GatePublic, Class: RateNone, Why: "a liveness probe answers whoever asks, by design"},
 	"GET /readyz":  {Gate: GatePublic, Class: RateNone, Why: "a readiness probe answers whoever asks, by design"},
 
-	// Prometheus exposition (D-25). server.go carries the reasoning and
-	// agentry#408 the exposure; this is the declaration's own claim.
+	// Prometheus exposition (D-25). server.go carries the reasoning; the
+	// compose edge answers /metrics with 404 (agentry#408), so there only a
+	// scraper on the private network reaches it. The Helm chart's ingress
+	// routes the whole host to the api and does not exclude it. This is the
+	// declaration's own claim.
 	"GET /metrics": {
 		Gate: GatePublic, Class: RateNone,
-		Why: "a scraper is infrastructure, not a principal; the mitigation is a private interface (agentry#408)",
+		Why: "a scraper is infrastructure, not a principal; the compose edge 404s it (agentry#408); a Helm ingress must exclude it",
 	},
 
 	// The discovery documents are what a client reads before it holds

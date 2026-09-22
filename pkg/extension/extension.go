@@ -72,7 +72,9 @@ type (
 // Allowance is the old name of Cap (agentry#360): kept so an extension
 // built against it still compiles until it adopts Cap.
 //
-// Deprecated: use Cap; removed once agentry-enterprise#29 lands.
+// Deprecated: use Cap. agentry-enterprise#29 has adopted Cap and nothing in
+// the estate uses this name; it goes with the next breaking change to this
+// package.
 type Allowance = entitlements.Cap
 
 // The two namespace kinds a Subject carries.
