@@ -26,7 +26,8 @@ and the examples each have their own public repository (see
 
 ## Contributing from outside
 
-Fork, branch from `main`, open a pull request. CI runs on the maintainers'
+Fork, branch from `dev`, open a pull request against `dev`: `dev` is where
+changes land, and `main` takes only its promotions. CI runs on the maintainers'
 own runners once a maintainer approves the run for a first-time contributor.
 Sign off every commit (the DCO, below); keep a change to one concern; say in
 the PR what you verified and how. A change that departs from the recorded
@@ -251,7 +252,8 @@ Releases are automated with [release-please](https://github.com/googleapis/relea
 2. Merging the release PR creates the `vX.Y.Z` tag and a GitHub release whose
    body is the changelog.
 3. The tag triggers `release.yaml`, which runs the full check + attack-corpus
-   gate, then builds reproducible cross-platform binaries, an SPDX SBOM, and
+   gate, then builds cross-platform binaries with reproducible-build flags
+   (`-trimpath`, cgo off; no step yet rebuilds and compares), an SPDX SBOM, and
    keyless cosign signatures, and attaches them to the release. It **refuses
    to release if the attack corpus gate is red** — the same bar publishers face.
 
