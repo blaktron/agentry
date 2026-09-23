@@ -43,6 +43,20 @@ func (q *Queries) ConsumeDesktopGrant(ctx context.Context, arg ConsumeDesktopGra
 	return i, err
 }
 
+const consumeDesktopGrantsForUser = `-- name: ConsumeDesktopGrantsForUser :execrows
+UPDATE desktop_grants SET consumed_at = now() WHERE user_id = $1 AND consumed_at IS NULL
+`
+
+// Clear-data (agentry#498): a code minted before the clear cannot be
+// exchanged for a token after it.
+func (q *Queries) ConsumeDesktopGrantsForUser(ctx context.Context, userID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, consumeDesktopGrantsForUser, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const createDesktopGrant = `-- name: CreateDesktopGrant :one
 
 INSERT INTO desktop_grants (id, user_id, code_sha256, state_sha256, scopes, name, expires_at)

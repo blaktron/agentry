@@ -494,7 +494,7 @@ paths:
       summary: Clear the caller's credentials, installs and settings, and keep the account (session only).
       description: >
         Revokes every personal access token and SSH key, deletes every
-        trusted device, ends every session but the caller's, removes every
+        trusted device, consumes every pending desktop sign-in code, ends every session but the caller's, removes every
         account install, and resets the display name and the notification
         settings to their defaults (every switch on; mail still goes only
         to a verified address). The account itself stays: the handle, the

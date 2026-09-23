@@ -15,3 +15,8 @@ RETURNING *;
 
 -- name: DeleteExpiredDesktopGrants :execrows
 DELETE FROM desktop_grants WHERE expires_at < now() - interval '1 day';
+
+-- name: ConsumeDesktopGrantsForUser :execrows
+-- Clear-data (agentry#498): a code minted before the clear cannot be
+-- exchanged for a token after it.
+UPDATE desktop_grants SET consumed_at = now() WHERE user_id = $1 AND consumed_at IS NULL;
