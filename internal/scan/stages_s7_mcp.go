@@ -34,7 +34,9 @@ type MCPScanRecord struct {
 	Package   string
 	Version   string
 	// Status is "safe" (no known advisories at LastChecked), "vulnerable"
-	// or "error" (the last lookup failed; Advisories are the last known).
+	// or "error" (a lookup failed before any answer: no Advisories, and S7
+	// counts it as no answer). A lookup that fails after an answer keeps the
+	// answer's Status and only sets LastError.
 	Status      string
 	MaxSeverity string
 	Advisories  []OSVVulnerability
@@ -179,12 +181,16 @@ func (s S7MCPServers) Run(sc stageContext, in *Input) StageResult {
 		vulns, err := sc.osv.Query(ctx, lookup)
 		if err != nil {
 			// Registry rows, stale or not, are better evidence than nothing;
-			// a server with no row at all is reported as unchecked.
+			// a server with no row at all is reported as unchecked, and so is
+			// one whose only row is the error row an earlier failed lookup
+			// wrote: that row holds no answer, and counting it as one let the
+			// second submission during an outage publish unchecked
+			// (agentry#480; plan mcp-vuln-scanning D9, fail toward review).
 			var unchecked []string
 			for _, p := range lookup {
 				i := lookupIdx[p.Key()]
 				d := servers[i]
-				if records[i] == nil {
+				if records[i] == nil || records[i].Status == "error" {
 					unchecked = append(unchecked, d.Ecosystem+":"+d.Package+"@"+d.Version)
 					if sc.mcpCache != nil {
 						_ = sc.mcpCache.Put(ctx, MCPScanRecord{Ecosystem: d.Ecosystem, Package: d.Package, Version: d.Version,

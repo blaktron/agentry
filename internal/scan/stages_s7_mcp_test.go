@@ -119,7 +119,8 @@ func TestS7LooksUpOnceThenReadsTheRegistry(t *testing.T) {
 }
 
 // A lookup failure is a medium finding (routes to review) for servers the
-// registry has never seen, and silently uses the last known row otherwise.
+// registry has never answered for, and silently uses the last known answer
+// otherwise.
 func TestS7LookupErrorFailsTowardReview(t *testing.T) {
 	osv := &fakeOSV{err: errors.New("dial tcp: i/o timeout")}
 	cache := &MemoryMCPScanCache{}
@@ -136,6 +137,18 @@ func TestS7LookupErrorFailsTowardReview(t *testing.T) {
 		t.Fatalf("error row: %+v", rec)
 	}
 
+	// A second submission during the same outage finds those error rows.
+	// An error row is no evidence, so the servers are still unchecked and
+	// the version still goes to review (agentry#480: it used to publish).
+	res = S7MCPServers{}.Run(s7ctx(osv, cache), &Input{ManifestJSON: []byte(s7Manifest)})
+	errs = findScanner(res.Findings, "S7/osv-error")
+	if len(errs) != 1 || errs[0].Severity != SevMedium || errs[0].Confidence != ConfHigh {
+		t.Fatalf("second submission during the outage: %+v", res.Findings)
+	}
+	if got := errs[0].Detail["servers"].([]string); len(got) != 2 {
+		t.Fatalf("unchecked servers on the second submission: %v", got)
+	}
+
 	// With a stale-but-real row the failure is absorbed: its advisories
 	// are reported and no osv-error finding is raised for that server.
 	stale := &MemoryMCPScanCache{}
@@ -147,6 +160,22 @@ func TestS7LookupErrorFailsTowardReview(t *testing.T) {
 	res = S7MCPServers{}.Run(s7ctx(osv, stale), &Input{ManifestJSON: []byte(s7Manifest)})
 	if len(findScanner(res.Findings, "S7/osv-error")) != 0 || len(findScanner(res.Findings, "S7/mcp-vuln-ghsa-old")) != 1 {
 		t.Fatalf("stale-row findings: %+v", res.Findings)
+	}
+
+	// Mixed: one server with a real answer, one with only an error row. Only
+	// the second is unchecked.
+	mixed := &MemoryMCPScanCache{}
+	_ = mixed.Put(context.Background(), MCPScanRecord{Ecosystem: "npm", Package: "@modelcontextprotocol/server-github", Version: "2026.1.2",
+		Status: "safe", LastChecked: time.Now().Add(-48 * time.Hour)})
+	_ = mixed.Put(context.Background(), MCPScanRecord{Ecosystem: "pypi", Package: "mcp-server-fetch", Version: "0.6.2",
+		Status: "error", LastChecked: time.Now().Add(-time.Hour), LastError: "earlier outage"})
+	res = S7MCPServers{}.Run(s7ctx(osv, mixed), &Input{ManifestJSON: []byte(s7Manifest)})
+	errs = findScanner(res.Findings, "S7/osv-error")
+	if len(errs) != 1 {
+		t.Fatalf("mixed findings: %+v", res.Findings)
+	}
+	if got := errs[0].Detail["servers"].([]string); len(got) != 1 || got[0] != "pypi:mcp-server-fetch@0.6.2" {
+		t.Fatalf("mixed unchecked servers: %v", got)
 	}
 }
 
