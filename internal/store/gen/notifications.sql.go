@@ -11,6 +11,19 @@ import (
 	"github.com/google/uuid"
 )
 
+const deleteUserNotificationSettings = `-- name: DeleteUserNotificationSettings :execrows
+DELETE FROM user_notification_settings WHERE user_id = $1
+`
+
+// Clear-data (agentry#498): no row reads as the defaults.
+func (q *Queries) DeleteUserNotificationSettings(ctx context.Context, userID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUserNotificationSettings, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getUserNotificationSettings = `-- name: GetUserNotificationSettings :one
 
 SELECT user_id, email_dependency_alerts, email_quarantine, email_review_decisions, email_advisories, email_org_invites, web_dependency_alerts, updated_at, email_billing FROM user_notification_settings WHERE user_id = $1
