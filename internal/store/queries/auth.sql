@@ -58,3 +58,8 @@ SELECT * FROM sessions WHERE id = $1;
 UPDATE sessions SET revoked_at = now()
 WHERE sso_connection_id = $1 AND saml_name_id = $2 AND revoked_at IS NULL
   AND (sqlc.narg('saml_session_index')::text IS NULL OR saml_session_index = sqlc.narg('saml_session_index')::text);
+
+-- name: RevokeAllPATsForUser :execrows
+-- Clear-data (agentry#498): every live token the user holds, org-bound ones
+-- included.
+UPDATE pats SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL;

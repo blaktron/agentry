@@ -223,6 +223,25 @@ content whenever the account has any:
   promote another member first, or decommission the organization. The
   erased account's memberships go with it, so no seat is held by an
   account that is gone.
+
+## Clearing an account's data
+
+`POST /user/clear-data` (session only) empties an account and keeps it
+(agentry#498). It revokes every personal access token and SSH key, deletes
+every trusted device, ends every session except the caller's, removes every
+account install, clears the display name and resets the notification
+settings to their defaults. The handle, the email, the sign-in account at the
+directory, organization memberships, BriefAgents with their versions and
+repositories, stars, the subscription and credits stay. It answers `204`, and
+the caller stays signed in.
+
+- **A token cannot call it** (`403`). A cookie request needs the session's
+  CSRF header, like every other cookie mutation.
+- **It writes one audit event**, `user.data_clear`, whose detail counts what
+  it removed.
+- **Extensions hear `user.data_cleared`** with the user id after the commit,
+  so an extension clears what it holds for the account (the hosted-runs
+  extension deletes the account's run history).
 - **A transfer respects the organization's private-agent cap** (`422
   private-agent-cap`, nothing erased, nothing moved) and is refused into an
   organization in its decommission hold.

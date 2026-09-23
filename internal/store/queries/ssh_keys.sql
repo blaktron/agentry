@@ -16,3 +16,7 @@ UPDATE user_ssh_keys SET last_used_at = now() WHERE id = $1;
 
 -- name: RevokeSSHKey :execrows
 UPDATE user_ssh_keys SET revoked_at = now() WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL;
+
+-- name: RevokeAllSSHKeysForUser :execrows
+-- Clear-data (agentry#498).
+UPDATE user_ssh_keys SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL;

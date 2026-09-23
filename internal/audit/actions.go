@@ -37,6 +37,9 @@ const (
 	// directory group membership (agentry#51).
 	ActionUserStaffSync Action = "user.staff_sync"
 	ActionUserDelete    Action = "user.delete"
+	// ActionUserDataClear records a user clearing their credentials,
+	// installs and settings while keeping the account (agentry#498).
+	ActionUserDataClear Action = "user.data_clear"
 
 	// Orgs & teams.
 	ActionOrgCreate       Action = "org.create"
@@ -135,7 +138,7 @@ func init() {
 	for _, a := range []Action{
 		ActionUserRegister, ActionUserLogin, ActionUserLoginFailed,
 		ActionUserLogout, ActionUserEmailVerified, ActionUserUpdate,
-		ActionUserTOTPEnabled, ActionPATCreate, ActionPATRevoke, ActionSSHKeyAdd, ActionSSHKeyRemove, ActionUserDelete, ActionUserDirectoryErase, ActionUserStaffSync,
+		ActionUserTOTPEnabled, ActionPATCreate, ActionPATRevoke, ActionSSHKeyAdd, ActionSSHKeyRemove, ActionUserDelete, ActionUserDataClear, ActionUserDirectoryErase, ActionUserStaffSync,
 		ActionTrustedDeviceAdd, ActionTrustedDeviceRevoke,
 		ActionOrgCreate, ActionOrgUpdate, ActionOrgMemberSet,
 		ActionOrgMemberRemove, ActionOrgInviteCreate, ActionOrgInviteRevoke,
