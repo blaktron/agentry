@@ -588,10 +588,10 @@ func (h *Handler) afterReceive(ctx context.Context, agent registry.Agent, princi
 		h.PostReceive(ctx, agent, refs, principal)
 	}
 
-	// §6.3: a new v* tag with auto-publish enabled submits the version.
-	// Runs inline for now — the M4 queue moves this to a worker job. The
-	// push already succeeded; submission failures surface via the version
-	// (or its absence) in the API, and in logs.
+	// §6.3: a new v* tag with auto-publish enabled submits the version: the
+	// archive is built here and the scan is handed to the worker's sandbox
+	// queue (agentry#507). The push already succeeded; submission failures
+	// surface via the version (or its absence) in the API, and in logs.
 	if agent.AutoPublishTags && agent.QuarantineState == "none" {
 		for _, ru := range refs {
 			tag, ok := strings.CutPrefix(ru.Ref, "refs/tags/")
