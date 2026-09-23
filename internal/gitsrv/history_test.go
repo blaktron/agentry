@@ -57,6 +57,14 @@ func TestHistoryPatchStreamsAddedLines(t *testing.T) {
 	}
 	histGit(t, work, "commit", "-qam", "fix")
 	head := histGit(t, work, "rev-parse", "HEAD")
+	// A push straight into the bare repository runs its own shim, which
+	// (like the server's) needs the hook binary named: here, this test
+	// binary, whose TestMain is the hook.
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AGENTRY_HOOK_BIN", exe)
 	histGit(t, work, "push", "-q", repos.Path(id), "main")
 
 	stream, err := repos.HistoryPatch(ctx, id, head)

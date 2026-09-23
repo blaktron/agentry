@@ -122,6 +122,12 @@ type Storage struct {
 type Git struct {
 	DataDir string `yaml:"dataDir"` // bare repos under {dataDir}/{uuid[0:2]}/{uuid}.git
 	BinPath string `yaml:"binPath"` // git binary; defaults to $PATH lookup
+	// HooksDir is where the git role makes the private directory git runs
+	// the pre-receive hook from; it must allow exec and be owned by the
+	// server (or sticky, like /tmp). Empty means the system temp directory.
+	// The repositories' own volume is not used, since it may not allow exec
+	// (agentry#495).
+	HooksDir string `yaml:"hooksDir"`
 	// SSHAddr, when set, is where the git and all roles listen for the SSH
 	// transport (§6.1 Q7, agentry#70), e.g. ":2222". Empty disables it.
 	SSHAddr string `yaml:"sshAddr"`
@@ -640,6 +646,7 @@ func applyEnv(c *Config) error {
 	str("AGENTRY_STORAGE_S3_ENDPOINT", &c.Storage.S3Endpoint)
 	str("AGENTRY_GIT_DATA_DIR", &c.Git.DataDir)
 	str("AGENTRY_GIT_BIN", &c.Git.BinPath)
+	str("AGENTRY_GIT_HOOKS_DIR", &c.Git.HooksDir)
 	str("AGENTRY_GIT_SSH_ADDR", &c.Git.SSHAddr)
 	str("AGENTRY_GIT_SSH_HOST_KEY", &c.Git.SSHHostKeyFile)
 	str("AGENTRY_GIT_SSH_PUBLIC_URL", &c.Git.SSHPublicURL)
