@@ -565,6 +565,10 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = w.Write([]byte(`{"status":"ok"}`))
 			})
+			// Readiness is the database ping, as on the api role: the chart's
+			// git Deployment probes /readyz, and a git pod without it never
+			// became Ready on the first live install (agentry#450).
+			api.MountFunc(mux, "GET /readyz", s.Readyz)
 			// The git role has no /api/v1 surface, so /metrics is mounted
 			// here too — a git deployment is exactly the one whose clone
 			// first-byte SLI (§16.1) needs scraping.

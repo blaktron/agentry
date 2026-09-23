@@ -541,6 +541,11 @@ func (s *Server) GetMeta(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, meta)
 }
 
+// Readyz is the readiness handler for a role that assembles its own mux —
+// the git role (pkg/extension), whose Deployment probes /readyz like the api's
+// and got a 404 until it was mounted there (agentry#450).
+func (s *Server) Readyz(w http.ResponseWriter, r *http.Request) { s.readyz(w, r) }
+
 // healthz is liveness (process up); readyz is readiness (dependencies).
 func (s *Server) healthz(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
