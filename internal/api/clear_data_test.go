@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/blaktron/agentry/internal/api"
 )
@@ -52,7 +51,7 @@ func TestClearCurrentUserData(t *testing.T) {
 	_, _ = env.mintPAT(sess, "cd-pat-2", "repo:read")
 	env.doJSON(sess, http.MethodPost, "/api/v1/user/ssh-keys", map[string]any{"title": "laptop", "publicKey": testPublicKeyLine(t)}, nil, http.StatusCreated)
 	if _, err := env.st.Pool().Exec(ctx,
-		`INSERT INTO trusted_devices (id, user_id, token_sha256, expires_at) VALUES (gen_random_uuid(), $1, '\x00', now() + interval '30 days')`, uid); err != nil {
+		`INSERT INTO trusted_devices (id, user_id, token_sha256, expires_at) VALUES (gen_random_uuid(), $1, decode(md5(random()::text), 'hex'), now() + interval '30 days')`, uid); err != nil {
 		t.Fatal(err)
 	}
 	if code, _, _ := env.putInstall(t, sess, authorH+"/keeper", map[string]any{"version": "1.0.0", "acceptCapabilities": true}); code != http.StatusOK {
@@ -64,10 +63,24 @@ func TestClearCurrentUserData(t *testing.T) {
 		"web":   map[string]any{"dependencyAlerts": false},
 	}, nil, http.StatusOK)
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents",
-		map[string]any{"namespace": h, "name": "mine", "modes": []string{"autonomous"}, "visibility": "private"}, nil, http.StatusCreated)
+		map[string]any{"namespace": h, "name": "mine", "modes": []string{"autonomous"}, "visibility": "public"}, nil, http.StatusCreated)
+	env.publishVersions(t, sess, h, "mine", []versionFiles{
+		{"1.0.0", installCapsFiles(h, "mine", "1.0.0", []string{"api.example"}, nil)},
+	})
+	orgID := env.createOrg(sess, "cd-org"+env.sfxDigits())
+	if _, err := env.st.Pool().Exec(ctx,
+		`INSERT INTO desktop_grants (id, user_id, code_sha256, state_sha256, scopes, name, expires_at)
+		 VALUES (gen_random_uuid(), $1, decode(md5(random()::text), 'hex'), '\x02', '{agent:read}', 'desktop', now() + interval '60 seconds')`, uid); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := env.st.Pool().Exec(ctx,
 		`INSERT INTO stars (user_id, agent_id) SELECT $1, id FROM agents WHERE name = 'keeper' AND namespace_id = (SELECT id FROM handles WHERE handle = $2)`, uid, authorH); err != nil {
 		t.Fatal(err)
+	}
+
+	var liveTokens int
+	if err := env.st.Pool().QueryRow(ctx, `SELECT count(*) FROM pats WHERE user_id = $1 AND revoked_at IS NULL`, uid).Scan(&liveTokens); err != nil || liveTokens < 2 {
+		t.Fatalf("live tokens before clearing: %d (%v)", liveTokens, err)
 	}
 
 	// A token cannot clear (session only).
@@ -99,11 +112,12 @@ func TestClearCurrentUserData(t *testing.T) {
 		return n
 	}
 	for what, n := range map[string]int{
-		"live PATs":             count(`SELECT count(*) FROM pats WHERE user_id = $1 AND revoked_at IS NULL`, uid),
-		"live SSH keys":         count(`SELECT count(*) FROM user_ssh_keys WHERE user_id = $1 AND revoked_at IS NULL`, uid),
-		"trusted devices":       count(`SELECT count(*) FROM trusted_devices WHERE user_id = $1`, uid),
-		"account installs":      count(`SELECT count(*) FROM account_installs WHERE user_id = $1`, uid),
-		"notification settings": count(`SELECT count(*) FROM user_notification_settings WHERE user_id = $1`, uid),
+		"live PATs":                count(`SELECT count(*) FROM pats WHERE user_id = $1 AND revoked_at IS NULL`, uid),
+		"live SSH keys":            count(`SELECT count(*) FROM user_ssh_keys WHERE user_id = $1 AND revoked_at IS NULL`, uid),
+		"trusted devices":          count(`SELECT count(*) FROM trusted_devices WHERE user_id = $1`, uid),
+		"account installs":         count(`SELECT count(*) FROM account_installs WHERE user_id = $1`, uid),
+		"notification settings":    count(`SELECT count(*) FROM user_notification_settings WHERE user_id = $1`, uid),
+		"unconsumed desktop codes": count(`SELECT count(*) FROM desktop_grants WHERE user_id = $1 AND consumed_at IS NULL`, uid),
 	} {
 		if n != 0 {
 			t.Errorf("%s after clearing: %d, want 0", what, n)
@@ -121,6 +135,12 @@ func TestClearCurrentUserData(t *testing.T) {
 	if n := count(`SELECT count(*) FROM stars WHERE user_id = $1`, uid); n != 1 {
 		t.Errorf("stars after clearing: %d, want 1", n)
 	}
+	if n := count(`SELECT count(*) FROM agent_versions v JOIN agents a ON a.id = v.agent_id WHERE a.namespace_id = $1 AND v.status = 'published'`, uid); n != 1 {
+		t.Errorf("published versions after clearing: %d, want 1", n)
+	}
+	if n := count(`SELECT count(*) FROM memberships WHERE user_id = $1 AND org_id = $2`, uid, orgID); n != 1 {
+		t.Errorf("the organization membership after clearing: %d, want 1", n)
+	}
 	if n := count(`SELECT count(*) FROM users WHERE id = $1 AND state = 'active' AND deleted_tombstone IS NULL`, uid); n != 1 {
 		t.Error("the account is no longer active after clearing")
 	}
@@ -133,21 +153,11 @@ func TestClearCurrentUserData(t *testing.T) {
 	}
 	var d map[string]any
 	_ = json.Unmarshal(detail, &d)
-	if d["tokens"] != float64(2) || d["sshKeys"] != float64(1) || d["trustedDevices"] != float64(1) || d["otherSessions"] != float64(1) || d["installs"] != float64(1) || d["notificationSettingsReset"] != true {
+	if d["tokens"] != float64(liveTokens) || d["sshKeys"] != float64(1) || d["trustedDevices"] != float64(1) || d["desktopCodes"] != float64(1) || d["otherSessions"] != float64(1) || d["installs"] != float64(1) || d["notificationSettingsReset"] != true {
 		t.Errorf("audit detail = %s", detail)
 	}
 
-	// Extensions heard it once, for this user.
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		mu.Lock()
-		n := len(seen)
-		mu.Unlock()
-		if n > 0 || time.Now().After(deadline) {
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
+	// Extensions heard it once, for this user (fireEvent is synchronous).
 	mu.Lock()
 	defer mu.Unlock()
 	if len(seen) != 1 || seen[0].UserID.String() != uid {

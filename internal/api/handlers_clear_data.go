@@ -49,6 +49,12 @@ func (s *Server) ClearCurrentUserData(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		counts["trustedDevices"] = n
+		// A desktop sign-in code another session minted moments ago would
+		// otherwise still exchange for a fresh token after the clear.
+		if n, err = tq.ConsumeDesktopGrantsForUser(r.Context(), p.UserID); err != nil {
+			return err
+		}
+		counts["desktopCodes"] = n
 		if n, err = tq.RevokeOtherUserSessions(r.Context(), storegen.RevokeOtherUserSessionsParams{
 			UserID: p.UserID, ID: p.SessionID,
 		}); err != nil {
