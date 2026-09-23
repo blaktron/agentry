@@ -54,8 +54,23 @@ data:
       s3UsePathStyle: {{ .Values.config.storage.s3UsePathStyle }}
     git:
       dataDir: {{ .Values.config.git.dataDir | quote }}
+      {{- with .Values.config.git.sshAddr }}
+      sshAddr: {{ . | quote }}
+      {{- end }}
+      {{- with .Values.config.git.sshPublicUrl }}
+      sshPublicUrl: {{ . | quote }}
+      {{- end }}
     signing:
       kind: {{ .Values.config.signing.kind }}
+      {{- if eq .Values.config.signing.kind "file" }}
+      {{- if not .Values.signingKey.existingSecret }}
+      {{- fail "config.signing.kind=file needs signingKey.existingSecret: the Secret holding the PEM" }}
+      {{- end }}
+      {{- if not .Values.config.signing.keyFile }}
+      {{- fail "config.signing.kind=file needs config.signing.keyFile" }}
+      {{- end }}
+      keyFile: {{ .Values.config.signing.keyFile | quote }}
+      {{- end }}
       kmsKeyARN: {{ .Values.config.signing.kmsKeyARN | quote }}
       kmsRegion: {{ .Values.config.signing.kmsRegion | quote }}
       {{- with .Values.config.signing.notBefore }}

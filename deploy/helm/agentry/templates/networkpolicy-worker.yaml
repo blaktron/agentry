@@ -1,0 +1,46 @@
+{{- if .Values.worker.networkPolicy.enabled }}
+# Default-deny egress for the worker pods (§13.3's no-egress worker): only
+# what is named below is reachable — DNS in kube-system, Services in this
+# namespace (an egress proxy), and the listed addresses and ports.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "agentry.fullname" . }}-worker-egress
+  labels:
+    {{- include "agentry.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "agentry.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  policyTypes: ["Egress"]
+  egress:
+    {{- if .Values.worker.networkPolicy.dns }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    {{- end }}
+    {{- if .Values.worker.networkPolicy.namespace }}
+    - to:
+        - podSelector: {}
+    {{- end }}
+    {{- range .Values.worker.networkPolicy.egress }}
+    - to:
+        - ipBlock:
+            cidr: {{ .cidr | quote }}
+      {{- with .ports }}
+      ports:
+        {{- range . }}
+        - port: {{ .port }}
+          protocol: {{ .protocol | default "TCP" }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+{{- end }}
