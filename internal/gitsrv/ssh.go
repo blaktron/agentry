@@ -332,11 +332,27 @@ func (s *SSHServer) execGit(ctx context.Context, ch ssh.Channel, service, gitPro
 		cmdCapture = &bytes.Buffer{}
 		stdin = io.TeeReader(ch, newCommandCapture(cmdCapture))
 	}
-	cmd := exec.CommandContext(ctx, h.repos.GitBin(), service, h.repos.Path(agent.RepoID))
+	cmd, done, err := h.repos.Command(ctx, service, h.repos.Path(agent.RepoID))
+	if err != nil {
+		outcome = "error"
+		h.log.Error("git hooks unavailable", "service", service, "err", err)
+		_, _ = fmt.Fprintf(ch.Stderr(), "agentry: the server cannot check pushes right now, try again later\n")
+		return 1
+	}
+	defer done()
 	cmd.Env = h.gitEnvFor(ctx, gitProtocol, agent, principal, role)
 	cmd.Stdin = stdin
 	cmd.Stdout = ch
-	cmd.Stderr = ch.Stderr()
+	// The pusher reads git's stderr on the channel; the log keeps a copy,
+	// since a refusal git reports only there (a hook that would not start)
+	// is otherwise the pusher's alone (agentry#495).
+	var stderr bytes.Buffer
+	cmd.Stderr = io.MultiWriter(ch.Stderr(), &stderr)
+	defer func() {
+		if stderr.Len() > 0 {
+			h.log.Warn("git ssh stderr", "service", service, "stderr", truncate(stderr.String(), 4096))
+		}
+	}()
 
 	release, err := h.acquireGit(ctx, agent.RepoID)
 	if err != nil {
@@ -389,4 +405,12 @@ func loadOrCreateHostKey(path string) (ssh.Signer, error) {
 		return nil, fmt.Errorf("git ssh: write host key: %w", err)
 	}
 	return ssh.NewSignerFromKey(priv)
+}
+
+// truncate keeps a logged value to at most n bytes.
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "…"
 }

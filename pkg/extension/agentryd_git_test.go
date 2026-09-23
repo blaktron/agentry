@@ -36,6 +36,7 @@ func TestGitRoleServesHealthAndReadiness(t *testing.T) {
 	cfg.DevMode = true
 	cfg.Scan.OSVURL = "none"
 	cfg.Git.DataDir = t.TempDir()
+	cfg.Git.HooksDir = t.TempDir()
 	cfg.Git.SSHAddr = "" // no listener in a test
 	mx, err := metrics.New(ctx, metrics.Config{ServiceName: "agentryd", Role: "git", Env: cfg.Env})
 	if err != nil {
