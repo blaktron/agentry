@@ -24,6 +24,7 @@ storage:
 
 git:
   dataDir: .devdata/git
+  # hooksDir: ""     # where the pre-receive hook runs from (must allow exec); empty = the system temp directory
 
 log:
   level: info        # debug | info | warn | error

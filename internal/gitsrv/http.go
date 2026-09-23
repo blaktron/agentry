@@ -314,8 +314,13 @@ func (h *Handler) infoRefs(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), h.opTimeout)
 	defer cancel()
 
-	args := []string{strings.TrimPrefix(service, "git-"), "--stateless-rpc", "--advertise-refs", h.repos.Path(agent.RepoID)}
-	cmd := exec.CommandContext(ctx, h.repos.GitBin(), args...)
+	cmd, done, err := h.repos.Command(ctx, strings.TrimPrefix(service, "git-"), "--stateless-rpc", "--advertise-refs", h.repos.Path(agent.RepoID))
+	if err != nil {
+		h.log.ErrorContext(r.Context(), "git hooks unavailable", "service", service, "err", err)
+		http.Error(w, "git error", http.StatusInternalServerError)
+		return
+	}
+	defer done()
 	cmd.Env = h.gitEnv(r, agent, principal, role)
 
 	// The advertisement is buffered rather than streamed on purpose: it is
@@ -438,7 +443,14 @@ func (h *Handler) rpc(w http.ResponseWriter, r *http.Request, agent registry.Age
 		stdin = io.TeeReader(body, newCommandCapture(cmdCapture))
 	}
 
-	cmd := exec.CommandContext(ctx, h.repos.GitBin(), service, "--stateless-rpc", h.repos.Path(agent.RepoID))
+	cmd, done, err := h.repos.Command(ctx, service, "--stateless-rpc", h.repos.Path(agent.RepoID))
+	if err != nil {
+		outcome = "error"
+		h.log.ErrorContext(r.Context(), "git hooks unavailable", "service", service, "err", err)
+		http.Error(w, "git error", http.StatusInternalServerError)
+		return
+	}
+	defer done()
 	cmd.Env = h.gitEnv(r, agent, principal, role)
 	cmd.Stdin = stdin
 	var stderr bytes.Buffer
@@ -484,6 +496,12 @@ func (h *Handler) rpc(w http.ResponseWriter, r *http.Request, agent registry.Age
 		// report to the client. Log for operators.
 		h.log.WarnContext(r.Context(), "git rpc exit", "service", service, "err", err, "stderr", stderr.String())
 		return
+	}
+	// git exits 0 on a push its pre-receive hook declined, and what it says
+	// about why — a hook that could not even start, above all — goes to its
+	// own stderr, which smart HTTP never shows the pusher (agentry#495).
+	if stderr.Len() > 0 {
+		h.log.WarnContext(r.Context(), "git rpc stderr", "service", service, "stderr", stderr.String())
 	}
 
 	if service == "receive-pack" {
