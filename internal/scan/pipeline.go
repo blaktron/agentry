@@ -136,7 +136,8 @@ func NewPipeline(d PipelineDeps) *Pipeline {
 func (p *Pipeline) VersionSubmitted(ctx context.Context, versionID uuid.UUID) error {
 	// Top of the §16.2 publish funnel. Counted here rather than in the
 	// registry so that the submitted count and the verdict counts come from
-	// the same object and cannot drift apart.
+	// the same object and cannot drift apart; a submission handed to the
+	// queue (QueuePipeline) is counted by the scan.version handler instead.
 	p.mx.RecordPublishSubmitted(ctx)
 	if err := p.Scan(ctx, versionID, "publish"); err != nil {
 		p.log.Error("pipeline: scan failed", "version", versionID, "err", err)
@@ -166,6 +167,16 @@ func (p *Pipeline) Scan(ctx context.Context, versionID uuid.UUID, trigger string
 	// it out by their queries; a scan asked for by name stops here.
 	if v.ScanStatus == registry.ScanStatusSkipped {
 		p.log.Info("scan: version admitted unscanned; not scanned", "version", versionID, "trigger", trigger)
+		return nil
+	}
+	// A publish scan is for a version in `scanning`. Queue delivery is
+	// at-least-once (agentry#507), so a scan.version job can arrive again
+	// after its version was published, held or rejected; running it would
+	// judge the version a second time and could file a review item against
+	// a decided version. Rescans use their own triggers and are not stopped.
+	if trigger == "publish" && registry.Status(v.Status) != registry.StatusScanning {
+		p.log.Info("scan: publish scan for a version no longer scanning; nothing to do",
+			"version", versionID, "status", v.Status)
 		return nil
 	}
 
