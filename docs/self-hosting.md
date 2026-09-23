@@ -113,6 +113,60 @@ Redis (`AGENTRY_REDIS_URL`) remains optional and unused by these. What is
 still per process is the §19 rate-limit buckets, which an N-replica
 deployment multiplies by N (the edge's limits are the ones that hold).
 
+### The Helm chart
+
+The chart in `deploy/helm/agentry` is published beside the image as an OCI
+chart, signed with cosign like the image. Every push to `dev` and `main`
+publishes `oci://ghcr.io/blaktron/agentry/charts/agentry` at a prerelease
+version, `0.1.0-<branch>.<run>.g<sha>`, whose default image is the
+`agentryd:sha-<sha>` built by the same run; a release publishes the tagged
+version (chart `0.2.0`, image `v0.2.0`). The package is private while the
+repository is, so pulling it needs a `read:packages` token, the same one the
+image needs.
+
+```bash
+echo "$GHCR_TOKEN" | helm registry login ghcr.io -u <user> --password-stdin
+cosign verify --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github.com/blaktron/agentry/' \
+  ghcr.io/blaktron/agentry/charts/agentry:0.1.0-main.57.g8420dcb
+helm install agentry oci://ghcr.io/blaktron/agentry/charts/agentry \
+  --version 0.1.0-main.57.g8420dcb -n agentry -f values.yaml
+```
+
+The values that make it installable on a cluster that is not the AWS
+reference (added for the Vultr production cluster, DEV-124):
+
+- `image.pullSecrets` — the Secrets that pull a private image.
+- `config.git.sshAddr` (off by default) and `config.git.sshPublicUrl` — the
+  git role's SSH listener, exposed as port 22 of the `<release>-git` Service
+  when set. The Ingress covers HTTP only; SSH needs a TCP route or a
+  LoadBalancer of its own.
+- `config.signing.kind: file` with `signingKey.existingSecret` and
+  `signingKey.key` — the PEM projected read-only to `config.signing.keyFile`
+  (default `/etc/agentry-signing/signing-key.pem`; the directory must not be
+  under the read-only `/etc/agentry` config mount, and the chart refuses one
+  that is) in every agentryd pod, because the server constructs the signer in
+  every role that has a database (agentry#479 confines it to the worker). The
+  chart refuses to render `kind: file` without the Secret.
+- `objectStoreCredentials.existingSecret` — object-store credentials
+  (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`), injected into the api and
+  worker pods only; the git role never touches the store.
+- `databaseCA.existingSecret` and `databaseCA.key` — the database's CA,
+  projected to `/etc/agentry-db-ca/ca.crt`, so the DSN can carry
+  `sslmode=verify-full&sslrootcert=/etc/agentry-db-ca/ca.crt`.
+- `worker.networkPolicy` and `worker.proxy` — default-deny egress for the
+  worker pods with allows for DNS, this namespace and the listed addresses,
+  and an egress proxy in the worker's environment only (`NO_PROXY` keeps
+  in-cluster names direct).
+- `git.updateStrategy` with `git.replicaCount: 1` and `{type: Recreate}` —
+  the shape for a ReadWriteOnce volume when no RWX class exists.
+- `api.extraEnv`, `git.extraEnv`, `worker.extraEnv` — environment for one
+  role; `extraEnv` reaches every role.
+
+`scripts/acceptance/m7.sh` asserts that shape on every render: the git
+Service, where each Secret lands and that nothing lands under `/etc/agentry`,
+the policy, the refusals.
+
 ## Configuration
 
 `agentry.yaml` (copy `agentry.yaml.example`) plus `AGENTRY_*` environment
