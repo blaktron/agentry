@@ -92,10 +92,21 @@ config:
     s3UsePathStyle: false # MinIO needs true; AWS does not
   git:
     dataDir: /data/git
+    # The SSH git transport (DEV-087): the address the git role listens on,
+    # e.g. ":2222"; empty (the default) leaves it off. The host key is
+    # generated under dataDir on first start, so replicas sharing the RWX
+    # volume share one host key. When set, the git Service exposes it as
+    # port 22 and sshPublicUrl is what clone URLs advertise.
+    sshAddr: ""
+    sshPublicUrl: "" # e.g. ssh://git@git.agentry.example:22
   signing:
     kind: kms # kms | file (prod must not be none)
     kmsKeyARN: ""
     kmsRegion: "" # empty uses the pod's ambient region
+    # kind=file: the PEM key's path in the pod; signingKey.existingSecret
+    # below is mounted at its directory, which must not be under /etc/agentry
+    # (the read-only config mount: a mount nested in it cannot be created).
+    keyFile: /etc/agentry-signing/signing-key.pem
     # §8.8 rotation is done with OVERLAPPING validity windows, so the key
     # discovery document must be able to list more than one key. notBefore/
     # notAfter (RFC3339) bound the ACTIVE key; additionalKeys publishes
@@ -140,6 +151,31 @@ config:
   # sshKeyOffersPerMin: 60
   # agentsPerOrgNamespace: 500
 
+# The attestation signing key for config.signing.kind=file: the Secret and
+# the key in it holding the PEM, projected read-only to config.signing.keyFile
+# (0400, readable through podSecurityContext.fsGroup). Every role mounts it,
+# because the server constructs the signer at start in every role that has a
+# database (agentry#479 is the seam that will let the api and git roles start
+# without the private key).
+signingKey:
+  existingSecret: ""
+  key: signing-key.pem
+
+# Object-store credentials for config.storage.kind=s3 on a cluster without
+# workload identity: a Secret with AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY,
+# injected into the api and worker pods only — the git role never touches the
+# store. Prefer this over extraEnv, which reaches every role.
+objectStoreCredentials:
+  existingSecret: ""
+
+# The database's CA, for a DSN that verifies the server: the Secret and the
+# key in it, projected read-only to /etc/agentry-db-ca/ca.crt in every role;
+# then AGENTRY_DATABASE_URL can carry
+# sslmode=verify-full&sslrootcert=/etc/agentry-db-ca/ca.crt.
+databaseCA:
+  existingSecret: ""
+  key: ca.crt
+
 # Sensitive values. In production prefer existingSecret (e.g. managed by
 # external-secrets / sealed-secrets) over inlining here.
 secret:
@@ -159,7 +195,9 @@ serviceAccount:
   # eks.amazonaws.com/role-arn: arn:aws:iam::<acct>:role/agentry
   annotations: {}
 
-# Extra env applied to all agentryd pods (e.g. AWS creds for non-IRSA clusters).
+# Extra env applied to all agentryd pods. For object-store credentials use
+# objectStoreCredentials.existingSecret instead, which reaches the api and
+# worker only; api.extraEnv, git.extraEnv and worker.extraEnv are per role.
 extraEnv: []
 
 podSecurityContext:
@@ -180,6 +218,7 @@ containerSecurityContext:
 api:
   replicaCount: 2
   port: 8080
+  extraEnv: []
   resources:
     requests: { cpu: 500m, memory: 512Mi }
     limits: { cpu: "1", memory: 1Gi }
@@ -195,6 +234,10 @@ api:
 git:
   replicaCount: 2
   port: 8080
+  extraEnv: []
+  # The rollout strategy. A ReadWriteOnce volume (no RWX class available) needs
+  # replicaCount 1 and {type: Recreate}; the default RollingUpdate suits RWX.
+  updateStrategy: {}
   # Shared RWX volume for the bare repos (§2.4 "git ×N (shared RWX volume)",
   # D-19). Requires a ReadWriteMany StorageClass (EFS CSI, Filestore, NFS, ...).
   persistence:
@@ -215,6 +258,28 @@ worker:
   # Empty = run all queues in one deployment (self-host default). To mirror the
   # SaaS split (§13.3) set queues per an additional worker deployment.
   queues: ""
+  extraEnv: []
+  # An egress proxy for the worker's outbound calls (the object store, the
+  # judge, webhooks): HTTPS_PROXY/HTTP_PROXY and NO_PROXY on the worker pods
+  # only, rendered when httpsProxy is set. Pair with networkPolicy so the
+  # proxy is the only way out. noProxy keeps in-cluster names direct; add
+  # the pod and service CIDRs and the database's address if they must not
+  # go through the proxy.
+  proxy:
+    httpsProxy: ""
+    noProxy: "localhost,127.0.0.1,.svc,.cluster.local"
+  # Default-deny egress for the worker pods, with the allows named here
+  # (§13.3's no-egress worker, restated for Kubernetes). dns lets the pods
+  # resolve through kube-system; namespace lets them reach Services in this
+  # namespace (an egress proxy); egress is a list of {cidr, ports: [{port,
+  # protocol}]} for the database and anything else reached by address.
+  networkPolicy:
+    enabled: false
+    dns: true
+    namespace: true
+    egress: []
+    # - cidr: 10.40.0.0/20
+    #   ports: [{ port: 16751, protocol: TCP }]
   resources:
     requests: { cpu: 500m, memory: 1Gi }
     limits: { cpu: "1", memory: 2Gi }

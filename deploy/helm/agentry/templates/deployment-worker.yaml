@@ -41,6 +41,20 @@ spec:
             {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           env:
             {{- include "agentry.agentrydEnv" . | nindent 12 }}
+            {{- include "agentry.storageCredentialsEnv" . | nindent 12 }}
+            {{- if .Values.worker.proxy.httpsProxy }}
+            - name: HTTPS_PROXY
+              value: {{ .Values.worker.proxy.httpsProxy | quote }}
+            - name: HTTP_PROXY
+              value: {{ .Values.worker.proxy.httpsProxy | quote }}
+            {{- with .Values.worker.proxy.noProxy }}
+            - name: NO_PROXY
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
+            {{- with .Values.worker.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           resources:
             {{- toYaml .Values.worker.resources | nindent 12 }}
           volumeMounts:
@@ -49,6 +63,7 @@ spec:
               readOnly: true
             - name: scratch
               mountPath: /tmp
+            {{- include "agentry.extraVolumeMounts" . | nindent 12 }}
             {{- if .Values.worker.mountGitData }}
             - name: git-data
               mountPath: {{ .Values.config.git.dataDir }}
@@ -59,6 +74,7 @@ spec:
             name: {{ include "agentry.fullname" . }}-config
         - name: scratch
           emptyDir: {}
+        {{- include "agentry.extraVolumes" . | nindent 8 }}
         {{- if .Values.worker.mountGitData }}
         - name: git-data
         {{- if .Values.git.persistence.existingClaim }}
