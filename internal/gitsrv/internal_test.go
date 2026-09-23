@@ -150,6 +150,7 @@ func newBookkeepingEnv(t *testing.T) *bkEnv {
 	cfg := config.Default()
 	cfg.DevMode = true
 	cfg.Git.DataDir = t.TempDir()
+	cfg.Git.HooksDir = t.TempDir()
 	cfg.Storage.LocalDir = t.TempDir()
 	repos, err := NewRepoStore(cfg)
 	if err != nil {

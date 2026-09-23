@@ -123,9 +123,10 @@ type Git struct {
 	DataDir string `yaml:"dataDir"` // bare repos under {dataDir}/{uuid[0:2]}/{uuid}.git
 	BinPath string `yaml:"binPath"` // git binary; defaults to $PATH lookup
 	// HooksDir is where the git role makes the private directory git runs
-	// the pre-receive hook from; it must allow exec. Empty means the
-	// system temp directory. The repositories' own volume is never used,
-	// since it may not allow exec (agentry#495).
+	// the pre-receive hook from; it must allow exec and be owned by the
+	// server (or sticky, like /tmp). Empty means the system temp directory.
+	// The repositories' own volume is not used, since it may not allow exec
+	// (agentry#495).
 	HooksDir string `yaml:"hooksDir"`
 	// SSHAddr, when set, is where the git and all roles listen for the SSH
 	// transport (§6.1 Q7, agentry#70), e.g. ":2222". Empty disables it.

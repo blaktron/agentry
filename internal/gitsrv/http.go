@@ -314,8 +314,12 @@ func (h *Handler) infoRefs(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), h.opTimeout)
 	defer cancel()
 
-	args := []string{strings.TrimPrefix(service, "git-"), "--stateless-rpc", "--advertise-refs", h.repos.Path(agent.RepoID)}
-	cmd := h.repos.Command(ctx, args...)
+	cmd, err := h.repos.Command(ctx, strings.TrimPrefix(service, "git-"), "--stateless-rpc", "--advertise-refs", h.repos.Path(agent.RepoID))
+	if err != nil {
+		h.log.ErrorContext(r.Context(), "git hooks unavailable", "service", service, "err", err)
+		http.Error(w, "git error", http.StatusInternalServerError)
+		return
+	}
 	cmd.Env = h.gitEnv(r, agent, principal, role)
 
 	// The advertisement is buffered rather than streamed on purpose: it is
@@ -438,7 +442,13 @@ func (h *Handler) rpc(w http.ResponseWriter, r *http.Request, agent registry.Age
 		stdin = io.TeeReader(body, newCommandCapture(cmdCapture))
 	}
 
-	cmd := h.repos.Command(ctx, service, "--stateless-rpc", h.repos.Path(agent.RepoID))
+	cmd, err := h.repos.Command(ctx, service, "--stateless-rpc", h.repos.Path(agent.RepoID))
+	if err != nil {
+		outcome = "error"
+		h.log.ErrorContext(r.Context(), "git hooks unavailable", "service", service, "err", err)
+		http.Error(w, "git error", http.StatusInternalServerError)
+		return
+	}
 	cmd.Env = h.gitEnv(r, agent, principal, role)
 	cmd.Stdin = stdin
 	var stderr bytes.Buffer
