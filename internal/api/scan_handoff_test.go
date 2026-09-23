@@ -11,8 +11,11 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/queue"
+	"github.com/blaktron/agentry/internal/scan"
 )
 
 func TestHandedOffPublishIsScannedByTheWorkerNotTheReceivingRole(t *testing.T) {
@@ -85,5 +88,28 @@ func TestHandedOffPublishIsScannedByTheWorkerNotTheReceivingRole(t *testing.T) {
 	}
 	if err := json.NewDecoder(res.Body).Decode(&att); err != nil || att.PayloadType == "" {
 		t.Fatalf("attestation body: %v %+v", err, att)
+	}
+
+	// Delivery is at-least-once: the same job arriving after the version
+	// was published is a no-op — no second run, no review item, still one
+	// attestation, still published.
+	if _, err := w.Enqueue(ctx, scan.JobScanVersion, "sandbox",
+		scan.ScanJobArgs{VersionID: uuid.MustParse(versionID), Trigger: "publish"}); err != nil {
+		t.Fatalf("re-enqueue: %v", err)
+	}
+	w.Drain(ctx, "sandbox")
+	var items, atts int
+	if err := env.st.Pool().QueryRow(ctx, `SELECT count(*) FROM scan_runs WHERE version_id = $1`, versionID).Scan(&runs); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.st.Pool().QueryRow(ctx, `SELECT count(*) FROM review_items WHERE version_id = $1`, versionID).Scan(&items); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.st.Pool().QueryRow(ctx, `SELECT count(*) FROM attestations WHERE version_id = $1`, versionID).Scan(&atts); err != nil {
+		t.Fatal(err)
+	}
+	if runs != 1 || items != 0 || atts != 1 || status() != "published" {
+		t.Fatalf("after a redelivered publish scan: runs=%d review items=%d attestations=%d status=%s, want 1/0/1/published",
+			runs, items, atts, status())
 	}
 }
