@@ -294,6 +294,20 @@ func (q *Queries) ListPATs(ctx context.Context, userID uuid.UUID) ([]ListPATsRow
 	return items, nil
 }
 
+const revokeAllPATsForUser = `-- name: RevokeAllPATsForUser :execrows
+UPDATE pats SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL
+`
+
+// Clear-data (agentry#498): every live token the user holds, org-bound ones
+// included.
+func (q *Queries) RevokeAllPATsForUser(ctx context.Context, userID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeAllPATsForUser, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const revokeOrgBoundPATsForUser = `-- name: RevokeOrgBoundPATsForUser :execrows
 UPDATE pats SET revoked_at = now() WHERE user_id = $1 AND org_id = $2 AND revoked_at IS NULL
 `

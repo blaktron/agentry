@@ -107,6 +107,19 @@ func (q *Queries) ListSSHKeys(ctx context.Context, userID uuid.UUID) ([]UserSshK
 	return items, nil
 }
 
+const revokeAllSSHKeysForUser = `-- name: RevokeAllSSHKeysForUser :execrows
+UPDATE user_ssh_keys SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL
+`
+
+// Clear-data (agentry#498).
+func (q *Queries) RevokeAllSSHKeysForUser(ctx context.Context, userID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeAllSSHKeysForUser, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const revokeSSHKey = `-- name: RevokeSSHKey :execrows
 UPDATE user_ssh_keys SET revoked_at = now() WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL
 `

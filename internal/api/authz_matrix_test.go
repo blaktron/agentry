@@ -431,6 +431,12 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			method: "POST", path: sPath("/api/v1/user/delete"),
 			skipCallers: map[string]bool{"admin": true, "security_reviewer": true, "member": true, "pending": true, "outsider": true},
 		},
+		// clearCurrentUserData is destructive in the same way: the flow test
+		// covers sessions; the matrix checks anonymous and PAT callers.
+		"clearCurrentUserData": {
+			method: "POST", path: sPath("/api/v1/user/clear-data"),
+			skipCallers: map[string]bool{"admin": true, "security_reviewer": true, "member": true, "pending": true, "outsider": true},
+		},
 		"getAgentReadme":        {method: "GET", path: agentPath("/readme")},
 		"getVersionReport":      {method: "GET", path: agentPath("/versions/9.9.9/report")},
 		"getVersionAttestation": {method: "GET", path: agentPath("/versions/9.9.9/attestation")},
