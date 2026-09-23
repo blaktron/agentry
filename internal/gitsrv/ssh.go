@@ -332,13 +332,14 @@ func (s *SSHServer) execGit(ctx context.Context, ch ssh.Channel, service, gitPro
 		cmdCapture = &bytes.Buffer{}
 		stdin = io.TeeReader(ch, newCommandCapture(cmdCapture))
 	}
-	cmd, err := h.repos.Command(ctx, service, h.repos.Path(agent.RepoID))
+	cmd, done, err := h.repos.Command(ctx, service, h.repos.Path(agent.RepoID))
 	if err != nil {
 		outcome = "error"
 		h.log.Error("git hooks unavailable", "service", service, "err", err)
 		_, _ = fmt.Fprintf(ch.Stderr(), "agentry: the server cannot check pushes right now, try again later\n")
 		return 1
 	}
+	defer done()
 	cmd.Env = h.gitEnvFor(ctx, gitProtocol, agent, principal, role)
 	cmd.Stdin = stdin
 	cmd.Stdout = ch
