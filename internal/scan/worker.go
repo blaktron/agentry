@@ -59,6 +59,12 @@ func (p *Pipeline) RegisterHandlers(q queue.Client) {
 		if err := json.Unmarshal(job.Args, &args); err != nil {
 			return fmt.Errorf("scan worker: bad args: %w", err)
 		}
+		// Top of the §16.2 publish funnel for a submission the receiving
+		// role handed off (agentry#507), counted once, not on each retry;
+		// the synchronous path counts in VersionSubmitted.
+		if args.Trigger == "publish" && job.Attempt <= 1 {
+			p.mx.RecordPublishSubmitted(ctx)
+		}
 		return p.Scan(ctx, args.VersionID, args.Trigger)
 	})
 	q.Register(JobRescanSweep, func(ctx context.Context, job queue.Job) error {
