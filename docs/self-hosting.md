@@ -160,6 +160,13 @@ reference (added for the Vultr production cluster, DEV-124):
   in-cluster names direct).
 - `git.updateStrategy` with `git.replicaCount: 1` and `{type: Recreate}` —
   the shape for a ReadWriteOnce volume when no RWX class exists.
+- `git.persistence.initOwnership` — for an RWX class whose driver leaves the
+  volume's root owned by root (the kubelet applies `fsGroup` only to
+  ReadWriteOnce volumes under a CSI driver's default `fsGroupPolicy`: Vultr
+  VFS, EFS without an access point, Filestore). `true` adds an init
+  container, the agentryd image run as root with `CAP_CHOWN` alone, that
+  chowns `config.git.dataDir` to the pod's user and group so the non-root
+  git role can write its SSH host key and the repositories.
 - `api.extraEnv`, `git.extraEnv`, `worker.extraEnv` — environment for one
   role; `extraEnv` reaches every role.
 

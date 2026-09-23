@@ -30,6 +30,30 @@ spec:
       {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.git.persistence.initOwnership }}
+      # The RWX volume's root is root-owned on NFS-like classes (see
+      # values.yaml); hand the directory to the non-root git process once.
+      initContainers:
+        - name: volume-ownership
+          image: {{ include "agentry.agentrydImage" . }}
+          imagePullPolicy: {{ .Values.image.agentryd.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - {{ printf "chown %v:%v %s" (.Values.podSecurityContext.runAsUser | default 65532) (.Values.podSecurityContext.fsGroup | default 65532) .Values.config.git.dataDir | quote }}
+          securityContext:
+            runAsNonRoot: false
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+              add: ["CHOWN"]
+          volumeMounts:
+            - name: git-data
+              mountPath: {{ .Values.config.git.dataDir }}
+      {{- end }}
       containers:
         - name: git
           image: {{ include "agentry.agentrydImage" . }}
