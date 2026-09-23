@@ -412,7 +412,7 @@ func (s *Server) HandOffScans() {
 }
 
 // Reg exposes the registry service so role wiring can share one instance
-// (git role injects its archiver; auto-publish uses the same pipeline).
+// (git role injects its archiver; auto-publish uses the same hand-off).
 func (s *Server) Reg() *registry.Service { return s.reg }
 
 // SetResolver overrides the DNS resolver (domain verification; tests inject a

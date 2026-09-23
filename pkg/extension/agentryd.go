@@ -508,7 +508,7 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		s := api.New(cfg, st, log)
 		s.SetMetrics(mx)
 		applyExtensions(s, exts)
-		wireScans(s, role)
+		s.HandOffScans() // a submission is the worker's to scan (agentry#507)
 		return api.NewHandler(s), s.Close, nil
 	case "git", "all":
 		if st == nil {
@@ -527,7 +527,7 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		s := api.New(cfg, st, log)
 		s.SetMetrics(mx)
 		applyExtensions(s, exts)
-		wireScans(s, role)
+		s.HandOffScans() // a submission is the worker's to scan (agentry#507)
 		reg := s.Reg()
 		reg.SetGitArchiver(repos)
 		if pl := s.Pipeline(); pl != nil {
@@ -605,27 +605,6 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		return api.NewHandlerWithGit(s, git.Mount), closeAll, nil
 	default:
 		return nil, nil, fmt.Errorf("unknown http role %q", role)
-	}
-}
-
-// handsOffScans says whether a role gives a submitted version to the queue
-// rather than scanning it in the process that received it (agentry#507).
-// Every role that takes submissions does: api (the publish API), git (a tag
-// on an auto-publish agent) and all, whose in-process worker drains the
-// same sandbox queue, so the single-process shape runs production's path.
-// The worker takes no submissions; its scans are the queue's jobs.
-func handsOffScans(role string) bool {
-	switch role {
-	case "api", "git", "all":
-		return true
-	}
-	return false
-}
-
-// wireScans applies handsOffScans to a role's server.
-func wireScans(s *api.Server, role string) {
-	if handsOffScans(role) {
-		s.HandOffScans()
 	}
 }
 

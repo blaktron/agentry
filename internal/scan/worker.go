@@ -116,8 +116,9 @@ func (p *Pipeline) RegisterHandlers(q queue.Client) {
 }
 
 // QueuePipeline adapts the queue into registry.Pipeline: instead of scanning
-// inline, it enqueues a scan.version job (the SaaS/worker path §13.3). Dev and
-// tests use the synchronous Pipeline directly.
+// inline, it enqueues a scan.version job (§8.2, §13.3). Every role that takes
+// submissions hands them off this way (api.Server.HandOffScans, agentry#507);
+// the synchronous Pipeline remains for tests that drive a scan in-request.
 type QueuePipeline struct {
 	Q queue.Client
 }

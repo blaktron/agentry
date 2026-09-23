@@ -250,16 +250,3 @@ func TestScopeAllows(t *testing.T) {
 		t.Fatal("a PAT without run:write passed; the list is flat")
 	}
 }
-
-// TestRolesThatTakeSubmissionsHandOffScans pins agentry#507: every role that
-// receives a submission gives the scan to the sandbox queue, so untrusted
-// content is scanned (and a clean verdict signed) only where a worker runs.
-// The api test TestHandedOffPublishIsScannedByTheWorkerNotTheReceivingRole
-// proves what the hand-off does.
-func TestRolesThatTakeSubmissionsHandOffScans(t *testing.T) {
-	for role, want := range map[string]bool{"api": true, "git": true, "all": true, "worker": false} {
-		if got := handsOffScans(role); got != want {
-			t.Errorf("handsOffScans(%q) = %v, want %v", role, got, want)
-		}
-	}
-}
