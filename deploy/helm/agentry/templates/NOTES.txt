@@ -18,7 +18,9 @@ Roles deployed:
 {{- if not .Values.config.storage.s3Bucket }}
 
    WARNING: storage.kind is "s3" but storage.s3Bucket is empty. Set it and
-   provide credentials (IRSA via serviceAccount.annotations, or extraEnv).
+   provide credentials (IRSA via serviceAccount.annotations, or
+   objectStoreCredentials.existingSecret, which reaches the api and worker
+   pods only).
 {{- end }}
 {{- end }}
 {{- if and (eq .Values.config.signing.kind "kms") (not .Values.config.signing.kmsKeyARN) }}

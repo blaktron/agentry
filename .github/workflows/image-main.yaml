@@ -44,3 +44,24 @@ jobs:
       - uses: sigstore/cosign-installer@v3
       - name: Sign the image
         run: cosign sign --yes "ghcr.io/${{ github.repository }}/agentryd@${{ steps.build.outputs.digest }}"
+      # The chart beside the image (agentry#450): a prerelease version per
+      # branch whose appVersion is the image tag this run built, so
+      # `helm install … oci://ghcr.io/blaktron/agentry/charts/agentry --version
+      # 0.1.0-dev.<run>.g<sha>` runs agentryd:sha-<sha> by default (the g
+      # keeps an all-digit sha from being a numeric semver segment, which
+      # may not start with 0). Releases publish the tagged version from
+      # release.yaml.
+      - uses: azure/setup-helm@v4
+      - name: Publish the chart
+        env:
+          HELM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          base=$(awk '/^version:/{print $2; exit}' deploy/helm/agentry/Chart.yaml)
+          version="${base}-${{ github.ref_name }}.${{ github.run_number }}.g${SHORT}"
+          echo "$HELM_TOKEN" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+          helm package deploy/helm/agentry --version "$version" --app-version "sha-${SHORT}" -d "$RUNNER_TEMP/chart"
+          helm push "$RUNNER_TEMP/chart/agentry-${version}.tgz" "oci://ghcr.io/${{ github.repository }}/charts" 2>&1 | tee "$RUNNER_TEMP/chart/push.log"
+          digest=$(grep -m1 -o 'sha256:[0-9a-f]\{64\}' "$RUNNER_TEMP/chart/push.log")
+          [ -n "$digest" ] || { echo "helm push printed no digest"; exit 1; }
+          cosign sign --yes "ghcr.io/${{ github.repository }}/charts/agentry@${digest}"
