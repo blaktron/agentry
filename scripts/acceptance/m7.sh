@@ -46,7 +46,8 @@ PROD=("${BASE[@]}"
   --set 'worker.networkPolicy.egress[0].cidr=10.40.0.0/20'
   --set 'worker.networkPolicy.egress[0].ports[0].port=16751'
   --set worker.proxy.httpsProxy=http://egress:3128
-  --set git.replicaCount=1 --set git.updateStrategy.type=Recreate)
+  --set git.replicaCount=1 --set git.updateStrategy.type=Recreate
+  --set git.persistence.initOwnership=true)
 
 fail=0
 # render <name> <template> [extra --set…]: the template rendered under the
@@ -79,6 +80,13 @@ check "git Service exposes SSH on 22" "$(count "$svc" 'port: 22')" 1
 check "git Service has no SSH port when sshAddr is empty" "$(count "$svc_nossh" 'port: 22')" 0
 check "git container listens on ssh" "$(count "$git" 'name: ssh')" 1
 check "git ×1 with Recreate renders" "$(count "$git" 'type: Recreate')" 1
+# The RWX volume's ownership: an init container as root with CAP_CHOWN only,
+# and only when asked for (Vultr VFS is root-owned to a non-root pod).
+check "git ownership init container renders when asked" "$(count "$git" 'name: volume-ownership')" 1
+check "it chowns dataDir to the pod's user and group" "$(count "$git" 'chown 65532:65532 /data/git')" 1
+check "it holds CAP_CHOWN alone" "$(printf '%s\n' "$git" | grep -A1 'drop: \["ALL"\]' | grep -c 'add: \["CHOWN"\]' || true)" 1
+render git_plain deployment-git.yaml --set git.persistence.initOwnership=false
+check "no init container unless asked" "$(count "$git_plain" 'initContainers')" 0
 check "config carries git.sshAddr" "$(count "$cm" 'sshAddr: ":2222"')" 1
 check "config carries signing.keyFile" "$(count "$cm" 'keyFile: "/etc/agentry-signing/signing-key.pem"')" 1
 
