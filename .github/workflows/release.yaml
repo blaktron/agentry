@@ -172,3 +172,28 @@ jobs:
         run: |
           cosign sign --yes \
             "ghcr.io/${{ github.repository }}/${{ matrix.name }}@${{ steps.build.outputs.digest }}"
+
+  # The chart beside the image (agentry#450), its own job so a second image
+  # in the matrix above never publishes it twice: version = the tag without
+  # its v, appVersion = the tag, which is the image tag, so the released
+  # chart runs the released image by default. The moving per-branch versions
+  # come from image-main.yaml.
+  chart:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - uses: sigstore/cosign-installer@v3
+      - name: Publish the chart
+        env:
+          HELM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          echo "$HELM_TOKEN" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+          helm package deploy/helm/agentry --version "$version" --app-version "$GITHUB_REF_NAME" -d "$RUNNER_TEMP/chart"
+          helm push "$RUNNER_TEMP/chart/agentry-${version}.tgz" "oci://ghcr.io/${{ github.repository }}/charts" 2>&1 | tee "$RUNNER_TEMP/chart/push.log"
+          digest=$(grep -m1 -o 'sha256:[0-9a-f]\{64\}' "$RUNNER_TEMP/chart/push.log")
+          [ -n "$digest" ] || { echo "helm push printed no digest"; exit 1; }
+          cosign sign --yes "ghcr.io/${{ github.repository }}/charts/agentry@${digest}"

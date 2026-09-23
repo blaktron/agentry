@@ -114,3 +114,72 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{ toYaml . }}
 {{- end }}
 {{- end }}
+
+{{/*
+  Object-store credentials from objectStoreCredentials.existingSecret, in the api
+  and worker containers only: the git role never touches the store.
+*/}}
+{{- define "agentry.storageCredentialsEnv" -}}
+{{- with .Values.objectStoreCredentials.existingSecret }}
+- name: AWS_ACCESS_KEY_ID
+  valueFrom:
+    secretKeyRef:
+      name: {{ . }}
+      key: AWS_ACCESS_KEY_ID
+- name: AWS_SECRET_ACCESS_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ . }}
+      key: AWS_SECRET_ACCESS_KEY
+{{- end }}
+{{- end }}
+
+{{/*
+  The signing key and database CA volumes, when their Secrets are named. Each
+  projects one key of its Secret to a fixed file name, so a Secret whose key
+  is named differently is a render-time value, not a crash loop. Their
+  directories sit beside /etc/agentry, never under it: the config mount is
+  read-only and a mount nested inside it cannot be created.
+*/}}
+{{- define "agentry.extraVolumes" -}}
+{{- with .Values.signingKey.existingSecret }}
+- name: signing-key
+  secret:
+    secretName: {{ . }}
+    defaultMode: 0400
+    items:
+      - key: {{ $.Values.signingKey.key }}
+        path: {{ base $.Values.config.signing.keyFile }}
+{{- end }}
+{{- with .Values.databaseCA.existingSecret }}
+- name: db-ca
+  secret:
+    secretName: {{ . }}
+    items:
+      - key: {{ $.Values.databaseCA.key }}
+        path: ca.crt
+{{- end }}
+{{- end }}
+
+{{- define "agentry.extraVolumeMounts" -}}
+{{- if .Values.signingKey.existingSecret }}
+{{- $dir := dir .Values.config.signing.keyFile }}
+{{- if or (not (hasPrefix "/" $dir)) (hasPrefix "/etc/agentry/" (printf "%s/" $dir)) }}
+{{- fail "config.signing.keyFile must be an absolute path outside /etc/agentry (the read-only config mount)" }}
+{{- end }}
+- name: signing-key
+  mountPath: {{ $dir }}
+  readOnly: true
+{{- end }}
+{{- if .Values.databaseCA.existingSecret }}
+- name: db-ca
+  mountPath: /etc/agentry-db-ca
+  readOnly: true
+{{- end }}
+{{- end }}
+
+{{/* The git role's SSH port number, from config.git.sshAddr (":2222" → 2222). */}}
+{{- define "agentry.gitSSHPort" -}}
+{{- $addr := .Values.config.git.sshAddr | default "" -}}
+{{- if $addr }}{{ (splitList ":" $addr) | last }}{{ end -}}
+{{- end }}

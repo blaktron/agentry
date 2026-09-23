@@ -37,6 +37,10 @@ spec:
             {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           env:
             {{- include "agentry.agentrydEnv" . | nindent 12 }}
+            {{- include "agentry.storageCredentialsEnv" . | nindent 12 }}
+            {{- with .Values.api.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.api.port }}
@@ -60,12 +64,14 @@ spec:
               readOnly: true
             - name: scratch
               mountPath: /tmp
+            {{- include "agentry.extraVolumeMounts" . | nindent 12 }}
       volumes:
         - name: config
           configMap:
             name: {{ include "agentry.fullname" . }}-config
         - name: scratch
           emptyDir: {}
+        {{- include "agentry.extraVolumes" . | nindent 8 }}
       {{- with .Values.api.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
