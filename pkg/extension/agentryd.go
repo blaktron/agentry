@@ -517,6 +517,12 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		if err != nil {
 			return nil, nil, err
 		}
+		// A git role whose pushes could not be policed does not start: the
+		// hook must run from the hooks base now, rather than every push
+		// being refused later (agentry#495).
+		if err := repos.PrepareHooks(); err != nil {
+			return nil, nil, err
+		}
 		s := api.New(cfg, st, log)
 		s.SetMetrics(mx)
 		applyExtensions(s, exts)
