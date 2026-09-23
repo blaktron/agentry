@@ -398,6 +398,19 @@ func (s *Server) SetNotifier(n notify.Notifier) {
 // nil when this server has no archive store (see New).
 func (s *Server) Pipeline() *scan.Pipeline { return s.pipeline }
 
+// HandOffScans makes a submitted version the worker's to scan: the registry
+// enqueues scan.version on the sandbox queue instead of running the
+// pipeline in the process that received the submission (ARCHITECTURE §4,
+// PLAN §8.2, agentry#507). The api, git and all roles call it; untrusted
+// content is then scanned, gated and signed only where a worker drains the
+// sandbox queue. A server with no pipeline or no queue keeps what it has.
+func (s *Server) HandOffScans() {
+	if s.pipeline == nil || s.jobs == nil {
+		return
+	}
+	s.reg.SetPipeline(scan.QueuePipeline{Q: s.jobs})
+}
+
 // Reg exposes the registry service so role wiring can share one instance
 // (git role injects its archiver; auto-publish uses the same pipeline).
 func (s *Server) Reg() *registry.Service { return s.reg }
