@@ -167,6 +167,13 @@ reference (added for the Vultr production cluster, DEV-124):
   container, the agentryd image run as root with `CAP_CHOWN` alone, that
   chowns `config.git.dataDir` to the pod's user and group so the non-root
   git role can write its SSH host key and the repositories.
+- `config.git.hooksDir` (`AGENTRY_GIT_HOOKS_DIR`) — where the git role makes
+  the private directory it runs the pre-receive policy hook from; empty means
+  the system temp directory, the chart's `/tmp` `emptyDir`. The hook never
+  runs from the repository volume, because an RWX volume may not allow exec
+  (Vultr VFS refuses with "Bad address", agentry#495). The git role refuses
+  to start if a hook cannot run from this directory, so point it elsewhere
+  only at a file system that allows exec.
 - `api.extraEnv`, `git.extraEnv`, `worker.extraEnv` — environment for one
   role; `extraEnv` reaches every role.
 

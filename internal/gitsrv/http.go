@@ -315,7 +315,7 @@ func (h *Handler) infoRefs(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	args := []string{strings.TrimPrefix(service, "git-"), "--stateless-rpc", "--advertise-refs", h.repos.Path(agent.RepoID)}
-	cmd := exec.CommandContext(ctx, h.repos.GitBin(), args...)
+	cmd := h.repos.Command(ctx, args...)
 	cmd.Env = h.gitEnv(r, agent, principal, role)
 
 	// The advertisement is buffered rather than streamed on purpose: it is
@@ -438,7 +438,7 @@ func (h *Handler) rpc(w http.ResponseWriter, r *http.Request, agent registry.Age
 		stdin = io.TeeReader(body, newCommandCapture(cmdCapture))
 	}
 
-	cmd := exec.CommandContext(ctx, h.repos.GitBin(), service, "--stateless-rpc", h.repos.Path(agent.RepoID))
+	cmd := h.repos.Command(ctx, service, "--stateless-rpc", h.repos.Path(agent.RepoID))
 	cmd.Env = h.gitEnv(r, agent, principal, role)
 	cmd.Stdin = stdin
 	var stderr bytes.Buffer
@@ -484,6 +484,12 @@ func (h *Handler) rpc(w http.ResponseWriter, r *http.Request, agent registry.Age
 		// report to the client. Log for operators.
 		h.log.WarnContext(r.Context(), "git rpc exit", "service", service, "err", err, "stderr", stderr.String())
 		return
+	}
+	// git exits 0 on a push its pre-receive hook declined, and what it says
+	// about why — a hook that could not even start, above all — goes to its
+	// own stderr, which smart HTTP never shows the pusher (agentry#495).
+	if stderr.Len() > 0 {
+		h.log.WarnContext(r.Context(), "git rpc stderr", "service", service, "stderr", stderr.String())
 	}
 
 	if service == "receive-pack" {
