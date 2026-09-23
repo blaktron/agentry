@@ -477,6 +477,21 @@ func TestGitConformance(t *testing.T) {
 		}
 	})
 
+	t.Run("the repository's own hooks do not decide (agentry#495)", func(t *testing.T) {
+		// The policy hook runs from the store's hooks directory, not the
+		// repository's hooks/ (which a virtiofs volume cannot exec from).
+		// Replace the repository's shim with one that accepts everything:
+		// the policy must still refuse.
+		permissive := filepath.Join(env.repos.Path(pub.RepoID), "hooks", "pre-receive")
+		if err := os.WriteFile(permissive, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil { //nolint:gosec // a hook must be executable
+			t.Fatal(err)
+		}
+		out, err := gitRun(t, work, "push", env.cloneURL("pub-agent", env.owner.patRW), ":refs/tags/v0.0.1")
+		if err == nil || !strings.Contains(out, "immutable") {
+			t.Fatalf("v* tag delete must still be rejected with the repository's hook replaced: %v\n%s", err, out)
+		}
+	})
+
 	t.Run("force-push allowed once the agent setting is on (agentry#48)", func(t *testing.T) {
 		if _, err := env.st.Pool().Exec(context.Background(),
 			`UPDATE agents SET allow_force_push = true WHERE name = 'pub-agent'`); err != nil {

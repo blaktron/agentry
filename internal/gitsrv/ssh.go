@@ -332,7 +332,7 @@ func (s *SSHServer) execGit(ctx context.Context, ch ssh.Channel, service, gitPro
 		cmdCapture = &bytes.Buffer{}
 		stdin = io.TeeReader(ch, newCommandCapture(cmdCapture))
 	}
-	cmd := exec.CommandContext(ctx, h.repos.GitBin(), service, h.repos.Path(agent.RepoID))
+	cmd := h.repos.Command(ctx, service, h.repos.Path(agent.RepoID))
 	cmd.Env = h.gitEnvFor(ctx, gitProtocol, agent, principal, role)
 	cmd.Stdin = stdin
 	cmd.Stdout = ch
