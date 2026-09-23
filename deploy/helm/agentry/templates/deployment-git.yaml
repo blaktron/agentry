@@ -7,6 +7,10 @@ metadata:
     app.kubernetes.io/component: git
 spec:
   replicas: {{ .Values.git.replicaCount }}
+  {{- with .Values.git.updateStrategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "agentry.selectorLabels" . | nindent 6 }}
@@ -35,9 +39,16 @@ spec:
             {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           env:
             {{- include "agentry.agentrydEnv" . | nindent 12 }}
+            {{- with .Values.git.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.git.port }}
+            {{- with (include "agentry.gitSSHPort" .) }}
+            - name: ssh
+              containerPort: {{ . }}
+            {{- end }}
           readinessProbe:
             httpGet:
               path: /readyz
@@ -58,6 +69,7 @@ spec:
               readOnly: true
             - name: scratch
               mountPath: /tmp
+            {{- include "agentry.extraVolumeMounts" . | nindent 12 }}
             - name: git-data
               mountPath: {{ .Values.config.git.dataDir }}
       volumes:
@@ -66,6 +78,7 @@ spec:
             name: {{ include "agentry.fullname" . }}-config
         - name: scratch
           emptyDir: {}
+        {{- include "agentry.extraVolumes" . | nindent 8 }}
         - name: git-data
         {{- if .Values.git.persistence.existingClaim }}
           persistentVolumeClaim:
