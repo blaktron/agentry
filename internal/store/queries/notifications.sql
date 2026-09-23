@@ -32,3 +32,7 @@ SELECT m.user_id FROM memberships m
 JOIN users u ON u.id = m.user_id
 WHERE m.org_id = $1 AND m.role = 'admin' AND m.state = 'active' AND u.state = 'active'
 ORDER BY m.created_at;
+
+-- name: DeleteUserNotificationSettings :execrows
+-- Clear-data (agentry#498): no row reads as the defaults.
+DELETE FROM user_notification_settings WHERE user_id = $1;

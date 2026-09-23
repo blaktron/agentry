@@ -29,13 +29,14 @@ import (
 
 // Event is one committed event the core fans out to extensions: the org
 // webhook kinds (version.published, agent.quarantined, org.member_added,
-// org.policy_updated, …) carrying the owning org, plus user.registered and
-// org.created. Payload is the same map the webhook carries.
+// org.policy_updated, …) carrying the owning org, plus user.registered,
+// user.data_cleared and org.created. Payload is the same map the webhook
+// carries.
 type Event struct {
 	Kind    string
 	OrgID   uuid.UUID // uuid.Nil for a personal namespace or a user event
 	AgentID uuid.UUID // set for agent transitions
-	UserID  uuid.UUID // set for user.registered
+	UserID  uuid.UUID // set for user.registered and user.data_cleared
 	Payload map[string]any
 }
 
