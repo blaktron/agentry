@@ -232,12 +232,13 @@ content whenever the account has any:
 
 `POST /user/clear-data` (session only) empties an account and keeps it
 (agentry#498). It revokes every personal access token and SSH key, deletes
-every trusted device, consumes every pending desktop sign-in code, ends every session except the caller's, removes every
-account install, clears the display name and resets the notification
-settings to their defaults. The handle, the email, the sign-in account at the
-directory, organization memberships, BriefAgents with their versions and
-repositories, stars, the subscription and credits stay. It answers `204`, and
-the caller stays signed in.
+every remembered browser (the ones that skip the second factor), consumes
+every pending desktop sign-in code, ends every session except the caller's,
+removes every account install, clears the display name and resets the
+notification settings to their defaults. The handle, the email, the sign-in
+account at the directory, organization memberships, BriefAgents with their
+versions and repositories, stars, the subscription and credits stay. It
+answers `204`, and the caller stays signed in.
 
 - **A token cannot call it** (`403`). A cookie request needs the session's
   CSRF header, like every other cookie mutation.
