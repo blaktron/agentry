@@ -517,6 +517,12 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		if err != nil {
 			return nil, nil, err
 		}
+		// Refuse to serve pushes that could not be policed: the hook must
+		// run from its directory now, not fail on the first push
+		// (agentry#495).
+		if err := repos.PrepareHooks(); err != nil {
+			return nil, nil, err
+		}
 		s := api.New(cfg, st, log)
 		s.SetMetrics(mx)
 		applyExtensions(s, exts)
