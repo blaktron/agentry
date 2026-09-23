@@ -62,6 +62,19 @@ func (q *Queries) DeleteAccountInstallByRef(ctx context.Context, arg DeleteAccou
 	return items, nil
 }
 
+const deleteAccountInstallsForUser = `-- name: DeleteAccountInstallsForUser :execrows
+DELETE FROM account_installs WHERE user_id = $1
+`
+
+// Clear-data (agentry#498): every record the user holds.
+func (q *Queries) DeleteAccountInstallsForUser(ctx context.Context, userID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteAccountInstallsForUser, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteOrgAgentAccountInstalls = `-- name: DeleteOrgAgentAccountInstalls :execrows
 DELETE FROM account_installs WHERE agent_id IN (SELECT id FROM agents WHERE namespace_id = $1)
 `

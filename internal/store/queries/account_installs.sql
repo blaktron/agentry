@@ -44,3 +44,7 @@ ORDER BY ai.updated_at DESC, a.name;
 
 -- name: DeleteOrgAgentAccountInstalls :execrows
 DELETE FROM account_installs WHERE agent_id IN (SELECT id FROM agents WHERE namespace_id = $1);
+
+-- name: DeleteAccountInstallsForUser :execrows
+-- Clear-data (agentry#498): every record the user holds.
+DELETE FROM account_installs WHERE user_id = $1;
