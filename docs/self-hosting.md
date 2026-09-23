@@ -247,8 +247,11 @@ scan:
 ```
 
 The scanning role needs egress to that database (one host); a worker that
-cannot reach it leaves an `S7/osv-error` finding, which routes the version
-to review rather than through. The answers are kept per package version in
+cannot reach it leaves an `S7/osv-error` finding naming every declared
+server version the registry holds no answer for, which routes the version to review
+rather than through, on every submission until a lookup succeeds. A server
+version with an earlier answer is judged on that answer, however old. The
+answers are kept per package version in
 the `mcp_server_scans` table, so a server version is looked up live the
 first time any manifest declares it and served from that table for the
 next 24 hours.

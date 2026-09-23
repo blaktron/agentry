@@ -2,8 +2,10 @@ package scan_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/metrics"
@@ -16,10 +18,14 @@ import (
 type sweepOSV struct {
 	calls int
 	vulns map[string][]scan.OSVVulnerability
+	err   error // set to stand in for an outage
 }
 
 func (f *sweepOSV) Query(_ context.Context, pkgs []scan.OSVPackage) (map[string][]scan.OSVVulnerability, error) {
 	f.calls++
+	if f.err != nil {
+		return nil, f.err
+	}
 	out := map[string][]scan.OSVVulnerability{}
 	for _, p := range pkgs {
 		if v, ok := f.vulns[p.Key()]; ok {
@@ -214,4 +220,42 @@ func TestMCPSweepCountsAFailedRunAsAnError(t *testing.T) {
 		}
 	}
 	t.Fatalf("no McpSweepRuns{outcome=\"error\"} 1 sample in:\n%s", out)
+}
+
+// A sweep whose lookup fails keeps each row's answer: a safe or vulnerable
+// row stays so, advisories and all, and only records the error. S7 counts
+// an error row as no answer (agentry#480), so a sweep that turned a real
+// answer into an error row would hold every later submission for review.
+func TestMCPSweepLookupFailureKeepsTheAnswer(t *testing.T) {
+	e := newPipeEnv(t)
+	ctx := context.Background()
+	osv := &sweepOSV{vulns: map[string][]scan.OSVVulnerability{}}
+	cache := scan.NewStoreMCPScanCache(e.st)
+	e.pipe.SetMCPScanning(osv, cache)
+	long := time.Now().Add(-48 * time.Hour)
+	adv := []scan.OSVVulnerability{{ID: "GHSA-kept", Severity: "medium", Summary: "kept"}}
+	for _, r := range []scan.MCPScanRecord{
+		{Ecosystem: "npm", Package: "sweep-outage-safe", Version: "1.0.0", Status: "safe", LastChecked: long},
+		{Ecosystem: "npm", Package: "sweep-outage-vuln", Version: "1.0.0", Status: "vulnerable", MaxSeverity: "medium", Advisories: adv, LastChecked: long},
+	} {
+		if err := cache.Put(ctx, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := e.st.Pool().Exec(ctx, `UPDATE mcp_server_scans SET last_checked_at = now() - interval '48 hours' WHERE package LIKE 'sweep-outage-%'`); err != nil {
+		t.Fatal(err)
+	}
+	osv.err = errors.New("dial tcp: i/o timeout")
+	sum, err := e.pipe.MCPSweep(ctx)
+	if err != nil || sum.LookupErrors < 2 {
+		t.Fatalf("sweep during an outage: %+v %v", sum, err)
+	}
+	safe, _ := cache.Get(ctx, "npm", "sweep-outage-safe", "1.0.0")
+	if safe == nil || safe.Status != "safe" || safe.LastError == "" {
+		t.Fatalf("safe row after a failed sweep: %+v", safe)
+	}
+	vuln, _ := cache.Get(ctx, "npm", "sweep-outage-vuln", "1.0.0")
+	if vuln == nil || vuln.Status != "vulnerable" || len(vuln.Advisories) != 1 || vuln.Advisories[0].ID != "GHSA-kept" || vuln.LastError == "" {
+		t.Fatalf("vulnerable row after a failed sweep: %+v", vuln)
+	}
 }
