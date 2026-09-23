@@ -4093,6 +4093,13 @@ type ClientInterface interface {
 	// Corresponds with GET /user/activity (the `ListUserActivity` operationId).
 	ListUserActivity(ctx context.Context, params *ListUserActivityParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ClearCurrentUserData Clear the caller's credentials, installs and settings, and keep the account (session only).
+	//
+	// Revokes every personal access token and SSH key, deletes every trusted device, ends every session but the caller's, removes every account install, and resets the display name and the notification settings to their defaults (every switch on; mail still goes only to a verified address). The account itself stays: the handle, the email, the sign-in account at the directory, organization memberships, BriefAgents with their versions and repositories, stars, the subscription and credits are untouched. Audited as `user.data_clear` with the count of each class; after the commit an extension event `user.data_cleared` carries the user id, so an extension clears what it holds for the account (hosted run history). Session only: a token is refused, and so is a request without the session's CSRF token.
+	//
+	// Corresponds with POST /user/clear-data (the `ClearCurrentUserData` operationId).
+	ClearCurrentUserData(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// DeleteCurrentUser Erase the caller's account (GDPR flow, §12.7).
 	//
 	// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase`. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
@@ -6758,6 +6765,23 @@ func (c *Client) UpdateCurrentUser(ctx context.Context, body UpdateCurrentUserJS
 // Corresponds with GET /user/activity (the `ListUserActivity` operationId).
 func (c *Client) ListUserActivity(ctx context.Context, params *ListUserActivityParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListUserActivityRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ClearCurrentUserData Clear the caller's credentials, installs and settings, and keep the account (session only).
+//
+// Revokes every personal access token and SSH key, deletes every trusted device, ends every session but the caller's, removes every account install, and resets the display name and the notification settings to their defaults (every switch on; mail still goes only to a verified address). The account itself stays: the handle, the email, the sign-in account at the directory, organization memberships, BriefAgents with their versions and repositories, stars, the subscription and credits are untouched. Audited as `user.data_clear` with the count of each class; after the commit an extension event `user.data_cleared` carries the user id, so an extension clears what it holds for the account (hosted run history). Session only: a token is refused, and so is a request without the session's CSRF token.
+//
+// Corresponds with POST /user/clear-data (the `ClearCurrentUserData` operationId).
+func (c *Client) ClearCurrentUserData(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewClearCurrentUserDataRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -12648,6 +12672,33 @@ func NewListUserActivityRequest(server string, params *ListUserActivityParams) (
 	return req, nil
 }
 
+// NewClearCurrentUserDataRequest constructs an http.Request for the ClearCurrentUserData method
+func NewClearCurrentUserDataRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/clear-data")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewDeleteCurrentUserRequest constructs an http.Request for the DeleteCurrentUser method
 func NewDeleteCurrentUserRequest(server string, params *DeleteCurrentUserParams) (*http.Request, error) {
 	var err error
@@ -14688,6 +14739,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /user/activity (the `ListUserActivity` operationId).
 	ListUserActivityWithResponse(ctx context.Context, params *ListUserActivityParams, reqEditors ...RequestEditorFn) (*ListUserActivityResponse, error)
+
+	// ClearCurrentUserDataWithResponse Clear the caller's credentials, installs and settings, and keep the account (session only).
+	//
+	// Revokes every personal access token and SSH key, deletes every trusted device, ends every session but the caller's, removes every account install, and resets the display name and the notification settings to their defaults (every switch on; mail still goes only to a verified address). The account itself stays: the handle, the email, the sign-in account at the directory, organization memberships, BriefAgents with their versions and repositories, stars, the subscription and credits are untouched. Audited as `user.data_clear` with the count of each class; after the commit an extension event `user.data_cleared` carries the user id, so an extension clears what it holds for the account (hosted run history). Session only: a token is refused, and so is a request without the session's CSRF token.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /user/clear-data (the `ClearCurrentUserData` operationId).
+	ClearCurrentUserDataWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ClearCurrentUserDataResponse, error)
 
 	// DeleteCurrentUserWithResponse Erase the caller's account (GDPR flow, §12.7).
 	//
@@ -20226,6 +20286,47 @@ func (r ListUserActivityResponse) ContentType() string {
 	return ""
 }
 
+type ClearCurrentUserDataResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ClearCurrentUserDataResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ClearCurrentUserDataResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ClearCurrentUserDataResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ClearCurrentUserDataResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ClearCurrentUserDataResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type DeleteCurrentUserResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -23368,6 +23469,21 @@ func (c *ClientWithResponses) ListUserActivityWithResponse(ctx context.Context, 
 		return nil, err
 	}
 	return ParseListUserActivityResponse(rsp)
+}
+
+// ClearCurrentUserDataWithResponse Clear the caller's credentials, installs and settings, and keep the account (session only).
+//
+// Revokes every personal access token and SSH key, deletes every trusted device, ends every session but the caller's, removes every account install, and resets the display name and the notification settings to their defaults (every switch on; mail still goes only to a verified address). The account itself stays: the handle, the email, the sign-in account at the directory, organization memberships, BriefAgents with their versions and repositories, stars, the subscription and credits are untouched. Audited as `user.data_clear` with the count of each class; after the commit an extension event `user.data_cleared` carries the user id, so an extension clears what it holds for the account (hosted run history). Session only: a token is refused, and so is a request without the session's CSRF token.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /user/clear-data (the `ClearCurrentUserData` operationId).
+func (c *ClientWithResponses) ClearCurrentUserDataWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ClearCurrentUserDataResponse, error) {
+	rsp, err := c.ClearCurrentUserData(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseClearCurrentUserDataResponse(rsp)
 }
 
 // DeleteCurrentUserWithResponse Erase the caller's account (GDPR flow, §12.7).
@@ -27492,6 +27608,35 @@ func ParseListUserActivityResponse(rsp *http.Response) (*ListUserActivityRespons
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseClearCurrentUserDataResponse parses an HTTP response from a ClearCurrentUserDataWithResponse call
+func ParseClearCurrentUserDataResponse(rsp *http.Response) (*ClearCurrentUserDataResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ClearCurrentUserDataResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

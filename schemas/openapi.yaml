@@ -487,6 +487,31 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /user/clear-data:
+    post:
+      operationId: clearCurrentUserData
+      tags: [users]
+      summary: Clear the caller's credentials, installs and settings, and keep the account (session only).
+      description: >
+        Revokes every personal access token and SSH key, deletes every
+        trusted device, ends every session but the caller's, removes every
+        account install, and resets the display name and the notification
+        settings to their defaults (every switch on; mail still goes only
+        to a verified address). The account itself stays: the handle, the
+        email, the sign-in account at the directory, organization
+        memberships, BriefAgents with their versions and repositories,
+        stars, the subscription and credits are untouched. Audited as
+        `user.data_clear` with the count of each class; after the commit an
+        extension event `user.data_cleared` carries the user id, so an
+        extension clears what it holds for the account (hosted run
+        history). Session only: a token is refused, and so is a request
+        without the session's CSRF token.
+      responses:
+        "204":
+          description: Cleared; the caller's session is still signed in.
+        default:
+          $ref: "#/components/responses/Problem"
+
   /user/domain-org:
     get:
       operationId: getDomainOrg

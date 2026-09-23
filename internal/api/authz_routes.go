@@ -132,14 +132,15 @@ var routeAuthz = map[string]RouteDecl{
 	"listRedTeamReports":   {Action: auth.ActPublicRead, SelfAuthorized: true},
 	// Social login establishes a credential (like login/register), so it sits
 	// outside the chokepoint and is rate-limited instead (§12.1).
-	"socialOidcStart":    {NoAuthz: true, Anonymous: true},
-	"socialOidcCallback": {NoAuthz: true, Anonymous: true},
-	"totpChallenge":      {NoAuthz: true, Anonymous: true},
-	"getAgentReadme":     {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
-	"deleteCurrentUser":  {Action: auth.ActUserSecurityManage, SessionOnly: true},
-	"reportAbuse":        {Action: auth.ActPublicRead, SelfAuthorized: true},
-	"listAbuseReports":   {Action: auth.ActPublicRead, SelfAuthorized: true},
-	"triageAbuseReport":  {Action: auth.ActPublicRead, SelfAuthorized: true},
+	"socialOidcStart":      {NoAuthz: true, Anonymous: true},
+	"socialOidcCallback":   {NoAuthz: true, Anonymous: true},
+	"totpChallenge":        {NoAuthz: true, Anonymous: true},
+	"getAgentReadme":       {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
+	"deleteCurrentUser":    {Action: auth.ActUserSecurityManage, SessionOnly: true},
+	"clearCurrentUserData": {Action: auth.ActUserSecurityManage, SessionOnly: true},
+	"reportAbuse":          {Action: auth.ActPublicRead, SelfAuthorized: true},
+	"listAbuseReports":     {Action: auth.ActPublicRead, SelfAuthorized: true},
+	"triageAbuseReport":    {Action: auth.ActPublicRead, SelfAuthorized: true},
 	// Enterprise (M6/WG-J). SSO/SCIM config = admin (ActOrgSettingsManage,
 	// session-only for PATs); webhooks/domains = admin+ (ActOrgUpdate);
 	// audit export = admin+ (ActOrgAuditRead). The SSO login-flow endpoints
