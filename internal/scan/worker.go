@@ -59,6 +59,12 @@ func (p *Pipeline) RegisterHandlers(q queue.Client) {
 		if err := json.Unmarshal(job.Args, &args); err != nil {
 			return fmt.Errorf("scan worker: bad args: %w", err)
 		}
+		// Top of the §16.2 publish funnel for a submission the receiving
+		// role handed off (agentry#507), counted once, not on each retry;
+		// the synchronous path counts in VersionSubmitted.
+		if args.Trigger == "publish" && job.Attempt <= 1 {
+			p.mx.RecordPublishSubmitted(ctx)
+		}
 		return p.Scan(ctx, args.VersionID, args.Trigger)
 	})
 	q.Register(JobRescanSweep, func(ctx context.Context, job queue.Job) error {
@@ -110,8 +116,9 @@ func (p *Pipeline) RegisterHandlers(q queue.Client) {
 }
 
 // QueuePipeline adapts the queue into registry.Pipeline: instead of scanning
-// inline, it enqueues a scan.version job (the SaaS/worker path §13.3). Dev and
-// tests use the synchronous Pipeline directly.
+// inline, it enqueues a scan.version job (§8.2, §13.3). Every role that takes
+// submissions hands them off this way (api.Server.HandOffScans, agentry#507);
+// the synchronous Pipeline remains for tests that drive a scan in-request.
 type QueuePipeline struct {
 	Q queue.Client
 }

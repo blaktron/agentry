@@ -508,6 +508,7 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		s := api.New(cfg, st, log)
 		s.SetMetrics(mx)
 		applyExtensions(s, exts)
+		s.HandOffScans() // a submission is the worker's to scan (agentry#507)
 		return api.NewHandler(s), s.Close, nil
 	case "git", "all":
 		if st == nil {
@@ -526,6 +527,7 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		s := api.New(cfg, st, log)
 		s.SetMetrics(mx)
 		applyExtensions(s, exts)
+		s.HandOffScans() // a submission is the worker's to scan (agentry#507)
 		reg := s.Reg()
 		reg.SetGitArchiver(repos)
 		if pl := s.Pipeline(); pl != nil {
