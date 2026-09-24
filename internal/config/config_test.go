@@ -223,6 +223,7 @@ func TestValidateGuardsTheNewSurfaces(t *testing.T) {
 		}},
 		{"negative trusted proxies", func(c *Config) { c.HTTP.TrustedProxies = -1 }},
 		{"zero quota", func(c *Config) { c.Limits.GitPushesPerHour = 0 }},
+		{"zero git concurrency per IP", func(c *Config) { c.Limits.GitConcurrentPerIP = 0 }},
 		{"unparseable signing window", func(c *Config) { c.Signing.NotAfter = "next tuesday" }},
 		{"inverted signing window", func(c *Config) {
 			c.Signing.NotBefore = "2026-06-01T00:00:00Z"
@@ -275,6 +276,7 @@ func TestDefaultLimitsMatchSection19(t *testing.T) {
 		{"webhook endpoints per org", int64(l.WebhookEndpointsPerOrg), 20},
 		{"webhook deliveries per second", int64(l.WebhookDeliveriesPerSecond), 5},
 		{"git pushes per hour", int64(l.GitPushesPerHour), 60},
+		{"git concurrent per IP", int64(l.GitConcurrentPerIP), 20},
 		{"archive max bytes", l.ArchiveMaxBytes, 10 << 20},
 		{"archive max files", int64(l.ArchiveMaxFiles), 2000},
 		{"archive max file bytes", l.ArchiveMaxFileBytes, 2 << 20},
@@ -296,6 +298,7 @@ func TestNewEnvOverridesApply(t *testing.T) {
 	t.Setenv("AGENTRY_SMTP_STARTTLS", "true")
 	t.Setenv("AGENTRY_LIMITS_GIT_PUSHES_PER_HOUR", "120")
 	t.Setenv("AGENTRY_LIMITS_SSH_KEY_OFFERS_PER_MIN", "30")
+	t.Setenv("AGENTRY_LIMITS_GIT_CONCURRENT_PER_IP", "8")
 	t.Setenv("AGENTRY_LIMITS_ARCHIVE_MAX_BYTES", "20971520")
 	t.Setenv("AGENTRY_LIMITS_REPO_WARN_BYTES", "31457280")
 	t.Setenv("AGENTRY_LIMITS_ARCHIVE_MAX_TEXT_BYTES", "2097152")
@@ -319,6 +322,9 @@ func TestNewEnvOverridesApply(t *testing.T) {
 	}
 	if cfg.Limits.GitPushesPerHour != 120 || cfg.Limits.SSHKeyOffersPerMin != 30 {
 		t.Errorf("gitPushesPerHour = %d, sshKeyOffersPerMin = %d", cfg.Limits.GitPushesPerHour, cfg.Limits.SSHKeyOffersPerMin)
+	}
+	if cfg.Limits.GitConcurrentPerIP != 8 {
+		t.Errorf("gitConcurrentPerIP = %d, want 8", cfg.Limits.GitConcurrentPerIP)
 	}
 	if cfg.Limits.RepoWarnBytes != 31457280 || cfg.Limits.ArchiveMaxTextBytes != 2097152 {
 		t.Errorf("repoWarnBytes = %d, archiveMaxTextBytes = %d", cfg.Limits.RepoWarnBytes, cfg.Limits.ArchiveMaxTextBytes)
