@@ -337,6 +337,9 @@ services:
       # Directory group whose members are platform staff (agentry#51); the
       # groups blueprint creates it. Empty disables the sync.
       AGENTRY_IDP_STAFF_GROUP: ${AGENTRY_IDP_STAFF_GROUP:-agentry-platform-staff}
+      # A second way to be staff (agentry#525): a verified address at exactly
+      # this domain, as the directory's ID token asserts it. Empty is off.
+      AGENTRY_IDP_STAFF_DOMAIN: ${AGENTRY_IDP_STAFF_DOMAIN:-}
       # Archive store against minio (S3-compatible), exercising the same code
       # path SaaS uses rather than the local-FS one.
       AGENTRY_STORAGE_KIND: s3
