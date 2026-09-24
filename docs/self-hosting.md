@@ -836,7 +836,14 @@ AUTHENTIK_BOOTSTRAP_EMAIL=akadmin@example.com
 
 then bring the stack up and run `scripts/dev/authentik-bootstrap.sh`
 (idempotent — creates the OAuth2 provider `agentry-registry` and the
-`agentry` application), and point the registry at the result:
+`agentry` application), and point the registry at the result. The provider
+allows one grant, the authorization code (with PKCE), the only one the
+registry uses. authentik 2026.8 made a provider's grants explicit: one the
+API creates gets none and refuses every sign-in with `invalid_request`,
+and one migrated from an older release gets all of them, including
+`password` and `client_credentials`, which hand out tokens to anyone
+holding the client secret, with no browser flow. Re-running the script
+after such an upgrade narrows the provider (agentry#494).
 
 ```bash
 AGENTRY_AUTH_EXTERNAL_ONLY=true

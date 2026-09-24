@@ -95,6 +95,16 @@ p = {
     "sub_mode": "hashed_user_id",
     "include_claims_in_id_token": True,
     "property_mappings": json.loads(os.environ["SCOPE_MAPPINGS"]),
+    # The one grant the registry uses: authorization code + PKCE
+    # (internal/auth/oidc; no refresh token is ever requested). authentik
+    # 2026.8 made a provider's grants explicit: one created through the API
+    # gets none and refuses every authorize request ("Invalid grant_type",
+    # reaching the registry as invalid_request), and one migrated from an
+    # older release got every grant, password and client_credentials
+    # included, which let anything holding the client secret get tokens
+    # without the browser flow. Sent on create and on refresh, so a re-run
+    # narrows an existing provider (agentry#494).
+    "grant_types": ["authorization_code"],
 }
 if os.environ.get("INVAL_FLOW"):
     p["invalidation_flow"] = os.environ["INVAL_FLOW"]
