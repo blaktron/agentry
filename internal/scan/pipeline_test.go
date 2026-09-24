@@ -42,10 +42,7 @@ type pipeEnv struct {
 // before it is assembled (tests that need to observe notifications).
 func newPipeEnv(t *testing.T, opts ...func(*scan.PipelineDeps)) *pipeEnv {
 	t.Helper()
-	url := os.Getenv("AGENTRY_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("AGENTRY_TEST_DATABASE_URL not set")
-	}
+	url := scanTestDatabaseURL(t)
 	ctx := context.Background()
 	if err := store.Migrate(ctx, url); err != nil {
 		t.Fatal(err)
