@@ -21,14 +21,18 @@ package api
 // DEV-024 recorded the earlier deferral).
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/blaktron/agentry/internal/scan"
+	"github.com/blaktron/agentry/internal/store"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 	"github.com/blaktron/agentry/pkg/attest"
 	"github.com/blaktron/agentry/pkg/ruleset"
 )
@@ -103,23 +107,37 @@ func normalizeDigest(d string) string {
 	return "sha256:" + strings.TrimPrefix(d, "sha256:")
 }
 
-// rulesetAttestationCache holds the one envelope a process ever needs: the
-// bundle is fixed per binary and the key per deployment, so signing once and
-// serving the bytes is both cheaper (KMS charges per Sign) and stabler than
-// re-signing per request.
-var rulesetAttestationCache struct {
-	mu     sync.Mutex
-	digest string
-	keyID  string
-	body   []byte
+// storeRulesetAttestation signs the statement over the embedded bundle's
+// digest and stores it (agentry#479). The process that holds the key does
+// this once at start; the api role, which holds no key, serves the stored
+// envelope. A row already there for this digest and key is kept.
+func storeRulesetAttestation(ctx context.Context, st *store.Store, signer scan.Signer, baseURL string) error {
+	bundle, err := ruleset.Load()
+	if err != nil {
+		return fmt.Errorf("ruleset attestation: load the bundle: %w", err)
+	}
+	digest := normalizeDigest(bundle.Digest())
+	env, err := signer.Sign(attest.BuildRulesetStatement(baseURL, bundle.Version(), digest))
+	if err != nil {
+		return fmt.Errorf("ruleset attestation: sign: %w", err)
+	}
+	body, err := json.Marshal(env)
+	if err != nil {
+		return fmt.Errorf("ruleset attestation: encode: %w", err)
+	}
+	if err := st.Queries().InsertRulesetAttestation(ctx, storegen.InsertRulesetAttestationParams{
+		BundleDigest: digest, KeyID: signer.KeyID(), DsseEnvelope: body,
+	}); err != nil {
+		return fmt.Errorf("ruleset attestation: store: %w", err)
+	}
+	return nil
 }
 
 // GetLatestRulesetAttestation implements GET /ruleset-releases/latest/attestation.
+// It serves the envelope the key holder stored for this binary's bundle,
+// signed by the active key (agentry#479), so the api role answers without
+// the private key. 404 when no key holder has started with this bundle.
 func (s *Server) GetLatestRulesetAttestation(w http.ResponseWriter, r *http.Request) {
-	if s.signer == nil {
-		problemNotFound(w, r)
-		return
-	}
 	bundle, err := ruleset.Load()
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "ruleset load", "err", err)
@@ -127,28 +145,27 @@ func (s *Server) GetLatestRulesetAttestation(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	digest := normalizeDigest(bundle.Digest())
-
-	rulesetAttestationCache.mu.Lock()
-	defer rulesetAttestationCache.mu.Unlock()
-	if rulesetAttestationCache.body == nil || rulesetAttestationCache.digest != digest || rulesetAttestationCache.keyID != s.signer.KeyID() {
-		env, err := s.signer.Sign(attest.BuildRulesetStatement(s.cfg.BaseURL, bundle.Version(), digest))
-		if err != nil {
-			s.log.ErrorContext(r.Context(), "ruleset attestation sign", "err", err)
-			problemInternal(w, r)
-			return
-		}
-		body, err := json.Marshal(env)
-		if err != nil {
-			problemInternal(w, r)
-			return
-		}
-		rulesetAttestationCache.digest, rulesetAttestationCache.keyID, rulesetAttestationCache.body = digest, s.signer.KeyID(), body
+	if s.st == nil {
+		problemNotFound(w, r)
+		return
 	}
+	row, err := s.q().GetRulesetAttestation(r.Context(), digest)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// No key holder has started with this bundle yet.
+		problemNotFound(w, r)
+		return
+	}
+	if err != nil {
+		s.log.ErrorContext(r.Context(), "ruleset attestation read", "err", err)
+		problemInternal(w, r)
+		return
+	}
+	body := row.DsseEnvelope
 	h := w.Header()
 	h.Set("Content-Type", "application/json")
 	h.Set("X-Agentry-Bundle-Semver", bundle.Version())
 	h.Set("X-Agentry-Bundle-Digest", digest)
 	h.Set("Cache-Control", "public, max-age=300")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(rulesetAttestationCache.body)
+	_, _ = w.Write(body)
 }

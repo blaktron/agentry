@@ -182,8 +182,11 @@ original signatures.
    clients that pinned it, and **never schedule deletion of a key that
    signed a published version**.
 2. Point signing at the new key (`AGENTRY_SIGNING_KMS_KEY_ARN`, or the file
-   key) and roll every role that signs or serves the key set — the worker
-   and the api (`all`, on compose). At start the log reads `attestations
+   key) and roll the role that holds it: the worker (`all`, on compose). The
+   api and git roles hold no key and need no restart: they read the active
+   key and the ruleset attestation from what the worker recorded at start
+   (agentry#479), within the key set's five-minute cache. At start the log
+   reads `attestations
    lack the signing key; re-attestation sweep enqueued` with the count; the
    worker then logs `re-attestation sweep complete` with how many it signed.
    A start on a key every attestation already carries logs nothing.

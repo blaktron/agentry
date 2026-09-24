@@ -397,19 +397,29 @@ func (s *Server) DecideReviewItem(w http.ResponseWriter, r *http.Request, id ope
 	// separately let a transient failure leave the item decided with the
 	// version still in needs_review, which the "already decided" guard above
 	// then made unrecoverable.
-	if err := s.pipeline.DecideReview(r.Context(), scan.ReviewDecision{
+	handedOff, err := s.pipeline.DecideReview(r.Context(), scan.ReviewDecision{
 		ItemID: ri.ID, VersionID: ri.VersionID, Target: target, State: newState,
 		Rationale: rationale, DecidedBy: p.UserID, Audit: e,
-	}); err != nil {
-		if errors.Is(err, registry.ErrBadTransition) {
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, scan.ErrAlreadyDecided):
+			problemConflict(w, r, "A reviewer already decided this item.")
+		case errors.Is(err, registry.ErrBadTransition):
 			problemConflict(w, r, "This version's status changed while the item was open. The decision was not recorded.")
-			return
+		default:
+			s.log.ErrorContext(r.Context(), "review decision", "item", ri.ID, "err", err)
+			problemInternal(w, r)
 		}
-		s.log.ErrorContext(r.Context(), "review decision", "item", ri.ID, "err", err)
-		problemInternal(w, r)
 		return
 	}
-	s.notifyReviewDecided(r.Context(), v, string(target), p.Handle, rationale)
+	// A publish handed to the worker (agentry#479) has not happened yet:
+	// the author hears that it was approved, not that it is published.
+	outcome := string(target)
+	if handedOff {
+		outcome = "approved"
+	}
+	s.notifyReviewDecided(r.Context(), v, outcome, p.Handle, rationale)
 	w.WriteHeader(http.StatusNoContent)
 }
 

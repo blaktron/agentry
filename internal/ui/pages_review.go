@@ -281,9 +281,10 @@ func (h *handler) reviewDecide(w http.ResponseWriter, r *http.Request) {
 // decisionDone is the flash for a recorded decision: the consequence the
 // §7 state machine gives it, branched on the version's status before the
 // decision, or the bare record when that status was not read. An approve
-// publishes and signs in the decision's own transaction
-// (internal/scan/pipeline.go DecideReview), so it is past tense by the
-// time the flash shows; a quarantined version was published, then
+// publishes and signs in the decision's own transaction where the server
+// holds the signing key, and moments later on the worker where it does not
+// (internal/scan/pipeline.go DecideReview, agentry#479), so the flash says
+// what is true on both; a quarantined version was published, then
 // quarantined (visible, not installable — docs/trust.md), and a reject
 // yanks it rather than the rejected edge that does not exist for it.
 func decisionDone(decision, status string) string {
@@ -292,7 +293,7 @@ func decisionDone(decision, status string) string {
 	case decision == "approve" && quarantined:
 		return "Approved. The version was published, then quarantined; it is published and signed again."
 	case decision == "approve":
-		return "Approved. The version is published and signed."
+		return "Approved. The version is published as soon as its attestation is signed, which takes moments."
 	case quarantined:
 		return "Rejected. The version was published, then quarantined, so it is yanked: an exact pin still resolves it, nothing else does."
 	case status == "":

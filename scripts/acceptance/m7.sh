@@ -95,15 +95,19 @@ check "api gets the object-store credentials" "$(count "$api" 'name: agentry-obj
 check "worker gets the object-store credentials" "$(count "$worker" 'name: agentry-object-store')" 2
 check "git never sees the object-store credentials" "$(count "$git" 'agentry-object-store')" 0
 
-# The signing key: projected read-only to keyFile in every role, because
-# agentryd constructs the signer in every role that has a database.
-# agentry#479 is the seam that confines it to the worker; when it lands, the
-# api and git "mounts the signing Secret" lines below want 0.
+# The signing key is the worker's alone (agentry#479, PLAN §13.3): the api
+# and git roles start without it and never sign, so the pods that terminate
+# untrusted traffic hold no private key.
+check "worker mounts the signing Secret" "$(count "$worker" 'secretName: agentry-signing')" 1
+check "worker projects the PEM to keyFile's directory" "$(count "$worker" 'path: signing-key.pem')" 1
+check "worker mounts the key read-only" "$(printf '%s\n' "$worker" | grep -A1 'mountPath: /etc/agentry-signing' | grep -c 'readOnly: true' || true)" 1
+for role in api git; do
+  eval "r=\$$role"
+  check "$role never mounts the signing Secret" "$(count "$r" 'agentry-signing')" 0
+  check "$role has no signing-key volume" "$(count "$r" 'name: signing-key')" 0
+done
 for role in api worker git; do
   eval "r=\$$role"
-  check "$role mounts the signing Secret" "$(count "$r" 'secretName: agentry-signing')" 1
-  check "$role projects the PEM to keyFile's directory" "$(count "$r" 'path: signing-key.pem')" 1
-  check "$role mounts the key read-only" "$(printf '%s\n' "$r" | grep -A1 'mountPath: /etc/agentry-signing' | grep -c 'readOnly: true' || true)" 1
   check "$role mounts the database CA read-only" "$(printf '%s\n' "$r" | grep -A1 'mountPath: /etc/agentry-db-ca' | grep -c 'readOnly: true' || true)" 1
   check "$role mounts nothing under the read-only /etc/agentry" "$(count "$r" 'mountPath: /etc/agentry/')" 0
   check "$role carries the pull secret" "$(count "$r" 'name: agentry-ghcr-pull')" 1

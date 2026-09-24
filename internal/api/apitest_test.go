@@ -129,15 +129,7 @@ func newTestEnvCfg(t *testing.T, cfgFn func(*config.Config), opts ...func(*api.S
 		t.Fatalf("test env: %v", envErr)
 	}
 
-	cfg := config.Default()
-	cfg.DevMode = true       // the test server is a dev instance; dev mode is opt-in (DEV-116)
-	cfg.Scan.OSVURL = "none" // S7 never dials out of a test; TestS7 installs a fake
-	cfg.Auth.SessionTTL = time.Hour
-	// Tests hammer auth endpoints from one IP; keep prod defaults out of the way.
-	cfg.Limits.LoginPerMin = 10000
-	cfg.Limits.AnonymousPerMin = 100000
-	cfg.Limits.AuthedPerHour = 10000000
-	cfg.Limits.AuthedBurstPerMin = 100000
+	cfg := testConfig()
 	if cfgFn != nil {
 		cfgFn(&cfg)
 	}
@@ -155,6 +147,20 @@ func newTestEnvCfg(t *testing.T, cfgFn func(*config.Config), opts ...func(*api.S
 		st:     envSt,
 		sfx:    fmt.Sprintf("%06x", rand.Int63n(1<<24)), //nolint:gosec // test fixture names
 	}
+}
+
+// testConfig is the configuration every test server starts from.
+func testConfig() config.Config {
+	cfg := config.Default()
+	cfg.DevMode = true       // the test server is a dev instance; dev mode is opt-in (DEV-116)
+	cfg.Scan.OSVURL = "none" // S7 never dials out of a test; TestS7 installs a fake
+	cfg.Auth.SessionTTL = time.Hour
+	// Tests hammer auth endpoints from one IP; keep prod defaults out of the way.
+	cfg.Limits.LoginPerMin = 10000
+	cfg.Limits.AnonymousPerMin = 100000
+	cfg.Limits.AuthedPerHour = 10000000
+	cfg.Limits.AuthedBurstPerMin = 100000
+	return cfg
 }
 
 // authenticate puts a caller's credential on a request the way do does,

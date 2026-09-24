@@ -4039,7 +4039,7 @@ type ClientInterface interface {
 
 	// GetLatestRulesetAttestation DSSE attestation over the bundle `…/latest/bundle` serves.
 	//
-	// An in-toto statement (predicate `https://agentry.dev/attestation/ruleset/v1`) whose subject digest is the bundle's content digest, signed with the registry's release-signing key (`/.well-known/agentry/signing-keys.json`). Lets `agentry validate --rules-update` verify a fetched bundle by signature rather than only by the digest the same server advertised (agentry#25). 404 when the registry does not sign (`signing.kind: none`).
+	// An in-toto statement (predicate `https://agentry.dev/attestation/ruleset/v1`) whose subject digest is the bundle's content digest, signed with the registry's release-signing key (`/.well-known/agentry/signing-keys.json`). Lets `agentry validate --rules-update` verify a fetched bundle by signature rather than only by the digest the same server advertised (agentry#25). The worker signs it at start and stores it, so every replica serves the same envelope (agentry#479). 404 when the registry does not sign (`signing.kind: none`), or when no process holding the signing key has started with this bundle yet (a rolling deploy).
 	//
 	// Corresponds with GET /ruleset-releases/latest/attestation (the `GetLatestRulesetAttestation` operationId).
 	GetLatestRulesetAttestation(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6641,7 +6641,7 @@ func (c *Client) ListReviewQueue(ctx context.Context, params *ListReviewQueuePar
 
 // GetLatestRulesetAttestation DSSE attestation over the bundle `…/latest/bundle` serves.
 //
-// An in-toto statement (predicate `https://agentry.dev/attestation/ruleset/v1`) whose subject digest is the bundle's content digest, signed with the registry's release-signing key (`/.well-known/agentry/signing-keys.json`). Lets `agentry validate --rules-update` verify a fetched bundle by signature rather than only by the digest the same server advertised (agentry#25). 404 when the registry does not sign (`signing.kind: none`).
+// An in-toto statement (predicate `https://agentry.dev/attestation/ruleset/v1`) whose subject digest is the bundle's content digest, signed with the registry's release-signing key (`/.well-known/agentry/signing-keys.json`). Lets `agentry validate --rules-update` verify a fetched bundle by signature rather than only by the digest the same server advertised (agentry#25). The worker signs it at start and stores it, so every replica serves the same envelope (agentry#479). 404 when the registry does not sign (`signing.kind: none`), or when no process holding the signing key has started with this bundle yet (a rolling deploy).
 //
 // Corresponds with GET /ruleset-releases/latest/attestation (the `GetLatestRulesetAttestation` operationId).
 func (c *Client) GetLatestRulesetAttestation(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -14674,7 +14674,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetLatestRulesetAttestationWithResponse DSSE attestation over the bundle `…/latest/bundle` serves.
 	//
-	// An in-toto statement (predicate `https://agentry.dev/attestation/ruleset/v1`) whose subject digest is the bundle's content digest, signed with the registry's release-signing key (`/.well-known/agentry/signing-keys.json`). Lets `agentry validate --rules-update` verify a fetched bundle by signature rather than only by the digest the same server advertised (agentry#25). 404 when the registry does not sign (`signing.kind: none`).
+	// An in-toto statement (predicate `https://agentry.dev/attestation/ruleset/v1`) whose subject digest is the bundle's content digest, signed with the registry's release-signing key (`/.well-known/agentry/signing-keys.json`). Lets `agentry validate --rules-update` verify a fetched bundle by signature rather than only by the digest the same server advertised (agentry#25). The worker signs it at start and stores it, so every replica serves the same envelope (agentry#479). 404 when the registry does not sign (`signing.kind: none`), or when no process holding the signing key has started with this bundle yet (a rolling deploy).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -23357,7 +23357,7 @@ func (c *ClientWithResponses) ListReviewQueueWithResponse(ctx context.Context, p
 
 // GetLatestRulesetAttestationWithResponse DSSE attestation over the bundle `…/latest/bundle` serves.
 //
-// An in-toto statement (predicate `https://agentry.dev/attestation/ruleset/v1`) whose subject digest is the bundle's content digest, signed with the registry's release-signing key (`/.well-known/agentry/signing-keys.json`). Lets `agentry validate --rules-update` verify a fetched bundle by signature rather than only by the digest the same server advertised (agentry#25). 404 when the registry does not sign (`signing.kind: none`).
+// An in-toto statement (predicate `https://agentry.dev/attestation/ruleset/v1`) whose subject digest is the bundle's content digest, signed with the registry's release-signing key (`/.well-known/agentry/signing-keys.json`). Lets `agentry validate --rules-update` verify a fetched bundle by signature rather than only by the digest the same server advertised (agentry#25). The worker signs it at start and stores it, so every replica serves the same envelope (agentry#479). 404 when the registry does not sign (`signing.kind: none`), or when no process holding the signing key has started with this bundle yet (a rolling deploy).
 //
 // Returns a wrapper object for the known response body format(s).
 //
