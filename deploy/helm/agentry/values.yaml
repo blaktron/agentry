@@ -167,6 +167,7 @@ config:
   # webhookDeliveriesPerSecond: 5
   # gitPushesPerHour: 60
   # sshKeyOffersPerMin: 60
+  # scimPerMin: 600
   # gitConcurrentPerIP: 20
   # agentsPerOrgNamespace: 500
 

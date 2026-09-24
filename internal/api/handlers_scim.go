@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -73,6 +74,19 @@ func (s *Server) scimAuth(next scimHandler) http.HandlerFunc {
 		row, err := s.q().GetSCIMTokenByHash(r.Context(), auth.HashToken(token))
 		if err != nil {
 			scimError(w, http.StatusUnauthorized, "invalid or expired SCIM token")
+			return
+		}
+		// §19's `scim` class (agentry#453), one bucket per organization: a
+		// directory syncs from one place, and every token is the
+		// organization's, so a second token buys no second budget. Spent
+		// once the token is known and before anything else is read. The
+		// RateLimit-* trio goes on every answer, as elsewhere, so an IdP can
+		// pace itself before it is refused; the refusal carries Retry-After.
+		res := s.limits.Allow("scim", row.OrgID.String(), s.classes.scim, s.classes.scimBurst)
+		writeRateLimitHeaders(w, res)
+		if !res.OK {
+			s.rateLimited(r, "scim")
+			scimError(w, http.StatusTooManyRequests, "too many SCIM requests for this organization; retry after the Retry-After interval")
 			return
 		}
 		org, err := s.q().GetOrgByID(r.Context(), row.OrgID)
@@ -166,11 +180,10 @@ func scimWrite(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func itoa(n int) string {
-	// SCIM encodes status as a string; small positive ints only.
-	return map[int]string{200: "200", 201: "201", 204: "204", 400: "400",
-		401: "401", 404: "404", 409: "409", 500: "500", 503: "503"}[n]
-}
+// itoa renders a status as SCIM's error schema wants it, a string. It was a
+// fixed map, and the statuses missing from it (403 for a suspended
+// organization or a missing entitlement, then 429) went out as "".
+func itoa(n int) string { return strconv.Itoa(n) }
 
 func userToSCIM(id uuid.UUID, email, displayName string, active bool) scimUser {
 	return scimUser{

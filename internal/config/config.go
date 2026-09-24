@@ -263,6 +263,10 @@ type Limits struct {
 	AuthedBurstPerMin int `yaml:"authedBurstPerMin"` // authed burst
 	AnonymousPerMin   int `yaml:"anonymousPerMin"`   // anonymous per-IP
 	LoginPerMin       int `yaml:"loginPerMin"`       // login/register per-IP
+	// SCIMPerMin is the SCIM data plane's budget per organization, per
+	// minute and as its burst (600; agentry#453): a directory syncs from one
+	// place, so the organization, not the address, is what it spends.
+	SCIMPerMin int `yaml:"scimPerMin"`
 
 	// Git/repo quotas (§19): 100 MB hard, 25 MB warn (the pre-receive hook
 	// tells the pusher), 25 MB single-object cap.
@@ -555,6 +559,7 @@ func Default() Config {
 			AuthedBurstPerMin:          100,
 			AnonymousPerMin:            60,
 			LoginPerMin:                10,
+			SCIMPerMin:                 600,
 			RepoQuotaBytes:             100 << 20,
 			RepoWarnBytes:              25 << 20,
 			RepoMaxBlobBytes:           25 << 20,
@@ -870,6 +875,7 @@ func applyEnv(c *Config) error {
 		{"AGENTRY_LIMITS_AUTHED_BURST_PER_MIN", &c.Limits.AuthedBurstPerMin},
 		{"AGENTRY_LIMITS_ANONYMOUS_PER_MIN", &c.Limits.AnonymousPerMin},
 		{"AGENTRY_LIMITS_LOGIN_PER_MIN", &c.Limits.LoginPerMin},
+		{"AGENTRY_LIMITS_SCIM_PER_MIN", &c.Limits.SCIMPerMin},
 		{"AGENTRY_LIMITS_GIT_PUSHES_PER_HOUR", &c.Limits.GitPushesPerHour},
 		{"AGENTRY_LIMITS_SSH_KEY_OFFERS_PER_MIN", &c.Limits.SSHKeyOffersPerMin},
 		{"AGENTRY_LIMITS_GIT_CONCURRENT_PER_IP", &c.Limits.GitConcurrentPerIP},
@@ -1142,6 +1148,7 @@ func (c Config) validateLimits() error {
 		{"limits.authedBurstPerMin", int64(c.Limits.AuthedBurstPerMin)},
 		{"limits.anonymousPerMin", int64(c.Limits.AnonymousPerMin)},
 		{"limits.loginPerMin", int64(c.Limits.LoginPerMin)},
+		{"limits.scimPerMin", int64(c.Limits.SCIMPerMin)},
 		{"limits.repoQuotaBytes", int64(c.Limits.RepoQuotaBytes)},
 		{"limits.repoWarnBytes", int64(c.Limits.RepoWarnBytes)},
 		{"limits.repoMaxBlobBytes", int64(c.Limits.RepoMaxBlobBytes)},
