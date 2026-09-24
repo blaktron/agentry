@@ -753,6 +753,52 @@ entries:
       negate: false
       timeout: 30
 
+  # The directory's own user-settings flow is closed to everyone
+  # (agentry#490). The provider asserts `email_verified: true` for whatever
+  # address the directory holds and the registry links accounts by it
+  # (T-12), so a person who could set their own address could sign in as
+  # whoever owns it. authentik's shipped `default-user-settings-flow` has an
+  # email field, and the only thing refusing a change is its validation
+  # policy reading the system setting `default_user_change_email` (false on
+  # a fresh 2026.8 install) or a group's `goauthentik.io/user/can-change-email`
+  # attribute: one toggle in the admin console reopens it. Blueprints may
+  # not write the system settings, and unsetting the brand's settings flow
+  # (below) only hides the panel; the flow still runs at
+  # /if/flow/default-user-settings-flow/. A flow-level policy that always
+  # denies makes the refusal a property of this file. Nothing in Agentry
+  # opens that flow: display name and handle are the registry's, and an
+  # operator still edits a directory user in the admin console.
+  #
+  # The flow entry repeats authentik's own attributes, so whichever
+  # blueprint applies first creates the same flow; authentik's default
+  # blueprint adds its stages, this file only the binding.
+  - model: authentik_policies_expression.expressionpolicy
+    id: policy-no-user-settings
+    identifiers:
+      name: agentry-no-user-settings
+    attrs:
+      expression: |
+        ak_message("Account details are changed in your account settings, not here.")
+        return False
+  - model: authentik_flows.flow
+    id: flow-default-user-settings
+    identifiers:
+      slug: default-user-settings-flow
+    attrs:
+      name: User settings
+      title: Update your info
+      designation: stage_configuration
+      authentication: require_authenticated
+  - model: authentik_policies.policybinding
+    identifiers:
+      policy: !KeyOf policy-no-user-settings
+      target: !KeyOf flow-default-user-settings
+      order: 0
+    attrs:
+      enabled: true
+      negate: false
+      timeout: 30
+
   # The brand: no user-settings flow (the directory's own settings panel is
   # not offered anywhere), sign-out and recovery go through the flows
   # above. default_application (the last piece: where a flow that ends

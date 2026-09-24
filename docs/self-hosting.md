@@ -1107,6 +1107,23 @@ and after a completed one — with a throwaway user it deletes on the way
 out; it needs the directory's URL, the bootstrap token and
 `AGENTRY_ACCOUNT_URL`.
 
+Nobody changes their own directory email. The registry links accounts by
+the address the directory holds, and the provider asserts it verified, so a
+self-service change would let a person sign in as whoever owns the address
+they typed. authentik's own `default-user-settings-flow` has an email field
+and stays reachable by URL even with the settings panel unset; the only
+thing refusing a change there is the system setting "Allow users to change
+email" (off by default), which blueprints cannot pin. The account-flows
+blueprint therefore binds a policy that always denies to that flow
+(agentry#490): nobody can run it, whatever the setting says. Display name
+and handle are the registry's; an operator who must correct an address
+does it in the directory's admin console, and should confirm the new
+address belongs to the person first.
+`scripts/acceptance/directory-user-settings.py` proves the refusal against
+a live directory with a throwaway user it deletes on the way out; it needs
+the directory's URL and the bootstrap token, and never changes the system
+settings.
+
 ## Hosting the downloads
 
 The edge serves whatever is in the downloads directory
