@@ -39,6 +39,9 @@ data:
       {{- with .Values.config.auth.idpStaffGroup }}
       idpStaffGroup: {{ . | quote }}
       {{- end }}
+      {{- with .Values.config.auth.idpStaffDomain }}
+      idpStaffDomain: {{ . | quote }}
+      {{- end }}
     {{- if .Values.config.social.authentik.clientId }}
     social:
       authentik:
