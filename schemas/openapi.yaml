@@ -459,7 +459,8 @@ paths:
         When the deployment holds credentials in a directory service and is
         configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account
         there is deleted in the same step; the outcome is audited as
-        `user.directory_erase` and returned as `directoryErasure`. A failed
+        `user.directory_erase` and returned in the `X-Agentry-Directory-Erasure`
+        header. A failed
         directory attempt does not undo the registry's erasure: it is retried
         by a job with backoff (each attempt audited) and the response says
         `pending`; a retry budget that runs out is audited as `abandoned` and
@@ -486,12 +487,23 @@ paths:
             Destination org handle, required with publishedContent=transfer.
             The caller must be an admin of that org.
       responses:
-        "200":
-          description: Account erased; session revoked. The body says where the directory half stands.
-          content:
-            application/json:
+        "204":
+          description: Account erased; session revoked.
+          headers:
+            X-Agentry-Directory-Erasure:
+              description: >
+                The directory half of the erasure (agentry#499). `deleted`:
+                the sign-in account at the directory is gone. `not-found`:
+                the directory holds no account with this address.
+                `not-configured`: the deployment reaches no directory, so
+                erasure is registry-only. `pending`: the directory could not
+                be reached; a job retries it with backoff for about four and
+                a half hours, and the operator is alerted if it never
+                succeeds. `failed`: the retry could not be queued; the
+                operator is alerted and finishes it by hand.
               schema:
-                $ref: "#/components/schemas/AccountErased"
+                type: string
+                enum: [deleted, not-found, not-configured, pending, failed]
         default:
           $ref: "#/components/responses/Problem"
 
@@ -4046,22 +4058,6 @@ components:
           type: string
           format: date-time
 
-    AccountErased:
-      type: object
-      required: [directoryErasure]
-      properties:
-        directoryErasure:
-          type: string
-          enum: [deleted, not-found, not-configured, pending, failed]
-          description: >
-            The directory half of the erasure (agentry#499). `deleted`: the
-            sign-in account at the directory is gone. `not-found`: the
-            directory holds no account with this address. `not-configured`:
-            the deployment reaches no directory, so erasure is registry-only.
-            `pending`: the directory could not be reached; a job retries it
-            with backoff for about four and a half hours and the operator is
-            alerted if it never succeeds. `failed`: the retry could not be
-            queued; the operator is alerted and finishes it by hand.
     PatCreated:
       allOf:
         - $ref: "#/components/schemas/Pat"

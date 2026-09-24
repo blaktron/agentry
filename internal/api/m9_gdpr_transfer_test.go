@@ -54,7 +54,7 @@ func TestErasureWithNothingPublishedNeedsNoChoice(t *testing.T) {
 	env.verifyEmail(user)
 	sess := env.login(user)
 	// No published content: there is nothing to choose between.
-	env.doJSON(sess, http.MethodPost, "/api/v1/user/delete", nil, nil, http.StatusOK)
+	env.doJSON(sess, http.MethodPost, "/api/v1/user/delete", nil, nil, http.StatusNoContent)
 }
 
 func TestErasureYankPath(t *testing.T) {
@@ -65,7 +65,7 @@ func TestErasureYankPath(t *testing.T) {
 	agentName := "yankable-" + env.sfx
 	env.publishUnder(t, sess, user, agentName)
 
-	env.doJSON(sess, http.MethodPost, "/api/v1/user/delete?publishedContent=yank", nil, nil, http.StatusOK)
+	env.doJSON(sess, http.MethodPost, "/api/v1/user/delete?publishedContent=yank", nil, nil, http.StatusNoContent)
 
 	var status, digest string
 	if err := env.st.Pool().QueryRow(context.Background(),
@@ -102,7 +102,7 @@ func TestErasureTransferPath(t *testing.T) {
 		map[string]any{"role": "admin"}, nil, http.StatusOK)
 
 	env.doJSON(sess, http.MethodPost,
-		"/api/v1/user/delete?publishedContent=transfer&transferOrg="+orgH, nil, nil, http.StatusOK)
+		"/api/v1/user/delete?publishedContent=transfer&transferOrg="+orgH, nil, nil, http.StatusNoContent)
 
 	// The agent now lives in the org, and its version is STILL published —
 	// that is the whole point of choosing transfer over yank.
@@ -188,7 +188,7 @@ func TestErasureTransferTargetIsValidated(t *testing.T) {
 		map[string]any{"role": "admin"}, nil, http.StatusOK) // a role change, not an add
 	memberSess = env.login(member)
 	env.doJSON(memberSess, http.MethodPost,
-		"/api/v1/user/delete?publishedContent=transfer&transferOrg="+orgH, nil, nil, http.StatusOK)
+		"/api/v1/user/delete?publishedContent=transfer&transferOrg="+orgH, nil, nil, http.StatusNoContent)
 	if err := env.st.Pool().QueryRow(context.Background(),
 		`SELECT h.handle::text FROM agents a JOIN handles h ON h.id = a.namespace_id WHERE a.name = $1`, agentName,
 	).Scan(&ns); err != nil {

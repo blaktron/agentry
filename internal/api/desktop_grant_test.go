@@ -134,7 +134,7 @@ func TestErasureConsumesDesktopGrants(t *testing.T) {
 		t.Fatal("grant lacks a code")
 	}
 
-	env.doJSON(sess, http.MethodPost, "/api/v1/user/delete", nil, nil, http.StatusOK)
+	env.doJSON(sess, http.MethodPost, "/api/v1/user/delete", nil, nil, http.StatusNoContent)
 
 	ctx := context.Background()
 	var unconsumed int

@@ -53,7 +53,7 @@ func TestErasureDeletesDirectoryAccount(t *testing.T) {
 	user := env.register("dir-erase")
 	env.verifyEmail(user)
 	sess := env.login(user)
-	env.doJSON(sess, http.MethodPost, "/api/v1/user/delete", nil, nil, http.StatusOK)
+	env.doJSON(sess, http.MethodPost, "/api/v1/user/delete", nil, nil, http.StatusNoContent)
 
 	if len(lookups) != 1 || !strings.HasPrefix(lookups[0], user+"@") {
 		t.Fatalf("directory lookups = %v, want one for the erased address", lookups)
@@ -75,7 +75,7 @@ func TestErasureWithoutDirectoryIsAudited(t *testing.T) {
 	user := env.register("dir-none")
 	env.verifyEmail(user)
 	sess := env.login(user)
-	env.doJSON(sess, http.MethodPost, "/api/v1/user/delete", nil, nil, http.StatusOK)
+	env.doJSON(sess, http.MethodPost, "/api/v1/user/delete", nil, nil, http.StatusNoContent)
 	var outcome string
 	if err := env.st.Pool().QueryRow(context.Background(),
 		`SELECT detail->>'directoryErasure' FROM audit_events WHERE action = 'user.directory_erase' ORDER BY occurred_at DESC LIMIT 1`).Scan(&outcome); err != nil || outcome != "not-configured" {

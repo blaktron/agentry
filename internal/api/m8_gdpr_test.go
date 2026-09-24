@@ -42,7 +42,7 @@ func TestAccountErasureFlow(t *testing.T) {
 	}
 
 	// Erase.
-	env.doJSON(sess, http.MethodPost, "/api/v1/user/delete?publishedContent=yank", nil, nil, http.StatusOK)
+	env.doJSON(sess, http.MethodPost, "/api/v1/user/delete?publishedContent=yank", nil, nil, http.StatusNoContent)
 
 	// The session is dead.
 	res = env.do(sess, http.MethodGet, "/api/v1/user", nil)

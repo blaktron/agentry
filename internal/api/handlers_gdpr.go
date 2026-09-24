@@ -285,7 +285,9 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 	}
 
 	clearCookie(w, sessionCookieName, s.cfg.Auth.CookieSecure)
-	writeJSON(w, http.StatusOK, AccountErased{DirectoryErasure: AccountErasedDirectoryErasure(dir)})
+	// A header on the 204, not a body: the contract is additive-only (D-09).
+	w.Header().Set(directoryErasureHeader, dir)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // transferAgents moves every agent in a personal namespace to an org, in one

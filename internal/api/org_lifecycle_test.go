@@ -794,7 +794,7 @@ func TestErasureTransferRespectsThePrivateAgentCap(t *testing.T) {
 	env.doJSON(user, http.MethodGet, "/api/v1/user", nil, nil, http.StatusOK)
 	// Public agents are not counted against the cap.
 	env.doJSON(user, http.MethodPatch, "/api/v1/agents/"+userH+"/mine", map[string]any{"visibility": "public"}, nil, http.StatusOK)
-	env.doJSON(user, http.MethodPost, "/api/v1/user/delete?publishedContent=transfer&transferOrg="+orgH, nil, nil, http.StatusOK)
+	env.doJSON(user, http.MethodPost, "/api/v1/user/delete?publishedContent=transfer&transferOrg="+orgH, nil, nil, http.StatusNoContent)
 	if err := env.st.Pool().QueryRow(context.Background(),
 		`SELECT h.handle::text FROM agents a JOIN handles h ON h.id = a.namespace_id WHERE a.name = 'mine' AND h.handle = $1`, orgH).Scan(&ns); err != nil {
 		t.Fatalf("the public agent did not move: %v", err)

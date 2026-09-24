@@ -229,7 +229,7 @@ content whenever the account has any:
 - **A transfer respects the organization's private-agent cap** (`422
   private-agent-cap`, nothing erased, nothing moved) and is refused into an
   organization in its decommission hold.
-- **The response is `200` with `directoryErasure`** (agentry#499): where the
+- **The `204` carries `X-Agentry-Directory-Erasure`** (agentry#499): where the
   sign-in account at the directory stands — `deleted`, `not-found`,
   `not-configured` (erasure is registry-only), `pending` (the directory
   was unreachable and a job retries it), or `failed` (the retry could not

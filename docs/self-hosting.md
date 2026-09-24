@@ -1039,8 +1039,8 @@ rights over users; the bootstrap token works) and erasure also deletes the
 directory account with the same email — never a superuser or a service
 account. Each attempt is recorded as its own `user.directory_erase` audit
 event (`deleted`, `not-found`, `failed`, `not-configured`, or `abandoned`),
-beside the `user.delete` event, and the erasure's response carries the
-outcome as `directoryErasure`. A failure does not undo the registry
+beside the `user.delete` event, and the erasure's 204 carries the
+outcome in the `X-Agentry-Directory-Erasure` header. A failure does not undo the registry
 erasure: the request answers `pending` and a `gdpr.directory_erase` job on
 the worker retries with backoff (fourteen attempts, about four and a half
 hours; the queued address is sealed with the sealing key) until the
