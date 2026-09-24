@@ -505,7 +505,10 @@ func serveHTTP(ctx context.Context, cfg config.Config, st *store.Store, log *slo
 func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *slog.Logger, role string, mx *metrics.Metrics, exts []Extension) (http.Handler, func() error, error) {
 	switch role {
 	case "api":
-		s := api.New(cfg, st, log)
+		// The api role holds no signing key (agentry#479): it serves the key
+		// set and the ruleset attestation from the record, and hands an
+		// approval's publish to the worker.
+		s := api.New(cfg, st, log, api.WithoutSigningKey())
 		s.SetMetrics(mx)
 		applyExtensions(s, exts)
 		s.HandOffScans() // a submission is the worker's to scan (agentry#507)
@@ -524,7 +527,13 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		if err := repos.PrepareHooks(); err != nil {
 			return nil, nil, err
 		}
-		s := api.New(cfg, st, log)
+		// The git role terminates untrusted git traffic and never signs, so
+		// it holds no key (agentry#479); `all` is also the worker and does.
+		var opts []api.Option
+		if role == "git" {
+			opts = append(opts, api.WithoutSigningKey())
+		}
+		s := api.New(cfg, st, log, opts...)
 		s.SetMetrics(mx)
 		applyExtensions(s, exts)
 		s.HandOffScans() // a submission is the worker's to scan (agentry#507)

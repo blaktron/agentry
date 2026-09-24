@@ -13,11 +13,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/logevent"
 	"github.com/blaktron/agentry/internal/metrics"
 	"github.com/blaktron/agentry/internal/notify"
+	"github.com/blaktron/agentry/internal/queue"
 	"github.com/blaktron/agentry/internal/registry"
 	"github.com/blaktron/agentry/internal/store"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
@@ -51,6 +53,8 @@ type Pipeline struct {
 	// registry, kept here for the daily sweep (agentry#177).
 	osv      OSVClient
 	mcpCache MCPScanCache
+	// jobs carries a keyless role's approvals to the worker (agentry#479).
+	jobs queue.Client
 }
 
 // SetMetrics wires the §16.2 instrument set onto the pipeline and the
@@ -107,6 +111,10 @@ type PipelineDeps struct {
 	RegistryURL string
 	RulesetID   uuid.UUID
 	RulesetVer  string
+	// Jobs is the queue a keyless role hands an approval to (agentry#479):
+	// with no Signer, an approve → published is published and signed by the
+	// worker's publish job, not in the request.
+	Jobs queue.Client
 }
 
 // StuckScanCap is the §7 timeout: a version in `scanning` longer than this
@@ -127,7 +135,7 @@ func NewPipeline(d PipelineDeps) *Pipeline {
 		st: d.Store, reg: d.Registry, blobs: d.Blobs, orch: d.Orchestrator,
 		signer: d.Signer, aud: d.Audit, notifier: notifier, log: log,
 		registryURL: d.RegistryURL, rulesetID: d.RulesetID, rulesetVer: d.RulesetVer,
-		rescanBatch: 100,
+		rescanBatch: 100, jobs: d.Jobs,
 	}
 }
 
@@ -957,14 +965,16 @@ func (p *Pipeline) ReconcileStuckScans(ctx context.Context) (int, error) {
 // happens exactly once per version (§7): quarantine/reinstate and a re-review
 // that republishes never re-issue it.
 func (p *Pipeline) sign(ctx context.Context, q *storegen.Queries, agent storegen.GetAgentByIDRow, v storegen.AgentVersion, runID uuid.UUID, reportDigest, judgeModel string, policyVer int) error {
-	if p.signer == nil {
-		p.log.Warn("pipeline: no signer configured; skipping attestation")
-		return nil
-	}
 	if _, err := q.GetAttestation(ctx, v.ID); err == nil {
 		return nil // already signed (§7: exactly once)
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("scan: attestation lookup: %w", err)
+	}
+	if p.signer == nil {
+		// A process without the key never publishes a version that has no
+		// attestation: the transaction this runs in rolls back (agentry#479).
+		// Publishing is the worker's, which holds the key.
+		return ErrNoSigningKey
 	}
 	if reportDigest == "" {
 		// The attestation's whole claim is "this report describes these
@@ -1074,8 +1084,17 @@ type ReviewDecision struct {
 // item marked decided while the version stayed in needs_review — and the
 // handler's "already decided" guard then refused every retry, so the version
 // was stuck with no way forward but a manual database edit.
+//
+// A process that holds no signing key (the api role, agentry#479) cannot
+// publish a version that has no attestation yet. It records the verdict and
+// hands the publish to the worker (JobPublishApproved), which transitions
+// and signs in one transaction; until then the version stays in
+// needs_review, and the watchdog finishes an approval whose job was lost.
+// A version that already carries its attestation (a quarantined one being
+// reinstated) is published here as before: nothing needs signing.
 func (p *Pipeline) DecideReview(ctx context.Context, in ReviewDecision) error {
 	var trans registry.TransitionResult
+	handOff := false
 	err := p.st.WithTx(ctx, func(q *storegen.Queries) error {
 		v, err := q.GetVersionByID(ctx, in.VersionID)
 		if err != nil {
@@ -1084,6 +1103,16 @@ func (p *Pipeline) DecideReview(ctx context.Context, in ReviewDecision) error {
 		agent, err := q.GetAgentByID(ctx, v.AgentID)
 		if err != nil {
 			return err
+		}
+		if in.Target == registry.StatusPublished && p.signer == nil {
+			if _, aerr := q.GetAttestation(ctx, v.ID); errors.Is(aerr, pgx.ErrNoRows) {
+				if registry.Status(v.Status) != registry.StatusNeedsReview {
+					return fmt.Errorf("%w: %s → %s", registry.ErrBadTransition, v.Status, in.Target)
+				}
+				handOff = true
+			} else if aerr != nil {
+				return fmt.Errorf("scan: attestation lookup: %w", aerr)
+			}
 		}
 		if err := q.DecideReviewItem(ctx, storegen.DecideReviewItemParams{
 			ID: in.ItemID, State: in.State, DecidedBy: &in.DecidedBy, Rationale: &in.Rationale,
@@ -1099,6 +1128,9 @@ func (p *Pipeline) DecideReview(ctx context.Context, in ReviewDecision) error {
 		if err := p.aud.Write(ctx, q, e); err != nil {
 			return err
 		}
+		if handOff {
+			return nil // the worker transitions and signs (PublishApproved)
+		}
 		trans, err = p.reg.TransitionInTx(ctx, q, in.VersionID, in.Target, "review: "+in.Rationale, audit.Event{
 			ActorKind: audit.ActorSystem,
 		})
@@ -1110,29 +1142,129 @@ func (p *Pipeline) DecideReview(ctx context.Context, in ReviewDecision) error {
 		}
 		// Signing is part of the same unit of work: a published version
 		// without an attestation is not something to reconcile later.
-		run, err := q.LatestScanRunForVersion(ctx, in.VersionID)
-		if err != nil {
-			return fmt.Errorf("scan: latest run for review decision: %w", err)
-		}
-		reportDigest := ""
-		if run.ReportDigest != nil {
-			reportDigest = *run.ReportDigest
-		}
-		judge := ""
-		if run.JudgeModel != nil {
-			judge = *run.JudgeModel
-		}
-		_, policyVer, err := effectivePolicyFor(ctx, q, agent.NamespaceKind, agent.NamespaceID)
-		if err != nil {
-			return err
-		}
-		return p.sign(ctx, q, agent, v, run.ID, reportDigest, judge, policyVer)
+		return p.signReviewed(ctx, q, agent, v)
 	})
 	if err != nil {
 		return err
 	}
+	if handOff {
+		if p.jobs == nil {
+			p.log.Error("review: approval recorded but no queue to hand the publish to; the watchdog will publish it",
+				"item", in.ItemID, "version", in.VersionID)
+			return nil
+		}
+		if _, err := p.jobs.Enqueue(ctx, JobPublishApproved, "core", PublishApprovedArgs{ItemID: in.ItemID}); err != nil {
+			// The verdict is committed and the version is in needs_review
+			// with an approved item: the watchdog publishes it.
+			p.log.Error("review: could not enqueue the publish; the watchdog will publish it",
+				"item", in.ItemID, "version", in.VersionID, "err", err)
+		}
+		return nil
+	}
 	p.reg.EmitTransition(ctx, trans)
 	return nil
+}
+
+// signReviewed signs a version a reviewer published, from its latest scan
+// run, inside the caller's transaction.
+func (p *Pipeline) signReviewed(ctx context.Context, q *storegen.Queries, agent storegen.GetAgentByIDRow, v storegen.AgentVersion) error {
+	run, err := q.LatestScanRunForVersion(ctx, v.ID)
+	if err != nil {
+		return fmt.Errorf("scan: latest run for review decision: %w", err)
+	}
+	reportDigest := ""
+	if run.ReportDigest != nil {
+		reportDigest = *run.ReportDigest
+	}
+	judge := ""
+	if run.JudgeModel != nil {
+		judge = *run.JudgeModel
+	}
+	_, policyVer, err := effectivePolicyFor(ctx, q, agent.NamespaceKind, agent.NamespaceID)
+	if err != nil {
+		return err
+	}
+	return p.sign(ctx, q, agent, v, run.ID, reportDigest, judge, policyVer)
+}
+
+// PublishApproved publishes and signs, in one transaction, a version whose
+// review item a keyless role approved (agentry#479). It runs where the key
+// is: the worker's publish job, or the watchdog. Idempotent: an item that is
+// not approved, or a version no longer in needs_review, is left alone, so a
+// redelivered job or a job racing the watchdog does nothing the second time.
+func (p *Pipeline) PublishApproved(ctx context.Context, itemID uuid.UUID) error {
+	if p.signer == nil {
+		return ErrNoSigningKey
+	}
+	var trans registry.TransitionResult
+	published := false
+	err := p.st.WithTx(ctx, func(q *storegen.Queries) error {
+		item, err := q.GetReviewItem(ctx, itemID)
+		if err != nil {
+			return fmt.Errorf("scan: review item: %w", err)
+		}
+		if item.State != "approved" {
+			return nil
+		}
+		v, err := q.GetVersionForUpdate(ctx, item.VersionID)
+		if err != nil {
+			return fmt.Errorf("scan: lock version: %w", err)
+		}
+		if registry.Status(v.Status) != registry.StatusNeedsReview {
+			return nil
+		}
+		agent, err := q.GetAgentByID(ctx, v.AgentID)
+		if err != nil {
+			return err
+		}
+		rationale := ""
+		if item.Rationale != nil {
+			rationale = *item.Rationale
+		}
+		trans, err = p.reg.TransitionInTx(ctx, q, v.ID, registry.StatusPublished, "review: "+rationale, audit.Event{
+			ActorKind: audit.ActorSystem,
+		})
+		if err != nil {
+			return err
+		}
+		published = true
+		return p.signReviewed(ctx, q, agent, v)
+	})
+	if err != nil {
+		return err
+	}
+	if published {
+		p.reg.EmitTransition(ctx, trans)
+	}
+	return nil
+}
+
+// approvalGrace is how long an approval waits for its publish job before the
+// watchdog publishes it itself.
+const approvalGrace = time.Minute
+
+// ReconcileApprovedReviews publishes every approval a keyless role handed
+// off whose publish never happened (a lost enqueue, a job that ran out of
+// attempts). Run by the watchdog in the worker; a process without the key
+// does nothing.
+func (p *Pipeline) ReconcileApprovedReviews(ctx context.Context) (int, error) {
+	if p.signer == nil {
+		return 0, nil
+	}
+	ids, err := p.st.Queries().ListApprovedReviewsAwaitingPublish(ctx,
+		pgtype.Interval{Microseconds: approvalGrace.Microseconds(), Valid: true})
+	if err != nil {
+		return 0, fmt.Errorf("scan: approvals awaiting publish: %w", err)
+	}
+	done := 0
+	for _, id := range ids {
+		if err := p.PublishApproved(ctx, id); err != nil {
+			p.log.Error("watchdog: could not publish an approved version", "item", id, "err", err)
+			continue
+		}
+		done++
+	}
+	return done, nil
 }
 
 // Quarantine/Block/Reinstate implement the T&S platform actions (§7).
@@ -1230,3 +1362,9 @@ func (p *Pipeline) historyReader(repoID uuid.UUID, commit string) func(ctx conte
 		return p.gitHistory.HistoryPatch(ctx, repoID, commit)
 	}
 }
+
+// ErrNoSigningKey is returned when a process that holds no signing key is
+// asked to sign (agentry#479): the api and git roles run without the key,
+// and a version is never published without its attestation (agentry#407),
+// so the transition that needed the signature does not happen there.
+var ErrNoSigningKey = errors.New("scan: this process holds no signing key; the worker signs")

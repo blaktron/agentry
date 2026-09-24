@@ -61,3 +61,28 @@ UPDATE attestations
 SET dsse_envelope = jsonb_set(dsse_envelope, '{signatures}', (dsse_envelope->'signatures') || sqlc.arg('signature')::jsonb)
 WHERE id = sqlc.arg('id')
   AND NOT (dsse_envelope->'signatures' @> sqlc.arg('key_match')::jsonb);
+
+-- The key the deployment signs with today, for a process that holds no key
+-- of its own (the api and git roles, agentry#479): the one registered most
+-- recently and not retired. A registration retires every other key, so at
+-- most one row qualifies once the signer has started.
+-- name: GetActiveSigningKey :one
+SELECT * FROM signing_keys WHERE retired_at IS NULL
+ORDER BY last_seen_at DESC LIMIT 1;
+
+-- The signer stores the ruleset attestation for the bundle it carries at
+-- start (agentry#479); a row already there for that digest and key stays.
+-- name: InsertRulesetAttestation :exec
+INSERT INTO ruleset_attestations (bundle_digest, key_id, dsse_envelope)
+VALUES ($1, $2, $3)
+ON CONFLICT (bundle_digest, key_id) DO NOTHING;
+
+-- The ruleset attestation to serve for a bundle: the active key's when
+-- there is one, else the newest by a retired key (which the key set still
+-- advertises while it has signatures to its name).
+-- name: GetRulesetAttestation :one
+SELECT ra.* FROM ruleset_attestations ra
+JOIN signing_keys k ON k.key_id = ra.key_id
+WHERE ra.bundle_digest = $1
+ORDER BY (k.retired_at IS NULL) DESC, ra.created_at DESC
+LIMIT 1;

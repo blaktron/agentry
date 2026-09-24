@@ -280,3 +280,18 @@ SELECT * FROM abuse_reports WHERE id = $1;
 
 -- name: TriageAbuseReport :exec
 UPDATE abuse_reports SET state = $2, triaged_by = $3, triaged_at = now(), resolution = $4 WHERE id = $1;
+
+-- Approvals a keyless role handed to the worker (agentry#479) whose version
+-- has not been published yet: the item is approved, the version is still in
+-- needs_review with no attestation and no other open item. The watchdog
+-- publishes them, so a lost enqueue delays a publish and never strands it.
+-- name: ListApprovedReviewsAwaitingPublish :many
+SELECT ri.id FROM review_items ri
+JOIN agent_versions v ON v.id = ri.version_id
+WHERE ri.state = 'approved'
+  AND v.status = 'needs_review'
+  AND ri.decided_at < now() - sqlc.arg('grace')::interval
+  AND NOT EXISTS (SELECT 1 FROM attestations a WHERE a.version_id = v.id)
+  AND NOT EXISTS (SELECT 1 FROM review_items o WHERE o.version_id = v.id AND o.state = 'pending')
+ORDER BY ri.decided_at
+LIMIT 100;

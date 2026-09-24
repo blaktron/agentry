@@ -135,13 +135,18 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
-  The signing key and database CA volumes, when their Secrets are named. Each
-  projects one key of its Secret to a fixed file name, so a Secret whose key
-  is named differently is a render-time value, not a crash loop. Their
-  directories sit beside /etc/agentry, never under it: the config mount is
-  read-only and a mount nested inside it cannot be created.
+  The database CA volume (every role) and the signing key volume (the worker
+  only), when their Secrets are named. Each projects one key of its Secret to
+  a fixed file name, so a Secret whose key is named differently is a
+  render-time value, not a crash loop. Their directories sit beside
+  /etc/agentry, never under it: the config mount is read-only and a mount
+  nested inside it cannot be created.
+
+  The key is the worker's alone (agentry#479, PLAN §13.3): the api and git
+  roles start without it and never sign, so the pods that terminate
+  untrusted traffic hold no private key.
 */}}
-{{- define "agentry.extraVolumes" -}}
+{{- define "agentry.signingKeyVolume" -}}
 {{- with .Values.signingKey.existingSecret }}
 - name: signing-key
   secret:
@@ -151,6 +156,21 @@ app.kubernetes.io/instance: {{ .Release.Name }}
       - key: {{ $.Values.signingKey.key }}
         path: {{ base $.Values.config.signing.keyFile }}
 {{- end }}
+{{- end }}
+
+{{- define "agentry.signingKeyVolumeMount" -}}
+{{- if .Values.signingKey.existingSecret }}
+{{- $dir := dir .Values.config.signing.keyFile }}
+{{- if or (not (hasPrefix "/" $dir)) (hasPrefix "/etc/agentry/" (printf "%s/" $dir)) }}
+{{- fail "config.signing.keyFile must be an absolute path outside /etc/agentry (the read-only config mount)" }}
+{{- end }}
+- name: signing-key
+  mountPath: {{ $dir }}
+  readOnly: true
+{{- end }}
+{{- end }}
+
+{{- define "agentry.extraVolumes" -}}
 {{- with .Values.databaseCA.existingSecret }}
 - name: db-ca
   secret:
@@ -162,15 +182,6 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{- define "agentry.extraVolumeMounts" -}}
-{{- if .Values.signingKey.existingSecret }}
-{{- $dir := dir .Values.config.signing.keyFile }}
-{{- if or (not (hasPrefix "/" $dir)) (hasPrefix "/etc/agentry/" (printf "%s/" $dir)) }}
-{{- fail "config.signing.keyFile must be an absolute path outside /etc/agentry (the read-only config mount)" }}
-{{- end }}
-- name: signing-key
-  mountPath: {{ $dir }}
-  readOnly: true
-{{- end }}
 {{- if .Values.databaseCA.existingSecret }}
 - name: db-ca
   mountPath: /etc/agentry-db-ca

@@ -29,7 +29,16 @@ const (
 	// registered signing key (§8.8, agentry#350). On the core queue: it
 	// touches the database and the signer, never untrusted content.
 	JobReattestSweep = "scan.reattest_sweep"
+	// JobPublishApproved publishes and signs a version whose review item a
+	// keyless role approved (agentry#479). On the core queue: it signs, and
+	// touches no untrusted content.
+	JobPublishApproved = "scan.publish_approved"
 )
+
+// PublishApprovedArgs names the approved review item to publish.
+type PublishApprovedArgs struct {
+	ItemID uuid.UUID `json:"itemId"`
+}
 
 // ScanJobArgs is the payload for a scan.version job.
 type ScanJobArgs struct {
@@ -103,6 +112,13 @@ func (p *Pipeline) RegisterHandlers(q queue.Client) {
 		_, err := p.MCPSweep(ctx)
 		return err
 	})
+	q.Register(JobPublishApproved, func(ctx context.Context, job queue.Job) error {
+		var args PublishApprovedArgs
+		if err := json.Unmarshal(job.Args, &args); err != nil {
+			return fmt.Errorf("scan worker: bad args: %w", err)
+		}
+		return p.PublishApproved(ctx, args.ItemID)
+	})
 	q.Register(JobScanReconcile, func(ctx context.Context, _ queue.Job) error {
 		moved, err := p.ReconcileStuckScans(ctx)
 		if err != nil {
@@ -110,6 +126,13 @@ func (p *Pipeline) RegisterHandlers(q queue.Client) {
 		}
 		if moved > 0 {
 			p.log.Warn("scan: watchdog routed stuck versions to review", "count", moved)
+		}
+		published, err := p.ReconcileApprovedReviews(ctx)
+		if err != nil {
+			return err
+		}
+		if published > 0 {
+			p.log.Warn("scan: watchdog published approvals whose publish job never ran", "count", published)
 		}
 		return nil
 	})

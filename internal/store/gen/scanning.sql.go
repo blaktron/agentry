@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const countFindingsBySeverity = `-- name: CountFindingsBySeverity :many
@@ -1030,6 +1031,42 @@ func (q *Queries) ListAdvisoriesForAgent(ctx context.Context, agentID uuid.UUID)
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listApprovedReviewsAwaitingPublish = `-- name: ListApprovedReviewsAwaitingPublish :many
+SELECT ri.id FROM review_items ri
+JOIN agent_versions v ON v.id = ri.version_id
+WHERE ri.state = 'approved'
+  AND v.status = 'needs_review'
+  AND ri.decided_at < now() - $1::interval
+  AND NOT EXISTS (SELECT 1 FROM attestations a WHERE a.version_id = v.id)
+  AND NOT EXISTS (SELECT 1 FROM review_items o WHERE o.version_id = v.id AND o.state = 'pending')
+ORDER BY ri.decided_at
+LIMIT 100
+`
+
+// Approvals a keyless role handed to the worker (agentry#479) whose version
+// has not been published yet: the item is approved, the version is still in
+// needs_review with no attestation and no other open item. The watchdog
+// publishes them, so a lost enqueue delays a publish and never strands it.
+func (q *Queries) ListApprovedReviewsAwaitingPublish(ctx context.Context, grace pgtype.Interval) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listApprovedReviewsAwaitingPublish, grace)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
