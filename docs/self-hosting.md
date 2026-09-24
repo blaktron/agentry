@@ -370,13 +370,36 @@ an instance or task role, not keys in this file. The hosted service's
 Terraform provisions both the bucket and a key whose `kms:Sign` permission
 is restricted to the worker task role.
 
-**Honest caveat:** these two backends have **not yet been exercised against a
-live AWS account**. The Terraform is validated but never applied, and the
-build environment has no AWS credentials, so the first real deployment is
-also the first integration test. `local` + `file` are the paths with mileage
-on them. If you are standing up production on S3 and KMS, publish a throwaway
-version first and confirm the archive round-trips and `agentry verify`
-passes before you trust it with anything.
+An S3-compatible store that is not AWS takes its endpoint and path-style
+addressing: `s3Endpoint` (for example `https://ewr1.vultrobjects.com`) and
+`s3UsePathStyle: true`, which MinIO and Ceph RGW both need, with any region
+name (`us-east-1`). `s3Prefix` puts every key under a prefix, so one bucket
+can hold several stores. The restore drill uses it to read the backup copy's
+`store/` in place.
+
+**What has been verified, and where.** The `s3` backend has run against two
+S3 implementations:
+- MinIO, in the compose stack, on every dev deployment since the first.
+- Ceph RGW, as Vultr Object Storage, in production. The Vultr plan's M3
+  (agentry#450, 2026-09-23) proved there:
+  - a publish end to end, with the archive round-tripped byte for byte;
+  - the write-once conditional PUT answered `412` on a second write;
+  - the attestation verified against the served key.
+
+  Its M7 (agentry-web#212, 2026-09-24) served and verified a version from a
+  copy of the store in a second region, through `s3Prefix`.
+
+Signing with `kind: file` is what production runs: a P-256 key in a Secret
+mounted by the worker pods only (DEV-129).
+
+**Honest caveat:** AWS S3 and KMS signing have **not been exercised against a
+live AWS account**. The AWS Terraform is validated but never applied, and the
+build environment has no AWS credentials. The first deployment on AWS is
+therefore also the first integration test of the `kms` signer and of S3's own
+behaviour, such as its conditional-write semantics. If you are standing up
+production on S3 and KMS, publish a throwaway version first and confirm that
+the archive round-trips and `agentry verify` passes before you trust it with
+anything.
 
 ### Social login
 
