@@ -112,6 +112,10 @@ func TestOIDC_ExchangeCreatesClaims(t *testing.T) {
 	if !strings.Contains(url, "code_challenge=") || !strings.Contains(url, "nonce=") {
 		t.Fatalf("auth url missing pkce/nonce: %s", url)
 	}
+	// No refresh token is ever used, so none is asked for (agentry#494).
+	if strings.Contains(url, "access_type=") || strings.Contains(url, "offline") {
+		t.Fatalf("auth url asks for offline access: %s", url)
+	}
 	claims, err := rp.Exchange(idp.ctx(), idp.code, "verifier-abcdefabcdefabcdefabcdefabcdef1234", idp.nonce)
 	if err != nil {
 		t.Fatalf("Exchange: %v", err)
