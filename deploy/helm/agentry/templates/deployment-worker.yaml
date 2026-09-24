@@ -64,6 +64,7 @@ spec:
             - name: scratch
               mountPath: /tmp
             {{- include "agentry.extraVolumeMounts" . | nindent 12 }}
+            {{- include "agentry.signingKeyVolumeMount" . | nindent 12 }}
             {{- if .Values.worker.mountGitData }}
             - name: git-data
               mountPath: {{ .Values.config.git.dataDir }}
@@ -75,6 +76,7 @@ spec:
         - name: scratch
           emptyDir: {}
         {{- include "agentry.extraVolumes" . | nindent 8 }}
+        {{- include "agentry.signingKeyVolume" . | nindent 8 }}
         {{- if .Values.worker.mountGitData }}
         - name: git-data
         {{- if .Values.git.persistence.existingClaim }}
