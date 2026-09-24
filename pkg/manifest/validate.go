@@ -255,6 +255,7 @@ func Validate(m *Manifest) []error {
 	validatePublish(&s, m.Publish)
 	validateIntake(&s, m)
 	validateInteractive(&s, m)
+	validateGuide(&s, m)
 
 	return s.list
 }
@@ -302,6 +303,9 @@ func validateClassification(s *issues, m *Manifest) {
 		}
 		if m.Interactive != nil {
 			s.errf("V1", "interactive", "interactive is a v2 field; set schemaVersion: 2")
+		}
+		if m.Guide != nil {
+			s.errf("V1", "guide", "guide is a v2 field; set schemaVersion: 2")
 		}
 	}
 }
@@ -400,6 +404,17 @@ func validateRuntime(s *issues, m *Manifest) {
 // MaxIntakeQuestions bounds intake so a run's up-front form stays a form.
 const MaxIntakeQuestions = 20
 
+// The guide's bounds (plan guided-runs.md §6): it is read before a run, so
+// each part stays the size a person reads at a glance.
+const (
+	MaxGuideOverviewBytes = 4096
+	MaxGuidePrepare       = 10
+	MaxGuidePrepareChars  = 200
+	MaxGuideFilesChars    = 500
+	MaxGuideTaskChars     = 200
+	MaxGuideConnectChars  = 300
+)
+
 // MaxOpeningChars bounds interactive.opening: it is a first message, not a
 // second instruction file.
 const MaxOpeningChars = 500
@@ -470,6 +485,73 @@ func validateInteractive(s *issues, m *Manifest) {
 	}
 	if !m.Supports(ModeInteractive) {
 		s.warnf("V10", "interactive", "interactive hints are declared but modes does not include interactive; they will never apply")
+	}
+}
+
+// validateGuide is V10's third half: the author's words for the run setup
+// (plan guided-runs.md §6). The overview is markdown and may span lines;
+// every other part is one plain line. A connect key must be a secret the
+// release declares, in capabilities.secrets or a declared MCP server's
+// secrets, so help never names a key the run cannot take.
+func validateGuide(s *issues, m *Manifest) {
+	if m.Major() != 2 || m.Guide == nil {
+		return
+	}
+	g := m.Guide
+	if n := len(g.Overview); n > MaxGuideOverviewBytes {
+		s.errf("V10", "guide.overview", "overview is %d bytes; the maximum is %d", n, MaxGuideOverviewBytes)
+	}
+	if strings.ContainsRune(g.Overview, 0) {
+		s.errf("V10", "guide.overview", "overview must not contain a NUL character")
+	}
+	if len(g.Prepare) > MaxGuidePrepare {
+		s.errf("V10", "guide.prepare", "%d prepare items; the maximum is %d", len(g.Prepare), MaxGuidePrepare)
+	}
+	for i, item := range g.Prepare {
+		guideLine(s, fmt.Sprintf("guide.prepare[%d]", i), item, MaxGuidePrepareChars, true)
+	}
+	guideLine(s, "guide.files", g.Files, MaxGuideFilesChars, false)
+	guideLine(s, "guide.task", g.Task, MaxGuideTaskChars, false)
+
+	declared := map[string]bool{}
+	for _, n := range m.Capabilities.Secrets {
+		declared[n] = true
+	}
+	for _, srv := range m.Capabilities.MCPServers {
+		for _, n := range srv.Secrets {
+			declared[n] = true
+		}
+	}
+	names := make([]string, 0, len(g.Connect))
+	for n := range g.Connect {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		p := "guide.connect." + n
+		if !declared[n] {
+			s.errf("V10", p, "%q is not a secret this release declares (capabilities.secrets or an MCP server's secrets)", n)
+		}
+		guideLine(s, p, g.Connect[n], MaxGuideConnectChars, true)
+	}
+}
+
+// guideLine checks one single-line part of the guide.
+func guideLine(s *issues, p, v string, maxChars int, required bool) {
+	if v == "" {
+		if required {
+			s.errf("V10", p, "must not be empty")
+		}
+		return
+	}
+	if n := utf8.RuneCountInString(v); n > maxChars {
+		s.errf("V10", p, "is %d characters; the maximum is %d", n, maxChars)
+	}
+	for _, r := range v {
+		if r < 0x20 || r == 0x7f {
+			s.errf("V10", p, "must be plain single-line text (no control characters)")
+			return
+		}
 	}
 }
 

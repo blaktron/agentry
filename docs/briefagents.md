@@ -190,6 +190,42 @@ time — is the operator's runner policy, which a manifest can only
 tighten. A release that does not list `interactive` may still declare
 hints: validation warns, and they never apply.
 
+### `guide`: what a person reads before a run
+
+A few lines in the author's own words for the run setup, the steps a
+person goes through on the site and in the desktop before a run starts
+(Before you start, Files, Connect tools, Details). It is shown to people
+only: it never reaches the agent, the run plan, the capability diff or
+the consent, so changing it asks no one to consent again. Without a
+`guide`, the clients derive the same steps from the summary, the intake
+questions and the declared capabilities.
+
+```yaml
+guide:
+  overview: |              # markdown, ≤ 4096 bytes
+    Reads your contract and your playbook and returns a clause-by-clause
+    review with the asks written out.
+  prepare:                 # ≤ 10 plain lines of ≤ 200 characters
+    - The contract, as text
+    - Your negotiation playbook, if you have one
+  files: "The contract, and optionally your playbook."   # ≤ 500 characters
+  task: "e.g. 3-year SaaS subscription, 200 seats, EU data"   # the task field's placeholder, ≤ 200 characters
+  connect:                 # help per declared secret, ≤ 300 characters each
+    GITHUB_TOKEN: "A fine-grained token with read access to pull requests"
+```
+
+| Rule | |
+|---|---|
+| `overview` | markdown; clients render it with no HTML and no images |
+| `prepare`, `files`, `task`, `connect` values | one plain line each: no control characters; a `prepare` item and a `connect` value may not be empty |
+| `connect` keys | each must be a secret the release declares, under `capabilities.secrets` or a declared MCP server's `secrets` |
+| schema | v2 only; a v1 manifest carrying `guide` is refused (V1) |
+
+The guide is validated under V10 with the intake and the interactive
+hints. A CLI or desktop older than the core release that added it
+refuses a manifest carrying one by name ("unknown field guide"), so use
+it once your tools are current.
+
 ### `runtime`: informational hints
 
 | Field | Meaning |
