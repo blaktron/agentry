@@ -114,7 +114,7 @@ func normalizeDigest(d string) string {
 func storeRulesetAttestation(ctx context.Context, st *store.Store, signer scan.Signer, baseURL string) error {
 	bundle, err := ruleset.Load()
 	if err != nil {
-		return err
+		return fmt.Errorf("ruleset attestation: load the bundle: %w", err)
 	}
 	digest := normalizeDigest(bundle.Digest())
 	env, err := signer.Sign(attest.BuildRulesetStatement(baseURL, bundle.Version(), digest))
@@ -123,18 +123,20 @@ func storeRulesetAttestation(ctx context.Context, st *store.Store, signer scan.S
 	}
 	body, err := json.Marshal(env)
 	if err != nil {
-		return err
+		return fmt.Errorf("ruleset attestation: encode: %w", err)
 	}
-	return st.Queries().InsertRulesetAttestation(ctx, storegen.InsertRulesetAttestationParams{
+	if err := st.Queries().InsertRulesetAttestation(ctx, storegen.InsertRulesetAttestationParams{
 		BundleDigest: digest, KeyID: signer.KeyID(), DsseEnvelope: body,
-	})
+	}); err != nil {
+		return fmt.Errorf("ruleset attestation: store: %w", err)
+	}
+	return nil
 }
 
 // GetLatestRulesetAttestation implements GET /ruleset-releases/latest/attestation.
 // It serves the envelope the key holder stored for this binary's bundle,
 // signed by the active key (agentry#479), so the api role answers without
-// the private key. A server with no database signs on request, as it has
-// nowhere to read one from.
+// the private key. 404 when no key holder has started with this bundle.
 func (s *Server) GetLatestRulesetAttestation(w http.ResponseWriter, r *http.Request) {
 	bundle, err := ruleset.Load()
 	if err != nil {
@@ -143,36 +145,22 @@ func (s *Server) GetLatestRulesetAttestation(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	digest := normalizeDigest(bundle.Digest())
-	var body []byte
-	switch {
-	case s.st != nil:
-		row, err := s.q().GetRulesetAttestation(r.Context(), digest)
-		if errors.Is(err, pgx.ErrNoRows) {
-			// The key holder has not started with this bundle yet.
-			problemNotFound(w, r)
-			return
-		}
-		if err != nil {
-			s.log.ErrorContext(r.Context(), "ruleset attestation read", "err", err)
-			problemInternal(w, r)
-			return
-		}
-		body = row.DsseEnvelope
-	case s.signer != nil:
-		env, err := s.signer.Sign(attest.BuildRulesetStatement(s.cfg.BaseURL, bundle.Version(), digest))
-		if err != nil {
-			s.log.ErrorContext(r.Context(), "ruleset attestation sign", "err", err)
-			problemInternal(w, r)
-			return
-		}
-		if body, err = json.Marshal(env); err != nil {
-			problemInternal(w, r)
-			return
-		}
-	default:
+	if s.st == nil {
 		problemNotFound(w, r)
 		return
 	}
+	row, err := s.q().GetRulesetAttestation(r.Context(), digest)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// No key holder has started with this bundle yet.
+		problemNotFound(w, r)
+		return
+	}
+	if err != nil {
+		s.log.ErrorContext(r.Context(), "ruleset attestation read", "err", err)
+		problemInternal(w, r)
+		return
+	}
+	body := row.DsseEnvelope
 	h := w.Header()
 	h.Set("Content-Type", "application/json")
 	h.Set("X-Agentry-Bundle-Semver", bundle.Version())

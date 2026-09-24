@@ -172,7 +172,8 @@ type ReviewNotice struct {
 	ToEmail string
 	Agent   string
 	Version string
-	// Decision is the §7 outcome the version reached: published | rejected |
+	// Decision is the §7 outcome the version reached: published | approved
+	// (published moments later, by the registry's signer) | rejected |
 	// yanked | needs_review. `yanked` arrives when a reviewer rejects an
 	// already-quarantined version, which cannot go to `rejected` because that
 	// edge does not exist (internal/api/handlers_reviews.go).
@@ -487,6 +488,14 @@ func (r renderer) review(n ReviewNotice) message {
 		detail = "The version is now resolvable and its attestation is signed. The full\n" +
 			"scan report stays public: publication records what was found, it does\n" +
 			"not certify that nothing was missed.\n"
+	case "approved":
+		// A reviewer approved it and the registry's signer publishes it
+		// moments later (agentry#479): said as it is at the time of the mail.
+		headline = "approved"
+		detail = "A reviewer approved it, and it is published as soon as the registry\n" +
+			"has signed its attestation, which takes moments. The full scan report\n" +
+			"stays public: publication records what was found, it does not certify\n" +
+			"that nothing was missed.\n"
 	case "rejected":
 		headline = "rejected"
 		// `rejected` is terminal: registry.allowedTransitions gives it no

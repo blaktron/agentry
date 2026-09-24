@@ -14,5 +14,12 @@ CREATE TABLE ruleset_attestations (
   PRIMARY KEY (bundle_digest, key_id)
 );
 
+-- An approval a keyless role handed to the worker (agentry#479) is marked,
+-- so the worker's job and the watchdog publish only what was handed off:
+-- an approved item left from before this column, whatever its version's
+-- status, is never published by either.
+ALTER TABLE review_items ADD COLUMN publish_pending boolean NOT NULL DEFAULT false;
+
 -- +goose Down
+ALTER TABLE review_items DROP COLUMN publish_pending;
 DROP TABLE ruleset_attestations;

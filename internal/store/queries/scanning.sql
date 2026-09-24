@@ -106,8 +106,15 @@ WHERE ri.id = $1;
 -- name: GetPendingReviewItemForVersion :one
 SELECT * FROM review_items WHERE version_id = $1 AND state = 'pending';
 
--- name: DecideReviewItem :exec
-UPDATE review_items SET state = $2, decided_by = $3, decided_at = now(), rationale = $4 WHERE id = $1;
+-- A decision lands only on a pending item: a second reviewer acting on a
+-- stale page gets no row and a conflict, never an overwrite of the first
+-- decision (agentry#479 made that reachable: a handed-off approval leaves
+-- its version in needs_review for a moment).
+-- name: DecideReviewItem :execrows
+UPDATE review_items SET state = $2, decided_by = $3, decided_at = now(), rationale = $4 WHERE id = $1 AND state = 'pending';
+
+-- name: SetReviewPublishPending :exec
+UPDATE review_items SET publish_pending = $2 WHERE id = $1;
 
 -- name: ListReviewQueue :many
 SELECT ri.*, av.version, av.status AS version_status, a.name AS agent_name, h.handle AS namespace
@@ -282,16 +289,15 @@ SELECT * FROM abuse_reports WHERE id = $1;
 UPDATE abuse_reports SET state = $2, triaged_by = $3, triaged_at = now(), resolution = $4 WHERE id = $1;
 
 -- Approvals a keyless role handed to the worker (agentry#479) whose version
--- has not been published yet: the item is approved, the version is still in
--- needs_review with no attestation and no other open item. The watchdog
--- publishes them, so a lost enqueue delays a publish and never strands it.
+-- has not been published yet: marked publish_pending, still approved, the
+-- version still in needs_review. The same conditions PublishApproved
+-- checks; the watchdog publishes them, so a lost enqueue delays a publish.
 -- name: ListApprovedReviewsAwaitingPublish :many
 SELECT ri.id FROM review_items ri
 JOIN agent_versions v ON v.id = ri.version_id
-WHERE ri.state = 'approved'
+WHERE ri.publish_pending
+  AND ri.state = 'approved'
   AND v.status = 'needs_review'
   AND ri.decided_at < now() - sqlc.arg('grace')::interval
-  AND NOT EXISTS (SELECT 1 FROM attestations a WHERE a.version_id = v.id)
-  AND NOT EXISTS (SELECT 1 FROM review_items o WHERE o.version_id = v.id AND o.state = 'pending')
 ORDER BY ri.decided_at
 LIMIT 100;

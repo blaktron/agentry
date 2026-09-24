@@ -79,14 +79,15 @@ func (q *Queries) GetActiveSigningKey(ctx context.Context) (SigningKey, error) {
 const getRulesetAttestation = `-- name: GetRulesetAttestation :one
 SELECT ra.bundle_digest, ra.key_id, ra.dsse_envelope, ra.created_at FROM ruleset_attestations ra
 JOIN signing_keys k ON k.key_id = ra.key_id
-WHERE ra.bundle_digest = $1
-ORDER BY (k.retired_at IS NULL) DESC, ra.created_at DESC
+WHERE ra.bundle_digest = $1 AND k.retired_at IS NULL
+ORDER BY k.last_seen_at DESC
 LIMIT 1
 `
 
-// The ruleset attestation to serve for a bundle: the active key's when
-// there is one, else the newest by a retired key (which the key set still
-// advertises while it has signatures to its name).
+// The ruleset attestation to serve for a bundle: the one the active key
+// signed. None when the active key's holder has not started with this
+// bundle yet; an envelope by a retired key is never served, because the key
+// set advertises retired keys only for version attestations.
 func (q *Queries) GetRulesetAttestation(ctx context.Context, bundleDigest string) (RulesetAttestation, error) {
 	row := q.db.QueryRow(ctx, getRulesetAttestation, bundleDigest)
 	var i RulesetAttestation
