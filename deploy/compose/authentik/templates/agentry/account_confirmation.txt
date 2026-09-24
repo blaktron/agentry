@@ -1,0 +1,14 @@
+{% autoescape off %}Confirm your email address
+
+Confirm this address to finish setting up your Agentry account. Next you
+set up an authenticator app, and then you are signed in.
+
+{{ url }}
+
+The link works for {{ expires|timeuntil }}. If you did not create an Agentry
+account, ignore this message: the account stays inactive and cannot sign in.
+
+--
+Agentry sent this automatically to the address on the account it concerns.
+Do not reply to this message.
+{% endautoescape %}
