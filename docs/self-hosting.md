@@ -566,6 +566,7 @@ through the entitlements resolver. The defaults:
 | `limits.versionsPerDay` | 20 | per agent |
 | `limits.webhookEndpointsPerOrg` / `webhookDeliveriesPerSecond` | 20 / 5 | |
 | `limits.authedPerHour`, `authedBurstPerMin`, `anonymousPerMin`, `loginPerMin` | 5000, 100, 60, 10 | the API rate buckets (also enforced at the edge) |
+| `limits.scimPerMin` | 600 | SCIM requests per organization per minute, and the burst a directory may spend at once. An initial sync of a few hundred people fits; past it the IdP gets 429 with `Retry-After` and paces itself. Raise it for a directory of thousands, since a directory's size is a property of the deployment |
 
 The archive quotas are checked by the manifest rules (V8) both on the server
 at submission and by `agentry validate` offline, so a package learns it is

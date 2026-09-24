@@ -323,14 +323,11 @@ func AllMountAuthzDecls() map[string]MountDecl {
 	return out
 }
 
-// scimDataPlane is what every SCIM route declares. §19 names no bucket for
-// SCIM, and a directory's provisioning burst is legitimate traffic that no
-// bucket distinguishes from an abusive one, so the class is a stated gap
-// rather than an oversight.
-var scimDataPlane = MountDecl{
-	Gate: GateSCIMToken, Class: RateNone,
-	Why: "no §19 bucket covers SCIM; a directory's provisioning burst is legitimate traffic and nothing today distinguishes it",
-}
+// scimDataPlane is what every SCIM route declares: the SCIM bearer token,
+// and the `scim` bucket scimAuth spends per organization (limits.scimPerMin;
+// agentry#453, DEV-140). Its burst is sized for a directory's initial sync,
+// which is legitimate traffic; past it an IdP is refused with Retry-After.
+var scimDataPlane = MountDecl{Gate: GateSCIMToken, Class: "scim"}
 
 // mountAuthz maps a root mount's pattern → declaration. These are the
 // registrations that are not part of the generated surface. A pattern here
