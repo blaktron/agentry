@@ -276,6 +276,11 @@ type Limits struct {
 	// offer the git SSH listener per minute, spent before the key is looked
 	// up (60/min; agentry#410).
 	SSHKeyOffersPerMin int `yaml:"sshKeyOffersPerMin"`
+	// GitConcurrentPerIP is §19's budget of concurrent git operations per
+	// client address (20), on both transports, keyed on the trusted client
+	// address (http.trustedProxyCIDRs, git.sshProxyProtocolCIDRs). An
+	// address at it is refused at once rather than queued (agentry#454).
+	GitConcurrentPerIP int `yaml:"gitConcurrentPerIP"`
 
 	// Namespace + publish-velocity quotas (§19).
 	AgentsPerUserNamespace int `yaml:"agentsPerUserNamespace"` // 200
@@ -555,6 +560,7 @@ func Default() Config {
 			RepoMaxBlobBytes:           25 << 20,
 			GitPushesPerHour:           60,
 			SSHKeyOffersPerMin:         60,
+			GitConcurrentPerIP:         20,
 			AgentsPerUserNamespace:     200,
 			AgentsPerOrgNamespace:      500,
 			VersionsPerDay:             20,
@@ -866,6 +872,7 @@ func applyEnv(c *Config) error {
 		{"AGENTRY_LIMITS_LOGIN_PER_MIN", &c.Limits.LoginPerMin},
 		{"AGENTRY_LIMITS_GIT_PUSHES_PER_HOUR", &c.Limits.GitPushesPerHour},
 		{"AGENTRY_LIMITS_SSH_KEY_OFFERS_PER_MIN", &c.Limits.SSHKeyOffersPerMin},
+		{"AGENTRY_LIMITS_GIT_CONCURRENT_PER_IP", &c.Limits.GitConcurrentPerIP},
 		{"AGENTRY_LIMITS_REPO_WARN_BYTES", &c.Limits.RepoWarnBytes},
 		{"AGENTRY_LIMITS_AGENTS_PER_USER_NAMESPACE", &c.Limits.AgentsPerUserNamespace},
 		{"AGENTRY_LIMITS_AGENTS_PER_ORG_NAMESPACE", &c.Limits.AgentsPerOrgNamespace},
@@ -1140,6 +1147,7 @@ func (c Config) validateLimits() error {
 		{"limits.repoMaxBlobBytes", int64(c.Limits.RepoMaxBlobBytes)},
 		{"limits.gitPushesPerHour", int64(c.Limits.GitPushesPerHour)},
 		{"limits.sshKeyOffersPerMin", int64(c.Limits.SSHKeyOffersPerMin)},
+		{"limits.gitConcurrentPerIP", int64(c.Limits.GitConcurrentPerIP)},
 		{"limits.agentsPerUserNamespace", int64(c.Limits.AgentsPerUserNamespace)},
 		{"limits.agentsPerOrgNamespace", int64(c.Limits.AgentsPerOrgNamespace)},
 		{"limits.versionsPerDay", int64(c.Limits.VersionsPerDay)},

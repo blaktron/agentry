@@ -27,7 +27,7 @@ import (
 // anything else is a typo that reads as a claim about enforcement.
 var rateClasses = map[string]bool{
 	"login": true, "anon": true, "authed": true, "abuse_reports": true,
-	"push": true, "ssh-key-offer": true,
+	"push": true, "ssh-key-offer": true, "git-concurrent": true,
 	api.RateNone: true, api.RatePerPrincipal: true,
 }
 

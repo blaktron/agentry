@@ -41,9 +41,12 @@ type Handler struct {
 	aud   *audit.Writer
 	log   *slog.Logger
 	// sem bounds concurrent git subprocesses instance-wide, perRepo bounds
-	// them per repository (§6.2: a semaphore per repo and global).
-	sem     chan struct{}
-	perRepo *repoSemaphores
+	// them per repository (§6.2: a semaphore per repo and global), and
+	// perClient per trusted client address (§19, agentry#454). nil perClient
+	// (tests) leaves only the first two.
+	sem       chan struct{}
+	perRepo   *repoSemaphores
+	perClient *clientSemaphores
 	// opTimeout bounds one git operation; postReceiveTimeout bounds the
 	// bookkeeping that outlives the request (afterReceive).
 	opTimeout          time.Duration
@@ -97,6 +100,7 @@ func NewHandler(cfg config.Config, st *store.Store, repos *RepoStore, reg *regis
 		cfg: cfg, st: st, repos: repos, reg: reg, aud: aud, log: log,
 		sem:                make(chan struct{}, globalGitConcurrency),
 		perRepo:            newRepoSemaphores(perRepoGitConcurrency),
+		perClient:          newClientSemaphores(gitConcurrentPerIP(cfg)),
 		opTimeout:          5 * time.Minute,
 		postReceiveTimeout: 2 * time.Minute,
 		diskUsage:          repos.DiskUsage,
@@ -106,6 +110,34 @@ func NewHandler(cfg config.Config, st *store.Store, repos *RepoStore, reg *regis
 		pushes:    ratelimit.New(2 * time.Hour),
 		keyOffers: ratelimit.New(2 * time.Minute),
 	}
+}
+
+// gitConcurrentPerIP is the §19 per-address budget of concurrent git
+// operations from config, with the shipped default when unset.
+func gitConcurrentPerIP(cfg config.Config) int {
+	if n := cfg.Limits.GitConcurrentPerIP; n > 0 {
+		return n
+	}
+	return 20
+}
+
+// gitClient is the address a git operation over smart HTTP is budgeted to:
+// the one the middleware resolved after the trusted-proxy decision
+// (http.trustedProxyCIDRs, agentry#429), so a client cannot pick its own
+// by sending X-Forwarded-For. A handler reached without that middleware
+// (tests) falls back to the peer.
+func gitClient(r *http.Request) string {
+	if ip := auth.ClientIPFrom(r.Context()); ip != "" {
+		return ip
+	}
+	return clientHost(r.RemoteAddr)
+}
+
+// refuseClientBusy answers an address at its budget. 429, not 503: the
+// instance is not busy, this address is.
+func refuseClientBusy(w http.ResponseWriter) {
+	w.Header().Set("Retry-After", "1")
+	http.Error(w, errClientBusy.Error(), http.StatusTooManyRequests)
 }
 
 // pushesPerHour is the §19 per-repo push budget from config, with the shipped
@@ -333,7 +365,11 @@ func (h *Handler) infoRefs(w http.ResponseWriter, r *http.Request) {
 	cmd.Stdout = &out
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	if err := h.runLimited(ctx, agent.RepoID, cmd); err != nil {
+	if err := h.runLimited(ctx, agent.RepoID, gitClient(r), cmd); err != nil {
+		if errors.Is(err, errClientBusy) {
+			refuseClientBusy(w)
+			return
+		}
 		h.log.ErrorContext(r.Context(), "info/refs", "err", err, "stderr", stderr.String())
 		http.Error(w, "git error", http.StatusInternalServerError)
 		return
@@ -465,7 +501,12 @@ func (h *Handler) rpc(w http.ResponseWriter, r *http.Request, agent registry.Age
 		http.Error(w, "git error", http.StatusInternalServerError)
 		return
 	}
-	release, err := h.acquireGit(ctx, agent.RepoID)
+	release, err := h.acquireGit(ctx, agent.RepoID, gitClient(r))
+	if errors.Is(err, errClientBusy) {
+		outcome = "throttled"
+		refuseClientBusy(w)
+		return
+	}
 	if err != nil {
 		outcome = "busy"
 		http.Error(w, "git busy", http.StatusServiceUnavailable)
@@ -682,8 +723,8 @@ func (h *Handler) gitEnvFor(ctx context.Context, gitProtocol string, agent regis
 	return env
 }
 
-func (h *Handler) runLimited(ctx context.Context, repoID uuid.UUID, cmd *exec.Cmd) error {
-	release, err := h.acquireGit(ctx, repoID)
+func (h *Handler) runLimited(ctx context.Context, repoID uuid.UUID, client string, cmd *exec.Cmd) error {
+	release, err := h.acquireGit(ctx, repoID, client)
 	if err != nil {
 		return err
 	}

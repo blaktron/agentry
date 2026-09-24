@@ -330,7 +330,7 @@ func TestAfterReceiveBookkeeping(t *testing.T) {
 func TestAcquireGitOrdersRepoBeforeGlobal(t *testing.T) {
 	h := &Handler{sem: make(chan struct{}, 4), perRepo: newRepoSemaphores(1)}
 	id := uuid.New()
-	release, err := h.acquireGit(context.Background(), id)
+	release, err := h.acquireGit(context.Background(), id, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +344,7 @@ func TestAcquireGitOrdersRepoBeforeGlobal(t *testing.T) {
 		defer wg.Done()
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 		defer cancel()
-		if _, err := h.acquireGit(ctx, id); err == nil {
+		if _, err := h.acquireGit(ctx, id, ""); err == nil {
 			t.Error("second operation on a repo at its cap must not be admitted")
 		}
 	}()
@@ -356,4 +356,82 @@ func TestAcquireGitOrdersRepoBeforeGlobal(t *testing.T) {
 	if len(h.sem) != 0 {
 		t.Fatalf("release left %d global slots held", len(h.sem))
 	}
+}
+
+// TestAcquireGitBudgetsEachClientAddress is §19's "20 concurrent git ops
+// per IP" (agentry#454): one address spread over many repositories used to
+// take every global slot and stall the instance. At its budget an address
+// is refused at once — it does not queue, so it holds no repository's slot
+// while it waits — and a second address is admitted beside it. The global
+// cap here is larger than the budget, so what refuses the first address is
+// its own budget, not the instance being full.
+func TestAcquireGitBudgetsEachClientAddress(t *testing.T) {
+	const budget = 3
+	h := &Handler{
+		sem:       make(chan struct{}, 8),
+		perRepo:   newRepoSemaphores(4),
+		perClient: newClientSemaphores(budget),
+	}
+	const greedy, other = "203.0.113.7", "198.51.100.9"
+	var releases []func()
+	for i := 0; i < budget; i++ {
+		// A different repository each time: the per-repository cap is not
+		// what stops this address.
+		release, err := h.acquireGit(context.Background(), uuid.New(), greedy)
+		if err != nil {
+			t.Fatalf("operation %d within the budget: %v", i+1, err)
+		}
+		releases = append(releases, release)
+	}
+
+	// Refused without waiting: a context with no deadline would hang here
+	// if the refusal queued.
+	repo := uuid.New()
+	if _, err := h.acquireGit(context.Background(), repo, greedy); !errors.Is(err, errClientBusy) {
+		t.Fatalf("operation past the budget: err = %v, want errClientBusy", err)
+	}
+	if len(h.sem) != budget {
+		t.Fatalf("a refused operation took a global slot: %d held, want %d", len(h.sem), budget)
+	}
+	if h.perRepo.tracked() != budget {
+		t.Fatalf("a refused operation took a repository slot: %d repositories tracked, want %d", h.perRepo.tracked(), budget)
+	}
+
+	// Another address is unaffected, on the same repository too.
+	release, err := h.acquireGit(context.Background(), repo, other)
+	if err != nil {
+		t.Fatalf("a second address beside one at its budget: %v", err)
+	}
+	release()
+
+	// Releasing one of the first address's operations gives it a slot back.
+	releases[0]()
+	release, err = h.acquireGit(context.Background(), repo, greedy)
+	if err != nil {
+		t.Fatalf("after a release, within the budget again: %v", err)
+	}
+	release()
+	for _, r := range releases[1:] {
+		r()
+	}
+	if len(h.sem) != 0 || h.perRepo.tracked() != 0 || h.perClient.tracked() != 0 {
+		t.Fatalf("slots left held: global %d, repositories %d, addresses %d", len(h.sem), h.perRepo.tracked(), h.perClient.tracked())
+	}
+}
+
+// TestAcquireGitWithoutAnAddressSkipsTheBudget: an operation the server
+// starts on its own behalf has no client address, and is bounded by the
+// repository and global caps alone.
+func TestAcquireGitWithoutAnAddressSkipsTheBudget(t *testing.T) {
+	h := &Handler{sem: make(chan struct{}, 4), perRepo: newRepoSemaphores(4), perClient: newClientSemaphores(1)}
+	a, err := h.acquireGit(context.Background(), uuid.New(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := h.acquireGit(context.Background(), uuid.New(), "")
+	if err != nil {
+		t.Fatalf("a second address-less operation: %v", err)
+	}
+	a()
+	b()
 }

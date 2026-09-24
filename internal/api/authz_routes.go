@@ -340,17 +340,13 @@ var mountAuthz = map[string]MountDecl{
 	// Git smart HTTP, registered by internal/gitsrv's own Mount. The gate is
 	// git's: a PAT over Basic auth, then the effective agent role. Pushes
 	// draw from the `push` bucket inside admitPush, which is the code that
-	// says so. The read side names no bucket because none applies — git's
-	// concurrency is bounded per repository and instance-wide by acquireGit,
-	// and §19's per-IP figure is the part that was never implemented.
-	"GET /{ns}/{repo}/info/refs": {
-		Gate: GateGit, Class: RateNone,
-		Why: "no §19 bucket; acquireGit bounds a clone at 4 per repository and 32 instance-wide, and §19's 20-concurrent-per-IP is unimplemented",
-	},
-	"POST /{ns}/{repo}/git-upload-pack": {
-		Gate: GateGit, Class: RateNone,
-		Why: "no §19 bucket; acquireGit bounds a fetch at 4 per repository and 32 instance-wide, and §19's 20-concurrent-per-IP is unimplemented",
-	},
+	// says so. The read side draws from `git-concurrent`, acquireGit's
+	// budget of concurrent operations per trusted client address (§19's 20,
+	// agentry#454), beside its caps of 4 per repository and 32
+	// instance-wide. A push draws from it too, before `push` — one class
+	// per declaration, so the push route names the bucket that is its own.
+	"GET /{ns}/{repo}/info/refs":         {Gate: GateGit, Class: "git-concurrent"},
+	"POST /{ns}/{repo}/git-upload-pack":  {Gate: GateGit, Class: "git-concurrent"},
 	"POST /{ns}/{repo}/git-receive-pack": {Gate: GateGit, Class: "push"},
 
 	// The image proxy: the signature is the route's only gate (agentry#64).
