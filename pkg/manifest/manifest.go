@@ -168,6 +168,12 @@ type Manifest struct {
 	// Interactive carries hints for interactive sessions (v2, V10).
 	// Everything else about a session is runner policy, not manifest.
 	Interactive *InteractiveHints `yaml:"interactive,omitempty" json:"interactive,omitempty"`
+	// Guide is what a person reads before a run: what the BriefAgent does,
+	// what to gather first, what files to bring, a task placeholder, and
+	// help for each declared secret (v2, V10; plan guided-runs.md §6). It is
+	// shown to people only: it never reaches the agent, the run plan, the
+	// capability diff or the consent.
+	Guide *Guide `yaml:"guide,omitempty" json:"guide,omitempty"`
 	// Runtime carries informational runtime hints and install targets.
 	Runtime Runtime `yaml:"runtime,omitempty" json:"runtime,omitempty"`
 	// Capabilities is the security contract (closed vocabulary, V5).
@@ -303,6 +309,23 @@ type IntakeQuestion struct {
 	Required bool `yaml:"required,omitempty" json:"required,omitempty"`
 	// Choices lists the allowed answers for IntakeChoice; forbidden otherwise.
 	Choices []string `yaml:"choices,omitempty" json:"choices,omitempty"`
+}
+
+// Guide is the author's own words for the run setup (plan guided-runs.md
+// §6): clients show them before a run and derive the same steps from the
+// rest of the manifest when a release carries none.
+type Guide struct {
+	// Overview says what the BriefAgent does and returns, in markdown.
+	Overview string `yaml:"overview,omitempty" json:"overview,omitempty"`
+	// Prepare lists what to gather before starting, one line each.
+	Prepare []string `yaml:"prepare,omitempty" json:"prepare,omitempty"`
+	// Files says what files to bring to the run, in one line.
+	Files string `yaml:"files,omitempty" json:"files,omitempty"`
+	// Task is the placeholder for the task field.
+	Task string `yaml:"task,omitempty" json:"task,omitempty"`
+	// Connect is help per declared secret name: where to create the key,
+	// which scopes it needs. Every key must be a declared secret (V10).
+	Connect map[string]string `yaml:"connect,omitempty" json:"connect,omitempty"`
 }
 
 // InteractiveHints are the manifest's hints for interactive sessions
