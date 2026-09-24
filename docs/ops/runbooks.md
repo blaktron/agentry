@@ -390,7 +390,9 @@ cannot sign in.
 3. Is the registry's OIDC client still what authentik has? Re-run
    `scripts/dev/authentik-bootstrap.sh` (idempotent): it restores the
    provider's redirect URIs (authorization *and* logout), the scope
-   mappings, the application's launch URL, and the brand's default
+   mappings, its one grant (the authorization code; a provider with none
+   answers every sign-in with `invalid_request`, agentry#494), the
+   application's launch URL, and the brand's default
    application and unset user-settings flow — everything a deployment that
    predates agentry#164 lacks. It needs `AGENTRY_PUBLIC_WEB_URL` and the
    bootstrap token from `.env`; read individual keys from that file rather
