@@ -89,7 +89,7 @@ config:
     s3Region: ""
     s3Prefix: "" # optional key prefix, letting one bucket host several envs
     s3Endpoint: "" # set for MinIO/Ceph; empty uses AWS
-    s3UsePathStyle: false # MinIO needs true; AWS does not
+    s3UsePathStyle: false # MinIO and Ceph RGW (Vultr Object Storage, verified at M3) need true; AWS does not
   git:
     dataDir: /data/git
     # The SSH git transport (DEV-087): the address the git role listens on,
