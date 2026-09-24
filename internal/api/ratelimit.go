@@ -24,6 +24,8 @@ type limitClasses struct {
 	anonBurst   int
 	login       rate.Limit
 	loginBurst  int
+	scim        rate.Limit
+	scimBurst   int
 }
 
 func classesFromConfig(l config.Limits) limitClasses {
@@ -34,6 +36,8 @@ func classesFromConfig(l config.Limits) limitClasses {
 		anonBurst:   l.AnonymousPerMin,
 		login:       ratelimit.PerMinute(l.LoginPerMin),
 		loginBurst:  l.LoginPerMin,
+		scim:        ratelimit.PerMinute(l.SCIMPerMin),
+		scimBurst:   l.SCIMPerMin,
 	}
 }
 
