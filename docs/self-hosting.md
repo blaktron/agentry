@@ -560,7 +560,7 @@ through the entitlements resolver. The defaults:
 | `limits.archiveMaxFileBytes` / `archiveMaxImageFileBytes` | 2 MiB / 5 MiB | any one file, images by extension |
 | `limits.archiveMaxTextBytes` | 1 MiB | the text files in total — the prose the scanners read in full; a package cannot spread an oversized instruction set across many files (V8) |
 | `limits.gitPushesPerHour` | 60 | per repository, spent at one admission point whichever transport the push arrives on — smart HTTP or SSH |
-| `limits.gitConcurrentPerIP` | 20 | concurrent git operations (clone, fetch, push, over smart HTTP or SSH) from one client address; past it the operation is refused at once (HTTP 429, or a message over SSH) rather than queued. The address is the trusted one: behind a proxy set `http.trustedProxyCIDRs` and, for SSH, `git.sshProxyProtocolCIDRs`, or every client shares the proxy's budget. Beside it stand fixed caps of 4 per repository and 32 per process |
+| `limits.gitConcurrentPerIP` | 20 | concurrent git operations (clone, fetch, push, over smart HTTP or SSH) from one client address; past it the operation is refused at once (HTTP 429, or a message over SSH) rather than queued. The address is the one resolved through the declared proxies: behind a proxy set `http.trustedProxyCIDRs` and, for SSH, `git.sshProxyProtocolCIDRs`, or every client shares the proxy's budget. Beside it stand fixed caps of 4 per repository and 32 per process |
 | `limits.sshKeyOffersPerMin` | 60 | public keys one source address may offer the git SSH listener per minute, spent before the key is looked up; past it the offer is refused without a database lookup |
 | `limits.agentsPerUserNamespace` / `agentsPerOrgNamespace` | 200 / 500 | |
 | `limits.versionsPerDay` | 20 | per agent |
