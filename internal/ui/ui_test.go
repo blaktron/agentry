@@ -493,7 +493,7 @@ func TestReviewPages(t *testing.T) {
 		t.Fatalf("verdict options: %s", body)
 	}
 	w = post(h, "/ui/review/ri1/decision", url.Values{"_csrf": {"csrf1"}, "decision": {"approve"}, "rationale": {"looks fine"}}, nil, sessCookie, csrfCookieV)
-	if loc, okMsg, _ := redirectedTo(t, w); w.Code != http.StatusSeeOther || loc != "/ui/review" || okMsg != "Approved. The version is published and signed." {
+	if loc, okMsg, _ := redirectedTo(t, w); w.Code != http.StatusSeeOther || loc != "/ui/review" || okMsg != "Approved. The version is published as soon as its attestation is signed, which takes moments." {
 		t.Fatalf("decide: %d %s %q %s", w.Code, loc, okMsg, w.Body.String())
 	}
 	// A needs_review version rejected will not publish; the item said which
@@ -772,7 +772,7 @@ func TestReviewDecisionFlashNamesTheConsequence(t *testing.T) {
 		{"quarantined", "reject", "Rejected. The version was published, then quarantined, so it is yanked: an exact pin still resolves it, nothing else does."},
 		{"quarantined", "approve", "Approved. The version was published, then quarantined; it is published and signed again."},
 		{"needs_review", "reject", "Rejected. This version will not publish."},
-		{"needs_review", "approve", "Approved. The version is published and signed."},
+		{"needs_review", "approve", "Approved. The version is published as soon as its attestation is signed, which takes moments."},
 		{"", "reject", "Rejected. The decision and rationale are recorded with the version."},
 	} {
 		f.versionStatus = tc.status
