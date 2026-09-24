@@ -3,6 +3,7 @@ package api
 import (
 	"net"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -92,8 +93,48 @@ func clientIP(r *http.Request) string {
 	return peerIP(r)
 }
 
+// proxyTrust is who may speak for a client in X-Forwarded-For: hops
+// trusted hops (http.trustedProxies), connecting from one of from
+// (http.trustedProxyCIDRs) when that list is set.
+type proxyTrust struct {
+	hops int
+	from []netip.Prefix
+}
+
+// newProxyTrust builds the trust decision from the listener config. The
+// list was validated at load; an entry that still fails to parse turns the
+// trust off rather than widening it.
+func newProxyTrust(c config.HTTP) proxyTrust {
+	from, err := config.ParseCIDRs(c.TrustedProxyCIDRs)
+	if err != nil {
+		return proxyTrust{}
+	}
+	return proxyTrust{hops: c.TrustedProxies, from: from}
+}
+
+// peerTrusted reports whether r's TCP peer is a hop whose forwarded headers
+// this server believes: any peer when a hop count is set without a list (the
+// hop count alone, as before agentry#429), only a listed one when the list
+// is set, and none when the hop count is 0.
+func (t proxyTrust) peerTrusted(r *http.Request) bool {
+	if t.hops <= 0 {
+		return false
+	}
+	if len(t.from) == 0 {
+		return true
+	}
+	a, err := netip.ParseAddr(peerIP(r))
+	return err == nil && config.InCIDRs(t.from, a)
+}
+
 // clientIPWithProxies resolves the caller's address from the peer address and
 // X-Forwarded-For.
+//
+// With http.trustedProxyCIDRs set, a request whose TCP peer is outside the
+// listed ranges resolves to that peer and its header is ignored: the trust
+// is keyed on who connected, as nginx's set_real_ip_from is, so a client
+// that reaches agentryd directly cannot pick its own address whatever the
+// hop count says (agentry#429).
 //
 // With http.trustedProxies at 0 (the default, and correct for a directly
 // addressed agentryd) this is the peer address and X-Forwarded-For is ignored
@@ -106,11 +147,12 @@ func clientIP(r *http.Request) string {
 // peer itself never appears in the header), so the entry before them is the
 // furthest address a trusted hop vouched for. Anything earlier in the list was
 // written by the client and is ignored.
-func clientIPWithProxies(r *http.Request, trusted int) string {
+func clientIPWithProxies(r *http.Request, trust proxyTrust) string {
 	peer := peerIP(r)
-	if trusted <= 0 {
+	if !trust.peerTrusted(r) {
 		return peer
 	}
+	trusted := trust.hops
 	fwd := parseForwardedFor(r.Header.Values("X-Forwarded-For"))
 	// The peer itself is one of the trusted hops and never appears in the
 	// header, so N trusted hops means N-1 trusted entries at the tail.

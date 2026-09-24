@@ -42,7 +42,8 @@ The server mints the id (16 hex characters). It honours an inbound
 front and on the server — only when the operator has said that **the hop
 in front sets the header on every request it forwards**
 (`http.proxyRequestID: true` / `AGENTRY_PROXY_REQUEST_ID=true`, which
-itself needs `http.trustedProxies` ≥ 1) and the value matches
+itself needs `http.trustedProxies` ≥ 1, and with `http.trustedProxyCIDRs`
+set, a request whose peer is in one of its ranges) and the value matches
 `^[A-Za-z0-9-]{8,64}$`. The hop count alone is not enough: anyone can send
 the header, and a proxy that merely forwards it would let a caller stamp
 its own id onto the server's lines and audit rows. The compose stack's
@@ -59,7 +60,7 @@ One line per request, `event=http.request`, `msg=http`, at `INFO`:
 | `method`, `path` | as requested |
 | `route` | the matched route pattern (`/api/v1/agents/{ns}/{name}`), never the concrete path — the low-cardinality key dashboards group by |
 | `status`, `dur_ms`, `bytes` | the response |
-| `client_ip` | the caller's address as the `http.trustedProxies` rule resolves it |
+| `client_ip` | the caller's address as the `http.trustedProxies` and `http.trustedProxyCIDRs` rule resolves it |
 | `user_agent` | as sent |
 | `actor`, `actor_via` | the principal's opaque id and how it authenticated (`session`, `pat`, `ssh`); `actor=anonymous` when unauthenticated. A PAT's id may appear (`actor_pat`); the PAT itself never does |
 

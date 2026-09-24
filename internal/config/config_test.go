@@ -101,6 +101,12 @@ func TestValidateGuards(t *testing.T) {
 		// without a hop count is a contradiction, not a default.
 		{"proxyRequestID without a hop", func(c *Config) { c.HTTP.ProxyRequestID = true; c.HTTP.TrustedProxies = 0 }},
 		{"bad audit stream kind", func(c *Config) { c.Audit.StreamKind = "kafka" }},
+		// A staff domain that could never match an address would switch the
+		// rule off silently (agentry#525).
+		{"staff domain with an at", func(c *Config) { c.Auth.IdPStaffDomain = "@secureagentry.net" }},
+		{"staff domain with a leading dot", func(c *Config) { c.Auth.IdPStaffDomain = ".secureagentry.net" }},
+		{"staff domain in capitals", func(c *Config) { c.Auth.IdPStaffDomain = "SecureAgentry.net" }},
+		{"staff domain of one label", func(c *Config) { c.Auth.IdPStaffDomain = "localhost" }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -418,6 +424,19 @@ func TestSocialProviderEnv(t *testing.T) {
 	}
 }
 
+func TestStaffDomainAcceptsABareDomain(t *testing.T) {
+	cfg := devDefault()
+	cfg.Auth.IdPStaffDomain = "secureagentry.net"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("a bare domain was refused: %v", err)
+	}
+	t.Setenv("AGENTRY_IDP_STAFF_DOMAIN", "secureagentry.net")
+	got := devDefault()
+	if err := applyEnv(&got); err != nil || got.Auth.IdPStaffDomain != "secureagentry.net" {
+		t.Fatalf("the environment did not set it: %q %v", got.Auth.IdPStaffDomain, err)
+	}
+}
+
 func TestParseCIDRs(t *testing.T) {
 	ok := []struct{ in, want string }{
 		{"10.0.0.0/8", "10.0.0.0/8"},
@@ -458,6 +477,23 @@ func TestSSHProxyProtocolCIDRsFromEnv(t *testing.T) {
 	}
 	t.Setenv("AGENTRY_GIT_SSH_PROXY_PROTOCOL_CIDRS", "10.0.0.1/8")
 	if _, err := Load(""); err == nil || !strings.Contains(err.Error(), "sshProxyProtocolCIDRs") {
+		t.Fatalf("a CIDR with host bits set was accepted: %v", err)
+	}
+}
+
+func TestTrustedProxyCIDRsFromEnv(t *testing.T) {
+	t.Setenv("AGENTRY_DEV_MODE", "true")
+	t.Setenv("AGENTRY_TRUSTED_PROXIES", "1")
+	t.Setenv("AGENTRY_TRUSTED_PROXY_CIDRS", "172.16.0.0/12,192.168.0.0/16")
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(cfg.HTTP.TrustedProxyCIDRs, "|"); got != "172.16.0.0/12|192.168.0.0/16" {
+		t.Fatalf("trustedProxyCIDRs = %q", got)
+	}
+	t.Setenv("AGENTRY_TRUSTED_PROXY_CIDRS", "172.16.0.1/12")
+	if _, err := Load(""); err == nil || !strings.Contains(err.Error(), "trustedProxyCIDRs") {
 		t.Fatalf("a CIDR with host bits set was accepted: %v", err)
 	}
 }

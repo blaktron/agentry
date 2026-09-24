@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -75,6 +76,17 @@ type HTTP struct {
 	// callers the ability to choose their own rate-limit bucket, so it must
 	// match the deployment exactly (§19, §13.5).
 	TrustedProxies int `yaml:"trustedProxies"`
+	// TrustedProxyCIDRs, when set, names the addresses the trusted hop
+	// connects from (agentry#429). X-Forwarded-For is then read only on a
+	// request whose TCP peer is inside one of these ranges; every other
+	// request resolves to its peer, whatever the header says. Without it
+	// the hop count trusts the header's tail from whoever connects, so a
+	// client that reaches agentryd directly names its own address; with
+	// it that is a property of the code, not of which ports a deployment
+	// happens to expose. CIDRs or bare addresses. Used only when
+	// trustedProxies >= 1; the hop count keeps its meaning for the entries
+	// the trusted hops wrote.
+	TrustedProxyCIDRs []string `yaml:"trustedProxyCIDRs"`
 	// ProxyRequestID says the hop in front SETS X-Request-Id on every request
 	// it forwards (the compose edge does; an ALB does not), so an inbound id
 	// is honoured (docs/logging.md). Off (the default) means the server mints
@@ -209,6 +221,19 @@ type Auth struct {
 	// is granted AND revoked in the directory, never by hand in SQL. Empty
 	// disables the sync and leaves the flag as it is.
 	IdPStaffGroup string `yaml:"idpStaffGroup"`
+	// IdPStaffDomain is a second way to be platform staff (agentry#525):
+	// at every `authentik` sign-in, an ID token asserting a verified
+	// address at exactly this domain makes the account staff, beside the
+	// group. The directory's word at sign-in decides, never an address
+	// stored in the registry, and both directions hold as for the group.
+	// The directory asserts email_verified for every account it holds
+	// (DEV-061), so the rule rests on how an address gets there: a
+	// self-enrolled account stays inactive until its emailed link is
+	// followed, nobody changes their own address (DEV-134), no federated
+	// source feeds the directory, and an administrator who creates an
+	// account at this domain makes staff. A bare domain, lower case; empty
+	// turns the rule off (and, with no group either, the sync).
+	IdPStaffDomain string `yaml:"idpStaffDomain"`
 	// RequireIdPMFA re-enables the §12.1 "2FA before public publish" gate
 	// under externalOnly, satisfied by evidence rather than trust: the
 	// account must have signed in at least once with an ID token whose
@@ -736,6 +761,7 @@ func applyEnv(c *Config) error {
 	str("AGENTRY_IDP_ADMIN_URL", &c.Auth.IdPAdminURL)
 	str("AGENTRY_IDP_ADMIN_TOKEN", &c.Auth.IdPAdminToken)
 	str("AGENTRY_IDP_STAFF_GROUP", &c.Auth.IdPStaffGroup)
+	str("AGENTRY_IDP_STAFF_DOMAIN", &c.Auth.IdPStaffDomain)
 	if err := boolean("AGENTRY_AUTH_REQUIRE_IDP_MFA", &c.Auth.RequireIdPMFA); err != nil {
 		return err
 	}
@@ -806,6 +832,7 @@ func applyEnv(c *Config) error {
 	if err := integer("AGENTRY_TRUSTED_PROXIES", &c.HTTP.TrustedProxies); err != nil {
 		return err
 	}
+	list("AGENTRY_TRUSTED_PROXY_CIDRS", &c.HTTP.TrustedProxyCIDRs)
 
 	// Notifications (§13.4).
 	str("AGENTRY_NOTIFY_KIND", &c.Notify.Kind)
@@ -884,6 +911,9 @@ func integer64(key string, dst *int64) error {
 	return nil
 }
 
+// staffDomainRE is a bare lower-case DNS name of at least two labels.
+var staffDomainRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$`)
+
 // Validate rejects configurations that must never run.
 func (c Config) Validate() error {
 	switch c.Env {
@@ -901,6 +931,11 @@ func (c Config) Validate() error {
 	}
 	if c.DevMode && c.Env != "dev" {
 		return fmt.Errorf("config: devMode is allowed only with env: dev (got env %q)", c.Env)
+	}
+	if d := c.Auth.IdPStaffDomain; d != "" && !staffDomainRE.MatchString(d) {
+		// A domain that could never match an address (an @, a leading dot, a
+		// capital) would switch the rule off silently; refuse it at start-up.
+		return fmt.Errorf("config: auth.idpStaffDomain must be a bare lower-case domain like example.com, got %q", d)
 	}
 	switch c.Storage.Kind {
 	case "local", "s3":
@@ -1001,6 +1036,9 @@ func (c Config) Validate() error {
 	}
 	if c.HTTP.TrustedProxies < 0 {
 		return fmt.Errorf("config: http.trustedProxies must be >= 0")
+	}
+	if _, err := ParseCIDRs(c.HTTP.TrustedProxyCIDRs); err != nil {
+		return fmt.Errorf("config: http.trustedProxyCIDRs: %w", err)
 	}
 	if _, err := ParseCIDRs(c.Git.SSHProxyProtocolCIDRs); err != nil {
 		return fmt.Errorf("config: git.sshProxyProtocolCIDRs: %w", err)

@@ -135,12 +135,15 @@ func routeClass(r *http.Request) string {
 // mx is a getter rather than a value so SetMetrics can be called after the
 // handler is assembled: binding the instrument set at construction time would
 // make the RED metrics silently depend on wiring order.
-// trustedProxies is the configured hop count; see clientIPWithProxies.
-func withMiddleware(next http.Handler, log *slog.Logger, mx func() *metrics.Metrics, trustedProxies int, proxyRequestID bool) http.Handler {
+// trust is who may speak for a client in X-Forwarded-For; see
+// clientIPWithProxies.
+func withMiddleware(next http.Handler, log *slog.Logger, mx func() *metrics.Metrics, trust proxyTrust, proxyRequestID bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
-		reqID := requestID(r, proxyRequestID && trustedProxies > 0)
+		// An inbound id is honoured only from a trusted hop: the same peer
+		// test as X-Forwarded-For, so a direct client cannot choose it.
+		reqID := requestID(r, proxyRequestID && trust.peerTrusted(r))
 		// The id rides the context (internal/logx): every line written under
 		// it — and the audit row — carries it without naming it.
 		ctx := logx.WithRequestID(r.Context(), reqID)
@@ -150,7 +153,7 @@ func withMiddleware(next http.Handler, log *slog.Logger, mx func() *metrics.Metr
 		// audit log can never disagree about who made the request — and so
 		// there is exactly one place where the X-Forwarded-For trust decision
 		// is made.
-		ctx = auth.WithClientIP(ctx, clientIPWithProxies(r, trustedProxies))
+		ctx = auth.WithClientIP(ctx, clientIPWithProxies(r, trust))
 		r = r.WithContext(ctx)
 		w.Header().Set(requestIDHeader, reqID)
 
