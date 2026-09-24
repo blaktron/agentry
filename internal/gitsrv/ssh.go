@@ -214,6 +214,9 @@ func (s *SSHServer) handleConn(ctx context.Context, nc net.Conn) {
 	defer func() { _ = sconn.Close() }()
 	go ssh.DiscardRequests(reqs)
 	fp := sconn.Permissions.Extensions[sshPermFingerprint]
+	// The client a trusted proxy named (git.sshProxyProtocolCIDRs,
+	// agentry#492), or the peer: what the per-address budget keys on.
+	client := clientHost(sconn.RemoteAddr().String())
 	for newCh := range chans {
 		if newCh.ChannelType() != "session" {
 			_ = newCh.Reject(ssh.UnknownChannelType, "only git sessions are served")
@@ -226,7 +229,7 @@ func (s *SSHServer) handleConn(ctx context.Context, nc net.Conn) {
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
-			s.handleSession(ctx, ch, chReqs, fp)
+			s.handleSession(ctx, ch, chReqs, fp, client)
 		}()
 	}
 }
@@ -256,7 +259,7 @@ func (s *SSHServer) proxied(nc net.Conn) (net.Conn, error) {
 var errUntrustedPeer = errors.New("peer is not a trusted proxy")
 
 // handleSession answers exactly one exec request per session channel.
-func (s *SSHServer) handleSession(ctx context.Context, ch ssh.Channel, reqs <-chan *ssh.Request, fp string) {
+func (s *SSHServer) handleSession(ctx context.Context, ch ssh.Channel, reqs <-chan *ssh.Request, fp, client string) {
 	defer func() { _ = ch.Close() }()
 	gitProtocol := ""
 	for req := range reqs {
@@ -278,7 +281,7 @@ func (s *SSHServer) handleSession(ctx context.Context, ch ssh.Channel, reqs <-ch
 			if req.WantReply {
 				_ = req.Reply(true, nil)
 			}
-			code := s.runGit(ctx, ch, fp, gitProtocol, payload.Command)
+			code := s.runGit(ctx, ch, fp, client, gitProtocol, payload.Command)
 			_, _ = ch.SendRequest("exit-status", false, ssh.Marshal(struct{ Status uint32 }{uint32(code)})) //nolint:gosec // small exit codes
 			return
 		default: // shell, pty-req, subsystem, forwarding: not a git server's business
@@ -327,7 +330,7 @@ func parseGitCommand(cmd string) (service, ns, name string, ok bool) {
 
 // runGit authorizes and runs one git service over the channel, returning
 // the exit status to report.
-func (s *SSHServer) runGit(ctx context.Context, ch ssh.Channel, fp, gitProtocol, command string) int {
+func (s *SSHServer) runGit(ctx context.Context, ch ssh.Channel, fp, client, gitProtocol, command string) int {
 	h := s.h
 	service, ns, name, ok := parseGitCommand(command)
 	if !ok {
@@ -363,10 +366,10 @@ func (s *SSHServer) runGit(ctx context.Context, ch ssh.Channel, fp, gitProtocol,
 			return 1
 		}
 	}
-	return s.execGit(ctx, ch, service, gitProtocol, agent, principal, role)
+	return s.execGit(ctx, ch, client, service, gitProtocol, agent, principal, role)
 }
 
-func (s *SSHServer) execGit(ctx context.Context, ch ssh.Channel, service, gitProtocol string, agent registry.Agent, principal *auth.Principal, role auth.AgentRole) int {
+func (s *SSHServer) execGit(ctx context.Context, ch ssh.Channel, client, service, gitProtocol string, agent registry.Agent, principal *auth.Principal, role auth.AgentRole) int {
 	h := s.h
 	start := time.Now()
 	outcome := "ok"
@@ -404,7 +407,12 @@ func (s *SSHServer) execGit(ctx context.Context, ch ssh.Channel, service, gitPro
 		}
 	}()
 
-	release, err := h.acquireGit(ctx, agent.RepoID)
+	release, err := h.acquireGit(ctx, agent.RepoID, client)
+	if errors.Is(err, errClientBusy) {
+		outcome = "throttled"
+		_, _ = fmt.Fprintf(ch.Stderr(), "agentry: %s\n", errClientBusy)
+		return 1
+	}
 	if err != nil {
 		outcome = "busy"
 		_, _ = fmt.Fprintf(ch.Stderr(), "agentry: repository busy, try again\n")
