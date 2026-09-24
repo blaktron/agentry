@@ -391,6 +391,13 @@ type ReviewItem struct {
 	CreatedAt time.Time  `json:"created_at"`
 }
 
+type RulesetAttestation struct {
+	BundleDigest string    `json:"bundle_digest"`
+	KeyID        string    `json:"key_id"`
+	DsseEnvelope []byte    `json:"dsse_envelope"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
 type RulesetRelease struct {
 	ID           uuid.UUID `json:"id"`
 	Semver       string    `json:"semver"`

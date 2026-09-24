@@ -153,10 +153,11 @@ config:
 
 # The attestation signing key for config.signing.kind=file: the Secret and
 # the key in it holding the PEM, projected read-only to config.signing.keyFile
-# (0400, readable through podSecurityContext.fsGroup). Every role mounts it,
-# because the server constructs the signer at start in every role that has a
-# database (agentry#479 is the seam that will let the api and git roles start
-# without the private key).
+# (0400, readable through podSecurityContext.fsGroup) in the worker pods
+# only. The api and git roles start without it (agentry#479): they serve the
+# key set and the ruleset attestation from what the worker stored, and an
+# approval's publish is the worker's, so the pods that terminate untrusted
+# traffic hold no private key.
 signingKey:
   existingSecret: ""
   key: signing-key.pem
