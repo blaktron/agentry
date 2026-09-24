@@ -122,7 +122,7 @@ func TestLastAdminCannotBeRemoved(t *testing.T) {
 	env.joinOrg(admin, orgH, thirdH)
 	env.doJSON(admin, http.MethodPut, "/api/v1/orgs/"+orgH+"/members/"+thirdH,
 		map[string]any{"role": "admin"}, nil, http.StatusOK)
-	env.doJSON(admin, http.MethodPost, "/api/v1/user/delete", nil, nil, http.StatusNoContent)
+	env.doJSON(admin, http.MethodPost, "/api/v1/user/delete", nil, nil, http.StatusOK)
 	var held int
 	if err := env.st.Pool().QueryRow(context.Background(),
 		`SELECT count(*) FROM memberships m JOIN users u ON u.id = m.user_id WHERE u.state = 'deleted' AND u.deleted_tombstone IS NOT NULL

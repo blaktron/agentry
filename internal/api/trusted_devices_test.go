@@ -549,7 +549,7 @@ func TestErasureDeletesTrustedDevices(t *testing.T) {
 		t.Fatalf("before erasure the record is %s, want live", got)
 	}
 
-	env.doJSON(c, http.MethodPost, "/api/v1/user/delete", nil, nil, http.StatusNoContent)
+	env.doJSON(c, http.MethodPost, "/api/v1/user/delete", nil, nil, http.StatusOK)
 
 	if got := deviceState(t, env, c.device); got != "gone" {
 		t.Fatalf("after erasure the record is %s, want gone: a revoked row would still hold an address and a user agent belonging to a person who asked to be deleted", got)
