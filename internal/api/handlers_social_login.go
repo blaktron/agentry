@@ -40,6 +40,7 @@ import (
 	"github.com/blaktron/agentry/internal/auth/social"
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/logevent"
+	"github.com/blaktron/agentry/internal/maildomains"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
@@ -315,10 +316,11 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 			s.log.WarnContext(r.Context(), "social login: record idp mfa", "err", err)
 		}
 	}
-	// Platform staff follows directory group membership (agentry#51):
-	// only the deployment's own directory may say who staff is.
-	if name == "authentik" && s.cfg.Auth.IdPStaffGroup != "" {
-		s.syncPlatformStaff(r, userID, id.Groups)
+	// Platform staff follows the directory's group (agentry#51) or a
+	// verified address at the staff domain (agentry#525): only the
+	// deployment's own directory may say who staff is.
+	if name == "authentik" && (s.cfg.Auth.IdPStaffGroup != "" || s.cfg.Auth.IdPStaffDomain != "") {
+		s.syncPlatformStaff(r, userID, id)
 	}
 	// The fold-in (agentry#364): an account at an organization's domain
 	// becomes a pending member of it, once, keyed on this token's email
@@ -633,17 +635,14 @@ func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user
 }
 
 // syncPlatformStaff sets users.platform_staff to "member of the configured
-// directory group" and audits a change. Both directions are deliberate:
-// removing someone from the group in the directory revokes staff at their
-// next sign-in, and nothing else grants it.
-func (s *Server) syncPlatformStaff(r *http.Request, userID uuid.UUID, groups []string) {
-	want := false
-	for _, g := range groups {
-		if g == s.cfg.Auth.IdPStaffGroup {
-			want = true
-			break
-		}
-	}
+// directory group, or holder of a verified address at the staff domain", as
+// this sign-in's ID token says, and audits a change with the rule that
+// decided. Both directions are deliberate: leaving the group, or signing in
+// with an address no longer at the domain, revokes staff at the next
+// sign-in, and nothing else grants it.
+func (s *Server) syncPlatformStaff(r *http.Request, userID uuid.UUID, id *social.Identity) {
+	rule := staffRule(s.cfg.Auth.IdPStaffGroup, s.cfg.Auth.IdPStaffDomain, id)
+	want := rule != ""
 	row, err := s.q().GetUserByID(r.Context(), userID)
 	if err != nil || row.PlatformStaff == want {
 		return
@@ -656,10 +655,45 @@ func (s *Server) syncPlatformStaff(r *http.Request, userID uuid.UUID, groups []s
 		e.Actor, e.ActorKind = userID, audit.ActorUser
 		e.TargetKind, e.TargetID = "user", userID
 		e.Detail = map[string]any{"platformStaff": want}
-		e.Detail["group"] = s.cfg.Auth.IdPStaffGroup
+		if want {
+			e.Detail["rule"] = rule
+		}
+		if s.cfg.Auth.IdPStaffGroup != "" {
+			e.Detail["group"] = s.cfg.Auth.IdPStaffGroup
+		}
+		if s.cfg.Auth.IdPStaffDomain != "" {
+			e.Detail["domain"] = s.cfg.Auth.IdPStaffDomain
+		}
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "social login: platform staff sync", "err", err, "user", userID)
 	}
+}
+
+// staffRule names what makes this sign-in's person platform staff — "group"
+// (the directory group is in the token's groups claim), "domain" (the token
+// asserts a verified address whose domain is exactly the staff domain; a
+// subdomain or a look-alike is not), "group+domain" — or "" when neither
+// holds. An unset group or domain never matches.
+func staffRule(group, domain string, id *social.Identity) string {
+	inGroup := false
+	if group != "" {
+		for _, g := range id.Groups {
+			if g == group {
+				inGroup = true
+				break
+			}
+		}
+	}
+	atDomain := domain != "" && id.EmailVerified && id.Email != "" && maildomains.Of(id.Email) == domain
+	switch {
+	case inGroup && atDomain:
+		return "group+domain"
+	case inGroup:
+		return "group"
+	case atDomain:
+		return "domain"
+	}
+	return ""
 }

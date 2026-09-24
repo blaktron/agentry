@@ -100,6 +100,12 @@ func TestValidateGuards(t *testing.T) {
 		// without a hop count is a contradiction, not a default.
 		{"proxyRequestID without a hop", func(c *Config) { c.HTTP.ProxyRequestID = true; c.HTTP.TrustedProxies = 0 }},
 		{"bad audit stream kind", func(c *Config) { c.Audit.StreamKind = "kafka" }},
+		// A staff domain that could never match an address would switch the
+		// rule off silently (agentry#525).
+		{"staff domain with an at", func(c *Config) { c.Auth.IdPStaffDomain = "@secureagentry.net" }},
+		{"staff domain with a leading dot", func(c *Config) { c.Auth.IdPStaffDomain = ".secureagentry.net" }},
+		{"staff domain in capitals", func(c *Config) { c.Auth.IdPStaffDomain = "SecureAgentry.net" }},
+		{"staff domain of one label", func(c *Config) { c.Auth.IdPStaffDomain = "localhost" }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -414,5 +420,18 @@ func TestSocialProviderEnv(t *testing.T) {
 	}
 	if cfg.Social.Claude.ClientID != "claude-id" || cfg.Social.Claude.Issuer != "https://issuer.example/claude" {
 		t.Errorf("claude env not applied: %+v", cfg.Social.Claude)
+	}
+}
+
+func TestStaffDomainAcceptsABareDomain(t *testing.T) {
+	cfg := devDefault()
+	cfg.Auth.IdPStaffDomain = "secureagentry.net"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("a bare domain was refused: %v", err)
+	}
+	t.Setenv("AGENTRY_IDP_STAFF_DOMAIN", "secureagentry.net")
+	got := devDefault()
+	if err := applyEnv(&got); err != nil || got.Auth.IdPStaffDomain != "secureagentry.net" {
+		t.Fatalf("the environment did not set it: %q %v", got.Auth.IdPStaffDomain, err)
 	}
 }

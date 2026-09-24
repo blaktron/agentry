@@ -856,6 +856,22 @@ person's next sign-in, and the change is audited as `user.staff_sync`.
 Only the `authentik` provider's claim counts — a Google or GitHub token
 carrying the same group name is ignored.
 
+**Or from an email domain.** `AGENTRY_IDP_STAFF_DOMAIN` (the chart's
+`config.auth.idpStaffDomain`) names a second way in: at the same sign-in, an
+ID token that asserts a verified address at exactly that domain makes the
+account platform staff, beside the group. `secureagentry.net` matches
+`chris@secureagentry.net`; it does not match `ops.secureagentry.net`,
+`secureagentry.net.example` or an address the token does not assert as
+verified. The address that counts is the one this sign-in's token asserts,
+never the one stored in the registry. Both directions hold: a person who
+next signs in with an address elsewhere loses staff, audited as
+`user.staff_sync` with the rule that decided (`group`, `domain` or both).
+Set it only where the directory's `email_verified` is honest: the account
+flows blueprint keeps it so by writing a self-enrolled account inactive
+until its emailed link is followed, and by offering no settings flow in
+which a person could change their address. A domain anyone can sign up at
+must never be the staff domain. Empty (the default) turns the rule off.
+
 **Provisioning org members from Authentik (SCIM).** The registry's SCIM
 endpoint is per organisation and authenticated by a token an org admin
 mints (`POST /api/v1/orgs/{org}/scim/tokens`, or the org admin console).
@@ -873,6 +889,7 @@ org-scoped and minted by the org, not by the platform.
 
 The Helm chart carries the same knobs (`config.auth.externalOnly`,
 `config.social.authentik`, `config.auth.idpStaffGroup`,
+`config.auth.idpStaffDomain`,
 `config.idp.logoutUrl`, `secret.authentikClientSecret`,
 `secret.idpAdminToken`); the hosted service's Terraform (kept with the
 site) carries them as `idp_client_id`, `idp_issuer`, `idp_logout_url` and

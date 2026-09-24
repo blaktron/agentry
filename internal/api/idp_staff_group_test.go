@@ -102,3 +102,95 @@ func TestDirectoryGroupSyncOffWhenUnconfigured(t *testing.T) {
 		t.Fatal("no group configured: the flag must stay false")
 	}
 }
+
+// Platform staff also follows an email domain (agentry#525): the directory's
+// own ID token, asserting a verified address at exactly the configured
+// domain, grants staff at sign-in and revokes it when the next sign-in no
+// longer does. A subdomain, a look-alike, an unverified assertion and any
+// other provider never grant it; the group rule stands beside it.
+func TestDirectoryDomainDrivesPlatformStaff(t *testing.T) {
+	idp := newFakeOIDC(t)
+	env := newTestEnvCfg(t, func(cfg *config.Config) {
+		cfg.Social.Authentik = config.SocialProvider{ClientID: idp.clientID, ClientSecret: "s", Issuer: idp.srv.URL}
+		cfg.Auth.IdPStaffDomain = "secureagentry.net"
+	}, func(s *api.Server) { s.SetOIDCHTTPClient(idp.srv.Client()) })
+	signIn := func(email string, verified bool) string {
+		t.Helper()
+		idp.email, idp.emailUnverified = email, !verified
+		return loginThroughFakeOIDCAs(t, env, idp, "authentik")
+	}
+
+	// At the domain, verified, in any case: staff, audited with the rule.
+	userID := signIn("Staff-"+randSuffix()+"@SecureAgentry.NET", true)
+	if !platformStaff(t, env, userID) {
+		t.Fatal("a verified address at the staff domain must be platform staff")
+	}
+	var rule string
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT detail->>'rule' FROM audit_events WHERE action = 'user.staff_sync' AND target_id = $1::uuid AND detail->>'platformStaff' = 'true'`, userID).Scan(&rule); err != nil {
+		t.Fatalf("the grant is not audited: %v", err)
+	}
+	if rule != "domain" {
+		t.Fatalf("the audit says the rule was %q, want domain", rule)
+	}
+
+	// The same account's next sign-in asserts another address: revoked.
+	if again := signIn("staff-"+randSuffix()+"@elsewhere.test", true); again != userID {
+		t.Fatalf("the second sign-in resolved another account: %s vs %s", again, userID)
+	}
+	if platformStaff(t, env, userID) {
+		t.Fatal("an address no longer at the staff domain must revoke platform staff")
+	}
+
+	// Never staff: a subdomain, look-alikes, an unverified assertion.
+	for _, c := range []struct {
+		email    string
+		verified bool
+	}{
+		{"a-" + randSuffix() + "@ops.secureagentry.net", true},
+		{"b-" + randSuffix() + "@secureagentry.net.evil.test", true},
+		{"c-" + randSuffix() + "@evilsecureagentry.net", true},
+		{"d-" + randSuffix() + "@secureagentry.net", false},
+	} {
+		idp.sub = "g-" + randSuffix()
+		if platformStaff(t, env, signIn(c.email, c.verified)) {
+			t.Fatalf("%s (verified %v) must not be platform staff", c.email, c.verified)
+		}
+	}
+
+	// Another provider's verified address at the domain: ignored.
+	other := newFakeOIDC(t)
+	other.email = "g-" + randSuffix() + "@secureagentry.net"
+	env2 := newTestEnvCfg(t, func(cfg *config.Config) {
+		cfg.Social.Google = config.SocialProvider{ClientID: other.clientID, ClientSecret: "s", Issuer: other.srv.URL}
+		cfg.Auth.IdPStaffDomain = "secureagentry.net"
+	}, func(s *api.Server) { s.SetOIDCHTTPClient(other.srv.Client()) })
+	if platformStaff(t, env2, loginThroughFakeOIDCAs(t, env2, other, "google")) {
+		t.Fatal("a non-directory provider's address must not grant staff")
+	}
+}
+
+// With both rules configured, either one makes staff, and a person who
+// meets neither is not.
+func TestDirectoryGroupOrDomainMakesStaff(t *testing.T) {
+	idp := newFakeOIDC(t)
+	env := newTestEnvCfg(t, func(cfg *config.Config) {
+		cfg.Social.Authentik = config.SocialProvider{ClientID: idp.clientID, ClientSecret: "s", Issuer: idp.srv.URL}
+		cfg.Auth.IdPStaffGroup = "agentry-platform-staff"
+		cfg.Auth.IdPStaffDomain = "secureagentry.net"
+	}, func(s *api.Server) { s.SetOIDCHTTPClient(idp.srv.Client()) })
+	for _, c := range []struct {
+		email  string
+		groups []string
+		want   bool
+	}{
+		{"g-" + randSuffix() + "@elsewhere.test", []string{"agentry-platform-staff"}, true},
+		{"d-" + randSuffix() + "@secureagentry.net", []string{"engineering"}, true},
+		{"n-" + randSuffix() + "@elsewhere.test", []string{"engineering"}, false},
+	} {
+		idp.sub, idp.email, idp.groups = "g-"+randSuffix(), c.email, c.groups
+		if got := platformStaff(t, env, loginThroughFakeOIDCAs(t, env, idp, "authentik")); got != c.want {
+			t.Fatalf("%s in %v: staff %v, want %v", c.email, c.groups, got, c.want)
+		}
+	}
+}
