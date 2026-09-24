@@ -19,6 +19,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,6 +30,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/logevent"
 	"github.com/blaktron/agentry/internal/ratelimit"
 	"github.com/blaktron/agentry/internal/registry"
@@ -42,6 +44,10 @@ type SSHServer struct {
 	wg              sync.WaitGroup
 	closed          chan struct{}
 	hostFingerprint string
+	// proxyFrom, when non-empty, is where the TCP proxy in front connects
+	// from (git.sshProxyProtocolCIDRs, agentry#492): every connection must
+	// come from there and open with a PROXY header naming the client.
+	proxyFrom []netip.Prefix
 	// resolveKey is the credential lookup, a fingerprint to its principal;
 	// the database in production, faked in tests that count it.
 	resolveKey func(ctx context.Context, fingerprint string) (*auth.Principal, error)
@@ -95,7 +101,11 @@ func (h *Handler) NewSSHServer(addr, hostKeyFile string) (*SSHServer, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &SSHServer{h: h, closed: make(chan struct{}), hostFingerprint: ssh.FingerprintSHA256(signer.PublicKey())}
+	proxyFrom, err := config.ParseCIDRs(h.cfg.Git.SSHProxyProtocolCIDRs)
+	if err != nil {
+		return nil, fmt.Errorf("git ssh: sshProxyProtocolCIDRs: %w", err)
+	}
+	s := &SSHServer{h: h, closed: make(chan struct{}), hostFingerprint: ssh.FingerprintSHA256(signer.PublicKey()), proxyFrom: proxyFrom}
 	s.resolveKey = func(ctx context.Context, fp string) (*auth.Principal, error) {
 		return auth.ResolveSSHKey(ctx, h.st.Queries(), fp)
 	}
@@ -180,6 +190,14 @@ func (s *SSHServer) Close() error {
 func (s *SSHServer) handleConn(ctx context.Context, nc net.Conn) {
 	defer func() { _ = nc.Close() }()
 	_ = nc.SetDeadline(time.Now().Add(30 * time.Second)) // handshake budget
+	if len(s.proxyFrom) > 0 {
+		pc, err := s.proxied(nc)
+		if err != nil {
+			s.h.log.Info("git ssh connection refused", "peer", nc.RemoteAddr().String(), "reason", err.Error())
+			return
+		}
+		nc = pc
+	}
 	sconn, chans, reqs, err := ssh.NewServerConn(nc, s.config)
 	if err != nil {
 		return
@@ -203,6 +221,27 @@ func (s *SSHServer) handleConn(ctx context.Context, nc net.Conn) {
 			s.handleSession(ctx, ch, chReqs, fp)
 		}()
 	}
+}
+
+// proxied admits a connection through the trusted proxy: the peer must be
+// in proxyFrom and the connection must open with a PROXY header, whose
+// source becomes the connection's RemoteAddr. A header from anywhere else
+// is never read, let alone believed: the connection is refused. A header
+// that names no client (the proxy's own health check: v1 UNKNOWN, v2
+// LOCAL) leaves the peer as the source, as the specification requires.
+func (s *SSHServer) proxied(nc net.Conn) (net.Conn, error) {
+	peer, err := netip.ParseAddrPort(nc.RemoteAddr().String())
+	if err != nil || !config.InCIDRs(s.proxyFrom, peer.Addr()) {
+		return nil, errors.New("peer is not a trusted proxy")
+	}
+	client, ok, err := readProxyHeader(nc)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nc, nil
+	}
+	return &proxiedConn{Conn: nc, remote: net.TCPAddrFromAddrPort(client)}, nil
 }
 
 // handleSession answers exactly one exec request per session channel.
