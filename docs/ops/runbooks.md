@@ -251,6 +251,24 @@ after the warning.
 **Verify:** `/readyz` green, a test publish reaches `published`, `agentry
 verify` passes on a pre-incident version.
 
+**On the Vultr production** (Vultr Managed Databases, plan
+`production-on-vultr.md` D7/D13; agentry-web#212): the point-in-time history
+is the managed service's own, and the call that restores from it to a new
+cluster is its **fork**. Give it the source database, a label, the plan, the
+region, `type: pitr`, and a date and time; the result is a new cluster with
+production's roles and passwords. Allowlist it before anything connects.
+Point the DSN (terraform's `agentry-app` Secret) at the fork, or restore in
+place with the service's restore call once the fork has shown that the
+chosen time is right. The history covers two days on the Startup plan and
+fourteen on Business. It lives in the same region as the database, so it
+does not survive the loss of that region. Two scripts, both in agentry-web:
+- `scripts/dr/pitr-fork.sh` proves the recovery. It forks to a chosen second
+  between two audited requests and checks that the fork holds the first and
+  not the second.
+- `scripts/dr/drill.sh` runs the whole restore beside production. Its runs
+  and times are in agentry-web's `docs/ops/deployment.md`, "Production on
+  Vultr: backups and the restore drill".
+
 ---
 
 ## 7. Repo storage restore
@@ -270,6 +288,18 @@ verify` passes on a pre-incident version.
 
 **Verify:** `git clone` of an affected agent works; `agentry install` of its
 published version was never affected.
+
+**On the Vultr production** the repositories are on a Vultr File System
+claim, of which Vultr states no snapshot. The nightly `backup-git` job
+(agentry-web's umbrella chart) copies each repository to the backup bucket in
+a second region, as a `git bundle --all` with the repository's `config`,
+`HEAD` and pre-receive shim beside it, and the git role's SSH host key. To
+restore a repository, stop the git role and run agentry-web's
+`scripts/dr/restore-git.yaml` Job pointed at the claim. It makes each
+repository as `InitBare` would (`git init --bare`, then the saved config,
+`HEAD` and shim), fetches the bundle and checks connectivity. The copy is
+nightly, so the RPO is a day: pushes since the last bundle come back only
+from a clone.
 
 ---
 
