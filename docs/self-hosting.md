@@ -878,9 +878,9 @@ Both directions hold, and a change is audited as `user.staff_sync` with
 - **Unsetting leaves grants in place.** With both the group and the domain
   unset, the sync does not run, and existing grants stay as they are.
 
-The directory asserts every address it holds as verified, so this rule is
-exactly as safe as the ways an address gets into the directory. Set a staff
-domain only when all of these hold:
+The directory asserts every address it holds as verified, so this rule
+grants staff to whoever can get an address at the domain into the
+directory. Set a staff domain only when all of these hold:
 
 - the issuer is the deployment's own directory;
 - a self-enrolled account stays inactive until its emailed link is followed (the account-flows blueprint);
