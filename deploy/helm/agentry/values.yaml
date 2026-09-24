@@ -57,10 +57,13 @@ config:
     # MFA, recovery and sign-up to the IdP configured under social.authentik;
     # idpAdminURL (+ secret.idpAdminToken) lets account erasure reach it;
     # idpStaffGroup names the directory group whose members are platform
-    # staff (granted and revoked at sign-in from the `groups` claim).
+    # staff (granted and revoked at sign-in from the `groups` claim);
+    # idpStaffDomain makes a verified address at exactly that domain staff
+    # too (agentry#525), as the directory's ID token asserts it.
     externalOnly: false
     idpAdminURL: ""
     idpStaffGroup: ""
+    idpStaffDomain: ""
   social:
     # The deployment's own directory as an OIDC provider. clientSecret is a
     # secret: secret.authentikClientSecret / existingSecret key

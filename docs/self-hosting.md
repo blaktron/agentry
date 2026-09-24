@@ -856,6 +856,41 @@ person's next sign-in, and the change is audited as `user.staff_sync`.
 Only the `authentik` provider's claim counts — a Google or GitHub token
 carrying the same group name is ignored.
 
+**Or from an email domain.** `AGENTRY_IDP_STAFF_DOMAIN` (the chart's
+`config.auth.idpStaffDomain`) names a second way in. At the same sign-in, an
+ID token from the deployment's own directory that asserts an address at
+exactly that domain makes the account platform staff, beside the group.
+
+What matches: `secureagentry.net` matches `chris@secureagentry.net`. It does
+not match `ops.secureagentry.net`, `secureagentry.net.example`, or a domain
+that is not plain ASCII (an internationalised look-alike). The address that
+counts is the one this sign-in's token asserts, never the one stored in the
+registry.
+
+Both directions hold, and a change is audited as `user.staff_sync` with
+`rule` set to `group`, `domain`, `group+domain` or `none`. Three consequences:
+
+- **Staff changes only at a directory sign-in.** Someone who is deactivated in
+  the directory, or whose directory address changes, keeps staff through a
+  live session or a token until then. Revoke their sessions and tokens too.
+- **The domain can override the group.** An address at the staff domain keeps
+  someone staff after they leave the group.
+- **Unsetting leaves grants in place.** With both the group and the domain
+  unset, the sync does not run, and existing grants stay as they are.
+
+The directory asserts every address it holds as verified, so this rule
+grants staff to whoever can get an address at the domain into the
+directory. Set a staff domain only when all of these hold:
+
+- the issuer is the deployment's own directory;
+- a self-enrolled account stays inactive until its emailed link is followed (the account-flows blueprint);
+- nobody can change their own address (the blueprint denies authentik's user-settings flow, DEV-134);
+- no federated source (Google, GitHub, another IdP) feeds the directory;
+- every account an administrator creates at the domain is one you mean to be staff.
+
+A domain anyone can sign up at must never be the staff domain. Empty (the
+default) turns the rule off.
+
 **Provisioning org members from Authentik (SCIM).** The registry's SCIM
 endpoint is per organisation and authenticated by a token an org admin
 mints (`POST /api/v1/orgs/{org}/scim/tokens`, or the org admin console).
@@ -873,6 +908,7 @@ org-scoped and minted by the org, not by the platform.
 
 The Helm chart carries the same knobs (`config.auth.externalOnly`,
 `config.social.authentik`, `config.auth.idpStaffGroup`,
+`config.auth.idpStaffDomain`,
 `config.idp.logoutUrl`, `secret.authentikClientSecret`,
 `secret.idpAdminToken`); the hosted service's Terraform (kept with the
 site) carries them as `idp_client_id`, `idp_issuer`, `idp_logout_url` and
