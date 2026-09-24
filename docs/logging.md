@@ -88,6 +88,7 @@ is a name missing from this table.
 | `failopen.history_not_scanned` | WARN | a git history the S2 stage could not scan | `stage`, `scanner`, `title` |
 | `failopen.osv_not_checked` | WARN | a dependency set S7 did not check against OSV | `stage`, `scanner`, `title` |
 | `failopen.osv_error` | WARN | an OSV lookup errored | `stage`, `scanner`, `title` |
+| `failopen.directory_erasure` | ERROR | an account erasure's directory half did not happen: its retries ran out, or the retry could not be queued; the sign-in account is left for the operator to delete | `user`, `attempts`, `err` |
 | `git.push_refused` | WARN | the git door refused a submission after a tag push | `agent`, `tag`, `err` |
 | `mail.suppressed` | INFO | a notification was withheld from an unverified address (WARN when the user row could not be read) | `user`, `kind` |
 | `webhook.delivered` | INFO | a webhook delivery attempt finished | `outcome` (`ok`, `error`), `org`, `delivery`, `attempt`, `status` or `err` |
