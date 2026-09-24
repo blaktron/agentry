@@ -193,6 +193,17 @@ jobs:
           ignore-unfixed: true
           exit-code: "0"
 
+  # The directory's mails (agentry#518): the account flows' email stages name
+  # the core's own templates, and each renders through authentik's own mail
+  # class in the pinned image with the link, the name and no authentik logo
+  # or footer. A template syntax error here would fail every sign-up.
+  directory-email:
+    runs-on: [self-hosted, linux, x64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: directory email acceptance (scripts/acceptance/directory-email.sh)
+        run: ./scripts/acceptance/directory-email.sh
+
   # The headless helm chart: lint, a template render with the required
   # values, and the assertion that nothing web-shaped renders (the site is
   # its own deployment since the cut-over, DEV-091). This lived in
