@@ -225,6 +225,14 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		if _, err := tq.DeleteTrustedDevicesForUser(r.Context(), p.UserID); err != nil {
 			return err
 		}
+		// A desktop sign-in code another session minted moments before the
+		// erasure would otherwise still exchange for a token afterwards
+		// (agentry#502): ExchangeDesktopCode checks only the grant, not the
+		// account's state. Consumed here, as clearing data does (agentry#498).
+		desktopCodes, err := tq.ConsumeDesktopGrantsForUser(r.Context(), p.UserID)
+		if err != nil {
+			return err
+		}
 		// An erased account holds no seat anywhere (agentry#363): the
 		// last-admin guard above has already passed, so nothing is left
 		// headless by this.
@@ -246,6 +254,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		e.Detail = map[string]any{
 			"publishedContent":  disposition,
 			"publishedVersions": publishedCount,
+			"desktopCodes":      desktopCodes,
 		}
 		if transferOrgID != uuid.Nil {
 			e.OrgID = transferOrgID

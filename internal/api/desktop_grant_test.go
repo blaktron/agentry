@@ -112,3 +112,63 @@ func TestDesktopGrantExchange(t *testing.T) {
 		t.Fatalf("grant anonymous: got %d want 401", res.StatusCode)
 	}
 }
+
+// Erasure consumes the account's unconsumed desktop codes in its own
+// transaction (agentry#502): a code minted by another session moments before
+// the erasure cannot be exchanged for a token afterwards.
+func TestErasureConsumesDesktopGrants(t *testing.T) {
+	env := newTestEnv(t)
+	h := env.register("dsk-erase")
+	env.verifyEmail(h)
+	sess := env.login(h)
+	uid := env.selfID(sess)
+	other := env.login(h) // the session that mints the code
+
+	const state = "app-nonce-erase-0123456789"
+	var grant struct {
+		Code string `json:"code"`
+	}
+	env.doJSON(other, http.MethodPost, "/api/v1/user/tokens/desktop-grant",
+		map[string]any{"state": state}, &grant, http.StatusCreated)
+	if grant.Code == "" {
+		t.Fatal("grant lacks a code")
+	}
+
+	env.doJSON(sess, http.MethodPost, "/api/v1/user/delete", nil, nil, http.StatusNoContent)
+
+	ctx := context.Background()
+	var unconsumed int
+	if err := env.st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM desktop_grants WHERE user_id = $1 AND consumed_at IS NULL`, uid).Scan(&unconsumed); err != nil {
+		t.Fatal(err)
+	}
+	if unconsumed != 0 {
+		t.Fatalf("unconsumed desktop codes after erasure: %d, want 0", unconsumed)
+	}
+
+	res := env.do(anonymous, http.MethodPost, "/api/v1/auth/desktop/exchange",
+		map[string]any{"code": grant.Code, "state": state})
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("exchange after erasure: got %d, want 403", res.StatusCode)
+	}
+	var livePATs int
+	if err := env.st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM pats WHERE user_id = $1 AND revoked_at IS NULL`, uid).Scan(&livePATs); err != nil {
+		t.Fatal(err)
+	}
+	if livePATs != 0 {
+		t.Fatalf("live PATs for the erased account: %d, want 0", livePATs)
+	}
+
+	var detail []byte
+	if err := env.st.Pool().QueryRow(ctx,
+		`SELECT detail FROM audit_events WHERE action = 'user.delete' AND target_id = $1`, uid).Scan(&detail); err != nil {
+		t.Fatalf("audit user.delete: %v", err)
+	}
+	var d map[string]any
+	_ = json.Unmarshal(detail, &d)
+	if d["desktopCodes"] != float64(1) {
+		t.Errorf("user.delete audit detail = %s, want desktopCodes 1", detail)
+	}
+}
