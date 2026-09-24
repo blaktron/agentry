@@ -357,6 +357,11 @@ services:
       # keep the transport reachable but unadvertised.
       AGENTRY_GIT_SSH_ADDR: ${AGENTRY_GIT_SSH_ADDR:-:2222}
       AGENTRY_GIT_SSH_PUBLIC_URL: ${AGENTRY_GIT_SSH_PUBLIC_URL:-}
+      # A TCP proxy in front of the SSH port (agentry#492): the CIDRs it
+      # connects from. When set, every SSH connection must come from them
+      # and open with a PROXY header naming the client. The stack publishes
+      # the port directly, so it stays empty here.
+      AGENTRY_GIT_SSH_PROXY_PROTOCOL_CIDRS: ${AGENTRY_GIT_SSH_PROXY_PROTOCOL_CIDRS:-}
       # Release signing (agentry#308). With dev mode off (the default) a
       # stable key is required: AGENTRY_SIGNING_KIND=file, the key at
       # AGENTRY_SIGNING_KEY_FILE inside the container, and the host
