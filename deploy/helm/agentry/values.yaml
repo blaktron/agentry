@@ -99,6 +99,14 @@ config:
     # port 22 and sshPublicUrl is what clone URLs advertise.
     sshAddr: ""
     sshPublicUrl: "" # e.g. ssh://git@git.agentry.example:22
+    # A TCP proxy in front of the SSH port (agentry#492): the addresses it
+    # connects from, as CIDRs. When set, every SSH connection must come from
+    # one of them and open with a PROXY protocol header (v1 or v2; nginx
+    # stream: `proxy_protocol on`), whose source is the client the key-offer
+    # budget and the log lines key on. Anything else is refused. Empty (the
+    # default) reads no header: behind a proxy that then puts every client
+    # in the proxy's one budget.
+    sshProxyProtocolCIDRs: []
   signing:
     kind: kms # kms | file (prod must not be none)
     kmsKeyARN: ""
