@@ -23,7 +23,9 @@ TEMPLATES=deploy/compose/authentik/templates
 IMAGE="${AUTHENTIK_IMAGE:-$(awk '/image: ghcr.io\/goauthentik\/server:/{print $2; exit}' deploy/compose/docker-compose.yaml)}"
 [ -n "$IMAGE" ] || { echo "FAIL: no authentik image pinned in the compose file"; exit 1; }
 
-# Every email stage in the blueprint, and the template each one names.
+# Every email stage in the blueprint, and the template each one names. Two
+# today (enrollment, recovery): a third stage fails here on purpose, so its
+# mail gets a template and a check before it ships.
 mapfile -t NAMES < <(awk '
   /model: authentik_stages_email.emailstage/ {in_stage=1; next}
   /^  - model:/ {in_stage=0}
@@ -50,9 +52,9 @@ cid=$(docker create -i --entrypoint python \
   -e DJANGO_SETTINGS_MODULE=authentik.root.settings \
   "$IMAGE" - "${NAMES[@]}")
 trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
-docker cp "$TEMPLATES" "$cid:/templates" >/dev/null
+docker cp "$TEMPLATES/." "$cid:/templates" >/dev/null
 set +e
-docker start -ai "$cid" <<'PY' 2>&1 | grep -v '^{'
+docker start -ai "$cid" <<'PY' 2>&1 | grep -v '"level": "info"'
 import sys
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace

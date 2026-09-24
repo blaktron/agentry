@@ -904,6 +904,10 @@ page:
   sets `AGENTRY_BRAND_NAME` to another name mounts its own copies of those
   files at the same paths (the subjects already follow the variable).
   `scripts/acceptance/directory-email.sh` renders them in the pinned image.
+  Before agentry#518 `/templates` was an empty named volume,
+  `authentik-templates`; a stack upgraded from then keeps that volume
+  unused (`docker volume rm <project>_authentik-templates` removes it),
+  and a template an operator had put in it is no longer mounted.
 - Both forms enforce the **same password policy** (12 characters minimum
   plus a zxcvbn strength score), because a password chosen during a reset
   should be held to the same bar as one chosen at sign-up. There is no
