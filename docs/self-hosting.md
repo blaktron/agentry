@@ -731,7 +731,7 @@ What to list: the address range the hop in front connects from. The compose
 stack defaults it to `172.16.0.0/12,192.168.0.0/16`, docker's own address
 pools, which hold the stack's network the edge reaches agentryd over (and the
 bridge address a published loopback port arrives from, so a process on the
-host itself is still trusted). Behind an ingress controller, list the
+host itself can still set the header). Behind an ingress controller, list the
 controller's pod range; behind a cloud balancer, its subnets. The chart's
 `config.http.trustedProxyCIDRs` is empty by default and should be set with
 `trustedProxies`.
