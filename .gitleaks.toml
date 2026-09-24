@@ -1,15 +1,29 @@
-# gitleaks configuration (agentry#209, open-source readiness). The default
-# rules apply; the three paths below are the known false positives —
-# generated base64 in the embedded OpenAPI spec, a placeholder helm value in
-# an acceptance script, and the attack corpus's own fixtures — so a clean
-# scan means something.
+# gitleaks configuration (agentry#209, open-source readiness; agentry#419 for
+# the CI job that runs it on every event). The default rules apply; the
+# entries below are the known false positives, each named, so a clean scan
+# means something and a new fixture that looks like a secret is a decision,
+# not an accident of a tree-wide allowlist.
 [extend]
 useDefault = true
 
 [allowlist]
-description = "generated spec, acceptance placeholders, the attack corpus"
+description = "generated spec, acceptance placeholders, the attack corpus's credential-shaped fixtures"
 paths = [
+  # Generated base64 in the embedded OpenAPI spec.
   '''internal/api/openapi_gen\.go''',
+  # A placeholder helm value in an acceptance script.
   '''scripts/acceptance/m7\.sh''',
-  '''testdata/attack-corpus/.*''',
+  # Attack-corpus fixtures that carry a fake credential on purpose: the
+  # scanner must find it (manifest-env-*), or must not be fooled by a
+  # credential-shaped token in benign text (s3-encoded-blob-benign).
+  '''testdata/attack-corpus/manifest-env-secret/agent\.yaml''',
+  '''testdata/attack-corpus/manifest-env-secret/expected\.yaml''',
+  '''testdata/attack-corpus/manifest-env-token-unquoted/agent\.yaml''',
+  '''testdata/attack-corpus/manifest-env-token-unquoted/expected\.yaml''',
+  '''testdata/attack-corpus/s3-encoded-blob-benign/readme\.md''',
+]
+# The helm job's placeholder sealing key in ci.yaml: base64 of the words
+# "sealingkey" repeated, not a key.
+regexes = [
+  '''c2VhbGluZ2tleXNlYWxpbmdrZXlzZWFsaW5na2V5MDA=''',
 ]
