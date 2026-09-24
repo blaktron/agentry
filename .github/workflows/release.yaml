@@ -34,15 +34,28 @@ jobs:
     env:
       AGENTRY_TEST_DATABASE_URL: postgres://agentry:agentry@localhost:5432/agentry_test?sslmode=disable
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
-      - run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+      # The tool versions live in one place, ci.yaml's workflow env block
+      # (agentry#419): the release installs what CI installed, never "latest",
+      # which in this workflow would run beside id-token: write.
+      - name: Tool versions from ci.yaml
+        run: |
+          set -euo pipefail
+          for var in SQLC_VERSION GOVULNCHECK_VERSION; do
+            v=$(sed -nE "s/^  $var: *([^ #]+).*/\1/p" .github/workflows/ci.yaml | head -1)
+            [ -n "$v" ] || { echo "$var is not set in ci.yaml's env block"; exit 1; }
+            echo "$var=$v" >> "$GITHUB_ENV"
+          done
+      - run: go install "github.com/sqlc-dev/sqlc/cmd/sqlc@${SQLC_VERSION}"
       - run: make check
       - name: attack-corpus gate must be green to release
         run: go test -timeout 20m ./internal/scan -run TestAttackCorpusGate -count=1
-      - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+      - run: go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...
 
   binaries:
     needs: verify
@@ -56,8 +69,10 @@ jobs:
           - { goos: darwin,  goarch: arm64 }
           - { goos: windows, goarch: amd64 }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
 
@@ -78,7 +93,7 @@ jobs:
       - name: Checksums
         run: cd dist && sha256sum * > "SHA256SUMS-${{ matrix.goos }}-${{ matrix.goarch }}.txt"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/
@@ -87,21 +102,34 @@ jobs:
     needs: binaries
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: dist-all
       - run: mkdir -p dist && find dist-all -type f -exec mv {} dist/ \;
 
+      # syft at the version ci.yaml's env block pins (agentry#419): this job
+      # holds id-token: write, and the action would otherwise fetch the
+      # newest syft at run time.
+      - name: syft version from ci.yaml
+        run: |
+          set -euo pipefail
+          v=$(sed -nE "s/^  SYFT_VERSION: *([^ #]+).*/\1/p" .github/workflows/ci.yaml | head -1)
+          [ -n "$v" ] || { echo "SYFT_VERSION is not set in ci.yaml's env block"; exit 1; }
+          echo "SYFT_VERSION=$v" >> "$GITHUB_ENV"
+
       - name: SBOM (syft, Apache-2.0 toolchain per §14.4)
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           path: .
           format: spdx-json
+          syft-version: ${{ env.SYFT_VERSION }}
           output-file: dist/agentry-sbom.spdx.json
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
 
       - name: Sign artifacts (keyless, OIDC identity)
         run: |
@@ -114,7 +142,7 @@ jobs:
             --output-certificate agentry-sbom.spdx.json.pem agentry-sbom.spdx.json
 
       - name: Publish release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           files: dist/*
           # release-please already created this release with the changelog as
@@ -147,14 +175,16 @@ jobs:
         include:
           - { name: agentryd, file: deploy/compose/Dockerfile }
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         id: build
         with:
           context: .
@@ -167,7 +197,7 @@ jobs:
             ghcr.io/${{ github.repository }}/${{ matrix.name }}:latest
           provenance: true
           sbom: true
-      - uses: sigstore/cosign-installer@v3
+      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
       - name: Sign the image
         run: |
           cosign sign --yes \
@@ -182,9 +212,11 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: azure/setup-helm@v4
-      - uses: sigstore/cosign-installer@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
       - name: Publish the chart
         env:
           HELM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
