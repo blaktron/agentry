@@ -88,9 +88,13 @@ func New(ctx context.Context, cfg Config, redirectURL string) (*RP, error) {
 // AuthURL returns the IdP authorization URL for an auth-code + PKCE flow. The
 // caller must persist state, nonce, and verifier (in a short-lived sealed
 // cookie or server-side) and supply them to Exchange.
+//
+// It asks for no offline access: the registry keeps its own sessions and
+// never uses a refresh token, so asking an IdP to mint one (access_type=
+// offline, a Google convention some IdPs honour) would only create a
+// long-lived credential nobody holds on purpose (agentry#494).
 func (rp *RP) AuthURL(state, nonce, verifier string) string {
 	return rp.oauth.AuthCodeURL(state,
-		oauth2.AccessTypeOffline,
 		oauth2.S256ChallengeOption(verifier),
 		coreoidc.Nonce(nonce),
 	)
