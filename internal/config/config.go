@@ -1162,6 +1162,9 @@ func ParseCIDRs(list []string) ([]netip.Prefix, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%q is not a CIDR", s)
 		}
+		if p.Addr().Is4In6() {
+			return nil, fmt.Errorf("%q is an IPv4-mapped range; write the IPv4 CIDR", s)
+		}
 		if p.Masked() != p {
 			return nil, fmt.Errorf("%q has host bits set (did you mean %s?)", s, p.Masked())
 		}
