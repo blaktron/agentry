@@ -143,7 +143,7 @@ func TestRescanQuarantineIsReviewableAndClearable(t *testing.T) {
 
 	// Approving clears the quarantine (§7: quarantined → published).
 	reviewer := e.seedUser("rev" + suffix())
-	if err := e.pipe.DecideReview(ctx, scan.ReviewDecision{
+	if _, err := e.pipe.DecideReview(ctx, scan.ReviewDecision{
 		ItemID: item.ID, VersionID: v.ID, Target: registry.StatusPublished,
 		State: "approved", Rationale: "false positive on review",
 		DecidedBy: reviewer, Audit: audit.Event{Actor: reviewer, ActorKind: audit.ActorUser},
@@ -1009,7 +1009,7 @@ func TestReviewDecisionRollsBackOnBadTransition(t *testing.T) {
 	reviewer := e.seedUser("atrev" + suffix())
 
 	// needs_review → quarantined is not an edge the state machine draws.
-	err = e.pipe.DecideReview(ctx, scan.ReviewDecision{
+	_, err = e.pipe.DecideReview(ctx, scan.ReviewDecision{
 		ItemID: item.ID, VersionID: v.ID, Target: registry.StatusQuarantined,
 		State: "approved", Rationale: "boom",
 		DecidedBy: reviewer, Audit: audit.Event{Actor: reviewer, ActorKind: audit.ActorUser},
@@ -1034,7 +1034,7 @@ func TestReviewDecisionRollsBackOnBadTransition(t *testing.T) {
 	}
 
 	// And the retry works.
-	if err := e.pipe.DecideReview(ctx, scan.ReviewDecision{
+	if _, err := e.pipe.DecideReview(ctx, scan.ReviewDecision{
 		ItemID: item.ID, VersionID: v.ID, Target: registry.StatusRejected,
 		State: "rejected", Rationale: "confirmed injection",
 		DecidedBy: reviewer, Audit: audit.Event{Actor: reviewer, ActorKind: audit.ActorUser},
@@ -1079,7 +1079,7 @@ func TestApprovalRefusesToSignAnEmptyDigest(t *testing.T) {
 	}
 
 	reviewer := e.seedUser("nodrev" + suffix())
-	err = e.pipe.DecideReview(ctx, scan.ReviewDecision{
+	_, err = e.pipe.DecideReview(ctx, scan.ReviewDecision{
 		ItemID: item.ID, VersionID: v.ID, Target: registry.StatusPublished,
 		State: "approved", Rationale: "looks fine",
 		DecidedBy: reviewer, Audit: audit.Event{Actor: reviewer, ActorKind: audit.ActorUser},
@@ -1314,7 +1314,7 @@ func TestQuarantineRejectPathIsYank(t *testing.T) {
 	reviewer := e.seedUser("qrej" + suffix())
 
 	// The edge the handler must NOT take: quarantined → rejected is not drawn.
-	err = e.pipe.DecideReview(ctx, scan.ReviewDecision{
+	_, err = e.pipe.DecideReview(ctx, scan.ReviewDecision{
 		ItemID: item.ID, VersionID: v.ID, Target: registry.StatusRejected,
 		State: "rejected", Rationale: "confirmed",
 		DecidedBy: reviewer, Audit: audit.Event{Actor: reviewer, ActorKind: audit.ActorUser},
@@ -1324,7 +1324,7 @@ func TestQuarantineRejectPathIsYank(t *testing.T) {
 	}
 
 	// The edge it takes instead.
-	if err := e.pipe.DecideReview(ctx, scan.ReviewDecision{
+	if _, err := e.pipe.DecideReview(ctx, scan.ReviewDecision{
 		ItemID: item.ID, VersionID: v.ID, Target: registry.StatusYanked,
 		State: "rejected", Rationale: "confirmed malicious on review",
 		DecidedBy: reviewer, Audit: audit.Event{Actor: reviewer, ActorKind: audit.ActorUser},

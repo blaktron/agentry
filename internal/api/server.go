@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
@@ -108,9 +109,26 @@ type Server struct {
 // enumerates (§12.2, agentry#415).
 func (s *Server) MountedRoutes() []string { return append([]string(nil), s.mounted...) }
 
+// Option adjusts how New assembles a server for its role.
+type Option func(*options)
+
+type options struct{ keyless bool }
+
+// WithoutSigningKey builds a server that holds no signing key (agentry#479):
+// the api and git roles, which never sign. New neither loads the key nor
+// registers it; the pipeline hands an approval's publish to the worker, the
+// ruleset attestation and the key set are read from what the key holder
+// stored, and anything that would still need a signature fails closed with
+// scan.ErrNoSigningKey rather than publishing unsigned.
+func WithoutSigningKey() Option { return func(o *options) { o.keyless = true } }
+
 // New creates the API server. st may be nil in database-less dev mode; any
 // handler that needs the store fails closed with 503 in that case.
-func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
+func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *Server {
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
 	if log == nil {
 		log = slog.Default()
 	}
@@ -224,24 +242,37 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 			panic(jerr)
 		}
 		log.Info("scan: judge configured", "provider", judge.Name(), "model", judge.ModelID())
-		signer, serr := scan.NewSigner(context.Background(), scan.SignerOptions{
-			Kind:      cfg.Signing.Kind,
-			KeyFile:   cfg.Signing.KeyFile,
-			KMSKeyARN: cfg.Signing.KMSKeyARN,
-			KMSRegion: cfg.Signing.KMSRegion,
-			DevMode:   cfg.DevMode,
-		})
-		if serr != nil {
-			panic(serr)
-		}
-		srv.signer = signer
-		// The signer's public key is recorded so a rotation orphans nothing
-		// (§8.8, agentry#350): retired keys stay advertised, and a key some
-		// attestation lacks triggers the re-attestation sweep once the
-		// pipeline below exists to run it.
-		keyReg, kerr := scan.RegisterSigningKey(context.Background(), st, signer)
-		if kerr != nil {
-			panic(kerr)
+		// Only the key holder builds a signer (agentry#479). A keyless role
+		// starts with no key file present; the worker, or `all`, refuses to
+		// start without one (NewSigner fails on a missing or bad key).
+		var signer scan.Signer
+		var keyReg scan.SigningKeyRegistration
+		if !o.keyless {
+			var serr error
+			signer, serr = scan.NewSigner(context.Background(), scan.SignerOptions{
+				Kind:      cfg.Signing.Kind,
+				KeyFile:   cfg.Signing.KeyFile,
+				KMSKeyARN: cfg.Signing.KMSKeyARN,
+				KMSRegion: cfg.Signing.KMSRegion,
+				DevMode:   cfg.DevMode,
+			})
+			if serr != nil {
+				panic(serr)
+			}
+			srv.signer = signer
+			// The signer's public key is recorded so a rotation orphans
+			// nothing (§8.8, agentry#350): retired keys stay advertised, and
+			// a key some attestation lacks triggers the re-attestation sweep
+			// once the pipeline below exists to run it.
+			var kerr error
+			keyReg, kerr = scan.RegisterSigningKey(context.Background(), st, signer)
+			if kerr != nil {
+				panic(kerr)
+			}
+			// The ruleset attestation the api role serves without the key.
+			if err := storeRulesetAttestation(context.Background(), st, signer, cfg.BaseURL); err != nil {
+				panic(err)
+			}
 		}
 		orch := scan.NewOrchestrator(bundle, judge, log)
 		tools, terr := externalScanTools(cfg.Scan, log)
@@ -252,8 +283,8 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		srv.pipeline = scan.NewPipeline(scan.PipelineDeps{
 			Store: st, Registry: srv.reg, Blobs: srv.blobs, Orchestrator: orch,
 			Signer: signer, Audit: aud, Notifier: srv.notifier, Log: log,
-			RegistryURL: cfg.BaseURL,
-			RulesetID:   rulesetReg.ID, RulesetVer: rulesetReg.Semver,
+			RegistryURL: cfg.BaseURL, Jobs: srv.jobs,
+			RulesetID: rulesetReg.ID, RulesetVer: rulesetReg.Semver,
 		})
 		// S7's vulnerability database and the scanned-server registry go on
 		// the pipeline, which hands them to the orchestrator (S7) and keeps
@@ -277,8 +308,10 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		// A ruleset semver we have never seen means the catalogue was judged
 		// by older rules (§8.7).
 		scan.EnqueueRescanSweepOnNewRuleset(context.Background(), srv.jobs, log, rulesetReg)
-		scan.EnqueueReattestSweepIfBehind(context.Background(), st, srv.jobs, log, signer, keyReg)
-		scan.EnqueueAttestSweepIfBehind(context.Background(), st, srv.jobs, log, signer)
+		if signer != nil {
+			scan.EnqueueReattestSweepIfBehind(context.Background(), st, srv.jobs, log, signer, keyReg)
+			scan.EnqueueAttestSweepIfBehind(context.Background(), st, srv.jobs, log, signer)
+		}
 	}
 	return srv
 }
@@ -666,6 +699,22 @@ func (s *Server) signingKeySet(ctx context.Context) []signingKey {
 			Status:    signingKeyActive,
 		})
 		listed[s.signer.KeyID()] = true
+	} else if s.st != nil {
+		// A keyless role (agentry#479) advertises the key the key holder
+		// registered: the same public key, read from the record.
+		if k, err := s.q().GetActiveSigningKey(ctx); err == nil {
+			keys = append(keys, signingKey{
+				KeyID:     k.KeyID,
+				Algorithm: k.Algorithm,
+				PublicKey: k.PublicKeyPem,
+				NotBefore: s.cfg.Signing.NotBefore,
+				NotAfter:  s.cfg.Signing.NotAfter,
+				Status:    signingKeyActive,
+			})
+			listed[k.KeyID] = true
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			s.log.ErrorContext(ctx, "signing keys: reading the active key", "err", err)
+		}
 	}
 	for _, k := range s.cfg.Signing.AdditionalKeys {
 		pemText := k.PublicKeyPEM
