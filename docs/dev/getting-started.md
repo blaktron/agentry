@@ -21,7 +21,7 @@ curl localhost:8080/api/v1/meta
 |---|---|
 | `make check` | the CI gate: generated-code drift, the embedded rule bundle in sync, lint, tests, build |
 | `make generate` | regenerate the OpenAPI server and Go client, and sqlc, after editing `schemas/` or `internal/store/queries/` |
-| `make test` | Go tests; DB tests need `AGENTRY_TEST_DATABASE_URL` (`./scripts/dev/pg.sh test-url`) |
+| `make test` | Go tests; DB tests need `AGENTRY_TEST_DATABASE_URL` (`./scripts/dev/pg.sh test-url`), whose role may create databases: `internal/scan`, whose sweeps act on every row, runs in its own `<db>_scan` beside it |
 | `./scripts/acceptance/m0.sh` | milestone acceptance scripts (`m0`–`m4`, `m6`, `m7`) |
 | `./scripts/acceptance/ui.sh` | the server's own `/ui/` pages: sign-in, account, a token, a device authorize and its exchange, sign-out — with curl, no browser |
 
