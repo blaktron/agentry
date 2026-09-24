@@ -63,6 +63,12 @@ data:
       {{- with .Values.config.git.sshPublicUrl }}
       sshPublicUrl: {{ . | quote }}
       {{- end }}
+      {{- with .Values.config.git.sshProxyProtocolCIDRs }}
+      sshProxyProtocolCIDRs:
+        {{- range . }}
+        - {{ . | quote }}
+        {{- end }}
+      {{- end }}
     signing:
       kind: {{ .Values.config.signing.kind }}
       {{- if eq .Values.config.signing.kind "file" }}
