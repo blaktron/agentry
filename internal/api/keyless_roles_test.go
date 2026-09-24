@@ -17,6 +17,7 @@ import (
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/queue"
+	"github.com/blaktron/agentry/internal/scan"
 	"github.com/blaktron/agentry/pkg/attest"
 )
 
@@ -25,14 +26,7 @@ import (
 // WithoutSigningKey. Its caller shares env's fixtures and sessions.
 func keylessTwin(t *testing.T, env *testEnv) *testEnv {
 	t.Helper()
-	cfg := config.Default()
-	cfg.DevMode = true
-	cfg.Scan.OSVURL = "none"
-	cfg.Auth.SessionTTL = time.Hour
-	cfg.Limits.LoginPerMin = 10000
-	cfg.Limits.AnonymousPerMin = 100000
-	cfg.Limits.AuthedPerHour = 10000000
-	cfg.Limits.AuthedBurstPerMin = 100000
+	cfg := testConfig()
 	cfg.Signing.Kind = "file"
 	cfg.Signing.KeyFile = filepath.Join(t.TempDir(), "absent", "signing-key.pem")
 	srv := api.New(cfg, env.st, nil, api.WithoutSigningKey())
@@ -83,9 +77,7 @@ func TestKeylessRoleStartsWithoutTheKeyAndServesWhatTheWorkerSigned(t *testing.T
 			t.Fatal("a server that holds the key started with no key file")
 		}
 	}()
-	cfg := config.Default()
-	cfg.DevMode = true
-	cfg.Scan.OSVURL = "none"
+	cfg := testConfig()
 	cfg.Signing.Kind = "file"
 	cfg.Signing.KeyFile = filepath.Join(t.TempDir(), "absent.pem")
 	api.New(cfg, holder.st, nil)
@@ -156,7 +148,7 @@ func TestKeylessApprovalIsPublishedAndSignedByTheWorker(t *testing.T) {
 	}
 	jobs := func(item string) int {
 		var n int
-		if err := holder.st.Pool().QueryRow(ctx, `SELECT count(*) FROM river_job WHERE kind = 'scan.publish_approved' AND args->>'itemId' = $1`, item).Scan(&n); err != nil {
+		if err := holder.st.Pool().QueryRow(ctx, `SELECT count(*) FROM river_job WHERE kind = $1 AND args->>'itemId' = $2`, scan.JobPublishApproved, item).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		return n
@@ -191,6 +183,10 @@ func TestKeylessApprovalIsPublishedAndSignedByTheWorker(t *testing.T) {
 	if n := jobs(item); n != 1 {
 		t.Fatalf("publish jobs for the approval = %d, want 1", n)
 	}
+	// A second reviewer on a stale page cannot overwrite the approval while
+	// the version waits for the worker.
+	keyless.doJSON(staff, http.MethodPost, "/api/v1/review-items/"+item+"/decision",
+		map[string]any{"decision": "reject", "rationale": "a stale page"}, nil, http.StatusConflict)
 	w := queue.NewRiverClient(holder.st, nil)
 	w.SetTestOnly(true)
 	holder.srvObj.Pipeline().RegisterHandlers(w)
@@ -203,7 +199,7 @@ func TestKeylessApprovalIsPublishedAndSignedByTheWorker(t *testing.T) {
 	// A lost enqueue delays the publish; the watchdog finishes it.
 	item = toReview("1.0.1")
 	approve(item)
-	if _, err := holder.st.Pool().Exec(ctx, `DELETE FROM river_job WHERE kind = 'scan.publish_approved' AND args->>'itemId' = $1`, item); err != nil {
+	if _, err := holder.st.Pool().Exec(ctx, `DELETE FROM river_job WHERE kind = $1 AND args->>'itemId' = $2`, scan.JobPublishApproved, item); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := holder.st.Pool().Exec(ctx, `UPDATE review_items SET decided_at = now() - interval '2 minutes' WHERE id = $1`, item); err != nil {
@@ -219,4 +215,22 @@ func TestKeylessApprovalIsPublishedAndSignedByTheWorker(t *testing.T) {
 		t.Fatalf("after the watchdog the version is %s, want published", st)
 	}
 	attests("1.0.1")
+
+	// An approval that was not handed off (one left from before the hand-off
+	// existed) is never published by the watchdog, whatever its version's
+	// status.
+	item = toReview("1.0.2")
+	approve(item)
+	if _, err := holder.st.Pool().Exec(ctx, `UPDATE review_items SET publish_pending = false, decided_at = now() - interval '2 minutes' WHERE id = $1`, item); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := holder.st.Pool().Exec(ctx, `DELETE FROM river_job WHERE kind = $1 AND args->>'itemId' = $2`, scan.JobPublishApproved, item); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := holder.srvObj.Pipeline().ReconcileApprovedReviews(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if st := status("1.0.2"); st != "needs_review" {
+		t.Fatalf("an approval that was never handed off was published by the watchdog: %s", st)
+	}
 }

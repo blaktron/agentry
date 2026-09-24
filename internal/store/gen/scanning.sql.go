@@ -220,7 +220,7 @@ const createReviewItem = `-- name: CreateReviewItem :one
 INSERT INTO review_items (id, version_id, queue, org_id, state)
 VALUES ($1, $2, $3, $4, 'pending')
 ON CONFLICT (version_id) WHERE state = 'pending' DO NOTHING
-RETURNING id, version_id, queue, org_id, state, decided_by, decided_at, rationale, created_at
+RETURNING id, version_id, queue, org_id, state, decided_by, decided_at, rationale, created_at, publish_pending
 `
 
 type CreateReviewItemParams struct {
@@ -248,6 +248,7 @@ func (q *Queries) CreateReviewItem(ctx context.Context, arg CreateReviewItemPara
 		&i.DecidedAt,
 		&i.Rationale,
 		&i.CreatedAt,
+		&i.PublishPending,
 	)
 	return i, err
 }
@@ -344,8 +345,8 @@ func (q *Queries) CreateScanRun(ctx context.Context, arg CreateScanRunParams) (S
 	return i, err
 }
 
-const decideReviewItem = `-- name: DecideReviewItem :exec
-UPDATE review_items SET state = $2, decided_by = $3, decided_at = now(), rationale = $4 WHERE id = $1
+const decideReviewItem = `-- name: DecideReviewItem :execrows
+UPDATE review_items SET state = $2, decided_by = $3, decided_at = now(), rationale = $4 WHERE id = $1 AND state = 'pending'
 `
 
 type DecideReviewItemParams struct {
@@ -355,14 +356,21 @@ type DecideReviewItemParams struct {
 	Rationale *string    `json:"rationale"`
 }
 
-func (q *Queries) DecideReviewItem(ctx context.Context, arg DecideReviewItemParams) error {
-	_, err := q.db.Exec(ctx, decideReviewItem,
+// A decision lands only on a pending item: a second reviewer acting on a
+// stale page gets no row and a conflict, never an overwrite of the first
+// decision (agentry#479 made that reachable: a handed-off approval leaves
+// its version in needs_review for a moment).
+func (q *Queries) DecideReviewItem(ctx context.Context, arg DecideReviewItemParams) (int64, error) {
+	result, err := q.db.Exec(ctx, decideReviewItem,
 		arg.ID,
 		arg.State,
 		arg.DecidedBy,
 		arg.Rationale,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deleteFindingsForScanner = `-- name: DeleteFindingsForScanner :exec
@@ -550,7 +558,7 @@ func (q *Queries) GetFinding(ctx context.Context, id uuid.UUID) (Finding, error)
 }
 
 const getPendingReviewItemForVersion = `-- name: GetPendingReviewItemForVersion :one
-SELECT id, version_id, queue, org_id, state, decided_by, decided_at, rationale, created_at FROM review_items WHERE version_id = $1 AND state = 'pending'
+SELECT id, version_id, queue, org_id, state, decided_by, decided_at, rationale, created_at, publish_pending FROM review_items WHERE version_id = $1 AND state = 'pending'
 `
 
 func (q *Queries) GetPendingReviewItemForVersion(ctx context.Context, versionID uuid.UUID) (ReviewItem, error) {
@@ -566,6 +574,7 @@ func (q *Queries) GetPendingReviewItemForVersion(ctx context.Context, versionID 
 		&i.DecidedAt,
 		&i.Rationale,
 		&i.CreatedAt,
+		&i.PublishPending,
 	)
 	return i, err
 }
@@ -628,7 +637,7 @@ func (q *Queries) GetPreviousPublishedVersion(ctx context.Context, arg GetPrevio
 }
 
 const getReviewItem = `-- name: GetReviewItem :one
-SELECT id, version_id, queue, org_id, state, decided_by, decided_at, rationale, created_at FROM review_items WHERE id = $1
+SELECT id, version_id, queue, org_id, state, decided_by, decided_at, rationale, created_at, publish_pending FROM review_items WHERE id = $1
 `
 
 func (q *Queries) GetReviewItem(ctx context.Context, id uuid.UUID) (ReviewItem, error) {
@@ -644,12 +653,13 @@ func (q *Queries) GetReviewItem(ctx context.Context, id uuid.UUID) (ReviewItem, 
 		&i.DecidedAt,
 		&i.Rationale,
 		&i.CreatedAt,
+		&i.PublishPending,
 	)
 	return i, err
 }
 
 const getReviewItemDetail = `-- name: GetReviewItemDetail :one
-SELECT ri.id, ri.version_id, ri.queue, ri.org_id, ri.state, ri.decided_by, ri.decided_at, ri.rationale, ri.created_at, av.version, av.status AS version_status, a.name AS agent_name, h.handle AS namespace
+SELECT ri.id, ri.version_id, ri.queue, ri.org_id, ri.state, ri.decided_by, ri.decided_at, ri.rationale, ri.created_at, ri.publish_pending, av.version, av.status AS version_status, a.name AS agent_name, h.handle AS namespace
 FROM review_items ri
 JOIN agent_versions av ON av.id = ri.version_id
 JOIN agents a ON a.id = av.agent_id
@@ -658,19 +668,20 @@ WHERE ri.id = $1
 `
 
 type GetReviewItemDetailRow struct {
-	ID            uuid.UUID  `json:"id"`
-	VersionID     uuid.UUID  `json:"version_id"`
-	Queue         string     `json:"queue"`
-	OrgID         *uuid.UUID `json:"org_id"`
-	State         string     `json:"state"`
-	DecidedBy     *uuid.UUID `json:"decided_by"`
-	DecidedAt     *time.Time `json:"decided_at"`
-	Rationale     *string    `json:"rationale"`
-	CreatedAt     time.Time  `json:"created_at"`
-	Version       string     `json:"version"`
-	VersionStatus string     `json:"version_status"`
-	AgentName     string     `json:"agent_name"`
-	Namespace     string     `json:"namespace"`
+	ID             uuid.UUID  `json:"id"`
+	VersionID      uuid.UUID  `json:"version_id"`
+	Queue          string     `json:"queue"`
+	OrgID          *uuid.UUID `json:"org_id"`
+	State          string     `json:"state"`
+	DecidedBy      *uuid.UUID `json:"decided_by"`
+	DecidedAt      *time.Time `json:"decided_at"`
+	Rationale      *string    `json:"rationale"`
+	CreatedAt      time.Time  `json:"created_at"`
+	PublishPending bool       `json:"publish_pending"`
+	Version        string     `json:"version"`
+	VersionStatus  string     `json:"version_status"`
+	AgentName      string     `json:"agent_name"`
+	Namespace      string     `json:"namespace"`
 }
 
 func (q *Queries) GetReviewItemDetail(ctx context.Context, id uuid.UUID) (GetReviewItemDetailRow, error) {
@@ -686,6 +697,7 @@ func (q *Queries) GetReviewItemDetail(ctx context.Context, id uuid.UUID) (GetRev
 		&i.DecidedAt,
 		&i.Rationale,
 		&i.CreatedAt,
+		&i.PublishPending,
 		&i.Version,
 		&i.VersionStatus,
 		&i.AgentName,
@@ -1041,19 +1053,18 @@ func (q *Queries) ListAdvisoriesForAgent(ctx context.Context, agentID uuid.UUID)
 const listApprovedReviewsAwaitingPublish = `-- name: ListApprovedReviewsAwaitingPublish :many
 SELECT ri.id FROM review_items ri
 JOIN agent_versions v ON v.id = ri.version_id
-WHERE ri.state = 'approved'
+WHERE ri.publish_pending
+  AND ri.state = 'approved'
   AND v.status = 'needs_review'
   AND ri.decided_at < now() - $1::interval
-  AND NOT EXISTS (SELECT 1 FROM attestations a WHERE a.version_id = v.id)
-  AND NOT EXISTS (SELECT 1 FROM review_items o WHERE o.version_id = v.id AND o.state = 'pending')
 ORDER BY ri.decided_at
 LIMIT 100
 `
 
 // Approvals a keyless role handed to the worker (agentry#479) whose version
-// has not been published yet: the item is approved, the version is still in
-// needs_review with no attestation and no other open item. The watchdog
-// publishes them, so a lost enqueue delays a publish and never strands it.
+// has not been published yet: marked publish_pending, still approved, the
+// version still in needs_review. The same conditions PublishApproved
+// checks; the watchdog publishes them, so a lost enqueue delays a publish.
 func (q *Queries) ListApprovedReviewsAwaitingPublish(ctx context.Context, grace pgtype.Interval) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, listApprovedReviewsAwaitingPublish, grace)
 	if err != nil {
@@ -1278,7 +1289,7 @@ func (q *Queries) ListPublishedVersionsWithoutAttestation(ctx context.Context, l
 }
 
 const listReviewQueue = `-- name: ListReviewQueue :many
-SELECT ri.id, ri.version_id, ri.queue, ri.org_id, ri.state, ri.decided_by, ri.decided_at, ri.rationale, ri.created_at, av.version, av.status AS version_status, a.name AS agent_name, h.handle AS namespace
+SELECT ri.id, ri.version_id, ri.queue, ri.org_id, ri.state, ri.decided_by, ri.decided_at, ri.rationale, ri.created_at, ri.publish_pending, av.version, av.status AS version_status, a.name AS agent_name, h.handle AS namespace
 FROM review_items ri
 JOIN agent_versions av ON av.id = ri.version_id
 JOIN agents a ON a.id = av.agent_id
@@ -1297,19 +1308,20 @@ type ListReviewQueueParams struct {
 }
 
 type ListReviewQueueRow struct {
-	ID            uuid.UUID  `json:"id"`
-	VersionID     uuid.UUID  `json:"version_id"`
-	Queue         string     `json:"queue"`
-	OrgID         *uuid.UUID `json:"org_id"`
-	State         string     `json:"state"`
-	DecidedBy     *uuid.UUID `json:"decided_by"`
-	DecidedAt     *time.Time `json:"decided_at"`
-	Rationale     *string    `json:"rationale"`
-	CreatedAt     time.Time  `json:"created_at"`
-	Version       string     `json:"version"`
-	VersionStatus string     `json:"version_status"`
-	AgentName     string     `json:"agent_name"`
-	Namespace     string     `json:"namespace"`
+	ID             uuid.UUID  `json:"id"`
+	VersionID      uuid.UUID  `json:"version_id"`
+	Queue          string     `json:"queue"`
+	OrgID          *uuid.UUID `json:"org_id"`
+	State          string     `json:"state"`
+	DecidedBy      *uuid.UUID `json:"decided_by"`
+	DecidedAt      *time.Time `json:"decided_at"`
+	Rationale      *string    `json:"rationale"`
+	CreatedAt      time.Time  `json:"created_at"`
+	PublishPending bool       `json:"publish_pending"`
+	Version        string     `json:"version"`
+	VersionStatus  string     `json:"version_status"`
+	AgentName      string     `json:"agent_name"`
+	Namespace      string     `json:"namespace"`
 }
 
 func (q *Queries) ListReviewQueue(ctx context.Context, arg ListReviewQueueParams) ([]ListReviewQueueRow, error) {
@@ -1331,6 +1343,7 @@ func (q *Queries) ListReviewQueue(ctx context.Context, arg ListReviewQueueParams
 			&i.DecidedAt,
 			&i.Rationale,
 			&i.CreatedAt,
+			&i.PublishPending,
 			&i.Version,
 			&i.VersionStatus,
 			&i.AgentName,
@@ -1514,6 +1527,20 @@ func (q *Queries) SetFindingVerdict(ctx context.Context, arg SetFindingVerdictPa
 		arg.VerdictBy,
 		arg.VerdictReason,
 	)
+	return err
+}
+
+const setReviewPublishPending = `-- name: SetReviewPublishPending :exec
+UPDATE review_items SET publish_pending = $2 WHERE id = $1
+`
+
+type SetReviewPublishPendingParams struct {
+	ID             uuid.UUID `json:"id"`
+	PublishPending bool      `json:"publish_pending"`
+}
+
+func (q *Queries) SetReviewPublishPending(ctx context.Context, arg SetReviewPublishPendingParams) error {
+	_, err := q.db.Exec(ctx, setReviewPublishPending, arg.ID, arg.PublishPending)
 	return err
 }
 

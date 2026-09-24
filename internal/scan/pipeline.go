@@ -31,6 +31,16 @@ import (
 // drives the §7 state machine per the gate decision, and signs on publish.
 // It replaces the M3 dev stub. Runs synchronously from a queue handler (or
 // inline in dev/tests).
+// ErrNoSigningKey is returned when a process that holds no signing key is
+// asked to sign (agentry#479): the api and git roles run without the key,
+// and a version is never published without its attestation (agentry#407),
+// so the transition that needed the signature does not happen there.
+var ErrNoSigningKey = errors.New("scan: this process holds no signing key; the worker signs")
+
+// ErrAlreadyDecided is returned when a decision reaches a review item that
+// is no longer pending (a second reviewer acting on a stale page).
+var ErrAlreadyDecided = errors.New("scan: review item already decided")
+
 type Pipeline struct {
 	st          *store.Store
 	reg         *registry.Service
@@ -1092,10 +1102,13 @@ type ReviewDecision struct {
 // needs_review, and the watchdog finishes an approval whose job was lost.
 // A version that already carries its attestation (a quarantined one being
 // reinstated) is published here as before: nothing needs signing.
-func (p *Pipeline) DecideReview(ctx context.Context, in ReviewDecision) error {
+//
+// handedOff reports that the publish was handed to the worker, so the
+// caller does not announce a publication that has not happened yet.
+func (p *Pipeline) DecideReview(ctx context.Context, in ReviewDecision) (handedOff bool, err error) {
 	var trans registry.TransitionResult
 	handOff := false
-	err := p.st.WithTx(ctx, func(q *storegen.Queries) error {
+	err = p.st.WithTx(ctx, func(q *storegen.Queries) error {
 		v, err := q.GetVersionByID(ctx, in.VersionID)
 		if err != nil {
 			return err
@@ -1107,17 +1120,31 @@ func (p *Pipeline) DecideReview(ctx context.Context, in ReviewDecision) error {
 		if in.Target == registry.StatusPublished && p.signer == nil {
 			if _, aerr := q.GetAttestation(ctx, v.ID); errors.Is(aerr, pgx.ErrNoRows) {
 				if registry.Status(v.Status) != registry.StatusNeedsReview {
-					return fmt.Errorf("%w: %s → %s", registry.ErrBadTransition, v.Status, in.Target)
+					// Only a held submission is handed off; anything else
+					// unsigned needs the key here, and this process has none.
+					return ErrNoSigningKey
+				}
+				// Refuse now what the worker could not sign later, so the
+				// verdict is not committed with nothing able to act on it
+				// and the reviewer can retry, as before the hand-off.
+				if run, rerr := q.LatestScanRunForVersion(ctx, v.ID); rerr != nil {
+					return fmt.Errorf("scan: latest run for review decision: %w", rerr)
+				} else if run.ReportDigest == nil || *run.ReportDigest == "" {
+					return fmt.Errorf("scan: version %s has no finished scan report to sign", v.ID)
 				}
 				handOff = true
 			} else if aerr != nil {
 				return fmt.Errorf("scan: attestation lookup: %w", aerr)
 			}
 		}
-		if err := q.DecideReviewItem(ctx, storegen.DecideReviewItemParams{
+		n, err := q.DecideReviewItem(ctx, storegen.DecideReviewItemParams{
 			ID: in.ItemID, State: in.State, DecidedBy: &in.DecidedBy, Rationale: &in.Rationale,
-		}); err != nil {
+		})
+		if err != nil {
 			return err
+		}
+		if n == 0 {
+			return fmt.Errorf("%w: the review item was already decided", ErrAlreadyDecided)
 		}
 		e := in.Audit
 		e.Action = audit.ActionReviewDecision
@@ -1129,7 +1156,9 @@ func (p *Pipeline) DecideReview(ctx context.Context, in ReviewDecision) error {
 			return err
 		}
 		if handOff {
-			return nil // the worker transitions and signs (PublishApproved)
+			// The worker transitions and signs (PublishApproved); the mark is
+			// what it and the watchdog act on.
+			return q.SetReviewPublishPending(ctx, storegen.SetReviewPublishPendingParams{ID: in.ItemID, PublishPending: true})
 		}
 		trans, err = p.reg.TransitionInTx(ctx, q, in.VersionID, in.Target, "review: "+in.Rationale, audit.Event{
 			ActorKind: audit.ActorSystem,
@@ -1145,24 +1174,24 @@ func (p *Pipeline) DecideReview(ctx context.Context, in ReviewDecision) error {
 		return p.signReviewed(ctx, q, agent, v)
 	})
 	if err != nil {
-		return err
+		return false, err
 	}
 	if handOff {
 		if p.jobs == nil {
 			p.log.Error("review: approval recorded but no queue to hand the publish to; the watchdog will publish it",
 				"item", in.ItemID, "version", in.VersionID)
-			return nil
+			return true, nil
 		}
 		if _, err := p.jobs.Enqueue(ctx, JobPublishApproved, "core", PublishApprovedArgs{ItemID: in.ItemID}); err != nil {
-			// The verdict is committed and the version is in needs_review
-			// with an approved item: the watchdog publishes it.
+			// The verdict is committed and the item is marked: the
+			// watchdog publishes it.
 			p.log.Error("review: could not enqueue the publish; the watchdog will publish it",
 				"item", in.ItemID, "version", in.VersionID, "err", err)
 		}
-		return nil
+		return true, nil
 	}
 	p.reg.EmitTransition(ctx, trans)
-	return nil
+	return false, nil
 }
 
 // signReviewed signs a version a reviewer published, from its latest scan
@@ -1203,15 +1232,17 @@ func (p *Pipeline) PublishApproved(ctx context.Context, itemID uuid.UUID) error 
 		if err != nil {
 			return fmt.Errorf("scan: review item: %w", err)
 		}
-		if item.State != "approved" {
+		if !item.PublishPending || item.State != "approved" {
 			return nil
 		}
 		v, err := q.GetVersionForUpdate(ctx, item.VersionID)
 		if err != nil {
 			return fmt.Errorf("scan: lock version: %w", err)
 		}
+		done := storegen.SetReviewPublishPendingParams{ID: itemID, PublishPending: false}
 		if registry.Status(v.Status) != registry.StatusNeedsReview {
-			return nil
+			// Moved on without this job (yanked, say): nothing to publish.
+			return q.SetReviewPublishPending(ctx, done)
 		}
 		agent, err := q.GetAgentByID(ctx, v.AgentID)
 		if err != nil {
@@ -1228,7 +1259,10 @@ func (p *Pipeline) PublishApproved(ctx context.Context, itemID uuid.UUID) error 
 			return err
 		}
 		published = true
-		return p.signReviewed(ctx, q, agent, v)
+		if err := p.signReviewed(ctx, q, agent, v); err != nil {
+			return err
+		}
+		return q.SetReviewPublishPending(ctx, done)
 	})
 	if err != nil {
 		return err
@@ -1362,9 +1396,3 @@ func (p *Pipeline) historyReader(repoID uuid.UUID, commit string) func(ctx conte
 		return p.gitHistory.HistoryPatch(ctx, repoID, commit)
 	}
 }
-
-// ErrNoSigningKey is returned when a process that holds no signing key is
-// asked to sign (agentry#479): the api and git roles run without the key,
-// and a version is never published without its attestation (agentry#407),
-// so the transition that needed the signature does not happen there.
-var ErrNoSigningKey = errors.New("scan: this process holds no signing key; the worker signs")
