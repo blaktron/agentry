@@ -1,6 +1,7 @@
 package config
 
 import (
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -414,5 +415,49 @@ func TestSocialProviderEnv(t *testing.T) {
 	}
 	if cfg.Social.Claude.ClientID != "claude-id" || cfg.Social.Claude.Issuer != "https://issuer.example/claude" {
 		t.Errorf("claude env not applied: %+v", cfg.Social.Claude)
+	}
+}
+
+func TestParseCIDRs(t *testing.T) {
+	ok := []struct{ in, want string }{
+		{"10.0.0.0/8", "10.0.0.0/8"},
+		{"172.16.0.0/12", "172.16.0.0/12"},
+		{" 127.0.0.1 ", "127.0.0.1/32"},
+		{"::1", "::1/128"},
+		{"::ffff:10.1.2.3", "10.1.2.3/32"},
+		{"fd00::/8", "fd00::/8"},
+	}
+	for _, c := range ok {
+		got, err := ParseCIDRs([]string{c.in})
+		if err != nil || len(got) != 1 || got[0].String() != c.want {
+			t.Errorf("ParseCIDRs(%q) = %v, %v; want %s", c.in, got, err, c.want)
+		}
+	}
+	for _, bad := range []string{"10.0.0.5/8", "10.0.0.0/33", "not-an-ip", "", "fe80::1%eth0"} {
+		if _, err := ParseCIDRs([]string{bad}); err == nil {
+			t.Errorf("ParseCIDRs(%q) accepted", bad)
+		}
+	}
+	p, _ := ParseCIDRs([]string{"172.16.0.0/12"})
+	for addr, want := range map[string]bool{"172.18.0.5": true, "::ffff:172.18.0.5": true, "192.168.1.1": false} {
+		if got := InCIDRs(p, netip.MustParseAddr(addr)); got != want {
+			t.Errorf("InCIDRs(172.16.0.0/12, %s) = %v, want %v", addr, got, want)
+		}
+	}
+}
+
+func TestSSHProxyProtocolCIDRsFromEnv(t *testing.T) {
+	t.Setenv("AGENTRY_DEV_MODE", "true")
+	t.Setenv("AGENTRY_GIT_SSH_PROXY_PROTOCOL_CIDRS", "10.0.0.0/8, 192.168.4.2")
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(cfg.Git.SSHProxyProtocolCIDRs, "|"); got != "10.0.0.0/8|192.168.4.2" {
+		t.Fatalf("sshProxyProtocolCIDRs = %q", got)
+	}
+	t.Setenv("AGENTRY_GIT_SSH_PROXY_PROTOCOL_CIDRS", "10.0.0.1/8")
+	if _, err := Load(""); err == nil || !strings.Contains(err.Error(), "sshProxyProtocolCIDRs") {
+		t.Fatalf("a CIDR with host bits set was accepted: %v", err)
 	}
 }

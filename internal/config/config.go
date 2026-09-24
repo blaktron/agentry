@@ -5,6 +5,7 @@ package config
 
 import (
 	"fmt"
+	"net/netip"
 	"net/url"
 	"os"
 	"strconv"
@@ -137,6 +138,15 @@ type Git struct {
 	// SSHPublicURL is the base clients use, e.g. "ssh://git@git.example.com:2222";
 	// when set, agent documents carry gitSshUrl.
 	SSHPublicURL string `yaml:"sshPublicUrl"`
+	// SSHProxyProtocolCIDRs, when set, says a TCP proxy fronts the SSH
+	// listener and names the addresses it connects from (agentry#492).
+	// Every connection must then come from one of these ranges and open
+	// with a PROXY protocol header (v1 or v2), whose source address becomes
+	// the client's: the key-offer budget (agentry#410) and the log lines
+	// key on it. A connection from any other address is refused, header or
+	// not, so a client cannot name its own address. Empty (the default)
+	// reads no header and keys on the TCP peer. CIDRs or bare addresses.
+	SSHProxyProtocolCIDRs []string `yaml:"sshProxyProtocolCIDRs"`
 }
 
 // Log configures structured logging.
@@ -596,6 +606,20 @@ func applyEnv(c *Config) error {
 			*dst = v
 		}
 	}
+	// list reads a comma-separated value; set but empty clears the list.
+	list := func(key string, dst *[]string) {
+		v, ok := os.LookupEnv(key)
+		if !ok {
+			return
+		}
+		var out []string
+		for _, part := range strings.Split(v, ",") {
+			if part = strings.TrimSpace(part); part != "" {
+				out = append(out, part)
+			}
+		}
+		*dst = out
+	}
 	boolean := func(key string, dst *bool) error {
 		v, ok := os.LookupEnv(key)
 		if !ok {
@@ -650,6 +674,7 @@ func applyEnv(c *Config) error {
 	str("AGENTRY_GIT_SSH_ADDR", &c.Git.SSHAddr)
 	str("AGENTRY_GIT_SSH_HOST_KEY", &c.Git.SSHHostKeyFile)
 	str("AGENTRY_GIT_SSH_PUBLIC_URL", &c.Git.SSHPublicURL)
+	list("AGENTRY_GIT_SSH_PROXY_PROTOCOL_CIDRS", &c.Git.SSHProxyProtocolCIDRs)
 	str("AGENTRY_LOG_LEVEL", &c.Log.Level)
 	str("AGENTRY_BASE_URL", &c.BaseURL)
 	str("AGENTRY_WEB_URL", &c.Web.URL)
@@ -977,6 +1002,9 @@ func (c Config) Validate() error {
 	if c.HTTP.TrustedProxies < 0 {
 		return fmt.Errorf("config: http.trustedProxies must be >= 0")
 	}
+	if _, err := ParseCIDRs(c.Git.SSHProxyProtocolCIDRs); err != nil {
+		return fmt.Errorf("config: git.sshProxyProtocolCIDRs: %w", err)
+	}
 	return c.validateLimits()
 }
 
@@ -1111,4 +1139,46 @@ func validateWindow(where, notBefore, notAfter string) error {
 		return fmt.Errorf("config: %s.notAfter (%s) must be after notBefore (%s)", where, notAfter, notBefore)
 	}
 	return nil
+}
+
+// ParseCIDRs parses a list of address ranges naming trusted proxies. Each
+// entry is a CIDR ("10.0.0.0/8") or a bare address, which means that one
+// address. A prefix with host bits set ("10.0.0.5/8") is refused rather than
+// silently widened or narrowed: a typo in a trust list should fail loudly.
+func ParseCIDRs(list []string) ([]netip.Prefix, error) {
+	out := make([]netip.Prefix, 0, len(list))
+	for _, s := range list {
+		s = strings.TrimSpace(s)
+		if !strings.Contains(s, "/") {
+			a, err := netip.ParseAddr(s)
+			if err != nil || a.Zone() != "" {
+				return nil, fmt.Errorf("%q is neither a CIDR nor an address", s)
+			}
+			a = a.Unmap()
+			out = append(out, netip.PrefixFrom(a, a.BitLen()))
+			continue
+		}
+		p, err := netip.ParsePrefix(s)
+		if err != nil {
+			return nil, fmt.Errorf("%q is not a CIDR", s)
+		}
+		if p.Masked() != p {
+			return nil, fmt.Errorf("%q has host bits set (did you mean %s?)", s, p.Masked())
+		}
+		out = append(out, p)
+	}
+	return out, nil
+}
+
+// InCIDRs reports whether addr falls in one of the ranges. An IPv4 address
+// seen in its IPv6-mapped form (a dual-stack listener) matches its IPv4
+// range.
+func InCIDRs(prefixes []netip.Prefix, addr netip.Addr) bool {
+	addr = addr.Unmap()
+	for _, p := range prefixes {
+		if p.Contains(addr) {
+			return true
+		}
+	}
+	return false
 }
