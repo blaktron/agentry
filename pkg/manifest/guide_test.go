@@ -71,6 +71,13 @@ func TestGuideRefusals(t *testing.T) {
 		{"prepare item on two lines", func(g *Guide) { g.Prepare = []string{"one\ntwo"} }, "guide.prepare[0]"},
 		{"files too long", func(g *Guide) { g.Files = strings.Repeat("a", MaxGuideFilesChars+1) }, "guide.files"},
 		{"task with a control character", func(g *Guide) { g.Task = "a\tb" }, "guide.task"},
+		{"task of spaces", func(g *Guide) { g.Task = "   " }, "guide.task"},
+		{"prepare item of spaces", func(g *Guide) { g.Prepare = []string{" "} }, "guide.prepare[0]"},
+		{"connect help with a bidi override", func(g *Guide) {
+			g.Connect = map[string]string{"PAGERDUTY_TOKEN": "paste it at https://evil.example/\u202Etxt.moc.ytudrepgap"}
+		}, "guide.connect.PAGERDUTY_TOKEN"},
+		{"files with a zero-width space", func(g *Guide) { g.Files = "the con\u200Btract" }, "guide.files"},
+		{"overview with a C1 control", func(g *Guide) { g.Overview = "a\u0085b" }, "guide.overview"},
 		{"connect for an undeclared secret", func(g *Guide) { g.Connect = map[string]string{"AWS_SECRET": "x"} }, "guide.connect.AWS_SECRET"},
 		{"empty connect help", func(g *Guide) { g.Connect = map[string]string{"PAGERDUTY_TOKEN": ""} }, "guide.connect.PAGERDUTY_TOKEN"},
 		{"connect help too long", func(g *Guide) {

@@ -492,7 +492,11 @@ func validateInteractive(s *issues, m *Manifest) {
 // (plan guided-runs.md §6). The overview is markdown and may span lines;
 // every other part is one plain line. A connect key must be a secret the
 // release declares, in capabilities.secrets or a declared MCP server's
-// secrets, so help never names a key the run cannot take.
+// secrets, so help never names a key the run cannot take. No part may carry
+// a format character (a bidi override, a zero-width space) or a C1 control:
+// the guide is read by a person deciding what to hand a run, and the
+// connect help is read by one deciding where to create a key, so what it
+// says must be what it shows.
 func validateGuide(s *issues, m *Manifest) {
 	if m.Major() != 2 || m.Guide == nil {
 		return
@@ -501,17 +505,20 @@ func validateGuide(s *issues, m *Manifest) {
 	if n := len(g.Overview); n > MaxGuideOverviewBytes {
 		s.errf("V10", "guide.overview", "overview is %d bytes; the maximum is %d", n, MaxGuideOverviewBytes)
 	}
-	if strings.ContainsRune(g.Overview, 0) {
-		s.errf("V10", "guide.overview", "overview must not contain a NUL character")
+	for _, r := range g.Overview {
+		if r == 0 || hiddenRune(r) {
+			s.errf("V10", "guide.overview", "overview must not contain a NUL, a C1 control or a format character (U+%04X)", r)
+			break
+		}
 	}
 	if len(g.Prepare) > MaxGuidePrepare {
 		s.errf("V10", "guide.prepare", "%d prepare items; the maximum is %d", len(g.Prepare), MaxGuidePrepare)
 	}
 	for i, item := range g.Prepare {
-		guideLine(s, fmt.Sprintf("guide.prepare[%d]", i), item, MaxGuidePrepareChars, true)
+		guideLine(s, fmt.Sprintf("guide.prepare[%d]", i), "prepare item", item, MaxGuidePrepareChars, true)
 	}
-	guideLine(s, "guide.files", g.Files, MaxGuideFilesChars, false)
-	guideLine(s, "guide.task", g.Task, MaxGuideTaskChars, false)
+	guideLine(s, "guide.files", "files", g.Files, MaxGuideFilesChars, false)
+	guideLine(s, "guide.task", "task", g.Task, MaxGuideTaskChars, false)
 
 	declared := map[string]bool{}
 	for _, n := range m.Capabilities.Secrets {
@@ -532,24 +539,32 @@ func validateGuide(s *issues, m *Manifest) {
 		if !declared[n] {
 			s.errf("V10", p, "%q is not a secret this release declares (capabilities.secrets or an MCP server's secrets)", n)
 		}
-		guideLine(s, p, g.Connect[n], MaxGuideConnectChars, true)
+		guideLine(s, p, "connect help for "+n, g.Connect[n], MaxGuideConnectChars, true)
 	}
 }
 
-// guideLine checks one single-line part of the guide.
-func guideLine(s *issues, p, v string, maxChars int, required bool) {
-	if v == "" {
-		if required {
-			s.errf("V10", p, "must not be empty")
+// hiddenRune is a character a reader does not see as itself: a C1 control
+// or a Unicode format character (bidi overrides, zero-width characters,
+// the tag block).
+func hiddenRune(r rune) bool {
+	return (r >= 0x80 && r <= 0x9f) || unicode.Is(unicode.Cf, r)
+}
+
+// guideLine checks one single-line part of the guide, naming it as what in
+// every message.
+func guideLine(s *issues, p, what, v string, maxChars int, required bool) {
+	if strings.TrimSpace(v) == "" {
+		if required || v != "" {
+			s.errf("V10", p, "%s must not be empty", what)
 		}
 		return
 	}
 	if n := utf8.RuneCountInString(v); n > maxChars {
-		s.errf("V10", p, "is %d characters; the maximum is %d", n, maxChars)
+		s.errf("V10", p, "%s is %d characters; the maximum is %d", what, n, maxChars)
 	}
 	for _, r := range v {
-		if r < 0x20 || r == 0x7f {
-			s.errf("V10", p, "must be plain single-line text (no control characters)")
+		if r < 0x20 || r == 0x7f || hiddenRune(r) {
+			s.errf("V10", p, "%s must be plain single-line text (no control or format characters)", what)
 			return
 		}
 	}
