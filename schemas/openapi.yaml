@@ -1081,7 +1081,10 @@ paths:
         registry's release-signing key (`/.well-known/agentry/signing-keys.json`).
         Lets `agentry validate --rules-update` verify a fetched bundle by
         signature rather than only by the digest the same server advertised
-        (agentry#25). 404 when the registry does not sign (`signing.kind: none`).
+        (agentry#25). The worker signs it at start and stores it, so every
+        replica serves the same envelope (agentry#479). 404 when the registry
+        does not sign (`signing.kind: none`), or when no process holding the
+        signing key has started with this bundle yet (a rolling deploy).
       security: []
       responses:
         "200":

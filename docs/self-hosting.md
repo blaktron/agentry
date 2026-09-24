@@ -145,9 +145,11 @@ reference (added for the Vultr production cluster, DEV-124):
   `signingKey.key` — the PEM projected read-only to `config.signing.keyFile`
   (default `/etc/agentry-signing/signing-key.pem`; the directory must not be
   under the read-only `/etc/agentry` config mount, and the chart refuses one
-  that is) in every agentryd pod, because the server constructs the signer in
-  every role that has a database (agentry#479 confines it to the worker). The
-  chart refuses to render `kind: file` without the Secret.
+  that is) in the worker pods only. The `api` and `git` roles start without
+  the key: they serve the key set and the ruleset attestation from what the
+  worker recorded, and a reviewer's approval is published and signed by the
+  worker (a version stays in `needs_review` for the moment in between;
+  agentry#479). The chart refuses to render `kind: file` without the Secret.
 - `objectStoreCredentials.existingSecret` — object-store credentials
   (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`), injected into the api and
   worker pods only; the git role never touches the store.

@@ -380,15 +380,23 @@ type Repo struct {
 }
 
 type ReviewItem struct {
-	ID        uuid.UUID  `json:"id"`
-	VersionID uuid.UUID  `json:"version_id"`
-	Queue     string     `json:"queue"`
-	OrgID     *uuid.UUID `json:"org_id"`
-	State     string     `json:"state"`
-	DecidedBy *uuid.UUID `json:"decided_by"`
-	DecidedAt *time.Time `json:"decided_at"`
-	Rationale *string    `json:"rationale"`
-	CreatedAt time.Time  `json:"created_at"`
+	ID             uuid.UUID  `json:"id"`
+	VersionID      uuid.UUID  `json:"version_id"`
+	Queue          string     `json:"queue"`
+	OrgID          *uuid.UUID `json:"org_id"`
+	State          string     `json:"state"`
+	DecidedBy      *uuid.UUID `json:"decided_by"`
+	DecidedAt      *time.Time `json:"decided_at"`
+	Rationale      *string    `json:"rationale"`
+	CreatedAt      time.Time  `json:"created_at"`
+	PublishPending bool       `json:"publish_pending"`
+}
+
+type RulesetAttestation struct {
+	BundleDigest string    `json:"bundle_digest"`
+	KeyID        string    `json:"key_id"`
+	DsseEnvelope []byte    `json:"dsse_envelope"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 type RulesetRelease struct {

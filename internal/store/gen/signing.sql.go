@@ -53,6 +53,53 @@ func (q *Queries) CountAttestationsLackingSignature(ctx context.Context, keyMatc
 	return count, err
 }
 
+const getActiveSigningKey = `-- name: GetActiveSigningKey :one
+SELECT key_id, algorithm, public_key_pem, first_seen_at, last_seen_at, retired_at FROM signing_keys WHERE retired_at IS NULL
+ORDER BY last_seen_at DESC LIMIT 1
+`
+
+// The key the deployment signs with today, for a process that holds no key
+// of its own (the api and git roles, agentry#479): the one registered most
+// recently and not retired. A registration retires every other key, so at
+// most one row qualifies once the signer has started.
+func (q *Queries) GetActiveSigningKey(ctx context.Context) (SigningKey, error) {
+	row := q.db.QueryRow(ctx, getActiveSigningKey)
+	var i SigningKey
+	err := row.Scan(
+		&i.KeyID,
+		&i.Algorithm,
+		&i.PublicKeyPem,
+		&i.FirstSeenAt,
+		&i.LastSeenAt,
+		&i.RetiredAt,
+	)
+	return i, err
+}
+
+const getRulesetAttestation = `-- name: GetRulesetAttestation :one
+SELECT ra.bundle_digest, ra.key_id, ra.dsse_envelope, ra.created_at FROM ruleset_attestations ra
+JOIN signing_keys k ON k.key_id = ra.key_id
+WHERE ra.bundle_digest = $1 AND k.retired_at IS NULL
+ORDER BY k.last_seen_at DESC
+LIMIT 1
+`
+
+// The ruleset attestation to serve for a bundle: the one the active key
+// signed. None when the active key's holder has not started with this
+// bundle yet; an envelope by a retired key is never served, because the key
+// set advertises retired keys only for version attestations.
+func (q *Queries) GetRulesetAttestation(ctx context.Context, bundleDigest string) (RulesetAttestation, error) {
+	row := q.db.QueryRow(ctx, getRulesetAttestation, bundleDigest)
+	var i RulesetAttestation
+	err := row.Scan(
+		&i.BundleDigest,
+		&i.KeyID,
+		&i.DsseEnvelope,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getSigningKey = `-- name: GetSigningKey :one
 SELECT key_id, algorithm, public_key_pem, first_seen_at, last_seen_at, retired_at FROM signing_keys WHERE key_id = $1
 `
@@ -69,6 +116,25 @@ func (q *Queries) GetSigningKey(ctx context.Context, keyID string) (SigningKey, 
 		&i.RetiredAt,
 	)
 	return i, err
+}
+
+const insertRulesetAttestation = `-- name: InsertRulesetAttestation :exec
+INSERT INTO ruleset_attestations (bundle_digest, key_id, dsse_envelope)
+VALUES ($1, $2, $3)
+ON CONFLICT (bundle_digest, key_id) DO NOTHING
+`
+
+type InsertRulesetAttestationParams struct {
+	BundleDigest string `json:"bundle_digest"`
+	KeyID        string `json:"key_id"`
+	DsseEnvelope []byte `json:"dsse_envelope"`
+}
+
+// The signer stores the ruleset attestation for the bundle it carries at
+// start (agentry#479); a row already there for that digest and key stays.
+func (q *Queries) InsertRulesetAttestation(ctx context.Context, arg InsertRulesetAttestationParams) error {
+	_, err := q.db.Exec(ctx, insertRulesetAttestation, arg.BundleDigest, arg.KeyID, arg.DsseEnvelope)
+	return err
 }
 
 const listAttestationsLackingSignature = `-- name: ListAttestationsLackingSignature :many
