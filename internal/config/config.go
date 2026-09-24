@@ -205,10 +205,13 @@ type Auth struct {
 	// address at exactly this domain makes the account staff, beside the
 	// group. The directory's word at sign-in decides, never an address
 	// stored in the registry, and both directions hold as for the group.
-	// It rests on the directory asserting email_verified honestly (DEV-061:
-	// self-enrolled accounts stay inactive until the emailed link, and no
-	// settings flow lets a person change their address). A bare domain,
-	// lower case; empty turns the rule off.
+	// The directory asserts email_verified for every account it holds
+	// (DEV-061), so the rule rests on how an address gets there: a
+	// self-enrolled account stays inactive until its emailed link is
+	// followed, nobody changes their own address (DEV-134), no federated
+	// source feeds the directory, and an administrator who creates an
+	// account at this domain makes staff. A bare domain, lower case; empty
+	// turns the rule off (and, with no group either, the sync).
 	IdPStaffDomain string `yaml:"idpStaffDomain"`
 	// RequireIdPMFA re-enables the §12.1 "2FA before public publish" gate
 	// under externalOnly, satisfied by evidence rather than trust: the
@@ -871,10 +874,10 @@ func integer64(key string, dst *int64) error {
 	return nil
 }
 
-// Validate rejects configurations that must never run.
 // staffDomainRE is a bare lower-case DNS name of at least two labels.
 var staffDomainRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$`)
 
+// Validate rejects configurations that must never run.
 func (c Config) Validate() error {
 	switch c.Env {
 	case "dev", "staging", "prod":

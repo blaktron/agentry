@@ -857,20 +857,39 @@ Only the `authentik` provider's claim counts — a Google or GitHub token
 carrying the same group name is ignored.
 
 **Or from an email domain.** `AGENTRY_IDP_STAFF_DOMAIN` (the chart's
-`config.auth.idpStaffDomain`) names a second way in: at the same sign-in, an
-ID token that asserts a verified address at exactly that domain makes the
-account platform staff, beside the group. `secureagentry.net` matches
-`chris@secureagentry.net`; it does not match `ops.secureagentry.net`,
-`secureagentry.net.example` or an address the token does not assert as
-verified. The address that counts is the one this sign-in's token asserts,
-never the one stored in the registry. Both directions hold: a person who
-next signs in with an address elsewhere loses staff, audited as
-`user.staff_sync` with the rule that decided (`group`, `domain` or both).
-Set it only where the directory's `email_verified` is honest: the account
-flows blueprint keeps it so by writing a self-enrolled account inactive
-until its emailed link is followed, and by offering no settings flow in
-which a person could change their address. A domain anyone can sign up at
-must never be the staff domain. Empty (the default) turns the rule off.
+`config.auth.idpStaffDomain`) names a second way in. At the same sign-in, an
+ID token from the deployment's own directory that asserts an address at
+exactly that domain makes the account platform staff, beside the group.
+
+What matches: `secureagentry.net` matches `chris@secureagentry.net`. It does
+not match `ops.secureagentry.net`, `secureagentry.net.example`, or a domain
+that is not plain ASCII (an internationalised look-alike). The address that
+counts is the one this sign-in's token asserts, never the one stored in the
+registry.
+
+Both directions hold, and a change is audited as `user.staff_sync` with
+`rule` set to `group`, `domain`, `group+domain` or `none`. Three consequences:
+
+- **Staff changes only at a directory sign-in.** Someone who is deactivated in
+  the directory, or whose directory address changes, keeps staff through a
+  live session or a token until then. Revoke their sessions and tokens too.
+- **The domain can override the group.** An address at the staff domain keeps
+  someone staff after they leave the group.
+- **Unsetting leaves grants in place.** With both the group and the domain
+  unset, the sync does not run, and existing grants stay as they are.
+
+The directory asserts every address it holds as verified, so this rule is
+exactly as safe as the ways an address gets into the directory. Set a staff
+domain only when all of these hold:
+
+- the issuer is the deployment's own directory;
+- a self-enrolled account stays inactive until its emailed link is followed (the account-flows blueprint);
+- nobody can change their own address (the blueprint denies authentik's user-settings flow, DEV-134);
+- no federated source (Google, GitHub, another IdP) feeds the directory;
+- every account an administrator creates at the domain is one you mean to be staff.
+
+A domain anyone can sign up at must never be the staff domain. Empty (the
+default) turns the rule off.
 
 **Provisioning org members from Authentik (SCIM).** The registry's SCIM
 endpoint is per organisation and authenticated by a token an org admin

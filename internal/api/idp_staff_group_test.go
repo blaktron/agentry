@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/blaktron/agentry/internal/api"
@@ -140,6 +141,21 @@ func TestDirectoryDomainDrivesPlatformStaff(t *testing.T) {
 	}
 	if platformStaff(t, env, userID) {
 		t.Fatal("an address no longer at the staff domain must revoke platform staff")
+	}
+	// That is the stored-versus-asserted case too: a sign-in does not
+	// rewrite the stored address, so the account still holds the one at the
+	// staff domain, and only the token's word counted.
+	var stored string
+	if err := env.st.Pool().QueryRow(context.Background(), `SELECT email FROM users WHERE id = $1::uuid`, userID).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(strings.ToLower(stored), "@secureagentry.net") {
+		t.Fatalf("the stored address moved to %q; this step no longer proves the stored address is ignored", stored)
+	}
+	var revokedRule string
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT detail->>'rule' FROM audit_events WHERE action = 'user.staff_sync' AND target_id = $1::uuid AND detail->>'platformStaff' = 'false'`, userID).Scan(&revokedRule); err != nil || revokedRule != "none" {
+		t.Fatalf("the revocation's audit rule: %q %v", revokedRule, err)
 	}
 
 	// Never staff: a subdomain, look-alikes, an unverified assertion.
