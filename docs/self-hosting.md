@@ -704,24 +704,45 @@ otherwise:
 
 ```yaml
 http:
-  trustedProxies: 2   # number of reverse-proxy hops in front of agentryd
+  trustedProxies: 2          # number of reverse-proxy hops in front of agentryd
+  trustedProxyCIDRs:         # where the hop in front connects from (recommended)
+    - 10.0.0.0/8
 ```
 
-Env: `AGENTRY_TRUSTED_PROXIES` (an integer hop count, not a CIDR list).
+Env: `AGENTRY_TRUSTED_PROXIES` (an integer hop count) and
+`AGENTRY_TRUSTED_PROXY_CIDRS` (comma-separated CIDRs or bare addresses).
 
-Set it to the real number of hops, and keep agentryd's own port off any
-network a client can reach directly (the compose stack binds it to
-loopback; the chart's service is cluster-internal). A hop count reads
-the last N entries of `X-Forwarded-For` from whoever connects, so a
-client that reaches the port directly with N = 1 can name its own
-address; a chain *shorter* than N did not come from the hop in front,
-and resolves to the connecting peer.
+The two knobs answer different questions. `trustedProxies` says **how many**
+hops wrote the tail of `X-Forwarded-For`, so the server knows which entry is
+the client's. `trustedProxyCIDRs` says **who** may speak for a client at all:
+when it is set, the header is read only on a request whose TCP peer is inside
+one of the ranges, and every other request resolves to its peer, whatever the
+header says (agentry#429). Set both. With the hop count alone, the server
+reads the last N entries from whoever connects, so a client that reaches
+agentryd's port directly with N = 1 names its own address and picks its own
+rate-limit bucket; the only defence is keeping that port off every network a
+client can reach. The list makes that a property of the server rather than
+of the deployment, the way nginx's `set_real_ip_from` does. A chain
+*shorter* than N did not come from the hops in front either, and resolves to
+the peer. The list is ignored while `trustedProxies` is 0. A prefix with host
+bits set (`10.0.0.5/8`) fails the start.
+
+What to list: the address range the hop in front connects from. The compose
+stack defaults it to `172.16.0.0/12,192.168.0.0/16`, docker's own address
+pools, which hold the stack's network the edge reaches agentryd over (and the
+bridge address a published loopback port arrives from, so a process on the
+host itself can still set the header). Behind an ingress controller, list the
+controller's pod range; behind a cloud balancer, its subnets. The chart's
+`config.http.trustedProxyCIDRs` is empty by default and should be set with
+`trustedProxies`.
 
 `http.proxyRequestID: true` (`AGENTRY_PROXY_REQUEST_ID=true`) additionally
 says the hop in front **sets** `X-Request-Id` on every request it forwards
 — the compose edge does (`proxy_set_header X-Request-Id $request_id`); an
 ALB does not — so the server honours it and one id names a request on both
-hops ([the log contract](logging.md)). Off, the default, the server mints
+hops ([the log contract](logging.md)). It is honoured under the same peer
+test as `X-Forwarded-For`: with `trustedProxyCIDRs` set, a request from an
+unlisted peer gets a minted id. Off, the default, the server mints
 its own and ignores the header. Never turn it on for a hop that merely
 forwards the header: that would let a client choose the id stamped on its
 lines and audit rows.

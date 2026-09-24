@@ -480,3 +480,20 @@ func TestSSHProxyProtocolCIDRsFromEnv(t *testing.T) {
 		t.Fatalf("a CIDR with host bits set was accepted: %v", err)
 	}
 }
+
+func TestTrustedProxyCIDRsFromEnv(t *testing.T) {
+	t.Setenv("AGENTRY_DEV_MODE", "true")
+	t.Setenv("AGENTRY_TRUSTED_PROXIES", "1")
+	t.Setenv("AGENTRY_TRUSTED_PROXY_CIDRS", "172.16.0.0/12,192.168.0.0/16")
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(cfg.HTTP.TrustedProxyCIDRs, "|"); got != "172.16.0.0/12|192.168.0.0/16" {
+		t.Fatalf("trustedProxyCIDRs = %q", got)
+	}
+	t.Setenv("AGENTRY_TRUSTED_PROXY_CIDRS", "172.16.0.1/12")
+	if _, err := Load(""); err == nil || !strings.Contains(err.Error(), "trustedProxyCIDRs") {
+		t.Fatalf("a CIDR with host bits set was accepted: %v", err)
+	}
+}
