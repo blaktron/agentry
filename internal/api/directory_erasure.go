@@ -24,7 +24,8 @@ import (
 	"github.com/blaktron/agentry/internal/queue"
 )
 
-// The outcomes a user.directory_erase row and the erasure's response carry.
+// The outcomes a user.directory_erase row and the erasure's response header
+// carry.
 const (
 	dirEraseDeleted       = "deleted"
 	dirEraseNotFound      = "not-found"
@@ -35,6 +36,9 @@ const (
 	// dirEraseAbandoned is the last retry failing: the operator finishes it.
 	dirEraseAbandoned = "abandoned"
 )
+
+// directoryErasureHeader carries the outcome on the erasure's 204.
+const directoryErasureHeader = "X-Agentry-Directory-Erasure"
 
 // jobDirectoryErase is the retry's queue kind.
 const jobDirectoryErase = "gdpr.directory_erase"

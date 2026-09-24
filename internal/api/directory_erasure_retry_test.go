@@ -59,6 +59,18 @@ func (d *flakyDirectory) handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// eraseAndReadOutcome erases the caller's account and returns the
+// directory outcome the 204 carries.
+func eraseAndReadOutcome(t *testing.T, env *testEnv, c caller) string {
+	t.Helper()
+	res := env.do(c, http.MethodPost, "/api/v1/user/delete", nil)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("erase: %d, want 204", res.StatusCode)
+	}
+	return res.Header.Get("X-Agentry-Directory-Erasure")
+}
+
 // drainRetries runs the queue until this user's retry job is finished,
 // pulling each backed-off retry forward rather than waiting it out.
 func drainRetries(t *testing.T, env *testEnv, srv *api.Server, uid string) {
@@ -123,12 +135,8 @@ func TestDirectoryErasureFailureIsRetried(t *testing.T) {
 	sess := env.login(h)
 	uid := env.selfID(sess)
 
-	var resp struct {
-		DirectoryErasure string `json:"directoryErasure"`
-	}
-	env.doJSON(sess, http.MethodPost, "/api/v1/user/delete", nil, &resp, http.StatusOK)
-	if resp.DirectoryErasure != "pending" {
-		t.Fatalf("directoryErasure = %q, want pending", resp.DirectoryErasure)
+	if got := eraseAndReadOutcome(t, env, sess); got != "pending" {
+		t.Fatalf("X-Agentry-Directory-Erasure = %q, want pending", got)
 	}
 	var queued int
 	if err := env.st.Pool().QueryRow(context.Background(),
@@ -191,7 +199,9 @@ func TestDirectoryErasureAbandonedAfterItsRetries(t *testing.T) {
 	env.verifyEmail(h)
 	sess := env.login(h)
 	uid := env.selfID(sess)
-	env.doJSON(sess, http.MethodPost, "/api/v1/user/delete", nil, nil, http.StatusOK)
+	if got := eraseAndReadOutcome(t, env, sess); got != "pending" {
+		t.Fatalf("X-Agentry-Directory-Erasure = %q, want pending", got)
+	}
 
 	drainRetries(t, env, srv, uid)
 
@@ -213,11 +223,7 @@ func TestDirectoryErasureOutcomeInTheResponse(t *testing.T) {
 	h := env.register("dir-resp")
 	env.verifyEmail(h)
 	sess := env.login(h)
-	var resp struct {
-		DirectoryErasure string `json:"directoryErasure"`
-	}
-	env.doJSON(sess, http.MethodPost, "/api/v1/user/delete", nil, &resp, http.StatusOK)
-	if resp.DirectoryErasure != "not-configured" {
-		t.Fatalf("directoryErasure = %q, want not-configured", resp.DirectoryErasure)
+	if got := eraseAndReadOutcome(t, env, sess); got != "not-configured" {
+		t.Fatalf("X-Agentry-Directory-Erasure = %q, want not-configured", got)
 	}
 }

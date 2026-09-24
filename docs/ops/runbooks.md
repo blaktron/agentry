@@ -346,8 +346,8 @@ publisher locked out (check `user.login_failed` audit volume by handle).
 5. Audit events keep the opaque user id. Do not delete audit rows; the table
    rejects it at the database level anyway.
 6. The directory half (the sign-in account in authentik) follows the
-   registry erasure. When the directory is unreachable the response says
-   `"directoryErasure": "pending"` and a worker job retries for about four
+   registry erasure. When the directory is unreachable the response header
+   `X-Agentry-Directory-Erasure` says `pending` and a worker job retries for about four
    and a half hours. A `failopen.directory_erasure` line (or a
    `FailOpenEvents{path="directory_erasure"}` increment, or a
    `user.directory_erase` audit row with `abandoned`) means it gave up:

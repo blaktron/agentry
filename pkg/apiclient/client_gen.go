@@ -42,33 +42,6 @@ func (e AbuseReportState) Valid() bool {
 	}
 }
 
-// Defines values for AccountErasedDirectoryErasure.
-const (
-	AccountErasedDirectoryErasureDeleted       AccountErasedDirectoryErasure = "deleted"
-	AccountErasedDirectoryErasureFailed        AccountErasedDirectoryErasure = "failed"
-	AccountErasedDirectoryErasureNotConfigured AccountErasedDirectoryErasure = "not-configured"
-	AccountErasedDirectoryErasureNotFound      AccountErasedDirectoryErasure = "not-found"
-	AccountErasedDirectoryErasurePending       AccountErasedDirectoryErasure = "pending"
-)
-
-// Valid indicates whether the value is a known member of the AccountErasedDirectoryErasure enum.
-func (e AccountErasedDirectoryErasure) Valid() bool {
-	switch e {
-	case AccountErasedDirectoryErasureDeleted:
-		return true
-	case AccountErasedDirectoryErasureFailed:
-		return true
-	case AccountErasedDirectoryErasureNotConfigured:
-		return true
-	case AccountErasedDirectoryErasureNotFound:
-		return true
-	case AccountErasedDirectoryErasurePending:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for AccountInstallQuarantineState.
 const (
 	AccountInstallQuarantineStateBlocked     AccountInstallQuarantineState = "blocked"
@@ -1329,15 +1302,6 @@ type AccessRequestResult struct {
 	MailedAdmins int    `json:"mailedAdmins"`
 	Org          string `json:"org"`
 }
-
-// AccountErased defines model for AccountErased.
-type AccountErased struct {
-	// DirectoryErasure The directory half of the erasure (agentry#499). `deleted`: the sign-in account at the directory is gone. `not-found`: the directory holds no account with this address. `not-configured`: the deployment reaches no directory, so erasure is registry-only. `pending`: the directory could not be reached; a job retries it with backoff for about four and a half hours and the operator is alerted if it never succeeds. `failed`: the retry could not be queued; the operator is alerted and finishes it by hand.
-	DirectoryErasure AccountErasedDirectoryErasure `json:"directoryErasure"`
-}
-
-// AccountErasedDirectoryErasure The directory half of the erasure (agentry#499). `deleted`: the sign-in account at the directory is gone. `not-found`: the directory holds no account with this address. `not-configured`: the deployment reaches no directory, so erasure is registry-only. `pending`: the directory could not be reached; a job retries it with backoff for about four and a half hours and the operator is alerted if it never succeeds. `failed`: the retry could not be queued; the operator is alerted and finishes it by hand.
-type AccountErasedDirectoryErasure string
 
 // AccountInstall One account install, composed for a list. Only `ref` and `readable` are always present: a record whose BriefAgent the caller can no longer read carries nothing else.
 type AccountInstall struct {
@@ -4138,7 +4102,7 @@ type ClientInterface interface {
 
 	// DeleteCurrentUser Erase the caller's account (GDPR flow, §12.7).
 	//
-	// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned as `directoryErasure`. A failed directory attempt does not undo the registry's erasure: it is retried by a job with backoff (each attempt audited) and the response says `pending`; a retry budget that runs out is audited as `abandoned` and raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
+	// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned in the `X-Agentry-Directory-Erasure` header. A failed directory attempt does not undo the registry's erasure: it is retried by a job with backoff (each attempt audited) and the response says `pending`; a retry budget that runs out is audited as `abandoned` and raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
 	//
 	// Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
 	DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6830,7 +6794,7 @@ func (c *Client) ClearCurrentUserData(ctx context.Context, reqEditors ...Request
 
 // DeleteCurrentUser Erase the caller's account (GDPR flow, §12.7).
 //
-// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned as `directoryErasure`. A failed directory attempt does not undo the registry's erasure: it is retried by a job with backoff (each attempt audited) and the response says `pending`; a retry budget that runs out is audited as `abandoned` and raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
+// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned in the `X-Agentry-Directory-Erasure` header. A failed directory attempt does not undo the registry's erasure: it is retried by a job with backoff (each attempt audited) and the response says `pending`; a retry budget that runs out is audited as `abandoned` and raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
 //
 // Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
 func (c *Client) DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -14787,7 +14751,7 @@ type ClientWithResponsesInterface interface {
 
 	// DeleteCurrentUserWithResponse Erase the caller's account (GDPR flow, §12.7).
 	//
-	// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned as `directoryErasure`. A failed directory attempt does not undo the registry's erasure: it is retried by a job with backoff (each attempt audited) and the response says `pending`; a retry budget that runs out is audited as `abandoned` and raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
+	// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned in the `X-Agentry-Directory-Erasure` header. A failed directory attempt does not undo the registry's erasure: it is retried by a job with backoff (each attempt audited) and the response says `pending`; a retry budget that runs out is audited as `abandoned` and raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -20363,18 +20327,18 @@ func (r ClearCurrentUserDataResponse) ContentType() string {
 	return ""
 }
 
+// DeleteCurrentUserResponse204Headers the declared response headers of an HTTP 204 response for DeleteCurrentUser
+type DeleteCurrentUserResponse204Headers struct {
+	XAgentryDirectoryErasure *string
+}
+
 type DeleteCurrentUserResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *AccountErased
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
 	ApplicationproblemJSONDefault *Problem
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r DeleteCurrentUserResponse) GetJSON200() *AccountErased {
-	return r.JSON200
+	// Headers204 the parsed response headers for an HTTP 204 response
+	Headers204 *DeleteCurrentUserResponse204Headers
 }
 
 // GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
@@ -23531,7 +23495,7 @@ func (c *ClientWithResponses) ClearCurrentUserDataWithResponse(ctx context.Conte
 
 // DeleteCurrentUserWithResponse Erase the caller's account (GDPR flow, §12.7).
 //
-// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned as `directoryErasure`. A failed directory attempt does not undo the registry's erasure: it is retried by a job with backoff (each attempt audited) and the response says `pending`; a retry budget that runs out is audited as `abandoned` and raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
+// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned in the `X-Agentry-Directory-Erasure` header. A failed directory attempt does not undo the registry's erasure: it is retried by a job with backoff (each attempt audited) and the response says `pending`; a retry budget that runs out is audited as `abandoned` and raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -27707,12 +27671,8 @@ func ParseDeleteCurrentUserResponse(rsp *http.Response) (*DeleteCurrentUserRespo
 	}
 
 	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest AccountErased
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
+	case rsp.StatusCode == 204:
+		break // No content-type
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
@@ -27721,6 +27681,19 @@ func ParseDeleteCurrentUserResponse(rsp *http.Response) (*DeleteCurrentUserRespo
 		}
 		response.ApplicationproblemJSONDefault = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		var headers DeleteCurrentUserResponse204Headers
+		if values := rsp.Header.Values("X-Agentry-Directory-Erasure"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Agentry-Directory-Erasure", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XAgentryDirectoryErasure = &value
+		}
+		response.Headers204 = &headers
 	}
 
 	return response, nil
