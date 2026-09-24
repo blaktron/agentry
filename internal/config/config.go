@@ -75,6 +75,17 @@ type HTTP struct {
 	// callers the ability to choose their own rate-limit bucket, so it must
 	// match the deployment exactly (§19, §13.5).
 	TrustedProxies int `yaml:"trustedProxies"`
+	// TrustedProxyCIDRs, when set, names the addresses the trusted hop
+	// connects from (agentry#429). X-Forwarded-For is then read only on a
+	// request whose TCP peer is inside one of these ranges; every other
+	// request resolves to its peer, whatever the header says. Without it
+	// the hop count trusts the header's tail from whoever connects, so a
+	// client that reaches agentryd directly names its own address; with
+	// it that is a property of the code, not of which ports a deployment
+	// happens to expose. CIDRs or bare addresses. Used only when
+	// trustedProxies >= 1; the hop count keeps its meaning for the entries
+	// the trusted hops wrote.
+	TrustedProxyCIDRs []string `yaml:"trustedProxyCIDRs"`
 	// ProxyRequestID says the hop in front SETS X-Request-Id on every request
 	// it forwards (the compose edge does; an ALB does not), so an inbound id
 	// is honoured (docs/logging.md). Off (the default) means the server mints
@@ -806,6 +817,7 @@ func applyEnv(c *Config) error {
 	if err := integer("AGENTRY_TRUSTED_PROXIES", &c.HTTP.TrustedProxies); err != nil {
 		return err
 	}
+	list("AGENTRY_TRUSTED_PROXY_CIDRS", &c.HTTP.TrustedProxyCIDRs)
 
 	// Notifications (§13.4).
 	str("AGENTRY_NOTIFY_KIND", &c.Notify.Kind)
@@ -1001,6 +1013,9 @@ func (c Config) Validate() error {
 	}
 	if c.HTTP.TrustedProxies < 0 {
 		return fmt.Errorf("config: http.trustedProxies must be >= 0")
+	}
+	if _, err := ParseCIDRs(c.HTTP.TrustedProxyCIDRs); err != nil {
+		return fmt.Errorf("config: http.trustedProxyCIDRs: %w", err)
 	}
 	if _, err := ParseCIDRs(c.Git.SSHProxyProtocolCIDRs); err != nil {
 		return fmt.Errorf("config: git.sshProxyProtocolCIDRs: %w", err)

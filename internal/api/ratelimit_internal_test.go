@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/time/rate"
 
+	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/ratelimit"
 )
 
@@ -113,9 +114,53 @@ func TestClientIPHonorsTrustedProxyDepth(t *testing.T) {
 		{"tunnel: an appended header hides the visitor", "203.0.113.7, 172.18.0.5", 1, "172.18.0.5"},
 	}
 	for _, c := range cases {
-		if got := clientIPWithProxies(req(c.xff), c.trusted); got != c.want {
+		if got := clientIPWithProxies(req(c.xff), proxyTrust{hops: c.trusted}); got != c.want {
 			t.Errorf("%s: clientIP = %q, want %q", c.name, got, c.want)
 		}
+	}
+}
+
+// With http.trustedProxyCIDRs set, X-Forwarded-For is read only from a
+// listed peer; any other peer is the answer whatever the header and the hop
+// count say (agentry#429). The hop count keeps its meaning for the entries
+// the trusted hops wrote.
+func TestClientIPTrustsForwardedForOnlyFromListedPeers(t *testing.T) {
+	cases := []struct {
+		name string
+		peer string
+		xff  string
+		hops int
+		from []string
+		want string
+	}{
+		{"listed peer: the tail entry", "172.18.0.11:4431", "203.0.113.7", 1, []string{"172.16.0.0/12"}, "203.0.113.7"},
+		{"unlisted peer: the peer, header ignored", "198.51.100.20:4431", "203.0.113.7", 1, []string{"172.16.0.0/12"}, "198.51.100.20"},
+		{"unlisted peer with a long forged chain: the peer", "198.51.100.20:4431", "1.1.1.1, 2.2.2.2, 3.3.3.3", 2, []string{"172.16.0.0/12"}, "198.51.100.20"},
+		{"listed peer, two hops: the entry before the tail", "10.1.2.3:80", "203.0.113.7, 198.51.100.2", 2, []string{"10.0.0.0/8"}, "203.0.113.7"},
+		{"listed peer, chain shorter than the hops: the peer", "10.1.2.3:80", "203.0.113.7", 2, []string{"10.0.0.0/8"}, "10.1.2.3"},
+		{"loopback listed (a proxy on the same host)", "127.0.0.1:5555", "203.0.113.7", 1, []string{"127.0.0.1"}, "203.0.113.7"},
+		{"loopback not listed", "127.0.0.1:5555", "203.0.113.7", 1, []string{"10.0.0.0/8"}, "127.0.0.1"},
+		{"IPv6 peer listed", "[fd00::5]:443", "2001:db8::7", 1, []string{"fd00::/8"}, "2001:db8::7"},
+		{"IPv4-mapped peer matches its IPv4 range", "[::ffff:172.18.0.11]:443", "203.0.113.7", 1, []string{"172.16.0.0/12"}, "203.0.113.7"},
+		{"a list without a hop count trusts nothing", "172.18.0.11:4431", "203.0.113.7", 0, []string{"172.16.0.0/12"}, "172.18.0.11"},
+		{"no list: the hop count alone, as before", "198.51.100.20:4431", "203.0.113.7", 1, nil, "203.0.113.7"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := httptest.NewRequest("GET", "/", nil)
+			r.RemoteAddr = c.peer
+			if c.xff != "" {
+				r.Header.Set("X-Forwarded-For", c.xff)
+			}
+			trust := newProxyTrust(config.HTTP{TrustedProxies: c.hops, TrustedProxyCIDRs: c.from})
+			if got := clientIPWithProxies(r, trust); got != c.want {
+				t.Fatalf("clientIP = %q, want %q", got, c.want)
+			}
+		})
+	}
+	// A list that fails to parse turns the trust off; it never widens it.
+	if (newProxyTrust(config.HTTP{TrustedProxies: 1, TrustedProxyCIDRs: []string{"nonsense"}})).hops != 0 {
+		t.Fatal("an unparsable list left a hop count trusted")
 	}
 }
 
