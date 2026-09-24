@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/netip"
@@ -193,7 +194,14 @@ func (s *SSHServer) handleConn(ctx context.Context, nc net.Conn) {
 	if len(s.proxyFrom) > 0 {
 		pc, err := s.proxied(nc)
 		if err != nil {
-			s.h.log.Info("git ssh connection refused", "peer", nc.RemoteAddr().String(), "reason", err.Error())
+			// A stranger at the port is Debug (scanners would flood Info);
+			// a listed proxy sending no usable header is a misconfiguration
+			// worth seeing.
+			level := slog.LevelInfo
+			if errors.Is(err, errUntrustedPeer) {
+				level = slog.LevelDebug
+			}
+			s.h.log.Log(context.Background(), level, "git ssh connection refused", "peer", nc.RemoteAddr().String(), "reason", err.Error())
 			return
 		}
 		nc = pc
@@ -230,9 +238,9 @@ func (s *SSHServer) handleConn(ctx context.Context, nc net.Conn) {
 // that names no client (the proxy's own health check: v1 UNKNOWN, v2
 // LOCAL) leaves the peer as the source, as the specification requires.
 func (s *SSHServer) proxied(nc net.Conn) (net.Conn, error) {
-	peer, err := netip.ParseAddrPort(nc.RemoteAddr().String())
-	if err != nil || !config.InCIDRs(s.proxyFrom, peer.Addr()) {
-		return nil, errors.New("peer is not a trusted proxy")
+	tcp, ok := nc.RemoteAddr().(*net.TCPAddr)
+	if !ok || !config.InCIDRs(s.proxyFrom, tcp.AddrPort().Addr()) {
+		return nil, errUntrustedPeer
 	}
 	client, ok, err := readProxyHeader(nc)
 	if err != nil {
@@ -243,6 +251,9 @@ func (s *SSHServer) proxied(nc net.Conn) (net.Conn, error) {
 	}
 	return &proxiedConn{Conn: nc, remote: net.TCPAddrFromAddrPort(client)}, nil
 }
+
+// errUntrustedPeer is a connection from outside git.sshProxyProtocolCIDRs.
+var errUntrustedPeer = errors.New("peer is not a trusted proxy")
 
 // handleSession answers exactly one exec request per session channel.
 func (s *SSHServer) handleSession(ctx context.Context, ch ssh.Channel, reqs <-chan *ssh.Request, fp string) {

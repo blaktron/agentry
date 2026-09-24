@@ -1333,7 +1333,8 @@ same authorization, hooks and quotas as HTTPS.
   from a listed address that opens without one: a client can never name its own address.
   The proxy's own health checks (v1 `UNKNOWN`, v2 `LOCAL`) are served as the proxy's
   address. Refusals are logged as `git ssh connection refused` with the peer and the
-  reason. Entries are CIDRs or bare addresses; a prefix with host bits set
+  reason: at `info` when a listed proxy sends no usable header (a misconfiguration), at
+  `debug` for any other address (scanners would otherwise flood the log). Entries are CIDRs or bare addresses; a prefix with host bits set
   (`10.0.0.5/8`) fails the start. Turn the proxy's header on and this setting on
   together: this setting without the header refuses every connection, and a header the
   listener does not expect is at best ignored (a v1 line is skipped as a pre-banner line

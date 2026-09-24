@@ -433,7 +433,7 @@ func TestParseCIDRs(t *testing.T) {
 			t.Errorf("ParseCIDRs(%q) = %v, %v; want %s", c.in, got, err, c.want)
 		}
 	}
-	for _, bad := range []string{"10.0.0.5/8", "10.0.0.0/33", "not-an-ip", "", "fe80::1%eth0"} {
+	for _, bad := range []string{"10.0.0.5/8", "10.0.0.0/33", "::ffff:10.0.0.0/104", "not-an-ip", "", "fe80::1%eth0"} {
 		if _, err := ParseCIDRs([]string{bad}); err == nil {
 			t.Errorf("ParseCIDRs(%q) accepted", bad)
 		}
