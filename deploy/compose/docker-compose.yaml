@@ -306,6 +306,14 @@ services:
       # point, and AGENTRY_COOKIE_SECURE=true once it serves a certificate
       # browsers accept (docs/self-hosting.md "Running behind a proxy").
       AGENTRY_TRUSTED_PROXIES: ${AGENTRY_TRUSTED_PROXIES:-0}
+      # ...and X-Forwarded-For is read only from a peer in these ranges
+      # (agentry#429): docker's own address pools, which hold this stack's
+      # network, where the edge (and a site's web container) reach the
+      # server. A client that reaches the server's port any other way
+      # resolves to its own address, whatever header it sends. Narrow it to
+      # the stack's subnet when docker's pools overlap a LAN of yours.
+      # Ignored while AGENTRY_TRUSTED_PROXIES is 0.
+      AGENTRY_TRUSTED_PROXY_CIDRS: ${AGENTRY_TRUSTED_PROXY_CIDRS:-172.16.0.0/12,192.168.0.0/16}
       AGENTRY_AUTH_COOKIE_SECURE: ${AGENTRY_COOKIE_SECURE:-false}
       # The edge SETS X-Request-Id on every request it forwards (its config
       # does, and so must a site's edge config in front of this server);
@@ -337,6 +345,9 @@ services:
       # Directory group whose members are platform staff (agentry#51); the
       # groups blueprint creates it. Empty disables the sync.
       AGENTRY_IDP_STAFF_GROUP: ${AGENTRY_IDP_STAFF_GROUP:-agentry-platform-staff}
+      # A second way to be staff (agentry#525): a verified address at exactly
+      # this domain, as the directory's ID token asserts it. Empty is off.
+      AGENTRY_IDP_STAFF_DOMAIN: ${AGENTRY_IDP_STAFF_DOMAIN:-}
       # Archive store against minio (S3-compatible), exercising the same code
       # path SaaS uses rather than the local-FS one.
       AGENTRY_STORAGE_KIND: s3

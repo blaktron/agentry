@@ -20,12 +20,13 @@ import (
 // database: what the access line carries, when the probes are skipped, and
 // when an inbound X-Request-Id is honoured.
 
-func contractServer(t *testing.T, trustedProxies int, proxyRequestID bool) (*httptest.Server, *bytes.Buffer) {
+func contractServer(t *testing.T, trustedProxies int, proxyRequestID bool, trustedFrom ...string) (*httptest.Server, *bytes.Buffer) {
 	t.Helper()
 	cfg := config.Default()
 	cfg.DevMode = true
 	cfg.HTTP.TrustedProxies = trustedProxies
 	cfg.HTTP.ProxyRequestID = proxyRequestID
+	cfg.HTTP.TrustedProxyCIDRs = trustedFrom
 	var buf bytes.Buffer
 	log := logx.New(logx.Options{W: &buf, Service: "agentryd", Role: "api", Version: "test"})
 	srv := httptest.NewServer(api.NewHandler(api.New(cfg, nil, log)))
@@ -240,5 +241,34 @@ func TestFailedSignInIsNamedAndMirrored(t *testing.T) {
 		if d, _ := l["detail"].(map[string]any); d == nil || d["login"] != h || d["request_id"] != id {
 			t.Errorf("the mirror carries the record's detail with the request id: %v", l["detail"])
 		}
+	}
+}
+
+// On the assembled handler, http.trustedProxyCIDRs decides whose forwarded
+// headers count (agentry#429): the test client connects from 127.0.0.1, so
+// a list that leaves loopback out makes it a direct client, whose
+// X-Forwarded-For and X-Request-Id are both ignored, and a list that names
+// it makes it the trusted hop.
+func TestForwardedHeadersCountOnlyFromAListedPeer(t *testing.T) {
+	const edgeID = "5f3a9c0e1b2d4f6a8c0e2b4d6f8a0c1e"
+	hdr := map[string]string{"X-Forwarded-For": "203.0.113.7", "X-Request-Id": edgeID}
+
+	srv, buf := contractServer(t, 1, true, "10.0.0.0/8")
+	res := get(t, srv.URL+"/api/v1/meta", hdr)
+	l := accessLine(t, buf)
+	if l == nil || l["client_ip"] != "127.0.0.1" {
+		t.Fatalf("an unlisted peer's X-Forwarded-For was believed: access line %v", l)
+	}
+	if got := res.Header.Get("X-Request-Id"); got == edgeID || !mintedID.MatchString(got) {
+		t.Fatalf("an unlisted peer chose its request id: %q", got)
+	}
+
+	srv, buf = contractServer(t, 1, true, "127.0.0.0/8")
+	res = get(t, srv.URL+"/api/v1/meta", hdr)
+	if l := accessLine(t, buf); l == nil || l["client_ip"] != "203.0.113.7" {
+		t.Fatalf("the listed hop's X-Forwarded-For was not read: access line %v", l)
+	}
+	if got := res.Header.Get("X-Request-Id"); got != edgeID {
+		t.Fatalf("the listed hop's request id was not honoured: %q", got)
 	}
 }
