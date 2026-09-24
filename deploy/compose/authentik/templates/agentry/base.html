@@ -1,0 +1,55 @@
+{% comment %}
+The frame of every mail the directory sends a person (agentry#518), in place
+of authentik's email/base.html, which embeds authentik's logo and ends
+"Powered by authentik". The email stages in the account-flows blueprint name
+the templates that extend this one; authentik reads them from /templates.
+
+Colours are the core's /ui/ palette (internal/ui/static/ui.css, the estate's
+design tokens), light scheme only: mail clients apply their own dark mode.
+Everything is inline and table-based because mail clients drop <style> and
+<link>; the wordmark is text, so nothing depends on remote images, which most
+clients block, or on an inline attachment. "Agentry" is the core's default
+AGENTRY_BRAND_NAME: a deployment that renames itself mounts its own copies of
+these files at /templates (docs/self-hosting.md, "Account flows").
+{% endcomment %}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>{% block title %}{% endblock %}</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f5efe4; color:#231b12; font-family:ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+<div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">{% block preheader %}{% endblock %}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5efe4;">
+  <tr>
+    <td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;">
+        <tr>
+          <td style="padding:0 4px 16px 4px; font-size:22px; line-height:28px; font-weight:600; letter-spacing:-0.02em; color:#231b12;">Agentry</td>
+        </tr>
+        <tr>
+          <td style="background-color:#faf6ee; border:1px solid #e6dccb; border-top:3px solid #8f4f22; border-radius:12px; padding:28px 28px 24px 28px;">
+            <h1 style="margin:0 0 12px 0; font-size:20px; line-height:28px; font-weight:600; color:#231b12;">{% block heading %}{% endblock %}</h1>
+            {% block content %}{% endblock %}
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;">
+              <tr>
+                <td style="background-color:#0e7a63; border-radius:8px;">
+                  <a href="{{ url }}" target="_blank" rel="noopener noreferrer" style="display:inline-block; padding:12px 20px; font-size:15px; line-height:20px; font-weight:600; color:#ffffff; text-decoration:none; border-radius:8px;">{% block action %}{% endblock %}</a>
+                </td>
+              </tr>
+            </table>
+            {% block after_action %}{% endblock %}
+            <p style="margin:16px 0 0 0; font-size:13px; line-height:20px; color:#66584a; word-break:break-all; overflow-wrap:anywhere;">If the button does not work, open this link:<br><a href="{{ url }}" target="_blank" rel="noopener noreferrer" style="color:#0b6350;">{{ url }}</a></p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 4px 0 4px; font-size:12px; line-height:18px; color:#66584a;">Agentry sent this automatically to the address on the account it concerns. Do not reply to this message.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>
