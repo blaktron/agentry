@@ -1358,6 +1358,23 @@ same authorization, hooks and quotas as HTTPS.
   (`AGENTRY_SSH_BIND`), so the edge's rate limits do not cover it; this budget is what does.
   It is keyed by the peer address the listener sees, so a TCP proxy in front of it that
   does not preserve the source puts every client in one bucket.
+- **Behind a TCP proxy:** set `git.sshProxyProtocolCIDRs` (env
+  `AGENTRY_GIT_SSH_PROXY_PROTOCOL_CIDRS`, comma-separated; the chart's
+  `config.git.sshProxyProtocolCIDRs`) to the addresses the proxy connects from, and have
+  the proxy send a PROXY protocol header (nginx `stream`: `proxy_protocol on;` in the
+  `server` block that forwards to the listener; HAProxy: `send-proxy` or `send-proxy-v2`).
+  The listener then requires a v1 or v2 header on every connection and uses its source
+  address for the key-offer budget and the log line, so the budget is per client again.
+  A connection from any other address is refused, header or not, and so is a connection
+  from a listed address that opens without one: a client can never name its own address.
+  The proxy's own health checks (v1 `UNKNOWN`, v2 `LOCAL`) are served as the proxy's
+  address. Refusals are logged as `git ssh connection refused` with the peer and the
+  reason: at `info` when a listed proxy sends no usable header (a misconfiguration), at
+  `debug` for any other address (scanners would otherwise flood the log). Entries are CIDRs or bare addresses; a prefix with host bits set
+  (`10.0.0.5/8`) fails the start. Turn the proxy's header on and this setting on
+  together: this setting without the header refuses every connection, and a header the
+  listener does not expect is at best ignored (a v1 line is skipped as a pre-banner line
+  and the budget stays the proxy's; a v2 header breaks the handshake).
 
 ## Fronting it with a site
 
