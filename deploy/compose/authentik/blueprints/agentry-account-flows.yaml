@@ -10,9 +10,14 @@
 # success depends on the order authentik happens to discover files in.
 #
 # Enrollment:  captcha (5) → prompt (10) → user write, inactive (20)
-#              → email confirmation, activates (30) → login (100)
-# Recovery:    identification (10) → email link (20) → new password (30)
-#              → user write (40) → login (100)
+#              → email confirmation, activates (30) → authenticator setup (40)
+#              → login (100)
+# Recovery:    identification (10) → email link (20) → authenticator (25)
+#              → new password (30) → user write (40) → login (100)
+#
+# The two mails are the core's own templates (agentry#518), mounted at
+# /templates from deploy/compose/authentik/templates: authentik's stock ones
+# embed its logo and end "Powered by authentik".
 #
 # The registry links an IdP identity to an account by VERIFIED email (T-12)
 # and the provider asserts `email_verified: true` (DEV-061). That assertion
@@ -267,7 +272,7 @@ entries:
       name: agentry-enrollment-email-confirmation
     attrs:
       use_global_settings: true
-      template: email/account_confirmation.html
+      template: agentry/account_confirmation.html
       subject: !Format ["Confirm your %s account", !Env [AGENTRY_BRAND_NAME, "Agentry"]]
       activate_user_on_success: true
       token_expiry: minutes=30
@@ -372,7 +377,7 @@ entries:
       name: agentry-recovery-email
     attrs:
       use_global_settings: true
-      template: email/password_reset.html
+      template: agentry/password_reset.html
       subject: !Format ["Reset your %s password", !Env [AGENTRY_BRAND_NAME, "Agentry"]]
       activate_user_on_success: false
       token_expiry: minutes=30
