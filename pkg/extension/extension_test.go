@@ -286,3 +286,13 @@ func TestApplyExtensionsSetsTheKeyWrapper(t *testing.T) {
 		t.Fatalf("after applyExtensions the wrapper is %T, want the extension's", srv.Knowledge().Wrapper())
 	}
 }
+
+// poolingResolver is the shape a closed resolver that pools knowledge takes
+// (agentry#612): the PoolsKnowledge seam, with the aliases alone.
+type poolingResolver struct{ tiered }
+
+func (poolingResolver) KnowledgePool(_ context.Context, o KeyOwner) (KnowledgePool, error) {
+	return KnowledgePool{Key: "org/pool", Owners: []KeyOwner{o}, Cap: Cap{Enabled: true, Max: 10 << 30}}, nil
+}
+
+var _ PoolsKnowledge = poolingResolver{}

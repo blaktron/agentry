@@ -300,7 +300,7 @@ func (s *Server) GetKnowledgeUsage(w http.ResponseWriter, r *http.Request) {
 		s.knowledgeProblem(w, r, err, "knowledge usage")
 		return
 	}
-	writeJSON(w, http.StatusOK, KnowledgeUsage{Bytes: u.Bytes, Max: u.Max, Packs: u.Packs})
+	writeJSON(w, http.StatusOK, KnowledgeUsage{Bytes: u.Bytes, Packs: u.Packs, Used: u.Used, Max: u.Max, Pooled: u.Pooled})
 }
 
 // ListKnowledgePackSizes implements GET /platform/knowledge (staff): an

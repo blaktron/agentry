@@ -518,19 +518,23 @@ func (q *Queries) SetKnowledgeTree(ctx context.Context, arg SetKnowledgeTreePara
 
 const sumKnowledgeBytesOfPool = `-- name: SumKnowledgeBytesOfPool :one
 SELECT COALESCE(SUM(bytes), 0)::bigint FROM knowledge_packs
-WHERE id <> $1 AND (owner_kind || '/' || owner_id::text) = ANY($2::text[])
+WHERE owner_kind = ANY($1::text[]) AND owner_id = ANY($2::uuid[])
+  AND id <> $3
 `
 
 type SumKnowledgeBytesOfPoolParams struct {
-	ExceptID uuid.UUID `json:"except_id"`
-	Owners   []string  `json:"owners"`
+	OwnerKinds []string    `json:"owner_kinds"`
+	OwnerIds   []uuid.UUID `json:"owner_ids"`
+	ExceptID   uuid.UUID   `json:"except_id"`
 }
 
 // What a pool's owners keep in the registry, the pack named aside (the one
-// an upload replaces): the allocation counts every other pack of every owner
-// in the pool, each named "<kind>/<id>" (agentry#612).
+// an upload replaces; uuid.Nil for none): the allocation counts every other
+// pack of every owner in the pool (agentry#612). An owner's id is a handle's,
+// unique across people and organizations, so the two lists match exactly
+// the owners given, on the owner index.
 func (q *Queries) SumKnowledgeBytesOfPool(ctx context.Context, arg SumKnowledgeBytesOfPoolParams) (int64, error) {
-	row := q.db.QueryRow(ctx, sumKnowledgeBytesOfPool, arg.ExceptID, arg.Owners)
+	row := q.db.QueryRow(ctx, sumKnowledgeBytesOfPool, arg.OwnerKinds, arg.OwnerIds, arg.ExceptID)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
