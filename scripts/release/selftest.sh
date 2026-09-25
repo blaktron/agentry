@@ -40,6 +40,8 @@ config() { # config [release-as]
 manifest() { jq -n --arg v "$1" '{".": $v}' > .release-please-manifest.json; }
 commit() { git add -A; git commit -q --allow-empty -m "$1"; }
 publish_ref() { git update-ref "refs/remotes/origin/$1" HEAD; }
+guarded() { "$guard" "$@" | { grep -v '^commit=' || true; }; }   # the guard's lines but the commit
+with_v1() { AGENTRY_ALLOW_V1=true "$@"; }
 count() { grep -c -- "$1" "$2" || true; }
 
 # --- next-dev-tag.sh ----------------------------------------------------------
@@ -83,8 +85,8 @@ expect v0.1.0-dev.1 "no tag and no release-as: initial-version" "$next"
 cd "$tmp/r"
 
 # --- tag-guard.sh -------------------------------------------------------------
-expect $'version=0.6.0\nprerelease=false\nbranch=main\nlatest=true' "a main release on main, the newest" "$guard" v0.6.0
-expect $'version=0.6.1-dev.9\nprerelease=true\nbranch=dev\nlatest=false' "a dev prerelease on dev, never latest" "$guard" v0.6.1-dev.9 HEAD
+expect $'version=0.6.0\nprerelease=false\nbranch=main\nlatest=true' "a main release on main, the newest" guarded v0.6.0
+expect $'version=0.6.1-dev.9\nprerelease=true\nbranch=dev\nlatest=false' "a dev prerelease on dev, never latest" guarded v0.6.1-dev.9 HEAD
 accepts "a dev release run on dev" env RUN_REF=refs/heads/dev "$guard" v0.6.1-dev.9 HEAD
 refuses "a dev release run on main (it would sign as main)" env RUN_REF=refs/heads/main "$guard" v0.6.1-dev.9 HEAD
 refuses "a main release run on dev" env RUN_REF=refs/heads/dev "$guard" v0.6.0
@@ -96,13 +98,14 @@ done
 refuses "a tag that does not exist, with no commit given" "$guard" v0.9.9
 git checkout -q main
 commit "chore(main): release 0.9.0"; git tag v0.9.0; commit "chore(main): release 0.10.0"; git tag v0.10.0; publish_ref main
-expect $'version=0.9.0\nprerelease=false\nbranch=main\nlatest=false' "an older main release rebuilt is not latest (0.9 < 0.10)" "$guard" v0.9.0
-expect latest=true "the newest main release is" sh -c "'$guard' v0.10.0 | tail -1"
+expect $'version=0.9.0\nprerelease=false\nbranch=main\nlatest=false' "an older main release rebuilt is not latest (0.9 < 0.10)" guarded v0.9.0
+expect latest=true "the newest main release is" sh -c "'$guard' v0.10.0 | grep '^latest='"
+expect "commit=$(git rev-parse v0.10.0)" "the commit it checked is the tag's" sh -c "'$guard' v0.10.0 | grep '^commit='"
 commit "chore(main): release 1.0.0"; git tag v1.0.0; publish_ref main; git checkout -q dev
 refuses "v1.0.0 without AGENTRY_ALLOW_V1" "$guard" v1.0.0
 refuses "v1.0.0-dev.1 without AGENTRY_ALLOW_V1" "$guard" v1.0.0-dev.1 HEAD
 refuses "v1.0.0 with AGENTRY_ALLOW_V1=yes (only true opens it)" env AGENTRY_ALLOW_V1=yes "$guard" v1.0.0
-expect $'version=1.0.0\nprerelease=false\nbranch=main\nlatest=true' "v1.0.0 with AGENTRY_ALLOW_V1=true" env AGENTRY_ALLOW_V1=true "$guard" v1.0.0
+expect $'version=1.0.0\nprerelease=false\nbranch=main\nlatest=true' "v1.0.0 with AGENTRY_ALLOW_V1=true" with_v1 guarded v1.0.0
 
 # --- config-guard.sh ----------------------------------------------------------
 repo c
@@ -170,8 +173,12 @@ expect 1 "  an asset of the same name is replaced" count '^DELETE https://api.gi
 expect $'false\nfalse\ntrue' "  published, not a prerelease, latest" jq -r '.draft, .prerelease, .make_latest' "$fake/body.PATCH"
 expect $'## 0.6.0 changelog\n\n<!-- agentry-release-verification -->\nVerify it.' "  the changelog kept, the block appended" jq -r .body "$fake/body.PATCH"
 
-echo '[{"id": 9, "tag_name": "v0.6.0", "draft": false, "body": "## 0.6.0 changelog\n\n<!-- agentry-release-verification -->\nVerify it.", "assets": []}]' > "$fake/list.json"
-accepts "publish: a rebuild of a published release" run_publish v0.6.0 false false
+echo '[{"id": 9, "tag_name": "v0.6.0", "draft": false, "body": "## 0.6.0 changelog", "assets": [{"id": 51, "name": "SHA256SUMS.txt"}]}]' > "$fake/list.json"
+accepts "publish: a rebuild of a release already published" run_publish v0.6.0 false false
+expect "GET https://api.github.com/repos/o/r/releases?per_page=100&page=1" "  is only read: no upload, no delete, no edit" cat "$fake/calls"
+
+echo '[{"id": 9, "tag_name": "v0.6.0", "draft": true, "body": "## 0.6.0 changelog\n\n<!-- agentry-release-verification -->\nVerify it.", "assets": []}]' > "$fake/list.json"
+accepts "publish: a draft whose earlier run appended the block" run_publish v0.6.0 false true
 expect $'## 0.6.0 changelog\n\n<!-- agentry-release-verification -->\nVerify it.' "  the block is not appended twice" jq -r .body "$fake/body.PATCH"
 
 [ "$fails" = 0 ] || { echo "release selftest: $fails failed"; exit 1; }

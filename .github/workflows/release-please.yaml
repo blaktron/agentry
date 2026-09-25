@@ -50,6 +50,11 @@ jobs:
     if: github.repository == 'blaktron/agentry'
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 10
+    # Two pushes to main a moment apart must not both tag the merged release
+    # PR before it is labelled tagged (two drafts for one version).
+    concurrency:
+      group: release-please-github-release
+      cancel-in-progress: false
     permissions:
       contents: write
       pull-requests: write   # labels the merged PR "autorelease: tagged"

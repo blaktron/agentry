@@ -14,8 +14,10 @@
 # run failed part-way), and must run on the tag's own branch.
 #
 # Nothing is published before verify passes: the binaries, the image and the
-# chart all wait on it, and scripts/release/publish.sh attaches the signed
-# assets before it takes the release out of draft. Only the newest main
+# chart all wait on it. The release waits on all three: the image and the
+# chart are signed first, and scripts/release/publish.sh attaches the signed
+# assets before it takes the release out of draft. Every job builds the
+# commit the guard checked, not whatever the tag names by then. Only the newest main
 # release becomes the repository's latest release and moves the image's
 # `latest`; a -dev.N release is marked prerelease and moves neither.
 #
@@ -66,6 +68,7 @@ jobs:
       prerelease: ${{ steps.guard.outputs.prerelease }}
       branch: ${{ steps.guard.outputs.branch }}
       latest: ${{ steps.guard.outputs.latest }}
+      commit: ${{ steps.guard.outputs.commit }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -102,7 +105,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          ref: refs/tags/${{ needs.guard.outputs.tag }}
+          ref: ${{ needs.guard.outputs.commit }}
           persist-credentials: false
       - name: Point the tests at the service's mapped port
         run: echo "AGENTRY_TEST_DATABASE_URL=postgres://agentry:agentry@localhost:${{ job.services.postgres.ports['5432'] }}/agentry_test?sslmode=disable" >> "$GITHUB_ENV"
@@ -149,7 +152,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          ref: refs/tags/${{ needs.guard.outputs.tag }}
+          ref: ${{ needs.guard.outputs.commit }}
           persist-credentials: false
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
@@ -189,16 +192,20 @@ jobs:
           path: dist/
 
   sbom-and-sign:
-    needs: [guard, binaries]
+    needs: [guard, binaries, image, chart]
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 20
+    # A dispatched rebuild and a live run of the same tag never publish at once.
+    concurrency:
+      group: release-publish-${{ needs.guard.outputs.tag }}
+      cancel-in-progress: false
     permissions:
       contents: write   # attach the assets, publish the release
       id-token: write   # keyless signing (OIDC)
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          ref: refs/tags/${{ needs.guard.outputs.tag }}
+          ref: ${{ needs.guard.outputs.commit }}
           persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -284,6 +291,9 @@ jobs:
     needs: [guard, verify]
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 30
+    concurrency:
+      group: release-image-${{ needs.guard.outputs.tag }}
+      cancel-in-progress: false
     permissions:
       contents: read
       packages: write   # push the image
@@ -295,7 +305,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          ref: refs/tags/${{ needs.guard.outputs.tag }}
+          ref: ${{ needs.guard.outputs.commit }}
           persist-credentials: false
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
@@ -313,11 +323,9 @@ jobs:
           pull: true
           build-args: |
             VERSION=${{ needs.guard.outputs.tag }}
-          # `latest` is the newest main release only: a dev prerelease or a
-          # rebuilt older release never moves it (the empty line is dropped).
-          tags: |
-            ghcr.io/${{ github.repository }}/${{ matrix.name }}:${{ needs.guard.outputs.tag }}
-            ${{ needs.guard.outputs.latest == 'true' && format('ghcr.io/{0}/{1}:latest', github.repository, matrix.name) || '' }}
+          # The version tag only: `latest` is added below, once the image is
+          # signed, so it never names an unsigned image.
+          tags: ghcr.io/${{ github.repository }}/${{ matrix.name }}:${{ needs.guard.outputs.tag }}
           provenance: true
           sbom: true
       - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
@@ -325,6 +333,35 @@ jobs:
         env:
           IMAGE: ghcr.io/${{ github.repository }}/${{ matrix.name }}@${{ steps.build.outputs.digest }}
         run: cosign sign --yes "$IMAGE"
+      # `latest` is the newest main release only: a dev prerelease or a
+      # rebuilt older release never moves it. The guard's answer is checked
+      # again against the tags as they are now, in case a newer release was
+      # tagged while this one built. The signature is on the digest, so the
+      # tag added here names a signed image.
+      - name: Move latest to this release
+        if: needs.guard.outputs.latest == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.guard.outputs.tag }}
+          REPO: ghcr.io/${{ github.repository }}/${{ matrix.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          # Every v* tag, a page at a time (dev prereleases add one per push);
+          # capped and de-duplicated, whichever way the endpoint pages.
+          tags=""
+          for page in $(seq 1 20); do
+            batch=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v?per_page=100&page=$page")
+            tags+=$(jq -r '.[].ref | ltrimstr("refs/tags/")' <<<"$batch")$'\n'
+            [ "$(jq length <<<"$batch")" -lt 100 ] && break
+          done
+          newest=$(sort -u <<<"$tags" \
+            | { grep -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' || true; } | sort -V | tail -1)
+          if [ "$newest" != "$TAG" ]; then
+            echo "$newest is newer than $TAG; latest stays where it is"; exit 0
+          fi
+          docker buildx imagetools create --tag "$REPO:latest" "$REPO@$DIGEST"
 
   # The chart beside the image (agentry#450), its own job so a second image
   # in the matrix above never publishes it twice: version = the tag without
@@ -342,7 +379,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          ref: refs/tags/${{ needs.guard.outputs.tag }}
+          ref: ${{ needs.guard.outputs.commit }}
           persist-credentials: false
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
       - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
