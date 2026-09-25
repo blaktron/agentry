@@ -25,6 +25,7 @@ import (
 	"github.com/blaktron/agentry/internal/dnsx"
 	"github.com/blaktron/agentry/internal/entitlements"
 	"github.com/blaktron/agentry/internal/httpmux"
+	"github.com/blaktron/agentry/internal/knowledge"
 	"github.com/blaktron/agentry/internal/metrics"
 	"github.com/blaktron/agentry/internal/notify"
 	"github.com/blaktron/agentry/internal/queue"
@@ -65,6 +66,9 @@ type Server struct {
 	blobs            registry.BlobStore
 	pipeline         *scan.Pipeline
 	renderer         *render.Renderer
+	// knowledge is the store of accounts' knowledge packs (agentry#593);
+	// nil without a database, and off (every route 503) with no wrapper.
+	knowledge *knowledge.Service
 	// Enterprise (M6/WG-J): webhook fan-out and the DNS resolver for domain
 	// verification.
 	webhooks *webhook.Dispatcher
@@ -297,6 +301,12 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 		// orchestrator alone left the sweep with no database.
 		srv.pipeline.SetMCPScanning(osvClient(cfg.Scan, log), scan.NewStoreMCPScanCache(st))
 		srv.reg.SetPipeline(srv.pipeline)
+		// The knowledge store (agentry#593) scans with the same
+		// orchestrator, rules and judge as a version.
+		srv.knowledge = knowledge.NewService(knowledge.Deps{
+			Store: st, Blobs: srv.blobs, Wrapper: knowledgeWrapper(cfg, st, log), Scanner: orch, Jobs: srv.jobs,
+			Entitlements: func() entitlements.Resolver { return srv.ents }, Log: log,
+		})
 		// §8.6 knobs that reject at submission time, and the §12.1/§19
 		// 2FA-before-public-publish gate. Both sit on the registry so the
 		// git-tag auto-publish path is covered as well as the API.
@@ -319,6 +329,20 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 		}
 	}
 	return srv
+}
+
+// knowledgeWrapper is the core's knowledge key wrapper (config validation
+// has checked the key); nil leaves the store off unless an extension wraps
+// keys.
+func knowledgeWrapper(cfg config.Config, st *store.Store, log *slog.Logger) knowledge.KeyWrapper {
+	w, err := knowledge.NewCoreWrapper(cfg.Knowledge.SealingKey, cfg.DevMode, knowledge.NewStoreSalts(st))
+	if err != nil {
+		panic(err) // startup-time config failure
+	}
+	if w == nil {
+		log.Info("knowledge: no knowledge sealing key; the store is off unless an extension wraps keys")
+	}
+	return w
 }
 
 // Close releases the resources the server owns outside the request path: the
@@ -532,6 +556,9 @@ func (s *Server) RegisterQueueHandlers(q queue.Client) {
 	s.registerOrgLifecycle(q)     // the decommission sweep (handlers_org_lifecycle.go, agentry#363)
 	s.registerFoldIn(q)           // the fold-in sweep and the pending members digest (handlers_fold_in.go, agentry#364)
 	s.registerDirectoryErasure(q) // erasure's directory half, retried (directory_erasure.go, agentry#499)
+	if s.knowledge != nil {
+		s.knowledge.RegisterHandlers(q) // the knowledge pack scan (internal/knowledge, agentry#593)
+	}
 }
 
 // emitAgentEvent is the registry event sink (§9.3): it resolves the agent's
@@ -592,6 +619,9 @@ func (s *Server) GetMeta(w http.ResponseWriter, r *http.Request) {
 		// off under externalOnly unless requireIdpMFA), so a front end states
 		// the requirement only where the server holds it (agentry#269).
 		"publicPublish2FA": publicPublish2FAEnabled(s.cfg),
+		// knowledge says the store of knowledge packs is on (agentry#593):
+		// a key to wrap with, from the deployment or an extension.
+		"knowledge": s.knowledge.Configured(),
 	}
 	meta := Meta{
 		Version:    version.Version,

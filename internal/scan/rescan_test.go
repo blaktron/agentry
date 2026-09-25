@@ -21,6 +21,7 @@ type laterRulesetProvider struct{ armed *bool }
 func (laterRulesetProvider) Name() string              { return "later-ruleset" }
 func (laterRulesetProvider) RequiresHumanReview() bool { return false }
 func (laterRulesetProvider) ModelID() string           { return "" }
+func (laterRulesetProvider) InputLimit() int           { return 0 }
 func (p laterRulesetProvider) Judge(_ context.Context, _ scan.JudgeContent) (scan.JudgeVerdict, error) {
 	v := scan.JudgeVerdict{Scores: map[scan.JudgeCategory]int{}, Excerpts: map[scan.JudgeCategory]string{}, Model: "later-ruleset"}
 	if *p.armed {

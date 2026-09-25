@@ -54,6 +54,7 @@ const (
 	typesafeDefaultModel   = "jev-1.13.0"
 	typesafePath           = "/v1/systemone"
 	typesafeChunk          = 8 << 10
+	typesafeInputLimit     = 50 << 10
 	typesafeBatch          = 1
 	typesafeBandLow        = 0.30
 	typesafeBandHigh       = 0.70
@@ -156,6 +157,11 @@ func (j *TypeSafeJudge) Name() string { return "typesafe" }
 
 // ModelID implements JudgeProvider: the pinned model id.
 func (j *TypeSafeJudge) ModelID() string { return j.model }
+
+// InputLimit implements JudgeProvider: about 50 KB, what Jev's documented
+// 32k-token window takes with the questions and the state around it (plan
+// knowledge.md §4.4). A call is still asked in typesafeChunk pieces.
+func (j *TypeSafeJudge) InputLimit() int { return typesafeInputLimit }
 
 // RequiresHumanReview implements JudgeProvider: the six axes are the rubric,
 // so the verdict follows the §8.5 table like an LLM judge's (plan D3).

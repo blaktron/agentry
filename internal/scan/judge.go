@@ -90,6 +90,13 @@ type JudgeProvider interface {
 	// produced one verdict (the static heuristics' version, say) and is
 	// evidence on the finding, not the record on the run.
 	ModelID() string
+	// InputLimit is the most content, in bytes, one Judge call should
+	// carry: what the provider's model reads in one request, or, for a
+	// provider that splits a call into requests of its own, what bounds one
+	// call's requests. A caller with more to adjudicate — a knowledge
+	// pack's documents and its wiki (plan knowledge.md §4.4, D19) — splits
+	// it into chunks of this size. 0 is a provider that reads nothing.
+	InputLimit() int
 }
 
 // scoreFromProbability maps a provider's positive-class probability onto the
@@ -171,6 +178,9 @@ func (NoneProvider) RequiresHumanReview() bool { return true }
 // ModelID implements JudgeProvider: no model.
 func (NoneProvider) ModelID() string { return "" }
 
+// InputLimit implements JudgeProvider: nothing is read.
+func (NoneProvider) InputLimit() int { return 0 }
+
 // Judge implements JudgeProvider: no scores, review forced by the gate. The
 // prompt hash still records WHICH no-op this was, so a run adjudicated by no
 // judge is distinguishable from one adjudicated by a judge that found nothing.
@@ -198,6 +208,11 @@ func (StaticProvider) RequiresHumanReview() bool { return false }
 // ModelID implements JudgeProvider: the heuristics are not a model, and the
 // run keeps recording "static" so existing reports keep their digests.
 func (StaticProvider) ModelID() string { return "" }
+
+// InputLimit implements JudgeProvider: the heuristics read anything, and
+// the limit is the chat providers' so a dev deployment chunks as a live
+// one would.
+func (StaticProvider) InputLimit() int { return chatInputLimit }
 
 var (
 	reInjection    = regexp.MustCompile(`(?i)ignore (?:all |your )?(?:previous|prior|above) instructions|disregard (?:the|all) (?:system|previous)`)
@@ -273,6 +288,10 @@ func (UnconfiguredProvider) RequiresHumanReview() bool { return true }
 
 // ModelID implements JudgeProvider: nothing adjudicated.
 func (UnconfiguredProvider) ModelID() string { return "" }
+
+// InputLimit implements JudgeProvider: every call fails, so a caller still
+// makes one and records the failure.
+func (UnconfiguredProvider) InputLimit() int { return chatInputLimit }
 
 // Judge implements JudgeProvider: returns an error so the orchestrator
 // records an S5 stage error and fails closed to review.
@@ -356,6 +375,12 @@ type HTTPJudge struct {
 // judgeMaxTokens bounds the verdict (six small scores + short excerpts).
 const judgeMaxTokens = 1024
 
+// chatInputLimit is what one chat-style adjudication (HTTP, Bedrock)
+// carries: 256 KiB, about 64k tokens at four bytes a token, inside the
+// context of every model these providers default to with room for the
+// rubric and the verdict.
+const chatInputLimit = 256 << 10
+
 // Defaults when judge.model is unset. Model names drift; operators who
 // point at a specific endpoint usually know which model they want, so
 // AGENTRY_JUDGE_MODEL is the real knob and these only keep the default
@@ -401,6 +426,9 @@ func (j *HTTPJudge) RequiresHumanReview() bool { return false }
 
 // ModelID implements JudgeProvider: the configured (or default) model.
 func (j *HTTPJudge) ModelID() string { return j.model }
+
+// InputLimit implements JudgeProvider.
+func (j *HTTPJudge) InputLimit() int { return chatInputLimit }
 
 // judgePromptTemplate is the fixed rubric every HTTP adjudication runs
 // under. Content goes in the delimited blocks as DATA; the model returns
@@ -627,14 +655,23 @@ func (S5Judge) Run(sc stageContext, in *Input) StageResult {
 	if err != nil {
 		return StageResult{Scanner: "S5", Err: err} // fail closed (§8.4.6)
 	}
-	promptHash := verdict.PromptHash
-	if promptHash == "" {
-		// A provider that reports no rubric version is itself a
-		// reproducibility gap; record which provider so it is at least
-		// attributable rather than blank (§8.4.4).
-		promptHash = RubricHash(rubricStatement, "provider="+sc.judge.Name(), "unversioned")
-	}
+	return StageResult{Scanner: "S5", Findings: verdictFindings(verdict), PromptHash: verdictPromptHash(sc.judge, verdict), JudgeUsage: verdict.Usage}
+}
 
+// verdictPromptHash is the rubric version a verdict was reached under.
+func verdictPromptHash(judge JudgeProvider, verdict JudgeVerdict) string {
+	if verdict.PromptHash != "" {
+		return verdict.PromptHash
+	}
+	// A provider that reports no rubric version is itself a
+	// reproducibility gap; record which provider so it is at least
+	// attributable rather than blank (§8.4.4).
+	return RubricHash(rubricStatement, "provider="+judge.Name(), "unversioned")
+}
+
+// verdictFindings are a verdict's findings: a category scored 2 is medium,
+// 3 high, and a verdict showing manipulation is one more.
+func verdictFindings(verdict JudgeVerdict) []Finding {
 	var findings []Finding
 	catTitle := map[JudgeCategory]string{
 		CatInjection: "prompt-injection or instruction override", CatExfiltration: "data exfiltration",
@@ -670,5 +707,5 @@ func (S5Judge) Run(sc stageContext, in *Input) StageResult {
 			Taxonomy: []string{"LLM01"},
 		})
 	}
-	return StageResult{Scanner: "S5", Findings: findings, PromptHash: promptHash, JudgeUsage: verdict.Usage}
+	return findings
 }

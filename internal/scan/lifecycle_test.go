@@ -317,6 +317,7 @@ type watchdogMidScanJudge struct {
 func (watchdogMidScanJudge) Name() string              { return "watchdog-mid-scan" }
 func (watchdogMidScanJudge) RequiresHumanReview() bool { return false }
 func (watchdogMidScanJudge) ModelID() string           { return "" }
+func (watchdogMidScanJudge) InputLimit() int           { return 0 }
 func (j watchdogMidScanJudge) Judge(ctx context.Context, _ scan.JudgeContent) (scan.JudgeVerdict, error) {
 	v := scan.JudgeVerdict{Scores: map[scan.JudgeCategory]int{}, Excerpts: map[scan.JudgeCategory]string{}, Model: "watchdog-mid-scan"}
 	if *j.fired {
@@ -1243,6 +1244,7 @@ type erroringJudge struct{}
 func (erroringJudge) Name() string              { return "erroring" }
 func (erroringJudge) RequiresHumanReview() bool { return false }
 func (erroringJudge) ModelID() string           { return "" }
+func (erroringJudge) InputLimit() int           { return 0 }
 func (erroringJudge) Judge(context.Context, scan.JudgeContent) (scan.JudgeVerdict, error) {
 	return scan.JudgeVerdict{}, errors.New("judge endpoint unreachable")
 }

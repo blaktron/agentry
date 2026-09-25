@@ -121,6 +121,10 @@ type Features struct {
 	// UnscannedAgents says whether the organization's admins may mark a
 	// private agent as skipping the pipeline.
 	UnscannedAgents bool
+	// KnowledgeBytes caps the bytes of knowledge packs a subject keeps in
+	// the registry (plan knowledge.md §4.4, D5): only what is stored here
+	// counts, and over the cap no pack is added or grown, none deleted.
+	KnowledgeBytes Cap
 }
 
 // Resolver answers entitlement questions.
@@ -178,11 +182,13 @@ func (r *ConfigResolver) Limits(_ context.Context, s Subject) (Limits, error) {
 }
 
 // Features implements Resolver: the OSS build caps nothing and switches
-// nothing off.
+// nothing off, but for the knowledge cap a self-hoster may set
+// (limits.knowledgeBytesPerAccount; 0, the default, is none).
 func (r *ConfigResolver) Features(context.Context, Subject) (Features, error) {
 	on := Cap{Enabled: true, Max: 0}
 	return Features{
 		PrivateAgents: on, Seats: on,
 		SSO: true, SCIM: true, Branding: true, AlertRouting: true, UnscannedAgents: true,
+		KnowledgeBytes: Cap{Enabled: true, Max: r.limits.KnowledgeBytesPerAccount},
 	}, nil
 }

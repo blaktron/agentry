@@ -271,6 +271,42 @@ type Job struct {
 	FinishedAt  *time.Time `json:"finished_at"`
 }
 
+type KnowledgeObject struct {
+	Key       string    `json:"key"`
+	PackID    uuid.UUID `json:"pack_id"`
+	OwnerKind string    `json:"owner_kind"`
+	OwnerID   uuid.UUID `json:"owner_id"`
+	Bytes     int64     `json:"bytes"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type KnowledgeOwnerKey struct {
+	OwnerKind string    `json:"owner_kind"`
+	OwnerID   uuid.UUID `json:"owner_id"`
+	Salt      []byte    `json:"salt"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type KnowledgePack struct {
+	ID               uuid.UUID  `json:"id"`
+	OwnerKind        string     `json:"owner_kind"`
+	OwnerID          uuid.UUID  `json:"owner_id"`
+	Name             string     `json:"name"`
+	State            string     `json:"state"`
+	Bytes            int64      `json:"bytes"`
+	Files            int32      `json:"files"`
+	Pages            int32      `json:"pages"`
+	Digest           string     `json:"digest"`
+	ObjectKey        string     `json:"object_key"`
+	ScanReport       []byte     `json:"scan_report"`
+	ScannedAt        *time.Time `json:"scanned_at"`
+	WrapperKind      string     `json:"wrapper_kind"`
+	WrapperRecipient string     `json:"wrapper_recipient"`
+	WrappedKey       []byte     `json:"wrapped_key"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
 type McpDependencyAlert struct {
 	ID             uuid.UUID  `json:"id"`
 	VersionID      uuid.UUID  `json:"version_id"`
