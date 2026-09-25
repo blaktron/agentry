@@ -46,6 +46,9 @@ type Service struct {
 	// orgEventSink is the same fan-out for organization-scoped events
 	// (membership.go). Set by the api layer; nil = no fan-out.
 	orgEventSink OrgEventSink
+	// staffOrg and staffDomain name the staff organization (staff.go,
+	// agentry#556); both empty leaves platform_staff alone.
+	staffOrg, staffDomain string
 	// policyGate enforces the §8.6 knobs that reject at V-validation time.
 	// nil = platform baseline only (no submission-time policy rejections).
 	policyGate PolicyGate

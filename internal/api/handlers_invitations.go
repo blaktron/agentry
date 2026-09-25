@@ -145,6 +145,11 @@ func (s *Server) CreateInvitation(w http.ResponseWriter, r *http.Request, org Or
 		if err := q.LockOrg(r.Context(), orgRow.ID); err != nil {
 			return err
 		}
+		// The staff organization invites only its own domain (agentry#556);
+		// the accept checks the account's verified address again.
+		if err := s.staffOrgAddressIn(r.Context(), q, orgRow.ID, email); err != nil {
+			return err
+		}
 		// Re-inviting supersedes the standing invitation: its token stops
 		// working and its seat is released. That happens before the count,
 		// so re-inviting the same address at the allowance is not refused
@@ -415,6 +420,16 @@ func (s *Server) AcceptInvitation(w http.ResponseWriter, r *http.Request, token 
 				return errInvitationSpent
 			}
 			spent = true
+			// The organization's own verified domain vouches for the address,
+			// so accepting from it confirms the account's address (operator
+			// decision, 2026-09-18). It is stamped here, inside the
+			// activation, so the staff organization's door (agentry#556)
+			// reads the address as verified.
+			if invitationAtOrgDomain(row) {
+				if err := q.MarkEmailVerified(ctx, p.UserID); err != nil {
+					return err
+				}
+			}
 			e := auditEvent(r, audit.ActionOrgInviteAccept)
 			e.OrgID = row.OrgID
 			e.TargetKind, e.TargetID = "invitation", row.ID
@@ -438,17 +453,6 @@ func (s *Server) AcceptInvitation(w http.ResponseWriter, r *http.Request, token 
 		// not spent: nothing to do, and the invitation stays answerable.
 		problemConflict(w, r, "You are already a member of "+orgRow.Handle+".")
 		return
-	}
-
-	// The organization's own verified domain vouches for the address, so
-	// accepting from it confirms the account's address (operator decision,
-	// 2026-09-18). Best effort after the fact: the membership is what the
-	// request was for, and a stamp that did not land is retried by the
-	// ordinary verification mail.
-	if invitationAtOrgDomain(row) {
-		if err := s.q().MarkEmailVerified(r.Context(), p.UserID); err != nil {
-			s.log.ErrorContext(r.Context(), "invitation: mark verified", "user", p.UserID, "err", err)
-		}
 	}
 
 	u, _ := s.q().GetUserByID(r.Context(), p.UserID)

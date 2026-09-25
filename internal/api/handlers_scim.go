@@ -214,6 +214,12 @@ func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request, sc scimC
 		})
 		return
 	}
+	// The staff organization provisions only its own domain (agentry#556),
+	// before any account is made for the address.
+	if err := s.staffOrgAddressIn(r.Context(), s.q(), sc.orgID, email); err != nil {
+		scimStaffOrgRefusal(w, r, s, err)
+		return
+	}
 	displayName := ""
 	if in.Name != nil {
 		displayName = in.Name.Formatted
@@ -399,6 +405,12 @@ func (s *Server) scimPutUser(w http.ResponseWriter, r *http.Request, sc scimCtx)
 		return
 	}
 
+	// Reinstating provisions again, so the staff organization's door applies
+	// (agentry#556).
+	if err := s.staffOrgAddressIn(r.Context(), s.q(), sc.orgID, u.Email); err != nil {
+		scimStaffOrgRefusal(w, r, s, err)
+		return
+	}
 	displayName := u.DisplayName
 	if in.Name != nil && strings.TrimSpace(in.Name.Formatted) != "" {
 		displayName = in.Name.Formatted
@@ -491,8 +503,24 @@ func (s *Server) scimDeactivate(ctx context.Context, orgID, userID uuid.UUID) er
 		if _, err := q.RevokeTrustedDevicesForUser(ctx, userID); err != nil {
 			return err
 		}
-		return s.auditW.Write(ctx, q, s.scimEvent(orgID, audit.ActionSCIMUserDeactivate, "user", userID))
+		if err := s.auditW.Write(ctx, q, s.scimEvent(orgID, audit.ActionSCIMUserDeactivate, "user", userID)); err != nil {
+			return err
+		}
+		// Deprovisioned from the staff organization is no longer staff
+		// (agentry#556); the IdP is the actor.
+		return s.syncStaffIn(ctx, q, userID, registry.StaffSyncMembership, s.scimEvent(orgID, audit.ActionUserStaffSync, "user", userID))
 	})
+}
+
+// scimStaffOrgRefusal answers the IdP when the staff organization's door
+// refuses an address (409, the SCIM shape), or a 500 for any other error.
+func scimStaffOrgRefusal(w http.ResponseWriter, r *http.Request, s *Server, err error) {
+	if errors.Is(err, registry.ErrStaffOrgDomain) {
+		scimError(w, http.StatusConflict, "this organization is the deployment's staff organization and admits only addresses at "+s.cfg.Auth.StaffDomain)
+		return
+	}
+	s.log.ErrorContext(r.Context(), "scim staff organization door", "err", err)
+	scimError(w, http.StatusInternalServerError, "provisioning failed")
 }
 
 // ---- Groups (teams) ----

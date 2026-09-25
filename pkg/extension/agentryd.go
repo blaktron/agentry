@@ -238,6 +238,7 @@ func runWorker(ctx context.Context, cfg config.Config, st *store.Store, log *slo
 	srv.SetMetrics(mx)
 	applyExtensions(srv, exts)
 	defer func() { _ = srv.Close() }()
+	staffAtStart(ctx, cfg, srv, log)
 	q, err := newWorkerQueue(ctx, cfg, srv, st, log, mx, exts)
 	if err != nil {
 		return err
@@ -512,6 +513,7 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		s.SetMetrics(mx)
 		applyExtensions(s, exts)
 		s.HandOffScans() // a submission is the worker's to scan (agentry#507)
+		staffAtStart(ctx, cfg, s, log)
 		return api.NewHandler(s), s.Close, nil
 	case "git", "all":
 		if st == nil {
@@ -537,6 +539,9 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		s.SetMetrics(mx)
 		applyExtensions(s, exts)
 		s.HandOffScans() // a submission is the worker's to scan (agentry#507)
+		if role == "all" {
+			staffAtStart(ctx, cfg, s, log)
+		}
 		reg := s.Reg()
 		reg.SetGitArchiver(repos)
 		if pl := s.Pipeline(); pl != nil {
@@ -682,4 +687,27 @@ func migrateExtensions(ctx context.Context, databaseURL string, exts []Extension
 		}
 	}
 	return nil
+}
+
+// staffAtStart warns about the retired staff keys and recomputes platform
+// staff once over every account the staff organization's rule could change
+// (agentry#556), so a configuration change takes effect when the server
+// starts rather than at each person's next sign-in. Several replicas may
+// run it at once; the registry serialises them on an advisory lock. A
+// failure is logged, not fatal: the flag is recomputed again at every
+// sign-in and membership change.
+func staffAtStart(ctx context.Context, cfg config.Config, s *api.Server, log *slog.Logger) {
+	if keys := cfg.RetiredStaffKeys(); len(keys) > 0 {
+		log.Warn("retired platform-staff keys are set and grant nothing; platform staff is membership of auth.staffOrg at auth.staffDomain (agentry#556)", "keys", keys)
+	}
+	reg := s.Reg()
+	if reg == nil || !reg.StaffConfigured() {
+		return
+	}
+	n, err := reg.ResyncStaff(ctx)
+	if err != nil {
+		log.Error("platform staff resync", "err", err)
+		return
+	}
+	log.Info("platform staff resync", "org", cfg.Auth.StaffOrg, "domain", cfg.Auth.StaffDomain, "accounts", n)
 }

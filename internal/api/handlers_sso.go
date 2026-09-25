@@ -23,6 +23,7 @@ import (
 	oidcrp "github.com/blaktron/agentry/internal/auth/oidc"
 	samlsp "github.com/blaktron/agentry/internal/auth/saml"
 	"github.com/blaktron/agentry/internal/entitlements"
+	"github.com/blaktron/agentry/internal/registry"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
@@ -456,6 +457,12 @@ func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, org
 		if err := q.TagSessionSSO(ctx, storegen.TagSessionSSOParams{
 			ID: sessID, Column2: orgRow.ID.String(), Column3: time.Now().UTC().Format(time.RFC3339),
 		}); err != nil {
+			return err
+		}
+		// Platform staff is recomputed at every sign-in (agentry#556).
+		staffActor := auditEvent(r, audit.ActionUserStaffSync)
+		staffActor.Actor, staffActor.ActorKind = userID, audit.ActorUser
+		if err := s.syncStaffIn(ctx, q, userID, registry.StaffSyncSignIn, staffActor); err != nil {
 			return err
 		}
 		e := auditEvent(r, audit.ActionSSOLogin)
