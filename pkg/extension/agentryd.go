@@ -721,4 +721,12 @@ func staffAtStart(ctx context.Context, cfg config.Config, s *api.Server, log *sl
 		return
 	}
 	log.Info("platform staff resync", "org", cfg.Auth.StaffOrg, "domain", cfg.Auth.StaffDomain, "accounts", n)
+	// Members the rule does not make staff are said, not removed
+	// (agentry#598): removing a member is the organization's admins' act.
+	if handles, err := reg.StaffOrgMembersNotStaff(ctx); err != nil {
+		log.Error("platform staff: list the staff organization's members who are not staff", "err", err)
+	} else if len(handles) > 0 {
+		log.Warn("the staff organization has active members who are not platform staff (an address outside its domain or unverified, or an inactive account); they are not removed",
+			"org", cfg.Auth.StaffOrg, "domain", cfg.Auth.StaffDomain, "members", handles)
+	}
 }

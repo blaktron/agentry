@@ -61,6 +61,12 @@ func (s *Service) SetStaffOrg(handle, domain string) {
 	s.staffOrg, s.staffDomain = handle, domain
 }
 
+// SetStaffChanged names a function to call after a sync changed someone's
+// platform_staff. It runs inside the sync's transaction, before it commits,
+// so it must not read the change back: the directory mirror it serves
+// queues a run for a few seconds later (agentry#598).
+func (s *Service) SetStaffChanged(fn func()) { s.staffChanged = fn }
+
 // StaffConfigured reports whether a staff organization is named.
 func (s *Service) StaffConfigured() bool { return s.staffOrg != "" && s.staffDomain != "" }
 
@@ -189,7 +195,13 @@ func (s *Service) SyncStaffIn(ctx context.Context, q *storegen.Queries, userID u
 		"platformStaff": want, "rule": StaffRule, "reason": reason,
 		"org": s.staffOrg, "domain": s.staffDomain,
 	}
-	return s.aud.Write(ctx, q, e)
+	if err := s.aud.Write(ctx, q, e); err != nil {
+		return err
+	}
+	if s.staffChanged != nil {
+		s.staffChanged()
+	}
+	return nil
 }
 
 // SyncStaff is SyncStaffIn in a transaction of its own, for a door that has
@@ -229,6 +241,23 @@ func (s *Service) ResyncStaffIn(ctx context.Context, q *storegen.Queries, reason
 		}
 	}
 	return len(ids), nil
+}
+
+// StaffOrgMembersNotStaff returns the handles of the staff organization's
+// active members who are not platform staff: members from before the
+// organization's door checked the domain, or whose account is no longer
+// active (agentry#598). They are reported, never removed: removing a member
+// is the organization's admins' act.
+func (s *Service) StaffOrgMembersNotStaff(ctx context.Context) ([]string, error) {
+	if !s.StaffConfigured() {
+		return nil, nil
+	}
+	q := s.st.Queries()
+	staffID, ok, err := s.staffOrgIDIn(ctx, q)
+	if err != nil || !ok {
+		return nil, err
+	}
+	return q.ListStaffOrgMembersNotStaff(ctx, staffID)
 }
 
 // ResyncStaff is ResyncStaffIn in a transaction of its own, run once when

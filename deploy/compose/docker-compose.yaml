@@ -354,6 +354,11 @@ services:
       # else. Set both or neither; empty leaves the flag as it is.
       AGENTRY_STAFF_ORG: ${AGENTRY_STAFF_ORG:-}
       AGENTRY_STAFF_DOMAIN: ${AGENTRY_STAFF_DOMAIN:-}
+      # The directory group the registry keeps equal to its platform staff
+      # (agentry#598), written through the admin URL and token above; a
+      # directory application that should admit staff alone (the log
+      # stack's Dashboards) reads it. Empty means no mirror.
+      AGENTRY_IDP_STAFF_MIRROR_GROUP: ${AGENTRY_IDP_STAFF_MIRROR_GROUP:-}
       # Retired (agentry#556): these grant nothing and the server warns at
       # start-up while either is set.
       AGENTRY_IDP_STAFF_GROUP: ${AGENTRY_IDP_STAFF_GROUP:-}
