@@ -2,24 +2,95 @@
 # hygiene). We hold ourselves to the standard we ask of publishers — signed
 # artifacts, an SBOM, and a scanned dependency tree.
 #
-# Triggered by the vX.Y.Z tag that release-please.yaml creates when its
-# release PR merges (or a manually pushed tag). release-please owns CHANGELOG
-# .md and the release notes; the publish step below appends the verification
-# instructions and attaches the signed assets rather than replacing them.
+# Two channels, one pipeline (DEV-148, agentry#597):
+#   - vX.Y.Z on main: release-please.yaml calls this when its release PR
+#     merges. release-please has created the tag and a draft release with the
+#     changelog as its body.
+#   - vX.Y.Z-dev.N on dev: dev-release.yaml calls this for dev's prereleases.
+#     Only the tag exists.
+# Both callers create their tag with GITHUB_TOKEN, whose events start no
+# workflow, so this runs as a called workflow, not on a tag push.
+# workflow_dispatch rebuilds and republishes an existing tag (a release whose
+# run failed part-way), and must run on the tag's own branch.
+#
+# Nothing is published before verify passes: the binaries, the image and the
+# chart all wait on it. The release waits on all three: the image and the
+# chart are signed first, and scripts/release/publish.sh attaches the signed
+# assets before it takes the release out of draft. Every job builds the
+# commit the guard checked, not whatever the tag names by then. Only the newest main
+# release becomes the repository's latest release and moves the image's
+# `latest`; a -dev.N release is marked prerelease and moves neither.
+#
+# The guard job (scripts/release/tag-guard.sh, from the branch that runs this,
+# not from the tag) refuses a tag of the wrong shape, one whose commit is not
+# on its channel's branch, a run on the other channel's branch (the signing
+# certificate names the branch, see below), and any 1.x or later unless the
+# operator has set the repository variable AGENTRY_ALLOW_V1=true (agentry#522
+# is the 1.0 step). It also refuses to run for any repository but this one,
+# so a workflow elsewhere that calls this file gets no release out of it.
+#
+# Signing is keyless: the certificate's identity is
+#   https://github.com/blaktron/agentry/.github/workflows/release.yaml@refs/heads/main
+# for a main release and the same with refs/heads/dev for a dev prerelease,
+# so a verifier pins the channel it wants (the release notes say how).
+#
+# Every job runs on the self-hosted runners: the GitHub-hosted minutes are
+# exhausted, and on ubuntu-latest no release job would ever schedule. The
+# binaries are built with a module and build cache of their own, downloaded
+# fresh and checked with go mod verify, not the runners' shared ones, and the
+# image is built without the builder's cache.
 name: release
 on:
-  push:
-    tags: ["v*"]
+  workflow_call:
+    inputs:
+      tag:
+        description: the vX.Y.Z or vX.Y.Z-dev.N tag to release; it must exist
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: an existing vX.Y.Z or vX.Y.Z-dev.N tag to rebuild and republish
+        required: true
+        type: string
 
 permissions:
-  contents: write   # create the release
-  id-token: write   # keyless signing (OIDC)
-  packages: write   # container image
+  contents: read
 
 jobs:
+  guard:
+    if: github.repository == 'blaktron/agentry'
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ inputs.tag }}
+      version: ${{ steps.guard.outputs.version }}
+      prerelease: ${{ steps.guard.outputs.prerelease }}
+      branch: ${{ steps.guard.outputs.branch }}
+      latest: ${{ steps.guard.outputs.latest }}
+      commit: ${{ steps.guard.outputs.commit }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # The branch this run is on (the guard's own code), every tag and
+          # both branches, for the channel check.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: The tag is a release this channel may cut
+        id: guard
+        env:
+          TAG: ${{ inputs.tag }}
+          RUN_REF: ${{ github.ref }}
+          AGENTRY_ALLOW_V1: ${{ vars.AGENTRY_ALLOW_V1 }}
+        run: ./scripts/release/tag-guard.sh "$TAG" >> "$GITHUB_OUTPUT"
+
   verify:
     # Never release something that would not pass CI.
-    runs-on: ubuntu-latest
+    needs: guard
+    runs-on: [self-hosted, linux, x64]
+    # ci.yaml's check job is sized at 35 minutes; this adds the corpus gate
+    # (-timeout 20m) and govulncheck.
+    timeout-minutes: 60
     services:
       postgres:
         image: postgres:16
@@ -27,39 +98,49 @@ jobs:
           POSTGRES_USER: agentry
           POSTGRES_PASSWORD: agentry
           POSTGRES_DB: agentry_test
-        ports: ["5432:5432"]
+        ports: ["5432"]  # ephemeral host port: several runners per host (agentry#125)
         options: >-
           --health-cmd "pg_isready -U agentry" --health-interval 5s
           --health-timeout 3s --health-retries 10
-    env:
-      AGENTRY_TEST_DATABASE_URL: postgres://agentry:agentry@localhost:5432/agentry_test?sslmode=disable
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          ref: ${{ needs.guard.outputs.commit }}
           persist-credentials: false
+      - name: Point the tests at the service's mapped port
+        run: echo "AGENTRY_TEST_DATABASE_URL=postgres://agentry:agentry@localhost:${{ job.services.postgres.ports['5432'] }}/agentry_test?sslmode=disable" >> "$GITHUB_ENV"
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
+          # The runners share one persistent host module cache (agentry#225).
+          cache: false
       # The tool versions live in one place, ci.yaml's workflow env block
-      # (agentry#419): the release installs what CI installed, never "latest",
-      # which in this workflow would run beside id-token: write.
+      # (agentry#419): the release installs what CI installed, never "latest".
       - name: Tool versions from ci.yaml
         run: |
           set -euo pipefail
-          for var in SQLC_VERSION GOVULNCHECK_VERSION; do
+          for var in SQLC_VERSION GOVULNCHECK_VERSION GOLANGCI_LINT_VERSION; do
             v=$(sed -nE "s/^  $var: *([^ #]+).*/\1/p" .github/workflows/ci.yaml | head -1)
             [ -n "$v" ] || { echo "$var is not set in ci.yaml's env block"; exit 1; }
             echo "$var=$v" >> "$GITHUB_ENV"
           done
       - run: go install "github.com/sqlc-dev/sqlc/cmd/sqlc@${SQLC_VERSION}"
+      # make check runs golangci-lint only when it is installed; CI installs
+      # it, so the release does too.
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8.0.0
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          skip-cache: true
       - run: make check
       - name: attack-corpus gate must be green to release
         run: go test -timeout 20m ./internal/scan -run TestAttackCorpusGate -count=1
       - run: go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...
 
   binaries:
-    needs: verify
-    runs-on: ubuntu-latest
+    needs: [guard, verify]
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 20
     strategy:
       matrix:
         include:
@@ -71,18 +152,30 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          ref: ${{ needs.guard.outputs.commit }}
           persist-credentials: false
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
+          cache: false
+      # Every PR job on these runners writes the shared host caches, so a
+      # release binary is built from its own: modules fetched fresh through
+      # the proxy against the checksum database, then checked against go.sum.
+      - name: Module and build caches of this job's own
+        run: |
+          set -euo pipefail
+          echo "GOMODCACHE=$RUNNER_TEMP/gomod" >> "$GITHUB_ENV"
+          echo "GOCACHE=$RUNNER_TEMP/gocache" >> "$GITHUB_ENV"
+          echo "GOFLAGS=-mod=readonly" >> "$GITHUB_ENV"
+      - run: go mod download && go mod verify
 
       - name: Build (reproducible flags)
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "0"
+          VERSION: ${{ needs.guard.outputs.tag }}
         run: |
-          VERSION="${GITHUB_REF_NAME}"
           LDFLAGS="-s -w -X github.com/blaktron/agentry/internal/version.Version=${VERSION}"
           mkdir -p dist
           EXT=""; [ "$GOOS" = "windows" ] && EXT=".exe"
@@ -99,11 +192,20 @@ jobs:
           path: dist/
 
   sbom-and-sign:
-    needs: binaries
-    runs-on: ubuntu-latest
+    needs: [guard, binaries, image, chart]
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 20
+    # A dispatched rebuild and a live run of the same tag never publish at once.
+    concurrency:
+      group: release-publish-${{ needs.guard.outputs.tag }}
+      cancel-in-progress: false
+    permissions:
+      contents: write   # attach the assets, publish the release
+      id-token: write   # keyless signing (OIDC)
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          ref: ${{ needs.guard.outputs.commit }}
           persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -127,6 +229,8 @@ jobs:
           format: spdx-json
           syft-version: ${{ env.SYFT_VERSION }}
           output-file: dist/agentry-sbom.spdx.json
+          # publish.sh attaches the SBOM with the other assets.
+          upload-release-assets: false
 
       - name: Install cosign
         uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
@@ -141,35 +245,59 @@ jobs:
           cosign sign-blob --yes --output-signature agentry-sbom.spdx.json.sig \
             --output-certificate agentry-sbom.spdx.json.pem agentry-sbom.spdx.json
 
-      - name: Publish release
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
-        with:
-          files: dist/*
-          # release-please already created this release with the changelog as
-          # its body; append the verification block instead of overwriting it.
-          append_body: true
-          body: |
-            ---
-            Verify the checksums before trusting these binaries:
+      # The block appended under the release's notes. Its first line is the
+      # marker publish.sh looks for, so a rebuild does not append it twice.
+      - name: The verification block
+        env:
+          TAG: ${{ needs.guard.outputs.tag }}
+          BRANCH: ${{ needs.guard.outputs.branch }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          identity="https://github.com/$REPO/.github/workflows/release.yaml@refs/heads/$BRANCH"
+          cat > "$RUNNER_TEMP/verification.md" <<EOF
+          <!-- agentry-release-verification -->
+          ---
+          Verify the checksums before trusting these binaries. A \`$BRANCH\` release is signed by \`release.yaml\` running on \`$BRANCH\`, so pin that identity:
 
-            ```
-            cosign verify-blob \
-              --certificate SHA256SUMS.txt.pem \
-              --signature SHA256SUMS.txt.sig \
-              --certificate-identity-regexp '.*' \
-              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-              SHA256SUMS.txt
-            sha256sum -c SHA256SUMS.txt
-            ```
+          \`\`\`
+          cosign verify-blob \\
+            --certificate SHA256SUMS.txt.pem \\
+            --signature SHA256SUMS.txt.sig \\
+            --certificate-identity $identity \\
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \\
+            --certificate-github-workflow-repository $REPO \\
+            SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+          \`\`\`
 
-            An SPDX SBOM (`agentry-sbom.spdx.json`) ships with every release.
+          The image \`ghcr.io/$REPO/agentryd:$TAG\` and the chart \`oci://ghcr.io/$REPO/charts/agentry\` at \`${TAG#v}\` are signed with the same identity (\`cosign verify\` with the same three flags).
+
+          An SPDX SBOM (\`agentry-sbom.spdx.json\`) ships with every release.
+          EOF
+
+      - name: Attach the assets, then publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.guard.outputs.tag }}
+          PRERELEASE: ${{ needs.guard.outputs.prerelease }}
+          LATEST: ${{ needs.guard.outputs.latest }}
+        run: ./scripts/release/publish.sh "$TAG" dist "$RUNNER_TEMP/verification.md"
 
   # One image per release: agentryd (every role, git included). The site's
   # image is built and released from its own repository (DEV-091); the
   # chart references only this one.
   image:
-    needs: verify
-    runs-on: ubuntu-latest
+    needs: [guard, verify]
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 30
+    concurrency:
+      group: release-image-${{ needs.guard.outputs.tag }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write   # push the image
+      id-token: write   # keyless signing (OIDC)
     strategy:
       matrix:
         include:
@@ -177,6 +305,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          ref: ${{ needs.guard.outputs.commit }}
           persist-credentials: false
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
@@ -190,18 +319,49 @@ jobs:
           context: .
           file: ${{ matrix.file }}
           push: true
+          no-cache: true
+          pull: true
           build-args: |
-            VERSION=${{ github.ref_name }}
-          tags: |
-            ghcr.io/${{ github.repository }}/${{ matrix.name }}:${{ github.ref_name }}
-            ghcr.io/${{ github.repository }}/${{ matrix.name }}:latest
+            VERSION=${{ needs.guard.outputs.tag }}
+          # The version tag only: `latest` is added below, once the image is
+          # signed, so it never names an unsigned image.
+          tags: ghcr.io/${{ github.repository }}/${{ matrix.name }}:${{ needs.guard.outputs.tag }}
           provenance: true
           sbom: true
       - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
       - name: Sign the image
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}/${{ matrix.name }}@${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "$IMAGE"
+      # `latest` is the newest main release only: a dev prerelease or a
+      # rebuilt older release never moves it. The guard's answer is checked
+      # again against the tags as they are now, in case a newer release was
+      # tagged while this one built. The signature is on the digest, so the
+      # tag added here names a signed image.
+      - name: Move latest to this release
+        if: needs.guard.outputs.latest == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.guard.outputs.tag }}
+          REPO: ghcr.io/${{ github.repository }}/${{ matrix.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
         run: |
-          cosign sign --yes \
-            "ghcr.io/${{ github.repository }}/${{ matrix.name }}@${{ steps.build.outputs.digest }}"
+          set -euo pipefail
+          # Every v* tag, a page at a time (dev prereleases add one per push);
+          # capped and de-duplicated, whichever way the endpoint pages.
+          tags=""
+          for page in $(seq 1 20); do
+            batch=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v?per_page=100&page=$page")
+            tags+=$(jq -r '.[].ref | ltrimstr("refs/tags/")' <<<"$batch")$'\n'
+            [ "$(jq length <<<"$batch")" -lt 100 ] && break
+          done
+          newest=$(sort -u <<<"$tags" \
+            | { grep -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' || true; } | sort -V | tail -1)
+          if [ "$newest" != "$TAG" ]; then
+            echo "$newest is newer than $TAG; latest stays where it is"; exit 0
+          fi
+          docker buildx imagetools create --tag "$REPO:latest" "$REPO@$DIGEST"
 
   # The chart beside the image (agentry#450), its own job so a second image
   # in the matrix above never publishes it twice: version = the tag without
@@ -209,23 +369,30 @@ jobs:
   # chart runs the released image by default. The moving per-branch versions
   # come from image-main.yaml.
   chart:
-    needs: verify
-    runs-on: ubuntu-latest
+    needs: [guard, verify]
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write   # push the chart
+      id-token: write   # keyless signing (OIDC)
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          ref: ${{ needs.guard.outputs.commit }}
           persist-credentials: false
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
       - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
       - name: Publish the chart
         env:
           HELM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.guard.outputs.tag }}
+          VERSION: ${{ needs.guard.outputs.version }}
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
           echo "$HELM_TOKEN" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
-          helm package deploy/helm/agentry --version "$version" --app-version "$GITHUB_REF_NAME" -d "$RUNNER_TEMP/chart"
-          helm push "$RUNNER_TEMP/chart/agentry-${version}.tgz" "oci://ghcr.io/${{ github.repository }}/charts" 2>&1 | tee "$RUNNER_TEMP/chart/push.log"
+          helm package deploy/helm/agentry --version "$VERSION" --app-version "$TAG" -d "$RUNNER_TEMP/chart"
+          helm push "$RUNNER_TEMP/chart/agentry-${VERSION}.tgz" "oci://ghcr.io/${{ github.repository }}/charts" 2>&1 | tee "$RUNNER_TEMP/chart/push.log"
           digest=$(grep -m1 -o 'sha256:[0-9a-f]\{64\}' "$RUNNER_TEMP/chart/push.log")
           [ -n "$digest" ] || { echo "helm push printed no digest"; exit 1; }
           cosign sign --yes "ghcr.io/${{ github.repository }}/charts/agentry@${digest}"
