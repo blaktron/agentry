@@ -382,6 +382,14 @@ jobs:
           ref: ${{ needs.guard.outputs.commit }}
           persist-credentials: false
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+      # cosign reads the Docker credentials, not helm's registry login: without
+      # this, the chart is pushed and then fails to be signed (the first
+      # release, v0.6.0-dev.1, agentry#597).
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
       - name: Publish the chart
         env:
