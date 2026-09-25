@@ -845,6 +845,33 @@ func (q *Queries) InsertFinding(ctx context.Context, arg InsertFindingParams) (F
 	return i, err
 }
 
+const latestFinishedScanRunForVersion = `-- name: LatestFinishedScanRunForVersion :one
+SELECT id, version_id, trigger, ruleset_release_id, policy_snapshot, judge_model, judge_prompt_hash, status, started_at, finished_at, report_digest, judge_prompt_tokens, judge_completion_tokens FROM scan_runs WHERE version_id = $1 AND finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 1
+`
+
+// The newest run of a version that has finished, whatever its outcome: what
+// a report describes while a later run is still going (agentry#542).
+func (q *Queries) LatestFinishedScanRunForVersion(ctx context.Context, versionID uuid.UUID) (ScanRun, error) {
+	row := q.db.QueryRow(ctx, latestFinishedScanRunForVersion, versionID)
+	var i ScanRun
+	err := row.Scan(
+		&i.ID,
+		&i.VersionID,
+		&i.Trigger,
+		&i.RulesetReleaseID,
+		&i.PolicySnapshot,
+		&i.JudgeModel,
+		&i.JudgePromptHash,
+		&i.Status,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.ReportDigest,
+		&i.JudgePromptTokens,
+		&i.JudgeCompletionTokens,
+	)
+	return i, err
+}
+
 const latestRuleset = `-- name: LatestRuleset :one
 SELECT id, semver, bundle_digest, notes, published_at FROM ruleset_releases ORDER BY published_at DESC LIMIT 1
 `

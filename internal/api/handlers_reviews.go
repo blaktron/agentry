@@ -115,6 +115,30 @@ func scanRunStandsBehindReport(status string) bool {
 	return status == "passed" || status == "findings"
 }
 
+// reportRun picks the scan run a version's report describes, and the run
+// still going beside it, if any. The report describes the newest run that
+// finished, whatever its outcome; a run that is still going only takes
+// over the report when no run has finished yet (the first scan). So a
+// rescan sweep does not blank the verdict a published release stands on
+// for as long as it runs, and a rescan that ends in error still becomes the
+// report: an error is never hidden behind the verdict before it. One rule
+// for the report and the account install row (agentry#542, DEV-146).
+// pgx.ErrNoRows means the version has no run at all.
+func reportRun(ctx context.Context, q *storegen.Queries, versionID uuid.UUID) (run storegen.ScanRun, inFlight *storegen.ScanRun, err error) {
+	latest, err := q.LatestScanRunForVersion(ctx, versionID)
+	if err != nil || latest.FinishedAt != nil {
+		return latest, nil, err
+	}
+	finished, err := q.LatestFinishedScanRunForVersion(ctx, versionID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return latest, nil, nil
+	}
+	if err != nil {
+		return storegen.ScanRun{}, nil, err
+	}
+	return finished, &latest, nil
+}
+
 // GetVersionReport implements GET .../versions/{version}/report (§8, public).
 func (s *Server) GetVersionReport(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, version VersionString) {
 	if !s.requireDB(w, r) {
@@ -132,7 +156,7 @@ func (s *Server) GetVersionReport(w http.ResponseWriter, r *http.Request, ns Nam
 		writeJSON(w, http.StatusOK, ScanReport{VersionStatus: VersionStatus(v.Status), ScanStatus: &skipped, Verdict: &unscanned, Findings: []ScanFinding{}})
 		return
 	}
-	run, err := s.q().LatestScanRunForVersion(r.Context(), v.ID)
+	run, inFlight, err := reportRun(r.Context(), s.q(), v.ID)
 	if err != nil {
 		// No scan yet (still submitted, say) is a legitimately empty report.
 		// A database failure is NOT, and answering 200-with-no-findings to
@@ -151,6 +175,9 @@ func (s *Server) GetVersionReport(w http.ResponseWriter, r *http.Request, ns Nam
 		s.log.ErrorContext(r.Context(), "version report: findings", "run", run.ID, "err", err)
 		problemInternal(w, r)
 		return
+	}
+	if inFlight != nil {
+		rep.RescanInFlight = &RescanInFlight{ScanRunId: inFlight.ID, StartedAt: inFlight.StartedAt}
 	}
 	writeJSON(w, http.StatusOK, rep)
 }
