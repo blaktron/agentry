@@ -244,22 +244,48 @@ description explaining why an existing one will not do.
 
 ## Releasing
 
-Releases are automated with [release-please](https://github.com/googleapis/release-please)
-(`.github/workflows/release-please.yaml`, `release-please-config.json`):
+Every build that ships is released under a version, on two channels
+(DEV-148, agentry#597). Nothing is 1.0.0 until the operator says so.
 
-1. Merges to `main` update a standing **release PR** that bumps the version
-   (per the conventional-commit types since the last release) and rewrites
-   `CHANGELOG.md`. Nothing is released while that PR sits open.
-2. Merging the release PR creates the `vX.Y.Z` tag and a GitHub release whose
-   body is the changelog.
-3. The tag triggers `release.yaml`, which runs the full check + attack-corpus
-   gate, then builds cross-platform binaries with reproducible-build flags
-   (`-trimpath`, cgo off; no step yet rebuilds and compares), an SPDX SBOM, and
-   keyless cosign signatures, and attaches them to the release. It **refuses
-   to release if the attack corpus gate is red** — the same bar publishers face.
+- **`main` releases, `vX.Y.Z`**, go to production. They are automated with
+  [release-please](https://github.com/googleapis/release-please)
+  (`.github/workflows/release-please.yaml`, `release-please-config.json`):
+  1. Merges to `main` update a standing **release PR** that bumps the version
+     and rewrites `CHANGELOG.md`. Nothing is released while that PR sits open.
+  2. Merging the release PR creates the `vX.Y.Z` tag and a GitHub release whose
+     body is the changelog, and `release-please.yaml` then calls `release.yaml`.
+- **`dev` prereleases, `vX.Y.Z-dev.N`**, go to dev. Every push to `dev` that
+  brings a `feat`, `fix`, `perf`, `security`, `deps` or `revert` commit is
+  tagged with the next version's Nth prerelease by `dev-release.yaml`
+  (`scripts/release/next-dev-tag.sh` says how the tag is picked), which then
+  calls `release.yaml`. Dispatching `dev-release` on `dev` cuts one without
+  such a commit.
 
-One operational prerequisite: the tag must be pushed with a token that can
-trigger workflows, or `release.yaml` will not fire. Store a fine-grained PAT
-or GitHub App token as the `RELEASE_PLEASE_TOKEN` secret (see the note atop
-`release-please.yaml`). Without it, the PR and changelog still work; push the
-tag manually to cut assets.
+**Versions.** Every release is a patch bump, whatever the commit types
+(`"versioning": "always-bump-patch"`). A `feat:` or a breaking change does not
+move the minor version by itself: the operator moves it, by setting
+`release-as` in `release-please-config.json` until that version is released.
+`release.yaml`'s first job (`scripts/release/tag-guard.sh`) refuses:
+
+- a tag of any other shape;
+- a `vX.Y.Z` whose commit is not on `main`, or a `-dev.N` whose commit is not
+  on `dev`;
+- any 1.x or later, unless the repository variable `AGENTRY_ALLOW_V1` is
+  `true`. Only the operator's 1.0 step sets it (agentry#522).
+
+**What a release carries.** `release.yaml` runs the full check and the
+attack-corpus gate. It then builds cross-platform binaries with
+reproducible-build flags (`-trimpath`, cgo off; no step yet rebuilds and
+compares them), an SPDX SBOM and keyless cosign signatures, and attaches them
+to the GitHub release. It **refuses to release if the attack-corpus gate is
+red**, the same bar publishers face. The `agentryd` image and the Helm chart
+are published at the tag, signed. Only a `main` release moves `latest`, and a
+`-dev.N` release is marked prerelease on GitHub.
+
+**Tokens.** The release PR, the tags and the releases are made with the
+workflow's own `GITHUB_TOKEN`. Its events start no other workflow, so the two
+release workflows call `release.yaml` directly rather than waiting for a tag
+push. For the same reason the release PR's `pull_request` runs wait for
+approval, so it is gated by dispatching `ci` on its branch
+(`gh workflow run ci --ref <branch>`). `workflow_dispatch` on `release`
+rebuilds an existing tag whose release failed part-way.

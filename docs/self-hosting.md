@@ -119,8 +119,10 @@ The chart in `deploy/helm/agentry` is published beside the image as an OCI
 chart, signed with cosign like the image. Every push to `dev` and `main`
 publishes `oci://ghcr.io/blaktron/agentry/charts/agentry` at a prerelease
 version, `0.1.0-<branch>.<run>.g<sha>`, whose default image is the
-`agentryd:sha-<sha>` built by the same run; a release publishes the tagged
-version (chart `0.2.0`, image `v0.2.0`). The package is private while the
+`agentryd:sha-<sha>` built by the same run. A release publishes the tagged
+version: a `main` release as chart `0.6.0` with image `v0.6.0`, a `dev`
+prerelease as chart `0.6.1-dev.1` with image `v0.6.1-dev.1`. Only a `main`
+release moves the image's `latest`. The package is private while the
 repository is, so pulling it needs a `read:packages` token, the same one the
 image needs.
 

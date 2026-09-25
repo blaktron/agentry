@@ -1,41 +1,67 @@
 # Release automation (§18.2 M8 OSS hygiene: "release-please, signed releases
-# + SBOM"). release-please watches conventional commits on main and maintains
-# a standing "release PR" that bumps the version and rewrites CHANGELOG.md.
-# Merging that PR creates the vX.Y.Z tag + GitHub release; the tag then drives
-# release.yaml, which builds, signs, and attaches artifacts.
+# + SBOM"; DEV-148, agentry#597). release-please watches conventional commits
+# on main and maintains a standing "release PR" that bumps the version and
+# rewrites CHANGELOG.md. Merging that PR creates the vX.Y.Z tag and its GitHub
+# release, and this workflow then calls release.yaml, which builds, signs and
+# attaches the artifacts. dev's prereleases (vX.Y.Z-dev.N) come from
+# dev-release.yaml through the same release.yaml.
 #
-# The first release is 0.1.0, not 1.0.0: release-please-config.json sets
-# initial-version, because with no release tag yet it would otherwise start
-# at 1.0.0 (the operator's decision of 2026-09-23, agentry#31: not ready for
-# 1.0). bump-minor-pre-major keeps later bumps in 0.x until 1.0 is chosen.
+# The version (release-please-config.json; the operator's decisions of
+# 2026-09-25, release-1.0.md D16):
+#   - release-as pins the next release. It is set to 0.6.0 for the first
+#     release and removed once v0.6.0 exists; the operator sets it again
+#     whenever they move the minor version (or cut 1.0.0, agentry#522).
+#   - "versioning": "always-bump-patch" makes every other release a patch
+#     bump, whatever the commit types: a feat: or a feat!: does not move the
+#     minor by itself, because only the operator does.
+#   - initial-version only matters before the first release.
 #
-# TOKEN NOTE (the one operational gotcha): a tag pushed with the default
-# GITHUB_TOKEN does NOT trigger other workflows (GitHub's recursion guard), so
-# release.yaml would not fire. Provide a fine-grained PAT or GitHub App token
-# as the `RELEASE_PLEASE_TOKEN` secret (contents: write, pull-requests: write,
-# workflows: write) so the tag push triggers release.yaml. Without it, the
-# release PR + CHANGELOG still work; cut assets by pushing the tag manually
-# (`git push origin vX.Y.Z`) or via `gh release`.
+# TOKEN NOTE: a tag or release created with the default GITHUB_TOKEN does NOT
+# trigger other workflows (GitHub's recursion guard), and the repository holds
+# no RELEASE_PLEASE_TOKEN. So the release job below calls release.yaml
+# directly when the action reports a release, instead of waiting for a tag
+# push that would never start it. The release PR itself is also opened by
+# GITHUB_TOKEN, so its pull_request runs wait for approval; ci.yaml's
+# workflow_dispatch runs the gate on that branch instead.
 name: release-please
 on:
   push:
     branches: [main]
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   release-please:
     # Self-hosted like every other workflow: GitHub-hosted minutes are
     # exhausted, so on ubuntu-latest the job never scheduled (agentry#220).
     runs-on: [self-hosted, linux, x64]
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          # Falls back to GITHUB_TOKEN when the PAT is absent: the release PR
-          # and tag are still created, but see the TOKEN NOTE above — the tag
-          # will not auto-trigger release.yaml under the default token.
+          persist-credentials: false
+      # No v1.* release PR without the operator (R5): a release-as or a
+      # manifest at 1.0.0 or later needs the AGENTRY_ALLOW_V1 variable, which
+      # only the 1.0 step sets. release.yaml's guard refuses such a tag too.
+      - name: No 1.x without the operator
+        env:
+          AGENTRY_ALLOW_V1: ${{ vars.AGENTRY_ALLOW_V1 }}
+        run: |
+          set -euo pipefail
+          for v in $(sed -nE 's/^[[:space:]]*"(release-as|\.)"[[:space:]]*:[[:space:]]*"([0-9]+)\..*/\2/p' release-please-config.json .release-please-manifest.json); do
+            if [ "$v" -ge 1 ] && [ "${AGENTRY_ALLOW_V1:-}" != true ]; then
+              echo "::error::a v$v release is the operator's: set the repository variable AGENTRY_ALLOW_V1=true (agentry#522)"; exit 1
+            fi
+          done
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
+        id: release
+        with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
           # Releases are cut from main (production); dev is the integration
           # branch and may become the repository's default, which this action
@@ -43,3 +69,14 @@ jobs:
           target-branch: main
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  release:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    permissions:
+      contents: write
+      id-token: write
+      packages: write
+    uses: ./.github/workflows/release.yaml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
