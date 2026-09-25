@@ -52,18 +52,23 @@ func (s S8Metadata) Run(sc stageContext, in *Input) StageResult {
 
 	findings = append(findings, s8Spam(in)...)
 
-	// Platform staff skip both publisher signals (operator, 2026-09-24,
-	// agentry#563): they are the burst-of-fresh-accounts shape, and staff
-	// is an account set the operator controls, whose checks and
-	// first-party publishes would otherwise wait on review for a week.
-	// Every other stage still scans the version.
-	if in.SubmitterIsStaff {
-		return StageResult{Scanner: "S8", Findings: findings}
+	// Platform staff skip the publisher signals (operator, 2026-09-24,
+	// agentry#563): staff is an account set the operator controls, and its
+	// checks and first-party publishes are bursts from young accounts by
+	// design. The rest of S8 and every other stage still run for them.
+	if !in.SubmitterIsStaff {
+		findings = append(findings, s8PublisherSignals(in)...)
 	}
+	return StageResult{Scanner: "S8", Findings: findings}
+}
 
+// s8PublisherSignals raises the publisher-behaviour findings: account age
+// against publish velocity, and the several-accounts-one-address cluster.
+func s8PublisherSignals(in *Input) []Finding {
+	var out []Finding
 	// Publisher anomaly (§8.3, §19 ramp): young account + high velocity.
 	if in.AccountAgeDays >= 0 && in.AccountAgeDays < 7 && in.RecentPublishCount >= 5 {
-		findings = append(findings, Finding{
+		out = append(out, Finding{
 			Scanner: "S8/publisher-velocity", Severity: SevMedium, Confidence: ConfMedium,
 			Title:    "New account with high publish velocity",
 			Detail:   map[string]any{"accountAgeDays": in.AccountAgeDays, "recentPublishes": in.RecentPublishCount},
@@ -76,14 +81,14 @@ func (s S8Metadata) Run(sc stageContext, in *Input) StageResult {
 	// review like the other publisher signals; the hash is keyed and
 	// month-rotated, so the finding names counts, never an address.
 	if in.IPClusterAccounts >= ipClusterMinAccounts && in.IPClusterVersions >= ipClusterMinVersions {
-		findings = append(findings, Finding{
+		out = append(out, Finding{
 			Scanner: "S8/ip-cluster", Severity: SevMedium, Confidence: ConfMedium,
 			Title:    "Several accounts publishing from one address",
 			Detail:   map[string]any{"accounts24h": in.IPClusterAccounts, "versions24h": in.IPClusterVersions},
 			Taxonomy: []string{"LLM03", "ASI04"},
 		})
 	}
-	return StageResult{Scanner: "S8", Findings: findings}
+	return out
 }
 
 // ClawHavoc-shaped thresholds for S8/ip-cluster: distinct accounts and

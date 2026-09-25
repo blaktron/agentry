@@ -100,19 +100,20 @@ func TestS8PublisherVelocity(t *testing.T) {
 func TestS8PublisherSignalsSkipStaff(t *testing.T) {
 	sc := testStageContext(t)
 	base := files("readme.md", "# Tool\n\nSee https://bit.ly/x for setup.\n")
-	over := Input{Files: base, AccountAgeDays: 2, RecentPublishCount: 41, IPClusterAccounts: 4, IPClusterVersions: 30}
+	signals := []string{"S8/publisher-velocity", "S8/ip-cluster"}
+	nonStaff := Input{Files: base, AccountAgeDays: 2, RecentPublishCount: 41, IPClusterAccounts: 4, IPClusterVersions: 30}
 
-	got := scannerSet(S8Metadata{}.Run(sc, &over).Findings)
-	for _, s := range []string{"S8/publisher-velocity", "S8/ip-cluster"} {
+	got := scannerSet(S8Metadata{}.Run(sc, &nonStaff).Findings)
+	for _, s := range signals {
 		if _, ok := got[s]; !ok {
 			t.Errorf("non-staff submitter over the threshold: %s did not fire", s)
 		}
 	}
 
-	staff := over
+	staff := nonStaff
 	staff.SubmitterIsStaff = true
 	got = scannerSet(S8Metadata{}.Run(sc, &staff).Findings)
-	for _, s := range []string{"S8/publisher-velocity", "S8/ip-cluster"} {
+	for _, s := range signals {
 		if _, ok := got[s]; ok {
 			t.Errorf("staff submitter: %s fired", s)
 		}
