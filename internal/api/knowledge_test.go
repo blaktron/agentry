@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -815,5 +816,167 @@ func TestTheLastScanAttemptSettlesThePack(t *testing.T) {
 	env.doJSON(o.pat, http.MethodGet, "/api/v1/knowledge/packs/"+p.ID, nil, &got, http.StatusOK)
 	if got.State != knowledge.StateFailed || got.Scan != nil {
 		t.Fatalf("after the last attempt the pack is %q with a report %v; want failed, nothing claimed read", got.State, got.Scan != nil)
+	}
+}
+
+// poolResolver is an extension's resolver that pools owners' knowledge
+// under one key and one cap, as a paid organization pools its members'.
+type poolResolver struct {
+	entitlements.Resolver
+	key    string
+	owners []knowledge.Owner
+	max    int64
+	// omit leaves the asker out of its pool, and fail answers an error:
+	// two mistakes an extension can make.
+	omit, fail bool
+}
+
+func (p poolResolver) KnowledgePool(_ context.Context, owner knowledge.Owner) (knowledge.Pool, error) {
+	if p.fail {
+		return knowledge.Pool{}, errors.New("the ledger is down")
+	}
+	if !slices.Contains(p.owners, owner) {
+		return knowledge.Pool{Key: owner.String(), Owners: []knowledge.Owner{owner}, Cap: entitlements.Cap{Enabled: true}}, nil
+	}
+	owners := p.owners
+	if p.omit {
+		owners = slices.DeleteFunc(slices.Clone(owners), func(o knowledge.Owner) bool { return o == owner })
+	}
+	return knowledge.Pool{Key: p.key, Owners: owners, Cap: entitlements.Cap{Enabled: true, Max: p.max}}, nil
+}
+
+func ownerOf(t *testing.T, env *testEnv, o knowledgeOwner) knowledge.Owner {
+	t.Helper()
+	return knowledge.User(uuid.MustParse(env.selfID(o.sess)))
+}
+
+type meter struct {
+	Bytes  int64 `json:"bytes"`
+	Packs  int   `json:"packs"`
+	Used   int64 `json:"used"`
+	Max    int64 `json:"max"`
+	Pooled bool  `json:"pooled"`
+}
+
+// TestKnowledgePoolIsCountedAndLocked (agentry#612): two owners in one pool
+// of 400 bytes upload 300 each at once; the pool's lock lets exactly one in,
+// both meters report the pool, a member still reads only their own packs, a
+// cap never deletes, and a wrong or failed answer is not permission.
+func TestKnowledgePoolIsCountedAndLocked(t *testing.T) {
+	env := newTestEnv(t)
+	a, b := newKnowledgeOwner(env, "kn-pool-a"), newKnowledgeOwner(env, "kn-pool-b")
+	pool := poolResolver{Resolver: entitlements.NewConfigResolver(config.Default().Limits), key: "pool:" + env.sfx, owners: []knowledge.Owner{ownerOf(t, env, a), ownerOf(t, env, b)}, max: 400}
+	env.srvObj.SetEntitlements(pool)
+
+	type upload struct {
+		o      knowledgeOwner
+		id     string
+		key    []byte
+		sealed []byte
+	}
+	var ups []upload
+	for i, o := range []knowledgeOwner{a, b} {
+		id, key := newPack(t, env, o, "pooled")
+		sealed, _, _ := sealedPack(t, sizedPack(300, byte('p'+i)), key)
+		ups = append(ups, upload{o, id, key, sealed})
+	}
+	codes := make([]int, len(ups))
+	errs := make([]error, len(ups))
+	var wg sync.WaitGroup
+	for i, u := range ups {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			req, _ := http.NewRequest(http.MethodPut, env.srv.URL+"/api/v1/knowledge/packs/"+u.id+"/tree", bytes.NewReader(u.sealed))
+			req.Header.Set("Authorization", "Bearer "+u.o.pat.pat)
+			res, err := env.srv.Client().Do(req)
+			if err != nil {
+				errs[i] = err
+				return
+			}
+			_ = res.Body.Close()
+			codes[i] = res.StatusCode
+		}()
+	}
+	wg.Wait()
+	var took *upload
+	for i, c := range codes {
+		if errs[i] != nil {
+			t.Fatalf("upload %d: %v", i, errs[i])
+		}
+		switch c {
+		case http.StatusAccepted:
+			if took != nil {
+				t.Fatalf("both uploads of 300 bytes into one 400-byte pool were taken (codes %v)", codes)
+			}
+			took = &ups[i]
+		case http.StatusRequestEntityTooLarge:
+		default:
+			t.Fatalf("an upload into the pool answered %d", c)
+		}
+	}
+	if took == nil {
+		t.Fatalf("neither upload was taken (codes %v)", codes)
+	}
+	for _, o := range []knowledgeOwner{a, b} {
+		var m meter
+		env.doJSON(o.pat, http.MethodGet, "/api/v1/knowledge/usage", nil, &m, http.StatusOK)
+		own := int64(0)
+		if o.handle == took.o.handle {
+			own = 300
+		}
+		if m.Used != 300 || m.Max != 400 || !m.Pooled || m.Bytes != own || m.Packs != 1 {
+			t.Fatalf("%s's meter = %+v, want the pool's 300 of 400 and %d of their own", o.handle, m, own)
+		}
+	}
+
+	// A member of the pool reads only their own packs.
+	other := a
+	if took.o.handle == a.handle {
+		other = b
+	}
+	for _, path := range []string{"", "/tree", "/export"} {
+		if st, _, body := env.raw(other.pat, http.MethodGet, "/api/v1/knowledge/packs/"+took.id+path, nil); st != http.StatusNotFound {
+			t.Fatalf("a fellow member of the pool read GET %s: %d %s", path, st, body)
+		}
+	}
+
+	// A cap never deletes: under a pool shrunk below what it holds, a
+	// smaller tree is taken and a larger one refused with the pool's total.
+	pool.max = 100
+	env.srvObj.SetEntitlements(pool)
+	smaller, _, _ := sealedPack(t, sizedPack(200, 's'), took.key)
+	if st, _, body := env.raw(took.o.pat, http.MethodPut, "/api/v1/knowledge/packs/"+took.id+"/tree", smaller); st != http.StatusAccepted {
+		t.Fatalf("a smaller tree over a shrunk pool: %d %s", st, body)
+	}
+	larger, _, _ := sealedPack(t, sizedPack(250, 'l'), took.key)
+	st, _, body := env.raw(took.o.pat, http.MethodPut, "/api/v1/knowledge/packs/"+took.id+"/tree", larger)
+	var refusal struct {
+		Bytes int64 `json:"bytes"`
+		Max   int64 `json:"max"`
+	}
+	_ = json.Unmarshal(body, &refusal)
+	if st != http.StatusRequestEntityTooLarge || problemTypeOf(body) != "knowledge-allocation" || refusal.Bytes != 250 || refusal.Max != 100 {
+		t.Fatalf("a larger tree over a shrunk pool: %d %s", st, body)
+	}
+
+	// An extension's mistakes are not permission: a pool that leaves out
+	// its owner, a pool with no key, and an error.
+	c := newKnowledgeOwner(env, "kn-pool-c")
+	id, key := newPack(t, env, c, "refused")
+	sealed, _, _ := sealedPack(t, sizedPack(10, 'o'), key)
+	for name, r := range map[string]poolResolver{
+		"a pool that leaves out its owner": {Resolver: pool.Resolver, key: pool.key, owners: []knowledge.Owner{ownerOf(t, env, c)}, max: 1000, omit: true},
+		"a pool with no key":               {Resolver: pool.Resolver, owners: []knowledge.Owner{ownerOf(t, env, c)}, max: 1000},
+		"an error":                         {Resolver: pool.Resolver, fail: true},
+	} {
+		env.srvObj.SetEntitlements(r)
+		if st, _, body := env.raw(c.pat, http.MethodPut, "/api/v1/knowledge/packs/"+id+"/tree", sealed); st != http.StatusInternalServerError {
+			t.Fatalf("%s: the upload answered %d %s, want 500 and nothing stored", name, st, body)
+		}
+	}
+	var objects int
+	if err := env.st.Pool().QueryRow(context.Background(), `SELECT count(*) FROM knowledge_objects WHERE pack_id = $1`, id).Scan(&objects); err != nil || objects != 0 {
+		t.Fatalf("a refused upload stored %d objects (%v)", objects, err)
 	}
 }

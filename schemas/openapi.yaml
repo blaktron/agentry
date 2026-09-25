@@ -4520,18 +4520,29 @@ components:
 
     KnowledgeUsage:
       type: object
-      required: [bytes, max, packs]
+      required: [bytes, max, packs, used, pooled]
       properties:
         bytes:
           type: integer
           format: int64
           description: The bytes of every pack the caller keeps here.
+        packs:
+          type: integer
+          description: The packs the caller keeps here.
+        used:
+          type: integer
+          format: int64
+          description: >-
+            What counts against the allocation: `bytes`, or, when `pooled`,
+            the pool's total — every pack of every owner who shares it (a
+            paid organization's, and its members').
         max:
           type: integer
           format: int64
           description: The allocation; 0 is no cap.
-        packs:
-          type: integer
+        pooled:
+          type: boolean
+          description: The allocation is shared with other owners (agentry#612).
 
     KnowledgeScanReport:
       type: object
