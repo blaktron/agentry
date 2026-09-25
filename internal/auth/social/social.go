@@ -75,6 +75,10 @@ type Identity struct {
 	ACR string
 	// Groups is the ID token's `groups` claim (directory group names).
 	Groups []string
+	// Username is the ID token's `preferred_username` (OIDC providers only):
+	// the name chosen at the IdP, which seeds a new account's handle
+	// (agentry#517). Never used to find an account.
+	Username string
 }
 
 // MFAAsserted reports whether AMR names a second factor: the RFC 8176
@@ -207,6 +211,7 @@ func (p *oidcProvider) Exchange(ctx context.Context, code, verifier, nonce strin
 		AMR:               claims.AMR,
 		ACR:               claims.ACR,
 		Groups:            claims.Groups,
+		Username:          claims.PreferredUsername,
 	}, nil
 }
 
