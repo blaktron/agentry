@@ -48,13 +48,18 @@ type accountData struct {
 
 // knowledgeUsage is the API's KnowledgeUsage, with its sizes in words.
 type knowledgeUsage struct {
-	Bytes int64 `json:"bytes"`
-	Max   int64 `json:"max"`
-	Packs int   `json:"packs"`
+	Bytes  int64 `json:"bytes"`
+	Packs  int   `json:"packs"`
+	Used   int64 `json:"used"`
+	Max    int64 `json:"max"`
+	Pooled bool  `json:"pooled"`
 }
 
-// Used and Allocation are the meter's two sizes, in MB with one decimal.
-func (k knowledgeUsage) Used() string       { return megabytes(k.Bytes) }
+// Kept, Counted and Allocation are the meter's sizes, in MB with one
+// decimal: the person's own packs, what counts against the allocation (the
+// pool's total when it is shared), and the allocation.
+func (k knowledgeUsage) Kept() string       { return megabytes(k.Bytes) }
+func (k knowledgeUsage) Counted() string    { return megabytes(k.Used) }
 func (k knowledgeUsage) Allocation() string { return megabytes(k.Max) }
 
 func megabytes(n int64) string {

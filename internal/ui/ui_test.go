@@ -72,7 +72,7 @@ func fakeAPI(t *testing.T) http.Handler {
 				http.Error(w, `{"detail":"sign in"}`, http.StatusUnauthorized)
 				return
 			}
-			_, _ = io.WriteString(w, `{"bytes":3670016,"max":104857600,"packs":2}`)
+			_, _ = io.WriteString(w, `{"bytes":3670016,"packs":2,"used":3670016,"max":104857600,"pooled":false}`)
 		case "PUT /api/v1/user/notifications":
 			var body map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&body)
@@ -699,7 +699,7 @@ func TestAccountPagesTellCouldNotLookFromEmpty(t *testing.T) {
 				case "/api/v1/user/notifications":
 					_, _ = io.WriteString(w, `{"email":{"dependencyAlerts":true,"quarantine":true,"reviewDecisions":true,"advisories":true,"orgInvites":true},"web":{"dependencyAlerts":true}}`)
 				case "/api/v1/knowledge/usage":
-					_, _ = io.WriteString(w, `{"bytes":0,"max":0,"packs":0}`)
+					_, _ = io.WriteString(w, `{"bytes":0,"packs":0,"used":0,"max":0,"pooled":false}`)
 				default:
 					_, _ = io.WriteString(w, `[]`)
 				}
@@ -1135,6 +1135,18 @@ func TestAccountShowsTheKnowledgeMeter(t *testing.T) {
 		}
 		base.ServeHTTP(w, r)
 	})
+	pooled := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/knowledge/usage" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"bytes":1048576,"packs":1,"used":5242880,"max":10485760,"pooled":true}`)
+			return
+		}
+		base.ServeHTTP(w, r)
+	})
+	w = get(newUI(t, Options{API: pooled}), "/ui/account", sessCookie, csrfCookieV)
+	if body := w.Body.String(); !strings.Contains(body, "1 pack kept here, 1.0 MB. The allocation you share with your organization: 5.0 MB used of 10.0 MB.") {
+		t.Fatalf("account with a pooled allocation:\n%s", body)
+	}
 	w = get(newUI(t, Options{API: off}), "/ui/account", sessCookie, csrfCookieV)
 	if body := w.Body.String(); !strings.Contains(body, "This registry keeps no knowledge packs.") || strings.Contains(body, "could not fetch your knowledge") {
 		t.Fatalf("account with the store off:\n%s", body)
