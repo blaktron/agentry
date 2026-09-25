@@ -4,6 +4,8 @@
 package config
 
 import (
+	"bytes"
+	"encoding/base64"
 	"fmt"
 	"net/netip"
 	"net/url"
@@ -54,6 +56,7 @@ type Config struct {
 	Web       Web       `yaml:"web"`
 	UI        UI        `yaml:"ui"`
 	Brand     Brand     `yaml:"brand"`
+	Knowledge Knowledge `yaml:"knowledge"`
 	// MinCLIVersion, when set, is advertised via GET /api/v1/meta so the CLI
 	// can warn (or refuse, on a major gap) before talking to an API it
 	// predates (§11 distribution note). Empty = no minimum advertised.
@@ -304,6 +307,23 @@ type Limits struct {
 	ArchiveMaxFileBytes      int64 `yaml:"archiveMaxFileBytes"`      // 2 MiB
 	ArchiveMaxImageFileBytes int64 `yaml:"archiveMaxImageFileBytes"` // 5 MiB
 	ArchiveMaxTextBytes      int64 `yaml:"archiveMaxTextBytes"`      // 1 MiB: the text files in total (§19)
+
+	// KnowledgeBytesPerAccount caps the knowledge an account keeps in the
+	// registry, in bytes of its packs' trees (plan knowledge.md §4.4,
+	// agentry#593). 0, the default, is no cap: a self-hoster sets one. A
+	// cap never deletes: over it, no pack is added or grown.
+	KnowledgeBytesPerAccount int64 `yaml:"knowledgeBytesPerAccount"`
+}
+
+// Knowledge configures the store of knowledge packs (plan knowledge.md
+// §4.4, agentry#593).
+type Knowledge struct {
+	// SealingKey is a base64 32-byte key the core wraps packs' data keys
+	// under (AGENTRY_KNOWLEDGE_SEALING_KEY): a key of its own, refused when
+	// it is the auth sealing key. Empty outside dev mode leaves the store
+	// off (its routes answer 503) unless an extension wraps the keys; in
+	// dev mode a fixed insecure key stands in, as for the auth sealer.
+	SealingKey string `yaml:"sealingKey"`
 }
 
 // Signing configures attestation signing (D-16): kms | file | none(dev).
@@ -735,6 +755,7 @@ func applyEnv(c *Config) error {
 	str("AGENTRY_AUTH_SEALING_KEY", &c.Auth.SealingKey)
 	str("AGENTRY_JUDGE_PROVIDER", &c.Judge.Provider)
 	str("AGENTRY_JUDGE_MODEL", &c.Judge.Model)
+	str("AGENTRY_KNOWLEDGE_SEALING_KEY", &c.Knowledge.SealingKey)
 	str("AGENTRY_JUDGE_REGION", &c.Judge.Region)
 	str("AGENTRY_JUDGE_BASE_URL", &c.Judge.BaseURL)
 	str("AGENTRY_JUDGE_API_KEY", &c.Judge.APIKey)
@@ -904,6 +925,7 @@ func applyEnv(c *Config) error {
 		{"AGENTRY_LIMITS_ARCHIVE_MAX_FILE_BYTES", &c.Limits.ArchiveMaxFileBytes},
 		{"AGENTRY_LIMITS_ARCHIVE_MAX_IMAGE_FILE_BYTES", &c.Limits.ArchiveMaxImageFileBytes},
 		{"AGENTRY_LIMITS_ARCHIVE_MAX_TEXT_BYTES", &c.Limits.ArchiveMaxTextBytes},
+		{"AGENTRY_KNOWLEDGE_BYTES_PER_ACCOUNT", &c.Limits.KnowledgeBytesPerAccount},
 	} {
 		if err := integer64(m.key, m.dst); err != nil {
 			return err
@@ -1005,6 +1027,9 @@ func (c Config) Validate() error {
 	}
 	if !c.DevMode && c.Auth.SealingKey == "" {
 		return fmt.Errorf("config: auth.sealingKey is required outside dev mode")
+	}
+	if err := c.validateKnowledge(); err != nil {
+		return err
 	}
 	switch c.Judge.Provider {
 	case "", "none", "static", "openai", "anthropic", "bedrock", "typesafe", "classifier":
@@ -1164,6 +1189,27 @@ func (c Config) validateNotify() error {
 	// (mailpit) there is no password, so the pairing only bites in real use.
 	if c.SMTP.Username != "" && !c.SMTP.StartTLS && !c.DevMode {
 		return fmt.Errorf("config: smtp.startTLS must be true when smtp.username is set outside dev mode")
+	}
+	return nil
+}
+
+// validateKnowledge refuses a knowledge sealing key that is not 32 bytes of
+// base64, or that is the auth sealing key: a key of its own, so that what
+// opens the TOTP seeds does not also open every pack (plan knowledge.md
+// §4.4), and a negative cap.
+func (c Config) validateKnowledge() error {
+	if c.Limits.KnowledgeBytesPerAccount < 0 {
+		return fmt.Errorf("config: limits.knowledgeBytesPerAccount must be >= 0 (0 is no cap)")
+	}
+	if c.Knowledge.SealingKey == "" {
+		return nil
+	}
+	k, err := base64.StdEncoding.DecodeString(c.Knowledge.SealingKey)
+	if err != nil || len(k) != 32 {
+		return fmt.Errorf("config: knowledge.sealingKey must be 32 bytes, base64")
+	}
+	if a, err := base64.StdEncoding.DecodeString(c.Auth.SealingKey); err == nil && bytes.Equal(a, k) {
+		return fmt.Errorf("config: knowledge.sealingKey must not be the auth sealing key")
 	}
 	return nil
 }
