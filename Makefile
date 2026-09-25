@@ -39,7 +39,13 @@ test:
 	GO=$(GO) ./scripts/ci/go-test.sh -timeout $(TEST_TIMEOUT) ./...
 
 ## lint: gofmt + go vet + golangci-lint (if installed)
+# No `| grep -q` in the scripts or the workflows (agentry#548, after
+# agentry-desktop#236): grep -q exits at its first match, the writer still
+# writing gets EPIPE, and pipefail reports that as the pipeline's failure,
+# so a found match reads as "not found". Comment lines are skipped.
 lint:
+	@hits=$$(grep -rnE '\|[[:space:]]*grep[[:space:]]+(-[A-Za-z]*q|--quiet)' scripts/ .github/workflows/ | grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' || true); \
+	if [ -n "$$hits" ]; then echo "$$hits"; echo "a piped grep -q under pipefail can fail on the writer's EPIPE: use grep -q ... <<<\"\$$x\" or grep ... >/dev/null (agentry#548)"; exit 1; fi
 	@fmt_out=$$(gofmt -l . || true); \
 	if [ -n "$$fmt_out" ]; then echo "gofmt needed on:"; echo "$$fmt_out"; exit 1; fi
 	$(GO) vet ./...

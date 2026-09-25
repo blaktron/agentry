@@ -72,8 +72,8 @@ SUB=$(curl -sS -w '\n%{http_code}' -H "Authorization: Bearer $PAT" -X POST "$API
 CODE=$(echo "$SUB" | tail -1)
 # The v* tag push auto-submits (agents.auto_publish_tags); an explicit POST
 # after it is then a duplicate that V3 immutability rightly refuses.
-if echo "$SUB" | grep -q "already exists"; then echo "  (tag push already auto-submitted — immutability refusal is correct)";
-elif ! echo "$CODE" | grep -q '^2'; then echo "FAIL: submit returned $CODE:"; echo "$SUB" | sed '$d' | head -c 600; exit 1; fi
+if grep -q "already exists" <<<"$SUB"; then echo "  (tag push already auto-submitted — immutability refusal is correct)";
+elif ! grep -q '^2' <<<"$CODE"; then echo "FAIL: submit returned $CODE:"; echo "$SUB" | sed '$d' | head -c 600; exit 1; fi
 STATUS=""
 for i in $(seq 1 30); do
   sleep 2
@@ -89,7 +89,7 @@ RES=$(curl -fsS -H "Authorization: Bearer $PAT" "$API/resolve?ref=$H/hello-dev@0
 echo "$RES" | jf "['digest']"
 curl -fsS -H "Authorization: Bearer $PAT" -o "$TMP/a.tar.zst" "$API/agents/$H/hello-dev/versions/0.1.0/download"
 D=$(sha256sum "$TMP/a.tar.zst" | cut -d' ' -f1)
-echo "$RES" | grep -q "$D" && echo "download digest matches resolve: OK" || { echo "FAIL: digest mismatch"; exit 1; }
+grep -q "$D" <<<"$RES" && echo "download digest matches resolve: OK" || { echo "FAIL: digest mismatch"; exit 1; }
 echo "== report card =="
 curl -fsS -H "Authorization: Bearer $PAT" "$API/agents/$H/hello-dev/versions/0.1.0/report" | python3 -c "
 import sys,json; r=json.load(sys.stdin)
