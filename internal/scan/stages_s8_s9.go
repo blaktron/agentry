@@ -30,7 +30,23 @@ func (s S8Metadata) Run(sc stageContext, in *Input) StageResult {
 
 	findings = append(findings, s8NameSimilarity(s.AgentName, s.PopularAgentNames)...)
 
-	// URL reputation in prose (punycode/homograph, shorteners).
+	findings = append(findings, s8URLReputation(in)...)
+	findings = append(findings, s8Spam(in)...)
+
+	// Platform staff skip the publisher signals (operator, 2026-09-24,
+	// agentry#563): staff is an account set the operator controls, and its
+	// checks and first-party publishes are bursts from young accounts by
+	// design. The rest of S8 and every other stage still run for them.
+	if !in.SubmitterIsStaff {
+		findings = append(findings, s8PublisherSignals(in)...)
+	}
+	return StageResult{Scanner: "S8", Findings: findings}
+}
+
+// s8URLReputation flags suspicious URLs in prose: punycode and homographs,
+// shorteners.
+func s8URLReputation(in *Input) []Finding {
+	var findings []Finding
 	for _, f := range in.Files {
 		if !f.IsText || f.Content == nil {
 			continue
@@ -49,17 +65,7 @@ func (s S8Metadata) Run(sc stageContext, in *Input) StageResult {
 			}
 		}
 	}
-
-	findings = append(findings, s8Spam(in)...)
-
-	// Platform staff skip the publisher signals (operator, 2026-09-24,
-	// agentry#563): staff is an account set the operator controls, and its
-	// checks and first-party publishes are bursts from young accounts by
-	// design. The rest of S8 and every other stage still run for them.
-	if !in.SubmitterIsStaff {
-		findings = append(findings, s8PublisherSignals(in)...)
-	}
-	return StageResult{Scanner: "S8", Findings: findings}
+	return findings
 }
 
 // s8PublisherSignals raises the publisher-behaviour findings: account age
