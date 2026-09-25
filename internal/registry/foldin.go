@@ -148,6 +148,13 @@ func (s *Service) writePending(ctx context.Context, orgID, userID uuid.UUID, dom
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
+		// The staff organization folds in only its own domain (agentry#556):
+		// a DNS claim of another domain does not make its people eligible.
+		if err := s.CheckStaffOrgDoorIn(ctx, q, orgID, userID); errors.Is(err, ErrStaffOrgDomain) {
+			return nil
+		} else if err != nil {
+			return err
+		}
 		n, err := q.UpsertPendingMembership(ctx, storegen.UpsertPendingMembershipParams{
 			OrgID: orgID, UserID: userID, Role: string(auth.RoleMember), ViaScim: false, ViaDomain: true,
 		})

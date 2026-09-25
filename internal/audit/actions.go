@@ -33,8 +33,8 @@ const (
 	ActionSSHKeyAdd          Action = "ssh_key.add"
 	ActionSSHKeyRemove       Action = "ssh_key.remove"
 	ActionUserDirectoryErase Action = "user.directory_erase"
-	// ActionUserStaffSync records a platform_staff change driven by
-	// directory group membership (agentry#51).
+	// ActionUserStaffSync records a platform_staff change: the staff
+	// organization's rule (agentry#556), with the reason it ran.
 	ActionUserStaffSync Action = "user.staff_sync"
 	ActionUserDelete    Action = "user.delete"
 	// ActionUserDataClear records a user clearing their credentials,

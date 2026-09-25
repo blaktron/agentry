@@ -397,6 +397,14 @@ func (s *Server) eraseOrg(ctx context.Context, orgID uuid.UUID, handle string) e
 		if err := tq.ReleaseHandle(ctx, storegen.ReleaseHandleParams{ID: orgID, Handle: retired}); err != nil {
 			return err
 		}
+		// Erasing the staff organization ends its members' staff with it
+		// (agentry#556): every flagged account is recomputed in this
+		// transaction. For any other organization nothing changes.
+		if s.reg != nil {
+			if _, err := s.reg.ResyncStaffIn(ctx, tq, registry.StaffSyncMembership, audit.Event{}); err != nil {
+				return err
+			}
+		}
 		return s.auditW.Write(ctx, tq, audit.Event{Action: audit.ActionOrgErase, ActorKind: audit.ActorSystem, OrgID: orgID,
 			TargetKind: "org", TargetID: orgID, Detail: counts})
 	})
