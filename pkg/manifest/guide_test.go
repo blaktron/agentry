@@ -78,6 +78,12 @@ func TestGuideRefusals(t *testing.T) {
 		}, "guide.connect.PAGERDUTY_TOKEN"},
 		{"files with a zero-width space", func(g *Guide) { g.Files = "the con\u200Btract" }, "guide.files"},
 		{"overview with a C1 control", func(g *Guide) { g.Overview = "a\u0085b" }, "guide.overview"},
+		// agentry#558: ESC starts a terminal escape sequence (colours, OSC 8
+		// links, OSC 52 clipboard writes); CR rewrites a printed line.
+		{"overview with ESC", func(g *Guide) { g.Overview = "a\x1b]52;c;ZXZpbA==\x07b" }, "guide.overview"},
+		{"overview with CR", func(g *Guide) { g.Overview = "first line\rrewritten" }, "guide.overview"},
+		{"overview with BEL", func(g *Guide) { g.Overview = "a\x07b" }, "guide.overview"},
+		{"overview with DEL", func(g *Guide) { g.Overview = "a\x7fb" }, "guide.overview"},
 		{"connect for an undeclared secret", func(g *Guide) { g.Connect = map[string]string{"AWS_SECRET": "x"} }, "guide.connect.AWS_SECRET"},
 		{"empty connect help", func(g *Guide) { g.Connect = map[string]string{"PAGERDUTY_TOKEN": ""} }, "guide.connect.PAGERDUTY_TOKEN"},
 		{"connect help too long", func(g *Guide) {
@@ -100,6 +106,19 @@ func TestGuideRefusals(t *testing.T) {
 				t.Fatalf("no V10 error at %s: %v", c.path, Validate(&m))
 			}
 		})
+	}
+}
+
+// TestGuideOverviewKeepsNewlinesAndTabs (agentry#558): the overview is
+// markdown over several lines, so a newline and a tab are the two control
+// characters it may carry.
+func TestGuideOverviewKeepsNewlinesAndTabs(t *testing.T) {
+	m := mustParse(t, guideYAML)
+	m.Guide.Overview = "Reads the export.\n\n- one\n\t- nested\n"
+	for _, err := range Validate(m) {
+		if is, ok := AsIssue(err); ok && is.Severity == SeverityError && is.Path == "guide.overview" {
+			t.Fatalf("a newline or a tab is refused: %v", is)
+		}
 	}
 }
 
@@ -176,7 +195,8 @@ func TestV2SchemaGuideShape(t *testing.T) {
 				AdditionalProperties bool `json:"additionalProperties"`
 				Properties           struct {
 					Overview struct {
-						MaxLength int `json:"maxLength"`
+						MaxLength int    `json:"maxLength"`
+						Pattern   string `json:"pattern"`
 					} `json:"overview"`
 					Prepare struct {
 						MaxItems int `json:"maxItems"`
@@ -207,6 +227,11 @@ func TestV2SchemaGuideShape(t *testing.T) {
 		t.Fatal("guide must be closed")
 	}
 	p := g.Properties
+	// The overview keeps newlines and tabs and refuses every other C0
+	// control and DEL (agentry#558).
+	if want := `^[^\u0000-\u0008\u000b-\u001f\u007f]*$`; p.Overview.Pattern != want {
+		t.Errorf("schema overview pattern is %q, want %q", p.Overview.Pattern, want)
+	}
 	for name, pair := range map[string][2]int{
 		"overview":     {p.Overview.MaxLength, MaxGuideOverviewBytes},
 		"prepare":      {p.Prepare.MaxItems, MaxGuidePrepare},
