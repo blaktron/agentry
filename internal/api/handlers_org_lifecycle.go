@@ -21,6 +21,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/knowledge"
 	"github.com/blaktron/agentry/internal/queue"
 	"github.com/blaktron/agentry/internal/registry"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
@@ -320,8 +321,9 @@ func (s *Server) RunOrgDecommissionSweep(ctx context.Context) (int, error) {
 // unreadable from the moment the first phase commits.
 func (s *Server) eraseOrg(ctx context.Context, orgID uuid.UUID, handle string) error {
 	var (
-		agents     []storegen.ListOrgAgentsForErasureRow
-		exportKeys []*string
+		agents        []storegen.ListOrgAgentsForErasureRow
+		exportKeys    []*string
+		knowledgeKeys []string
 	)
 	counts := map[string]any{"handle": handle}
 	err := s.st.WithTx(ctx, func(tq *storegen.Queries) error {
@@ -380,6 +382,12 @@ func (s *Server) eraseOrg(ctx context.Context, orgID uuid.UUID, handle string) e
 			}
 			counts[st.name] = n
 		}
+		// The organization's knowledge packs go with it (agentry#593), and
+		// the key that opens them once the transaction has committed.
+		if knowledgeKeys, err = knowledge.EraseOwner(ctx, tq, knowledge.Org(orgID)); err != nil {
+			return err
+		}
+		counts["knowledge_objects"] = len(knowledgeKeys)
 		if _, err := tq.RetireOrgAgents(ctx, orgID); err != nil {
 			return err
 		}
@@ -414,6 +422,7 @@ func (s *Server) eraseOrg(ctx context.Context, orgID uuid.UUID, handle string) e
 		}
 		return err
 	}
+	_ = s.knowledge.Destroyed(ctx, knowledge.Org(orgID), knowledgeKeys)
 	s.log.InfoContext(ctx, "org erased", "org", handle, "counts", counts)
 	s.fireEvent(ctx, Event{Kind: eventOrgDecommissioned, OrgID: orgID, Payload: map[string]any{"org": handle}})
 	return s.retireOrgContent(ctx, orgID, handle, exportKeys)

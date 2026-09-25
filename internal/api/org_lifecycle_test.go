@@ -22,6 +22,7 @@ import (
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/entitlements"
+	"github.com/blaktron/agentry/internal/knowledge"
 	"github.com/blaktron/agentry/internal/notify"
 )
 
@@ -633,11 +634,17 @@ func TestOrgDecommissionErasesAfterTheHold(t *testing.T) {
 		t.Fatalf("archive before erasure: %v %v", ok, err)
 	}
 
+	// An organization's knowledge pack (agentry#593) goes when it is
+	// erased; the routes reach an organization's packs from the shared
+	// knowledge milestone, so this one is put through the store.
+	kn := seedKnowledge(t, env, knowledge.Org(uuid.MustParse(orgID)))
+
 	env.doJSON(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/decommission", map[string]any{"confirm": orgH}, nil, http.StatusOK)
 	n, err := srv.RunOrgDecommissionSweep(ctx)
 	if err != nil || n != 1 {
 		t.Fatalf("sweep: erased %d, err %v; want 1", n, err)
 	}
+	assertKnowledgeGone(t, env, kn)
 
 	// Gone from every surface; the handle and the domain are free.
 	res := env.do(admin, http.MethodGet, "/api/v1/orgs/"+orgH, nil)
