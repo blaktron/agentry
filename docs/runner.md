@@ -75,6 +75,7 @@ One BriefAgent, one job, one container tree, then gone.
 | `--input FILE` | task text (else piped stdin, else an empty task) |
 | `--intake id=value` | answer an intake question non-interactively (repeatable; unanswered questions are asked on a terminal, and a `secret` answer is never recorded) |
 | `--file PATH` | provide a file or directory to the run, read-only under `/inputs` (repeatable; basename-rooted; duplicate basenames refused) |
+| `--knowledge DIR` | attach a knowledge pack read-only at `/knowledge/<name>`, searched with the knowledge tools (repeatable; [below](#knowledge-packs)) |
 | `--out DIR` | output folder (default `./agentry-out/<ns>-<name>-<runid>/`) |
 | `--output-format text\|json` | stdout carries the result text, or the full envelope |
 | `--keep-profile true\|false` | this run's MCP-profile completion choice (default: the profile's own setting, else policy) |
@@ -541,6 +542,39 @@ checks (`scripts/acceptance/runner-r2.sh`). Each script points
 throwaway directory, so the consent records `agentry run` writes never
 reach your `~/.config/agentry/installed.yaml`.
 
+## Knowledge packs
+
+A knowledge pack is an LLM wiki of at most 10 MB: cited pages with an
+index, together with the documents they were compiled from. It is one
+directory holding `manifest.json` (name, id, dates, the page and byte
+counts, the tree's digest, the scan record), `wiki/` (`index.md`, generated;
+`log.md`, append-only; the pages) and `sources/` (the documents as given,
+and each one's decoded text as `<name>.txt`). The digest is the SHA-256 of
+a canonical tar of `wiki/` and `sources/`, the form the registry's store
+checks too ([Knowledge packs in the registry](knowledge.md)).
+
+**Making one.** `agentry knowledge create NAME --file PATH…` makes a pack
+in `--dir` (default `./NAME`), and `agentry knowledge add DIR --file PATH…`
+extends one. The built-in Knowledge Creator does the work. It is a package
+this binary embeds and runs with the attestation state `builtin`, never a
+release anyone installs. The runner first decodes the documents in an
+image that holds only `pdftotext`, `pandoc` and `tesseract`, with no
+network and every capability dropped. Markdown, text, HTML, CSV, JSON,
+YAML and source files pass as they are. Then the Creator compiles their
+text into pages against the model your policy names, and the build applies
+what it wrote. A local build costs no credits and is not scanned; the pack
+records `not scanned`. `--timeout`, `--max-turns` and `--max-cost` bound
+the run, and an `add` with the same documents continues a build that
+stopped.
+
+**Attaching one.** `run … --knowledge DIR` loads and verifies each pack
+(the manifest, the layout, the 10 MB cap, the digest) before anything is
+resolved. It mounts one read-only `/knowledge` volume, and the tools server
+grants `knowledge_list`, `knowledge_search` and `knowledge_read` for that
+run only. Attaching a pack changes neither the compiled plan nor its hash.
+The receipt's `capabilities_enforced.knowledge` names each pack by digest
+and says whether a registry scanned it.
+
 ## Machine-readable output
 
 A client that drives the CLI — the desktop app, the `agentry-mcp` server
@@ -567,6 +601,7 @@ key variable's **name** only.
 | `setup --json` | `policyPath`, `provider`, `model`, `apiKeyEnv` (a name), `baseUrl`, `images` ready\|skipped |
 | `run ns/name --plan --json` (or `--local DIR`) | the consent-free preview a client shows before a person consents: `ref`, `version`, `digest`, `mode`, `modes`, `plan` (the compiled plan, canonical — what a run would enforce), `planSha256` (the receipt's `runPlanSha256`, over the plan's canonical indented form — match it, do not re-derive it from the compact `plan` bytes), `contract`, `contractDigest`, `attestation` verified\|unsigned\|local\|mismatch\|unverifiable, `keyId`, `signed`, `installed`, `diff`, `needsConfirmation`, `reason`, `refusals[]` (every refusal the attestation and vulnerable-server gates would meet, in the order a run meets them: `kind` attestation\|vulnerable_server, `message`, `lift` — the flag that lifts it, `--allow-unsigned`, `--allow-unscanned` or `--allow-vulnerable-mcp`, absent when none does), `refusal` (deprecated: the first refusal's message). Asks nothing, records nothing, materializes into a temp home; exit 0 whether or not a run would be refused (`--dry-run` is the plan for a person who consented on the terminal) |
 | `run … --output-format json` | the result envelope: `agentry` (`run/v1`), `status`, `exitCode` and `exitClass`, `error`, `runId`, `ref`, `digest`, `attestation`, `capabilities_enforced`, `harness`, `usage`, `result`, `outDir`, `resultFile`, `receipts` (`dir`, `runPlanSha256`), and `policy` (`path` of the operator policy file the run enforced, absolute; `source` default\|flag\|env — the runner home's file, `--policy`, or a home relocated by `AGENTRY_RUNNER_HOME`; `sha256`, the plan's `policySha256` — the digest of that file) |
+| `knowledge create NAME --json` / `knowledge add DIR --json` | `dir`, `manifest` (the pack's `manifest.json`: `schema`, `name`, `id`, `created`, `updated`, `creator`, `pages`, `bytes`, `sha256`, and `scan`, the string `not scanned` or a registry's record), `documents[]` (what the run was given), `skipped[]` (documents not ingested), `written[]` (the paths the build applied), `dropped[]` (`path`, `reason`, `kept`), `receipts` (the Creator run's receipt directory), `decode` (the decode step's report, when documents were decoded), `stopped` (the budget or error that stopped the run early, when one did) |
 | `--version` | `agentry version <v>` — a release version, or a git describe on a source build |
 
 One example, `install --plan --json` on a first install of a BriefAgent

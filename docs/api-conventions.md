@@ -317,13 +317,15 @@ scopes:
 | `audit:read` | read an organization's audit log |
 | `run:read` | read a hosted run of a BriefAgent, its log and its artefacts |
 | `run:write` | start, feed and cancel a hosted run of a BriefAgent |
+| `knowledge:read` | list and read the account's knowledge packs, their scan reports and sealed trees, export them, and have a pack's data key unwrapped |
+| `knowledge:write` | create, upload and delete the account's knowledge packs and have a data key wrapped |
 
 `run:read` and `run:write` are consumed only by a registry that mounts the
 runs extension (`GET /meta` lists it); on a registry without it a token
 carrying only these two is refused everywhere a token without the right
 scope is. [Hosted runs](hosted-runs.md) is what those routes do, route by
 route. The desktop app's sign-in grant asks for a fixed set
-(`agent:read`, `agent:publish`, `repo:read`, `repo:write`, `user:profile`, `run:read`, `run:write`).
+(`agent:read`, `agent:publish`, `repo:read`, `repo:write`, `user:profile`, `run:read`, `run:write`, `knowledge:read`, `knowledge:write`).
 
 ## Native credentials vs an external directory
 

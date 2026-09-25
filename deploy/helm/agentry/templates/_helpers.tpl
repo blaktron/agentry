@@ -78,6 +78,14 @@ app.kubernetes.io/instance: {{ .Release.Name }}
     secretKeyRef:
       name: {{ include "agentry.secretName" . }}
       key: AGENTRY_AUTH_SEALING_KEY
+{{- if or .Values.secret.knowledgeSealingKey .Values.secret.existingSecret }}
+- name: AGENTRY_KNOWLEDGE_SEALING_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "agentry.secretName" . }}
+      key: AGENTRY_KNOWLEDGE_SEALING_KEY
+      optional: true
+{{- end }}
 {{- if or .Values.secret.redisUrl .Values.secret.existingSecret }}
 - name: AGENTRY_REDIS_URL
   valueFrom:
