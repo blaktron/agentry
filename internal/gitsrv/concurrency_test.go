@@ -20,10 +20,17 @@ import (
 )
 
 // holdUploadPack opens a git-upload-pack request from addr whose body never
-// ends: the server admits it, starts git, and git waits on its stdin, so
-// the operation's slot stays held until the returned func is called (or
-// the test ends).
-func (e *gitEnv) holdUploadPack(t *testing.T, repo, addr string) (release func()) {
+// ends: the server admits it, starts git, and git waits on its stdin, so the
+// operation's slot stays held until the returned func is called (or the test
+// ends). It returns once the server books the slot to key, the address the
+// budget is expected to charge, and fails the test if the server refuses or
+// finishes the request instead.
+//
+// It waits on the server's own count rather than on a request from the same
+// address: such a probe holds that address's slot while it runs, so with a
+// budget of one it could refuse the operation being held, after which every
+// probe was served and the test failed on a correct server (agentry#562).
+func (e *gitEnv) holdUploadPack(t *testing.T, repo, addr, key string) (release func()) {
 	t.Helper()
 	pr, pw := io.Pipe()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -34,12 +41,16 @@ func (e *gitEnv) holdUploadPack(t *testing.T, repo, addr string) (release func()
 	req.Header.Set("Content-Type", "application/x-git-upload-pack-request")
 	req.Header.Set("X-Forwarded-For", addr)
 	done := make(chan struct{})
+	status := make(chan int, 1) // the held request's status, should it end
 	go func() {
 		defer close(done)
-		if res, err := e.srv.Client().Do(req); err == nil {
-			_, _ = io.Copy(io.Discard, res.Body)
-			_ = res.Body.Close()
+		res, err := e.srv.Client().Do(req)
+		if err != nil {
+			return
 		}
+		status <- res.StatusCode
+		_, _ = io.Copy(io.Discard, res.Body)
+		_ = res.Body.Close()
 	}()
 	var once sync.Once
 	release = func() {
@@ -53,7 +64,33 @@ func (e *gitEnv) holdUploadPack(t *testing.T, repo, addr string) (release func()
 	// Close, which would otherwise wait forever on the held request when a
 	// test fails before releasing it.
 	t.Cleanup(release)
+	e.untilClientOps(t, key, 1, status, done)
 	return release
+}
+
+// untilClientOps waits until the server counts want operations held by the
+// client address key. status and done belong to a held request: if it ends
+// before the count is reached, the wait fails at once with its status.
+func (e *gitEnv) untilClientOps(t *testing.T, key string, want int, status <-chan int, done <-chan struct{}) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	tick := time.NewTicker(5 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		if got := e.git.ClientOpsHeld(key); got == want {
+			return
+		}
+		select {
+		case code := <-status:
+			t.Fatalf("the held upload-pack ended with %d before %s held %d operation(s)", code, key, want)
+		case <-done:
+			t.Fatalf("the held upload-pack failed before %s held %d operation(s)", key, want)
+		case <-tick.C:
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%s holds %d git operation(s) after 10s, want %d", key, e.git.ClientOpsHeld(key), want)
+		}
+	}
 }
 
 // infoRefs asks for the upload-pack advertisement as addr and returns the
@@ -72,22 +109,6 @@ func (e *gitEnv) infoRefs(t *testing.T, repo, addr string) int {
 	_, _ = io.Copy(io.Discard, res.Body)
 	_ = res.Body.Close()
 	return res.StatusCode
-}
-
-// untilStatus polls infoRefs as addr until it answers want, or fails.
-func (e *gitEnv) untilStatus(t *testing.T, repo, addr string, want int) {
-	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		got := e.infoRefs(t, repo, addr)
-		if got == want {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("info/refs as %s: %d, want %d", addr, got, want)
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
 }
 
 func seedPublicRepo(t *testing.T, e *gitEnv, name string) {
@@ -111,11 +132,12 @@ func TestGitConcurrencyIsBudgetedPerTrustedAddress(t *testing.T) {
 	seedPublicRepo(t, env, "budget-b")
 	const greedy, other = "203.0.113.7", "198.51.100.9"
 
-	release := env.holdUploadPack(t, "budget-a", greedy)
-	// The held operation is admitted asynchronously; the refusal of the
-	// next one from the same address is what shows it holds the slot. On
+	release := env.holdUploadPack(t, "budget-a", greedy, greedy)
+	// The address is at its budget: its next operation is refused. On
 	// another repository, so the per-repository cap is not what refuses it.
-	env.untilStatus(t, "budget-b", greedy, http.StatusTooManyRequests)
+	if got := env.infoRefs(t, "budget-b", greedy); got != http.StatusTooManyRequests {
+		t.Fatalf("an address at its budget: info/refs %d, want 429", got)
+	}
 
 	if got := env.infoRefs(t, "budget-b", other); got != http.StatusOK {
 		t.Fatalf("a second address beside one at its budget: info/refs %d, want 200", got)
@@ -125,7 +147,12 @@ func TestGitConcurrencyIsBudgetedPerTrustedAddress(t *testing.T) {
 	}
 
 	release()
-	env.untilStatus(t, "budget-b", greedy, http.StatusOK)
+	// The server lets the slot go when git exits, after the client has
+	// already hung up.
+	env.untilClientOps(t, greedy, 0, nil, nil)
+	if got := env.infoRefs(t, "budget-b", greedy); got != http.StatusOK {
+		t.Fatalf("the address once its operation ended: info/refs %d, want 200", got)
+	}
 }
 
 // With no trusted proxy (the default) X-Forwarded-For is the client's own
@@ -137,8 +164,11 @@ func TestGitConcurrencyBudgetIgnoresAnUntrustedForwardedFor(t *testing.T) {
 	seedPublicRepo(t, env, "spoof-a")
 	seedPublicRepo(t, env, "spoof-b")
 
-	env.holdUploadPack(t, "spoof-a", "203.0.113.7")
-	env.untilStatus(t, "spoof-b", "203.0.113.7", http.StatusTooManyRequests)
+	// The slot is booked to the peer, not to the address the client wrote.
+	env.holdUploadPack(t, "spoof-a", "203.0.113.7", "127.0.0.1")
+	if got := env.infoRefs(t, "spoof-b", "203.0.113.7"); got != http.StatusTooManyRequests {
+		t.Fatalf("the peer at its budget: info/refs %d, want 429", got)
+	}
 	if got := env.infoRefs(t, "spoof-b", "198.51.100.9"); got != http.StatusTooManyRequests {
 		t.Fatalf("a forged X-Forwarded-For from the same peer: info/refs %d, want 429 (the peer's budget)", got)
 	}
