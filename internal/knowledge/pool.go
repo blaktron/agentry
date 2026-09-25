@@ -2,8 +2,12 @@ package knowledge
 
 import (
 	"context"
+	"slices"
+
+	"github.com/google/uuid"
 
 	"github.com/blaktron/agentry/internal/entitlements"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 // Pool is the allocation an owner's knowledge packs draw on (agentry#612):
@@ -24,25 +28,27 @@ type Pool struct {
 
 // Pools is the optional interface of an entitlements resolver that pools
 // owners' knowledge. The core asks the resolver it holds, so an extension's
-// resolver answers; an error is not permission.
+// resolver answers; an error is not permission. The contract the core
+// cannot check: every owner a pool lists must be answered with that same
+// pool (the same Key), or two of them are not serialised on one lock.
+// Pooling discloses the pool's total to every owner in it — the meter and
+// the refusal name it — which a shared cap cannot avoid.
 type Pools interface {
 	KnowledgePool(ctx context.Context, owner Owner) (Pool, error)
 }
 
-func (p Pool) counts(owner Owner) bool {
+// sumParams is the store's question for the pool's bytes, except aside
+// (uuid.Nil for none).
+func (p Pool) sumParams(except uuid.UUID) storegen.SumKnowledgeBytesOfPoolParams {
+	arg := storegen.SumKnowledgeBytesOfPoolParams{ExceptID: except}
 	for _, o := range p.Owners {
-		if o == owner {
-			return true
-		}
+		arg.OwnerKinds = append(arg.OwnerKinds, string(o.Kind))
+		arg.OwnerIds = append(arg.OwnerIds, o.ID)
 	}
-	return false
+	return arg
 }
 
-// owners is the pool's owners as the store names them, "<kind>/<id>".
-func (p Pool) owners() []string {
-	out := make([]string, 0, len(p.Owners))
-	for _, o := range p.Owners {
-		out = append(out, o.String())
-	}
-	return out
+// pooled says whether the pool counts owners other than owner.
+func (p Pool) pooled(owner Owner) bool {
+	return slices.ContainsFunc(p.Owners, func(o Owner) bool { return o != owner })
 }

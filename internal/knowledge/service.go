@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"slices"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -244,17 +245,22 @@ func (s *Service) Sizes(ctx context.Context, owner Owner) ([]storegen.ListKnowle
 	return rows, nil
 }
 
-// Usage is what an owner keeps in the registry against their allocation.
+// Usage is an owner's meter: what the owner keeps, and the allocation it
+// draws on — the owner's own, or a pool an extension shares among owners,
+// whose total every owner in it sees.
 type Usage struct {
+	// Bytes and Packs are the owner's own packs.
 	Bytes int64
-	// Max is the allocation; 0 is no cap.
-	Max   int64
 	Packs int
+	// Used is what counts against the allocation: Bytes, or the pool's
+	// total when Pooled.
+	Used int64
+	// Max is the allocation; 0 is no cap.
+	Max    int64
+	Pooled bool
 }
 
-// Usage is owner's meter: the bytes and the cap of the pool owner's packs
-// draw on (the owner alone unless an extension pools owners), and the
-// owner's own packs.
+// Usage is owner's meter.
 func (s *Service) Usage(ctx context.Context, owner Owner) (Usage, error) {
 	rows, err := s.List(ctx, owner)
 	if err != nil {
@@ -264,11 +270,15 @@ func (s *Service) Usage(ctx context.Context, owner Owner) (Usage, error) {
 	if err != nil {
 		return Usage{}, err
 	}
-	used, err := s.st.Queries().SumKnowledgeBytesOfPool(ctx, storegen.SumKnowledgeBytesOfPoolParams{ExceptID: uuid.Nil, Owners: pool.owners()})
+	used, err := s.st.Queries().SumKnowledgeBytesOfPool(ctx, pool.sumParams(uuid.Nil))
 	if err != nil {
 		return Usage{}, fmt.Errorf("knowledge: count the allocation: %w", err)
 	}
-	return Usage{Bytes: used, Max: pool.Cap.Max, Packs: len(rows)}, nil
+	u := Usage{Packs: len(rows), Used: used, Max: pool.Cap.Max, Pooled: pool.pooled(owner)}
+	for _, p := range rows {
+		u.Bytes += p.Bytes
+	}
+	return u, nil
 }
 
 // resolver is the entitlements resolver the server holds now.
@@ -282,7 +292,7 @@ func (s *Service) resolver() entitlements.Resolver {
 // pool is the allocation owner's packs draw on: an extension's answer when
 // its resolver pools owners (Pools), else the owner alone under
 // Features.KnowledgeBytes. An unknown answer is not permission, and neither
-// is a pool that does not count its own owner.
+// is a pool with no key or one that does not count its own owner.
 func (s *Service) pool(ctx context.Context, owner Owner) (Pool, error) {
 	r := s.resolver()
 	if p, ok := r.(Pools); ok {
@@ -290,7 +300,10 @@ func (s *Service) pool(ctx context.Context, owner Owner) (Pool, error) {
 		if err != nil {
 			return Pool{}, fmt.Errorf("knowledge: entitlements: %w", err)
 		}
-		if pool.Key == "" || !pool.counts(owner) {
+		if pool.Key == "" {
+			return Pool{}, fmt.Errorf("knowledge: entitlements: the pool for %s has no key", owner)
+		}
+		if !slices.Contains(pool.Owners, owner) {
 			return Pool{}, fmt.Errorf("knowledge: entitlements: the pool for %s does not count its owner", owner)
 		}
 		return pool, nil
@@ -304,6 +317,31 @@ func (s *Service) pool(ctx context.Context, owner Owner) (Pool, error) {
 		return Pool{}, fmt.Errorf("knowledge: entitlements: %w", err)
 	}
 	return Pool{Key: owner.String(), Owners: []Owner{owner}, Cap: f.KnowledgeBytes}, nil
+}
+
+// lockPool reserves owner's pool on q and answers it as it stands under the
+// lock: the pool is resolved, its key locked, and the pool read again, so
+// its owners and cap are the ones the lock serialises. A pool whose key
+// moved in between (an owner joining or leaving) is locked under its new key
+// as well.
+func (s *Service) lockPool(ctx context.Context, q *storegen.Queries, owner Owner) (Pool, error) {
+	locked := map[string]bool{}
+	for {
+		pool, err := s.pool(ctx, owner)
+		if err != nil {
+			return Pool{}, err
+		}
+		if locked[pool.Key] {
+			return pool, nil
+		}
+		if err := q.LockKey(ctx, "knowledge:"+pool.Key); err != nil {
+			return Pool{}, fmt.Errorf("knowledge: lock the allocation: %w", err)
+		}
+		locked[pool.Key] = true
+		if len(locked) > 3 {
+			return Pool{}, errors.New("knowledge: the allocation kept moving; retry")
+		}
+	}
 }
 
 // objectKey is where a sealed tree lives: under its owner's prefix.
@@ -334,12 +372,9 @@ func (s *Service) Upload(ctx context.Context, owner Owner, id uuid.UUID, sealed 
 	}
 	var replaced []string
 	err = s.st.WithTx(ctx, func(q *storegen.Queries) error {
-		pool, err := s.pool(ctx, owner)
+		pool, err := s.lockPool(ctx, q, owner)
 		if err != nil {
 			return err
-		}
-		if err := q.LockKey(ctx, "knowledge:"+pool.Key); err != nil {
-			return fmt.Errorf("knowledge: lock the allocation: %w", err)
 		}
 		cur, err := q.GetKnowledgePackForUpdate(ctx, storegen.GetKnowledgePackForUpdateParams{ID: id, OwnerKind: string(owner.Kind), OwnerID: owner.ID})
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -348,14 +383,13 @@ func (s *Service) Upload(ctx context.Context, owner Owner, id uuid.UUID, sealed 
 		if err != nil {
 			return fmt.Errorf("knowledge: lock pack: %w", err)
 		}
-		c := pool.Cap
-		others, err := q.SumKnowledgeBytesOfPool(ctx, storegen.SumKnowledgeBytesOfPoolParams{ExceptID: id, Owners: pool.owners()})
+		others, err := q.SumKnowledgeBytesOfPool(ctx, pool.sumParams(id))
 		if err != nil {
 			return fmt.Errorf("knowledge: count the allocation: %w", err)
 		}
 		// A cap never deletes (D25): a tree no larger than the one it
 		// replaces is always taken; one that grows must fit.
-		if tree.Bytes > cur.Bytes && (!c.Enabled || (c.Max > 0 && others+tree.Bytes > c.Max)) {
+		if c := pool.Cap; tree.Bytes > cur.Bytes && (!c.Enabled || (c.Max > 0 && others+tree.Bytes > c.Max)) {
 			return &AllocationError{Bytes: others + tree.Bytes, Max: c.Max}
 		}
 		if err := q.CreateKnowledgeObject(ctx, storegen.CreateKnowledgeObjectParams{
