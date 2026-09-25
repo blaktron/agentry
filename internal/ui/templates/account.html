@@ -53,5 +53,14 @@
 <p class="muted">The address confirmation is not switchable; the registry sends it only when you ask for one.</p>
 {{end}}
 </section>
+<section class="card">
+<h2>Knowledge</h2>
+{{if .KnowledgeError}}<p class="flash error">{{.KnowledgeError}}</p>
+{{else if .KnowledgeOff}}<p class="muted">This registry keeps no knowledge packs.</p>
+{{else if .Knowledge}}{{with .Knowledge}}
+<p>{{.Packs}} {{if eq .Packs 1}}pack{{else}}packs{{end}} kept here, {{.Used}}{{if gt .Max 0}} of {{.Allocation}}{{else}}, with no cap on this registry{{end}}.</p>
+<p class="muted">Only what is kept in the registry counts. A pack on your own machine does not, and reaching the cap deletes nothing: it stops a pack being added or grown here.</p>
+{{end}}{{end}}
+</section>
 {{end}}
 {{end}}
