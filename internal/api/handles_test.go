@@ -40,3 +40,41 @@ func TestOrgHandleReserved(t *testing.T) {
 		t.Error("unreservedHandle must leave an unreserved handle alone")
 	}
 }
+
+// TestHandleSeed: a JIT handle is seeded from the username the IdP asserts,
+// falling back to the email's local part only when the username is absent
+// or yields no valid handle (agentry#517).
+func TestHandleSeed(t *testing.T) {
+	cases := []struct{ username, email, subject, want string }{
+		{"blaktron", "chris@example.test", "sub", "blaktron"},
+		{"", "chris@example.test", "sub", "chris"},
+		{"   ", "chris@example.test", "sub", "chris"},
+		{"chris.young@contoso.test", "cy@contoso.test", "sub", "chris.young"}, // a UPN gives its local part
+		{"___", "chris@example.test", "sub", "chris"},                         // no valid handle in it
+		{"", "", "github-42", "github-42"},
+	}
+	for _, c := range cases {
+		if got := handleSeed(c.username, c.email, c.subject); got != c.want {
+			t.Errorf("handleSeed(%q, %q, %q) = %q, want %q", c.username, c.email, c.subject, got, c.want)
+		}
+	}
+	// The seed still goes through the grammar and the reserved list.
+	if got := sanitizeHandle(handleSeed("Chris.Young", "x@y.test", "s")); got != "chris-young" {
+		t.Errorf("sanitized seed = %q, want chris-young", got)
+	}
+	if got := sanitizeHandle(handleSeed("admin", "x@y.test", "s")); got != "admin-1" {
+		t.Errorf("a reserved username = %q, want admin-1", got)
+	}
+}
+
+func TestHandleRequestedDetail(t *testing.T) {
+	if d := handleRequestedDetail("blaktron", "blaktron"); d != nil {
+		t.Errorf("agreeing handle recorded %v", d)
+	}
+	if d := handleRequestedDetail("", "chris"); d != nil {
+		t.Errorf("no username recorded %v", d)
+	}
+	if d := handleRequestedDetail("blaktron", "blaktron-1a2b3c"); d["handleRequested"] != "blaktron" {
+		t.Errorf("fallback not recorded: %v", d)
+	}
+}

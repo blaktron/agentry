@@ -48,6 +48,12 @@ type Claims struct {
 	// the user's group names there); nil when absent. The registry maps
 	// one configured group onto platform staff (agentry#51).
 	Groups []string
+	// PreferredUsername is the `preferred_username` claim: the name the
+	// person chose at the IdP (authentik's profile scope puts the
+	// directory's username there); "" when absent. It is a seed for a new
+	// account's handle, never an identifier: OIDC Core §5.7 does not make
+	// it unique or stable, so nothing is looked up by it (agentry#517).
+	PreferredUsername string
 }
 
 // New builds the RP. coreoidc.NewProvider performs discovery and pins the
@@ -127,6 +133,7 @@ func (rp *RP) Exchange(ctx context.Context, code, verifier, expectedNonce string
 		AMR           any    `json:"amr"`
 		ACR           string `json:"acr"`
 		Groups        any    `json:"groups"`
+		PreferredUser string `json:"preferred_username"`
 	}
 	if err := idToken.Claims(&raw); err != nil {
 		return nil, fmt.Errorf("oidc: decode claims: %w", err)
@@ -139,6 +146,8 @@ func (rp *RP) Exchange(ctx context.Context, code, verifier, expectedNonce string
 		AMR:           asStrings(raw.AMR),
 		ACR:           raw.ACR,
 		Groups:        asStrings(raw.Groups),
+		// Trimmed only: the handle grammar is the caller's to apply.
+		PreferredUsername: strings.TrimSpace(raw.PreferredUser),
 	}
 	if c.Subject == "" {
 		c.Subject = raw.Sub
