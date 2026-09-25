@@ -1,0 +1,76 @@
+# A red `ci` run on a merge commit is told to whoever merged it (agentry#452).
+# On 2026-09-21 `main` sat red for over two hours after a merge-commit run
+# failed, because nothing re-ran it and a red push run is easy to miss: the
+# gate judges the pull request's run, and the push run on dev or main lands
+# after the merge. This workflow comments on the pull request(s) that produced
+# the commit, naming the failed jobs, so the merger hears of it where they
+# were last working.
+#
+# workflow_run workflows run from the default branch's copy of this file
+# (main), so it takes effect once promoted. workflow_dispatch with dry_run
+# prints what it would post for a given run, which is how it is checked
+# without posting.
+name: post-merge
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main, dev]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: a ci run id to report on
+        required: true
+      dry_run:
+        description: print the comment instead of posting it
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+
+jobs:
+  alert:
+    # Only a push run (a merge commit on dev or main) that failed; a pull
+    # request's own run is the gate's business. No fork guard is needed:
+    # workflow_run runs the default branch's code, never a fork's.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'failure')
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 5
+    steps:
+      - name: tell the merged pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+        run: |
+          set -euo pipefail
+          api() { curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$@"; }
+          run=$(api "https://api.github.com/repos/$REPO/actions/runs/$RUN_ID")
+          sha=$(jq -r .head_sha <<<"$run")
+          branch=$(jq -r .head_branch <<<"$run")
+          url=$(jq -r .html_url <<<"$run")
+          attempt=$(jq -r .run_attempt <<<"$run")
+          failed=$(api "https://api.github.com/repos/$REPO/actions/runs/$RUN_ID/attempts/$attempt/jobs?per_page=100" \
+            | jq -r '[.jobs[] | select(.conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "cancelled") | "`\(.name)` (\(.conclusion))"] | join(", ")')
+          prs=$(api "https://api.github.com/repos/$REPO/commits/$sha/pulls" | jq -r '.[] | select(.merged_at != null) | .number')
+          body="The \`ci\` run on this merge commit (\`${sha:0:7}\` on \`$branch\`) is red: ${failed:-no failed job listed}. $url
+
+          The gate judged this pull request's own run; this is the push run after the merge. Read the failure (\`gh run view $RUN_ID --log-failed\`): a known flake may be re-run once, and anything else is fixed forward on a new branch before the next promotion (agentry#452)."
+          if [ -z "$prs" ]; then
+            echo "no merged pull request found for $sha; nothing to tell"
+            exit 0
+          fi
+          for n in $prs; do
+            if [ "$DRY_RUN" = "true" ]; then
+              printf 'would comment on #%s:\n%s\n' "$n" "$body"
+            else
+              jq -n --arg b "$body" '{body: $b}' | api -X POST "https://api.github.com/repos/$REPO/issues/$n/comments" -d @- >/dev/null
+              echo "told #$n"
+            fi
+          done
