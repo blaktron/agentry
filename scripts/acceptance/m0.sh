@@ -52,6 +52,6 @@ curl -fsS "http://localhost:$PORT/.well-known/agentry/registry.json" >/dev/null 
 gotest "go client smoke" -timeout 20m ./internal/api -run 'TestM0Smoke' -count=1
 
 # 6. The server's own surface answers (the full check is scripts/acceptance/ui.sh).
-curl -fsS -o /dev/null -w '%{http_code}' "http://localhost:$PORT/ui/login" | grep -q 200 && echo "core UI: OK"
+curl -fsS -o /dev/null -w '%{http_code}' "http://localhost:$PORT/ui/login" | grep 200 >/dev/null && echo "core UI: OK"
 
 echo "== M0 acceptance PASSED =="

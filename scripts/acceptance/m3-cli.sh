@@ -126,7 +126,7 @@ echo "== agentry install --target=claude-skill =="
 "$AGENTRY" install --registry "$BASE" "$HANDLE/$NAME" --target=claude-skill --dir "$TMP/skills" --yes
 test -f "$TMP/skills/$NAME/SKILL.md"  || { echo "SKILL.md missing after install"; exit 1; }
 test -f "$TMP/skills/$NAME/agent.yaml" || { echo "agent.yaml missing after install"; exit 1; }
-head -1 "$TMP/skills/$NAME/SKILL.md" | grep -q '^---$' || { echo "installed SKILL.md lacks YAML frontmatter"; exit 1; }
+head -1 "$TMP/skills/$NAME/SKILL.md" | grep '^---$' >/dev/null || { echo "installed SKILL.md lacks YAML frontmatter"; exit 1; }
 
 echo "== agentry info + search =="
 "$AGENTRY" info --registry "$BASE" "$HANDLE/$NAME" >"$TMP/info.out"

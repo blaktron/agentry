@@ -39,7 +39,7 @@ loc=$(curl -sS -o /dev/null -w '%{redirect_url}' -c "$JAR" -b "$JAR" -H 'Sec-Fet
 [ "$loc" = "$BASE/ui/account" ] || { echo "sign-in: redirect $loc"; exit 1; }
 [ -n "$(csrf)" ] || { echo "sign-in: no csrf cookie"; exit 1; }
 echo "sign-in form: OK"
-curl -fsS -b "$JAR" "$BASE/ui/account" | grep -q "$HANDLE" && echo "account page: OK"
+curl -fsS -b "$JAR" "$BASE/ui/account" | grep "$HANDLE" >/dev/null && echo "account page: OK"
 # Organizations (agentry#363): the create form, then the decommission form.
 # Creating one needs a verified address, and the verification token never
 # leaves the server, so the address is marked verified directly, as
@@ -49,21 +49,21 @@ ORG="uiorg$SFX"
 loc=$(curl -sS -o /dev/null -w '%{redirect_url}' -b "$JAR" -c "$JAR" -H 'Sec-Fetch-Site: same-origin' --data-urlencode "_csrf=$(csrf)" \
   --data-urlencode "handle=$ORG" --data-urlencode "displayName=Acceptance Org" "$BASE/ui/orgs")
 [ "$loc" = "$BASE/ui/orgs/$ORG" ] || { echo "create org form: redirect $loc"; exit 1; }
-curl -fsS -b "$JAR" -c "$JAR" "$BASE/ui/orgs/$ORG" | grep -q "Acceptance Org" && echo "org created from the form: OK"
+curl -fsS -b "$JAR" -c "$JAR" "$BASE/ui/orgs/$ORG" | grep "Acceptance Org" >/dev/null && echo "org created from the form: OK"
 loc=$(curl -sS -o /dev/null -w '%{redirect_url}' -b "$JAR" -c "$JAR" -H 'Sec-Fetch-Site: same-origin' --data-urlencode "_csrf=$(csrf)" \
   --data-urlencode "section=decommission" --data-urlencode "confirm=$ORG" "$BASE/ui/orgs/$ORG")
 [ "$loc" = "$BASE/ui/orgs/$ORG" ] || { echo "decommission form: redirect $loc"; exit 1; }
-curl -fsS -b "$JAR" -c "$JAR" "$BASE/ui/orgs/$ORG" | grep -q "being decommissioned" && echo "org decommissioned from the form: OK"
+curl -fsS -b "$JAR" -c "$JAR" "$BASE/ui/orgs/$ORG" | grep "being decommissioned" >/dev/null && echo "org decommissioned from the form: OK"
 curl -fsS -b "$JAR" -H 'Sec-Fetch-Site: same-origin' --data-urlencode "_csrf=$(csrf)" --data-urlencode "action=create" \
-  --data-urlencode "name=acceptance" --data-urlencode "scopes=agent:read" "$BASE/ui/account/tokens" | grep -q "agy_" && echo "token shown once: OK"
-curl -fsS -b "$JAR" "$BASE/ui/account/tokens" | grep -q "acceptance" && echo "token listed: OK"
+  --data-urlencode "name=acceptance" --data-urlencode "scopes=agent:read" "$BASE/ui/account/tokens" | grep "agy_" >/dev/null && echo "token shown once: OK"
+curl -fsS -b "$JAR" "$BASE/ui/account/tokens" | grep "acceptance" >/dev/null && echo "token listed: OK"
 # The hosted-run scopes are on the form and travel to the token (agentry#348).
-curl -fsS -b "$JAR" "$BASE/ui/account/tokens" | grep -q 'value="run:write"' && echo "run scopes offered: OK"
+curl -fsS -b "$JAR" "$BASE/ui/account/tokens" | grep 'value="run:write"' >/dev/null && echo "run scopes offered: OK"
 curl -fsS -b "$JAR" -H 'Sec-Fetch-Site: same-origin' --data-urlencode "_csrf=$(csrf)" --data-urlencode "action=create" \
-  --data-urlencode "name=acceptance-run" --data-urlencode "scopes=run:read" --data-urlencode "scopes=run:write" "$BASE/ui/account/tokens" | grep -q "agy_" && echo "run-scoped token shown once: OK"
-curl -fsS -b "$JAR" "$BASE/ui/account/tokens" | grep -q "run:read run:write" && echo "run-scoped token listed with its scopes: OK"
+  --data-urlencode "name=acceptance-run" --data-urlencode "scopes=run:read" --data-urlencode "scopes=run:write" "$BASE/ui/account/tokens" | grep "agy_" >/dev/null && echo "run-scoped token shown once: OK"
+curl -fsS -b "$JAR" "$BASE/ui/account/tokens" | grep "run:read run:write" >/dev/null && echo "run-scoped token listed with its scopes: OK"
 STATE="state_$SFX$SFX"
-curl -fsS -b "$JAR" "$BASE/ui/authorize?port=40123&state=$STATE" | grep -q "127.0.0.1:40123" && echo "authorize page: OK"
+curl -fsS -b "$JAR" "$BASE/ui/authorize?port=40123&state=$STATE" | grep "127.0.0.1:40123" >/dev/null && echo "authorize page: OK"
 cb=$(curl -sS -o /dev/null -w '%{redirect_url}' -b "$JAR" -H 'Sec-Fetch-Site: same-origin' --data-urlencode "_csrf=$(csrf)" \
   --data-urlencode "port=40123" --data-urlencode "state=$STATE" "$BASE/ui/authorize")
 case "$cb" in http://127.0.0.1:40123/callback\?*) ;; *) echo "approve: redirect $cb"; exit 1;; esac

@@ -43,10 +43,10 @@ up() {
     sleep 0.3
   done
   PSQL=("$PGBIN/psql" -h localhost -p "$PORT" -U postgres -v ON_ERROR_STOP=1 -qAt)
-  "${PSQL[@]}" -c "SELECT 1 FROM pg_roles WHERE rolname='agentry'" | grep -q 1 || \
+  "${PSQL[@]}" -c "SELECT 1 FROM pg_roles WHERE rolname='agentry'" | grep 1 >/dev/null || \
     "${PSQL[@]}" -c "CREATE ROLE agentry LOGIN PASSWORD 'agentry' SUPERUSER"
   for db in agentry_dev agentry_test; do
-    "${PSQL[@]}" -c "SELECT 1 FROM pg_database WHERE datname='$db'" | grep -q 1 || \
+    "${PSQL[@]}" -c "SELECT 1 FROM pg_database WHERE datname='$db'" | grep 1 >/dev/null || \
       "${PSQL[@]}" -c "CREATE DATABASE $db OWNER agentry"
   done
   echo "postgres up on :$PORT (data: $DATA)"
