@@ -157,7 +157,7 @@ reference (added for the Vultr production cluster, DEV-124):
   worker, which rebuilds it from the recorded commit and stores it only if
   the digest matches (agentry#508). So the worker needs the git volume
   (`worker.mountGitData`, the default). A tag submission whose archive is
-  not stored within 30 minutes is rejected, and the publisher pushes a new
+  not stored within two hours is rejected, and the publisher pushes a new
   version tag.
 - `databaseCA.existingSecret` and `databaseCA.key` — the database's CA,
   projected to `/etc/agentry-db-ca/ca.crt`, so the DSN can carry
