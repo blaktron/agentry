@@ -111,6 +111,13 @@ jobs:
         run: make sync-rules-check
       - name: make check
         run: make check
+      # No acceptance line may print OK for a -run filter that matched
+      # nothing, and every test ARCHITECTURE §9 names for a core row exists
+      # under that name (agentry#420).
+      - name: acceptance helper refuses an empty match
+        run: ./scripts/acceptance/lib-selftest.sh
+      - name: section 9 test names exist
+        run: ./scripts/acceptance/section9-names.sh
       - name: acceptance M0
         run: ./scripts/acceptance/m0.sh
       # The server's own browser surface, driven with curl (DEV-091).
