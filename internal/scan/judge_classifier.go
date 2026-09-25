@@ -65,6 +65,10 @@ func (j *ClassifierJudge) RequiresHumanReview() bool { return true }
 // keeps recording the provider's name (agentry#321).
 func (j *ClassifierJudge) ModelID() string { return "" }
 
+// InputLimit implements JudgeProvider: a call is split into requests of
+// classifierMaxInput, and eight of them bound one call.
+func (j *ClassifierJudge) InputLimit() int { return 8 * classifierMaxInput }
+
 // injectionLabel reports whether a classifier label names the positive
 // class. PromptGuard uses INJECTION/JAILBREAK; others use LABEL_1 with the
 // positive class second, or "unsafe".
