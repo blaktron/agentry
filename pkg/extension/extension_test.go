@@ -15,6 +15,7 @@ import (
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/knowledge"
 	"github.com/blaktron/agentry/internal/queue"
 )
 
@@ -248,5 +249,40 @@ func TestScopeAllows(t *testing.T) {
 	}
 	if ScopeAllows(pat, ScopeRunWrite) {
 		t.Fatal("a PAT without run:write passed; the list is flat")
+	}
+}
+
+// wrapperLike is the shape SecureAgentry's knowledge wrapper takes (plan
+// knowledge.md §4.4): the WrapsKeys seam, satisfied with the aliases alone.
+type wrapperLike struct{ noop }
+
+func (wrapperLike) KeyWrapper() KeyWrapper { return certWrapper{} }
+
+type certWrapper struct{}
+
+func (certWrapper) Wrap(_ context.Context, o KeyOwner, _ []byte) (WrappedKey, error) {
+	return WrappedKey{Kind: "certificate", Recipient: string(o.Kind)}, nil
+}
+func (certWrapper) Unwrap(context.Context, KeyOwner, WrappedKey) ([]byte, error) {
+	return nil, ErrKeyNotOwner
+}
+func (certWrapper) Destroy(context.Context, KeyOwner) error { return nil }
+
+var _ WrapsKeys = wrapperLike{}
+
+// TestApplyExtensionsSetsTheKeyWrapper: a WrapsKeys extension's wrapper is
+// the knowledge store's, in place of the deployment key's.
+func TestApplyExtensionsSetsTheKeyWrapper(t *testing.T) {
+	st := migratedStore(t)
+	cfg := config.Default()
+	cfg.DevMode = true
+	cfg.Scan.OSVURL = "none"
+	srv := api.New(cfg, st, slog.New(slog.DiscardHandler))
+	if _, ok := srv.Knowledge().Wrapper().(*knowledge.DeploymentWrapper); !ok {
+		t.Fatalf("with no extension the wrapper is %T, want the deployment key's", srv.Knowledge().Wrapper())
+	}
+	applyExtensions(srv, []Extension{wrapperLike{}})
+	if _, ok := srv.Knowledge().Wrapper().(certWrapper); !ok {
+		t.Fatalf("after applyExtensions the wrapper is %T, want the extension's", srv.Knowledge().Wrapper())
 	}
 }

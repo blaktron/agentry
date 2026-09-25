@@ -140,7 +140,11 @@ var routeAuthz = map[string]RouteDecl{
 	"clearCurrentUserData": {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	"reportAbuse":          {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"listAbuseReports":     {Action: auth.ActPublicRead, SelfAuthorized: true},
-	"triageAbuseReport":    {Action: auth.ActPublicRead, SelfAuthorized: true},
+	// Staff see an account's knowledge packs by name and size, nothing of
+	// their content (agentry#593): requireStaff, and knowledge:read on a
+	// token, inside the handler.
+	"listKnowledgePackSizes": {Action: auth.ActPublicRead, SelfAuthorized: true},
+	"triageAbuseReport":      {Action: auth.ActPublicRead, SelfAuthorized: true},
 	// Enterprise (M6/WG-J). SSO/SCIM config = admin (ActOrgSettingsManage,
 	// session-only for PATs); webhooks/domains = admin+ (ActOrgUpdate);
 	// audit export = admin+ (ActOrgAuditRead). The SSO login-flow endpoints
@@ -184,17 +188,29 @@ var routeAuthz = map[string]RouteDecl{
 	"createDesktopGrant": {Action: auth.ActUserTokensManage, SessionOnly: true},
 	"deleteTeam":         {Action: auth.ActOrgTeamsManage, OrgScoped: true},
 	"getCurrentUser":     {Action: auth.ActUserSelfRead},
-	"getMeta":            {Action: auth.ActPublicRead, Anonymous: true, NoAuthz: true},
-	"getOrg":             {Action: auth.ActOrgRead, OrgScoped: true, Anonymous: true},
-	"getUserProfile":     {Action: auth.ActPublicRead, Anonymous: true},
-	"listOrgAudit":       {Action: auth.ActOrgAuditRead, OrgScoped: true},
-	"listOrgMembers":     {Action: auth.ActOrgMembersRead, OrgScoped: true},
-	"listTeamMembers":    {Action: auth.ActOrgTeamsRead, OrgScoped: true},
-	"listTeams":          {Action: auth.ActOrgTeamsRead, OrgScoped: true},
-	"listTokens":         {Action: auth.ActUserTokensRead},
-	"listSshKeys":        {Action: auth.ActUserTokensRead},
-	"addSshKey":          {Action: auth.ActUserTokensManage, SessionOnly: true},
-	"removeSshKey":       {Action: auth.ActUserTokensManage, SessionOnly: true},
+	// Knowledge packs (agentry#593) are the CALLER's own: self-scoped, each
+	// looked up by its owner, so another account's pack is a 404.
+	"listKnowledgePacks":    {Action: auth.ActKnowledgeRead},
+	"createKnowledgePack":   {Action: auth.ActKnowledgeWrite},
+	"getKnowledgePack":      {Action: auth.ActKnowledgeRead},
+	"deleteKnowledgePack":   {Action: auth.ActKnowledgeWrite},
+	"uploadKnowledgeTree":   {Action: auth.ActKnowledgeWrite},
+	"downloadKnowledgeTree": {Action: auth.ActKnowledgeRead},
+	"exportKnowledgePack":   {Action: auth.ActKnowledgeRead},
+	"wrapKnowledgeKey":      {Action: auth.ActKnowledgeWrite},
+	"unwrapKnowledgeKey":    {Action: auth.ActKnowledgeRead},
+	"getKnowledgeUsage":     {Action: auth.ActKnowledgeRead},
+	"getMeta":               {Action: auth.ActPublicRead, Anonymous: true, NoAuthz: true},
+	"getOrg":                {Action: auth.ActOrgRead, OrgScoped: true, Anonymous: true},
+	"getUserProfile":        {Action: auth.ActPublicRead, Anonymous: true},
+	"listOrgAudit":          {Action: auth.ActOrgAuditRead, OrgScoped: true},
+	"listOrgMembers":        {Action: auth.ActOrgMembersRead, OrgScoped: true},
+	"listTeamMembers":       {Action: auth.ActOrgTeamsRead, OrgScoped: true},
+	"listTeams":             {Action: auth.ActOrgTeamsRead, OrgScoped: true},
+	"listTokens":            {Action: auth.ActUserTokensRead},
+	"listSshKeys":           {Action: auth.ActUserTokensRead},
+	"addSshKey":             {Action: auth.ActUserTokensManage, SessionOnly: true},
+	"removeSshKey":          {Action: auth.ActUserTokensManage, SessionOnly: true},
 	// Sessions: listing rides the self-read action so a `user:profile` PAT is
 	// admitted and answered with an empty list (a PAT has no sessions of its
 	// own); revoking is session-only, like logout — a token must not be able

@@ -27,6 +27,7 @@ import (
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/entitlements"
+	"github.com/blaktron/agentry/internal/knowledge"
 	"github.com/blaktron/agentry/internal/queue"
 	"github.com/blaktron/agentry/internal/registry"
 	"github.com/blaktron/agentry/internal/webhook"
@@ -98,6 +99,34 @@ type (
 	Ticket    = registry.Ticket
 	Refusal   = registry.Refusal
 )
+
+// WrapsKeys is the optional interface for an extension that wraps the data
+// keys of knowledge packs itself (plan knowledge.md §4.3, §4.4; agentry#593):
+// SecureAgentry's wrapper seals each key to its owner's own certificate. The
+// core's wrapper, the deployment's knowledge sealing key, is replaced and
+// nothing else changes: the store, the routes, the scan and the erasure
+// stay the core's. A nil KeyWrapper leaves the core's in place.
+type WrapsKeys interface {
+	KeyWrapper() KeyWrapper
+}
+
+// KeyWrapper, KeyOwner and WrappedKey are the knowledge store's key types.
+type (
+	KeyWrapper = knowledge.KeyWrapper
+	KeyOwner   = knowledge.Owner
+	WrappedKey = knowledge.WrappedKey
+)
+
+// The owners a knowledge pack can have.
+const (
+	KeyOwnerUser = knowledge.OwnerUser
+	KeyOwnerOrg  = knowledge.OwnerOrg
+)
+
+// ErrKeyNotOwner is what a KeyWrapper's Unwrap answers for a wrapped key
+// that does not open for the owner presenting it; the routes answer it as
+// a key that is not there.
+var ErrKeyNotOwner = knowledge.ErrNotOwner
 
 // Unthrottles is the optional interface for an extension whose receiver of
 // signed callbacks must never be refused by the anonymous rate class (a
