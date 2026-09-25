@@ -3,6 +3,7 @@ package ui
 import (
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -37,6 +38,27 @@ type accountData struct {
 	// (agentry#274); NotificationsError says the read failed.
 	Notifications      *notificationSettings
 	NotificationsError string
+	// Knowledge is the knowledge meter (agentry#593): what the person keeps
+	// in the registry against their allocation. KnowledgeOff says the
+	// registry keeps no packs; KnowledgeError that the read failed.
+	Knowledge      *knowledgeUsage
+	KnowledgeOff   bool
+	KnowledgeError string
+}
+
+// knowledgeUsage is the API's KnowledgeUsage, with its sizes in words.
+type knowledgeUsage struct {
+	Bytes int64 `json:"bytes"`
+	Max   int64 `json:"max"`
+	Packs int   `json:"packs"`
+}
+
+// Used and Allocation are the meter's two sizes, in MB with one decimal.
+func (k knowledgeUsage) Used() string       { return megabytes(k.Bytes) }
+func (k knowledgeUsage) Allocation() string { return megabytes(k.Max) }
+
+func megabytes(n int64) string {
+	return strconv.FormatFloat(float64(n)/(1<<20), 'f', 1, 64) + " MB"
 }
 
 // notificationSettings is the API's NotificationSettings, the six mail
@@ -71,6 +93,17 @@ func (h *handler) accountPage(w http.ResponseWriter, r *http.Request) {
 		var ns notificationSettings
 		if res.decode(&ns) == nil {
 			d.Notifications = &ns
+		}
+	}
+	switch res, err := h.call(r).do(http.MethodGet, "/knowledge/usage", nil); {
+	case err == nil && res.problemType() != "" && strings.HasSuffix(res.problemType(), "/knowledge-unconfigured"):
+		d.KnowledgeOff = true
+	case err != nil || !res.OK():
+		d.KnowledgeError = readFailed("your knowledge allocation", res, err)
+	default:
+		var ku knowledgeUsage
+		if res.decode(&ku) == nil {
+			d.Knowledge = &ku
 		}
 	}
 	if h.opt.ExternalOnly {
@@ -127,7 +160,7 @@ type token struct {
 }
 
 // scopes is the PAT scope set the pages offer (§12.3), in the order shown.
-var scopes = []string{"agent:read", "agent:publish", "repo:read", "repo:write", "user:profile", "org:admin", "review:act", "audit:read", "run:read", "run:write"}
+var scopes = []string{"agent:read", "agent:publish", "repo:read", "repo:write", "user:profile", "org:admin", "review:act", "audit:read", "run:read", "run:write", "knowledge:read", "knowledge:write"}
 
 type tokensData struct {
 	Tokens []token
