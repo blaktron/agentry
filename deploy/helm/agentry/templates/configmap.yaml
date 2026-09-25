@@ -42,6 +42,12 @@ data:
       {{- with .Values.config.auth.idpAdminURL }}
       idpAdminURL: {{ . | quote }}
       {{- end }}
+      {{- with .Values.config.auth.staffOrg }}
+      staffOrg: {{ . | quote }}
+      {{- end }}
+      {{- with .Values.config.auth.staffDomain }}
+      staffDomain: {{ . | quote }}
+      {{- end }}
       {{- with .Values.config.auth.idpStaffGroup }}
       idpStaffGroup: {{ . | quote }}
       {{- end }}

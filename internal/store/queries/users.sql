@@ -32,8 +32,17 @@ UPDATE users SET totp_secret_enc = $2, totp_enabled = false, updated_at = now() 
 -- name: EnableUserTOTP :exec
 UPDATE users SET totp_enabled = true, updated_at = now() WHERE id = $1;
 
+-- name: ListStaffSyncCandidates :many
+-- The accounts whose platform_staff the staff rule could change
+-- (agentry#556): every account flagged today, and every active member of
+-- the staff organization. The start-up resync recomputes exactly these.
+SELECT id FROM users
+WHERE platform_staff
+   OR id IN (SELECT m.user_id FROM memberships m WHERE m.org_id = $1 AND m.state = 'active')
+ORDER BY id;
+
 -- name: SetUserPlatformStaff :exec
--- Directory group membership decides platform staff (agentry#51).
+-- The staff rule decides platform staff (agentry#556; registry.SyncStaffIn).
 UPDATE users SET platform_staff = $2, updated_at = now() WHERE id = $1;
 
 -- name: SetUserIdPMFA :exec
