@@ -22,6 +22,8 @@
 #   prerelease=true|false
 #   branch=main|dev
 #   latest=true|false    (a main release that is the newest vX.Y.Z tag)
+#   commit=<sha>         (the commit it checked; later jobs build that, not
+#                         whatever the tag names by then)
 # and exits 0. Otherwise it names the refusal on stderr and exits 1.
 set -euo pipefail
 tag=${1:?usage: tag-guard.sh <tag> [<commit>]}
@@ -50,6 +52,7 @@ fi
 if [ -z "$commit" ]; then
   commit=$(git rev-parse -q --verify "refs/tags/$tag^{commit}") || refuse "no such tag"
 fi
+commit=$(git rev-parse -q --verify "$commit^{commit}") || refuse "no such commit $commit"
 git rev-parse -q --verify "refs/remotes/origin/$branch" >/dev/null \
   || refuse "origin/$branch is not fetched (check out with fetch-depth: 0)"
 git merge-base --is-ancestor "$commit" "origin/$branch" \
@@ -65,3 +68,4 @@ echo "version=${tag#v}"
 echo "prerelease=$prerelease"
 echo "branch=$branch"
 echo "latest=$latest"
+echo "commit=$commit"

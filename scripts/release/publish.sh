@@ -14,7 +14,10 @@
 #      generated notes. (The API's release-by-tag lookup never returns a
 #      draft, which is why the listing is read.)
 #   2. Every file in <assets-dir> is uploaded, replacing an asset of the same
-#      name, so a rebuild of the same tag republishes cleanly.
+#      name, so a rebuild of a release left in draft (a run that failed
+#      part-way) finishes it cleanly. A release already published is left as
+#      it is: replacing a live release's assets one by one could leave it
+#      with a new SHA256SUMS.txt beside an old signature.
 #   3. The notes file is appended to the body unless its first line (a
 #      marker) is already there.
 #   4. The release is published: draft false, its prerelease flag, and
@@ -46,6 +49,10 @@ if [ -z "$release" ]; then
 fi
 id=$(jq -r .id <<<"$release")
 [[ $id =~ ^[0-9]+$ ]] || { echo "publish: no release id for $tag" >&2; exit 1; }
+if [ "$(jq -r .draft <<<"$release")" = false ]; then
+  echo "publish: $tag is already published with its assets; left as it is"
+  exit 0
+fi
 
 for f in "$dir"/*; do
   name=$(basename "$f")
