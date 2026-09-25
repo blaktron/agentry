@@ -1477,6 +1477,63 @@ func (q *Queries) ListStuckScanningVersions(ctx context.Context, arg ListStuckSc
 	return items, nil
 }
 
+const listStuckSubmittedVersions = `-- name: ListStuckSubmittedVersions :many
+SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash, scan_status FROM agent_versions
+WHERE status = 'submitted' AND source = 'git-tag' AND updated_at < $1
+ORDER BY updated_at
+LIMIT $2
+`
+
+type ListStuckSubmittedVersionsParams struct {
+	UpdatedAt time.Time `json:"updated_at"`
+	Limit     int32     `json:"limit"`
+}
+
+// A git-tag submission recorded by a role that hands the archive write to
+// a worker (agentry#508) stays `submitted` until the worker stores it; one
+// still there past the cap was never stored.
+func (q *Queries) ListStuckSubmittedVersions(ctx context.Context, arg ListStuckSubmittedVersionsParams) ([]AgentVersion, error) {
+	rows, err := q.db.Query(ctx, listStuckSubmittedVersions, arg.UpdatedAt, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AgentVersion
+	for rows.Next() {
+		var i AgentVersion
+		if err := rows.Scan(
+			&i.ID,
+			&i.AgentID,
+			&i.Version,
+			&i.CommitSha,
+			&i.Manifest,
+			&i.Capabilities,
+			&i.ArchiveDigest,
+			&i.ArchiveKey,
+			&i.ArchiveSize,
+			&i.Status,
+			&i.StatusReason,
+			&i.PublishedAt,
+			&i.YankedAt,
+			&i.YankReason,
+			&i.Channel,
+			&i.SubmittedBy,
+			&i.Source,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.SubmitterIpHash,
+			&i.ScanStatus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const runningScanRunForVersion = `-- name: RunningScanRunForVersion :one
 SELECT id, version_id, trigger, ruleset_release_id, policy_snapshot, judge_model, judge_prompt_hash, status, started_at, finished_at, report_digest, judge_prompt_tokens, judge_completion_tokens FROM scan_runs
 WHERE version_id = $1 AND trigger = $2 AND status = 'running'
