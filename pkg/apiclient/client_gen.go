@@ -2036,6 +2036,12 @@ type RegisterRequest struct {
 // ReportVerdict What a report is: `scanned` when a scan run stands behind it (the findings say the rest), `unscanned` when the version was admitted without one — never conflated with "scanned with a known gap". Absent while a scan is still pending.
 type ReportVerdict string
 
+// RescanInFlight A later scan of this version still running (a ruleset or MCP rescan sweep, a manual rescan) while the report describes the latest run that finished. Present only when such a run exists: the verdict a release was published on stands until the rescan finishes, and the report says one is under way rather than going blank (agentry#542).
+type RescanInFlight struct {
+	ScanRunId openapi_types.UUID `json:"scanRunId"`
+	StartedAt time.Time          `json:"startedAt"`
+}
+
 // ResolveResult defines model for ResolveResult.
 type ResolveResult struct {
 	// ArchiveUrl Where to fetch the archive (CDN on SaaS; API path self-host).
@@ -2161,8 +2167,11 @@ type ScanReport struct {
 	JudgeModel *string `json:"judgeModel,omitempty"`
 
 	// JudgeUsage The token use the AI Review model's provider reported for this scan run — what the review cost, as measured. Present for platform staff only, and absent when the provider reported none (the static and classifier judges, an endpoint without a usage block); absent means unknown, not zero. Not part of the signed report.
-	JudgeUsage     *JudgeUsage         `json:"judgeUsage,omitempty"`
-	ReportDigest   *string             `json:"reportDigest,omitempty"`
+	JudgeUsage   *JudgeUsage `json:"judgeUsage,omitempty"`
+	ReportDigest *string     `json:"reportDigest,omitempty"`
+
+	// RescanInFlight A later scan of this version still running (a ruleset or MCP rescan sweep, a manual rescan) while the report describes the latest run that finished. Present only when such a run exists: the verdict a release was published on stands until the rescan finishes, and the report says one is under way rather than going blank (agentry#542).
+	RescanInFlight *RescanInFlight     `json:"rescanInFlight,omitempty"`
 	RulesetVersion *string             `json:"rulesetVersion,omitempty"`
 	ScanRunId      *openapi_types.UUID `json:"scanRunId,omitempty"`
 
