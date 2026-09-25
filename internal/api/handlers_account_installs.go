@@ -352,13 +352,15 @@ func (s *Server) versionSigned(ctx context.Context, versionID uuid.UUID) (bool, 
 // versionVerdict is the report's verdict for a version, as GET …/report
 // gives it: unscanned for a version admitted without a scan, scanned with
 // its finding counts when a run stands behind the report, absent while a
-// run is pending or errored.
+// first scan is pending or when the report's run errored. A rescan in
+// flight does not blank it: the report's run is the latest finished one
+// (reportRun, agentry#542).
 func (s *Server) versionVerdict(ctx context.Context, v registry.Version) (*ReportVerdict, *map[string]int, error) {
 	if v.ScanStatus == registry.ScanStatusSkipped {
 		unscanned := Unscanned
 		return &unscanned, nil, nil
 	}
-	run, err := s.q().LatestScanRunForVersion(ctx, v.ID)
+	run, _, err := reportRun(ctx, s.q(), v.ID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil, nil

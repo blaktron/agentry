@@ -50,6 +50,11 @@ SELECT * FROM scan_runs WHERE id = $1;
 -- name: LatestScanRunForVersion :one
 SELECT * FROM scan_runs WHERE version_id = $1 ORDER BY started_at DESC LIMIT 1;
 
+-- name: LatestFinishedScanRunForVersion :one
+-- The newest run of a version that has finished, whatever its outcome: what
+-- a report describes while a later run is still going (agentry#542).
+SELECT * FROM scan_runs WHERE version_id = $1 AND finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 1;
+
 -- name: UpsertStageResult :exec
 INSERT INTO scan_stage_results (scan_run_id, scanner, status, detail)
 VALUES ($1, $2, $3, $4)
