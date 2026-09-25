@@ -54,6 +54,9 @@ type Service struct {
 	// staffOrg and staffDomain name the staff organization (staff.go,
 	// agentry#556); both empty leaves platform_staff alone.
 	staffOrg, staffDomain string
+	// staffChanged is told when a sync changed someone's platform_staff
+	// (the api layer's directory mirror, agentry#598); nil tells nobody.
+	staffChanged func()
 	// policyGate enforces the §8.6 knobs that reject at V-validation time.
 	// nil = platform baseline only (no submission-time policy rejections).
 	policyGate PolicyGate

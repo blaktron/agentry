@@ -313,6 +313,78 @@ func (q *Queries) ListPersonalNamespaceAgents(ctx context.Context, id uuid.UUID)
 	return items, nil
 }
 
+const listStaffMirrorAccounts = `-- name: ListStaffMirrorAccounts :many
+SELECT u.id, lower(u.email)::text AS email,
+       coalesce(substring(i.subject from 11), '')::text AS directory_subject
+FROM users u
+LEFT JOIN identities i ON i.user_id = u.id AND i.provider_kind = 'social'
+     AND i.sso_connection_id IS NULL AND i.subject LIKE 'authentik:%'
+WHERE u.platform_staff AND u.state = 'active' AND u.email_verified_at IS NOT NULL
+ORDER BY 2, 3
+`
+
+type ListStaffMirrorAccountsRow struct {
+	ID               uuid.UUID `json:"id"`
+	Email            string    `json:"email"`
+	DirectorySubject string    `json:"directory_subject"`
+}
+
+// Every account that is platform staff and active, with its verified
+// address (lower-cased; the directory's match is case-blind) and each
+// directory subject it is linked to by a directory sign-in, "authentik:"
+// stripped (empty when it has none): the set the directory's staff mirror
+// group is kept equal to (agentry#598).
+func (q *Queries) ListStaffMirrorAccounts(ctx context.Context) ([]ListStaffMirrorAccountsRow, error) {
+	rows, err := q.db.Query(ctx, listStaffMirrorAccounts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListStaffMirrorAccountsRow
+	for rows.Next() {
+		var i ListStaffMirrorAccountsRow
+		if err := rows.Scan(&i.ID, &i.Email, &i.DirectorySubject); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStaffOrgMembersNotStaff = `-- name: ListStaffOrgMembersNotStaff :many
+SELECT h.handle FROM memberships m
+JOIN users u ON u.id = m.user_id
+JOIN handles h ON h.id = u.id
+WHERE m.org_id = $1 AND m.state = 'active' AND NOT u.platform_staff
+ORDER BY h.handle
+`
+
+// Active members of the staff organization who are not platform staff: an
+// address outside its domain or unverified, or an account that is not
+// active (agentry#598). Reported at start-up, never removed.
+func (q *Queries) ListStaffOrgMembersNotStaff(ctx context.Context, orgID uuid.UUID) ([]string, error) {
+	rows, err := q.db.Query(ctx, listStaffOrgMembersNotStaff, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var handle string
+		if err := rows.Scan(&handle); err != nil {
+			return nil, err
+		}
+		items = append(items, handle)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStaffSyncCandidates = `-- name: ListStaffSyncCandidates :many
 SELECT id FROM users
 WHERE platform_staff
