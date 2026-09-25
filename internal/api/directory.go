@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -41,7 +42,16 @@ func (a *authentikEraser) do(ctx context.Context, method, path string) (*http.Re
 	}
 	req.Header.Set("Authorization", "Bearer "+a.token)
 	req.Header.Set("Accept", "application/json")
-	return a.http.Do(req)
+	res, err := a.http.Do(req)
+	// A transport error names the URL, and the lookup's URL carries the
+	// person's address in its query. The error goes to the audit log and the
+	// server's log for an erasure (agentry#499), so it keeps the method and
+	// the cause and drops the URL.
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		err = fmt.Errorf("%s %s: %w", method, strings.SplitN(path, "?", 2)[0], ue.Err)
+	}
+	return res, err
 }
 
 func (a *authentikEraser) EraseByEmail(ctx context.Context, email string) (bool, error) {

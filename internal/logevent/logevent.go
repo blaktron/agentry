@@ -46,6 +46,9 @@ const (
 	FailOpenOSVNotChecked Event = "failopen.osv_not_checked"
 	// FailOpenOSVError is an OSV lookup that errored (DEV-026.3).
 	FailOpenOSVError Event = "failopen.osv_error"
+	// FailOpenDirectoryErasure is an account erasure whose directory half
+	// did not happen after its retries (agentry#499).
+	FailOpenDirectoryErasure Event = "failopen.directory_erasure"
 	// GitPushRefused is a submission the git door refused after a tag push
 	// (agentry#322).
 	GitPushRefused Event = "git.push_refused"
@@ -67,7 +70,7 @@ func Audit(action string) Event { return Event(AuditPrefix + action) }
 var All = []Event{
 	HTTPRequest, HTTPRateLimited, AuthLoginFailed, AuthSocialRejected, SAMLStateUnavailable, SSRFRefused,
 	GateVerdict, GateError, ScanStage,
-	FailOpenAuditStreamDrop, FailOpenHistoryNotScanned, FailOpenOSVNotChecked, FailOpenOSVError,
+	FailOpenAuditStreamDrop, FailOpenHistoryNotScanned, FailOpenOSVNotChecked, FailOpenOSVError, FailOpenDirectoryErasure,
 	GitPushRefused, MailSuppressed, WebhookDelivered,
 }
 
