@@ -70,6 +70,9 @@ func (j *BedrockJudge) Name() string { return "bedrock" }
 // ModelID implements JudgeProvider: the Bedrock model id.
 func (j *BedrockJudge) ModelID() string { return j.model }
 
+// InputLimit implements JudgeProvider: the chat providers' limit.
+func (j *BedrockJudge) InputLimit() int { return chatInputLimit }
+
 // RequiresHumanReview implements JudgeProvider: a live judge scores.
 func (j *BedrockJudge) RequiresHumanReview() bool { return false }
 

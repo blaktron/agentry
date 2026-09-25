@@ -409,6 +409,7 @@ type sampledJudge struct{}
 
 func (sampledJudge) Name() string              { return "sampled" }
 func (sampledJudge) ModelID() string           { return "" }
+func (sampledJudge) InputLimit() int           { return 0 }
 func (sampledJudge) RequiresHumanReview() bool { return false }
 func (sampledJudge) Judge(context.Context, JudgeContent) (JudgeVerdict, error) {
 	return JudgeVerdict{

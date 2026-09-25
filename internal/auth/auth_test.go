@@ -260,7 +260,7 @@ func TestHoldPermits(t *testing.T) {
 	permitted := map[Action]bool{
 		ActOrgRead: true, ActOrgMembersRead: true, ActOrgTeamsRead: true, ActOrgAuditRead: true,
 		ActPublicRead: true, ActUserSelfRead: true, ActUserTokensRead: true,
-		ActAgentRead: true, ActAgentRepoRead: true, ActOrgLeave: true,
+		ActAgentRead: true, ActAgentRepoRead: true, ActOrgLeave: true, ActKnowledgeRead: true,
 	}
 	all := []Action{
 		ActOrgRead, ActOrgUpdate, ActOrgMembersRead, ActOrgMembersManage, ActOrgMembersElevate,
@@ -268,6 +268,7 @@ func TestHoldPermits(t *testing.T) {
 		ActOrgDecommission, ActOrgLeave, ActUserSelfRead, ActUserSelfUpdate, ActUserTokensRead,
 		ActUserTokensManage, ActUserSecurityManage, ActUserOrgRequest, ActOrgCreate, ActPublicRead, ActReviewAct,
 		ActAgentCreate, ActAgentRead, ActAgentRepoRead, ActAgentRepoWrite, ActAgentMaintain, ActAgentPublish, ActAgentAdminister,
+		ActKnowledgeRead, ActKnowledgeWrite,
 	}
 	for _, act := range all {
 		if got := HoldPermits(act); got != permitted[act] {

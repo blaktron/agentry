@@ -204,12 +204,17 @@ databaseCA:
 # external-secrets / sealed-secrets) over inlining here.
 secret:
   create: true
-  existingSecret: "" # if set, must provide keys: AGENTRY_DATABASE_URL, AGENTRY_AUTH_SEALING_KEY, and optionally AGENTRY_REDIS_URL / AGENTRY_SMTP_PASS / AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET / AGENTRY_IDP_ADMIN_TOKEN
+  existingSecret: "" # if set, must provide keys: AGENTRY_DATABASE_URL, AGENTRY_AUTH_SEALING_KEY, and optionally AGENTRY_KNOWLEDGE_SEALING_KEY / AGENTRY_REDIS_URL / AGENTRY_SMTP_PASS / AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET / AGENTRY_IDP_ADMIN_TOKEN
   authentikClientSecret: "" # OIDC client secret for config.social.authentik
   idpAdminToken: "" # directory API token for account erasure (config.auth.idpAdminURL)
   databaseUrl: "" # postgres://user:pass@host:5432/agentry?sslmode=require
   redisUrl: "" # rediss://:pass@host:6379/0 (optional)
   sealingKey: "" # base64 32 bytes; required outside dev (§ config Validate)
+  # base64 32 bytes, a key of its own (never the sealingKey above): what the
+  # store of knowledge packs wraps their data keys under. Empty leaves the
+  # store off (its routes answer 503) unless an extension wraps keys.
+  # The per-account cap is config.limits.knowledgeBytesPerAccount (0: none).
+  knowledgeSealingKey: ""
   smtpPassword: "" # required when config.notify.kind=smtp and smtp.username is set
 
 serviceAccount:

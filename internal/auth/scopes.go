@@ -23,6 +23,12 @@ const (
 	// a token carrying only these as a token with no scope at all.
 	ScopeRunRead  Scope = "run:read"
 	ScopeRunWrite Scope = "run:write"
+	// The knowledge scopes (plan knowledge.md §4.3, agentry#593): a token
+	// that may read the caller's knowledge packs, their scan reports and
+	// their trees and have a pack's data key unwrapped (knowledge:read), or
+	// create, upload, delete and wrap (knowledge:write).
+	ScopeKnowledgeRead  Scope = "knowledge:read"
+	ScopeKnowledgeWrite Scope = "knowledge:write"
 )
 
 // AllScopes enumerates every valid scope (validation, docs, UI).
@@ -30,7 +36,7 @@ func AllScopes() []Scope {
 	return []Scope{
 		ScopeRepoRead, ScopeRepoWrite, ScopeAgentPublish, ScopeAgentRead,
 		ScopeOrgAdmin, ScopeReviewAct, ScopeAuditRead, ScopeUserProfile,
-		ScopeRunRead, ScopeRunWrite,
+		ScopeRunRead, ScopeRunWrite, ScopeKnowledgeRead, ScopeKnowledgeWrite,
 	}
 }
 
