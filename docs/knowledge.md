@@ -8,8 +8,9 @@ and attaching it to a run. This page is the registry's side: how a
 signed-in account keeps its packs here, how they are sealed, what the
 registry reads of them, and when they are destroyed.
 
-A pack is private to its owner. Nothing here publishes one, lists it
-anywhere public, or lets another account read it.
+No route publishes a pack, lists it anywhere public, or lets another
+account read it. What the registry itself reads of a pack is below
+([What the registry reads](#what-the-registry-reads)).
 
 ## What the registry holds
 
@@ -50,10 +51,11 @@ Wrapping is a seam, `KeyWrapper` on `pkg/extension` (`Wrap`, `Unwrap`,
   random bytes, base64, and it is a key of its own: the server refuses to
   start if it is the auth sealing key. Each owner's key-encryption key is
   derived from it with HKDF-SHA256 and a random salt of that owner's, and
-  the owner is named in the AEAD's additional data. A core-only registry
-  can therefore open a stored tree only for its owner. When an owner is
-  erased, their salt is deleted, so every copy of their wrapped keys stops
-  opening, including one kept on a laptop.
+  the owner is named in the AEAD's additional data. A wrapped key
+  presented by another account does not open, even copied whole. When an
+  owner is erased, their salt is deleted in the erasure's own
+  transaction, so every copy of their wrapped keys stops opening,
+  including one kept on a laptop.
 - **An extension's wrapper** replaces the core's wrapper and nothing else.
   The store, the routes, the scan and the erasure stay the core's.
   SecureAgentry wraps each key to the account's own certificate.
@@ -80,8 +82,8 @@ exist: 404, for a fellow member of the owner's organization too.
 | `PUT /api/v1/knowledge/packs/{id}/tree` | upload the sealed tree in one body (below), which replaces the one before and is scanned (202, `scanning`) |
 | `GET /api/v1/knowledge/packs` | the caller's packs, by name, each with its scan state and report |
 | `GET /api/v1/knowledge/packs/{id}` | one pack and its report |
-| `GET /api/v1/knowledge/packs/{id}/tree` | the sealed tree as stored, with its digest in `X-Agentry-Knowledge-Digest`; the client opens it with the unwrapped key |
-| `GET /api/v1/knowledge/packs/{id}/export` | the tree decrypted, `application/x-tar`, `no-store`: the canonical tar whose SHA-256 is the digest |
+| `GET /api/v1/knowledge/packs/{id}/tree` | the sealed tree as stored, with its digest in `X-Agentry-Knowledge-Digest`; the client opens it with the unwrapped key. 409 `knowledge-scanning` while the pack is scanned |
+| `GET /api/v1/knowledge/packs/{id}/export` | the tree decrypted, `application/x-tar`, `no-store`: the canonical tar whose SHA-256 is the digest. 409 `knowledge-scanning` while the pack is scanned |
 | `DELETE /api/v1/knowledge/packs/{id}` | the pack, its stored trees and its wrapped key |
 | `GET /api/v1/knowledge/usage` | the meter: `bytes` kept here, the allocation `max` (0 is no cap), `packs` |
 | `GET /api/v1/platform/knowledge?owner=<handle>` | platform staff only (a staff token needs `knowledge:read`): an account's packs by name, state and size, and nothing of their content, digest, report or key |
@@ -116,8 +118,10 @@ A closed build's resolver answers by tier. The account page under
 A pack is `scanning` from each upload until its `knowledge.scan` job ends
 (the sandbox queue, the same worker that scans a version). It is `ready`
 after the job, whether it has findings or not: the report is a record,
-never a gate. A pack whose stored tree could not be read after the job's
-retries is `failed`, with no report.
+never a gate. A pack is unusable only while it is
+`scanning`: its download and export answer 409 `knowledge-scanning`. A
+pack whose stored tree could not be read on the job's last attempt is
+`failed`, with no report.
 
 The scan reads every text file of the tree: every page and every source.
 A source's original that is not text (a PDF, an image) is listed under
@@ -136,9 +140,10 @@ place. The scan runs these stages:
   for the classifier. A file longer than a chunk is read in pieces, cut at
   line ends where one falls, so every byte is read. With the judge
   provider `none`, the review writes "AI Review not configured" and reads
-  nothing; the prose stages still run. A judge that fails on a chunk is
-  retried with the job. The job's last attempt records the review with
-  `failed` counting the chunks it could not read.
+  nothing; the prose stages still run. A stage that fails (a timeout, a panic) is marked
+  `failed`, and a judge that fails on a chunk is counted. Either way the
+  job retries, and its last attempt records the review with the failed
+  stages and chunks named.
 
 The report (`KnowledgeScanReport`) names the stages that ran, what was
 read (`sources`, `wiki`, `bytes`, `notRead`), and the review: the
@@ -149,6 +154,22 @@ and line, or by chunk for AI Review.
 
 The report says what read the pack and what it found, and claims nothing
 more: scanned, N findings.
+
+## What the registry reads
+
+The seal keeps a pack's words out of every blob, table and backup. It does
+not keep them from the registry's own code:
+
+- The registry unwraps the data key and opens the tree on every upload,
+  to check it, and in the scan job, to scan it. It keeps nothing of what
+  it read beyond the counts and the report.
+- On a core registry, whoever holds both the knowledge sealing key and the
+  database can unwrap every data key. Keep the key as you keep the auth
+  sealing key: in the environment, never in the database or its backups.
+  An extension's wrapper moves that trust to its own keys.
+- AI Review sends the text of each chunk to the judge provider the
+  registry is configured with. With a hosted model, that provider reads
+  the pack. With `none`, nothing leaves the registry.
 
 ## Erasure
 
@@ -161,7 +182,9 @@ destroyed:
 - when an organization's decommission completes, for the organization's
   packs.
 
-The rows go in the erasure's own transaction. Once it commits, the
-wrapper's `Destroy` runs (the core's deletes the owner's salt), and then
-the sealed blobs are deleted. A blob whose delete fails is logged and
-left. It is sealed under a data key that no one can unwrap any more.
+The rows and the owner's salt go in the erasure's own transaction. Once it
+commits, the wrapper's `Destroy` runs (for an extension's own keys; the
+core's salt is already gone), and then the sealed blobs are deleted. A
+step that fails is logged and handed to a `knowledge.erase` job that
+retries it. Until it succeeds, a blob left behind is sealed under a data
+key that no one can unwrap.
