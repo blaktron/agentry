@@ -320,8 +320,11 @@ worker:
     minReplicas: 2
     maxReplicas: 8
     targetCPUUtilizationPercentage: 70
-  # Workers touch untrusted content (§8.2). Keep the root FS read-only; the git
-  # RWX volume is mounted read-only for gc coordination when mountGitData=true.
+  # Workers touch untrusted content (§8.2). Keep the root FS read-only. The git
+  # RWX volume is mounted when mountGitData=true: the worker scans a tag's git
+  # history (S2) and stores the archive of a tag pushed to the git role, which
+  # holds no object-store credential (agentry#508). Without it a tag push is
+  # rejected after two hours, its archive never stored.
   mountGitData: true
   nodeSelector: {}
   tolerations: []
