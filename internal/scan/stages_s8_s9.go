@@ -52,6 +52,15 @@ func (s S8Metadata) Run(sc stageContext, in *Input) StageResult {
 
 	findings = append(findings, s8Spam(in)...)
 
+	// Platform staff skip both publisher signals (operator, 2026-09-24,
+	// agentry#563): they are the burst-of-fresh-accounts shape, and staff
+	// is an account set the operator controls, whose checks and
+	// first-party publishes would otherwise wait on review for a week.
+	// Every other stage still scans the version.
+	if in.SubmitterIsStaff {
+		return StageResult{Scanner: "S8", Findings: findings}
+	}
+
 	// Publisher anomaly (§8.3, §19 ramp): young account + high velocity.
 	if in.AccountAgeDays >= 0 && in.AccountAgeDays < 7 && in.RecentPublishCount >= 5 {
 		findings = append(findings, Finding{
