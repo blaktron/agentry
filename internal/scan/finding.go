@@ -140,6 +140,9 @@ type Input struct {
 	// submission.
 	IPClusterAccounts int
 	IPClusterVersions int
+	// SubmitterIsStaff: the submitter is platform staff at scan time, which
+	// exempts the version from S8's two publisher signals (agentry#563).
+	SubmitterIsStaff bool
 	// Source is the version's publish source ("git-tag" | "cli-upload").
 	Source string
 	// History streams the git history reachable from the tagged commit as a
