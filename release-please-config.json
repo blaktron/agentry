@@ -6,7 +6,6 @@
       "package-name": "agentry",
       "changelog-path": "CHANGELOG.md",
       "include-component-in-tag": false,
-      "release-as": "0.6.0",
       "versioning": "always-bump-patch",
       "initial-version": "0.1.0",
       "draft": true,
