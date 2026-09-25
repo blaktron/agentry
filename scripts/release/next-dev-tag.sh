@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # next-dev-tag.sh — the tag a dev prerelease of HEAD gets, or nothing when
 # HEAD needs none (DEV-148, agentry#597). dev-release.yaml runs it on every
-# push to dev.
+# push to dev. Needs git and jq; reads release-please-config.json.
 #
 #   next-dev-tag.sh [--force]
 #
 # Prints vX.Y.Z-dev.N and exits 0. Prints nothing and exits 0 when HEAD
 # already carries a v* tag, or, without --force, when no commit since the
 # last v* tag reachable from HEAD is one release-please would release on
-# main: a feat, fix, perf, security, deps or revert subject (the visible
-# sections of release-please-config.json).
+# main: a commit whose type is one of the config's visible changelog-sections
+# (feat, fix, perf, security, deps, revert today).
 #
 # X.Y.Z is the version main's next release will have:
 #   - the config's release-as, while no vX.Y.Z tag exists for it and it is
@@ -25,7 +25,7 @@
 set -euo pipefail
 force=0
 [ "${1:-}" = --force ] && force=1
-config=${RELEASE_PLEASE_CONFIG:-release-please-config.json}
+config=release-please-config.json
 die() { echo "next-dev-tag: $*" >&2; exit 1; }
 [ -f "$config" ] || die "no $config"
 
@@ -34,15 +34,18 @@ if git tag --points-at HEAD | grep -E '^v[0-9]' >/dev/null; then
 fi
 
 if [ "$force" = 0 ]; then
+  types=$(jq -r '[.["changelog-sections"][] | select(.hidden != true) | .type] | join("|")' "$config")
+  [ -n "$types" ] || die "$config has no visible changelog-sections"
   prev=$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD 2>/dev/null || true)
   if ! git log --format=%s "${prev:+$prev..}HEAD" \
-      | grep -E '^(feat|fix|perf|security|deps|revert)(\([^)]*\))?!?: ' >/dev/null; then
+      | grep -E "^($types)(\([^)]*\))?!?: " >/dev/null; then
     exit 0
   fi
 fi
 
-setting() { sed -nE "s/^[[:space:]]*\"$1\"[[:space:]]*:[[:space:]]*\"([^\"]+)\".*/\1/p" "$config" | head -1; }
-semver='^[0-9]+\.[0-9]+\.[0-9]+$'
+n='(0|[1-9][0-9]*)'
+semver="^$n\.$n\.$n\$"
+setting() { jq -r --arg k "$1" '.packages["."][$k] // empty' "$config"; }
 latest=$(git tag -l 'v*' | sed 's/^v//' | { grep -E "$semver" || true; } | sort -V | tail -1)
 release_as=$(setting release-as)
 
@@ -61,5 +64,5 @@ else
   [[ $next =~ $semver ]] || die "no release yet and no initial-version in $config"
 fi
 
-n=$(git tag -l "v$next-dev.*" | sed -nE "s/^v${next//./\\.}-dev\.([0-9]+)$/\1/p" | sort -n | tail -1)
-echo "v$next-dev.$(( ${n:-0} + 1 ))"
+last=$(git tag -l "v$next-dev.*" | sed -nE "s/^v${next//./\\.}-dev\.([0-9]+)$/\1/p" | sort -n | tail -1)
+echo "v$next-dev.$(( ${last:-0} + 1 ))"

@@ -121,8 +121,12 @@ publishes `oci://ghcr.io/blaktron/agentry/charts/agentry` at a prerelease
 version, `0.1.0-<branch>.<run>.g<sha>`, whose default image is the
 `agentryd:sha-<sha>` built by the same run. A release publishes the tagged
 version: a `main` release as chart `0.6.0` with image `v0.6.0`, a `dev`
-prerelease as chart `0.6.1-dev.1` with image `v0.6.1-dev.1`. Only a `main`
-release moves the image's `latest`. The package is private while the
+prerelease as chart `0.6.1-dev.1` with image `v0.6.1-dev.1`. Only the newest
+`main` release moves the image's `latest`. A released chart or image is signed
+by the release workflow on its branch: pin
+`--certificate-identity https://github.com/blaktron/agentry/.github/workflows/release.yaml@refs/heads/main`
+(with `--certificate-github-workflow-repository blaktron/agentry`) to accept
+only `main` releases. The regexp below also accepts the per-branch builds. The package is private while the
 repository is, so pulling it needs a `read:packages` token, the same one the
 image needs.
 

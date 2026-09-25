@@ -15,8 +15,9 @@ on:
   pull_request:
   # release-please's release PR is opened with GITHUB_TOKEN, so its
   # pull_request runs wait for approval. Dispatching this workflow on the
-  # release branch runs the same jobs on the same head, which is how that PR
-  # is gated before it merges (agentry#597).
+  # release branch runs every job a push runs on that head (oasdiff alone is
+  # pull_request-only, and the release PR touches no schema), which is how
+  # that PR is gated before it merges (agentry#597).
   workflow_dispatch:
 
 permissions:

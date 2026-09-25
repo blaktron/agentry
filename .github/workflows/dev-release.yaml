@@ -1,11 +1,18 @@
 # dev's prereleases (DEV-148, agentry#597). Every push to dev that
-# release-please would release on main (a feat, fix, perf, security, deps or
-# revert commit since the last dev tag) is tagged vX.Y.Z-dev.N, the Nth
-# prerelease of the version main's next release will have. It is then
-# released through release.yaml exactly as a main release is: verified,
-# built, signed, and published as a GitHub Release marked prerelease, with
-# its image and chart tagged with it, never `latest`.
-# scripts/release/next-dev-tag.sh picks the tag and says how.
+# release-please would release on main (a commit of a type the config shows
+# in the changelog: feat, fix, perf, security, deps or revert, since the last
+# dev tag) is tagged vX.Y.Z-dev.N, the Nth prerelease of the version main's
+# next release will have. It is then released through release.yaml exactly as
+# a main release is: verified, built, signed, and published as a GitHub
+# Release marked prerelease, with its image and chart tagged with it, never
+# `latest`. scripts/release/next-dev-tag.sh picks the tag and says how.
+#
+# Why a tagging workflow and not release-please's prerelease mode:
+# release-please only tags when its release PR merges, so a prerelease per dev
+# push would mean a second standing PR merged into dev for every one, and dev
+# would then carry manifest and changelog commits that main's release-please
+# also writes. The version it proposes is still the one main will release,
+# because the script reads the same config.
 #
 # The tag is created with the workflow's own token, whose events never start
 # other workflows, so this workflow calls release.yaml itself (the same
@@ -21,17 +28,18 @@ on:
 permissions:
   contents: read
 
-# One at a time, never cancelled: two runs must not pick the same N, and a
-# release in flight finishes on its own account. A newer push waits.
-concurrency:
-  group: dev-release
-  cancel-in-progress: false
-
 jobs:
   tag:
-    if: github.ref == 'refs/heads/dev'
+    if: github.repository == 'blaktron/agentry' && github.ref == 'refs/heads/dev'
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 5
+    # One tag job at a time, so two pushes never pick the same N; only this
+    # short job is serialised, so each push's release runs on its own. GitHub
+    # keeps one pending run per group: a push whose tag job is still pending
+    # when a third arrives is folded into the later one's tag.
+    concurrency:
+      group: dev-release-tag
+      cancel-in-progress: false
     permissions:
       contents: write
     outputs:
@@ -48,9 +56,10 @@ jobs:
         env:
           FORCE: ${{ github.event_name == 'workflow_dispatch' && '--force' || '' }}
           AGENTRY_ALLOW_V1: ${{ vars.AGENTRY_ALLOW_V1 }}
+          RUN_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
-          tag=$(./scripts/release/next-dev-tag.sh $FORCE)
+          tag=$(./scripts/release/next-dev-tag.sh ${FORCE:+"$FORCE"})
           if [ -z "$tag" ]; then
             echo "nothing to release at $GITHUB_SHA: already tagged, or no releasable commit since the last dev tag"
             exit 0
