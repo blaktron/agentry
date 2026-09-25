@@ -155,6 +155,14 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		problemValidation(w, r, "That org handle is reserved. Choose another.")
 		return
 	}
+	// The staff organization's handle is reserved to platform staff
+	// (agentry#556): founding it makes its first member, and so its first
+	// staff, and nobody may make themselves staff. A deployment's first
+	// staff are seeded by its operator (docs/self-hosting.md).
+	if req.Handle == s.cfg.Auth.StaffOrg && !p.PlatformStaff {
+		problemValidation(w, r, "That org handle is reserved. Choose another.")
+		return
+	}
 	name := strings.TrimSpace(req.DisplayName)
 	if name == "" || len(name) > 120 {
 		problemValidation(w, r, "Set displayName to 1-120 characters.")
@@ -242,13 +250,26 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		}); err != nil {
 			return err
 		}
+		// The founder of the staff organization is its first member, so the
+		// domain rule holds for them too, and founding it makes them staff
+		// (agentry#556). For any other organization both are no-ops.
+		if err := s.staffOrgDoorIn(r.Context(), q, orgID, p.UserID); err != nil {
+			return err
+		}
 		e := auditEvent(r, audit.ActionOrgCreate)
 		e.OrgID = orgID
 		e.TargetKind, e.TargetID = "org", orgID
 		e.Detail = map[string]any{"domain": domain}
-		return s.auditW.Write(r.Context(), q, e)
+		if err := s.auditW.Write(r.Context(), q, e); err != nil {
+			return err
+		}
+		return s.syncStaffIn(r.Context(), q, p.UserID, registry.StaffSyncMembership, auditEvent(r, audit.ActionUserStaffSync))
 	})
 	if err != nil {
+		if errors.Is(err, registry.ErrStaffOrgDomain) {
+			problemStaffOrgDomain(w, r, req.Handle, s.cfg.Auth.StaffDomain)
+			return
+		}
 		if errors.Is(err, registry.ErrAlreadyAMember) || uniqueViolationOn(err, "memberships_one_active_per_user") {
 			problemAlreadyAMember(w, r, alreadyAMemberCreatorDetail)
 			return
@@ -542,6 +563,8 @@ func (s *Server) seatRefusal(w http.ResponseWriter, r *http.Request, org storege
 	case errors.Is(err, registry.ErrAlreadyAMember):
 		problemAlreadyAMember(w, r, alreadyAMemberDetail)
 		return true
+	case s.staffOrgProblem(w, r, org.Handle, err):
+		return true
 	case s.orgGateProblem(w, r, org.Handle, err):
 		return true
 	}
@@ -664,7 +687,12 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 		e.OrgID = orgRow.ID
 		e.TargetKind, e.TargetID = "user", target.ID
 		e.Detail = map[string]any{"role": string(requested), "previous": string(current)}
-		return s.auditW.Write(r.Context(), q, e)
+		if err := s.auditW.Write(r.Context(), q, e); err != nil {
+			return err
+		}
+		// Any active role in the staff organization is staff; the sync
+		// runs at every membership change all the same (agentry#556).
+		return s.syncStaffIn(r.Context(), q, target.ID, registry.StaffSyncMembership, auditEvent(r, audit.ActionUserStaffSync))
 	})
 	if errors.Is(err, errLastAdmin) {
 		problemLastAdmin(w, r, orgRow.Handle)
@@ -798,7 +826,13 @@ func (s *Server) DeclineOrgMember(w http.ResponseWriter, r *http.Request, org Or
 		e.OrgID = orgRow.ID
 		e.TargetKind, e.TargetID = "user", target.ID
 		e.Detail = map[string]any{"via": string(registry.DoorOf(m.ViaScim, m.ViaDomain))}
-		return s.auditW.Write(r.Context(), q, e)
+		if err := s.auditW.Write(r.Context(), q, e); err != nil {
+			return err
+		}
+		// A pending member was never staff, but an approval can land
+		// between the pending check above and this delete; the sync keeps
+		// the flag true to the membership either way (agentry#556).
+		return s.syncStaffIn(r.Context(), q, target.ID, registry.StaffSyncMembership, auditEvent(r, audit.ActionUserStaffSync))
 	})
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "decline member", "err", err)
@@ -866,7 +900,12 @@ func (s *Server) RemoveOrgMember(w http.ResponseWriter, r *http.Request, org Org
 		e.OrgID = orgRow.ID
 		e.TargetKind, e.TargetID = "user", target.ID
 		e.Detail = map[string]any{"previous": string(current), "left": leaving}
-		return s.auditW.Write(r.Context(), q, e)
+		if err := s.auditW.Write(r.Context(), q, e); err != nil {
+			return err
+		}
+		// Leaving or being removed from the staff organization ends staff
+		// in the same transaction (agentry#556).
+		return s.syncStaffIn(r.Context(), q, target.ID, registry.StaffSyncMembership, auditEvent(r, audit.ActionUserStaffSync))
 	})
 	if errors.Is(err, errLastAdmin) {
 		problemLastAdmin(w, r, orgRow.Handle)

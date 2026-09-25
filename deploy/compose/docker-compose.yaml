@@ -342,11 +342,15 @@ services:
       # has to say so).
       AGENTRY_IDP_ADMIN_URL: ${AGENTRY_IDP_ADMIN_URL:-}
       AGENTRY_IDP_ADMIN_TOKEN: ${AGENTRY_IDP_ADMIN_TOKEN:-}
-      # Directory group whose members are platform staff (agentry#51); the
-      # groups blueprint creates it. Empty disables the sync.
-      AGENTRY_IDP_STAFF_GROUP: ${AGENTRY_IDP_STAFF_GROUP:-agentry-platform-staff}
-      # A second way to be staff (agentry#525): a verified address at exactly
-      # this domain, as the directory's ID token asserts it. Empty is off.
+      # Platform staff is membership of the staff organization (agentry#556):
+      # an active member of AGENTRY_STAFF_ORG whose verified address is at
+      # exactly AGENTRY_STAFF_DOMAIN, and the organization admits nobody
+      # else. Set both or neither; empty leaves the flag as it is.
+      AGENTRY_STAFF_ORG: ${AGENTRY_STAFF_ORG:-}
+      AGENTRY_STAFF_DOMAIN: ${AGENTRY_STAFF_DOMAIN:-}
+      # Retired (agentry#556): these grant nothing and the server warns at
+      # start-up while either is set.
+      AGENTRY_IDP_STAFF_GROUP: ${AGENTRY_IDP_STAFF_GROUP:-}
       AGENTRY_IDP_STAFF_DOMAIN: ${AGENTRY_IDP_STAFF_DOMAIN:-}
       # Archive store against minio (S3-compatible), exercising the same code
       # path SaaS uses rather than the local-FS one.

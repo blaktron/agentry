@@ -239,6 +239,11 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		if _, err := tq.DeleteUserMemberships(r.Context(), p.UserID); err != nil {
 			return err
 		}
+		// An erased account is not staff (agentry#556): the account is
+		// deleted and belongs to no organization, so the rule answers no.
+		if err := s.syncStaffIn(r.Context(), tq, p.UserID, registry.StaffSyncErasure, auditEvent(r, audit.ActionUserStaffSync)); err != nil {
+			return err
+		}
 		// Every PAT dies with the account.
 		pats, err := tq.ListPATs(r.Context(), p.UserID)
 		if err != nil {
