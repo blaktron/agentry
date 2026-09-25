@@ -14,9 +14,10 @@
 #
 # The version (release-please-config.json; the operator's decisions of
 # 2026-09-25, release-1.0.md D16):
-#   - release-as pins the next release. It is set to 0.6.0 for the first
-#     release and removed once v0.6.0 exists; the operator sets it again
-#     whenever they move the minor version (or cut 1.0.0, agentry#522).
+#   - release-as pins the next release. It was set to 0.6.0 for the first
+#     release and removed once v0.6.0 existed (agentry#597); the operator
+#     sets it again whenever they move the minor version (or cut 1.0.0,
+#     agentry#522), and it is removed again after that release.
 #   - "versioning": "always-bump-patch" makes every other release a patch
 #     bump, whatever the commit types: a feat: or a feat!: does not move the
 #     minor by itself, because only the operator does.
