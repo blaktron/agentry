@@ -152,7 +152,13 @@ reference (added for the Vultr production cluster, DEV-124):
   agentry#479). The chart refuses to render `kind: file` without the Secret.
 - `objectStoreCredentials.existingSecret` — object-store credentials
   (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`), injected into the api and
-  worker pods only; the git role never touches the store.
+  worker pods only; the git role never touches the store. A `v*` tag
+  pushed there is recorded by the git role and its archive is stored by a
+  worker, which rebuilds it from the recorded commit and stores it only if
+  the digest matches (agentry#508). So the worker needs the git volume
+  (`worker.mountGitData`, the default). A tag submission whose archive is
+  not stored within two hours is rejected, and the publisher pushes a new
+  version tag.
 - `databaseCA.existingSecret` and `databaseCA.key` — the database's CA,
   projected to `/etc/agentry-db-ca/ca.crt`, so the DSN can carry
   `sslmode=verify-full&sslrootcert=/etc/agentry-db-ca/ca.crt`.
