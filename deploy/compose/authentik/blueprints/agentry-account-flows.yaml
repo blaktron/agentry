@@ -214,7 +214,7 @@ entries:
       label: Username
       type: username
       required: true
-      placeholder: "your registry handle, in lowercase letters and digits"
+      placeholder: "your registry handle: lowercase letters, digits, hyphens"
       placeholder_expression: false
       order: 0
   - model: authentik_stages_prompt.prompt
@@ -242,6 +242,37 @@ entries:
       placeholder_expression: false
       order: 2
 
+  # The username becomes the registry handle (DEV-142, agentry#517): the
+  # first sign-in seeds the handle from preferred_username, which is this
+  # field. A username the registry could not take as it is would be mapped
+  # to something else without the person knowing, so the form refuses it
+  # here (agentry#590, agentry-web#417). HANDLE is the core's reHandle
+  # (internal/api/handlers_auth.go) and RESERVED is pathHandles plus
+  # firstPartyHandles (internal/api/handles.go), byte for byte:
+  # TestEnrollmentUsernamePolicyMatchesHandleRules fails when they drift.
+  # A handle someone already holds in the registry is not checked: no
+  # endpoint answers that without an account.
+  - model: authentik_policies_expression.expressionpolicy
+    id: policy-enrollment-username
+    identifiers:
+      name: agentry-enrollment-username-is-a-handle
+    attrs:
+      execution_logging: false
+      expression: |
+        import re
+
+        HANDLE = r"^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"
+        RESERVED = {"about", "admin", "advisories", "agent-template", "agentry", "api", "auth", "build", "contact", "cookies", "dashboard", "docs", "download", "downloads", "healthz", "img", "invitations", "login", "logout", "metrics", "new", "orgs", "pricing", "privacy", "readyz", "review", "runs", "scim", "search", "secureagentry", "settings", "signup", "sso", "staff", "static", "tags", "terms", "trust", "ui"}
+
+        username = str((request.context.get("prompt_data") or {}).get("username") or "")
+        if not re.fullmatch(HANDLE, username):
+            ak_message("A username is 1 to 39 lowercase letters, digits and hyphens, and starts and ends with a letter or digit. It becomes your registry handle.")
+            return False
+        if username in RESERVED:
+            ak_message("That username is reserved. Choose another; it becomes your registry handle.")
+            return False
+        return True
+
   - model: authentik_stages_prompt.promptstage
     id: stage-enrollment-prompt
     identifiers:
@@ -255,6 +286,7 @@ entries:
         - !KeyOf field-password-repeat
       validation_policies:
         - !KeyOf password-policy
+        - !KeyOf policy-enrollment-username
 
   - model: authentik_stages_user_write.userwritestage
     id: stage-enrollment-user-write
