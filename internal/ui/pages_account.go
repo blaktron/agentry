@@ -96,7 +96,7 @@ func (h *handler) accountPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	switch res, err := h.call(r).do(http.MethodGet, "/knowledge/usage", nil); {
-	case err == nil && res.problemType() != "" && strings.HasSuffix(res.problemType(), "/knowledge-unconfigured"):
+	case err == nil && strings.HasSuffix(res.problemType(), "/knowledge-unconfigured"):
 		d.KnowledgeOff = true
 	case err != nil || !res.OK():
 		d.KnowledgeError = readFailed("your knowledge allocation", res, err)

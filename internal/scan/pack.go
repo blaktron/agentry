@@ -52,10 +52,13 @@ type PackReport struct {
 	Findings []PackFinding `json:"findings"`
 }
 
-// PackStage is one stage that read the pack.
+// PackStage is one stage that read the pack, or that failed to (a
+// timeout, a panic): a failed stage is named, its findings are not
+// trusted to be all there are, and the scan is not complete.
 type PackStage struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Failed bool   `json:"failed,omitempty"`
 }
 
 // PackRead counts what the scan read: the text files of each half and
@@ -101,9 +104,16 @@ type PackFinding struct {
 	Chunk      int        `json:"chunk,omitempty"`
 }
 
-// Complete says whether every chunk of AI Review was read (or none was to
-// be, with no judge configured).
-func (r PackReport) Complete() bool { return r.Review.Failed == 0 }
+// Complete says whether every stage finished and every chunk of AI Review
+// was read (or none was to be, with no judge configured).
+func (r PackReport) Complete() bool {
+	for _, st := range r.Stages {
+		if st.Failed {
+			return false
+		}
+	}
+	return r.Review.Failed == 0
+}
 
 // packRuleStages are the stages that read a pack, in the order they run.
 var packRuleStages = []PackStage{
@@ -148,9 +158,23 @@ func (o *Orchestrator) ScanPack(ctx context.Context, files []PackFile) PackRepor
 
 	sc := stageContext{ctx: ctx, bundle: o.bundle, judge: o.judge, log: o.log}
 	var found []Finding
-	found = append(found, o.runStage(sc, S2Secrets{}, in).Findings...)
-	found = append(found, o.runStage(sc, S3S4Content{}, in).Findings...)
+	failed := map[string]bool{}
+	for _, st := range []Stage{S2Secrets{}, S3S4Content{}} {
+		res := o.runStage(sc, st, in)
+		if res.Err != nil {
+			// S3S4 is two of the report's stages; a failure fails both.
+			for _, id := range []string{"S2", "S3", "S4"} {
+				if strings.Contains(st.ID(), id) {
+					failed[id] = true
+				}
+			}
+		}
+		found = append(found, res.Findings...)
+	}
 	found = append(found, s8URLReputation(in)...)
+	for i := range r.Stages {
+		r.Stages[i].Failed = failed[r.Stages[i].ID]
+	}
 	for _, f := range found {
 		r.Findings = append(r.Findings, PackFinding{
 			Scanner: f.Scanner, Severity: f.Severity, Confidence: f.Confidence, Title: f.Title,

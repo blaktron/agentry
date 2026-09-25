@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/blaktron/agentry/pkg/ruleset"
 )
@@ -182,5 +183,20 @@ func TestScanPackRecordsAJudgeFailure(t *testing.T) {
 	ok := packOrchestrator(t, &recordingJudge{limit: 1 << 20}).ScanPack(context.Background(), []PackFile{{Path: "wiki/index.md", Content: []byte("# Index\n")}})
 	if !ok.Complete() {
 		t.Fatalf("a review with no failure is incomplete: %+v", ok.Review)
+	}
+}
+
+func TestScanPackRecordsAStageFailure(t *testing.T) {
+	o := packOrchestrator(t, NoneProvider{})
+	o.stageTimeout = time.Nanosecond
+	r := o.ScanPack(context.Background(), []PackFile{{Path: "wiki/index.md", Content: []byte("# Index\n")}})
+	var failed []string
+	for _, st := range r.Stages {
+		if st.Failed {
+			failed = append(failed, st.ID)
+		}
+	}
+	if strings.Join(failed, ",") != "S2,S3,S4" || r.Complete() {
+		t.Fatalf("stages %+v, complete %v: a stage that timed out read nothing and the report says so", r.Stages, r.Complete())
 	}
 }

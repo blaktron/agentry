@@ -280,7 +280,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		return
 	}
 
-	_ = s.knowledge.Destroyed(r.Context(), knowledge.User(p.UserID), knowledgeKeys)
+	s.knowledge.FinishErasure(r.Context(), knowledge.User(p.UserID), knowledgeKeys)
 
 	// The other half (agentry#20): with credentials in the directory service
 	// the person's sign-in account — email, display name, password hash —

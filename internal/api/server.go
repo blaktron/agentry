@@ -5,7 +5,6 @@ package api
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -332,29 +331,16 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 	return srv
 }
 
-// knowledgeWrapper is the core's knowledge key wrapper: the deployment's
-// knowledge sealing key, or in dev mode without one a fixed insecure key
-// (as the auth sealer has); nil otherwise, which leaves the store off
-// unless an extension wraps keys. Config validation has checked the key.
+// knowledgeWrapper is the core's knowledge key wrapper (config validation
+// has checked the key); nil leaves the store off unless an extension wraps
+// keys.
 func knowledgeWrapper(cfg config.Config, st *store.Store, log *slog.Logger) knowledge.KeyWrapper {
-	var key []byte
-	switch {
-	case cfg.Knowledge.SealingKey != "":
-		k, err := knowledge.DecodeSealingKey(cfg.Knowledge.SealingKey)
-		if err != nil {
-			panic(err) // startup-time config failure
-		}
-		key = k
-	case cfg.DevMode:
-		sum := sha256.Sum256([]byte("agentry-dev-insecure-knowledge-sealing-key"))
-		key = sum[:]
-	default:
-		log.Info("knowledge: no knowledge sealing key; the store is off unless an extension wraps keys")
-		return nil
-	}
-	w, err := knowledge.NewDeploymentWrapper(key, knowledge.NewStoreSalts(st))
+	w, err := knowledge.NewCoreWrapper(cfg.Knowledge.SealingKey, cfg.DevMode, knowledge.NewStoreSalts(st))
 	if err != nil {
-		panic(err)
+		panic(err) // startup-time config failure
+	}
+	if w == nil {
+		log.Info("knowledge: no knowledge sealing key; the store is off unless an extension wraps keys")
 	}
 	return w
 }

@@ -69,6 +69,8 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 	// the §12.3 review:act gate from the role check.
 	_, patScopedTok := env.mintPAT(staffSess, "sam-scoped", "review:act", "user:profile", "agent:read")
 	_, patUnscopedTok := env.mintPAT(staffSess, "sam-unscoped", "user:profile", "agent:read")
+	_, patKnowledgeTok := env.mintPAT(staffSess, "sam-knowledge", "knowledge:read")
+	patKnowledge := caller{name: "staff-pat-knowledge", pat: patKnowledgeTok}
 	patScoped := caller{name: "patScoped", pat: patScopedTok}
 	patUnscoped := caller{name: "patUnscoped", pat: patUnscopedTok}
 
@@ -199,6 +201,14 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 			map[string]any{"category": "spam", "detail": "matrix self-authz abuse fixture"}, anonymous, deny1},
 		{"reportAbuse", "POST", "/api/v1/agents/" + author + "/risky/abuse-reports",
 			map[string]any{"category": "spam", "detail": "matrix self-authz abuse fixture"}, plain, pass},
+
+		// listKnowledgePackSizes — staff-only (agentry#593), and a staff
+		// token needs knowledge:read; an owner with no packs lists empty.
+		{"listKnowledgePackSizes", "GET", "/api/v1/platform/knowledge?owner=" + plainH, nil, anonymous, deny1},
+		{"listKnowledgePackSizes", "GET", "/api/v1/platform/knowledge?owner=" + plainH, nil, plain, deny3},
+		{"listKnowledgePackSizes", "GET", "/api/v1/platform/knowledge?owner=" + plainH, nil, staffSess, pass},
+		{"listKnowledgePackSizes", "GET", "/api/v1/platform/knowledge?owner=" + plainH, nil, patUnscoped, deny3},
+		{"listKnowledgePackSizes", "GET", "/api/v1/platform/knowledge?owner=" + plainH, nil, patKnowledge, pass},
 
 		// listAbuseReports / triageAbuseReport — staff-only; triage of a
 		// random id gives authorized callers 404, nothing mutated.

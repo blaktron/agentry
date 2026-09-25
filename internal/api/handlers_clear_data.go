@@ -90,7 +90,7 @@ func (s *Server) ClearCurrentUserData(w http.ResponseWriter, r *http.Request) {
 		problemInternal(w, r)
 		return
 	}
-	_ = s.knowledge.Destroyed(r.Context(), knowledge.User(p.UserID), knowledgeKeys)
+	s.knowledge.FinishErasure(r.Context(), knowledge.User(p.UserID), knowledgeKeys)
 	s.fireEvent(r.Context(), Event{Kind: eventUserDataCleared, UserID: p.UserID, Payload: counts})
 	w.WriteHeader(http.StatusNoContent)
 }

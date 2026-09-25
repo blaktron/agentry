@@ -81,6 +81,28 @@ func DecodeSealingKey(b64 string) ([]byte, error) {
 	return k, nil
 }
 
+// NewCoreWrapper is the core's wrapper from configuration: the knowledge
+// sealing key (base64), or in dev mode without one a fixed insecure key, as
+// the auth sealer has. With neither it is nil, which leaves the store off
+// unless an extension wraps keys.
+func NewCoreWrapper(sealingKey string, devMode bool, salts OwnerSalts) (KeyWrapper, error) {
+	var key []byte
+	switch {
+	case sealingKey != "":
+		k, err := DecodeSealingKey(sealingKey)
+		if err != nil {
+			return nil, err
+		}
+		key = k
+	case devMode:
+		sum := sha256.Sum256([]byte("agentry-dev-insecure-knowledge-sealing-key"))
+		key = sum[:]
+	default:
+		return nil, nil
+	}
+	return NewDeploymentWrapper(key, salts)
+}
+
 // NewDeploymentWrapper builds the core wrapper over a 32-byte key.
 func NewDeploymentWrapper(key []byte, salts OwnerSalts) (*DeploymentWrapper, error) {
 	if len(key) != 32 {

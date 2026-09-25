@@ -10,6 +10,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -57,7 +58,10 @@ func (s *Server) knowledgeProblem(w http.ResponseWriter, r *http.Request, err er
 			map[string]any{"bytes": alloc.Bytes, "max": alloc.Max})
 	case errors.Is(err, knowledge.ErrTooLarge):
 		writeProblem(w, r, http.StatusRequestEntityTooLarge, "knowledge-too-large", "Knowledge pack too large",
-			"A knowledge pack is at most 10 MB and 2000 files.")
+			fmt.Sprintf("A knowledge pack is at most %d MB and %d files.", knowledge.MaxBytes>>20, knowledge.MaxFiles))
+	case errors.Is(err, knowledge.ErrScanning):
+		writeProblem(w, r, http.StatusConflict, "knowledge-scanning", "Pack being scanned",
+			"This pack's tree is being scanned; it can be read once the scan ends.")
 	case errors.Is(err, knowledge.ErrDigest):
 		writeProblem(w, r, http.StatusUnprocessableEntity, "knowledge-digest-mismatch", "Tree does not match its digest",
 			"The tree inside the upload is not the digest its header names; nothing was stored.")
@@ -78,11 +82,19 @@ func (s *Server) knowledgeProblem(w http.ResponseWriter, r *http.Request, err er
 	}
 }
 
+func wrappedKeyToAPI(k knowledge.WrappedKey) KnowledgeWrappedKey {
+	return KnowledgeWrappedKey{Kind: k.Kind, Recipient: k.Recipient, Key: k.Blob}
+}
+
+func wrappedKeyFromAPI(k KnowledgeWrappedKey) knowledge.WrappedKey {
+	return knowledge.WrappedKey{Kind: k.Kind, Recipient: k.Recipient, Blob: k.Key}
+}
+
 func knowledgePackToAPI(p storegen.KnowledgePack) (KnowledgePack, error) {
 	out := KnowledgePack{
 		Id: p.ID, Name: p.Name, State: KnowledgePackState(p.State),
 		Bytes: p.Bytes, Files: int(p.Files), Pages: int(p.Pages), Digest: p.Digest,
-		WrappedKey: KnowledgeWrappedKey{Kind: p.WrapperKind, Recipient: p.WrapperRecipient, Key: p.WrappedKey},
+		WrappedKey: wrappedKeyToAPI(knowledge.WrappedKeyOf(p)),
 		ScannedAt:  p.ScannedAt, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
 	}
 	if len(p.ScanReport) > 0 {
@@ -135,9 +147,7 @@ func (s *Server) CreateKnowledgePack(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &req) {
 		return
 	}
-	p, err := s.knowledge.Create(r.Context(), knowledgeOwner(r), req.Name, knowledge.WrappedKey{
-		Kind: req.WrappedKey.Kind, Recipient: req.WrappedKey.Recipient, Blob: req.WrappedKey.Key,
-	})
+	p, err := s.knowledge.Create(r.Context(), knowledgeOwner(r), req.Name, wrappedKeyFromAPI(req.WrappedKey))
 	if err != nil {
 		s.knowledgeProblem(w, r, err, "create knowledge pack")
 		return
@@ -180,11 +190,11 @@ func (s *Server) UploadKnowledgeTree(w http.ResponseWriter, r *http.Request, pac
 		s.knowledgeProblem(w, r, knowledge.ErrUnconfigured, "upload knowledge tree")
 		return
 	}
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, knowledge.MaxUpload))
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, knowledge.MaxUpload()))
 	if err != nil {
 		var tooLarge *http.MaxBytesError
 		if errors.As(err, &tooLarge) {
-			problemUploadTooLarge(w, r, "A sealed knowledge pack is at most a 10 MB pack; this upload is larger.")
+			problemUploadTooLarge(w, r, fmt.Sprintf("A sealed knowledge pack holds at most a %d MB pack; this upload is larger.", knowledge.MaxBytes>>20))
 			return
 		}
 		problemBadRequest(w, r, "The upload could not be read.")
@@ -258,7 +268,7 @@ func (s *Server) WrapKnowledgeKey(w http.ResponseWriter, r *http.Request) {
 		s.knowledgeProblem(w, r, err, "wrap knowledge key")
 		return
 	}
-	writeJSON(w, http.StatusOK, KnowledgeWrappedKey{Kind: wk.Kind, Recipient: wk.Recipient, Key: wk.Blob})
+	writeJSON(w, http.StatusOK, wrappedKeyToAPI(wk))
 }
 
 // UnwrapKnowledgeKey implements POST /knowledge/keys/unwrap: the data key,
@@ -271,7 +281,7 @@ func (s *Server) UnwrapKnowledgeKey(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &req) {
 		return
 	}
-	key, err := s.knowledge.Unwrap(r.Context(), knowledgeOwner(r), knowledge.WrappedKey{Kind: req.Kind, Recipient: req.Recipient, Blob: req.Key})
+	key, err := s.knowledge.Unwrap(r.Context(), knowledgeOwner(r), wrappedKeyFromAPI(req))
 	if err != nil {
 		s.knowledgeProblem(w, r, err, "unwrap knowledge key")
 		return
@@ -323,7 +333,7 @@ func (s *Server) ListKnowledgePackSizes(w http.ResponseWriter, r *http.Request, 
 	}
 	out := make([]KnowledgePackSize, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, KnowledgePackSize{Id: row.ID, Name: row.Name, State: row.State, Bytes: row.Bytes, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt})
+		out = append(out, KnowledgePackSize{Id: row.ID, Name: row.Name, State: KnowledgePackState(row.State), Bytes: row.Bytes, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
