@@ -979,7 +979,13 @@ page:
   confirmation link that activates it, then sign-in. Writing the account
   inactive is what makes the directory-verified `email` assertion above
   honest for self-enrolled users: no account is active, and so none
-  reaches the registry, before its address is confirmed.
+  reaches the registry, before its address is confirmed. The username
+  becomes the registry handle at the first sign-in, so the form refuses
+  one that is not a valid handle (lowercase letters, digits and hyphens,
+  at most 39) or that the registry reserves for its own paths and names
+  (agentry#590). Users created in the directory some other way are not
+  checked; the registry maps such a username to a valid handle and
+  records the one asked for (DEV-142).
 - **Password recovery** — identification, an emailed reset link, then a
   new password. The identification stage runs with `pretend_user_exists`,
   so an unknown address gets the same answer a real one does and the form
