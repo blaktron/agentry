@@ -67,8 +67,23 @@ scanned and published.** It does not mean the contents are benign. Those
 are different claims and the product never conflates them.
 
 Verification keys are served at
-`/.well-known/agentry/signing-keys.json`; the CLI pins them on first use and
-warns when the advertised key ids change.
+`/.well-known/agentry/signing-keys.json`. The CLI and the desktop share one
+pin store, and pin the keys when you log in, or at the first verification if
+you never did. After that, a signature counts only if a pinned key made it.
+When a later login finds a different key set, the client says what changed
+and keeps the pin:
+
+- If the registry added a key and still lists every pinned one, the client
+  reports a possible key rotation. It cannot tell a rotation from a key
+  added by whoever answers for the registry's address, so it asks you to
+  confirm with the registry's operator and then re-pin deliberately. Until
+  you do, a release signed only by the new key is refused.
+- If a pinned key is gone, or a pinned key id now carries a different
+  public key, the client warns. A rotation never does either.
+
+When the key that verified a release is one the registry lists as retired,
+`agentry verify` prints `signed by a retired key (retired <date>)`. The
+signature still verifies exactly as before.
 
 A key rotation orphans nothing. The registry keeps every key it has signed
 with, and the well-known set lists each one with a `status`: `active` for the
