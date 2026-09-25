@@ -119,8 +119,11 @@ Match the file you are editing. Beyond that:
 - comments explain constraints and *why*, not what the next line does;
 - conventional commits (`feat:`, `fix:`, `perf:`, `security:`, `deps:`, `docs:`,
   `refactor:`, `test:`, `ci:`, `chore:`) — release-please turns these into the
-  CHANGELOG, so the prefix is what appears (or is hidden) in release notes. A
-  `feat!:` or a `BREAKING CHANGE:` footer bumps the major version.
+  CHANGELOG, so the prefix is what appears (or is hidden) in release notes. It
+  does not choose the version: every release is a patch bump, and only the
+  operator moves the minor or the major (see "Releasing"). Mark a breaking
+  change with `feat!:` or a `BREAKING CHANGE:` footer all the same, so the
+  changelog says so.
 
 ## Tests
 
