@@ -13,6 +13,12 @@ on:
     # "Branches", 2026-09-22).
     branches: [main, dev]
   pull_request:
+  # release-please's release PR is opened with GITHUB_TOKEN, so its
+  # pull_request runs wait for approval. Dispatching this workflow on the
+  # release branch runs every job a push runs on that head (oasdiff alone is
+  # pull_request-only, and the release PR touches no schema), which is how
+  # that PR is gated before it merges (agentry#597).
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -125,6 +131,10 @@ jobs:
       # under that name (agentry#420).
       - name: acceptance helper refuses an empty match
         run: ./scripts/acceptance/lib-selftest.sh
+      # The release tag rules: the next dev prerelease, and every tag the
+      # release guard refuses (agentry#597).
+      - name: release tag rules
+        run: ./scripts/release/selftest.sh
       - name: section 9 test names exist
         run: ./scripts/acceptance/section9-names.sh
       - name: acceptance M0
@@ -343,7 +353,8 @@ jobs:
 
   # Secret scanning (agentry#419): gitleaks over the commits this event
   # brings — a pull request's own range, or a push's before..after — with the
-  # repository's .gitleaks.toml, failing on any hit. The binary is the release
+  # repository's .gitleaks.toml, failing on any hit (a dispatched run: the
+  # ref's commits over main). The binary is the release
   # tarball at the pinned version, checked against the pinned checksum before
   # it runs (the runner image's copy is not relied on). --redact: a hit names
   # the file, line and rule, never the value.
@@ -374,6 +385,10 @@ jobs:
           set -euo pipefail
           if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
             range="$PR_BASE..$PR_HEAD"
+          elif [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            # A dispatched run (the release PR's gate): what the ref brings
+            # over main, as its pull request would.
+            range="origin/main..$PUSH_AFTER"
           elif [ -n "$PUSH_BEFORE" ] && ! grep -qE '^0+$' <<<"$PUSH_BEFORE" && git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then
             range="$PUSH_BEFORE..$PUSH_AFTER"
           else
