@@ -109,8 +109,8 @@ func TestOSSResolverCapsNothing(t *testing.T) {
 				t.Fatalf("Features.%s has a kind this test does not know: %T", name, field)
 			}
 		}
-		if v.NumField() != 7 {
-			t.Fatalf("Features has %d fields, want 7 — add the new one to this test's expectations", v.NumField())
+		if v.NumField() != 8 {
+			t.Fatalf("Features has %d fields, want 8 — add the new one to this test's expectations", v.NumField())
 		}
 	}
 }
@@ -129,3 +129,15 @@ func (s stubResolver) Features(context.Context, Subject) (Features, error) {
 }
 
 var _ Resolver = stubResolver{}
+
+func TestConfigResolverKnowledgeCapIsTheSelfHostersToSet(t *testing.T) {
+	l := config.Default().Limits
+	l.KnowledgeBytesPerAccount = 100 << 20
+	f, err := NewConfigResolver(l).Features(context.Background(), ForUser(uuid.New()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !f.KnowledgeBytes.Enabled || f.KnowledgeBytes.Max != 100<<20 {
+		t.Fatalf("knowledge cap = %+v, want enabled at 100 MiB", f.KnowledgeBytes)
+	}
+}

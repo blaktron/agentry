@@ -228,6 +228,14 @@ func TestValidateGuardsTheNewSurfaces(t *testing.T) {
 		}},
 		{"negative trusted proxies", func(c *Config) { c.HTTP.TrustedProxies = -1 }},
 		{"zero quota", func(c *Config) { c.Limits.GitPushesPerHour = 0 }},
+		{"negative knowledge cap", func(c *Config) { c.Limits.KnowledgeBytesPerAccount = -1 }},
+		{"a short knowledge sealing key", func(c *Config) { c.Knowledge.SealingKey = "c2hvcnQ=" }},
+		// A key of its own (agentry#593): the one that opens TOTP seeds
+		// must not also open every knowledge pack.
+		{"the knowledge key is the auth key", func(c *Config) {
+			c.Auth.SealingKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+			c.Knowledge.SealingKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+		}},
 		{"zero scim budget", func(c *Config) { c.Limits.SCIMPerMin = 0 }},
 		{"zero git concurrency per IP", func(c *Config) { c.Limits.GitConcurrentPerIP = 0 }},
 		{"unparseable signing window", func(c *Config) { c.Signing.NotAfter = "next tuesday" }},
@@ -525,5 +533,18 @@ func TestTrustedProxyCIDRsFromEnv(t *testing.T) {
 	t.Setenv("AGENTRY_TRUSTED_PROXY_CIDRS", "172.16.0.1/12")
 	if _, err := Load(""); err == nil || !strings.Contains(err.Error(), "trustedProxyCIDRs") {
 		t.Fatalf("a CIDR with host bits set was accepted: %v", err)
+	}
+}
+
+func TestKnowledgeSealingKeyFromEnv(t *testing.T) {
+	t.Setenv("AGENTRY_KNOWLEDGE_SEALING_KEY", "a25vd2xlZGdlLWtub3dsZWRnZS1rbm93bGVkZ2UtISE=")
+	t.Setenv("AGENTRY_KNOWLEDGE_BYTES_PER_ACCOUNT", "104857600")
+	t.Setenv("AGENTRY_AUTH_SEALING_KEY", "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
+	c, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Knowledge.SealingKey != "a25vd2xlZGdlLWtub3dsZWRnZS1rbm93bGVkZ2UtISE=" || c.Limits.KnowledgeBytesPerAccount != 100<<20 {
+		t.Fatalf("knowledge = %+v, cap %d", c.Knowledge, c.Limits.KnowledgeBytesPerAccount)
 	}
 }
