@@ -496,7 +496,10 @@ func validateInteractive(s *issues, m *Manifest) {
 // a format character (a bidi override, a zero-width space) or a C1 control:
 // the guide is read by a person deciding what to hand a run, and the
 // connect help is read by one deciding where to create a key, so what it
-// says must be what it shows.
+// says must be what it shows. The overview keeps newlines and tabs and
+// refuses every other C0 control and DEL (agentry#558): ESC starts a
+// terminal escape sequence and CR rewrites a printed line, and a client
+// that prints the overview should not have to remember to clean it.
 func validateGuide(s *issues, m *Manifest) {
 	if m.Major() != 2 || m.Guide == nil {
 		return
@@ -506,8 +509,8 @@ func validateGuide(s *issues, m *Manifest) {
 		s.errf("V10", "guide.overview", "overview is %d bytes; the maximum is %d", n, MaxGuideOverviewBytes)
 	}
 	for _, r := range g.Overview {
-		if r == 0 || hiddenRune(r) {
-			s.errf("V10", "guide.overview", "overview must not contain a NUL, a C1 control or a format character (U+%04X)", r)
+		if (r < 0x20 && r != '\n' && r != '\t') || r == 0x7f || hiddenRune(r) {
+			s.errf("V10", "guide.overview", "overview must not contain a control character other than a newline or a tab, or a format character (U+%04X)", r)
 			break
 		}
 	}

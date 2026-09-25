@@ -101,8 +101,9 @@
       "properties": {
         "overview": {
           "type": "string",
-          "description": "What the BriefAgent does and returns, in markdown. At most 4096 bytes (V10 counts bytes).",
-          "maxLength": 4096
+          "description": "What the BriefAgent does and returns, in markdown. At most 4096 bytes (V10 counts bytes). Newlines and tabs are the only control characters it may carry (agentry#558).",
+          "maxLength": 4096,
+          "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f]*$"
         },
         "prepare": {
           "type": "array",
