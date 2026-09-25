@@ -56,6 +56,15 @@ jobs:
   check:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
+    # The job's backstop (agentry#452), sized from the Makefile's
+    # TEST_TIMEOUT (25m); change both or neither. `make check` is internal/api's
+    # time plus at most 0.6 min. Everything outside `make check` (container
+    # init, checkout, lint, the acceptance scripts) took at most 5.1 min on a
+    # green first-host run (124 jobs, 2026-09-22..25). So 25 + 0.6 + 5.1 ≈ 31,
+    # and 35 lets a package timeout print its diagnosis before the job is cut.
+    # The worst green job took 18.7 min, well below. A wedged runner then
+    # costs 35 minutes, not GitHub's default 360.
+    timeout-minutes: 35
     services:
       postgres:
         image: postgres:16

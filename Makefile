@@ -18,14 +18,25 @@ build:
 	$(GO) build ./...
 	$(GO) build -ldflags '$(LDFLAGS)' -o $(BIN_DIR)/agentryd ./cmd/agentryd
 
-## test: run all Go tests (DB tests honor AGENTRY_TEST_DATABASE_URL). The
-## timeout is explicit at every `go test` in the tree because Go's 10m default
-## sits inside the self-hosted runner's noise: internal/api takes 366-421s when
-## the host is quiet and the host varies about fourfold, which failed four runs
-## on 2026-09-21 with no failing test in any of them — only the package
-## overrunning. 20m leaves a slow host room and still bounds a genuine hang.
+## test: run all Go tests (DB tests honor AGENTRY_TEST_DATABASE_URL), through
+## scripts/ci/go-test.sh, which names a package killed by the timeout and says
+## whether any test failed (agentry#452).
+##
+## TEST_TIMEOUT is measured, not guessed (agentry#452, 2026-09-25). The runs
+## API gave 124 `check` jobs from 2026-09-22 to 09-25, and internal/api
+## dominates every run:
+##   - first runner host (core-1/2, 4 vCPU): 17 green runs, 420 s to 976 s
+##     (median 648 s). No run was killed by the timeout.
+##   - second host (r2-core-*, 12 vCPU): 98 green runs, 72 s to 424 s
+##     (median 131 s).
+## 25m = 1500 s is the worst green run (976 s) with about 50% headroom; the
+## first host has swung more than twofold between quiet and loaded. A genuine
+## hang still fails, at 25 minutes. The check job's timeout-minutes in
+## .github/workflows/ci.yaml (35) is sized from this value: change both or
+## neither.
+TEST_TIMEOUT ?= 25m
 test:
-	$(GO) test -timeout 20m ./...
+	GO=$(GO) ./scripts/ci/go-test.sh -timeout $(TEST_TIMEOUT) ./...
 
 ## lint: gofmt + go vet + golangci-lint (if installed)
 lint:
