@@ -123,6 +123,16 @@ const (
 	KeyOwnerOrg  = knowledge.OwnerOrg
 )
 
+// KnowledgePool and KnowledgePools are the knowledge store's allocation
+// seam (agentry#612): an extension's resolver that also implements
+// KnowledgePools names the pool an owner's packs draw on — the lock every
+// upload into it is reserved under, the owners it counts, and its cap — as a
+// paid organization pools its seats across its members.
+type (
+	KnowledgePool  = knowledge.Pool
+	KnowledgePools = knowledge.Pools
+)
+
 // ErrKeyNotOwner is what a KeyWrapper's Unwrap answers for a wrapped key
 // that does not open for the owner presenting it; the routes answer it as
 // a key that is not there.

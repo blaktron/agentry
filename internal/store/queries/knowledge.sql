@@ -22,11 +22,12 @@ SELECT * FROM knowledge_packs WHERE owner_kind = $1 AND owner_id = $2 ORDER BY n
 SELECT id, name, state, bytes, created_at, updated_at FROM knowledge_packs
 WHERE owner_kind = $1 AND owner_id = $2 ORDER BY name;
 
--- name: SumKnowledgeBytes :one
--- What an owner keeps in the registry, the pack named aside (the one an
--- upload replaces): the allocation counts every other pack.
+-- name: SumKnowledgeBytesOfPool :one
+-- What a pool's owners keep in the registry, the pack named aside (the one
+-- an upload replaces): the allocation counts every other pack of every owner
+-- in the pool, each named "<kind>/<id>" (agentry#612).
 SELECT COALESCE(SUM(bytes), 0)::bigint FROM knowledge_packs
-WHERE owner_kind = $1 AND owner_id = $2 AND id <> sqlc.arg(except_id);
+WHERE id <> sqlc.arg(except_id) AND (owner_kind || '/' || owner_id::text) = ANY(sqlc.arg(owners)::text[]);
 
 -- name: SetKnowledgeTree :one
 -- A new tree is in place and its scan is queued.
