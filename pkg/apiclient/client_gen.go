@@ -378,6 +378,33 @@ func (e KnowledgeScanReportFindingsPart) Valid() bool {
 	}
 }
 
+// Defines values for KnowledgeScanReportFindingsSeverity.
+const (
+	KnowledgeScanReportFindingsSeverityCritical KnowledgeScanReportFindingsSeverity = "critical"
+	KnowledgeScanReportFindingsSeverityHigh     KnowledgeScanReportFindingsSeverity = "high"
+	KnowledgeScanReportFindingsSeverityInfo     KnowledgeScanReportFindingsSeverity = "info"
+	KnowledgeScanReportFindingsSeverityLow      KnowledgeScanReportFindingsSeverity = "low"
+	KnowledgeScanReportFindingsSeverityMedium   KnowledgeScanReportFindingsSeverity = "medium"
+)
+
+// Valid indicates whether the value is a known member of the KnowledgeScanReportFindingsSeverity enum.
+func (e KnowledgeScanReportFindingsSeverity) Valid() bool {
+	switch e {
+	case KnowledgeScanReportFindingsSeverityCritical:
+		return true
+	case KnowledgeScanReportFindingsSeverityHigh:
+		return true
+	case KnowledgeScanReportFindingsSeverityInfo:
+		return true
+	case KnowledgeScanReportFindingsSeverityLow:
+		return true
+	case KnowledgeScanReportFindingsSeverityMedium:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for McpAdvisorySeverity.
 const (
 	McpAdvisorySeverityCritical McpAdvisorySeverity = "critical"
@@ -1856,7 +1883,7 @@ type KnowledgePack struct {
 	Scan      *KnowledgeScanReport `json:"scan,omitempty"`
 	ScannedAt *time.Time           `json:"scannedAt,omitempty"`
 
-	// State `empty` until a tree is uploaded; `scanning` from each upload until its scan ends; `ready` after it, findings or not; `failed` when the stored tree could not be read to scan.
+	// State `empty` until a tree is uploaded; `scanning` from each upload until its scan ends, when the pack cannot be downloaded or exported (409 `knowledge-scanning`); `ready` after it, findings or not; `failed` when the stored tree could not be read to scan.
 	State     KnowledgePackState `json:"state"`
 	UpdatedAt time.Time          `json:"updatedAt"`
 
@@ -1864,30 +1891,32 @@ type KnowledgePack struct {
 	WrappedKey KnowledgeWrappedKey `json:"wrappedKey"`
 }
 
-// KnowledgePackState `empty` until a tree is uploaded; `scanning` from each upload until its scan ends; `ready` after it, findings or not; `failed` when the stored tree could not be read to scan.
-type KnowledgePackState string
-
 // KnowledgePackSize defines model for KnowledgePackSize.
 type KnowledgePackSize struct {
 	Bytes     int64              `json:"bytes"`
 	CreatedAt time.Time          `json:"createdAt"`
 	Id        openapi_types.UUID `json:"id"`
 	Name      string             `json:"name"`
-	State     string             `json:"state"`
+
+	// State `empty` until a tree is uploaded; `scanning` from each upload until its scan ends, when the pack cannot be downloaded or exported (409 `knowledge-scanning`); `ready` after it, findings or not; `failed` when the stored tree could not be read to scan.
+	State     KnowledgePackState `json:"state"`
 	UpdatedAt time.Time          `json:"updatedAt"`
 }
+
+// KnowledgePackState `empty` until a tree is uploaded; `scanning` from each upload until its scan ends, when the pack cannot be downloaded or exported (409 `knowledge-scanning`); `ready` after it, findings or not; `failed` when the stored tree could not be read to scan.
+type KnowledgePackState string
 
 // KnowledgeScanReport What a pack's scan read and found (plan knowledge.md §4.4, D19): a record, never a gate (D27). The stages that read prose over every text file, then AI Review over `sources/` and then `wiki/` in chunks no larger than the judge declares it reads.
 type KnowledgeScanReport struct {
 	Findings []struct {
-		Chunk      *int                            `json:"chunk,omitempty"`
-		Confidence string                          `json:"confidence"`
-		File       *string                         `json:"file,omitempty"`
-		Line       *int                            `json:"line,omitempty"`
-		Part       KnowledgeScanReportFindingsPart `json:"part"`
-		Scanner    string                          `json:"scanner"`
-		Severity   string                          `json:"severity"`
-		Title      string                          `json:"title"`
+		Chunk      *int                                `json:"chunk,omitempty"`
+		Confidence string                              `json:"confidence"`
+		File       *string                             `json:"file,omitempty"`
+		Line       *int                                `json:"line,omitempty"`
+		Part       KnowledgeScanReportFindingsPart     `json:"part"`
+		Scanner    string                              `json:"scanner"`
+		Severity   KnowledgeScanReportFindingsSeverity `json:"severity"`
+		Title      string                              `json:"title"`
 	} `json:"findings"`
 	Read struct {
 		Bytes int64 `json:"bytes"`
@@ -1918,13 +1947,18 @@ type KnowledgeScanReport struct {
 	} `json:"review"`
 	Schema string `json:"schema"`
 	Stages []struct {
-		Id   string `json:"id"`
-		Name string `json:"name"`
+		// Failed The stage did not finish (a timeout, a panic); its findings are not all there are.
+		Failed *bool  `json:"failed,omitempty"`
+		Id     string `json:"id"`
+		Name   string `json:"name"`
 	} `json:"stages"`
 }
 
 // KnowledgeScanReportFindingsPart defines model for KnowledgeScanReport.Findings.Part.
 type KnowledgeScanReportFindingsPart string
+
+// KnowledgeScanReportFindingsSeverity defines model for KnowledgeScanReport.Findings.Severity.
+type KnowledgeScanReportFindingsSeverity string
 
 // KnowledgeUsage defines model for KnowledgeUsage.
 type KnowledgeUsage struct {
@@ -3753,12 +3787,12 @@ type ClientInterface interface {
 
 	// ExportKnowledgePack The pack's tree, decrypted as it streams, to its owner alone.
 	//
-	// The canonical tar of the pack's `wiki/` and `sources/`, whose SHA-256 is the pack's digest; `Cache-Control: no-store`; 404 to anyone but the owner.
+	// The canonical tar of the pack's `wiki/` and `sources/`, whose SHA-256 is the pack's digest; `Cache-Control: no-store`; 404 to anyone but the owner; 409 `knowledge-scanning` while the pack is scanned.
 	//
 	// Corresponds with GET /knowledge/packs/{packId}/export (the `ExportKnowledgePack` operationId).
 	ExportKnowledgePack(ctx context.Context, packId KnowledgePackId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DownloadKnowledgeTree The pack's sealed tree, as stored; the client opens it with the unwrapped data key.
+	// DownloadKnowledgeTree The pack's sealed tree, as stored; the client opens it with the unwrapped data key (409 `knowledge-scanning` while it is scanned).
 	//
 	// Corresponds with GET /knowledge/packs/{packId}/tree (the `DownloadKnowledgeTree` operationId).
 	DownloadKnowledgeTree(ctx context.Context, packId KnowledgePackId, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5677,7 +5711,7 @@ func (c *Client) GetKnowledgePack(ctx context.Context, packId KnowledgePackId, r
 
 // ExportKnowledgePack The pack's tree, decrypted as it streams, to its owner alone.
 //
-// The canonical tar of the pack's `wiki/` and `sources/`, whose SHA-256 is the pack's digest; `Cache-Control: no-store`; 404 to anyone but the owner.
+// The canonical tar of the pack's `wiki/` and `sources/`, whose SHA-256 is the pack's digest; `Cache-Control: no-store`; 404 to anyone but the owner; 409 `knowledge-scanning` while the pack is scanned.
 //
 // Corresponds with GET /knowledge/packs/{packId}/export (the `ExportKnowledgePack` operationId).
 func (c *Client) ExportKnowledgePack(ctx context.Context, packId KnowledgePackId, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5692,7 +5726,7 @@ func (c *Client) ExportKnowledgePack(ctx context.Context, packId KnowledgePackId
 	return c.Client.Do(req)
 }
 
-// DownloadKnowledgeTree The pack's sealed tree, as stored; the client opens it with the unwrapped data key.
+// DownloadKnowledgeTree The pack's sealed tree, as stored; the client opens it with the unwrapped data key (409 `knowledge-scanning` while it is scanned).
 //
 // Corresponds with GET /knowledge/packs/{packId}/tree (the `DownloadKnowledgeTree` operationId).
 func (c *Client) DownloadKnowledgeTree(ctx context.Context, packId KnowledgePackId, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -15042,14 +15076,14 @@ type ClientWithResponsesInterface interface {
 
 	// ExportKnowledgePackWithResponse The pack's tree, decrypted as it streams, to its owner alone.
 	//
-	// The canonical tar of the pack's `wiki/` and `sources/`, whose SHA-256 is the pack's digest; `Cache-Control: no-store`; 404 to anyone but the owner.
+	// The canonical tar of the pack's `wiki/` and `sources/`, whose SHA-256 is the pack's digest; `Cache-Control: no-store`; 404 to anyone but the owner; 409 `knowledge-scanning` while the pack is scanned.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /knowledge/packs/{packId}/export (the `ExportKnowledgePack` operationId).
 	ExportKnowledgePackWithResponse(ctx context.Context, packId KnowledgePackId, reqEditors ...RequestEditorFn) (*ExportKnowledgePackResponse, error)
 
-	// DownloadKnowledgeTreeWithResponse The pack's sealed tree, as stored; the client opens it with the unwrapped data key.
+	// DownloadKnowledgeTreeWithResponse The pack's sealed tree, as stored; the client opens it with the unwrapped data key (409 `knowledge-scanning` while it is scanned).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -23901,7 +23935,7 @@ func (c *ClientWithResponses) GetKnowledgePackWithResponse(ctx context.Context, 
 
 // ExportKnowledgePackWithResponse The pack's tree, decrypted as it streams, to its owner alone.
 //
-// The canonical tar of the pack's `wiki/` and `sources/`, whose SHA-256 is the pack's digest; `Cache-Control: no-store`; 404 to anyone but the owner.
+// The canonical tar of the pack's `wiki/` and `sources/`, whose SHA-256 is the pack's digest; `Cache-Control: no-store`; 404 to anyone but the owner; 409 `knowledge-scanning` while the pack is scanned.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -23914,7 +23948,7 @@ func (c *ClientWithResponses) ExportKnowledgePackWithResponse(ctx context.Contex
 	return ParseExportKnowledgePackResponse(rsp)
 }
 
-// DownloadKnowledgeTreeWithResponse The pack's sealed tree, as stored; the client opens it with the unwrapped data key.
+// DownloadKnowledgeTreeWithResponse The pack's sealed tree, as stored; the client opens it with the unwrapped data key (409 `knowledge-scanning` while it is scanned).
 //
 // Returns a wrapper object for the known response body format(s).
 //

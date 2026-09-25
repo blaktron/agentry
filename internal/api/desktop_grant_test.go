@@ -54,8 +54,8 @@ func TestDesktopGrantExchange(t *testing.T) {
 		t.Fatal("exchange returned no token")
 	}
 	scopes, _ := pat["scopes"].([]any)
-	if len(scopes) != 7 {
-		t.Fatalf("desktop PAT scopes = %v, want the seven desktop scopes", scopes)
+	if len(scopes) != 9 {
+		t.Fatalf("desktop PAT scopes = %v, want the nine desktop scopes", scopes)
 	}
 	has := map[string]bool{}
 	for _, sc := range scopes {

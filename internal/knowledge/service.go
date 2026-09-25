@@ -22,25 +22,35 @@ import (
 	"github.com/blaktron/agentry/pkg/packseal"
 )
 
-// The states a pack is in.
+// State is where a pack is in its life.
+type State string
+
+// The states a pack is in: empty until a tree is uploaded, scanning from
+// each upload until its scan ends, ready after it whatever it found (D27),
+// failed when the stored tree could not be read to scan.
 const (
-	StateEmpty    = "empty"
-	StateScanning = "scanning"
-	StateReady    = "ready"
-	StateFailed   = "failed"
+	StateEmpty    State = "empty"
+	StateScanning State = "scanning"
+	StateReady    State = "ready"
+	StateFailed   State = "failed"
 )
 
-// JobScan is the pack scan's job kind; it runs on the sandbox queue, as a
-// version's scan does, because it reads what an account uploaded.
-const JobScan = "knowledge.scan"
+// The job kinds: the pack scan runs on the sandbox queue, as a version's
+// scan does, because it reads what an account uploaded; the retry of an
+// erasure's last step on the core queue, since it reads no content.
+const (
+	JobScan  = "knowledge.scan"
+	JobErase = "knowledge.erase"
+)
 
-// scanAttempts is the scan job's retry budget: a judge that fails on a
-// chunk is retried until the last attempt, which records what it read.
+// scanAttempts is the scan job's retry budget: a scan that did not finish
+// (a stage failed, the judge failed on a chunk) is retried until the last
+// attempt, which records what it read.
 const scanAttempts = 3
 
 // MaxUpload bounds the body of a tree upload: a sealed tree of the largest
 // tar a pack can be.
-var MaxUpload = packseal.MaxSealedSize(MaxTreeBytes)
+func MaxUpload() int64 { return packseal.MaxSealedSize(MaxTreeBytes) }
 
 var (
 	// ErrNotFound is a pack the caller does not own, or that does not
@@ -50,6 +60,9 @@ var (
 	ErrNameTaken = errors.New("knowledge: the owner already has a pack of this name")
 	// ErrName is a name that is not a pack's.
 	ErrName = errors.New("knowledge: a pack name is 1-64 lowercase letters, digits, '.', '-' or '_', starting with a letter or a digit")
+	// ErrScanning is a pack whose tree is being scanned: a pack is
+	// unusable only then (D27).
+	ErrScanning = errors.New("knowledge: the pack is being scanned")
 )
 
 // AllocationError is an upload past the owner's allocation: what they
@@ -161,7 +174,8 @@ func (s *Service) Unwrap(ctx context.Context, owner Owner, w WrappedKey) ([]byte
 	return key, nil
 }
 
-func wrappedOf(p storegen.KnowledgePack) WrappedKey {
+// WrappedKeyOf is a pack's data key as its row holds it.
+func WrappedKeyOf(p storegen.KnowledgePack) WrappedKey {
 	return WrappedKey{Kind: p.WrapperKind, Recipient: p.WrapperRecipient, Blob: p.WrappedKey}
 }
 
@@ -185,7 +199,10 @@ func (s *Service) Create(ctx context.Context, owner Owner, name string, w Wrappe
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 		return storegen.KnowledgePack{}, ErrNameTaken
 	}
-	return p, err
+	if err != nil {
+		return p, fmt.Errorf("knowledge: create pack: %w", err)
+	}
+	return p, nil
 }
 
 // List is owner's packs, by name.
@@ -193,7 +210,11 @@ func (s *Service) List(ctx context.Context, owner Owner) ([]storegen.KnowledgePa
 	if err := s.ready(); err != nil {
 		return nil, err
 	}
-	return s.st.Queries().ListKnowledgePacks(ctx, storegen.ListKnowledgePacksParams{OwnerKind: string(owner.Kind), OwnerID: owner.ID})
+	rows, err := s.st.Queries().ListKnowledgePacks(ctx, storegen.ListKnowledgePacksParams{OwnerKind: string(owner.Kind), OwnerID: owner.ID})
+	if err != nil {
+		return nil, fmt.Errorf("knowledge: list packs: %w", err)
+	}
+	return rows, nil
 }
 
 // Get is one of owner's packs.
@@ -205,7 +226,10 @@ func (s *Service) Get(ctx context.Context, owner Owner, id uuid.UUID) (storegen.
 	if errors.Is(err, pgx.ErrNoRows) {
 		return p, ErrNotFound
 	}
-	return p, err
+	if err != nil {
+		return p, fmt.Errorf("knowledge: read pack: %w", err)
+	}
+	return p, nil
 }
 
 // Sizes is what platform staff see of owner's packs: names and sizes.
@@ -213,7 +237,11 @@ func (s *Service) Sizes(ctx context.Context, owner Owner) ([]storegen.ListKnowle
 	if err := s.ready(); err != nil {
 		return nil, err
 	}
-	return s.st.Queries().ListKnowledgePackSizes(ctx, storegen.ListKnowledgePackSizesParams{OwnerKind: string(owner.Kind), OwnerID: owner.ID})
+	rows, err := s.st.Queries().ListKnowledgePackSizes(ctx, storegen.ListKnowledgePackSizesParams{OwnerKind: string(owner.Kind), OwnerID: owner.ID})
+	if err != nil {
+		return nil, fmt.Errorf("knowledge: list pack sizes: %w", err)
+	}
+	return rows, nil
 }
 
 // Usage is what an owner keeps in the registry against their allocation.
@@ -244,8 +272,7 @@ func (s *Service) Usage(ctx context.Context, owner Owner) (Usage, error) {
 
 // allocation is owner's knowledge cap. An unknown answer is not permission.
 func (s *Service) allocation(ctx context.Context, owner Owner) (entitlements.Cap, error) {
-	res := entitlements.Default()
-	var r entitlements.Resolver = res
+	var r entitlements.Resolver = entitlements.Default()
 	if s.ents != nil && s.ents() != nil {
 		r = s.ents()
 	}
@@ -289,14 +316,14 @@ func (s *Service) Upload(ctx context.Context, owner Owner, id uuid.UUID, sealed 
 	var replaced []string
 	err = s.st.WithTx(ctx, func(q *storegen.Queries) error {
 		if err := q.LockKey(ctx, "knowledge:"+owner.String()); err != nil {
-			return err
+			return fmt.Errorf("knowledge: lock owner: %w", err)
 		}
 		cur, err := q.GetKnowledgePackForUpdate(ctx, storegen.GetKnowledgePackForUpdateParams{ID: id, OwnerKind: string(owner.Kind), OwnerID: owner.ID})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("knowledge: lock pack: %w", err)
 		}
 		c, err := s.allocation(ctx, owner)
 		if err != nil {
@@ -304,7 +331,7 @@ func (s *Service) Upload(ctx context.Context, owner Owner, id uuid.UUID, sealed 
 		}
 		others, err := q.SumKnowledgeBytes(ctx, storegen.SumKnowledgeBytesParams{OwnerKind: string(owner.Kind), OwnerID: owner.ID, ExceptID: id})
 		if err != nil {
-			return err
+			return fmt.Errorf("knowledge: count the allocation: %w", err)
 		}
 		// A cap never deletes (D25): a tree no larger than the one it
 		// replaces is always taken; one that grows must fit.
@@ -314,31 +341,33 @@ func (s *Service) Upload(ctx context.Context, owner Owner, id uuid.UUID, sealed 
 		if err := q.CreateKnowledgeObject(ctx, storegen.CreateKnowledgeObjectParams{
 			Key: key, PackID: id, OwnerKind: string(owner.Kind), OwnerID: owner.ID, Bytes: int64(len(sealed)),
 		}); err != nil {
-			return err
+			return fmt.Errorf("knowledge: record the tree: %w", err)
 		}
 		keys, err := q.ListKnowledgeObjectsOfPack(ctx, id)
 		if err != nil {
-			return err
+			return fmt.Errorf("knowledge: list the pack's trees: %w", err)
 		}
 		for _, k := range keys {
 			if k != key {
 				replaced = append(replaced, k)
 				if err := q.DeleteKnowledgeObject(ctx, k); err != nil {
-					return err
+					return fmt.Errorf("knowledge: drop the tree replaced: %w", err)
 				}
 			}
 		}
 		p, err = q.SetKnowledgeTree(ctx, storegen.SetKnowledgeTreeParams{
-			ID: id, Bytes: tree.Bytes, Files: int32(len(tree.Files)), Pages: int32(tree.Pages), Digest: tree.Digest, ObjectKey: key,
+			ID: id, Bytes: tree.Bytes, Files: int32(len(tree.Files)), Pages: int32(tree.Pages), Digest: tree.Digest, ObjectKey: key, //nolint:gosec // bounded by MaxFiles
 		})
 		if err != nil {
-			return err
+			return fmt.Errorf("knowledge: set the tree: %w", err)
 		}
 		if s.jobs == nil {
 			return errors.New("knowledge: no queue to scan the pack on")
 		}
-		_, err = s.jobs.Enqueue(ctx, JobScan, "sandbox", ScanArgs{Pack: id, Object: key}, queue.WithMaxAttempts(scanAttempts))
-		return err
+		if _, err := s.jobs.Enqueue(ctx, JobScan, "sandbox", ScanArgs{Pack: id, Object: key}, queue.WithMaxAttempts(scanAttempts)); err != nil {
+			return fmt.Errorf("knowledge: queue the scan: %w", err)
+		}
+		return nil
 	})
 	if err != nil {
 		s.deleteBlobs(ctx, key)
@@ -351,7 +380,7 @@ func (s *Service) Upload(ctx context.Context, owner Owner, id uuid.UUID, sealed 
 // open reads a sealed tree of p: the header names the pack's digest, the
 // data key opens it, and the tree inside is that digest.
 func (s *Service) open(ctx context.Context, owner Owner, p storegen.KnowledgePack, r io.Reader) (*Tree, error) {
-	key, err := s.Unwrap(ctx, owner, wrappedOf(p))
+	key, err := s.Unwrap(ctx, owner, WrappedKeyOf(p))
 	if err != nil {
 		return nil, err
 	}
@@ -362,20 +391,35 @@ func (s *Service) open(ctx context.Context, owner Owner, p storegen.KnowledgePac
 	return ReadTree(plain, h.Digest)
 }
 
+// usable is one of owner's packs with a tree that is not being scanned.
+func (s *Service) usable(ctx context.Context, owner Owner, id uuid.UUID) (storegen.KnowledgePack, error) {
+	p, err := s.Get(ctx, owner, id)
+	if err != nil {
+		return p, err
+	}
+	if State(p.State) == StateScanning {
+		return p, ErrScanning
+	}
+	if p.ObjectKey == "" {
+		return p, ErrNotFound
+	}
+	return p, nil
+}
+
 // SealedTree is the stored sealed tree of one of owner's packs.
 func (s *Service) SealedTree(ctx context.Context, owner Owner, id uuid.UUID) (storegen.KnowledgePack, io.ReadCloser, error) {
-	p, err := s.Get(ctx, owner, id)
+	p, err := s.usable(ctx, owner, id)
 	if err != nil {
 		return p, nil, err
 	}
-	if p.ObjectKey == "" {
-		return p, nil, ErrNotFound
-	}
 	rc, err := s.blobs.Get(ctx, p.ObjectKey)
-	return p, rc, err
+	if err != nil {
+		return p, nil, fmt.Errorf("knowledge: read the stored tree: %w", err)
+	}
+	return p, rc, nil
 }
 
-// Export writes one of owner's packs' tree, decrypted: the canonical tar
+// Export is one of owner's packs' tree, decrypted: the canonical tar
 // whose digest is the pack's. It is opened and checked in full before a
 // byte is written, so a tree that does not open writes nothing.
 func (s *Service) Export(ctx context.Context, owner Owner, id uuid.UUID) (storegen.KnowledgePack, *Tree, error) {
@@ -388,22 +432,28 @@ func (s *Service) Export(ctx context.Context, owner Owner, id uuid.UUID) (storeg
 	return p, tree, err
 }
 
-// Delete removes one of owner's packs, its objects and their blobs.
+// Delete removes one of owner's packs, its objects and their blobs. The
+// pack row is locked first, so an upload racing the delete either lands
+// before it (and its object goes with the pack) or finds no pack.
 func (s *Service) Delete(ctx context.Context, owner Owner, id uuid.UUID) error {
 	if err := s.ready(); err != nil {
 		return err
 	}
 	var keys []string
 	err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
+		if _, err := q.GetKnowledgePackForUpdate(ctx, storegen.GetKnowledgePackForUpdateParams{ID: id, OwnerKind: string(owner.Kind), OwnerID: owner.ID}); errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		} else if err != nil {
+			return fmt.Errorf("knowledge: lock pack: %w", err)
+		}
 		var err error
 		if keys, err = q.ListKnowledgeObjectsOfPack(ctx, id); err != nil {
-			return err
+			return fmt.Errorf("knowledge: list the pack's trees: %w", err)
 		}
-		_, err = q.DeleteKnowledgePack(ctx, storegen.DeleteKnowledgePackParams{ID: id, OwnerKind: string(owner.Kind), OwnerID: owner.ID})
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrNotFound
+		if _, err = q.DeleteKnowledgePack(ctx, storegen.DeleteKnowledgePackParams{ID: id, OwnerKind: string(owner.Kind), OwnerID: owner.ID}); err != nil {
+			return fmt.Errorf("knowledge: delete pack: %w", err)
 		}
-		return err
+		return nil
 	})
 	if err != nil {
 		return err
@@ -412,37 +462,70 @@ func (s *Service) Delete(ctx context.Context, owner Owner, id uuid.UUID) error {
 	return nil
 }
 
-// EraseOwner deletes every pack of owner on q, the caller's transaction:
-// the account erasure, a data clear, an organization's decommission. It
-// returns the blob keys, which Destroyed takes once the transaction has
-// committed. It runs whether or not the store is on, so that turning it off
-// strands nothing an erasure should remove.
+// EraseOwner deletes every pack of owner on q, the caller's transaction —
+// the account erasure, a data clear, an organization's decommission — and
+// the salt the core's wrapper derives the owner's keys from, so that the
+// crypto-erasure commits with the erasure itself. It returns the blob keys,
+// which FinishErasure takes once the transaction has committed. It runs
+// whether or not the store is on, so that turning it off strands nothing an
+// erasure should remove.
 func EraseOwner(ctx context.Context, q *storegen.Queries, owner Owner) ([]string, error) {
 	keys, err := q.DeleteKnowledgeObjectsOfOwner(ctx, storegen.DeleteKnowledgeObjectsOfOwnerParams{OwnerKind: string(owner.Kind), OwnerID: owner.ID})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("knowledge: erase the owner's trees: %w", err)
 	}
 	if _, err := q.DeleteKnowledgePacksOfOwner(ctx, storegen.DeleteKnowledgePacksOfOwnerParams{OwnerKind: string(owner.Kind), OwnerID: owner.ID}); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("knowledge: erase the owner's packs: %w", err)
+	}
+	if err := q.DeleteKnowledgeOwnerSalt(ctx, storegen.DeleteKnowledgeOwnerSaltParams{OwnerKind: string(owner.Kind), OwnerID: owner.ID}); err != nil {
+		return nil, fmt.Errorf("knowledge: erase the owner's key: %w", err)
 	}
 	return keys, nil
 }
 
-// Destroyed finishes an owner's erasure after its transaction committed:
-// the wrapper destroys what opens the owner's keys, then the blobs go.
-// Either failing is logged, never hidden, and undoes nothing: a blob left
-// behind is sealed under a data key no one can unwrap any more.
-func (s *Service) Destroyed(ctx context.Context, owner Owner, keys []string) error {
-	var err error
-	if s != nil && s.wrapper != nil {
-		if err = s.wrapper.Destroy(ctx, owner); err != nil {
-			s.log.ErrorContext(ctx, "knowledge: destroy the owner's keys", "owner", owner.String(), "err", err)
+// EraseArgs names an erasure's last step: the owner whose keys the wrapper
+// destroys, and the sealed blobs to delete.
+type EraseArgs struct {
+	Kind OwnerKind `json:"kind"`
+	ID   uuid.UUID `json:"id"`
+	Keys []string  `json:"keys,omitempty"`
+}
+
+// FinishErasure is an erasure's last step, after its transaction
+// committed: the wrapper destroys what opens the owner's keys (an
+// extension's wrapper holds its own; the core's salt is already gone),
+// then the sealed blobs go. A step that fails is handed to a retrying job
+// and logged, never hidden, and undoes nothing: a blob left behind is
+// sealed under a data key no one can unwrap any more.
+func (s *Service) FinishErasure(ctx context.Context, owner Owner, keys []string) {
+	if s == nil {
+		return
+	}
+	if err := s.finishErasure(ctx, EraseArgs{Kind: owner.Kind, ID: owner.ID, Keys: keys}); err != nil {
+		s.log.ErrorContext(ctx, "knowledge: the erasure's last step failed; retrying as a job", "owner", owner.String(), "err", err)
+		if s.jobs != nil {
+			if _, qerr := s.jobs.Enqueue(ctx, JobErase, "core", EraseArgs{Kind: owner.Kind, ID: owner.ID, Keys: keys}); qerr != nil {
+				s.log.ErrorContext(ctx, "knowledge: queue the erasure's retry", "owner", owner.String(), "err", qerr)
+			}
 		}
 	}
-	if s != nil {
-		s.deleteBlobs(ctx, keys...)
+}
+
+func (s *Service) finishErasure(ctx context.Context, a EraseArgs) error {
+	var errs []error
+	if s.wrapper != nil {
+		if err := s.wrapper.Destroy(ctx, Owner{Kind: a.Kind, ID: a.ID}); err != nil {
+			errs = append(errs, fmt.Errorf("knowledge: destroy the owner's keys: %w", err))
+		}
 	}
-	return err
+	if s.blobs != nil {
+		for _, k := range a.Keys {
+			if err := s.blobs.Delete(ctx, k); err != nil {
+				errs = append(errs, fmt.Errorf("knowledge: delete a sealed tree: %w", err))
+			}
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func (s *Service) deleteBlobs(ctx context.Context, keys ...string) {
@@ -462,20 +545,34 @@ type ScanArgs struct {
 	Object string    `json:"object"`
 }
 
-// RegisterHandlers wires the scan job.
+// RegisterHandlers wires the scan job and the erasure's retry.
 func (s *Service) RegisterHandlers(q queue.Client) {
 	q.Register(JobScan, func(ctx context.Context, job queue.Job) error {
 		var args ScanArgs
 		if err := json.Unmarshal(job.Args, &args); err != nil {
 			return fmt.Errorf("%s: bad args: %w", JobScan, err)
 		}
-		return s.scanPack(ctx, args, job.Attempt >= scanAttempts)
+		last := job.Attempt >= scanAttempts
+		err := s.scanPack(ctx, args, last)
+		if err != nil && last {
+			// The last attempt never leaves a pack scanning: whatever
+			// stopped it, the pack is failed, with nothing claimed read.
+			s.failPack(ctx, args)
+		}
+		return err
+	})
+	q.Register(JobErase, func(ctx context.Context, job queue.Job) error {
+		var args EraseArgs
+		if err := json.Unmarshal(job.Args, &args); err != nil {
+			return fmt.Errorf("%s: bad args: %w", JobErase, err)
+		}
+		return s.finishErasure(ctx, args)
 	})
 }
 
 // scanPack reads the tree the job names and records its report. A tree
 // since replaced is not scanned: its successor has a job of its own. A
-// review that failed on a chunk is retried until the last attempt, which
+// scan that did not finish is retried until the last attempt, which
 // records what it read (D27: the report is a record, never a gate).
 func (s *Service) scanPack(ctx context.Context, args ScanArgs, last bool) error {
 	if err := s.ready(); err != nil {
@@ -490,43 +587,47 @@ func (s *Service) scanPack(ctx context.Context, args ScanArgs, last bool) error 
 		return nil
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("knowledge: read the pack to scan: %w", err)
 	}
-	if p.State != StateScanning {
+	if State(p.State) != StateScanning {
 		return nil
 	}
 	owner := Owner{Kind: OwnerKind(p.OwnerKind), ID: p.OwnerID}
 	rc, err := s.blobs.Get(ctx, p.ObjectKey)
 	if err != nil {
-		return s.failScan(ctx, p, last, fmt.Errorf("read the stored tree: %w", err))
+		s.log.ErrorContext(ctx, "knowledge: scan could not read the stored tree", "pack", p.ID, "err", err)
+		return fmt.Errorf("knowledge: read the stored tree: %w", err)
 	}
 	tree, err := s.open(ctx, owner, p, rc)
 	_ = rc.Close()
-	if err != nil {
-		return s.failScan(ctx, p, last, err)
+	if err == nil && tree.Digest != p.Digest {
+		err = ErrDigest
 	}
-	if tree.Digest != p.Digest {
-		return s.failScan(ctx, p, last, ErrDigest)
+	if err != nil {
+		s.log.ErrorContext(ctx, "knowledge: scan could not open the stored tree", "pack", p.ID, "err", err)
+		return err
 	}
 	report := s.scanner.ScanPack(ctx, tree.Files)
 	if !report.Complete() && !last {
-		return fmt.Errorf("knowledge: AI Review of pack %s is incomplete (%d chunks failed); retrying", p.ID, report.Review.Failed)
+		return fmt.Errorf("knowledge: the scan of pack %s did not finish; retrying", p.ID)
 	}
 	raw, err := json.Marshal(report)
 	if err != nil {
-		return err
+		return fmt.Errorf("knowledge: record the report: %w", err)
 	}
-	_, err = q.FinishKnowledgeScan(ctx, storegen.FinishKnowledgeScanParams{State: StateReady, Report: raw, ID: p.ID, ObjectKey: p.ObjectKey})
-	return err
+	if _, err := q.FinishKnowledgeScan(ctx, storegen.FinishKnowledgeScanParams{State: string(StateReady), Report: raw, ID: p.ID, ObjectKey: p.ObjectKey}); err != nil {
+		return fmt.Errorf("knowledge: record the report: %w", err)
+	}
+	return nil
 }
 
-// failScan retries a tree that could not be read, and on the last attempt
-// records the pack as failed, with no report: nothing was read.
-func (s *Service) failScan(ctx context.Context, p storegen.KnowledgePack, last bool, cause error) error {
-	s.log.ErrorContext(ctx, "knowledge: scan could not read the pack", "pack", p.ID, "err", cause)
-	if !last {
-		return cause
+// failPack records a pack whose last scan attempt failed as failed, with no
+// report: nothing was read.
+func (s *Service) failPack(ctx context.Context, args ScanArgs) {
+	if s.st == nil {
+		return
 	}
-	_, err := s.st.Queries().FinishKnowledgeScan(ctx, storegen.FinishKnowledgeScanParams{State: StateFailed, Report: nil, ID: p.ID, ObjectKey: p.ObjectKey})
-	return err
+	if _, err := s.st.Queries().FinishKnowledgeScan(ctx, storegen.FinishKnowledgeScanParams{State: string(StateFailed), Report: nil, ID: args.Pack, ObjectKey: args.Object}); err != nil {
+		s.log.ErrorContext(ctx, "knowledge: record a failed scan", "pack", args.Pack, "err", err)
+	}
 }

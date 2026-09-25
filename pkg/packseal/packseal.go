@@ -59,15 +59,20 @@ const nonceSize = 12
 // Header is what may be read of a sealed pack without its key: which pack
 // it is and the digest of the tree it holds.
 type Header struct {
-	Version int    `json:"v"`
-	AEAD    string `json:"aead"`
+	// Version is the format's version, 1.
+	Version int `json:"v"`
+	// AEAD names the frames' cipher, "AES-256-GCM".
+	AEAD string `json:"aead"`
 	// Pack is the pack's own id (its manifest's id).
 	Pack string `json:"pack"`
 	// Digest is the pack's tree digest ("sha256:<hex>"), as its maker
 	// computed it; whoever opens it may check it against the tree.
 	Digest string `json:"digest"`
-	Nonce  []byte `json:"nonce"`
-	Chunk  int    `json:"chunk"`
+	// Nonce is the random prefix of every frame's nonce, 8 bytes; the
+	// frame's index fills the last 4.
+	Nonce []byte `json:"nonce"`
+	// Chunk is the most plaintext a frame carries, ChunkSize.
+	Chunk int `json:"chunk"`
 }
 
 var (

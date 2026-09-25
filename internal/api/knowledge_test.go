@@ -15,9 +15,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/entitlements"
 	"github.com/blaktron/agentry/internal/knowledge"
 	"github.com/blaktron/agentry/internal/queue"
 	"github.com/blaktron/agentry/internal/scan"
@@ -64,14 +68,14 @@ type knowledgeKey struct {
 }
 
 type knowledgePackBody struct {
-	ID         string       `json:"id"`
-	Name       string       `json:"name"`
-	State      string       `json:"state"`
-	Bytes      int64        `json:"bytes"`
-	Files      int          `json:"files"`
-	Pages      int          `json:"pages"`
-	Digest     string       `json:"digest"`
-	WrappedKey knowledgeKey `json:"wrappedKey"`
+	ID         string          `json:"id"`
+	Name       string          `json:"name"`
+	State      knowledge.State `json:"state"`
+	Bytes      int64           `json:"bytes"`
+	Files      int             `json:"files"`
+	Pages      int             `json:"pages"`
+	Digest     string          `json:"digest"`
+	WrappedKey knowledgeKey    `json:"wrappedKey"`
 	Scan       *struct {
 		Stages []struct {
 			ID string `json:"id"`
@@ -402,14 +406,38 @@ func TestKnowledgeAtRestIsSealed(t *testing.T) {
 		c.Judge.Provider = "static"
 	})
 	o := newKnowledgeOwner(env, "kn-rest")
-	p, _, _, _ := putPack(t, env, o, "at-rest", knowledgeFiles())
-	drainKnowledgeScans(t, env)
 
+	// Every route, and every response kept: the wrap, the create, the
+	// upload, the reads, the download, the export and the unwrap.
 	var responses [][]byte
-	for _, path := range []string{"/api/v1/knowledge/packs", "/api/v1/knowledge/packs/" + p.ID, "/api/v1/knowledge/usage", "/api/v1/knowledge/packs/" + p.ID + "/tree"} {
-		_, _, b := env.raw(o.pat, http.MethodGet, path, nil)
-		responses = append(responses, b)
+	record := func(c caller, method, path string, body any) []byte {
+		var raw []byte
+		if b, ok := body.([]byte); ok {
+			_, _, raw = env.raw(c, method, path, b)
+		} else {
+			res := env.do(c, method, path, body)
+			raw, _ = io.ReadAll(res.Body)
+			_ = res.Body.Close()
+		}
+		responses = append(responses, raw)
+		return raw
 	}
+	dataKey, _ := packseal.NewKey()
+	var wk knowledgeKey
+	if err := json.Unmarshal(record(o.pat, http.MethodPost, "/api/v1/knowledge/keys/wrap", map[string]any{"key": dataKey}), &wk); err != nil {
+		t.Fatal(err)
+	}
+	var p knowledgePackBody
+	if err := json.Unmarshal(record(o.pat, http.MethodPost, "/api/v1/knowledge/packs", map[string]any{"name": "at-rest", "wrappedKey": wk}), &p); err != nil {
+		t.Fatal(err)
+	}
+	sealed, _, _ := sealedPack(t, knowledgeFiles(), dataKey)
+	record(o.pat, http.MethodPut, "/api/v1/knowledge/packs/"+p.ID+"/tree", sealed)
+	drainKnowledgeScans(t, env)
+	for _, path := range []string{"/api/v1/knowledge/packs", "/api/v1/knowledge/packs/" + p.ID, "/api/v1/knowledge/usage", "/api/v1/knowledge/packs/" + p.ID + "/tree", "/api/v1/knowledge/packs/" + p.ID + "/export"} {
+		record(o.pat, http.MethodGet, path, nil)
+	}
+	unwrapped := record(o.pat, http.MethodPost, "/api/v1/knowledge/keys/unwrap", wk)
 	var got knowledgePackBody
 	env.doJSON(o.pat, http.MethodGet, "/api/v1/knowledge/packs/"+p.ID, nil, &got, http.StatusOK)
 	if got.State != knowledge.StateReady || got.Scan == nil || len(got.Scan.Findings) == 0 {
@@ -439,23 +467,37 @@ func TestKnowledgeAtRestIsSealed(t *testing.T) {
 		t.Fatal("no blob was stored: the search above searched nothing")
 	}
 
-	key, _ := base64.StdEncoding.DecodeString(sealingKey)
-	keyForms := map[string][]byte{
-		"raw": key, "base64": []byte(sealingKey), "hex": []byte(hex.EncodeToString(key)),
-		"base64 raw": []byte(base64.RawStdEncoding.EncodeToString(key)), "base64url": []byte(base64.RawURLEncoding.EncodeToString(key)),
+	forms := func(k []byte) map[string][]byte {
+		return map[string][]byte{
+			"raw": k, "base64": []byte(base64.StdEncoding.EncodeToString(k)), "hex": []byte(hex.EncodeToString(k)),
+			"base64 raw": []byte(base64.RawStdEncoding.EncodeToString(k)), "base64url": []byte(base64.RawURLEncoding.EncodeToString(k)),
+		}
 	}
+	sealingRaw, _ := base64.StdEncoding.DecodeString(sealingKey)
+	keys := map[string]map[string][]byte{"the knowledge sealing key": forms(sealingRaw), "the pack's data key": forms(dataKey)}
+	// Where the words, the sealing key and the data key may not be: the
+	// log and every table. The data key's one way out is the unwrap
+	// response, to its owner; the sealing key has none.
 	look := func(where string, b []byte) {
 		if bytes.Contains(b, marker) {
 			t.Errorf("a page is in the clear in %s", where)
 		}
-		for name, f := range keyForms {
-			if bytes.Contains(b, f) {
-				t.Errorf("the knowledge sealing key (%s) is in %s", name, where)
+		for what, fs := range keys {
+			for name, f := range fs {
+				if bytes.Contains(b, f) {
+					t.Errorf("%s (%s) is in %s", what, name, where)
+				}
 			}
 		}
 	}
+	if !bytes.Contains(unwrapped, []byte(base64.StdEncoding.EncodeToString(dataKey))) {
+		t.Fatalf("the unwrap did not answer the data key: %s", unwrapped)
+	}
+	if len(responses) != 9 {
+		t.Fatalf("%d responses recorded, want 9", len(responses))
+	}
 	for i, b := range responses {
-		for name, f := range keyForms {
+		for name, f := range keys["the knowledge sealing key"] {
 			if bytes.Contains(b, f) {
 				t.Errorf("the knowledge sealing key (%s) is in response %d", name, i)
 			}
@@ -541,5 +583,237 @@ func assertKnowledgeGone(t *testing.T, env *testEnv, k seededKnowledge) {
 	}
 	if _, err := env.srvObj.Knowledge().Unwrap(ctx, k.owner, k.wk); !errors.Is(err, knowledge.ErrNotOwner) {
 		t.Errorf("a wrapped key kept from before the erasure still opens: %v", err)
+	}
+}
+
+// sizedPack is a pack whose tree holds n bytes of content (n >= 8).
+func sizedPack(n int, fill byte) []scan.PackFile {
+	return []scan.PackFile{
+		{Path: "sources/a.txt", Content: bytes.Repeat([]byte{fill}, n-8)},
+		{Path: "wiki/index.md", Content: []byte("# Index\n")},
+	}
+}
+
+// newPack wraps a fresh key and creates an empty pack, returning its id
+// and data key.
+func newPack(t *testing.T, env *testEnv, o knowledgeOwner, name string) (string, []byte) {
+	t.Helper()
+	dataKey, err := packseal.NewKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wk knowledgeKey
+	env.doJSON(o.pat, http.MethodPost, "/api/v1/knowledge/keys/wrap", map[string]any{"key": dataKey}, &wk, http.StatusOK)
+	var created knowledgePackBody
+	env.doJSON(o.pat, http.MethodPost, "/api/v1/knowledge/packs", map[string]any{"name": name, "wrappedKey": wk}, &created, http.StatusCreated)
+	return created.ID, dataKey
+}
+
+func problemTypeOf(b []byte) string {
+	var p struct {
+		Type string `json:"type"`
+	}
+	_ = json.Unmarshal(b, &p)
+	return p.Type[strings.LastIndex(p.Type, "/")+1:]
+}
+
+func TestKnowledgeUploadRefusals(t *testing.T) {
+	env := newTestEnv(t)
+	o := newKnowledgeOwner(env, "kn-refuse")
+	id, key := newPack(t, env, o, "refused")
+	put := func(body []byte) (int, string) {
+		st, _, b := env.raw(o.pat, http.MethodPut, "/api/v1/knowledge/packs/"+id+"/tree", body)
+		return st, problemTypeOf(b)
+	}
+
+	// A body past a sealed 10 MB pack's size is refused before it is read.
+	if st, typ := put(make([]byte, knowledge.MaxUpload()+1)); st != http.StatusRequestEntityTooLarge || typ != "upload-too-large" {
+		t.Fatalf("an oversized body: %d %s", st, typ)
+	}
+	// A tree past 10 MB of files fits the body and is refused on reading.
+	big, _, _ := sealedPack(t, sizedPack(knowledge.MaxBytes+1, 'x'), key)
+	if st, typ := put(big); st != http.StatusRequestEntityTooLarge || typ != "knowledge-too-large" {
+		t.Fatalf("a tree past 10 MB: %d %s", st, typ)
+	}
+	// A header that names another digest.
+	var tb bytes.Buffer
+	if err := knowledge.WriteTree(&tb, knowledgeFiles()); err != nil {
+		t.Fatal(err)
+	}
+	var wrong bytes.Buffer
+	if err := packseal.Seal(&wrong, key, packseal.Header{Pack: "kp", Digest: "sha256:" + strings.Repeat("0", 64)}, bytes.NewReader(tb.Bytes())); err != nil {
+		t.Fatal(err)
+	}
+	if st, typ := put(wrong.Bytes()); st != http.StatusUnprocessableEntity || typ != "knowledge-digest-mismatch" {
+		t.Fatalf("a tree that is not its digest: %d %s", st, typ)
+	}
+	// Sealed under another key, and not a sealed tree at all.
+	other, _ := packseal.NewKey()
+	foreign, _, _ := sealedPack(t, knowledgeFiles(), other)
+	for name, body := range map[string][]byte{"another key": foreign, "not sealed": tb.Bytes()} {
+		if st, typ := put(body); st != http.StatusUnprocessableEntity || typ != "knowledge-tree-invalid" {
+			t.Fatalf("%s: %d %s", name, st, typ)
+		}
+	}
+	var objects int
+	if err := env.st.Pool().QueryRow(context.Background(), `SELECT count(*) FROM knowledge_objects WHERE pack_id = $1`, id).Scan(&objects); err != nil || objects != 0 {
+		t.Fatalf("a refused upload stored %d objects (%v)", objects, err)
+	}
+
+	// While its tree is scanned the pack is unusable (D27), then usable.
+	good, _, _ := sealedPack(t, knowledgeFiles(), key)
+	if st, typ := put(good); st != http.StatusAccepted {
+		t.Fatalf("a good upload: %d %s", st, typ)
+	}
+	for _, path := range []string{"/tree", "/export"} {
+		if st, _, b := env.raw(o.pat, http.MethodGet, "/api/v1/knowledge/packs/"+id+path, nil); st != http.StatusConflict || problemTypeOf(b) != "knowledge-scanning" {
+			t.Fatalf("%s while scanning: %d %s", path, st, b)
+		}
+	}
+	drainKnowledgeScans(t, env)
+	for _, path := range []string{"/tree", "/export"} {
+		if st, _, _ := env.raw(o.pat, http.MethodGet, "/api/v1/knowledge/packs/"+id+path, nil); st != http.StatusOK {
+			t.Fatalf("%s after the scan: %d", path, st)
+		}
+	}
+}
+
+func TestKnowledgeAllocation(t *testing.T) {
+	env := newTestEnvCfg(t, func(c *config.Config) { c.Limits.KnowledgeBytesPerAccount = 400 })
+	o := newKnowledgeOwner(env, "kn-alloc")
+	put := func(id string, key []byte, files []scan.PackFile) (int, []byte) {
+		sealed, _, _ := sealedPack(t, files, key)
+		st, _, b := env.raw(o.pat, http.MethodPut, "/api/v1/knowledge/packs/"+id+"/tree", sealed)
+		return st, b
+	}
+	a, aKey := newPack(t, env, o, "first")
+	if st, b := put(a, aKey, sizedPack(200, 'a')); st != http.StatusAccepted {
+		t.Fatalf("200 of 400: %d %s", st, b)
+	}
+	b, bKey := newPack(t, env, o, "second")
+	st, body := put(b, bKey, sizedPack(250, 'b'))
+	var refusal struct {
+		Type  string `json:"type"`
+		Bytes int64  `json:"bytes"`
+		Max   int64  `json:"max"`
+	}
+	_ = json.Unmarshal(body, &refusal)
+	if st != http.StatusRequestEntityTooLarge || problemTypeOf(body) != "knowledge-allocation" || refusal.Bytes != 450 || refusal.Max != 400 {
+		t.Fatalf("450 of 400: %d %s", st, body)
+	}
+	// A cap never deletes, and a tree no larger than the one it replaces is
+	// taken whatever the cap: the operator lowers it under what is kept.
+	env.srvObj.SetEntitlements(capResolver(100))
+	if st, b := put(a, aKey, sizedPack(150, 'c')); st != http.StatusAccepted {
+		t.Fatalf("a smaller tree over a lowered cap: %d %s", st, b)
+	}
+	var usage struct {
+		Bytes int64 `json:"bytes"`
+		Max   int64 `json:"max"`
+	}
+	env.doJSON(o.pat, http.MethodGet, "/api/v1/knowledge/usage", nil, &usage, http.StatusOK)
+	if usage.Bytes != 150 || usage.Max != 100 {
+		t.Fatalf("usage = %+v", usage)
+	}
+	var list []knowledgePackBody
+	env.doJSON(o.pat, http.MethodGet, "/api/v1/knowledge/packs", nil, &list, http.StatusOK)
+	if len(list) != 2 {
+		t.Fatalf("the cap deleted a pack: %+v", list)
+	}
+}
+
+// capResolver is the core resolver with the knowledge cap set to max.
+func capResolver(max int64) entitlements.Resolver {
+	l := config.Default().Limits
+	l.KnowledgeBytesPerAccount = max
+	return entitlements.NewConfigResolver(l)
+}
+
+// TestKnowledgeAllocationHoldsUnderRace: two uploads that each fit the cap
+// alone and not together, at once — the owner lock lets exactly one in.
+func TestKnowledgeAllocationHoldsUnderRace(t *testing.T) {
+	env := newTestEnvCfg(t, func(c *config.Config) { c.Limits.KnowledgeBytesPerAccount = 400 })
+	o := newKnowledgeOwner(env, "kn-race")
+	type upload struct {
+		id     string
+		sealed []byte
+	}
+	var ups []upload
+	for i, name := range []string{"left", "right"} {
+		id, key := newPack(t, env, o, name)
+		sealed, _, _ := sealedPack(t, sizedPack(300, byte('l'+i)), key)
+		ups = append(ups, upload{id, sealed})
+	}
+	codes := make([]int, len(ups))
+	var wg sync.WaitGroup
+	for i, u := range ups {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			req, _ := http.NewRequest(http.MethodPut, env.srv.URL+"/api/v1/knowledge/packs/"+u.id+"/tree", bytes.NewReader(u.sealed))
+			req.Header.Set("Authorization", "Bearer "+o.pat.pat)
+			res, err := env.srv.Client().Do(req)
+			if err != nil {
+				return
+			}
+			_ = res.Body.Close()
+			codes[i] = res.StatusCode
+		}()
+	}
+	wg.Wait()
+	accepted := 0
+	for _, c := range codes {
+		if c == http.StatusAccepted {
+			accepted++
+		} else if c != http.StatusRequestEntityTooLarge {
+			t.Fatalf("an upload answered %d", c)
+		}
+	}
+	if accepted != 1 {
+		t.Fatalf("%d uploads of 300 bytes were taken under a 400-byte cap (codes %v)", accepted, codes)
+	}
+}
+
+// handlerQueue keeps the handlers registered on it, so a test can run one
+// job with the attempt it names.
+type handlerQueue struct{ h map[string]queue.Handler }
+
+func (q *handlerQueue) Enqueue(context.Context, string, string, any, ...queue.EnqueueOption) (uuid.UUID, error) {
+	return uuid.New(), nil
+}
+func (q *handlerQueue) Register(kind string, h queue.Handler) { q.h[kind] = h }
+func (q *handlerQueue) Work(context.Context, ...string) error { return nil }
+
+func TestTheLastScanAttemptSettlesThePack(t *testing.T) {
+	env := newTestEnv(t)
+	o := newKnowledgeOwner(env, "kn-last")
+	p, _, _, _ := putPack(t, env, o, "unreadable", knowledgeFiles())
+	var object string
+	if err := env.st.Pool().QueryRow(context.Background(), `SELECT object_key FROM knowledge_packs WHERE id = $1`, p.ID).Scan(&object); err != nil {
+		t.Fatal(err)
+	}
+	// The stored tree is gone: every attempt fails to read it.
+	if err := env.srvObj.Blobs().Delete(context.Background(), object); err != nil {
+		t.Fatal(err)
+	}
+	q := &handlerQueue{h: map[string]queue.Handler{}}
+	env.srvObj.Knowledge().RegisterHandlers(q)
+	args, _ := json.Marshal(knowledge.ScanArgs{Pack: uuid.MustParse(p.ID), Object: object})
+	run := func(attempt int) error {
+		return q.h[knowledge.JobScan](context.Background(), queue.Job{Kind: knowledge.JobScan, Args: args, Attempt: attempt})
+	}
+	state := func() knowledge.State {
+		var got knowledgePackBody
+		env.doJSON(o.pat, http.MethodGet, "/api/v1/knowledge/packs/"+p.ID, nil, &got, http.StatusOK)
+		return got.State
+	}
+	if err := run(1); err == nil || state() != knowledge.StateScanning {
+		t.Fatalf("a first attempt that could not read the tree: err %v, state %s; want an error to retry on, still scanning", err, state())
+	}
+	_ = run(3)
+	var got knowledgePackBody
+	env.doJSON(o.pat, http.MethodGet, "/api/v1/knowledge/packs/"+p.ID, nil, &got, http.StatusOK)
+	if got.State != knowledge.StateFailed || got.Scan != nil {
+		t.Fatalf("after the last attempt the pack is %q with a report %v; want failed, nothing claimed read", got.State, got.Scan != nil)
 	}
 }

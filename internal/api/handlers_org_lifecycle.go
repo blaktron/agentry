@@ -422,7 +422,7 @@ func (s *Server) eraseOrg(ctx context.Context, orgID uuid.UUID, handle string) e
 		}
 		return err
 	}
-	_ = s.knowledge.Destroyed(ctx, knowledge.Org(orgID), knowledgeKeys)
+	s.knowledge.FinishErasure(ctx, knowledge.Org(orgID), knowledgeKeys)
 	s.log.InfoContext(ctx, "org erased", "org", handle, "counts", counts)
 	s.fireEvent(ctx, Event{Kind: eventOrgDecommissioned, OrgID: orgID, Payload: map[string]any{"org": handle}})
 	return s.retireOrgContent(ctx, orgID, handle, exportKeys)
