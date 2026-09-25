@@ -52,6 +52,10 @@ type gitEnv struct {
 	git   *gitsrv.Handler
 	sfx   string
 	owner person
+	// api is the server the handler is mounted on, and cfg the config it
+	// was built from (a split-role test builds a worker beside it).
+	api *api.Server
+	cfg config.Config
 }
 
 // person is a seeded user with the three PAT shapes the git tests drive.
@@ -114,7 +118,7 @@ func newGitEnvCfg(t *testing.T, cfgFn func(*config.Config)) *gitEnv {
 	srv := httptest.NewServer(api.NewHandlerWithGit(apiSrv, git.Mount))
 	t.Cleanup(srv.Close)
 
-	env := &gitEnv{t: t, srv: srv, st: st, reg: reg, repos: repos, git: git, sfx: fmt.Sprintf("%06x", rand.Int63n(1<<24))} //nolint:gosec
+	env := &gitEnv{t: t, srv: srv, st: st, reg: reg, repos: repos, git: git, sfx: fmt.Sprintf("%06x", rand.Int63n(1<<24)), api: apiSrv, cfg: cfg} //nolint:gosec
 
 	// Seed the owner directly through the store (API flows are covered by
 	// internal/api tests; here git transport is the subject).

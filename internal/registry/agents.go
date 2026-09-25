@@ -40,6 +40,11 @@ type Service struct {
 	// gitArchiver produces tag archives for git-tag submissions; nil on
 	// roles without repo storage (SaaS api role — M7 routes via workers).
 	gitArchiver GitArchiver
+	// archiveHandOff, when set, takes the archive write of a git-tag
+	// submission off this process: the git role holds no object-store
+	// credential, so it records the version and a worker stores the
+	// archive (agentry#508, tag_archive.go). nil = write it here.
+	archiveHandOff ArchiveHandOff
 	// eventSink receives post-commit state transitions for webhook fan-out
 	// (§9.3, M6). Set by the api layer; nil = no fan-out.
 	eventSink EventSink
@@ -142,9 +147,12 @@ func (s *Service) SetGitArchiver(g GitArchiver) { s.gitArchiver = g }
 // GitArchiver materializes the tree of a tag into a workspace directory and
 // returns the peeled commit id (§6.5 step 1: git archive, never a
 // working-tree checkout; export-ignore disabled — the manifest allowlist is
-// the only filter).
+// the only filter). MaterializeCommit does the same for a commit already
+// resolved: the worker rebuilds a git-tag submission's archive from the
+// commit the git role recorded (agentry#508).
 type GitArchiver interface {
 	MaterializeTag(ctx context.Context, repoID uuid.UUID, tag, dst string) (commitSHA string, err error)
+	MaterializeCommit(ctx context.Context, repoID uuid.UUID, commit, dst string) error
 }
 
 // ErrNotFound is returned when an agent or namespace does not exist.
