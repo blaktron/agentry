@@ -459,7 +459,12 @@ paths:
         When the deployment holds credentials in a directory service and is
         configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account
         there is deleted in the same step; the outcome is audited as
-        `user.directory_erase`. An account that is an organization's last
+        `user.directory_erase` and returned in the `X-Agentry-Directory-Erasure`
+        header. A failed
+        directory attempt does not undo the registry's erasure: it is retried
+        by a job with backoff (each attempt audited) and the response says
+        `pending`; a retry budget that runs out is audited as `abandoned` and
+        raised to the operator. An account that is an organization's last
         admin is refused (409 last-admin) until another admin is in
         place; a transfer that would put the organization over its
         private-agent cap is refused (422 private-agent-cap) with nothing
@@ -484,6 +489,21 @@ paths:
       responses:
         "204":
           description: Account erased; session revoked.
+          headers:
+            X-Agentry-Directory-Erasure:
+              description: >
+                The directory half of the erasure (agentry#499). `deleted`:
+                the sign-in account at the directory is gone. `not-found`:
+                the directory holds no account with this address.
+                `not-configured`: the deployment reaches no directory, so
+                erasure is registry-only. `pending`: the directory could not
+                be reached; a job retries it with backoff for about four and
+                a half hours, and the operator is alerted if it never
+                succeeds. `failed`: the retry could not be queued; the
+                operator is alerted and finishes it by hand.
+              schema:
+                type: string
+                enum: [deleted, not-found, not-configured, pending, failed]
         default:
           $ref: "#/components/responses/Problem"
 

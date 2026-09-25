@@ -94,6 +94,41 @@
         }
       }
     },
+    "guide": {
+      "type": "object",
+      "description": "The author's words for the run setup, shown to people before a run and never to the agent (V10; plan guided-runs.md §6). Clients derive the same steps from the rest of the manifest when it is absent.",
+      "additionalProperties": false,
+      "properties": {
+        "overview": {
+          "type": "string",
+          "description": "What the BriefAgent does and returns, in markdown. At most 4096 bytes (V10 counts bytes).",
+          "maxLength": 4096
+        },
+        "prepare": {
+          "type": "array",
+          "description": "What to gather before starting, one plain line each.",
+          "maxItems": 10,
+          "items": { "type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[^\\u0000-\\u001f\\u007f]*$" }
+        },
+        "files": {
+          "type": "string",
+          "description": "What files to bring to the run, in one plain line.",
+          "maxLength": 500,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]*$"
+        },
+        "task": {
+          "type": "string",
+          "description": "The placeholder for the task field.",
+          "maxLength": 200,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]*$"
+        },
+        "connect": {
+          "type": "object",
+          "description": "Help per declared secret name: where to create the key and which scopes it needs. Every key must be a secret the release declares, in capabilities.secrets or a declared MCP server's secrets (V10; JSON schema cannot express that cross-reference).",
+          "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 300, "pattern": "^[^\\u0000-\\u001f\\u007f]*$" }
+        }
+      }
+    },
     "runtime": {
       "type": "object",
       "additionalProperties": false,
