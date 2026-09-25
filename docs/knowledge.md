@@ -104,13 +104,19 @@ upload.
 fit the owner's allocation. Otherwise the answer is 413
 `knowledge-allocation` with `bytes` and `max`. Only what is kept in the
 registry counts; a pack on a machine does not. The check is made under a
-lock on the owner, so two uploads cannot both slip under the cap. A cap
+lock on the owner (on its pool, below), so two uploads cannot both slip under the cap. A cap
 never deletes: a smaller or equal tree is always taken, and nothing
 already stored is touched. The allocation is `Features.KnowledgeBytes` on
 the entitlements resolver. The core's resolver answers enabled, with the
 cap `AGENTRY_KNOWLEDGE_BYTES_PER_ACCOUNT`
 (`limits.knowledgeBytesPerAccount`, in bytes; 0, the default, is no cap).
-A closed build's resolver answers by tier. The account page under
+A closed build's resolver answers by tier, and it may pool owners: a
+resolver that also implements `KnowledgePools` (`pkg/extension`) names
+the pool an owner's packs draw on. That is a key, the owners it counts
+and its cap, as a paid organization's seats are shared by its own packs
+and its members'. An upload is then reserved under a lock on the pool's
+key and counted against every pooled owner's packs, and the meter reports
+the pool. The account page under
 `/ui/account` shows the meter.
 
 ## The scan
