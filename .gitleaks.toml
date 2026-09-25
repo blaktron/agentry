@@ -24,6 +24,13 @@ paths = [
 ]
 # The helm job's placeholder sealing key in ci.yaml: base64 of the words
 # "sealingkey" repeated, not a key.
+# The config and knowledge tests' sealing-key fixtures (agentry#593): base64
+# of "0123456789abcdef" twice and of "knowledge-knowledge-knowledge-!!",
+# 32 readable bytes each, not keys; gitleaks decodes base64, so the first
+# is listed decoded as well.
 regexes = [
   '''c2VhbGluZ2tleXNlYWxpbmdrZXlzZWFsaW5na2V5MDA=''',
+  '''MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=''',
+  '''^0123456789abcdef0123456789abcdef$''',
+  '''a25vd2xlZGdlLWtub3dsZWRnZS1rbm93bGVkZ2UtISE=''',
 ]
