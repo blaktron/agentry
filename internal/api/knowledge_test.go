@@ -817,3 +817,104 @@ func TestTheLastScanAttemptSettlesThePack(t *testing.T) {
 		t.Fatalf("after the last attempt the pack is %q with a report %v; want failed, nothing claimed read", got.State, got.Scan != nil)
 	}
 }
+
+// poolResolver is an extension's resolver that pools two owners' knowledge
+// under one key and one cap, as a paid organization pools its members'.
+type poolResolver struct {
+	entitlements.Resolver
+	key    string
+	owners []knowledge.Owner
+	max    int64
+	omit   bool
+}
+
+func (p poolResolver) KnowledgePool(_ context.Context, owner knowledge.Owner) (knowledge.Pool, error) {
+	for _, o := range p.owners {
+		if o == owner {
+			owners := p.owners
+			if p.omit {
+				owners = nil
+			}
+			return knowledge.Pool{Key: p.key, Owners: owners, Cap: entitlements.Cap{Enabled: true, Max: p.max}}, nil
+		}
+	}
+	return knowledge.Pool{Key: owner.String(), Owners: []knowledge.Owner{owner}, Cap: entitlements.Cap{Enabled: true}}, nil
+}
+
+func ownerOf(t *testing.T, env *testEnv, o knowledgeOwner) knowledge.Owner {
+	t.Helper()
+	return knowledge.User(uuid.MustParse(env.selfID(o.sess)))
+}
+
+// TestKnowledgePoolIsCountedAndLocked (agentry#612): two owners in one pool
+// of 400 bytes upload 300 each at once; the pool's lock lets exactly one in,
+// and both meters report the pool.
+func TestKnowledgePoolIsCountedAndLocked(t *testing.T) {
+	env := newTestEnv(t)
+	a, b := newKnowledgeOwner(env, "kn-pool-a"), newKnowledgeOwner(env, "kn-pool-b")
+	pool := poolResolver{Resolver: entitlements.NewConfigResolver(config.Default().Limits), key: "pool:" + env.sfx, owners: []knowledge.Owner{ownerOf(t, env, a), ownerOf(t, env, b)}, max: 400}
+	env.srvObj.SetEntitlements(pool)
+
+	type upload struct {
+		o      knowledgeOwner
+		id     string
+		sealed []byte
+	}
+	var ups []upload
+	for i, o := range []knowledgeOwner{a, b} {
+		id, key := newPack(t, env, o, "pooled")
+		sealed, _, _ := sealedPack(t, sizedPack(300, byte('p'+i)), key)
+		ups = append(ups, upload{o, id, sealed})
+	}
+	codes := make([]int, len(ups))
+	var wg sync.WaitGroup
+	for i, u := range ups {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			req, _ := http.NewRequest(http.MethodPut, env.srv.URL+"/api/v1/knowledge/packs/"+u.id+"/tree", bytes.NewReader(u.sealed))
+			req.Header.Set("Authorization", "Bearer "+u.o.pat.pat)
+			res, err := env.srv.Client().Do(req)
+			if err != nil {
+				return
+			}
+			_ = res.Body.Close()
+			codes[i] = res.StatusCode
+		}()
+	}
+	wg.Wait()
+	accepted := 0
+	for _, c := range codes {
+		if c == http.StatusAccepted {
+			accepted++
+		} else if c != http.StatusRequestEntityTooLarge {
+			t.Fatalf("an upload into the pool answered %d", c)
+		}
+	}
+	if accepted != 1 {
+		t.Fatalf("%d uploads of 300 bytes into one 400-byte pool were taken (codes %v)", accepted, codes)
+	}
+	for _, o := range []knowledgeOwner{a, b} {
+		var usage struct {
+			Bytes int64 `json:"bytes"`
+			Max   int64 `json:"max"`
+		}
+		env.doJSON(o.pat, http.MethodGet, "/api/v1/knowledge/usage", nil, &usage, http.StatusOK)
+		if usage.Bytes != 300 || usage.Max != 400 {
+			t.Fatalf("%s's meter = %+v, want the pool's 300 of 400", o.handle, usage)
+		}
+	}
+
+	// A pool that does not count its own owner is an extension's mistake,
+	// and is not permission.
+	pool.omit = true
+	env.srvObj.SetEntitlements(pool)
+	c := newKnowledgeOwner(env, "kn-pool-c")
+	pool.owners = append(pool.owners, ownerOf(t, env, c))
+	env.srvObj.SetEntitlements(pool)
+	id, key := newPack(t, env, c, "omitted")
+	sealed, _, _ := sealedPack(t, sizedPack(10, 'o'), key)
+	if st, _, body := env.raw(c.pat, http.MethodPut, "/api/v1/knowledge/packs/"+id+"/tree", sealed); st == http.StatusAccepted {
+		t.Fatalf("an upload into a pool that omits its owner was taken: %s", body)
+	}
+}
