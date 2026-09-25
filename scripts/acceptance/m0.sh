@@ -4,6 +4,7 @@
 # Go client (in `make test`); the TS client smoke lives with the site now.
 set -euo pipefail
 cd "$(cd "$(dirname "$0")/../.." && pwd)"
+. scripts/acceptance/lib.sh
 
 PORT="${AGENTRY_ACCEPT_PORT:-$(python3 -c "import socket; s=socket.socket(); s.bind(('127.0.0.1',0)); print(s.getsockname()[1]); s.close()")}"  # free unless pinned (agentry#133)
 export PATH=/opt/homebrew/bin:$PATH
@@ -48,7 +49,7 @@ curl -fsS "http://localhost:$PORT/readyz"  >/dev/null && echo "readyz: OK (db re
 curl -fsS "http://localhost:$PORT/.well-known/agentry/registry.json" >/dev/null && echo "well-known: OK"
 
 # 5. Go client smoke (same code path as make test, run explicitly).
-go test -timeout 20m ./internal/api -run 'TestM0Smoke' -count=1 >/dev/null && echo "go client smoke: OK"
+gotest "go client smoke" -timeout 20m ./internal/api -run 'TestM0Smoke' -count=1
 
 # 6. The server's own surface answers (the full check is scripts/acceptance/ui.sh).
 curl -fsS -o /dev/null -w '%{http_code}' "http://localhost:$PORT/ui/login" | grep -q 200 && echo "core UI: OK"
