@@ -321,7 +321,7 @@ worker:
   # RWX volume is mounted when mountGitData=true: the worker scans a tag's git
   # history (S2) and stores the archive of a tag pushed to the git role, which
   # holds no object-store credential (agentry#508). Without it a tag push is
-  # rejected after 30 minutes, its archive never stored.
+  # rejected after two hours, its archive never stored.
   mountGitData: true
   nodeSelector: {}
   tolerations: []

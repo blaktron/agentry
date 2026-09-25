@@ -158,7 +158,7 @@ func TestSplitGitRoleStuckSubmissionIsRejected(t *testing.T) {
 		t.Fatalf("watchdog inside the cap: moved %d, err %v", n, err)
 	}
 	if _, err := env.st.Pool().Exec(ctx,
-		`UPDATE agent_versions SET updated_at = now() - interval '31 minutes' WHERE id = $1::uuid`, id); err != nil {
+		`UPDATE agent_versions SET updated_at = now() - interval '121 minutes' WHERE id = $1::uuid`, id); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := env.reg.ReconcileStuckSubmissions(ctx); err != nil {

@@ -657,10 +657,12 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 		// it against the digest, stores it, and enters the machine
 		// (StoreTagArchive). Until then the version is `submitted`, and a
 		// store job that never succeeds is the watchdog's
-		// (ReconcileStuckSubmissions).
-		if err := s.archiveHandOff.StoreTagArchive(ctx, StoreTagArchiveArgs{
-			VersionID: versionID, AdmissionTicket: ticket.ID,
-		}); err != nil {
+		// (ReconcileStuckSubmissions). The submission event goes out now,
+		// from here: it ties the admission ticket to the version, so a
+		// version the watchdog rejects is refunded like any other
+		// pipeline error.
+		s.EmitAgentEvent(ctx, a.ID, "version.submitted", submitted)
+		if err := s.archiveHandOff.StoreTagArchive(ctx, StoreTagArchiveArgs{VersionID: versionID}); err != nil {
 			s.logger().Error("registry: archive hand-off failed; version left in submitted",
 				"version", versionID, "agent", a.Namespace+"/"+a.Name, "err", err)
 			v, gerr := s.st.Queries().GetVersionByID(ctx, versionID)
@@ -677,7 +679,9 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 // enterPipeline takes a recorded version whose archive is in the store
 // into the machine: published unscanned when its agent skips the pipeline,
 // otherwise submitted → scanning and handed to the pipeline. submitted is
-// the version.submitted event's payload.
+// the version.submitted event's payload, or nil when the event already
+// went out (a handed-off git-tag submission, emitted where it was
+// recorded).
 func (s *Service) enterPipeline(ctx context.Context, a Agent, versionID uuid.UUID, submitted map[string]any, sysEvent audit.Event, pipeline Pipeline) (Version, error) {
 	// An agent its organization's administrator took off the pipeline
 	// (M21, D16): the version is published as submitted, marked skipped
@@ -693,8 +697,10 @@ func (s *Service) enterPipeline(ctx context.Context, a Agent, versionID uuid.UUI
 			return Version{}, err
 		}
 		if published {
-			submitted["scanStatus"] = ScanStatusSkipped
-			s.EmitAgentEvent(ctx, a.ID, "version.submitted", submitted)
+			if submitted != nil {
+				submitted["scanStatus"] = ScanStatusSkipped
+				s.EmitAgentEvent(ctx, a.ID, "version.submitted", submitted)
+			}
 			return s.st.Queries().GetVersionByID(ctx, versionID)
 		}
 		// The agent stopped being one that may skip between the
@@ -705,7 +711,9 @@ func (s *Service) enterPipeline(ctx context.Context, a Agent, versionID uuid.UUI
 	if err := s.Transition(ctx, versionID, StatusScanning, "archive built", sysEvent); err != nil {
 		return Version{}, err
 	}
-	s.EmitAgentEvent(ctx, a.ID, "version.submitted", submitted)
+	if submitted != nil {
+		s.EmitAgentEvent(ctx, a.ID, "version.submitted", submitted)
+	}
 	if pipeline != nil {
 		if perr := pipeline.VersionSubmitted(ctx, versionID); perr != nil {
 			// The version row is committed and sitting in `scanning`; there is

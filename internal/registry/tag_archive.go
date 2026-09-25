@@ -41,16 +41,15 @@ const SourceGitTag = "git-tag"
 const JobStoreTagArchive = "registry.store_tag_archive"
 
 // StuckSubmissionCap is how long a handed-off submission may stay
-// `submitted` before the watchdog rejects it. The same bound as a scan's
-// (§7): the store job's own retries are over well before it.
-const StuckSubmissionCap = 30 * time.Minute
+// `submitted` before the watchdog rejects it. Longer than a scan's 30
+// minutes (§7), because the store job waits in the sandbox queue behind
+// scans and a rejection burns the version string, where a stuck scan only
+// goes to review; the job's own retries are over well before it.
+const StuckSubmissionCap = 2 * time.Hour
 
-// StoreTagArchiveArgs are the job's arguments. AdmissionTicket rides along
-// so the version.submitted event the worker emits carries it, as it would
-// have from the submitting process (plan subscription-tiers §5.1).
+// StoreTagArchiveArgs are the job's arguments.
 type StoreTagArchiveArgs struct {
-	VersionID       uuid.UUID `json:"versionId"`
-	AdmissionTicket string    `json:"admissionTicket,omitempty"`
+	VersionID uuid.UUID `json:"versionId"`
 }
 
 // ArchiveHandOff enqueues JobStoreTagArchive. The git role sets it
@@ -104,24 +103,11 @@ func (s *Service) StoreTagArchive(ctx context.Context, args StoreTagArchiveArgs,
 		return err
 	}
 
-	exists, err := s.blobs.Exists(ctx, *v.ArchiveKey)
-	if err != nil {
-		return fmt.Errorf("registry: archive lookup: %w", err)
+	if err := s.rebuildAndStore(ctx, a, v); err != nil {
+		return err
 	}
-	if !exists {
-		if err := s.rebuildAndStore(ctx, a, v); err != nil {
-			return err
-		}
-	}
-
-	submitted := map[string]any{
-		"version": v.Version, "source": v.Source, "channel": v.Channel,
-	}
-	if args.AdmissionTicket != "" {
-		submitted["admissionTicket"] = args.AdmissionTicket
-		submitted["versionId"] = v.ID.String()
-	}
-	_, err = s.enterPipeline(ctx, a, v.ID, submitted, audit.Event{ActorKind: audit.ActorSystem}, pipeline)
+	// version.submitted went out where the version was recorded.
+	_, err = s.enterPipeline(ctx, a, v.ID, nil, audit.Event{ActorKind: audit.ActorSystem}, pipeline)
 	if errors.Is(err, ErrScanNotScheduled) {
 		// The version is in `scanning` now; a retry would find it past
 		// `submitted` and do nothing. The scan watchdog has it (§7).
@@ -131,8 +117,10 @@ func (s *Service) StoreTagArchive(ctx context.Context, args StoreTagArchiveArgs,
 }
 
 // rebuildAndStore rebuilds v's archive from its recorded commit exactly as
-// SubmitVersion built it (the manifest allowlist over the commit's tree),
-// checks the digest and writes the object.
+// SubmitVersion built it (the manifest allowlist over the commit's tree)
+// and checks the digest, always, even when the content-addressed object is
+// already there: the recorded digest is not trusted without the commit
+// agreeing. It writes the object only when it is absent (write-once).
 func (s *Service) rebuildAndStore(ctx context.Context, a Agent, v Version) error {
 	if s.gitArchiver == nil {
 		return errors.New("registry: this role cannot read the repositories (no git data)")
@@ -169,6 +157,13 @@ func (s *Service) rebuildAndStore(ctx context.Context, a Agent, v Version) error
 	if info.Digest != *v.ArchiveDigest || ArchiveKey(info.Digest) != *v.ArchiveKey {
 		return fmt.Errorf("%w: version %s recorded %s, the commit gives %s", ErrArchiveMismatch, v.ID, *v.ArchiveDigest, info.Digest)
 	}
+	exists, err := s.blobs.Exists(ctx, *v.ArchiveKey)
+	if err != nil {
+		return fmt.Errorf("registry: archive lookup: %w", err)
+	}
+	if exists {
+		return nil
+	}
 	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
@@ -193,19 +188,40 @@ func (s *Service) ReconcileStuckSubmissions(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf("registry: list stuck submissions: %w", err)
 	}
 	sys := audit.Event{ActorKind: audit.ActorSystem}
-	cause := TransitionCause{PipelineError: true}
+	reason := fmt.Sprintf("this version's archive was not stored within %s of the tag push, so it was rejected; push a new version tag", StuckSubmissionCap)
 	moved := 0
 	for _, v := range rows {
-		if err := s.TransitionFrom(ctx, v.ID, StatusSubmitted, StatusScanning,
-			"the archive was never stored", sys, cause); err != nil {
-			s.logger().Error("registry: watchdog could not move a stuck submission", "version", v.ID, "err", err)
-			continue
+		// Both moves in one transaction, from `submitted` only: a version
+		// left half-way in `scanning` would reach review through the scan
+		// watchdog, where an approval publishes it with no archive.
+		var toScanning, toRejected TransitionResult
+		err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
+			row, err := q.GetVersionForUpdate(ctx, v.ID)
+			if err != nil {
+				return fmt.Errorf("registry: lock version: %w", err)
+			}
+			if Status(row.Status) != StatusSubmitted {
+				return fmt.Errorf("%w: %s is %s", ErrVersionMoved, row.Version, row.Status)
+			}
+			if toScanning, err = s.TransitionInTx(ctx, q, v.ID, StatusScanning, "the archive was never stored", sys); err != nil {
+				return err
+			}
+			toRejected, err = s.TransitionInTx(ctx, q, v.ID, StatusRejected, reason, sys)
+			return err
+		})
+		if errors.Is(err, ErrVersionMoved) {
+			continue // the worker stored it after all
 		}
-		reason := fmt.Sprintf("this version's archive was not stored within %s of the tag push, so it was rejected; push a new version tag", StuckSubmissionCap)
-		if err := s.TransitionFrom(ctx, v.ID, StatusScanning, StatusRejected, reason, sys, cause); err != nil {
+		if err != nil {
 			s.logger().Error("registry: watchdog could not reject a stuck submission", "version", v.ID, "err", err)
 			continue
 		}
+		// The rejection is the platform's fault: an extension that charged
+		// for the submission refunds on it (plan subscription-tiers §5.4).
+		toScanning.Cause = TransitionCause{PipelineError: true}
+		toRejected.Cause = TransitionCause{PipelineError: true}
+		s.EmitTransition(ctx, toScanning)
+		s.EmitTransition(ctx, toRejected)
 		s.logger().Warn("registry: stuck git-tag submission rejected", "version", v.ID)
 		moved++
 	}
