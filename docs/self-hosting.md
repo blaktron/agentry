@@ -28,6 +28,7 @@ git clone https://github.com/blaktron/agentry.git
 cd agentry/deploy/compose
 printf 'AUTHENTIK_SECRET_KEY=%s\n' "$(openssl rand -base64 48)" >> .env
 printf 'AGENTRY_AUTH_SEALING_KEY=%s\n' "$(openssl rand -base64 32)" >> .env   # encrypts TOTP seeds and webhook secrets at rest
+printf 'AGENTRY_KNOWLEDGE_SEALING_KEY=%s\n' "$(openssl rand -base64 32)" >> .env   # optional: wraps knowledge packs' keys; a key of its own
 mkdir -p keys && openssl ecparam -name prime256v1 -genkey -noout -out keys/signing-key.pem
 chmod 600 keys/signing-key.pem && sudo chown 65532 keys/signing-key.pem  # the server's uid inside the container
 printf 'AGENTRY_SIGNING_KEY_FILE=/etc/agentry/signing-key.pem\nAGENTRY_SIGNING_KEY_DIR=%s/keys\n' "$PWD" >> .env
@@ -218,6 +219,9 @@ storage:
 auth:
   sealingKey: "<base64 32 bytes>"   # required outside dev; encrypts TOTP seeds
   cookieSecure: true
+
+knowledge:
+  sealingKey: "<base64 32 bytes>"   # optional; wraps knowledge packs' data keys (docs/knowledge.md); never auth.sealingKey
 
 signing:
   kind: file            # file | kms, 'none' is refused in prod
@@ -578,6 +582,7 @@ through the entitlements resolver. The defaults:
 | `limits.versionsPerDay` | 20 | per agent |
 | `limits.webhookEndpointsPerOrg` / `webhookDeliveriesPerSecond` | 20 / 5 | |
 | `limits.authedPerHour`, `authedBurstPerMin`, `anonymousPerMin`, `loginPerMin` | 5000, 100, 60, 10 | the API rate buckets (also enforced at the edge) |
+| `limits.knowledgeBytesPerAccount` | 0 (no cap) | the bytes of knowledge packs one account keeps in the registry (`AGENTRY_KNOWLEDGE_BYTES_PER_ACCOUNT`); past it no pack is added or grown, and none is deleted ([Knowledge packs](knowledge.md)) |
 | `limits.scimPerMin` | 600 | SCIM requests per organization per minute, and the burst a directory may spend at once. An initial sync of a few hundred people fits; past it the IdP gets 429 with `Retry-After` and paces itself. Raise it for a directory of thousands, since a directory's size is a property of the deployment |
 
 The archive quotas are checked by the manifest rules (V8) both on the server

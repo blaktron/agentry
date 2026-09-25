@@ -7,6 +7,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/knowledge"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
@@ -35,6 +36,7 @@ func (s *Server) ClearCurrentUserData(w http.ResponseWriter, r *http.Request) {
 	}
 
 	counts := map[string]any{}
+	var knowledgeKeys []string
 	err := s.st.WithTx(r.Context(), func(tq *storegen.Queries) error {
 		n, err := tq.RevokeAllPATsForUser(r.Context(), p.UserID)
 		if err != nil {
@@ -72,6 +74,12 @@ func (s *Server) ClearCurrentUserData(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		counts["notificationSettingsReset"] = n > 0
+		// The account's knowledge packs and what opens them (agentry#593):
+		// the rows here, the key and the sealed trees once this commits.
+		if knowledgeKeys, err = knowledge.EraseOwner(r.Context(), tq, knowledge.User(p.UserID)); err != nil {
+			return err
+		}
+		counts["knowledgeObjects"] = len(knowledgeKeys)
 		e := auditEvent(r, audit.ActionUserDataClear)
 		e.TargetKind, e.TargetID = "user", p.UserID
 		e.Detail = counts
@@ -82,6 +90,7 @@ func (s *Server) ClearCurrentUserData(w http.ResponseWriter, r *http.Request) {
 		problemInternal(w, r)
 		return
 	}
+	s.knowledge.FinishErasure(r.Context(), knowledge.User(p.UserID), knowledgeKeys)
 	s.fireEvent(r.Context(), Event{Kind: eventUserDataCleared, UserID: p.UserID, Payload: counts})
 	w.WriteHeader(http.StatusNoContent)
 }

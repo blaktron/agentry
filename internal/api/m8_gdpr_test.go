@@ -8,6 +8,10 @@ import (
 	"context"
 	"net/http"
 	"testing"
+
+	"github.com/google/uuid"
+
+	"github.com/blaktron/agentry/internal/knowledge"
 )
 
 func TestAccountErasureFlow(t *testing.T) {
@@ -34,6 +38,9 @@ func TestAccountErasureFlow(t *testing.T) {
 	}
 	env.waitStatus(user, "doomed", "1.0.0", "published")
 
+	// A knowledge pack (agentry#593) goes with the account.
+	kn := seedKnowledge(t, env, knowledge.User(uuid.MustParse(env.selfID(sess))))
+
 	// A PAT cannot erase the account (session-only).
 	res := env.do(caller{name: "pat", pat: pat}, http.MethodPost, "/api/v1/user/delete", nil)
 	_ = res.Body.Close()
@@ -58,6 +65,7 @@ func TestAccountErasureFlow(t *testing.T) {
 	}
 
 	ctx := context.Background()
+	assertKnowledgeGone(t, env, kn)
 	// PII is gone; the row survives, pseudonymized.
 	var email, displayName, state string
 	var pwHash *string

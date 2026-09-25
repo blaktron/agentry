@@ -54,8 +54,8 @@ func TestDesktopGrantExchange(t *testing.T) {
 		t.Fatal("exchange returned no token")
 	}
 	scopes, _ := pat["scopes"].([]any)
-	if len(scopes) != 7 {
-		t.Fatalf("desktop PAT scopes = %v, want the seven desktop scopes", scopes)
+	if len(scopes) != 9 {
+		t.Fatalf("desktop PAT scopes = %v, want the nine desktop scopes", scopes)
 	}
 	has := map[string]bool{}
 	for _, sc := range scopes {
@@ -70,6 +70,11 @@ func TestDesktopGrantExchange(t *testing.T) {
 	// Agentry on RunPanel creates and reads runs with this token.
 	if !has["run:read"] || !has["run:write"] {
 		t.Fatalf("desktop PAT lacks the hosted-run scopes: %v", scopes)
+	}
+	// The knowledge scopes too (agentry#593): the Knowledge panel wraps,
+	// unwraps, uploads and downloads packs with this token.
+	if !has["knowledge:read"] || !has["knowledge:write"] {
+		t.Fatalf("desktop PAT lacks the knowledge scopes: %v", scopes)
 	}
 	// The PAT authenticates.
 	var me struct {

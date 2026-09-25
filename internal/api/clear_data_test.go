@@ -13,7 +13,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/blaktron/agentry/internal/api"
+	"github.com/blaktron/agentry/internal/knowledge"
 )
 
 func TestClearCurrentUserData(t *testing.T) {
@@ -78,6 +81,10 @@ func TestClearCurrentUserData(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// A knowledge pack (agentry#593): the clear takes it, the key that
+	// opens it and its sealed tree.
+	kn := seedKnowledge(t, env, knowledge.User(uuid.MustParse(uid)))
+
 	var liveTokens int
 	if err := env.st.Pool().QueryRow(ctx, `SELECT count(*) FROM pats WHERE user_id = $1 AND revoked_at IS NULL`, uid).Scan(&liveTokens); err != nil || liveTokens < 2 {
 		t.Fatalf("live tokens before clearing: %d (%v)", liveTokens, err)
@@ -123,6 +130,7 @@ func TestClearCurrentUserData(t *testing.T) {
 			t.Errorf("%s after clearing: %d, want 0", what, n)
 		}
 	}
+	assertKnowledgeGone(t, env, kn)
 	var name string
 	if err := env.st.Pool().QueryRow(ctx, `SELECT display_name FROM users WHERE id = $1`, uid).Scan(&name); err != nil || name != "" {
 		t.Errorf("display name after clearing: %q (%v), want empty", name, err)

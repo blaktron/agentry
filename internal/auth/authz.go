@@ -83,6 +83,12 @@ const (
 	ActOrgCreate Action = "org.create"
 	// Anonymous-capable reads.
 	ActPublicRead Action = "public.read"
+	// The caller's own knowledge packs (plan knowledge.md §4.4,
+	// agentry#593): self-scoped, since a pack is found only by its owner.
+	// Read covers the packs, their reports and trees, the export and
+	// having a data key unwrapped; write covers the rest.
+	ActKnowledgeRead  Action = "knowledge.read"
+	ActKnowledgeWrite Action = "knowledge.write"
 	// ActReviewAct is the review surface (§12.3 review:act). Check only
 	// enforces the PAT scope gate for it: WHO may review — platform staff or
 	// an org security_reviewer who is not the version's author (§12.2) — is a
@@ -181,6 +187,8 @@ var scopeFor = map[Action]Scope{
 	ActUserSelfUpdate:       ScopeUserProfile,
 	ActUserTokensRead:       ScopeUserProfile,
 	ActReviewAct:            ScopeReviewAct,
+	ActKnowledgeRead:        ScopeKnowledgeRead,
+	ActKnowledgeWrite:       ScopeKnowledgeWrite,
 }
 
 // minRole is the role threshold per org-scoped action.
@@ -205,7 +213,7 @@ func ReadOnly(act Action) bool {
 	switch act {
 	case ActOrgRead, ActOrgMembersRead, ActOrgTeamsRead, ActOrgAuditRead,
 		ActPublicRead, ActUserSelfRead, ActUserTokensRead,
-		ActAgentRead, ActAgentRepoRead:
+		ActAgentRead, ActAgentRepoRead, ActKnowledgeRead:
 		return true
 	}
 	return false
@@ -248,7 +256,7 @@ func Check(p *Principal, res Resource, act Action) error {
 	switch act {
 	case ActUserSelfRead, ActUserSelfUpdate, ActUserTokensRead,
 		ActUserTokensManage, ActUserSecurityManage, ActUserOrgRequest, ActOrgCreate,
-		ActAgentCreate, ActReviewAct:
+		ActAgentCreate, ActReviewAct, ActKnowledgeRead, ActKnowledgeWrite:
 		// ActAgentCreate: namespace-level authorization (self vs org
 		// admin+) happens in registry.CreateAgent with the target ns.
 		// ActReviewAct: the scope gate above is the whole contribution here;

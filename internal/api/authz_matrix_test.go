@@ -480,6 +480,32 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			path:   func(s *matrixSeed, _ string) string { return "/api/v1/user/stars/" + s.orgH + "/mx-agent" },
 		},
 		"listAccountInstalls": {method: "GET", path: sPath("/api/v1/user/installs")},
+		// Knowledge packs (agentry#593): an authorized caller meets a pack
+		// that is not theirs (404), a key that does not open for them (404)
+		// or a short key (422) — never a denial — and nothing is stored.
+		"listKnowledgePacks": {method: "GET", path: sPath("/api/v1/knowledge/packs")},
+		"createKnowledgePack": {
+			method: "POST", path: sPath("/api/v1/knowledge/packs"),
+			body: func(_ *matrixSeed, id string) any {
+				return map[string]any{"name": "mx" + id, "wrappedKey": map[string]any{"kind": "deployment", "recipient": "deployment:0", "key": "eA=="}}
+			},
+		},
+		"getKnowledgePack":      {method: "GET", path: sPath("/api/v1/knowledge/packs/00000000-0000-0000-0000-000000000000")},
+		"deleteKnowledgePack":   {method: "DELETE", path: sPath("/api/v1/knowledge/packs/00000000-0000-0000-0000-000000000000")},
+		"uploadKnowledgeTree":   {method: "PUT", path: sPath("/api/v1/knowledge/packs/00000000-0000-0000-0000-000000000000/tree"), body: func(*matrixSeed, string) any { return "not a sealed tree" }},
+		"downloadKnowledgeTree": {method: "GET", path: sPath("/api/v1/knowledge/packs/00000000-0000-0000-0000-000000000000/tree")},
+		"exportKnowledgePack":   {method: "GET", path: sPath("/api/v1/knowledge/packs/00000000-0000-0000-0000-000000000000/export")},
+		"wrapKnowledgeKey": {
+			method: "POST", path: sPath("/api/v1/knowledge/keys/wrap"),
+			body: func(*matrixSeed, string) any { return map[string]any{"key": "c2hvcnQ="} },
+		},
+		"unwrapKnowledgeKey": {
+			method: "POST", path: sPath("/api/v1/knowledge/keys/unwrap"),
+			body: func(*matrixSeed, string) any {
+				return map[string]any{"kind": "deployment", "recipient": "deployment:0", "key": "eA=="}
+			},
+		},
+		"getKnowledgeUsage": {method: "GET", path: sPath("/api/v1/knowledge/usage")},
 		// The fixture agent has no published version, so an authorized
 		// caller gets 404 (not denied) and nothing is recorded.
 		"putAccountInstall": {
