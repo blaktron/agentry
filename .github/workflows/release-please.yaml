@@ -1,10 +1,16 @@
 # Release automation (§18.2 M8 OSS hygiene: "release-please, signed releases
 # + SBOM"; DEV-148, agentry#597). release-please watches conventional commits
 # on main and maintains a standing "release PR" that bumps the version and
-# rewrites CHANGELOG.md. Merging that PR creates the vX.Y.Z tag and its GitHub
-# release, and this workflow then calls release.yaml, which builds, signs and
-# attaches the artifacts. dev's prereleases (vX.Y.Z-dev.N) come from
+# rewrites CHANGELOG.md. Merging that PR tags vX.Y.Z and creates its GitHub
+# release as a draft, with the changelog as its body. This workflow then calls
+# release.yaml, which verifies, builds, signs and attaches the artifacts, and
+# only then publishes the release. dev's prereleases (vX.Y.Z-dev.N) come from
 # dev-release.yaml through the same release.yaml.
+#
+# The release PR is the one pull request main takes that is not a promotion
+# from dev (DEV-148 addendum): it carries only CHANGELOG.md and the manifest,
+# which release-please reads from main. dev never needs them back, since
+# next-dev-tag.sh reads the tags.
 #
 # The version (release-please-config.json; the operator's decisions of
 # 2026-09-25, release-1.0.md D16):
@@ -14,15 +20,22 @@
 #   - "versioning": "always-bump-patch" makes every other release a patch
 #     bump, whatever the commit types: a feat: or a feat!: does not move the
 #     minor by itself, because only the operator does.
+#   - "draft" with "force-tag-creation": the tag exists at once, for
+#     release.yaml to build from, and the release stays a draft until its
+#     signed assets are attached.
 #   - initial-version only matters before the first release.
+# scripts/release/config-guard.sh refuses a 1.x manifest or release-as
+# without the operator's AGENTRY_ALLOW_V1, and a release-as that is already
+# released (which release-please would propose again).
 #
 # TOKEN NOTE: a tag or release created with the default GITHUB_TOKEN does NOT
 # trigger other workflows (GitHub's recursion guard), and the repository holds
 # no RELEASE_PLEASE_TOKEN. So the release job below calls release.yaml
-# directly when the action reports a release, instead of waiting for a tag
-# push that would never start it. The release PR itself is also opened by
-# GITHUB_TOKEN, so its pull_request runs wait for approval; ci.yaml's
-# workflow_dispatch runs the gate on that branch instead.
+# directly when a release was created, and nothing listens for tag pushes. The
+# release PR opened with GITHUB_TOKEN gets pull_request runs that wait for
+# approval; it is gated by dispatching ci on its branch. A RELEASE_PLEASE_TOKEN
+# the operator might add is still used first: its PR's runs would start by
+# themselves, and its tags start nothing that is not already called here.
 name: release-please
 on:
   push:
@@ -32,13 +45,14 @@ permissions:
   contents: read
 
 jobs:
-  release-please:
-    # Self-hosted like every other workflow: GitHub-hosted minutes are
-    # exhausted, so on ubuntu-latest the job never scheduled (agentry#220).
+  # Tags a release PR that has just merged and creates its draft release.
+  github-release:
+    if: github.repository == 'blaktron/agentry'
     runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 10
     permissions:
       contents: write
-      pull-requests: write
+      pull-requests: write   # labels the merged PR "autorelease: tagged"
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
@@ -46,19 +60,10 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      # No v1.* release PR without the operator (R5): a release-as or a
-      # manifest at 1.0.0 or later needs the AGENTRY_ALLOW_V1 variable, which
-      # only the 1.0 step sets. release.yaml's guard refuses such a tag too.
-      - name: No 1.x without the operator
+      - name: No 1.x release without the operator
         env:
           AGENTRY_ALLOW_V1: ${{ vars.AGENTRY_ALLOW_V1 }}
-        run: |
-          set -euo pipefail
-          for v in $(sed -nE 's/^[[:space:]]*"(release-as|\.)"[[:space:]]*:[[:space:]]*"([0-9]+)\..*/\2/p' release-please-config.json .release-please-manifest.json); do
-            if [ "$v" -ge 1 ] && [ "${AGENTRY_ALLOW_V1:-}" != true ]; then
-              echo "::error::a v$v release is the operator's: set the repository variable AGENTRY_ALLOW_V1=true (agentry#522)"; exit 1
-            fi
-          done
+        run: ./scripts/release/config-guard.sh release
       - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
         id: release
         with:
@@ -69,14 +74,41 @@ jobs:
           target-branch: main
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+          skip-github-pull-request: true
 
   release:
-    needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    needs: github-release
+    if: needs.github-release.outputs.release_created == 'true'
     permissions:
       contents: write
       id-token: write
       packages: write
     uses: ./.github/workflows/release.yaml
     with:
-      tag: ${{ needs.release-please.outputs.tag_name }}
+      tag: ${{ needs.github-release.outputs.tag_name }}
+
+  # Opens or updates the standing release PR, after any release above exists:
+  # release-please will not propose a new version while a merged release PR is
+  # untagged.
+  release-pr:
+    needs: github-release
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: The version the release PR may propose
+        env:
+          AGENTRY_ALLOW_V1: ${{ vars.AGENTRY_ALLOW_V1 }}
+        run: ./scripts/release/config-guard.sh pull-request
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          target-branch: main
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          skip-github-release: true

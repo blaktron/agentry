@@ -9,7 +9,8 @@
       "release-as": "0.6.0",
       "versioning": "always-bump-patch",
       "initial-version": "0.1.0",
-      "draft": false,
+      "draft": true,
+      "force-tag-creation": true,
       "prerelease": false
     }
   },
