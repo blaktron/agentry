@@ -450,7 +450,11 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 	if p == nil || p.Anonymous {
 		return Version{}, auth.ErrUnauthorized
 	}
-	if s.blobs == nil {
+	// A git-tag submission on a role that hands the archive write off
+	// (the git role, agentry#508) builds the archive for its digest and
+	// leaves the store to the worker.
+	deferStore := s.archiveHandOff != nil && in.Source == SourceGitTag
+	if s.blobs == nil && !deferStore {
 		return Version{}, errors.New("registry: no blob store configured")
 	}
 
@@ -577,11 +581,13 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 	}
 
 	key := ArchiveKey(info.Digest)
-	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
-		return Version{}, err
-	}
-	if err := s.blobs.Put(ctx, key, tmp); err != nil {
-		return Version{}, fmt.Errorf("registry: store archive: %w", err)
+	if !deferStore {
+		if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+			return Version{}, err
+		}
+		if err := s.blobs.Put(ctx, key, tmp); err != nil {
+			return Version{}, fmt.Errorf("registry: store archive: %w", err)
+		}
 	}
 
 	caps, err := json.Marshal(m.Capabilities)
@@ -645,6 +651,34 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 	}
 	sysEvent := actorEvent
 
+	if deferStore {
+		// The row records the digest and key; the object is not there yet.
+		// The worker rebuilds the archive from the recorded commit, checks
+		// it against the digest, stores it, and enters the machine
+		// (StoreTagArchive). Until then the version is `submitted`, and a
+		// store job that never succeeds is the watchdog's
+		// (ReconcileStuckSubmissions).
+		if err := s.archiveHandOff.StoreTagArchive(ctx, StoreTagArchiveArgs{
+			VersionID: versionID, AdmissionTicket: ticket.ID,
+		}); err != nil {
+			s.logger().Error("registry: archive hand-off failed; version left in submitted",
+				"version", versionID, "agent", a.Namespace+"/"+a.Name, "err", err)
+			v, gerr := s.st.Queries().GetVersionByID(ctx, versionID)
+			if gerr != nil {
+				return Version{}, gerr
+			}
+			return v, fmt.Errorf("%w: %v", ErrScanNotScheduled, err)
+		}
+		return s.st.Queries().GetVersionByID(ctx, versionID)
+	}
+	return s.enterPipeline(ctx, a, versionID, submitted, sysEvent, s.pipeline)
+}
+
+// enterPipeline takes a recorded version whose archive is in the store
+// into the machine: published unscanned when its agent skips the pipeline,
+// otherwise submitted → scanning and handed to the pipeline. submitted is
+// the version.submitted event's payload.
+func (s *Service) enterPipeline(ctx context.Context, a Agent, versionID uuid.UUID, submitted map[string]any, sysEvent audit.Event, pipeline Pipeline) (Version, error) {
 	// An agent its organization's administrator took off the pipeline
 	// (M21, D16): the version is published as submitted, marked skipped
 	// first so the one gate-skipping edge will take it, with no scan run
@@ -672,8 +706,8 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 		return Version{}, err
 	}
 	s.EmitAgentEvent(ctx, a.ID, "version.submitted", submitted)
-	if s.pipeline != nil {
-		if perr := s.pipeline.VersionSubmitted(ctx, versionID); perr != nil {
+	if pipeline != nil {
+		if perr := pipeline.VersionSubmitted(ctx, versionID); perr != nil {
 			// The version row is committed and sitting in `scanning`; there is
 			// nothing to roll back. Report it instead of returning a 202 that
 			// promises a scan nobody scheduled — the watchdog will route it to
@@ -768,7 +802,7 @@ func (s *Service) SubmitTag(ctx context.Context, p *auth.Principal, a Agent, tag
 		return Version{}, &ErrValidation{Issues: []error{fmt.Errorf("tag %s: %v", tag, err)}}
 	}
 	return s.SubmitVersion(ctx, p, a, SubmitInput{
-		Source: "git-tag", Tag: tag, CommitSHA: commit, Workspace: ws,
+		Source: SourceGitTag, Tag: tag, CommitSHA: commit, Workspace: ws,
 	}, actorEvent)
 }
 

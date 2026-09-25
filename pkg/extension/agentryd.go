@@ -273,6 +273,9 @@ func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st 
 	repos, rerr := gitsrv.NewRepoStore(cfg)
 	if rerr == nil {
 		pipeline.SetGitHistory(repos)
+		// A git role's tag submission is stored by the worker, which
+		// rebuilds its archive from the repository (agentry#508).
+		srv.Reg().SetGitArchiver(repos)
 	} else {
 		log.Warn("worker: git history scan unavailable", "err", rerr)
 		repos = nil
@@ -537,6 +540,11 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		s.SetMetrics(mx)
 		applyExtensions(s, exts)
 		s.HandOffScans() // a submission is the worker's to scan (agentry#507)
+		if role == "git" {
+			// The git pods hold no object-store credential: a tag's
+			// archive is the worker's to store (agentry#508).
+			s.DeferTagArchives()
+		}
 		reg := s.Reg()
 		reg.SetGitArchiver(repos)
 		if pl := s.Pipeline(); pl != nil {

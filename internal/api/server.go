@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -447,6 +448,29 @@ func (s *Server) HandOffScans() {
 	s.reg.SetPipeline(scan.QueuePipeline{Q: s.jobs})
 }
 
+// DeferTagArchives makes a git-tag submission's archive write a worker's:
+// the registry records the version and enqueues registry.store_tag_archive
+// on the sandbox queue, and the worker, which holds the git volume and the
+// object-store credential, rebuilds, checks and stores the archive
+// (agentry#508). The git role calls it, because the chart gives the git
+// pods no store credential; `all` holds the store and writes it itself.
+func (s *Server) DeferTagArchives() {
+	if s.jobs == nil {
+		return
+	}
+	s.reg.SetArchiveHandOff(tagArchiveQueue{q: s.jobs})
+}
+
+// tagArchiveQueue is the registry's ArchiveHandOff over the job queue.
+type tagArchiveQueue struct{ q queue.Client }
+
+func (t tagArchiveQueue) StoreTagArchive(ctx context.Context, args registry.StoreTagArchiveArgs) error {
+	if _, err := t.q.Enqueue(ctx, registry.JobStoreTagArchive, "sandbox", args); err != nil {
+		return fmt.Errorf("enqueue %s for version %s: %w", registry.JobStoreTagArchive, args.VersionID, err)
+	}
+	return nil
+}
+
 // Reg exposes the registry service so role wiring can share one instance
 // (git role injects its archiver; auto-publish uses the same hand-off).
 func (s *Server) Reg() *registry.Service { return s.reg }
@@ -493,6 +517,15 @@ func (s *Server) RegisterQueueHandlers(q queue.Client) {
 		s.webhooks.RegisterHandlers(q)
 	}
 	q.Register(jobAuditExport, s.runAuditExport)
+	// A git role's tag submission, stored and entered here (agentry#508);
+	// the scan it leads to is enqueued like any other submission's.
+	q.Register(registry.JobStoreTagArchive, func(ctx context.Context, job queue.Job) error {
+		var args registry.StoreTagArchiveArgs
+		if err := json.Unmarshal(job.Args, &args); err != nil {
+			return fmt.Errorf("%s: bad args: %w", registry.JobStoreTagArchive, err)
+		}
+		return s.reg.StoreTagArchive(ctx, args, scan.QueuePipeline{Q: q})
+	})
 	s.registerAuditRetention(q)   // §4.3 hot-table retention (audit_retention.go)
 	s.registerRedTeam(q)          // §17.5 report-only red-team job (handlers_redteam.go)
 	s.registerOrgLifecycle(q)     // the decommission sweep (handlers_org_lifecycle.go, agentry#363)
