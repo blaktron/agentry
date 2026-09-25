@@ -345,6 +345,15 @@ publisher locked out (check `user.login_failed` audit volume by handle).
    trust & safety with a written rationale, not an erasure step.
 5. Audit events keep the opaque user id. Do not delete audit rows; the table
    rejects it at the database level anyway.
+6. The directory half (the sign-in account in authentik) follows the
+   registry erasure. When the directory is unreachable the response header
+   `X-Agentry-Directory-Erasure` says `pending` and a worker job retries for about four
+   and a half hours. A `failopen.directory_erasure` line (or a
+   `FailOpenEvents{path="directory_erasure"}` increment, or a
+   `user.directory_erase` audit row with `abandoned`) means it gave up:
+   delete the authentik user with the account's former address by hand
+   (the requester supplies it; the registry no longer holds it), and never
+   a superuser or a service account.
 
 **Verify:** the account cannot log in, the handle shows as retired, published
 versions read `yanked` (or are owned by the destination org, if the requester

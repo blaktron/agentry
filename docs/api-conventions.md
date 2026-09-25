@@ -219,6 +219,9 @@ content whenever the account has any:
   forbids deleting version rows and a database trigger enforces it: digests
   stay resolvable so existing installs can still be verified. PII is purged
   and credentials revoked; what remains is a leak-free tombstone.
+- **Every pending desktop sign-in code is consumed** in the erasure
+  transaction (agentry#502), so a code minted by another session just
+  before the erasure cannot be exchanged for a token afterwards.
 - **An organization's last admin cannot be erased** (`409 last-admin`):
   promote another member first, or decommission the organization. The
   erased account's memberships go with it, so no seat is held by an
@@ -226,6 +229,12 @@ content whenever the account has any:
 - **A transfer respects the organization's private-agent cap** (`422
   private-agent-cap`, nothing erased, nothing moved) and is refused into an
   organization in its decommission hold.
+- **The `204` carries `X-Agentry-Directory-Erasure`** (agentry#499): where the
+  sign-in account at the directory stands — `deleted`, `not-found`,
+  `not-configured` (erasure is registry-only), `pending` (the directory
+  was unreachable and a job retries it), or `failed` (the retry could not
+  be queued; the operator is alerted). A client tells the person when it is
+  `pending` or `failed`; the registry's erasure has happened either way.
 
 
 ## Clearing an account's data

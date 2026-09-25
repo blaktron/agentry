@@ -53,14 +53,17 @@ type Server struct {
 	// dirEraser deletes the sign-in account in the directory service on
 	// erasure (agentry#20); nil when auth.idpAdminURL is unset.
 	dirEraser directoryEraser
-	sealer    *auth.Sealer
-	signer    scan.Signer
-	limits    *ratelimit.Buckets
-	classes   limitClasses
-	reg       *registry.Service
-	blobs     registry.BlobStore
-	pipeline  *scan.Pipeline
-	renderer  *render.Renderer
+	// dirEraseAttempts overrides the directory erasure retry budget
+	// (directory_erasure.go; 0 is the default).
+	dirEraseAttempts int
+	sealer           *auth.Sealer
+	signer           scan.Signer
+	limits           *ratelimit.Buckets
+	classes          limitClasses
+	reg              *registry.Service
+	blobs            registry.BlobStore
+	pipeline         *scan.Pipeline
+	renderer         *render.Renderer
 	// Enterprise (M6/WG-J): webhook fan-out and the DNS resolver for domain
 	// verification.
 	webhooks *webhook.Dispatcher
@@ -490,10 +493,11 @@ func (s *Server) RegisterQueueHandlers(q queue.Client) {
 		s.webhooks.RegisterHandlers(q)
 	}
 	q.Register(jobAuditExport, s.runAuditExport)
-	s.registerAuditRetention(q) // §4.3 hot-table retention (audit_retention.go)
-	s.registerRedTeam(q)        // §17.5 report-only red-team job (handlers_redteam.go)
-	s.registerOrgLifecycle(q)   // the decommission sweep (handlers_org_lifecycle.go, agentry#363)
-	s.registerFoldIn(q)         // the fold-in sweep and the pending members digest (handlers_fold_in.go, agentry#364)
+	s.registerAuditRetention(q)   // §4.3 hot-table retention (audit_retention.go)
+	s.registerRedTeam(q)          // §17.5 report-only red-team job (handlers_redteam.go)
+	s.registerOrgLifecycle(q)     // the decommission sweep (handlers_org_lifecycle.go, agentry#363)
+	s.registerFoldIn(q)           // the fold-in sweep and the pending members digest (handlers_fold_in.go, agentry#364)
+	s.registerDirectoryErasure(q) // erasure's directory half, retried (directory_erasure.go, agentry#499)
 }
 
 // emitAgentEvent is the registry event sink (§9.3): it resolves the agent's

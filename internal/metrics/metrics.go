@@ -211,7 +211,7 @@ func (m *Metrics) instrument(meter metric.Meter) error {
 	// denominator of the §16.3 scan-error-rate page alarm.
 	m.scanStageRuns = i64c("ScanStageRuns", "Scan stage executions.")
 	m.scanStageErrors = i64c("ScanStageErrors", "Scan stage executions that failed.")
-	m.failOpen = i64c("FailOpenEvents", "Deliberate fail-open events by path (audit_stream_drop, osv_not_checked, osv_error, history_not_scanned).")
+	m.failOpen = i64c("FailOpenEvents", "Deliberate fail-open events by path (audit_stream_drop, osv_not_checked, osv_error, history_not_scanned, directory_erasure).")
 	m.scanStageHits = i64c("ScanStageHits", "Findings produced by a scan stage.")
 	m.mcpSweeps = i64c("McpSweepRuns", "Daily MCP server vulnerability sweeps, by outcome (ok, error).")
 	m.mcpAlerts = i64c("McpDependencyAlertsOpened", "Dependency alerts opened on published versions by the MCP sweep.")
@@ -344,6 +344,11 @@ const (
 	// FailOpenHistoryNotScanned counts git-tag publishes whose history S2
 	// could not (fully) scan for secrets (agentry#54).
 	FailOpenHistoryNotScanned = "history_not_scanned"
+	// FailOpenDirectoryErasure counts account erasures whose directory
+	// half did not happen: the retries ran out, or the retry could not be
+	// queued (agentry#499). The registry's erasure stands; the sign-in
+	// account is left for the operator to delete.
+	FailOpenDirectoryErasure = "directory_erasure"
 )
 
 // RecordMCPSweep counts one sweep run and the alerts it opened.
