@@ -210,6 +210,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 		srv.reg.SetEventSink(srv.emitAgentEvent)
 		srv.reg.SetOrgEventSink(srv.emitOrgEvent)
 		srv.reg.SetEntitlements(srv.ents)
+		srv.reg.SetStaffOrg(cfg.Auth.StaffOrg, cfg.Auth.StaffDomain)
 		// Archive storage. Both kinds are wired here, so the pipeline below is
 		// assembled identically either way — the s3 kind used to fall through
 		// with a nil store and take the whole scan pipeline down with it,

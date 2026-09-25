@@ -15,6 +15,7 @@ import (
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/logevent"
+	"github.com/blaktron/agentry/internal/registry"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
@@ -347,6 +348,12 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 			ExpiresAt:   time.Now().Add(s.cfg.Auth.SessionTTL),
 		})
 		if err != nil {
+			return err
+		}
+		// Platform staff is recomputed at every sign-in (agentry#556).
+		staffActor := auditEvent(r, audit.ActionUserStaffSync)
+		staffActor.Actor, staffActor.ActorKind = row.ID, audit.ActorUser
+		if err := s.syncStaffIn(ctx, q, row.ID, registry.StaffSyncSignIn, staffActor); err != nil {
 			return err
 		}
 		e := auditEvent(r, audit.ActionUserLogin)

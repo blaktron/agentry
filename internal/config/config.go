@@ -215,24 +215,27 @@ type Auth struct {
 	// server reaches it (compose: http://authentik-server:9000).
 	IdPAdminURL   string `yaml:"idpAdminURL"`
 	IdPAdminToken string `yaml:"idpAdminToken"`
-	// IdPStaffGroup names the directory group whose members are platform
-	// staff (agentry#51). At every `authentik` sign-in the account's
-	// platform_staff flag is set to "is a member of this group" — so staff
-	// is granted AND revoked in the directory, never by hand in SQL. Empty
-	// disables the sync and leaves the flag as it is.
+	// StaffOrg is the handle of the staff organization (agentry#556):
+	// platform staff is exactly an active account with a verified address
+	// at StaffDomain that is an active member of this organization, and
+	// the organization admits nobody else. Membership is granted by the
+	// organization's admins; the address is verified by the directory. The
+	// flag is recomputed at every membership change, at sign-in and once
+	// when the server starts. Set both or neither; with neither the flag
+	// is left as it is.
+	StaffOrg string `yaml:"staffOrg"`
+	// StaffDomain is the staff organization's domain: a bare lower-case
+	// DNS name, matched exactly (no subdomain) against the account's
+	// verified address.
+	StaffDomain string `yaml:"staffDomain"`
+	// IdPStaffGroup is retired (agentry#556): the directory group of
+	// DEV-083 no longer grants platform staff. It is still read, so a
+	// configuration that sets it loads, and the server warns at start-up.
 	IdPStaffGroup string `yaml:"idpStaffGroup"`
-	// IdPStaffDomain is a second way to be platform staff (agentry#525):
-	// at every `authentik` sign-in, an ID token asserting a verified
-	// address at exactly this domain makes the account staff, beside the
-	// group. The directory's word at sign-in decides, never an address
-	// stored in the registry, and both directions hold as for the group.
-	// The directory asserts email_verified for every account it holds
-	// (DEV-061), so the rule rests on how an address gets there: a
-	// self-enrolled account stays inactive until its emailed link is
-	// followed, nobody changes their own address (DEV-134), no federated
-	// source feeds the directory, and an administrator who creates an
-	// account at this domain makes staff. A bare domain, lower case; empty
-	// turns the rule off (and, with no group either, the sync).
+	// IdPStaffDomain is retired (agentry#556): being at a domain makes an
+	// account eligible to join the staff organization (StaffDomain), not
+	// staff by itself (DEV-137 superseded). Read and warned about like
+	// IdPStaffGroup.
 	IdPStaffDomain string `yaml:"idpStaffDomain"`
 	// RequireIdPMFA re-enables the §12.1 "2FA before public publish" gate
 	// under externalOnly, satisfied by evidence rather than trust: the
@@ -771,6 +774,8 @@ func applyEnv(c *Config) error {
 	str("AGENTRY_SOCIAL_AUTHENTIK_ISSUER", &c.Social.Authentik.Issuer)
 	str("AGENTRY_IDP_ADMIN_URL", &c.Auth.IdPAdminURL)
 	str("AGENTRY_IDP_ADMIN_TOKEN", &c.Auth.IdPAdminToken)
+	str("AGENTRY_STAFF_ORG", &c.Auth.StaffOrg)
+	str("AGENTRY_STAFF_DOMAIN", &c.Auth.StaffDomain)
 	str("AGENTRY_IDP_STAFF_GROUP", &c.Auth.IdPStaffGroup)
 	str("AGENTRY_IDP_STAFF_DOMAIN", &c.Auth.IdPStaffDomain)
 	if err := boolean("AGENTRY_AUTH_REQUIRE_IDP_MFA", &c.Auth.RequireIdPMFA); err != nil {
@@ -924,6 +929,22 @@ func integer64(key string, dst *int64) error {
 	return nil
 }
 
+// staffOrgRE is a lower-case handle as an organization's is written.
+var staffOrgRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,37}[a-z0-9])?$`)
+
+// RetiredStaffKeys names the retired staff keys this configuration still
+// sets (agentry#556), for the start-up warning: they grant nothing now.
+func (c *Config) RetiredStaffKeys() []string {
+	var out []string
+	if c.Auth.IdPStaffGroup != "" {
+		out = append(out, "auth.idpStaffGroup (AGENTRY_IDP_STAFF_GROUP)")
+	}
+	if c.Auth.IdPStaffDomain != "" {
+		out = append(out, "auth.idpStaffDomain (AGENTRY_IDP_STAFF_DOMAIN)")
+	}
+	return out
+}
+
 // staffDomainRE is a bare lower-case DNS name of at least two labels.
 var staffDomainRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$`)
 
@@ -945,10 +966,18 @@ func (c Config) Validate() error {
 	if c.DevMode && c.Env != "dev" {
 		return fmt.Errorf("config: devMode is allowed only with env: dev (got env %q)", c.Env)
 	}
-	if d := c.Auth.IdPStaffDomain; d != "" && !staffDomainRE.MatchString(d) {
+	if (c.Auth.StaffOrg == "") != (c.Auth.StaffDomain == "") {
+		// Half a rule is no rule: an organization with no domain would admit
+		// anyone, and a domain with no organization names nobody.
+		return fmt.Errorf("config: auth.staffOrg and auth.staffDomain are set together or not at all (got %q and %q)", c.Auth.StaffOrg, c.Auth.StaffDomain)
+	}
+	if o := c.Auth.StaffOrg; o != "" && !staffOrgRE.MatchString(o) {
+		return fmt.Errorf("config: auth.staffOrg must be an organization handle like agentry, got %q", o)
+	}
+	if d := c.Auth.StaffDomain; d != "" && !staffDomainRE.MatchString(d) {
 		// A domain that could never match an address (an @, a leading dot, a
 		// capital) would switch the rule off silently; refuse it at start-up.
-		return fmt.Errorf("config: auth.idpStaffDomain must be a bare lower-case domain like example.com, got %q", d)
+		return fmt.Errorf("config: auth.staffDomain must be a bare lower-case domain like example.com, got %q", d)
 	}
 	switch c.Storage.Kind {
 	case "local", "s3":
