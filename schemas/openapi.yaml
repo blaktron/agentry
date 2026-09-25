@@ -5131,6 +5131,25 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ScanFinding"
+        rescanInFlight:
+          $ref: "#/components/schemas/RescanInFlight"
+
+    RescanInFlight:
+      type: object
+      required: [scanRunId, startedAt]
+      description: >-
+        A later scan of this version still running (a ruleset or MCP rescan
+        sweep, a manual rescan) while the report describes the latest run that
+        finished. Present only when such a run exists: the verdict a release was
+        published on stands until the rescan finishes, and the report says one
+        is under way rather than going blank (agentry#542).
+      properties:
+        scanRunId:
+          type: string
+          format: uuid
+        startedAt:
+          type: string
+          format: date-time
 
     ReportVerdict:
       type: string
