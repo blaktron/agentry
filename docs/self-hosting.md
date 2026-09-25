@@ -882,50 +882,67 @@ directory, or enrolled through a flow with an email-verification stage.
 If you allow self-enrollment without one, drop that mapping and accept
 that such accounts start as new registry users.
 
-**Platform staff comes from a directory group.** The groups blueprint
-creates `agentry-platform-staff`; the registry reads the ID token's
-`groups` claim at every `authentik` sign-in and sets the account's
-`platform_staff` flag to "is a member" (`AGENTRY_IDP_STAFF_GROUP`, compose
-defaults it to that group; empty disables the sync). Add and remove staff
-in the directory, never in SQL: leaving the group revokes staff at the
-person's next sign-in, and the change is audited as `user.staff_sync`.
-Only the `authentik` provider's claim counts — a Google or GitHub token
-carrying the same group name is ignored.
+**Platform staff is membership of the staff organization.** Name the
+deployment's staff organization and its domain with `AGENTRY_STAFF_ORG` and
+`AGENTRY_STAFF_DOMAIN` (the chart's `config.auth.staffOrg` and
+`config.auth.staffDomain`); set both or neither. An account is platform
+staff exactly while three things hold:
 
-**Or from an email domain.** `AGENTRY_IDP_STAFF_DOMAIN` (the chart's
-`config.auth.idpStaffDomain`) names a second way in. At the same sign-in, an
-ID token from the deployment's own directory that asserts an address at
-exactly that domain makes the account platform staff, beside the group.
+- the account is active;
+- its verified address is at exactly the staff domain;
+- it is an active member of the staff organization, in any role.
+
+The organization admits nobody else. An address outside its domain is
+refused with `409 staff-org-domain` at every door: an invitation, the
+invitation's accept, an admin's approval of a pending member, SCIM
+provisioning, the domain fold-in and founding the organization.
 
 What matches: `secureagentry.net` matches `chris@secureagentry.net`. It does
 not match `ops.secureagentry.net`, `secureagentry.net.example`, or a domain
-that is not plain ASCII (an internationalised look-alike). The address that
-counts is the one this sign-in's token asserts, never the one stored in the
-registry.
+that is not plain ASCII (an internationalised look-alike).
 
-Both directions hold, and a change is audited as `user.staff_sync` with
-`rule` set to `group`, `domain`, `group+domain` or `none`. Three consequences:
+Add and remove staff by adding and removing members, as an admin of the
+staff organization. The flag is recomputed in the same transaction as every
+membership change (an accept, an approval, a role change, a removal or a
+member leaving, SCIM deprovisioning, account erasure, and erasing the
+organization). It is also recomputed at every sign-in and once over every
+flagged account and member when the server starts, so changing these keys
+takes effect at the next start. Each change is audited as
+`user.staff_sync` with `rule: staff-org` and the reason.
 
-- **Staff changes only at a directory sign-in.** Someone who is deactivated in
-  the directory, or whose directory address changes, keeps staff through a
-  live session or a token until then. Revoke their sessions and tokens too.
-- **The domain can override the group.** An address at the staff domain keeps
-  someone staff after they leave the group.
-- **Unsetting leaves grants in place.** With both the group and the domain
-  unset, the sync does not run, and existing grants stay as they are.
+The rule rests on facts nobody sets about themselves:
 
-The directory asserts every address it holds as verified, so this rule
-grants staff to whoever can get an address at the domain into the
-directory. Set a staff domain only when all of these hold:
+- **Membership** is granted by the organization's admins.
+- **The organization itself** can be founded only by platform staff.
+- **A stored address** changes only at erasure (SCIM refuses a change, and
+  the directory denies self-service changes, DEV-134).
 
-- the issuer is the deployment's own directory;
-- a self-enrolled account stays inactive until its emailed link is followed (the account-flows blueprint);
-- nobody can change their own address (the blueprint denies authentik's user-settings flow, DEV-134);
-- no federated source (Google, GitHub, another IdP) feeds the directory;
-- every account an administrator creates at the domain is one you mean to be staff.
+An address counts as verified when the registry's mailed link was
+followed, the directory or a social provider asserted it at sign-in, an
+invitation at an organization's verified domain was accepted, or an
+organization's SCIM provisioned it. So an address at the staff domain in
+the registry is not proof by itself that its holder controls the mailbox.
+It is the membership an admin grants that makes staff.
 
-A domain anyone can sign up at must never be the staff domain. Empty (the
-default) turns the rule off.
+A registry-side service account needs an address at the domain and a
+membership like anyone else. With neither key set, nothing syncs and
+existing flags stay as they are.
+
+**Moving a deployment onto the rule, in this order.**
+
+1. Make sure the staff organization exists, founded by an account that is
+   staff under the old rules.
+2. Give every account meant to stay staff (operators, service accounts) a
+   verified address at the domain and an active membership.
+3. Set both keys and restart.
+
+The first start recomputes every flagged account: anyone not yet a member
+loses staff, audited. If nobody is a member, nobody is staff, and only an
+operator writing to the database can seed the first one again.
+
+The directory group (`AGENTRY_IDP_STAFF_GROUP`) and the domain-alone rule
+(`AGENTRY_IDP_STAFF_DOMAIN`) are retired: they grant nothing, and the server
+logs a warning at start-up while either is set.
 
 **Provisioning org members from Authentik (SCIM).** The registry's SCIM
 endpoint is per organisation and authenticated by a token an org admin
@@ -943,12 +960,13 @@ with its own token. This is deliberately not a blueprint: the token is
 org-scoped and minted by the org, not by the platform.
 
 The Helm chart carries the same knobs (`config.auth.externalOnly`,
-`config.social.authentik`, `config.auth.idpStaffGroup`,
-`config.auth.idpStaffDomain`,
+`config.social.authentik`, `config.auth.staffOrg`,
+`config.auth.staffDomain`,
 `config.idp.logoutUrl`, `secret.authentikClientSecret`,
 `secret.idpAdminToken`); the hosted service's Terraform (kept with the
-site) carries them as `idp_client_id`, `idp_issuer`, `idp_logout_url` and
-`idp_staff_group`, with the client secret in Secrets Manager.
+site) carries them as `idp_client_id`, `idp_issuer` and `idp_logout_url`,
+with the client secret in Secrets Manager; its `idp_staff_group` is retired
+with the group (agentry#556).
 
 **Account flows.** `deploy/compose/authentik/blueprints/agentry-account-flows.yaml`
 is mounted into authentik as a blueprint and applied automatically on

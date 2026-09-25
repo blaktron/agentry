@@ -213,6 +213,57 @@ func TestPipelineBenignPublishesAndSigns(t *testing.T) {
 	}
 }
 
+// The pipeline hands the submitter's platform-staff flag to S8
+// (agentry#563): a new account's fifth version in a week trips
+// S8/publisher-velocity, and the same account as staff publishes its sixth.
+func TestPipelineStaffSubmitterSkipsPublisherVelocity(t *testing.T) {
+	e := newPipeEnv(t)
+	ctx := context.Background()
+	q := e.st.Queries()
+	u, _ := q.GetUserByID(ctx, e.owner)
+	clean := func(name string) map[string]string {
+		return map[string]string{
+			"agent.yaml": skillManifest(u.Handle, name, "1.0.0"),
+			"README.md":  "# " + name + "\nA helpful, well-behaved skill.\n",
+			"SKILL.md":   "Summarize the input politely and cite sources.\n",
+			"LICENSE":    "Apache-2.0\n",
+		}
+	}
+	velocity := func(v storegen.AgentVersion) bool {
+		t.Helper()
+		run, err := q.LatestScanRunForVersion(ctx, v.ID)
+		if err != nil {
+			t.Fatalf("no scan run for %s: %v", v.Version, err)
+		}
+		fs, err := q.ListFindings(ctx, run.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range fs {
+			if f.Scanner == "S8/publisher-velocity" {
+				return true
+			}
+		}
+		return false
+	}
+
+	var v storegen.AgentVersion
+	for _, name := range []string{"burst-a", "burst-b", "burst-c", "burst-d", "burst-e"} {
+		v = e.publish(name, "public", clean(name))
+	}
+	if !velocity(v) || v.Status != "needs_review" {
+		t.Fatalf("non-staff fifth version in a week: status %s, velocity finding %v; want needs_review on S8/publisher-velocity", v.Status, velocity(v))
+	}
+
+	if err := q.SetUserPlatformStaff(ctx, storegen.SetUserPlatformStaffParams{ID: e.owner, PlatformStaff: true}); err != nil {
+		t.Fatal(err)
+	}
+	v = e.publish("burst-f", "public", clean("burst-f"))
+	if velocity(v) || v.Status != "published" {
+		t.Fatalf("staff sixth version: status %s, velocity finding %v; want published without S8/publisher-velocity", v.Status, velocity(v))
+	}
+}
+
 func TestPipelineMaliciousGatesToReview(t *testing.T) {
 	e := newPipeEnv(t)
 	u, _ := e.st.Queries().GetUserByID(context.Background(), e.owner)

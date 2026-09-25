@@ -62,13 +62,16 @@ config:
     patMaxTTL: 8760h
     # Directory service (DEV-057, agentry#51). externalOnly hands passwords,
     # MFA, recovery and sign-up to the IdP configured under social.authentik;
-    # idpAdminURL (+ secret.idpAdminToken) lets account erasure reach it;
-    # idpStaffGroup names the directory group whose members are platform
-    # staff (granted and revoked at sign-in from the `groups` claim);
-    # idpStaffDomain makes a verified address at exactly that domain staff
-    # too (agentry#525), as the directory's ID token asserts it.
+    # idpAdminURL (+ secret.idpAdminToken) lets account erasure reach it.
     externalOnly: false
     idpAdminURL: ""
+    # Platform staff is membership of the staff organization (agentry#556):
+    # an active member of staffOrg whose verified address is at exactly
+    # staffDomain; the organization admits nobody else. Set both or neither.
+    staffOrg: ""
+    staffDomain: ""
+    # Retired (agentry#556): they grant nothing, and the server warns at
+    # start-up while either is set.
     idpStaffGroup: ""
     idpStaffDomain: ""
   social:
