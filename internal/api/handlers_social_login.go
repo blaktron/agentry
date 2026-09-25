@@ -428,7 +428,7 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 
 	// 4. JIT-create an individual account.
 	newUserID := newUUID()
-	handle, err := s.allocateHandle(ctx, id.Email, id.Provider+"-"+id.Subject)
+	handle, err := s.allocateHandle(ctx, id.Username, id.Email, id.Provider+"-"+id.Subject)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -466,6 +466,9 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 		e.Actor, e.ActorKind = newUserID, audit.ActorUser
 		e.TargetKind, e.TargetID = "user", newUserID
 		e.Detail = map[string]any{"provider": id.Provider, "jit": true}
+		for k, v := range handleRequestedDetail(id.Username, handle) {
+			e.Detail[k] = v
+		}
 		return s.auditW.Write(ctx, tq, e)
 	})
 	if err != nil {
@@ -477,10 +480,14 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 	// subscription-tiers §5.2; under externalOnly this is the door). The
 	// email is the IdP's assertion and emailVerified says whether it was
 	// asserted verified — a hook must not mail an unverified one.
-	s.fireEvent(r.Context(), Event{Kind: "user.registered", UserID: newUserID, Payload: map[string]any{
+	payload := map[string]any{
 		"handle": handle, "email": email, "emailVerified": id.EmailVerified && id.Email != "",
 		"via": "social", "provider": id.Provider,
-	}})
+	}
+	for k, v := range handleRequestedDetail(id.Username, handle) {
+		payload[k] = v
+	}
+	s.fireEvent(r.Context(), Event{Kind: "user.registered", UserID: newUserID, Payload: payload})
 	return newUserID, nil
 }
 

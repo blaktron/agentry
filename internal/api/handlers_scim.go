@@ -218,7 +218,7 @@ func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request, sc scimC
 	if in.Name != nil {
 		displayName = in.Name.Formatted
 	}
-	userID, err := s.scimProvisionUser(r.Context(), sc.orgID, email, displayName)
+	userID, err := s.scimProvisionUser(r.Context(), sc.orgID, email, in.UserName, displayName)
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "scim create user", "err", err)
 		scimError(w, http.StatusInternalServerError, "provisioning failed")
@@ -233,8 +233,10 @@ func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request, sc scimC
 // D7): the IdP says who exists, an admin says who is a member. A pending
 // membership holds no seat and confers nothing, so a SCIM create still
 // answers 201 however many seats the organization has left — the wall is at
-// the approval.
-func (s *Server) scimProvisionUser(ctx context.Context, orgID uuid.UUID, email, displayName string) (uuid.UUID, error) {
+// the approval. A new account's handle is seeded from the IdP's userName
+// (its local part when the userName is the address), the name the directory
+// knows the person by (agentry#517).
+func (s *Server) scimProvisionUser(ctx context.Context, orgID uuid.UUID, email, userName, displayName string) (uuid.UUID, error) {
 	if u, err := s.q().GetUserByEmail(ctx, email); err == nil {
 		if err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
 			_, err := q.UpsertPendingMembership(ctx, storegen.UpsertPendingMembershipParams{
@@ -249,7 +251,7 @@ func (s *Server) scimProvisionUser(ctx context.Context, orgID uuid.UUID, email, 
 		return uuid.Nil, err
 	}
 	userID := newUUID()
-	handle, err := s.allocateHandle(ctx, email, email)
+	handle, err := s.allocateHandle(ctx, userName, email, email)
 	if err != nil {
 		return uuid.Nil, err
 	}
