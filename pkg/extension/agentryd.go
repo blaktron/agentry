@@ -677,6 +677,9 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 				reg.SetAdmitter(adm)
 			}
 		}
+		if k, ok := e.(WrapsKeys); ok {
+			srv.SetKeyWrapper(k.KeyWrapper())
+		}
 		if h := e.Hooks().Event; h != nil {
 			srv.AddEventHook(h)
 		}

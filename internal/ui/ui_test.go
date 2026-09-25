@@ -67,6 +67,12 @@ func fakeAPI(t *testing.T) http.Handler {
 				return
 			}
 			_, _ = io.WriteString(w, `{"email":{"dependencyAlerts":true,"quarantine":true,"reviewDecisions":false,"advisories":true,"orgInvites":true},"web":{"dependencyAlerts":true}}`)
+		case "GET /api/v1/knowledge/usage":
+			if !authed {
+				http.Error(w, `{"detail":"sign in"}`, http.StatusUnauthorized)
+				return
+			}
+			_, _ = io.WriteString(w, `{"bytes":3670016,"max":104857600,"packs":2}`)
 		case "PUT /api/v1/user/notifications":
 			var body map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&body)
@@ -681,7 +687,7 @@ func TestAccountPagesTellCouldNotLookFromEmpty(t *testing.T) {
 	var status int
 	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method + " " + r.URL.Path {
-		case "GET /api/v1/user/tokens", "GET /api/v1/user/ssh-keys", "GET /api/v1/user/sessions", "GET /api/v1/user/directory", "GET /api/v1/user/notifications":
+		case "GET /api/v1/user/tokens", "GET /api/v1/user/ssh-keys", "GET /api/v1/user/sessions", "GET /api/v1/user/directory", "GET /api/v1/user/notifications", "GET /api/v1/knowledge/usage":
 			w.Header().Set("Content-Type", "application/json")
 			if status == http.StatusOK {
 				w.WriteHeader(http.StatusOK)
@@ -692,6 +698,8 @@ func TestAccountPagesTellCouldNotLookFromEmpty(t *testing.T) {
 					_, _ = io.WriteString(w, `{"passwordChangeUrl":"https://idp.example/password"}`)
 				case "/api/v1/user/notifications":
 					_, _ = io.WriteString(w, `{"email":{"dependencyAlerts":true,"quarantine":true,"reviewDecisions":true,"advisories":true,"orgInvites":true},"web":{"dependencyAlerts":true}}`)
+				case "/api/v1/knowledge/usage":
+					_, _ = io.WriteString(w, `{"bytes":0,"max":0,"packs":0}`)
 				default:
 					_, _ = io.WriteString(w, `[]`)
 				}
@@ -709,6 +717,7 @@ func TestAccountPagesTellCouldNotLookFromEmpty(t *testing.T) {
 		{"/ui/account/sessions", "your sessions", "No sessions are recorded."},
 		{"/ui/account", "the password and authenticator links", "Change password"},
 		{"/ui/account", "your notification settings", "Save notifications"},
+		{"/ui/account", "your knowledge allocation", "0 packs kept here, 0.0 MB, with no cap on this registry."},
 	}
 	status = http.StatusInternalServerError
 	for _, pg := range pages {
@@ -1104,5 +1113,30 @@ func TestCSPAdmitsTheSignOutOrigin(t *testing.T) {
 	}
 	if strings.Contains(csp, "cancel") || strings.Contains(csp, "end-session") {
 		t.Fatalf("csp carries more than the origin: %q", csp)
+	}
+}
+
+// TestAccountShowsTheKnowledgeMeter (agentry#593): the account view says
+// what the person keeps in the registry against their allocation, and that
+// a registry with the store off keeps none.
+func TestAccountShowsTheKnowledgeMeter(t *testing.T) {
+	h := newUI(t, Options{})
+	w := get(h, "/ui/account", sessCookie, csrfCookieV)
+	if body := w.Body.String(); w.Code != http.StatusOK || !strings.Contains(body, "2 packs kept here, 3.5 MB of 100.0 MB.") {
+		t.Fatalf("account: %d, no meter:\n%s", w.Code, body)
+	}
+	base := fakeAPI(t)
+	off := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/knowledge/usage" {
+			w.Header().Set("Content-Type", "application/problem+json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = io.WriteString(w, `{"type":"https://agentry.dev/problems/knowledge-unconfigured","title":"Knowledge store off","status":503}`)
+			return
+		}
+		base.ServeHTTP(w, r)
+	})
+	w = get(newUI(t, Options{API: off}), "/ui/account", sessCookie, csrfCookieV)
+	if body := w.Body.String(); !strings.Contains(body, "This registry keeps no knowledge packs.") || strings.Contains(body, "could not fetch your knowledge") {
+		t.Fatalf("account with the store off:\n%s", body)
 	}
 }

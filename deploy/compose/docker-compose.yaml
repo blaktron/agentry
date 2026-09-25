@@ -254,6 +254,12 @@ services:
       AGENTRY_ENV: ${AGENTRY_ENV:-dev}
       AGENTRY_DEV_MODE: ${AGENTRY_DEV_MODE:-false}
       AGENTRY_AUTH_SEALING_KEY: ${AGENTRY_AUTH_SEALING_KEY:-}
+      # The store of knowledge packs (agentry#593) wraps each pack's data key
+      # under a key of its own — 32 random bytes base64, never the sealing
+      # key above; unset outside dev mode, the store is off (503) unless an
+      # extension wraps keys. The per-account cap, in bytes, is unset: none.
+      AGENTRY_KNOWLEDGE_SEALING_KEY: ${AGENTRY_KNOWLEDGE_SEALING_KEY:-}
+      AGENTRY_KNOWLEDGE_BYTES_PER_ACCOUNT: ${AGENTRY_KNOWLEDGE_BYTES_PER_ACCOUNT:-0}
       AGENTRY_DATABASE_URL: postgres://agentry:${AGENTRY_PG_PASSWORD:-agentry}@postgres:5432/agentry_dev?sslmode=disable
       AGENTRY_HTTP_ADDR: ":8080"
       # Optional AI Review model (S5, the judge): typesafe (TypeSafe AI's Jev,

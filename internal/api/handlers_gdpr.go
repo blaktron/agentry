@@ -16,6 +16,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/knowledge"
 	"github.com/blaktron/agentry/internal/registry"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
@@ -199,6 +200,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		}
 	}
 
+	var knowledgeKeys []string
 	err = s.st.WithTx(r.Context(), func(tq *storegen.Queries) error {
 		if err := tq.PseudonymizeUser(r.Context(), storegen.PseudonymizeUserParams{
 			ID: p.UserID, Email: scrubbedEmail, DeletedTombstone: tombstone,
@@ -244,6 +246,11 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		if err := s.syncStaffIn(r.Context(), tq, p.UserID, registry.StaffSyncErasure, auditEvent(r, audit.ActionUserStaffSync)); err != nil {
 			return err
 		}
+		// The account's knowledge packs go with it (agentry#593), and the
+		// key that opens them once this commits.
+		if knowledgeKeys, err = knowledge.EraseOwner(r.Context(), tq, knowledge.User(p.UserID)); err != nil {
+			return err
+		}
 		// Every PAT dies with the account.
 		pats, err := tq.ListPATs(r.Context(), p.UserID)
 		if err != nil {
@@ -260,6 +267,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 			"publishedContent":  disposition,
 			"publishedVersions": publishedCount,
 			"desktopCodes":      desktopCodes,
+			"knowledgeObjects":  len(knowledgeKeys),
 		}
 		if transferOrgID != uuid.Nil {
 			e.OrgID = transferOrgID
@@ -271,6 +279,8 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		problemInternal(w, r)
 		return
 	}
+
+	s.knowledge.FinishErasure(r.Context(), knowledge.User(p.UserID), knowledgeKeys)
 
 	// The other half (agentry#20): with credentials in the directory service
 	// the person's sign-in account — email, display name, password hash —
