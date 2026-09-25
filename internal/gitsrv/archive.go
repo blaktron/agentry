@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -77,10 +78,42 @@ func (s *RepoStore) ArchiveTag(ctx context.Context, repoID uuid.UUID, tag string
 		return nil, "", fmt.Errorf("gitsrv: tag %s not found: %w", tag, err)
 	}
 	commit := strings.TrimSpace(string(revOut))
+	stream, err := s.archiveCommit(ctx, dir, commit)
+	if err != nil {
+		return nil, "", err
+	}
+	return stream, commit, nil
+}
 
+// reCommitID is a full object id: SHA-1 (40) or SHA-256 (64) hex.
+var reCommitID = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
+
+// ArchiveCommit is ArchiveTag for a commit already resolved: the worker
+// rebuilds a tag's archive from the commit the git role recorded, so a tag
+// moved in between cannot change what is stored (agentry#508). The commit
+// must be a full object id naming a commit in the repository.
+func (s *RepoStore) ArchiveCommit(ctx context.Context, repoID uuid.UUID, commit string) (io.ReadCloser, error) {
+	dir := s.Path(repoID)
+	if err := checkNoInfoAttributes(dir); err != nil {
+		return nil, err
+	}
+	if !reCommitID.MatchString(commit) {
+		return nil, fmt.Errorf("gitsrv: %q is not a commit id", commit)
+	}
+	typ, err := exec.CommandContext(ctx, s.gitBin, "-C", dir, "cat-file", "-t", commit).Output() //nolint:gosec // fixed binary; commit is a validated hex oid
+	if err != nil || strings.TrimSpace(string(typ)) != "commit" {
+		return nil, fmt.Errorf("gitsrv: commit %s not found", commit)
+	}
+	return s.archiveCommit(ctx, dir, commit)
+}
+
+// archiveCommit writes `git archive <commit>` to a temp file, checks it
+// against the commit's tree, and returns it rewound. The archive is of the
+// resolved commit, not of the ref, so the tree archived is the one resolved.
+func (s *RepoStore) archiveCommit(ctx context.Context, dir, commit string) (_ io.ReadCloser, err error) {
 	f, err := os.CreateTemp("", "agentry-archive-*.tar")
 	if err != nil {
-		return nil, "", fmt.Errorf("gitsrv: archive temp file: %w", err)
+		return nil, fmt.Errorf("gitsrv: archive temp file: %w", err)
 	}
 	tmp := &tempFile{File: f}
 	defer func() {
@@ -90,20 +123,20 @@ func (s *RepoStore) ArchiveTag(ctx context.Context, repoID uuid.UUID, tag string
 	}()
 
 	args := append([]string{"-C", dir}, archiveArgs...)
-	cmd := exec.CommandContext(ctx, s.gitBin, append(args, ref)...) //nolint:gosec // fixed binary; ref is a qualified refs/tags/ name that passed safeRefName
+	cmd := exec.CommandContext(ctx, s.gitBin, append(args, commit)...) //nolint:gosec // fixed binary; commit is a resolved hex oid
 	cmd.Env = archiveEnv()
 	var stderr strings.Builder
 	cmd.Stdout, cmd.Stderr = f, &stderr
 	if err = cmd.Run(); err != nil {
-		return nil, "", fmt.Errorf("gitsrv: git archive %s: %v: %s", tag, err, stderr.String())
+		return nil, fmt.Errorf("gitsrv: git archive %s: %v: %s", commit, err, stderr.String())
 	}
 	if err = s.verifyArchiveComplete(ctx, dir, commit, f); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	if _, err = f.Seek(0, io.SeekStart); err != nil {
-		return nil, "", fmt.Errorf("gitsrv: archive rewind: %w", err)
+		return nil, fmt.Errorf("gitsrv: archive rewind: %w", err)
 	}
-	return tmp, commit, nil
+	return tmp, nil
 }
 
 // tempFile deletes its backing file when the reader is closed.
@@ -289,6 +322,17 @@ func (s *RepoStore) MaterializeTag(ctx context.Context, repoID uuid.UUID, tag, d
 		return "", err
 	}
 	return commit, nil
+}
+
+// MaterializeCommit implements registry.GitArchiver: extracts `git archive
+// {commit}` into dst, as MaterializeTag does for a tag.
+func (s *RepoStore) MaterializeCommit(ctx context.Context, repoID uuid.UUID, commit, dst string) error {
+	stream, err := s.ArchiveCommit(ctx, repoID, commit)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = stream.Close() }()
+	return extractPlainTar(stream, dst)
 }
 
 // tagRef qualifies a submitted tag name to the ref git will be given:

@@ -212,6 +212,15 @@ WHERE status = 'scanning' AND updated_at < $1
 ORDER BY updated_at
 LIMIT $2;
 
+-- name: ListStuckSubmittedVersions :many
+-- A git-tag submission recorded by a role that hands the archive write to
+-- a worker (agentry#508) stays `submitted` until the worker stores it; one
+-- still there past the cap was never stored.
+SELECT * FROM agent_versions
+WHERE status = 'submitted' AND source = 'git-tag' AND updated_at < $1
+ORDER BY updated_at
+LIMIT $2;
+
 -- name: ListStageResults :many
 SELECT * FROM scan_stage_results WHERE scan_run_id = $1;
 

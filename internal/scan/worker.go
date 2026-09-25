@@ -127,6 +127,17 @@ func (p *Pipeline) RegisterHandlers(q queue.Client) {
 		if moved > 0 {
 			p.log.Warn("scan: watchdog routed stuck versions to review", "count", moved)
 		}
+		// Handed-off git-tag submissions whose archive was never stored
+		// (agentry#508).
+		if p.reg != nil {
+			rejected, err := p.reg.ReconcileStuckSubmissions(ctx)
+			if err != nil {
+				return err
+			}
+			if rejected > 0 {
+				p.log.Warn("scan: watchdog rejected git-tag submissions whose archive was never stored", "count", rejected)
+			}
+		}
 		published, err := p.ReconcileApprovedReviews(ctx)
 		if err != nil {
 			return err
