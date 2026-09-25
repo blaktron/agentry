@@ -82,7 +82,7 @@ func TestScanPackReadsEverySourceAndPage(t *testing.T) {
 		t.Fatalf("not read = %v, want the PDF, whose extracted text is read in its place", r.Read.NotRead)
 	}
 	by := findingsBy(r)
-	if f, ok := by["S2/github-pat"]; !ok || f.File != "sources/report.pdf.txt" || f.Part != PartSources || strings.Contains(f.Excerpt, "a1B2c3a1B2c3") {
+	if f, ok := by["S2/github-pat"]; !ok || f.File != "sources/report.pdf.txt" || f.Part != PartSources || f.Line != 2 {
 		t.Fatalf("the token in the extracted text: %+v (found %v)", f, ok)
 	}
 	if _, ok := by["S5/"+string(CatInjection)]; !ok {
@@ -176,7 +176,7 @@ func TestScanPackRecordsAJudgeFailure(t *testing.T) {
 		{Path: "sources/a.md", Content: []byte("text\n")},
 		{Path: "wiki/index.md", Content: []byte("# Index\n")},
 	})
-	if r.Review.Failed != 2 || !strings.Contains(r.Review.Error, "529") || r.Complete() {
+	if r.Review.Failed != 2 || r.Review.Error != "the judge failed on sources chunk 1 of 1" || strings.Contains(r.Review.Error, "529") || r.Complete() {
 		t.Fatalf("review = %+v, complete %v: both chunks failed and the report says so", r.Review, r.Complete())
 	}
 	ok := packOrchestrator(t, &recordingJudge{limit: 1 << 20}).ScanPack(context.Background(), []PackFile{{Path: "wiki/index.md", Content: []byte("# Index\n")}})

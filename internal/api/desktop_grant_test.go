@@ -71,6 +71,11 @@ func TestDesktopGrantExchange(t *testing.T) {
 	if !has["run:read"] || !has["run:write"] {
 		t.Fatalf("desktop PAT lacks the hosted-run scopes: %v", scopes)
 	}
+	// The knowledge scopes too (agentry#593): the Knowledge panel wraps,
+	// unwraps, uploads and downloads packs with this token.
+	if !has["knowledge:read"] || !has["knowledge:write"] {
+		t.Fatalf("desktop PAT lacks the knowledge scopes: %v", scopes)
+	}
 	// The PAT authenticates.
 	var me struct {
 		Handle string `json:"handle"`

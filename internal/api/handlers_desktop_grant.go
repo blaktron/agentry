@@ -30,10 +30,11 @@ const desktopGrantTTL = 60 * time.Second
 // desktopScopes is the scope set the desktop app's surfaces use: browse and
 // install (agent:read, repo:read), Build → publish (agent:publish,
 // repo:write), identity (user:profile), and hosted runs — In Agentry on
-// RunPanel (run:read, run:write; plan hosted-runs.md §4.7). Deliberately no
-// review:act and no org scopes. Fixed server-side so a caller of the grant
-// endpoint cannot widen it.
-var desktopScopes = []string{"agent:read", "agent:publish", "repo:read", "repo:write", "user:profile", "run:read", "run:write"}
+// RunPanel (run:read, run:write; plan hosted-runs.md §4.7), and the
+// Knowledge panel's packs and their keys (knowledge:read, knowledge:write;
+// plan knowledge.md §4.3). Deliberately no review:act and no org scopes.
+// Fixed server-side so a caller of the grant endpoint cannot widen it.
+var desktopScopes = []string{"agent:read", "agent:publish", "repo:read", "repo:write", "user:profile", "run:read", "run:write", "knowledge:read", "knowledge:write"}
 
 var desktopStateRE = regexp.MustCompile(`^[A-Za-z0-9_-]{8,128}$`)
 

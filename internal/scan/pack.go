@@ -65,7 +65,7 @@ type PackRead struct {
 	Sources int      `json:"sources"`
 	Wiki    int      `json:"wiki"`
 	Bytes   int64    `json:"bytes"`
-	NotRead []string `json:"not_read"`
+	NotRead []string `json:"notRead"`
 }
 
 // PackReview is AI Review's record: which provider and model, under which
@@ -76,17 +76,20 @@ type PackReview struct {
 	Note         string      `json:"note,omitempty"`
 	Provider     string      `json:"provider"`
 	Model        string      `json:"model,omitempty"`
-	RubricHash   string      `json:"rubric_hash,omitempty"`
-	ChunkBytes   int         `json:"chunk_bytes,omitempty"`
-	SourceChunks int         `json:"source_chunks"`
-	WikiChunks   int         `json:"wiki_chunks"`
+	RubricHash   string      `json:"rubricHash,omitempty"`
+	ChunkBytes   int         `json:"chunkBytes,omitempty"`
+	SourceChunks int         `json:"sourceChunks"`
+	WikiChunks   int         `json:"wikiChunks"`
 	Failed       int         `json:"failed,omitempty"`
 	Error        string      `json:"error,omitempty"`
 	Usage        *JudgeUsage `json:"usage,omitempty"`
 }
 
 // PackFinding is one finding, placed in the half and, for AI Review, the
-// chunk it came from (1-based within its half).
+// chunk it came from (1-based within its half). It carries no excerpt: the
+// report is kept in the clear beside a tree kept sealed, so it names where
+// a finding is, never the words there (the owner, who holds the tree, can
+// read them).
 type PackFinding struct {
 	Scanner    string     `json:"scanner"`
 	Severity   Severity   `json:"severity"`
@@ -96,7 +99,6 @@ type PackFinding struct {
 	File       string     `json:"file,omitempty"`
 	Line       int        `json:"line,omitempty"`
 	Chunk      int        `json:"chunk,omitempty"`
-	Excerpt    string     `json:"excerpt,omitempty"`
 }
 
 // Complete says whether every chunk of AI Review was read (or none was to
@@ -152,7 +154,7 @@ func (o *Orchestrator) ScanPack(ctx context.Context, files []PackFile) PackRepor
 	for _, f := range found {
 		r.Findings = append(r.Findings, PackFinding{
 			Scanner: f.Scanner, Severity: f.Severity, Confidence: f.Confidence, Title: f.Title,
-			Part: part[f.FilePath], File: f.FilePath, Line: f.LineStart, Excerpt: f.Excerpt,
+			Part: part[f.FilePath], File: f.FilePath, Line: f.LineStart,
 		})
 	}
 
@@ -190,10 +192,13 @@ func (o *Orchestrator) reviewPack(ctx context.Context, r *PackReport, files []Fi
 			// Content is data (§8.4.1): a pack declares no capabilities.
 			verdict, err := j.Judge(ctx, JudgeContent{ManifestJSON: []byte(`{}`), Files: chunk.files})
 			if err != nil {
+				// The report says where; the provider's own words stay in
+				// the log, since the report goes to the pack's owner.
 				r.Review.Failed++
 				if r.Review.Error == "" {
-					r.Review.Error = fmt.Sprintf("the judge failed on %s chunk %d: %v", half, i+1, err)
+					r.Review.Error = fmt.Sprintf("the judge failed on %s chunk %d of %d", half, i+1, len(chunks))
 				}
+				o.log.WarnContext(ctx, "knowledge: AI Review failed on a chunk", "part", string(half), "chunk", i+1, "provider", j.Name(), "err", err)
 				continue
 			}
 			if r.Review.RubricHash == "" {
@@ -212,7 +217,7 @@ func (o *Orchestrator) reviewPack(ctx context.Context, r *PackReport, files []Fi
 			for _, f := range verdictFindings(verdict) {
 				r.Findings = append(r.Findings, PackFinding{
 					Scanner: f.Scanner, Severity: f.Severity, Confidence: f.Confidence, Title: f.Title,
-					Part: half, File: chunk.file(), Chunk: i + 1, Excerpt: f.Excerpt,
+					Part: half, File: chunk.file(), Chunk: i + 1,
 				})
 			}
 		}
