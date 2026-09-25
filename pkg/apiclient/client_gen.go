@@ -1966,8 +1966,16 @@ type KnowledgeUsage struct {
 	Bytes int64 `json:"bytes"`
 
 	// Max The allocation; 0 is no cap.
-	Max   int64 `json:"max"`
-	Packs int   `json:"packs"`
+	Max int64 `json:"max"`
+
+	// Packs The packs the caller keeps here.
+	Packs int `json:"packs"`
+
+	// Pooled The allocation is shared with other owners (agentry#612).
+	Pooled bool `json:"pooled"`
+
+	// Used What counts against the allocation: `bytes`, or, when `pooled`, the pool's total — every pack of every owner who shares it (a paid organization's, and its members').
+	Used int64 `json:"used"`
 }
 
 // KnowledgeWrappedKey A pack's data key as a wrapper sealed it: the wrapper's `kind` (`deployment` on a core registry), the `recipient` it is wrapped to (a key's id, never a key), and the sealed bytes.
