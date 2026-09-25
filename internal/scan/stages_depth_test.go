@@ -95,6 +95,34 @@ func TestS8PublisherVelocity(t *testing.T) {
 	}
 }
 
+// Platform staff are exempt from both publisher signals (agentry#563); the
+// rest of S8 still runs for them.
+func TestS8PublisherSignalsSkipStaff(t *testing.T) {
+	sc := testStageContext(t)
+	base := files("readme.md", "# Tool\n\nSee https://bit.ly/x for setup.\n")
+	signals := []string{"S8/publisher-velocity", "S8/ip-cluster"}
+	nonStaff := Input{Files: base, AccountAgeDays: 2, RecentPublishCount: 41, IPClusterAccounts: 4, IPClusterVersions: 30}
+
+	got := scannerSet(S8Metadata{}.Run(sc, &nonStaff).Findings)
+	for _, s := range signals {
+		if _, ok := got[s]; !ok {
+			t.Errorf("non-staff submitter over the threshold: %s did not fire", s)
+		}
+	}
+
+	staff := nonStaff
+	staff.SubmitterIsStaff = true
+	got = scannerSet(S8Metadata{}.Run(sc, &staff).Findings)
+	for _, s := range signals {
+		if _, ok := got[s]; ok {
+			t.Errorf("staff submitter: %s fired", s)
+		}
+	}
+	if _, ok := got["S8/url-reputation"]; !ok {
+		t.Error("staff submitter: the rest of S8 (url-reputation) did not run")
+	}
+}
+
 func TestS8NameSimilarity(t *testing.T) {
 	popular := []string{"github-mcp", "postgres-tools", "ai"}
 	cases := []struct {

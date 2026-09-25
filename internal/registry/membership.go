@@ -186,6 +186,12 @@ func (s *Service) ActivateMember(ctx context.Context, req ActivateMemberRequest)
 			return err
 		}
 
+		// The staff organization admits only its domain (agentry#556): the
+		// invitation's accept and an admin's approval both pass here.
+		if err := s.CheckStaffOrgDoorIn(ctx, q, req.OrgID, req.UserID); err != nil {
+			return err
+		}
+
 		// The one-organization count, under the person's row lock taken
 		// at the top.
 		elsewhere, err := q.CountActiveMembershipsElsewhere(ctx, storegen.CountActiveMembershipsElsewhereParams{UserID: req.UserID, OrgID: req.OrgID})
@@ -223,7 +229,12 @@ func (s *Service) ActivateMember(ctx context.Context, req ActivateMemberRequest)
 		e.OrgID = req.OrgID
 		e.TargetKind, e.TargetID = "user", req.UserID
 		e.Detail = map[string]any{"role": string(req.Role), "state": StateActive, "via": string(req.Via)}
-		return s.aud.Write(ctx, q, e)
+		if err := s.aud.Write(ctx, q, e); err != nil {
+			return err
+		}
+		// Joining the staff organization makes staff, in the same
+		// transaction (agentry#556).
+		return s.SyncStaffIn(ctx, q, req.UserID, StaffSyncMembership, req.Actor)
 	})
 	if err != nil {
 		return false, err

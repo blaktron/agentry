@@ -111,10 +111,12 @@ remediation fixed that.)
 
 S8's publisher-behaviour signal covers **account age × publish velocity**
 and, since DEV-026.1, the **IP cluster** half of §8.3 (`S8/ip-cluster`: three
-or more accounts, or ten or more versions, publishing from one keyed IP hash
+or more accounts and ten or more versions publishing from one keyed IP hash
 within 24 hours). The actual ClawHavoc incident (1,184 skills from 12
 accounts) turned on that axis; the finding narrows step 1 below, it does not
-replace it.
+replace it. Neither signal is raised for a platform-staff submitter
+(DEV-143), so a burst from a staff account carries no S8 publisher finding:
+if one is in the cluster, scope it by the query below, not by the findings.
 
 1. **Scope it before acting.** Find the cluster:
    ```sql
