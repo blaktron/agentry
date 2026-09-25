@@ -95,7 +95,7 @@ PY
     echo "$out"
     echo "  FAILED: every unslop script passes the softened sentence and so did the gate"
     status=1
-  elif printf '%s' "$out" | grep -q "docs/trust.md"; then
+  elif grep -q "docs/trust.md" <<<"$out"; then
     printf '%s\n' "$out" | sed 's/^/  /'
     echo "  OK: caught in docs/trust.md"
   else
@@ -113,7 +113,7 @@ PY
   mkdir -p "$tmp/docs"
   cp "$HERE/fixtures/never-word.md" "$tmp/docs/never-word.md"
   out="$("$PY" "$HERE/gates.py" never --root "$tmp" --markdown docs 2>&1)"
-  if [ $? -ne 0 ] && printf '%s' "$out" | grep -q "never-word.md"; then
+  if [ $? -ne 0 ] && grep -q "never-word.md" <<<"$out"; then
     printf '%s\n' "$out" | sed 's/^/  /'
     echo "  OK"
   else
