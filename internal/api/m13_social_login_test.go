@@ -611,6 +611,9 @@ type fakeOIDC struct {
 	// emailUnverified asserts the address without vouching for it
 	// (agentry#364: the fold-in must not fire on one).
 	emailUnverified bool
+	// preferredUsername, when set, rides the ID token as the
+	// `preferred_username` claim (agentry#517).
+	preferredUsername string
 }
 
 func newFakeOIDC(t *testing.T) *fakeOIDC {
@@ -662,6 +665,9 @@ func newFakeOIDC(t *testing.T) *fakeOIDC {
 		}
 		if p.groups != nil {
 			claimMap["groups"] = p.groups
+		}
+		if p.preferredUsername != "" {
+			claimMap["preferred_username"] = p.preferredUsername
 		}
 		claims, _ := json.Marshal(claimMap)
 		writeTestJSON(w, map[string]any{
@@ -722,6 +728,84 @@ func TestSocialLoginGoogleOIDC(t *testing.T) {
 	}
 	if subject != "google:"+idp.sub {
 		t.Fatalf("subject = %q, want google:%s", subject, idp.sub)
+	}
+}
+
+// googleFirstSignIn runs one browser-mode-free sign-in through the google
+// OIDC provider and returns the new account's handle.
+func googleFirstSignIn(t *testing.T, env *testEnv, idp *fakeOIDC) string {
+	t.Helper()
+	authURL, state, cookie := env.socialStart(t, "google")
+	visit, err := idp.srv.Client().Get(authURL.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = visit.Body.Close()
+	res := env.socialCallback(t, "google", state, cookie)
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("google callback: got %d want 200", res.StatusCode)
+	}
+	var out struct {
+		User struct {
+			Handle string `json:"handle"`
+		} `json:"user"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	return out.User.Handle
+}
+
+// TestSocialLoginHandleFromPreferredUsername: the username chosen at the
+// directory's sign-up names the account, not the email's local part
+// (agentry#517: `blaktron` with chris@… became `chris`).
+func TestSocialLoginHandleFromPreferredUsername(t *testing.T) {
+	idp := newFakeOIDC(t)
+	env := newTestEnvCfg(t, func(cfg *config.Config) {
+		cfg.Social.Google = config.SocialProvider{
+			ClientID: idp.clientID, ClientSecret: "google-secret", Issuer: idp.srv.URL,
+		}
+	}, func(s *api.Server) {
+		s.SetOIDCHTTPClient(idp.srv.Client())
+	})
+	idp.preferredUsername = "blaktron" + env.sfx
+	idp.email = "chris" + env.sfx + "@example.test"
+
+	if got := googleFirstSignIn(t, env, idp); got != idp.preferredUsername {
+		t.Fatalf("handle = %q, want the preferred_username %q", got, idp.preferredUsername)
+	}
+}
+
+// TestSocialLoginTakenUsernameFallsBackDeterministically: a username that
+// is already someone's handle gets a fallback that keeps the name, and the
+// audit event records what was asked for (agentry#517).
+func TestSocialLoginTakenUsernameFallsBackDeterministically(t *testing.T) {
+	idp := newFakeOIDC(t)
+	env := newTestEnvCfg(t, func(cfg *config.Config) {
+		cfg.Social.Google = config.SocialProvider{
+			ClientID: idp.clientID, ClientSecret: "google-secret", Issuer: idp.srv.URL,
+		}
+	}, func(s *api.Server) {
+		s.SetOIDCHTTPClient(idp.srv.Client())
+	})
+	taken := env.register("taken")
+	idp.preferredUsername = taken
+	idp.email = "other" + env.sfx + "@example.test"
+
+	got := googleFirstSignIn(t, env, idp)
+	if got == taken || !strings.HasPrefix(got, taken+"-") {
+		t.Fatalf("handle = %q, want %q with a suffix", got, taken)
+	}
+	var requested string
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT coalesce(detail->>'handleRequested', '') FROM audit_events
+		  WHERE action = 'user.social_login' AND target_id = (SELECT id FROM handles WHERE handle = $1)`, got,
+	).Scan(&requested); err != nil {
+		t.Fatal(err)
+	}
+	if requested != taken {
+		t.Fatalf("audit handleRequested = %q, want %q", requested, taken)
 	}
 }
 
