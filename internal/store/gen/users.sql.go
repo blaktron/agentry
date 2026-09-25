@@ -313,6 +313,36 @@ func (q *Queries) ListPersonalNamespaceAgents(ctx context.Context, id uuid.UUID)
 	return items, nil
 }
 
+const listStaffSyncCandidates = `-- name: ListStaffSyncCandidates :many
+SELECT id FROM users
+WHERE platform_staff
+   OR id IN (SELECT m.user_id FROM memberships m WHERE m.org_id = $1 AND m.state = 'active')
+ORDER BY id
+`
+
+// The accounts whose platform_staff the staff rule could change
+// (agentry#556): every account flagged today, and every active member of
+// the staff organization. The start-up resync recomputes exactly these.
+func (q *Queries) ListStaffSyncCandidates(ctx context.Context, orgID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listStaffSyncCandidates, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markEmailVerified = `-- name: MarkEmailVerified :exec
 UPDATE users SET email_verified_at = now(), updated_at = now() WHERE id = $1
 `
@@ -410,7 +440,7 @@ type SetUserPlatformStaffParams struct {
 	PlatformStaff bool      `json:"platform_staff"`
 }
 
-// Directory group membership decides platform staff (agentry#51).
+// The staff rule decides platform staff (agentry#556; registry.SyncStaffIn).
 func (q *Queries) SetUserPlatformStaff(ctx context.Context, arg SetUserPlatformStaffParams) error {
 	_, err := q.db.Exec(ctx, setUserPlatformStaff, arg.ID, arg.PlatformStaff)
 	return err

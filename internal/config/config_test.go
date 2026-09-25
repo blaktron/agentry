@@ -102,11 +102,16 @@ func TestValidateGuards(t *testing.T) {
 		{"proxyRequestID without a hop", func(c *Config) { c.HTTP.ProxyRequestID = true; c.HTTP.TrustedProxies = 0 }},
 		{"bad audit stream kind", func(c *Config) { c.Audit.StreamKind = "kafka" }},
 		// A staff domain that could never match an address would switch the
-		// rule off silently (agentry#525).
-		{"staff domain with an at", func(c *Config) { c.Auth.IdPStaffDomain = "@secureagentry.net" }},
-		{"staff domain with a leading dot", func(c *Config) { c.Auth.IdPStaffDomain = ".secureagentry.net" }},
-		{"staff domain in capitals", func(c *Config) { c.Auth.IdPStaffDomain = "SecureAgentry.net" }},
-		{"staff domain of one label", func(c *Config) { c.Auth.IdPStaffDomain = "localhost" }},
+		// rule off silently (agentry#525, agentry#556).
+		{"staff domain with an at", func(c *Config) { c.Auth.StaffOrg = "agentry"; c.Auth.StaffDomain = "@secureagentry.net" }},
+		{"staff domain with a leading dot", func(c *Config) { c.Auth.StaffOrg = "agentry"; c.Auth.StaffDomain = ".secureagentry.net" }},
+		{"staff domain in capitals", func(c *Config) { c.Auth.StaffOrg = "agentry"; c.Auth.StaffDomain = "SecureAgentry.net" }},
+		{"staff domain of one label", func(c *Config) { c.Auth.StaffOrg = "agentry"; c.Auth.StaffDomain = "localhost" }},
+		// Half a rule is refused: an organization with no domain would admit
+		// anyone, a domain with no organization names nobody (agentry#556).
+		{"staff org without a domain", func(c *Config) { c.Auth.StaffOrg = "agentry" }},
+		{"staff domain without an org", func(c *Config) { c.Auth.StaffDomain = "secureagentry.net" }},
+		{"staff org that is no handle", func(c *Config) { c.Auth.StaffOrg = "Agentry Staff"; c.Auth.StaffDomain = "secureagentry.net" }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -432,16 +437,33 @@ func TestSocialProviderEnv(t *testing.T) {
 	}
 }
 
-func TestStaffDomainAcceptsABareDomain(t *testing.T) {
+func TestStaffOrgAcceptsAHandleAndABareDomain(t *testing.T) {
 	cfg := devDefault()
-	cfg.Auth.IdPStaffDomain = "secureagentry.net"
+	cfg.Auth.StaffOrg, cfg.Auth.StaffDomain = "agentry", "secureagentry.net"
 	if err := cfg.Validate(); err != nil {
-		t.Fatalf("a bare domain was refused: %v", err)
+		t.Fatalf("a handle and a bare domain were refused: %v", err)
 	}
-	t.Setenv("AGENTRY_IDP_STAFF_DOMAIN", "secureagentry.net")
+	t.Setenv("AGENTRY_STAFF_ORG", "agentry")
+	t.Setenv("AGENTRY_STAFF_DOMAIN", "secureagentry.net")
 	got := devDefault()
-	if err := applyEnv(&got); err != nil || got.Auth.IdPStaffDomain != "secureagentry.net" {
-		t.Fatalf("the environment did not set it: %q %v", got.Auth.IdPStaffDomain, err)
+	if err := applyEnv(&got); err != nil || got.Auth.StaffOrg != "agentry" || got.Auth.StaffDomain != "secureagentry.net" {
+		t.Fatalf("the environment did not set them: %q %q %v", got.Auth.StaffOrg, got.Auth.StaffDomain, err)
+	}
+}
+
+// TestRetiredStaffKeysAreNamed (agentry#556): the group and the domain-alone
+// keys still load, grant nothing, and are named for the start-up warning.
+func TestRetiredStaffKeysAreNamed(t *testing.T) {
+	cfg := devDefault()
+	if keys := cfg.RetiredStaffKeys(); len(keys) != 0 {
+		t.Fatalf("nothing set, yet %v", keys)
+	}
+	cfg.Auth.IdPStaffGroup, cfg.Auth.IdPStaffDomain = "agentry-platform-staff", "secureagentry.net"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("a configuration still setting the retired keys must load: %v", err)
+	}
+	if keys := cfg.RetiredStaffKeys(); len(keys) != 2 {
+		t.Fatalf("retired keys = %v", keys)
 	}
 }
 

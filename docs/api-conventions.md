@@ -62,6 +62,10 @@ reached. `409 already-a-member` refuses an invitation, an approval or
 `POST /orgs` for someone who is an active member of another
 organization: a person belongs to one at a time, and leaves it (`DELETE
 /orgs/{org}/members/{own handle}`) before joining or founding another.
+`409 staff-org-domain` refuses the deployment's staff organization
+(`AGENTRY_STAFF_ORG`) an address outside its domain (`AGENTRY_STAFF_DOMAIN`),
+at every door: an invitation, its accept, an approval, SCIM provisioning and
+founding it; its members are platform staff (agentry#556).
 `409 domain-claimed` refuses `POST /orgs` from an address whose domain
 already belongs to an organization — recorded at that organization's
 creation, or verified by it over DNS — and a DNS verification of a domain
