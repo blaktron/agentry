@@ -30,6 +30,7 @@ type fakeIDP struct {
 	nonce          string
 	code           string
 	issuerOverride string // discovery reports this issuer (for issuer-pin test)
+	preferredUser  string // rides the ID token as preferred_username when set
 }
 
 func newFakeIDP(t *testing.T) *fakeIDP {
@@ -72,6 +73,9 @@ func newFakeIDP(t *testing.T) *fakeIDP {
 			"iss": idp.srv.URL, "aud": idp.clientID, "sub": idp.sub,
 			"iat": time.Now().Unix(), "exp": time.Now().Add(time.Hour).Unix(),
 			"nonce": idp.nonce, "email": idp.email, "email_verified": idp.emailVerified,
+		}
+		if idp.preferredUser != "" {
+			claims["preferred_username"] = idp.preferredUser
 		}
 		cb, _ := json.Marshal(claims)
 		idToken := oidctest.SignIDToken(idp.key, idp.keyID, "RS256", string(cb))
@@ -158,5 +162,23 @@ func TestOIDC_EmailVerifiedSurfaced(t *testing.T) {
 	}
 	if claims.EmailVerified {
 		t.Fatal("email_verified=false must be surfaced (respected by the caller)")
+	}
+}
+
+// TestOIDC_PreferredUsernameSurfaced: the directory's username reaches the
+// caller, which seeds a new account's handle from it (agentry#517).
+func TestOIDC_PreferredUsernameSurfaced(t *testing.T) {
+	idp := newFakeIDP(t)
+	idp.preferredUser = " blaktron "
+	rp, err := New(idp.ctx(), Config{Issuer: idp.srv.URL, ClientID: idp.clientID}, idp.srv.URL+"/callback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims, err := rp.Exchange(idp.ctx(), idp.code, "verifier-abcdefabcdefabcdefabcdefabcdef1234", idp.nonce)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claims.PreferredUsername != "blaktron" {
+		t.Fatalf("PreferredUsername = %q, want blaktron", claims.PreferredUsername)
 	}
 }
