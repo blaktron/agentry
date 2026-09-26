@@ -164,6 +164,11 @@ func TestClearCurrentUserData(t *testing.T) {
 	if d["tokens"] != float64(liveTokens) || d["sshKeys"] != float64(1) || d["trustedDevices"] != float64(1) || d["desktopCodes"] != float64(1) || d["otherSessions"] != float64(1) || d["installs"] != float64(1) || d["notificationSettingsReset"] != true {
 		t.Errorf("audit detail = %s", detail)
 	}
+	// No extension erases anything here, so the detail names none
+	// (agentry#638).
+	if _, ok := d["extensions"]; ok {
+		t.Errorf("audit detail names extensions with none registered: %s", detail)
+	}
 
 	// Extensions heard it once, for this user (fireEvent is synchronous).
 	mu.Lock()

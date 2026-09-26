@@ -39,7 +39,8 @@ func TestAccountErasureFlow(t *testing.T) {
 	env.waitStatus(user, "doomed", "1.0.0", "published")
 
 	// A knowledge pack (agentry#593) goes with the account.
-	kn := seedKnowledge(t, env, knowledge.User(uuid.MustParse(env.selfID(sess))))
+	uid := env.selfID(sess)
+	kn := seedKnowledge(t, env, knowledge.User(uuid.MustParse(uid)))
 
 	// A PAT cannot erase the account (session-only).
 	res := env.do(caller{name: "pat", pat: pat}, http.MethodPost, "/api/v1/user/delete", nil)
@@ -121,6 +122,15 @@ func TestAccountErasureFlow(t *testing.T) {
 	}
 	if n == 0 {
 		t.Fatal("no user.delete audit event")
+	}
+	// No extension erases anything here, so the detail names none
+	// (agentry#638).
+	if err := env.st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM audit_events WHERE action = 'user.delete' AND target_id = $1 AND detail ? 'extensions'`, uid).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatal("user.delete detail names extensions with none registered")
 	}
 }
 

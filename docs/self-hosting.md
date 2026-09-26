@@ -1585,7 +1585,8 @@ loaded. An extension may also admit or refuse a submission after every core
 check and before anything is stored (`Admits`), name a route of its own
 the anonymous rate class skips (`Unthrottles`: a payment provider's signed
 webhook), receive the database pool, the logger and an audit writer at
-start-up (`Binds`), run a job on a period, and register audit actions under
-its own name. The core carries no extension and behaves identically with none:
+start-up (`Binds`), delete the rows it keeps about a person inside the
+account erasure's and the data clear's own transaction (`ErasesAccounts`),
+run a job on a period, and register audit actions under its own name. The core carries no extension and behaves identically with none:
 a self-hosted registry has no subscription tiers, caps nothing, and never
 answers `402`.
