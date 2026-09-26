@@ -149,9 +149,9 @@ var routeAuthz = map[string]RouteDecl{
 	// credential that an extension admits, decided in the handler. A token
 	// is refused whatever its scopes, and an ordinary account never reaches
 	// them.
-	"scanModelInput":   {Action: auth.ActPublicRead, SelfAuthorized: true},
-	"searchModelInput": {Action: auth.ActPublicRead, SelfAuthorized: true},
-	"triageAbuseReport":      {Action: auth.ActPublicRead, SelfAuthorized: true},
+	"scanModelInput":    {Action: auth.ActPublicRead, SelfAuthorized: true},
+	"searchModelInput":  {Action: auth.ActPublicRead, SelfAuthorized: true},
+	"triageAbuseReport": {Action: auth.ActPublicRead, SelfAuthorized: true},
 	// Enterprise (M6/WG-J). SSO/SCIM config = admin (ActOrgSettingsManage,
 	// session-only for PATs); webhooks/domains = admin+ (ActOrgUpdate);
 	// audit export = admin+ (ActOrgAuditRead). The SSO login-flow endpoints
