@@ -132,14 +132,15 @@ The search needs a provider:
 
 | Variable | Meaning |
 |---|---|
-| `AGENTRY_WEB_SEARCH_PROVIDER` | `none` (the default: `503 web-search-unavailable`), `brave` (Brave's LLM Context API: page chunks extracted for a model, read from its `grounding.generic` results) or `youcom` (You.com's Web Search API) |
+| `AGENTRY_WEB_SEARCH_PROVIDER` | `none` (the default: `503 web-search-unavailable`), `youcom` (You.com's Web Search API) or `brave` (Brave's LLM Context API: page chunks extracted for a model, read from its `grounding.generic` results; a query past Brave's 75 words or 600 bytes is searched on its opening words) |
 | `AGENTRY_WEB_SEARCH_API_KEY` | the provider's key; required with a provider, never logged |
 | `AGENTRY_WEB_SEARCH_BASE_URL` | the provider's API root, for a test double; empty is the provider's own |
 
 A provider named without its key, or a name the registry does not know,
 refuses startup. The provider's host (`api.search.brave.com:443` for Brave,
 `ydc-index.io:443` for You.com) must be reachable from the registry's API
-role, and so must the judge's (`api.typesafe.ai:443`), since every result is
+role, and so must the judge's (`api.typesafe.ai:443`, or its region's host
+when `AGENTRY_JUDGE_REGION` is set), since every result is
 scanned before it is returned; no sandbox host needs either. Neither client
 follows a redirect, since each sends its key in a header that Go would carry
 to another host.

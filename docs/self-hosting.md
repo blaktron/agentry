@@ -271,12 +271,13 @@ judge:
 
 webSearch:
   # The web search the registry brokers for POST /model-input/search
-  # (docs/model-input.md): none, brave (Brave's LLM Context API) or youcom
-  # (You.com's Web Search API). The key stays in the registry and never
+  # (docs/model-input.md): none, youcom (You.com's Web Search API) or brave
+  # (Brave's LLM Context API). The key stays in the registry and never
   # reaches a sandbox host.
-  provider: none                      # AGENTRY_WEB_SEARCH_PROVIDER: none | brave | youcom
+  provider: none                      # AGENTRY_WEB_SEARCH_PROVIDER: none | youcom | brave
   # apiKey: ...                       # AGENTRY_WEB_SEARCH_API_KEY (required with a provider)
-  # baseUrl: ...                      # AGENTRY_WEB_SEARCH_BASE_URL (empty: https://api.search.brave.com, https://ydc-index.io)
+  # baseUrl: ...                      # AGENTRY_WEB_SEARCH_BASE_URL (empty is the provider's own:
+  #                                   #   https://ydc-index.io for youcom, https://api.search.brave.com for brave)
 
 scan:
   # The one external scanner tool behind the §8.3 seam. Optional: unset,
