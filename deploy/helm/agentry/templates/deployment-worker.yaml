@@ -21,7 +21,7 @@ spec:
         {{- include "agentry.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: worker
     spec:
-      serviceAccountName: {{ include "agentry.serviceAccountName" . }}
+      serviceAccountName: {{ include "agentry.serviceAccountName" (dict "ctx" . "role" "worker") }}
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
