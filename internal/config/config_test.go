@@ -437,6 +437,11 @@ func TestWebSearchEnvConfig(t *testing.T) {
 		cfg.WebSearch.BaseURL != "https://search.example.internal" || cfg.Limits.ModelInputPerMin != 30 {
 		t.Fatalf("env not applied: %v %+v %d", err, cfg.WebSearch, cfg.Limits.ModelInputPerMin)
 	}
+	t.Setenv("AGENTRY_WEB_SEARCH_PROVIDER", "brave")
+	t.Setenv("AGENTRY_WEB_SEARCH_BASE_URL", "")
+	if cfg, err = Load(""); err != nil || cfg.WebSearch.Provider != "brave" {
+		t.Fatalf("brave (agentry#631): %v %+v", err, cfg.WebSearch)
+	}
 	t.Setenv("AGENTRY_WEB_SEARCH_PROVIDER", "fake")
 	if _, err := Load(""); err == nil {
 		t.Error("an unknown provider (the tests' fake included) must fail validation")
