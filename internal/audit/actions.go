@@ -36,7 +36,11 @@ const (
 	// ActionUserStaffSync records a platform_staff change: the staff
 	// organization's rule (agentry#556), with the reason it ran.
 	ActionUserStaffSync Action = "user.staff_sync"
-	ActionUserDelete    Action = "user.delete"
+	// ActionDirectoryStaffMirror records one change the registry made to
+	// the directory's mirror of platform staff (agentry#598): an account
+	// added to or removed from auth.idpStaffMirrorGroup.
+	ActionDirectoryStaffMirror Action = "directory.staff_mirror"
+	ActionUserDelete           Action = "user.delete"
 	// ActionUserDataClear records a user clearing their credentials,
 	// installs and settings while keeping the account (agentry#498).
 	ActionUserDataClear Action = "user.data_clear"
@@ -138,7 +142,7 @@ func init() {
 	for _, a := range []Action{
 		ActionUserRegister, ActionUserLogin, ActionUserLoginFailed,
 		ActionUserLogout, ActionUserEmailVerified, ActionUserUpdate,
-		ActionUserTOTPEnabled, ActionPATCreate, ActionPATRevoke, ActionSSHKeyAdd, ActionSSHKeyRemove, ActionUserDelete, ActionUserDataClear, ActionUserDirectoryErase, ActionUserStaffSync,
+		ActionUserTOTPEnabled, ActionPATCreate, ActionPATRevoke, ActionSSHKeyAdd, ActionSSHKeyRemove, ActionUserDelete, ActionUserDataClear, ActionUserDirectoryErase, ActionUserStaffSync, ActionDirectoryStaffMirror,
 		ActionTrustedDeviceAdd, ActionTrustedDeviceRevoke,
 		ActionOrgCreate, ActionOrgUpdate, ActionOrgMemberSet,
 		ActionOrgMemberRemove, ActionOrgInviteCreate, ActionOrgInviteRevoke,

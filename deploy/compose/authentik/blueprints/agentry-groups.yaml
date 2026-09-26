@@ -6,6 +6,12 @@
 # AGENTRY_STAFF_DOMAIN), granted by that organization's admins in the
 # registry. `state: absent` removes the group from a directory that still
 # has it, so nobody reads a membership in it as meaning something.
+#
+# The staff mirror group (AGENTRY_IDP_STAFF_MIRROR_GROUP, agentry#598) is the
+# reverse: the registry writes it, equal to its platform staff, for
+# applications such as the log stack's Dashboards to read. It is not
+# declared here, because its name is the deployment's; the registry and
+# scripts/dev/authentik-bootstrap.sh create it.
 version: 1
 metadata:
   name: Agentry - Directory groups

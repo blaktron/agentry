@@ -32,10 +32,20 @@ type staffFixture struct {
 
 func newStaffFixture(t *testing.T) *staffFixture {
 	t.Helper()
+	return newStaffFixtureWith(t, nil)
+}
+
+// newStaffFixtureWith is newStaffFixture with more configuration, given the
+// staff organization's handle.
+func newStaffFixtureWith(t *testing.T, more func(cfg *config.Config, org string)) *staffFixture {
+	t.Helper()
 	tag := fmt.Sprintf("%06x", rand.Int63n(1<<24)) //nolint:gosec // test fixture names
 	f := &staffFixture{org: "staff" + tag, domain: "staff" + tag + ".test"}
 	f.env = newTestEnvCfg(t, func(cfg *config.Config) {
 		cfg.Auth.StaffOrg, cfg.Auth.StaffDomain = f.org, f.domain
+		if more != nil {
+			more(cfg, f.org)
+		}
 	}, func(s *api.Server) { f.srv = s })
 	// Founding the staff organization is reserved to platform staff: the
 	// founder is seeded staff, the way an operator seeds the first.
