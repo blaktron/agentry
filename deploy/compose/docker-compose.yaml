@@ -278,8 +278,9 @@ services:
       # defaults to https://api.typesafe.ai.
       AGENTRY_JUDGE_REGION: ${AGENTRY_JUDGE_REGION:-}
       # Web search the registry brokers for the model-input search route
-      # (agentry#608): none (the default; the route answers 503) or youcom,
-      # with its key held here and never on a sandbox host. The model-input
+      # (agentry#608): none (the default; the route answers 503), youcom or
+      # brave (agentry#631), with its key held here and never on a sandbox
+      # host. The model-input
       # scan route itself needs the typesafe judge above.
       AGENTRY_WEB_SEARCH_PROVIDER: ${AGENTRY_WEB_SEARCH_PROVIDER:-}
       AGENTRY_WEB_SEARCH_API_KEY: ${AGENTRY_WEB_SEARCH_API_KEY:-}
