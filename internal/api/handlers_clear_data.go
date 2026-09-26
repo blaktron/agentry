@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
@@ -37,7 +38,7 @@ func (s *Server) ClearCurrentUserData(w http.ResponseWriter, r *http.Request) {
 
 	counts := map[string]any{}
 	var knowledgeKeys []string
-	err := s.st.WithTx(r.Context(), func(tq *storegen.Queries) error {
+	err := s.st.WithPgxTx(r.Context(), func(tx pgx.Tx, tq *storegen.Queries) error {
 		n, err := tq.RevokeAllPATsForUser(r.Context(), p.UserID)
 		if err != nil {
 			return err
@@ -80,6 +81,15 @@ func (s *Server) ClearCurrentUserData(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		counts["knowledgeObjects"] = len(knowledgeKeys)
+		// An extension's credentials and history go too (agentry#638), in
+		// this transaction.
+		extRows, err := s.eraseInExtensions(r.Context(), tx, p.UserID, AccountDataCleared)
+		if err != nil {
+			return err
+		}
+		if extRows != nil {
+			counts["extensions"] = extRows
+		}
 		e := auditEvent(r, audit.ActionUserDataClear)
 		e.TargetKind, e.TargetID = "user", p.UserID
 		e.Detail = counts
