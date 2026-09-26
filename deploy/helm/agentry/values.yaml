@@ -231,7 +231,8 @@ serviceAccount:
   # share. Set with create: true, the render fails.
   name: ""
   # Applied to all three. On EKS, annotate with an IRSA role granting S3 +
-  # KMS (Sign for worker) access:
+  # KMS (Sign for worker) access; its trust policy names the three accounts
+  # (or <release>-agentry-*), not the single one of before agentry#627:
   # eks.amazonaws.com/role-arn: arn:aws:iam::<acct>:role/agentry
   annotations: {}
 

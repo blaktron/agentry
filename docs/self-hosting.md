@@ -200,7 +200,10 @@ reference (added for the Vultr production cluster, DEV-124):
   token (the enterprise build's key service for hosted-run secrets binds
   encryption to the api's account and decryption to the worker's) can tell
   them apart. `serviceAccount.annotations` (an EKS IRSA role, say) goes on
-  all three. `serviceAccount.create: false` with `serviceAccount.name` runs
+  all three; an IAM trust policy written for the single account
+  `<release>-agentry` the chart made before agentry#627 must name the three
+  (or `<release>-agentry-*`) before the upgrade, or the roles lose their S3
+  and KMS access. `serviceAccount.create: false` with `serviceAccount.name` runs
   every role under one existing account instead; `name` with `create: true`
   fails the render. The chart grants the accounts no Kubernetes RBAC: no
   role calls the Kubernetes API.
