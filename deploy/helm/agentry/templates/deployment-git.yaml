@@ -23,7 +23,7 @@ spec:
         {{- include "agentry.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: git
     spec:
-      serviceAccountName: {{ include "agentry.serviceAccountName" . }}
+      serviceAccountName: {{ include "agentry.serviceAccountName" (dict "ctx" . "role" "git") }}
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
