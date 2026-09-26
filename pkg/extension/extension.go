@@ -169,7 +169,8 @@ type Knowledge interface {
 	// else ErrKnowledgeChanged with nothing stored. A tree past the
 	// pool's cap is a *KnowledgeAllocationError, one that is not a pack's
 	// ErrKnowledgeTree or ErrKnowledgeTooLarge. A tree the pack already
-	// holds is not stored again, changed false.
+	// holds is not stored again, changed false, whatever from is, so a
+	// replace retried after it landed is not a conflict.
 	Replace(ctx context.Context, owner KeyOwner, id uuid.UUID, from string, files []KnowledgeFile) (pack KnowledgePack, changed bool, err error)
 	// Usage is owner's meter: what counts against its allocation and the
 	// cap (0 is none).
