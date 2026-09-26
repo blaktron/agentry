@@ -21,6 +21,10 @@ paths = [
   '''testdata/attack-corpus/manifest-env-token-unquoted/agent\.yaml''',
   '''testdata/attack-corpus/manifest-env-token-unquoted/expected\.yaml''',
   '''testdata/attack-corpus/s3-encoded-blob-benign/readme\.md''',
+  # The model-input bench's benign API reference (agentry#608): a curl
+  # example with a placeholder bearer token, on purpose, so the bench shows
+  # the scan does not withhold documentation of a credential.
+  '''pkg/judge/testdata/model-input-bench/benign-api-reference\.txt''',
 ]
 # The helm job's placeholder sealing key in ci.yaml: base64 of the words
 # "sealingkey" repeated, not a key.
