@@ -137,8 +137,9 @@ opened and checked, counted against the pool under its lock, the tree it
 replaces deleted, the scan queued. It lands only if the pack still holds
 the tree the extension read (compared under the pack's row lock), so a
 build never overwrites an upload made while it ran; a tree the pack
-already holds is not stored again. The data key never leaves the core
-through it.
+already holds is not stored again, and is no conflict, so a retried
+replace that already landed is harmless. The data key never leaves the
+core through it.
 
 ## The scan
 

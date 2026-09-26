@@ -101,9 +101,16 @@ func TestKnowledgeReplaceThroughTheSeam(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The same tree again stores nothing and queues nothing.
+	// The same tree again stores nothing and queues nothing, even from the
+	// digest before it landed: a replace retried after it succeeded.
 	if again, changed, err := svc.Replace(ctx, owner, p.ID, got.Digest, files); err != nil || changed || again.Digest != got.Digest {
 		t.Fatalf("an unchanged tree: %+v %v %v", again, changed, err)
+	}
+	if again, changed, err := svc.Replace(ctx, owner, p.ID, "", files); err != nil || changed || again.Digest != got.Digest {
+		t.Fatalf("a retried replace: %+v %v %v", again, changed, err)
+	}
+	if err := env.st.Pool().QueryRow(ctx, `SELECT count(*) FROM river_job WHERE kind = $1 AND args->>'pack' = $2`, knowledge.JobScan, p.ID.String()).Scan(&queued); err != nil || queued != 1 {
+		t.Fatalf("scans queued after two unchanged replaces = %d (%v), want still 1", queued, err)
 	}
 	// A new tree keeps the header's pack id; one from a stale digest is
 	// refused and stores nothing.

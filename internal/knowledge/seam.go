@@ -96,14 +96,13 @@ func (s *Service) TreeOf(ctx context.Context, owner Owner, id uuid.UUID) (Info, 
 // tree it replaces deleted, its scan queued. It answers ErrChanged when
 // the pack moved on, the upload's errors otherwise (ErrTree, ErrTooLarge,
 // *AllocationError). A tree the pack already holds is not stored again,
-// and changed is false.
+// and changed is false, whatever from says: the pack is already what the
+// caller asked for, so a replace retried after it landed is not a
+// conflict.
 func (s *Service) Replace(ctx context.Context, owner Owner, id uuid.UUID, from string, files []scan.PackFile) (info Info, changed bool, err error) {
 	p, err := s.Get(ctx, owner, id)
 	if err != nil {
 		return Info{}, false, err
-	}
-	if p.Digest != from {
-		return infoOf(p), false, ErrChanged
 	}
 	var plain bytes.Buffer
 	if err := WriteTree(&plain, files); err != nil {
@@ -113,6 +112,9 @@ func (s *Service) Replace(ctx context.Context, owner Owner, id uuid.UUID, from s
 	digest := "sha256:" + hex.EncodeToString(sum[:])
 	if digest == p.Digest && p.ObjectKey != "" {
 		return infoOf(p), false, nil
+	}
+	if p.Digest != from {
+		return infoOf(p), false, ErrChanged
 	}
 	key, err := s.Unwrap(ctx, owner, WrappedKeyOf(p))
 	if err != nil {
