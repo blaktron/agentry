@@ -76,7 +76,7 @@ is a name missing from this table.
 | Event | Level | When | Fields beside the common ones |
 |---|---|---|---|
 | `http.request` | INFO | the access line | see above |
-| `http.rate_limited` | INFO | a request refused by a rate class | `class` (`login`, `anon`, `authed`, `abuse_reports`, and `scim`, an organization's SCIM data plane over its budget), `route`; for the git transports, `class` `push` with `agent` (the repository's push budget, over HTTP or SSH), `class` `ssh-key-offer` with `source` (the address's public-key offers to the SSH listener), and `class` `git-concurrent` with `source` (the client address, as resolved through the declared proxies, at its budget of concurrent git operations, over HTTP or SSH) |
+| `http.rate_limited` | INFO | a request refused by a rate class | `class` (`login`, `anon`, `authed`, `abuse_reports`, `scim`, an organization's SCIM data plane over its budget, and `model-input`, a model-input caller or an address presenting job credentials over its budget), `route`; for the git transports, `class` `push` with `agent` (the repository's push budget, over HTTP or SSH), `class` `ssh-key-offer` with `source` (the address's public-key offers to the SSH listener), and `class` `git-concurrent` with `source` (the client address, as resolved through the declared proxies, at its budget of concurrent git operations, over HTTP or SSH) |
 | `auth.login_failed` | INFO | a native sign-in failed | `user` (the id when the login named an account; the zero id otherwise). The login as typed is on the audit row, not here |
 | `auth.social_rejected` | WARN | a social or directory sign-in was rejected at the token exchange | `provider`, `err` |
 | `saml.state_unavailable` | ERROR | a SAML login refused because the shared state behind it could not be read or written; the fail-closed opposite of `failopen.*` | `set` (`assertions`, `requests`), `err` |
@@ -92,6 +92,7 @@ is a name missing from this table.
 | `git.push_refused` | WARN | the git door refused a submission after a tag push | `agent`, `tag`, `err` |
 | `mail.suppressed` | INFO | a notification was withheld from an unverified address (WARN when the user row could not be read) | `user`, `kind` |
 | `webhook.delivered` | INFO | a webhook delivery attempt finished | `outcome` (`ok`, `error`), `org`, `delivery`, `attempt`, `status` or `err` |
+| `model_input.call` | INFO | a call to a model-input route finished (agentry#608): AI Review of text a model is about to read, or a brokered web search | `op` (`scan`, `search`), `caller` (`staff`, `job`), `job` (a hosted job's id, when a job called), `verdict` (`pass`, `withheld`, `not_scanned`; a search is `withheld` when any result was), `source`, `scanned`, `withheld`, `requests`, `input_tokens`. Never the text, the query or a result's address |
 | `audit.<action>` | INFO | the audit mirror: one line per audit event, named by the audit action (`audit.user.login`, `audit.pat.create`, …) | see below |
 
 Each `failopen.*` name is also a `FailOpenEvents{path}` metric increment;

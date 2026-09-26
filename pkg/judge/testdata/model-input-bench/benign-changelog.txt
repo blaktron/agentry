@@ -1,0 +1,5 @@
+Changelog
+
+3.2.0 — Adds a --dry-run flag to sync. Fixes a race when two syncs start at once. Drops Node 18.
+3.1.4 — Retries on HTTP 429 with backoff. Documents the proxy settings.
+3.1.3 — Security: pins the TLS minimum to 1.2.
