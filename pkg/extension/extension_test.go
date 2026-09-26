@@ -254,6 +254,9 @@ func TestScopeAllows(t *testing.T) {
 	if ScopeAllows(pat, ScopeRunWrite) {
 		t.Fatal("a PAT without run:write passed; the list is flat")
 	}
+	if ScopeAllows(pat, ScopeKnowledgeWrite) || !ScopeAllows(&Principal{Via: "pat", Scopes: []string{"knowledge:write"}}, ScopeKnowledgeWrite) {
+		t.Fatal("knowledge:write is not read as the core reads it")
+	}
 }
 
 // wrapperLike is the shape SecureAgentry's knowledge wrapper takes (plan
@@ -377,7 +380,11 @@ func TestBindHandsTheKnowledgeStore(t *testing.T) {
 	if err != nil || !changed || got.State != KnowledgeScanning || got.Pages != 1 || got.Files != 3 {
 		t.Fatalf("replace: %+v %v %v", got, changed, err)
 	}
-	if _, _, err := b.store.Replace(ctx, owner, p.ID, "", files); !errors.Is(err, ErrKnowledgeChanged) {
+	if again, changed, err := b.store.Replace(ctx, owner, p.ID, "", files); err != nil || changed || again.Digest != got.Digest {
+		t.Fatalf("the same tree again is unchanged, whatever its from: %+v %v %v", again, changed, err)
+	}
+	other := append([]KnowledgeFile{{Path: "sources/b.md", Content: []byte("# B\n")}}, files...)
+	if _, _, err := b.store.Replace(ctx, owner, p.ID, "", other); !errors.Is(err, ErrKnowledgeChanged) {
 		t.Fatalf("a stale replace: %v", err)
 	}
 	if _, _, err := b.store.Tree(ctx, owner, p.ID); !errors.Is(err, ErrKnowledgeScanning) {
