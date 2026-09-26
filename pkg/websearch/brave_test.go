@@ -7,11 +7,12 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
-// braveAnswer is the LLM Context shape as Brave answered on 2026-09-26:
-// grounding.generic (read), grounding.map and grounding.poi (local results,
-// never read) and the sources map (never read).
+// braveAnswer is the LLM Context shape Brave answered on 2026-09-26
+// (grounding.generic, read; grounding.map and the sources map, never read),
+// with the grounding.poi its reference documents added, also never read.
 const braveAnswer = `{"grounding":{
 	"generic":[
 		{"url":"https://www.loc.gov/preservation/digital/formats/fdd/fdd000323.shtml","title":"CSV, Comma Separated Values (RFC 4180)",
@@ -41,7 +42,8 @@ func TestBraveAsksOnceWithTheKeyAndReadsOnlyTheGenericResults(t *testing.T) {
 	if got.Method != http.MethodGet || got.URL.Path != "/res/v1/llm/context" || got.Header.Get("X-Subscription-Token") != "brave-secret-key" {
 		t.Fatalf("request: %s %s", got.Method, got.URL)
 	}
-	if q.Get("q") != "RFC 4180 CSV" || q.Get("count") != "3" || q.Get("maximum_number_of_urls") != "3" || q.Get("enable_local") != "false" {
+	if q.Get("q") != "RFC 4180 CSV" || q.Get("maximum_number_of_urls") != "3" || q.Get("maximum_number_of_tokens") != "2048" ||
+		q.Get("maximum_number_of_tokens_per_url") != "512" || q.Get("enable_local") != "false" || q.Has("count") {
 		t.Fatalf("query: %v", q)
 	}
 	if strings.Contains(got.URL.RawQuery, "brave-secret-key") {
@@ -59,7 +61,9 @@ func TestBraveAsksOnceWithTheKeyAndReadsOnlyTheGenericResults(t *testing.T) {
 	}
 }
 
-func TestBraveFailsWithoutTheKeyInTheErrorAndNeverFollowsARedirect(t *testing.T) {
+// A non-200 answer, a redirect, an answer out of shape and a missing key
+// are each refused, and no error carries any part of the key.
+func TestBraveRefusalsCarryNoKeyAndNoRedirectIsFollowed(t *testing.T) {
 	key := "brave-secret-key-long-enough"
 	echo := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
@@ -69,7 +73,7 @@ func TestBraveFailsWithoutTheKeyInTheErrorAndNeverFollowsARedirect(t *testing.T)
 	b, _ := NewBrave(BraveConfig{BaseURL: echo.URL, APIKey: key})
 	_, err := b.Search(context.Background(), "q", 5)
 	var se *StatusError
-	if !errors.As(err, &se) || se.Status != http.StatusTooManyRequests || se.Provider != BraveName || strings.Contains(err.Error(), "brave-secret") {
+	if !errors.As(err, &se) || se.Status != http.StatusTooManyRequests || se.Provider != BraveName || strings.Contains(err.Error(), "brave-secr") {
 		t.Fatalf("err = %v", err)
 	}
 
@@ -93,5 +97,45 @@ func TestBraveFailsWithoutTheKeyInTheErrorAndNeverFollowsARedirect(t *testing.T)
 	}
 	if _, err := NewBrave(BraveConfig{APIKey: "  "}); err != ErrNoKey {
 		t.Fatalf("no key: %v", err)
+	}
+}
+
+// A query the route admits (400 characters) can pass Brave's 75 words, and
+// 400 characters of a wide script pass 600 bytes; either would be a 422.
+// The client searches on the query's opening words within both.
+func TestBraveHoldsTheQueryToItsLimits(t *testing.T) {
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.URL.Query().Get("q")
+		_, _ = w.Write([]byte(`{"grounding":{"generic":[]}}`))
+	}))
+	defer srv.Close()
+	b, _ := NewBrave(BraveConfig{BaseURL: srv.URL, APIKey: "k"})
+
+	words := strings.TrimSpace(strings.Repeat("ab ", 120))
+	q, err := CleanQuery(words)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.Search(context.Background(), q, 5); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(strings.Fields(got)); n != 75 || got != strings.TrimSpace(strings.Repeat("ab ", 75)) {
+		t.Fatalf("sent %d words: %q", n, got)
+	}
+
+	wide, err := CleanQuery(strings.Repeat("検", 400))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.Search(context.Background(), wide, 5); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) > 600 || !utf8.ValidString(got) || got != strings.Repeat("検", 200) {
+		t.Fatalf("sent %d bytes, valid %v", len(got), utf8.ValidString(got))
+	}
+
+	if _, err := b.Search(context.Background(), "RFC 4180 CSV", 5); err != nil || got != "RFC 4180 CSV" {
+		t.Fatalf("a short query must go as it is: %q %v", got, err)
 	}
 }

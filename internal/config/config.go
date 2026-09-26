@@ -486,7 +486,7 @@ type Judge struct {
 // Drafter's `web_search`, with the key held here beside the judge's so no
 // sandbox host gains one. Provider is none (the default: the route answers
 // 503), youcom (You.com's Web Search API) or brave (Brave's LLM Context API,
-// dev's and production's since agentry#631). AGENTRY_WEB_SEARCH_PROVIDER,
+// agentry#631). AGENTRY_WEB_SEARCH_PROVIDER,
 // AGENTRY_WEB_SEARCH_BASE_URL and AGENTRY_WEB_SEARCH_API_KEY set them; the
 // key is never logged.
 type WebSearch struct {
