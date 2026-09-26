@@ -398,3 +398,35 @@ func TestBindHandsTheKnowledgeStore(t *testing.T) {
 		t.Fatalf("usage: %+v %v", u, err)
 	}
 }
+
+// vaultLike is the shape SecureAgentry's vault takes (agentry#638): it
+// deletes an account's rows in the core's erasure transaction, through the
+// aliases alone.
+type vaultLike struct{ noop }
+
+func (vaultLike) Name() string { return "vault" }
+func (vaultLike) EraseAccount(_ context.Context, _ ErasureTx, _ uuid.UUID, kind AccountErasureKind) (int64, error) {
+	if kind != AccountErased && kind != AccountDataCleared {
+		return 0, errors.New("unknown clear")
+	}
+	return 0, nil
+}
+
+var _ ErasesAccounts = vaultLike{}
+
+// TestApplyExtensionsRegistersTheAccountEraser: an ErasesAccounts extension
+// is called from the erasure and the data clear; with none, nothing is.
+func TestApplyExtensionsRegistersTheAccountEraser(t *testing.T) {
+	cfg := config.Default()
+	cfg.DevMode = true
+	cfg.Scan.OSVURL = "none"
+	srv := api.New(cfg, nil, slog.New(slog.DiscardHandler))
+	applyExtensions(srv, []Extension{noop{}})
+	if got := srv.AccountErasers(); len(got) != 0 {
+		t.Fatalf("erasers with no ErasesAccounts extension: %v", got)
+	}
+	applyExtensions(srv, []Extension{vaultLike{}})
+	if got := srv.AccountErasers(); len(got) != 1 || got[0] != "vault" {
+		t.Fatalf("erasers = %v, want [vault]", got)
+	}
+}

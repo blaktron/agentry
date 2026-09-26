@@ -201,7 +201,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 	}
 
 	var knowledgeKeys []string
-	err = s.st.WithTx(r.Context(), func(tq *storegen.Queries) error {
+	err = s.st.WithPgxTx(r.Context(), func(tx pgx.Tx, tq *storegen.Queries) error {
 		if err := tq.PseudonymizeUser(r.Context(), storegen.PseudonymizeUserParams{
 			ID: p.UserID, Email: scrubbedEmail, DeletedTombstone: tombstone,
 		}); err != nil {
@@ -261,6 +261,12 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 				return err
 			}
 		}
+		// What extensions keep about the account goes in this transaction
+		// too (agentry#638), after every step of the core's own.
+		extRows, err := s.eraseInExtensions(r.Context(), tx, p.UserID, AccountErased)
+		if err != nil {
+			return err
+		}
 		e := auditEvent(r, audit.ActionUserDelete)
 		e.TargetKind, e.TargetID = "user", p.UserID
 		e.Detail = map[string]any{
@@ -268,6 +274,9 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 			"publishedVersions": publishedCount,
 			"desktopCodes":      desktopCodes,
 			"knowledgeObjects":  len(knowledgeKeys),
+		}
+		if extRows != nil {
+			e.Detail["extensions"] = extRows
 		}
 		if transferOrgID != uuid.Nil {
 			e.OrgID = transferOrgID

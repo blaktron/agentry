@@ -111,6 +111,40 @@ type WrapsKeys interface {
 	KeyWrapper() KeyWrapper
 }
 
+// ErasesAccounts is the optional interface for an extension that keeps
+// rows about a person which must go with the person's account
+// (agentry#638): the core calls EraseAccount inside the transaction of
+// POST /user/delete (kind AccountErased) and of POST /user/clear-data
+// (kind AccountDataCleared), after its own steps and before its audit
+// event, so the extension's delete commits or rolls back with the core's.
+// tx carries statements only: the core ends the transaction. The extension
+// writes only its own schema through it, and is quick: the request waits
+// on it. The count it returns is recorded in the user.delete or
+// user.data_clear event's detail under the extension's name. An error
+// fails the erasure or the clear — the account is not erased, the caller
+// gets a 500 — so the extension's rows never outlive an erased account
+// through a failed delete of its own.
+//
+// Hooks.Event hears user.data_cleared after the commit, best-effort; this
+// is for what may not wait or fail on its own.
+type ErasesAccounts interface {
+	EraseAccount(ctx context.Context, tx ErasureTx, userID uuid.UUID, kind AccountErasureKind) (int64, error)
+}
+
+// ErasureTx is the core's erasure transaction as an eraser may use it:
+// Exec, Query and QueryRow, never Commit or Rollback.
+type ErasureTx = api.ErasureTx
+
+// AccountErasureKind says which account clear an EraseAccount call is part
+// of; its values are the audit actions that record them.
+type AccountErasureKind = api.AccountErasureKind
+
+// The two account clears.
+const (
+	AccountErased      = api.AccountErased
+	AccountDataCleared = api.AccountDataCleared
+)
+
 // KeyWrapper, KeyOwner and WrappedKey are the knowledge store's key types.
 type (
 	KeyWrapper = knowledge.KeyWrapper

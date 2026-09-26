@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/blaktron/agentry/internal/audit"
@@ -72,6 +73,95 @@ func (s *Server) RegisterExtension(name string, routes func(*http.ServeMux)) {
 // a slow hook slows the request, so hooks should hand real work to a job.
 func (s *Server) AddEventHook(h func(ctx context.Context, ev Event)) {
 	s.eventHooks = append(s.eventHooks, h)
+}
+
+// AccountErasureKind says which of the core's two account clears an
+// AccountEraser is called from: the account's erasure (POST /user/delete)
+// or the clearing of its data (POST /user/clear-data), each named by the
+// audit action that records it.
+type AccountErasureKind string
+
+// The two account clears (agentry#638).
+const (
+	AccountErased      = AccountErasureKind(audit.ActionUserDelete)
+	AccountDataCleared = AccountErasureKind(audit.ActionUserDataClear)
+)
+
+// ErasureTx is the erasure's transaction as an eraser may use it:
+// statements, and nothing that ends it. An eraser that could commit would
+// commit the core's erasure half-done; one that could roll back would
+// leave the core's later statements failing on a dead transaction.
+type ErasureTx interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// erasureTx narrows a pgx.Tx to ErasureTx, so an eraser cannot assert its
+// way back to Commit.
+type erasureTx struct{ tx pgx.Tx }
+
+func (t erasureTx) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	return t.tx.Exec(ctx, sql, args...)
+}
+
+func (t erasureTx) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+	return t.tx.Query(ctx, sql, args...)
+}
+
+func (t erasureTx) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	return t.tx.QueryRow(ctx, sql, args...)
+}
+
+// AccountEraser deletes what an extension keeps about an account, inside
+// the core's own transaction, and says how many rows went. An error rolls
+// the whole erasure or clear back.
+type AccountEraser func(ctx context.Context, tx ErasureTx, userID uuid.UUID, kind AccountErasureKind) (int64, error)
+
+type namedEraser struct {
+	name  string
+	erase AccountEraser
+}
+
+// AddAccountEraser registers an extension's eraser (pkg/extension.
+// ErasesAccounts, agentry#638), called in registration order inside the
+// transaction of every account erasure and data clear.
+// A name registered twice panics: the counts are keyed by it.
+func (s *Server) AddAccountEraser(name string, fn AccountEraser) {
+	for _, e := range s.accountErasers {
+		if e.name == name {
+			panic("api: account eraser registered twice: " + name)
+		}
+	}
+	s.accountErasers = append(s.accountErasers, namedEraser{name: name, erase: fn})
+}
+
+// AccountErasers names the extensions whose erasers are registered, in
+// the order they run.
+func (s *Server) AccountErasers() []string {
+	names := make([]string, len(s.accountErasers))
+	for i, e := range s.accountErasers {
+		names[i] = e.name
+	}
+	return names
+}
+
+// eraseInExtensions runs every registered eraser in tx. The counts, keyed
+// by extension, are for the audit event's detail; nil when none is
+// registered, so a core with no extension records exactly what it did.
+func (s *Server) eraseInExtensions(ctx context.Context, tx pgx.Tx, userID uuid.UUID, kind AccountErasureKind) (map[string]int64, error) {
+	if len(s.accountErasers) == 0 {
+		return nil, nil
+	}
+	counts := make(map[string]int64, len(s.accountErasers))
+	for _, e := range s.accountErasers {
+		n, err := e.erase(ctx, erasureTx{tx}, userID, kind)
+		if err != nil {
+			return nil, fmt.Errorf("extension %s: erase account: %w", e.name, err)
+		}
+		counts[e.name] = n
+	}
+	return counts, nil
 }
 
 // SetExtensionUnthrottled names the routes of a mounted extension the

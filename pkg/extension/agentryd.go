@@ -714,6 +714,9 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 		if k, ok := e.(WrapsKeys); ok {
 			srv.SetKeyWrapper(k.KeyWrapper())
 		}
+		if x, ok := e.(ErasesAccounts); ok {
+			srv.AddAccountEraser(e.Name(), x.EraseAccount)
+		}
 		if m, ok := e.(AdmitsModelInput); ok {
 			if c := m.ModelInputCallers(); c != nil {
 				srv.SetModelInputCallers(c)
