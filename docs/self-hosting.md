@@ -939,6 +939,56 @@ A registry-side service account needs an address at the domain and a
 membership like anyone else. With neither key set, nothing syncs and
 existing flags stay as they are.
 
+**The directory's mirror of platform staff** (agentry#598). An application
+that signs in through the directory and should admit staff alone, such as
+the log stack's OpenSearch Dashboards, can read only what the directory's
+tokens carry. Set `AGENTRY_IDP_STAFF_MIRROR_GROUP` (the chart's
+`config.auth.idpStaffMirrorGroup`), say `agentry-staff`, and the registry
+keeps that directory group equal to its platform staff: for every active
+account with the flag and a verified address, the directory account it
+signed in with, and nobody else. That account is the registry's own record
+of the person's directory sign-in (its subject, which is authentik's `uid`
+under the `hashed_user_id` subject mode the bootstrap script sets). It is
+found by address and added only when its `uid` matches and the account is
+active, so a second directory account at a staff member's address gains
+nothing. It needs the
+staff organization and `AGENTRY_IDP_ADMIN_URL`/`AGENTRY_IDP_ADMIN_TOKEN`,
+which it writes the group through; the token needs rights over groups as
+well as users. The group is a mirror, never a source of staff: anyone
+added to it in the directory by hand is removed at its next run, and each
+change the registry makes is audited as `directory.staff_mirror`. It runs a
+few seconds after any staff change, every ten minutes, and soon after the
+server starts. So a removal reaches the directory within seconds when the
+directory answers. While runs fail (the directory unreachable from the
+registry, or an admin token without rights over groups), a removed member
+keeps the group until a run succeeds: every failure is logged, and runs are
+retried every ten minutes. A directory
+session or an application session already open is not ended by it. Staff
+who have not yet signed in to the registry through the directory are added
+after their first such sign-in.
+
+`scripts/dev/authentik-bootstrap.sh` makes the Dashboards side when
+`AGENTRY_DASHBOARDS_URL` is set (idempotent, like the rest):
+
+- the mirror group (`AGENTRY_IDP_STAFF_MIRROR_GROUP`, default
+  `agentry-staff`; give the server the same value);
+- a `roles` scope mapping whose claim is `["agentry-reader"]` for a member
+  of that group and `[]` for anyone else;
+- the OAuth2 provider `agentry-dashboards` (authorization code only,
+  redirect `<url>/auth/openid/login`) and its application, which admits
+  members of the group alone. The application uses an expression policy
+  rather than a group binding, because authentik deletes a group's
+  bindings along with the group, and the expression then fails closed. Its
+  policy engine mode is `all`, so a policy bound later cannot admit anyone
+  by itself;
+- the client id and secret, written to `AGENTRY_DASHBOARDS_SECRET_FILE`
+  (default `~/.config/agentry/dashboards-oidc.env`, mode 0600, outside any
+  checkout) and never printed. A re-run keeps the secret in an existing
+  file.
+
+It prints the provider's OpenID configuration URL, which the log stack's
+Dashboards takes (agentry-logging#49).
+
 **Moving a deployment onto the rule, in this order.**
 
 1. Make sure the staff organization exists, founded by an account that is

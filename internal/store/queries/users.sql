@@ -32,6 +32,30 @@ UPDATE users SET totp_secret_enc = $2, totp_enabled = false, updated_at = now() 
 -- name: EnableUserTOTP :exec
 UPDATE users SET totp_enabled = true, updated_at = now() WHERE id = $1;
 
+-- name: ListStaffMirrorAccounts :many
+-- Every account that is platform staff and active, with its verified
+-- address (lower-cased; the directory's match is case-blind) and each
+-- directory subject it is linked to by a directory sign-in, "authentik:"
+-- stripped (empty when it has none): the set the directory's staff mirror
+-- group is kept equal to (agentry#598).
+SELECT u.id, lower(u.email)::text AS email,
+       coalesce(substring(i.subject from 11), '')::text AS directory_subject
+FROM users u
+LEFT JOIN identities i ON i.user_id = u.id AND i.provider_kind = 'social'
+     AND i.sso_connection_id IS NULL AND i.subject LIKE 'authentik:%'
+WHERE u.platform_staff AND u.state = 'active' AND u.email_verified_at IS NOT NULL
+ORDER BY 2, 3;
+
+-- name: ListStaffOrgMembersNotStaff :many
+-- Active members of the staff organization who are not platform staff: an
+-- address outside its domain or unverified, or an account that is not
+-- active (agentry#598). Reported at start-up, never removed.
+SELECT h.handle FROM memberships m
+JOIN users u ON u.id = m.user_id
+JOIN handles h ON h.id = u.id
+WHERE m.org_id = $1 AND m.state = 'active' AND NOT u.platform_staff
+ORDER BY h.handle;
+
 -- name: ListStaffSyncCandidates :many
 -- The accounts whose platform_staff the staff rule could change
 -- (agentry#556): every account flagged today, and every active member of

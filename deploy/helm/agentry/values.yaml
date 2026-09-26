@@ -70,6 +70,11 @@ config:
     # staffDomain; the organization admits nobody else. Set both or neither.
     staffOrg: ""
     staffDomain: ""
+    # The directory group the registry keeps equal to its platform staff
+    # (agentry#598), written through idpAdminURL and secret.idpAdminToken,
+    # for a directory application that admits staff alone (the log stack's
+    # Dashboards). Needs staffOrg and the admin URL and token. Empty: none.
+    idpStaffMirrorGroup: ""
     # Retired (agentry#556): they grant nothing, and the server warns at
     # start-up while either is set.
     idpStaffGroup: ""

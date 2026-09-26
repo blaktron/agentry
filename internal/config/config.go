@@ -231,6 +231,16 @@ type Auth struct {
 	// DNS name, matched exactly (no subdomain) against the account's
 	// verified address.
 	StaffDomain string `yaml:"staffDomain"`
+	// IdPStaffMirrorGroup names the directory group the registry keeps equal
+	// to its platform staff (agentry#598): every active account with the
+	// platform_staff flag, and nobody else, matched by verified address. It
+	// is a mirror, written by the registry through IdPAdminURL/IdPAdminToken,
+	// never read back as a source: the flag stays the staff organization's
+	// (agentry#556). A directory application that should admit staff alone,
+	// such as the log stack's Dashboards, reads membership of this group from
+	// its tokens. Empty means no mirror. It needs the admin URL and token and
+	// the staff organization.
+	IdPStaffMirrorGroup string `yaml:"idpStaffMirrorGroup"`
 	// IdPStaffGroup is retired (agentry#556): the directory group of
 	// DEV-083 no longer grants platform staff. It is still read, so a
 	// configuration that sets it loads, and the server warns at start-up.
@@ -798,6 +808,7 @@ func applyEnv(c *Config) error {
 	str("AGENTRY_STAFF_ORG", &c.Auth.StaffOrg)
 	str("AGENTRY_STAFF_DOMAIN", &c.Auth.StaffDomain)
 	str("AGENTRY_IDP_STAFF_GROUP", &c.Auth.IdPStaffGroup)
+	str("AGENTRY_IDP_STAFF_MIRROR_GROUP", &c.Auth.IdPStaffMirrorGroup)
 	str("AGENTRY_IDP_STAFF_DOMAIN", &c.Auth.IdPStaffDomain)
 	if err := boolean("AGENTRY_AUTH_REQUIRE_IDP_MFA", &c.Auth.RequireIdPMFA); err != nil {
 		return err
@@ -992,6 +1003,20 @@ func (c Config) Validate() error {
 		// Half a rule is no rule: an organization with no domain would admit
 		// anyone, and a domain with no organization names nobody.
 		return fmt.Errorf("config: auth.staffOrg and auth.staffDomain are set together or not at all (got %q and %q)", c.Auth.StaffOrg, c.Auth.StaffDomain)
+	}
+	if g := c.Auth.IdPStaffMirrorGroup; g != "" {
+		// The mirror is written through the directory's admin API and filled
+		// from the staff organization: without either it would be a group
+		// nobody keeps, which an application would still read as staff.
+		if c.Auth.IdPAdminURL == "" || c.Auth.IdPAdminToken == "" {
+			return fmt.Errorf("config: auth.idpStaffMirrorGroup needs auth.idpAdminURL and auth.idpAdminToken, which the registry writes the group through")
+		}
+		if c.Auth.StaffOrg == "" {
+			return fmt.Errorf("config: auth.idpStaffMirrorGroup needs auth.staffOrg and auth.staffDomain: the group mirrors the staff organization's platform staff")
+		}
+		if g == c.Auth.IdPStaffGroup {
+			return fmt.Errorf("config: auth.idpStaffMirrorGroup must not be the retired auth.idpStaffGroup (%q): that group was a source of staff, the mirror is written by the registry", g)
+		}
 	}
 	if o := c.Auth.StaffOrg; o != "" && !staffOrgRE.MatchString(o) {
 		return fmt.Errorf("config: auth.staffOrg must be an organization handle like agentry, got %q", o)

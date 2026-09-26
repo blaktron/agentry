@@ -12,6 +12,16 @@
 # Optional:
 #   AGENTRY_CLIENT_ID   (default agentry-registry)
 #   CURL_FLAGS          e.g. -k while the edge still runs a self-signed cert
+# Optional, the log stack's Dashboards (agentry#598; skipped unless the URL is set):
+#   AGENTRY_DASHBOARDS_URL             e.g. https://dash.<host> — Dashboards' public URL
+#   AGENTRY_IDP_STAFF_MIRROR_GROUP     the group the registry keeps equal to its
+#                                      platform staff (default agentry-staff); give the
+#                                      server the same value
+#   AGENTRY_DASHBOARDS_CLIENT_ID       (default agentry-dashboards)
+#   AGENTRY_DASHBOARDS_SECRET_FILE     where the client id and secret are written, 0600
+#                                      (default ${XDG_CONFIG_HOME:-~/.config}/agentry/
+#                                      dashboards-oidc.env, outside any checkout); an
+#                                      existing file's secret is kept, and never printed
 set -euo pipefail
 
 : "${AUTHENTIK_URL:?}" "${AUTHENTIK_BOOTSTRAP_TOKEN:?}"
@@ -152,6 +162,131 @@ APP_PK=$(curlx "$API/core/applications/agentry/" | jget "d['pk']")
 BRAND_PK=$(curlx "$API/core/brands/?domain=authentik-default" | jget "d['results'][0]['brand_uuid']")
 curlx -X PATCH "$API/core/brands/$BRAND_PK/" -d "$(APP_PK="$APP_PK" python3 -c "import json,os;print(json.dumps({'default_application':os.environ['APP_PK'],'flow_user_settings':None}))")" -o /dev/null
 echo "brand $BRAND_PK: default_application=$APP_PK, flow_user_settings=null"
+
+if [ -n "${AGENTRY_DASHBOARDS_URL:-}" ]; then
+  # The log stack's Dashboards signs in here too (agentry#598). Its tokens
+  # carry `roles`: ["agentry-reader"] for a member of the staff mirror group,
+  # which the registry keeps equal to its platform staff, and nothing else;
+  # the application is bound to the group, so nobody else is even given a
+  # token. The group is written by the registry alone (AGENTRY_IDP_STAFF_MIRROR_GROUP
+  # on the server); adding someone to it here is undone at its next run.
+  DASH_URL="${AGENTRY_DASHBOARDS_URL%/}"
+  MIRROR_GROUP="${AGENTRY_IDP_STAFF_MIRROR_GROUP:-agentry-staff}"
+  DASH_CLIENT_ID="${AGENTRY_DASHBOARDS_CLIENT_ID:-agentry-dashboards}"
+  DASH_SECRET_FILE="${AGENTRY_DASHBOARDS_SECRET_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/agentry/dashboards-oidc.env}"
+  ( umask 077; mkdir -p "$(dirname "$DASH_SECRET_FILE")" )
+  export DASH_URL MIRROR_GROUP DASH_CLIENT_ID
+
+  echo "== Dashboards: the staff mirror group =="
+  GROUP_PK=$(curlx -G --data-urlencode "name=$MIRROR_GROUP" "$API/core/groups/" | jget "(d['results'][0]['pk'] if d['results'] else '')")
+  if [ -z "$GROUP_PK" ]; then
+    GROUP_PK=$(curlx -X POST "$API/core/groups/" -d "$(python3 -c 'import json,os;print(json.dumps({"name":os.environ["MIRROR_GROUP"]}))')" | jget "d['pk']")
+    echo "created group $MIRROR_GROUP"
+  else
+    echo "group $MIRROR_GROUP exists"
+  fi
+
+  echo "== Dashboards: the roles claim =="
+  ROLES_NAME="Agentry: Dashboards roles (staff mirror)"; export ROLES_NAME
+  ROLES_BODY=$(python3 -c '
+import json, os
+g = os.environ["MIRROR_GROUP"]
+print(json.dumps({
+  "name": os.environ["ROLES_NAME"], "scope_name": "roles",
+  "description": "Dashboards reader role for platform staff",
+  "expression": "# The registry keeps this group equal to its platform staff (agentry#598).\n"
+                "return {\"roles\": [\"agentry-reader\"] if ak_is_group_member(request.user, name=%r) else []}" % g,
+}))')
+  ROLES_PK=$(curlx -G --data-urlencode "name=$ROLES_NAME" "$API/propertymappings/provider/scope/" | jget "(d['results'][0]['pk'] if d['results'] else '')")
+  if [ -z "$ROLES_PK" ]; then
+    ROLES_PK=$(curlx -X POST "$API/propertymappings/provider/scope/" -d "$ROLES_BODY" | jget "d['pk']")
+    echo "created roles mapping $ROLES_PK"
+  else
+    curlx -X PATCH "$API/propertymappings/provider/scope/$ROLES_PK/" -d "$ROLES_BODY" -o /dev/null
+    echo "updated roles mapping $ROLES_PK"
+  fi
+
+  echo "== Dashboards: the client secret =="
+  DASH_SECRET=""
+  if [ -f "$DASH_SECRET_FILE" ]; then
+    DASH_SECRET=$(sed -n 's/^AGENTRY_DASHBOARDS_OIDC_CLIENT_SECRET=//p' "$DASH_SECRET_FILE" | tail -1)
+  fi
+  if [ -z "$DASH_SECRET" ]; then
+    DASH_SECRET=$(python3 -c 'import secrets;print(secrets.token_urlsafe(48))')
+    ( umask 077; printf 'AGENTRY_DASHBOARDS_OIDC_CLIENT_ID=%s\nAGENTRY_DASHBOARDS_OIDC_CLIENT_SECRET=%s\n' "$DASH_CLIENT_ID" "$DASH_SECRET" > "$DASH_SECRET_FILE" )
+    echo "wrote a new client id and secret to $DASH_SECRET_FILE"
+  else
+    echo "kept the client secret in $DASH_SECRET_FILE"
+  fi
+  export DASH_SECRET ROLES_PK
+
+  echo "== Dashboards: the provider =="
+  DASH_BODY=$(python3 -c '
+import json, os
+dash = os.environ["DASH_URL"]
+mappings = json.loads(os.environ["SCOPE_MAPPINGS"]) + [os.environ["ROLES_PK"]]
+p = {
+  "name": "agentry-dashboards", "authorization_flow": os.environ["AUTHZ_FLOW"],
+  "client_type": "confidential", "client_id": os.environ["DASH_CLIENT_ID"],
+  "client_secret": os.environ["DASH_SECRET"], "signing_key": os.environ["CERT"],
+  "sub_mode": "hashed_user_id", "include_claims_in_id_token": True,
+  "property_mappings": mappings,
+  # Authorization code only, as the registry'"'"'s provider (agentry#494).
+  "grant_types": ["authorization_code"],
+  # OpenSearch Dashboards returns to <base_redirect_url>/auth/openid/login
+  # and, signed out, to its base URL.
+  "redirect_uris": [{"matching_mode": "strict", "url": dash + "/auth/openid/login", "redirect_uri_type": "authorization"},
+                    {"matching_mode": "strict", "url": dash, "redirect_uri_type": "logout"}],
+}
+if os.environ.get("INVAL_FLOW"):
+    p["invalidation_flow"] = os.environ["INVAL_FLOW"]
+print(json.dumps(p))')
+  # The body carries the client secret: on stdin, not curl's command line.
+  DASH_PK=$(curlx "$API/providers/oauth2/?name=agentry-dashboards" | jget "(d['results'][0]['pk'] if d['results'] else '')")
+  if [ -z "$DASH_PK" ]; then
+    DASH_PK=$(printf '%s' "$DASH_BODY" | curlx -X POST "$API/providers/oauth2/" --data-binary @- | jget "d['pk']")
+    echo "created provider pk=$DASH_PK"
+  else
+    printf '%s' "$DASH_BODY" | curlx -X PATCH "$API/providers/oauth2/$DASH_PK/" --data-binary @- -o /dev/null
+    echo "updated provider pk=$DASH_PK"
+  fi
+  unset DASH_SECRET DASH_BODY
+
+  echo "== Dashboards: the application, admitting the group alone =="
+  # policy_engine_mode all: every bound policy must pass, so a policy bound
+  # later cannot let anyone else in by itself.
+  DASH_APP_BODY=$(DASH_PK="$DASH_PK" python3 -c "import json,os;print(json.dumps({'name':'Agentry Dashboards','slug':'agentry-dashboards','provider':int(os.environ['DASH_PK']),'meta_launch_url':os.environ['DASH_URL'],'open_in_new_tab':True,'policy_engine_mode':'all'}))")
+  if [ "$(curlx "$API/core/applications/?slug=agentry-dashboards" | jget "d['pagination']['count']")" = "0" ]; then
+    curlx -X POST "$API/core/applications/" -d "$DASH_APP_BODY" -o /dev/null
+    echo "created application slug=agentry-dashboards"
+  else
+    curlx -X PATCH "$API/core/applications/agentry-dashboards/" -d "$DASH_APP_BODY" -o /dev/null
+    echo "updated application slug=agentry-dashboards"
+  fi
+  DASH_APP_PK=$(curlx "$API/core/applications/agentry-dashboards/" | jget "d['pk']")
+  # An expression policy, not a group binding: authentik deletes a group's
+  # bindings with the group, which would leave the application open to every
+  # directory account; the expression fails closed when the group is gone.
+  POLICY_NAME="agentry-dashboards-staff-mirror"; export POLICY_NAME
+  POLICY_BODY=$(python3 -c 'import json,os;print(json.dumps({"name":os.environ["POLICY_NAME"],"expression":"# The registry keeps this group equal to its platform staff (agentry#598).\nreturn ak_is_group_member(request.user, name=%r)" % os.environ["MIRROR_GROUP"]}))')
+  POLICY_PK=$(curlx -G --data-urlencode "name=$POLICY_NAME" "$API/policies/expression/" | jget "(d['results'][0]['pk'] if d['results'] else '')")
+  if [ -z "$POLICY_PK" ]; then
+    POLICY_PK=$(curlx -X POST "$API/policies/expression/" -d "$POLICY_BODY" | jget "d['pk']")
+    echo "created policy $POLICY_NAME"
+  else
+    curlx -X PATCH "$API/policies/expression/$POLICY_PK/" -d "$POLICY_BODY" -o /dev/null
+    echo "updated policy $POLICY_NAME"
+  fi
+  if [ "$(curlx "$API/policies/bindings/?target=$DASH_APP_PK&policy=$POLICY_PK" | jget "d['pagination']['count']")" = "0" ]; then
+    curlx -X POST "$API/policies/bindings/" -d "$(APP="$DASH_APP_PK" POL="$POLICY_PK" python3 -c "import json,os;print(json.dumps({'target':os.environ['APP'],'policy':os.environ['POL'],'order':0,'enabled':True,'negate':False,'timeout':30}))")" -o /dev/null
+    echo "bound application to $POLICY_NAME"
+  else
+    echo "application already bound to $POLICY_NAME"
+  fi
+  echo "== Dashboards issuer (the log stack's OpenID connect URL) =="
+  echo "$AUTHENTIK_URL/application/o/agentry-dashboards/.well-known/openid-configuration"
+  echo "client id and secret: $DASH_SECRET_FILE"
+fi
 
 echo "== issuer (AGENTRY_SOCIAL_AUTHENTIK_ISSUER) =="
 echo "$AUTHENTIK_URL/application/o/agentry/"
