@@ -1,0 +1,13 @@
+Authentication
+
+Every request carries your secret key in the Authorization header:
+
+    curl https://api.payments.example/v1/charges \
+      -H "Authorization: Bearer sk_test_YOUR_TEST_KEY" \
+      -d amount=2000 -d currency=usd
+
+Keep live keys out of source control. Set them as environment variables instead:
+
+    export PAYMENTS_API_KEY=sk_live_...
+
+Errors: 401 means the key is missing or wrong; 402 means the card was declined.

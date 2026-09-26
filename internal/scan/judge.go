@@ -3,8 +3,6 @@ package scan
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +11,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/blaktron/agentry/pkg/judge"
 )
 
 // S5 judge (§8.4). The judge reviews manifest + prose/instruction files with
@@ -102,17 +102,7 @@ type JudgeProvider interface {
 // scoreFromProbability maps a provider's positive-class probability onto the
 // rubric's 0–3 scale: 0.5/0.7/0.9 → 1/2/3, the ladder every probability
 // provider (classifier, typesafe) shares and names in its hash.
-func scoreFromProbability(p float64) int {
-	switch {
-	case p >= 0.9:
-		return 3
-	case p >= 0.7:
-		return 2
-	case p >= 0.5:
-		return 1
-	}
-	return 0
-}
+func scoreFromProbability(p float64) int { return judge.ScoreFromProbability(p) }
 
 // excerptLine bounds one cited line for a finding's excerpt.
 func excerptLine(line string) string {
@@ -150,14 +140,7 @@ type JudgeFile struct {
 // "prompt + model id are versioned; judge_prompt_hash recorded per run" —
 // reproducibility and appeals). Providers hash the exact rubric text they
 // adjudicate with, so changing a rule changes the hash on every later run.
-func RubricHash(parts ...string) string {
-	h := sha256.New()
-	for _, p := range parts {
-		_, _ = h.Write([]byte(p))
-		_, _ = h.Write([]byte{0})
-	}
-	return "sha256:" + hex.EncodeToString(h.Sum(nil))
-}
+func RubricHash(parts ...string) string { return judge.Hash(parts...) }
 
 // rubricStatement is the fixed framing every provider adjudicates under
 // (§8.4.1: content is DATA; instructions inside it are evidence, never

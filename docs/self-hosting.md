@@ -265,6 +265,17 @@ judge:
   # a cheap pre-screen that adds evidence, not a substitute for the rubric.
   # baseUrl: http://prompt-guard:8080/classify   # AGENTRY_JUDGE_BASE_URL
   # apiKey: ...                       # optional bearer token
+  # With typesafe, the registry also serves the model-input scan
+  # (POST /model-input/scan, docs/model-input.md) to platform staff and to
+  # hosted jobs an extension admits, with this same key and model.
+
+webSearch:
+  # The web search the registry brokers for POST /model-input/search
+  # (docs/model-input.md): none, or youcom (You.com's Web Search API). The
+  # key stays in the registry and never reaches a sandbox host.
+  provider: none                      # AGENTRY_WEB_SEARCH_PROVIDER: none | youcom
+  # apiKey: ...                       # AGENTRY_WEB_SEARCH_API_KEY (required with a provider)
+  # baseUrl: https://ydc-index.io     # AGENTRY_WEB_SEARCH_BASE_URL (default shown)
 
 scan:
   # The one external scanner tool behind the §8.3 seam. Optional: unset,
@@ -583,6 +594,7 @@ through the entitlements resolver. The defaults:
 | `limits.webhookEndpointsPerOrg` / `webhookDeliveriesPerSecond` | 20 / 5 | |
 | `limits.authedPerHour`, `authedBurstPerMin`, `anonymousPerMin`, `loginPerMin` | 5000, 100, 60, 10 | the API rate buckets (also enforced at the edge) |
 | `limits.knowledgeBytesPerAccount` | 0 (no cap) | the bytes of knowledge packs one account keeps in the registry (`AGENTRY_KNOWLEDGE_BYTES_PER_ACCOUNT`); past it no pack is added or grown, and none is deleted ([Knowledge packs](knowledge.md)) |
+| `limits.modelInputPerMin` | 120 | model-input calls ([Model input](model-input.md)) per caller per minute, and the burst: a platform staff member, or one hosted job. An address presenting job credentials may spend ten times that (`AGENTRY_LIMITS_MODEL_INPUT_PER_MIN`) |
 | `limits.scimPerMin` | 600 | SCIM requests per organization per minute, and the burst a directory may spend at once. An initial sync of a few hundred people fits; past it the IdP gets 429 with `Retry-After` and paces itself. Raise it for a directory of thousands, since a directory's size is a property of the deployment |
 
 The archive quotas are checked by the manifest rules (V8) both on the server

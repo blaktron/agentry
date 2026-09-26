@@ -287,6 +287,42 @@ func TestApplyExtensionsSetsTheKeyWrapper(t *testing.T) {
 	}
 }
 
+// jobAdmitter is the shape SecureAgentry's runs extension takes for the
+// model-input routes (agentry#608): the AdmitsModelInput seam, with the
+// aliases alone.
+type jobAdmitter struct{ noop }
+
+func (jobAdmitter) ModelInputCallers() ModelInputCallers { return jobCallers{} }
+
+type jobCallers struct{}
+
+func (jobCallers) AdmitModelInput(_ context.Context, cred string, call ModelInputCall) (string, *Refusal, error) {
+	if call.Op == ModelInputOpSearch && call.Count > 10 {
+		return "", &Refusal{Status: http.StatusTooManyRequests, Slug: "draft-searches-used"}, nil
+	}
+	return strings.TrimPrefix(cred, "agyj_"), nil, nil
+}
+func (jobCallers) RecordModelInput(context.Context, string, ModelInputUse) {}
+
+var _ AdmitsModelInput = jobAdmitter{}
+
+// TestApplyExtensionsSetsTheModelInputCallers: an AdmitsModelInput
+// extension is what admits hosted jobs to the model-input routes; with none,
+// nothing does.
+func TestApplyExtensionsSetsTheModelInputCallers(t *testing.T) {
+	cfg := config.Default()
+	cfg.DevMode = true
+	cfg.Scan.OSVURL = "none"
+	srv := api.New(cfg, nil, slog.New(slog.DiscardHandler))
+	if srv.ModelInputCallers() != nil {
+		t.Fatal("a core server admits no job credentials")
+	}
+	applyExtensions(srv, []Extension{jobAdmitter{}})
+	if _, ok := srv.ModelInputCallers().(jobCallers); !ok {
+		t.Fatalf("after applyExtensions the callers are %T, want the extension's", srv.ModelInputCallers())
+	}
+}
+
 // poolingResolver is the shape a closed resolver that pools knowledge takes
 // (agentry#612): the PoolsKnowledge seam, with the aliases alone.
 type poolingResolver struct{ tiered }

@@ -1,0 +1,163 @@
+# Model input: AI Review before a model reads, and brokered web search
+
+Two registry routes serve work that feeds a model text from outside: the
+Drafter (the built-in package that drafts a BriefAgent from a person's
+description) and, later, a hosted run's input files. Both push text to
+the registry rather than holding a key of their own (agentry#608; plan
+`builder-rework.md` D20–D25):
+
+- `POST /api/v1/model-input/scan` asks the deployment's judge whether a
+  text an AI agent is about to read tries to steer it, and answers with a
+  verdict: `pass`, `withheld` or `not_scanned`.
+- `POST /api/v1/model-input/search` searches the web through the
+  deployment's provider, with the registry's key, and scans every result
+  the same way before returning it.
+
+This is not the publication scan. A release is still scanned at
+publication, by the pipeline (S1–S10), whatever these routes said about
+the text its draft was made from ([trust.md](trust.md)).
+
+## Who may call them
+
+The routes spend the deployment's own judge and search keys, so no
+account's token reaches them, whatever its scopes. Two callers do:
+
+- **Platform staff, by session** (the instance admin on a self-host). A
+  staff member's personal access token is refused like anyone's.
+- **A hosted job**, by the credential an extension minted for that one
+  job, in the `X-Agentry-Job-Token` header. The core has no such extension:
+  on a core registry the header is answered 401. SecureAgentry's runs
+  extension admits the Drafter's hosted draft kind through the
+  `AdmitsModelInput` seam of `pkg/extension`: it names the job a
+  credential acts for, may refuse a call past the job's caps (a draft past
+  its searches, say) in its own status and words, and hears what each
+  admitted call spent. The credential never enters a run's containers; the
+  sandbox host's tool plane presents it.
+
+Anything else is 401 (no credential) or 403 (the wrong one). A request
+carrying a session and a job credential together is 400.
+
+## The scan
+
+The request is `{"source": …, "text": …}`. `source` says what the text
+is: `description`, `search_result`, `page`, `registry` or `input_file`.
+`text` is at most 65,536 bytes of UTF-8 (eight chunks); a longer text is
+sent in parts. A larger one is `413 model-input-too-large`.
+
+The text is cut into 8 KiB chunks at line ends where it can be (never
+inside a character), and every chunk is asked the **model-input question
+set** in one request each, up to four chunks at once:
+
+| Question | Asks whether the text… |
+|---|---|
+| `injection` | tries to instruct the AI agent reading it: override its instructions, change what it does next, make it work for someone else |
+| `exfiltration` | directs the agent to send conversation history, secrets, credentials, keys or private files anywhere, a link or an image address included |
+| `deception` | tells the agent to mislead the person it works for, or hide something from them |
+| `obfuscation` | carries instructions that are encoded, hidden or disguised: base64 or hex payloads, invisible characters (zero-width or Unicode tag characters), comments or markup a person would not see |
+
+These are four of the publication rubric's six, re-worded for text read
+as data. The rubric's undeclared-capability and destructive-action
+questions are not asked: they judge a release against its own declared
+contract, and a page has none. Each question says what does not count
+(installation steps, commands to run, configuration and API usage written
+for a person; text that only documents or quotes an attack), because a
+documented `curl | bash` must not read as an injection. The texts are
+constants in `pkg/judge`, and nothing from the scanned text is rendered
+into them: the text travels in the request's state beside its `source`,
+as data.
+
+Each answer is a probability; 0.5, 0.7 and 0.9 are scores 1, 2 and 3. An
+answer between 0.30 and 0.70 is asked twice more and the highest kept,
+never the mean. The text's score is the highest over every chunk and
+question, and the verdict follows:
+
+- **`withheld`**: some question scored 2 or more (the gate's medium). The
+  caller gives the model the source's address and the reason, never the
+  text.
+- **`not_scanned`**: the judge could not answer for some chunk (an error,
+  a timeout, an answer out of shape). A caller treats it as withheld: the
+  scan fails closed.
+- **`pass`**: neither.
+
+A flag wins over a chunk that was not scanned. The answer carries each
+chunk's scores (or its failure, `timeout` or `judge-error`), the flagged
+questions, the pinned model, the question set's hash and `usage`, the
+judge's requests and input tokens. `usage` is for the record. It is never
+a price: AI Review is charged per operation, however many scans it makes
+(DEV-150).
+
+The question set was benched before anything used it, on hostile pages
+(instructions in comments, hidden text, encoded, invisible and
+tag-character payloads, fake tool calls, exfiltration through links) and
+benign ones (install guides, API references with example keys, an article
+that quotes an injection, an `AGENTS.md`, an `llms.txt`). The corpus is
+`pkg/judge/testdata/model-input-bench`, the bench is `TestModelInputBench`
+(it needs `AGENTRY_JUDGE_BENCH=1` and a Jev key), and the readings are in
+the engineering record's `measurements/model-input-bench.md`. A bench
+bounds what it measured, not what it did not: a sufficiently novel
+injection can pass this scan as it can pass the publication scan.
+
+## The search
+
+The request is `{"query": …, "count": …}`: a query of 1 to 400 characters
+with no control characters, and 1 to 10 results (5 when unset). The
+registry asks its provider, drops any result without an absolute `http` or
+`https` address (or with user information in it), folds and cuts each
+title to 300 characters and each snippet to 1,000, and scans every result
+as a `search_result`: its title, address and snippet together, since an
+address can carry an instruction too.
+
+Only scanned results come back. A result that passed carries its title and
+snippet; one that was withheld or not scanned carries its address, verdict,
+score and flags, never its text. `withheld` counts both. A provider that
+does not answer is `502 web-search-failed`; nothing is returned.
+
+The query goes to the provider and to nowhere else: it is neither kept nor
+logged. With no judge to scan the results the search is not made at all.
+
+## Configuration
+
+The scan needs the deployment's judge to be TypeSafe's Jev
+(`AGENTRY_JUDGE_TYPE=typesafe`; [self-hosting.md](self-hosting.md)), and
+uses its key and pinned model. With any other judge, or none, both routes
+answer `503 model-input-unavailable`.
+
+The search needs a provider:
+
+| Variable | Meaning |
+|---|---|
+| `AGENTRY_WEB_SEARCH_PROVIDER` | `none` (the default: `503 web-search-unavailable`) or `youcom`, You.com's Web Search API |
+| `AGENTRY_WEB_SEARCH_API_KEY` | the provider's key; required with a provider, never logged |
+| `AGENTRY_WEB_SEARCH_BASE_URL` | the provider's API root, for a test double; empty is the provider's own |
+
+A provider named without its key, or a name the registry does not know,
+refuses startup. The provider's host (`ydc-index.io:443` for You.com) must
+be reachable from the registry's API role; no sandbox host needs it.
+
+## Budgets
+
+Each caller (a staff member, or one job) has
+`limits.modelInputPerMin` calls a minute (`AGENTRY_LIMITS_MODEL_INPUT_PER_MIN`,
+120), refused with 429 past it. A job's calls are not drawn from the
+anonymous rate class by address, because every sandbox host behind one NAT
+shares an address; an address presenting job credentials has ten times a
+caller's budget instead, which bounds guessing at credentials. Across a
+replica, the routes' requests to the judge are paced under Jev's rate
+limit, leaving the publication pipeline its share of the key; a chunk that
+cannot be asked before its call's 45-second deadline is not scanned.
+
+## What is recorded
+
+Nothing of a text, a query or a result's address is kept. Each call
+writes one `model_input.call` log line ([logging.md](logging.md)) with its
+operation, caller kind, job, verdict, source and counts, and counts into
+the `ModelInputCalls{op,verdict}` and `ModelInputJudgeTokens{op}` metrics.
+A chunk that was not scanned also logs the judge client's error, with the
+key redacted.
+
+## Scanning on a person's own machine
+
+`pkg/judge` is the same client and the same question set, exported, so the
+CLI and the desktop can scan a local draft's inputs with the person's own
+Jev key and ask exactly what the registry asks (D25). `pkg/websearch` is
+the provider client, for a person's own search key.

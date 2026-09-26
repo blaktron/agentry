@@ -83,9 +83,7 @@ func typesafeServer(t *testing.T, answer func(call int, id string, c typesafeCal
 
 func newTestTypeSafe(t *testing.T, srv *httptest.Server) *TypeSafeJudge {
 	t.Helper()
-	j := NewTypeSafeJudge(JudgeConfig{Provider: "typesafe", BaseURL: srv.URL, APIKey: "tok"})
-	j.retryWait = 0
-	return j
+	return newTypeSafeJudge(JudgeConfig{Provider: "typesafe", BaseURL: srv.URL, APIKey: "tok"}, -1)
 }
 
 func benign(int, string, typesafeCall) (float64, int) { return 0.01, 0 }
@@ -471,7 +469,7 @@ func TestTypeSafeJudgeIsWiredIntoTheFactory(t *testing.T) {
 			t.Fatalf("PinnedJudgeModel(%q) = %v", m, !want)
 		}
 	}
-	if j, ok := p.(*TypeSafeJudge); !ok || j.endpoint != typesafeDefaultBaseURL+"/v1/systemone" {
+	if j, ok := p.(*TypeSafeJudge); !ok || j.client.Endpoint() != typesafeDefaultBaseURL+"/v1/systemone" {
 		t.Fatalf("default endpoint: %+v", p)
 	}
 }
@@ -507,5 +505,32 @@ func TestS5ReadsEveryTextFile(t *testing.T) {
 			paths = append(paths, c.State.Path)
 		}
 		t.Fatalf("the judge never saw the fixture's script; states: %v", paths)
+	}
+}
+
+// The rubric's six texts moved into pkg/judge (agentry#608) byte for byte,
+// and the request shapes with them: the hash a run records under each shape
+// is the one recorded before the move, so no run reads as a new rubric.
+func TestTypeSafeRubricHashIsUnchangedByTheMoveToPkgJudge(t *testing.T) {
+	want := map[int]string{
+		1: "sha256:6e875adc14dce8c61b17cf7a78baab58d8edf7cb4073985e76305ed5ae35ad05",
+		2: "sha256:3f4b5a087e4cef3ce0ada18a07554da27cf3a02ef9ffe8629d58be14a6a52cbc",
+		6: "sha256:fac5aa066f97b25cc134556ff463bcb5f5502353f52253a3e1838d5c90e43c35",
+	}
+	for batch, h := range want {
+		j := NewTypeSafeJudge(JudgeConfig{Provider: "typesafe", APIKey: "k"})
+		j.batch = batch
+		if got := j.hash(); got != h {
+			t.Fatalf("batch %d: rubric hash %s, want %s", batch, got, h)
+		}
+	}
+}
+
+// A judge that could not be built (no key) fails every verdict closed, as
+// the S5 stage error it becomes.
+func TestTypeSafeJudgeWithoutAKeyFailsClosed(t *testing.T) {
+	j := NewTypeSafeJudge(JudgeConfig{Provider: "typesafe"})
+	if _, err := j.Judge(context.Background(), JudgeContent{ManifestJSON: []byte(`{}`), Files: []JudgeFile{{Path: "a.md", Content: "x"}}}); err == nil {
+		t.Fatal("a judge with no key must fail closed")
 	}
 }

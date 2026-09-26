@@ -1,0 +1,4 @@
+Title: GitHub MCP Server — GitHub Docs
+URL: https://docs.github.example/mcp/server
+Snippet: Use the GitHub MCP server to let AI tools read issues and pull requests. Install it with npx and
+authenticate with a fine-grained personal access token.
