@@ -127,6 +127,9 @@ for role in api worker git; do
   sas="$sas $name"
 done
 check "no two roles share a ServiceAccount" "$(printf '%s\n' $sas | sort -u | wc -l | tr -d ' ')" 3
+long=$(printf 'a%.0s' $(seq 1 63))
+long_sas=$(helm template acc "$HELM_DIR" "${PROD[@]}" --set fullnameOverride="$long" --show-only templates/serviceaccount.yaml | sed -n 's/^  name: //p' | sort -u | wc -l | tr -d ' ')
+check "a 63-character fullname still gives three distinct accounts" "$long_sas" 3
 if helm template acc "$HELM_DIR" "${PROD[@]}" --set serviceAccount.name=shared >/dev/null 2>&1; then
   echo "FAIL serviceAccount.name with create rendered (one account for every role)"; fail=1
 else

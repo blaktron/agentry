@@ -58,7 +58,9 @@ every role runs under the one existing account serviceAccount.name. */}}
 {{- if $ctx.Values.serviceAccount.name -}}
 {{- fail "serviceAccount.name names an existing account, and needs serviceAccount.create=false: with create, the chart makes one account per role (<release>-agentry-api, -worker and -git)" -}}
 {{- end -}}
-{{- printf "%s-%s" (include "agentry.fullname" $ctx) .role | trunc 63 | trimSuffix "-" -}}
+{{- /* The fullname is cut to leave room for "-worker", the longest role, so
+truncation never makes two roles' names one. */ -}}
+{{- printf "%s-%s" (include "agentry.fullname" $ctx | trunc 56 | trimSuffix "-") .role -}}
 {{- else -}}
 {{- default "default" $ctx.Values.serviceAccount.name -}}
 {{- end -}}
