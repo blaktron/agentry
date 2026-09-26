@@ -61,12 +61,19 @@ func (s *Store) Queries() *storegen.Queries { return storegen.New(s.pool) }
 // WithTx runs fn inside a transaction, passing transaction-bound queries.
 // Commit on nil, rollback on error or panic.
 func (s *Store) WithTx(ctx context.Context, fn func(q *storegen.Queries) error) error {
+	return s.WithPgxTx(ctx, func(_ pgx.Tx, q *storegen.Queries) error { return fn(q) })
+}
+
+// WithPgxTx is WithTx that also hands fn the transaction itself, for a step
+// that is not a generated query: an extension's own writes in the core's
+// erasure (pkg/extension.ErasesAccounts, agentry#638).
+func (s *Store) WithPgxTx(ctx context.Context, fn func(tx pgx.Tx, q *storegen.Queries) error) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("store: begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err := fn(storegen.New(tx)); err != nil {
+	if err := fn(tx, storegen.New(tx)); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
