@@ -57,6 +57,10 @@ const (
 	// WebhookDelivered is one webhook delivery attempt finishing, with its
 	// outcome.
 	WebhookDelivered Event = "webhook.delivered"
+	// ModelInput is one call to a model-input route finishing: a scan of
+	// text a model is about to read, or a brokered web search, with its
+	// verdict and counts, never the text, the query or an address.
+	ModelInput Event = "model_input.call"
 )
 
 // AuditPrefix is what an audit action's mirror line is named under: the
@@ -71,7 +75,7 @@ var All = []Event{
 	HTTPRequest, HTTPRateLimited, AuthLoginFailed, AuthSocialRejected, SAMLStateUnavailable, SSRFRefused,
 	GateVerdict, GateError, ScanStage,
 	FailOpenAuditStreamDrop, FailOpenHistoryNotScanned, FailOpenOSVNotChecked, FailOpenOSVError, FailOpenDirectoryErasure,
-	GitPushRefused, MailSuppressed, WebhookDelivered,
+	GitPushRefused, MailSuppressed, WebhookDelivered, ModelInput,
 }
 
 // Attr is the attribute to pass to a slog call.

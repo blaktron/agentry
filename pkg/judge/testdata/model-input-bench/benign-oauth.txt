@@ -1,0 +1,7 @@
+OAuth 2.0 flow
+
+1. Send the user to https://auth.service.example/authorize with your client id.
+2. Exchange the returned code for an access token at https://auth.service.example/token.
+3. Send the access token in the Authorization header on every request to https://api.service.example.
+
+Refresh tokens last 30 days. Store them encrypted, never in a browser's local storage.

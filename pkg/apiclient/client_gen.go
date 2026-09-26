@@ -516,6 +516,96 @@ func (e MembershipState) Valid() bool {
 	}
 }
 
+// Defines values for ModelInputChunkFailure.
+const (
+	JudgeError ModelInputChunkFailure = "judge-error"
+	Timeout    ModelInputChunkFailure = "timeout"
+)
+
+// Valid indicates whether the value is a known member of the ModelInputChunkFailure enum.
+func (e ModelInputChunkFailure) Valid() bool {
+	switch e {
+	case JudgeError:
+		return true
+	case Timeout:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelInputScanFlagged.
+const (
+	ModelInputScanFlaggedDeception    ModelInputScanFlagged = "deception"
+	ModelInputScanFlaggedExfiltration ModelInputScanFlagged = "exfiltration"
+	ModelInputScanFlaggedInjection    ModelInputScanFlagged = "injection"
+	ModelInputScanFlaggedObfuscation  ModelInputScanFlagged = "obfuscation"
+)
+
+// Valid indicates whether the value is a known member of the ModelInputScanFlagged enum.
+func (e ModelInputScanFlagged) Valid() bool {
+	switch e {
+	case ModelInputScanFlaggedDeception:
+		return true
+	case ModelInputScanFlaggedExfiltration:
+		return true
+	case ModelInputScanFlaggedInjection:
+		return true
+	case ModelInputScanFlaggedObfuscation:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelInputSource.
+const (
+	Description  ModelInputSource = "description"
+	InputFile    ModelInputSource = "input_file"
+	Page         ModelInputSource = "page"
+	Registry     ModelInputSource = "registry"
+	SearchResult ModelInputSource = "search_result"
+)
+
+// Valid indicates whether the value is a known member of the ModelInputSource enum.
+func (e ModelInputSource) Valid() bool {
+	switch e {
+	case Description:
+		return true
+	case InputFile:
+		return true
+	case Page:
+		return true
+	case Registry:
+		return true
+	case SearchResult:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelInputVerdict.
+const (
+	NotScanned ModelInputVerdict = "not_scanned"
+	Pass       ModelInputVerdict = "pass"
+	Withheld   ModelInputVerdict = "withheld"
+)
+
+// Valid indicates whether the value is a known member of the ModelInputVerdict enum.
+func (e ModelInputVerdict) Valid() bool {
+	switch e {
+	case NotScanned:
+		return true
+	case Pass:
+		return true
+	case Withheld:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OrgRole.
 const (
 	OrgRoleAdmin            OrgRole = "admin"
@@ -909,6 +999,30 @@ func (e VersionStatus) Valid() bool {
 	case VersionStatusSubmitted:
 		return true
 	case VersionStatusYanked:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WebSearchResultFlagged.
+const (
+	WebSearchResultFlaggedDeception    WebSearchResultFlagged = "deception"
+	WebSearchResultFlaggedExfiltration WebSearchResultFlagged = "exfiltration"
+	WebSearchResultFlaggedInjection    WebSearchResultFlagged = "injection"
+	WebSearchResultFlaggedObfuscation  WebSearchResultFlagged = "obfuscation"
+)
+
+// Valid indicates whether the value is a known member of the WebSearchResultFlagged enum.
+func (e WebSearchResultFlagged) Valid() bool {
+	switch e {
+	case WebSearchResultFlaggedDeception:
+		return true
+	case WebSearchResultFlaggedExfiltration:
+		return true
+	case WebSearchResultFlaggedInjection:
+		return true
+	case WebSearchResultFlaggedObfuscation:
 		return true
 	default:
 		return false
@@ -2093,6 +2207,82 @@ type Meta struct {
 	Version string `json:"version"`
 }
 
+// ModelInputChunk defines model for ModelInputChunk.
+type ModelInputChunk struct {
+	Bytes int `json:"bytes"`
+
+	// Failure Why a chunk was not scanned.
+	Failure *ModelInputChunkFailure `json:"failure,omitempty"`
+	Index   int                     `json:"index"`
+
+	// Scores Per question, 0 to 3 (0.5, 0.7 and 0.9 are 1, 2 and 3).
+	Scores *ModelInputScores `json:"scores,omitempty"`
+
+	// Verdict `pass`: no question scored 2 or more. `withheld`: one did; the model gets the source's address and the reason, never the text. `not_scanned`: the judge could not answer for part of the text; a caller treats it as withheld.
+	Verdict ModelInputVerdict `json:"verdict"`
+}
+
+// ModelInputChunkFailure Why a chunk was not scanned.
+type ModelInputChunkFailure string
+
+// ModelInputScan defines model for ModelInputScan.
+type ModelInputScan struct {
+	Chunks []ModelInputChunk `json:"chunks"`
+
+	// Flagged The questions that scored 2 or more.
+	Flagged []ModelInputScanFlagged `json:"flagged"`
+
+	// Model The pinned judge model, such as `jev-1.13.0`.
+	Model string `json:"model"`
+
+	// QuestionSet The hash of the question set and everything else that changes a verdict (model, wording, chunk size, thresholds).
+	QuestionSet string `json:"questionSet"`
+
+	// Score The highest score over every chunk and question.
+	Score int `json:"score"`
+
+	// Scores Per question, 0 to 3 (0.5, 0.7 and 0.9 are 1, 2 and 3).
+	Scores ModelInputScores `json:"scores"`
+
+	// Usage The judge's requests and input tokens, for the record. Never a price: AI Review is charged per operation (DEV-150).
+	Usage ModelInputUsage `json:"usage"`
+
+	// Verdict `pass`: no question scored 2 or more. `withheld`: one did; the model gets the source's address and the reason, never the text. `not_scanned`: the judge could not answer for part of the text; a caller treats it as withheld.
+	Verdict ModelInputVerdict `json:"verdict"`
+}
+
+// ModelInputScanFlagged defines model for ModelInputScan.Flagged.
+type ModelInputScanFlagged string
+
+// ModelInputScanRequest defines model for ModelInputScanRequest.
+type ModelInputScanRequest struct {
+	// Source What the text is: a person's description, one web search result, a web page's text, an answer from the registry's public API, or a hosted run's input file as decoded text. It rides beside the text in the judge's state; nothing of the text reaches a question.
+	Source ModelInputSource `json:"source"`
+
+	// Text The text as the model would read it, at most 65,536 bytes of UTF-8 (eight chunks); a longer text is sent in parts.
+	Text string `json:"text"`
+}
+
+// ModelInputScores Per question, 0 to 3 (0.5, 0.7 and 0.9 are 1, 2 and 3).
+type ModelInputScores struct {
+	Deception    int `json:"deception"`
+	Exfiltration int `json:"exfiltration"`
+	Injection    int `json:"injection"`
+	Obfuscation  int `json:"obfuscation"`
+}
+
+// ModelInputSource What the text is: a person's description, one web search result, a web page's text, an answer from the registry's public API, or a hosted run's input file as decoded text. It rides beside the text in the judge's state; nothing of the text reaches a question.
+type ModelInputSource string
+
+// ModelInputUsage The judge's requests and input tokens, for the record. Never a price: AI Review is charged per operation (DEV-150).
+type ModelInputUsage struct {
+	InputTokens int `json:"inputTokens"`
+	Requests    int `json:"requests"`
+}
+
+// ModelInputVerdict `pass`: no question scored 2 or more. `withheld`: one did; the model gets the source's address and the reason, never the text. `not_scanned`: the judge could not answer for part of the text; a caller treats it as withheld.
+type ModelInputVerdict string
+
 // NotificationSettings defines model for NotificationSettings.
 type NotificationSettings struct {
 	// Email Which of the registry's mails the person receives.
@@ -2636,6 +2826,53 @@ type VersionStatus string
 type WebNotificationSettings struct {
 	// DependencyAlerts Show the dependency-alert banner on every page while an alert is open (the dashboard lists alerts regardless).
 	DependencyAlerts bool `json:"dependencyAlerts"`
+}
+
+// WebSearchRequest defines model for WebSearchRequest.
+type WebSearchRequest struct {
+	// Count How many results to ask the provider for; clamped to 1–10.
+	Count *int   `json:"count,omitempty"`
+	Query string `json:"query"`
+}
+
+// WebSearchResult defines model for WebSearchResult.
+type WebSearchResult struct {
+	Flagged *[]WebSearchResultFlagged `json:"flagged,omitempty"`
+	Score   int                       `json:"score"`
+
+	// Scores Per question, 0 to 3 (0.5, 0.7 and 0.9 are 1, 2 and 3).
+	Scores *ModelInputScores `json:"scores,omitempty"`
+
+	// Snippet Present only when the result passed.
+	Snippet *string `json:"snippet,omitempty"`
+
+	// Title Present only when the result passed.
+	Title *string `json:"title,omitempty"`
+
+	// Url The result's address when it passed; only its origin (scheme and host) when it was withheld or not scanned, since a path or a query can carry an instruction too.
+	Url string `json:"url"`
+
+	// Verdict `pass`: no question scored 2 or more. `withheld`: one did; the model gets the source's address and the reason, never the text. `not_scanned`: the judge could not answer for part of the text; a caller treats it as withheld.
+	Verdict ModelInputVerdict `json:"verdict"`
+}
+
+// WebSearchResultFlagged defines model for WebSearchResult.Flagged.
+type WebSearchResultFlagged string
+
+// WebSearchResults defines model for WebSearchResults.
+type WebSearchResults struct {
+	Model string `json:"model"`
+
+	// Provider The search provider the deployment brokers.
+	Provider    string            `json:"provider"`
+	QuestionSet string            `json:"questionSet"`
+	Results     []WebSearchResult `json:"results"`
+
+	// Usage The judge's requests and input tokens, for the record. Never a price: AI Review is charged per operation (DEV-150).
+	Usage ModelInputUsage `json:"usage"`
+
+	// Withheld How many results were withheld or not scanned.
+	Withheld int `json:"withheld"`
 }
 
 // WebhookDelivery defines model for WebhookDelivery.
@@ -3184,6 +3421,12 @@ type WrapKnowledgeKeyJSONRequestBody = KnowledgeDataKey
 
 // CreateKnowledgePackJSONRequestBody defines body for CreateKnowledgePack for application/json ContentType.
 type CreateKnowledgePackJSONRequestBody = CreateKnowledgePackRequest
+
+// ScanModelInputJSONRequestBody defines body for ScanModelInput for application/json ContentType.
+type ScanModelInputJSONRequestBody = ModelInputScanRequest
+
+// SearchModelInputJSONRequestBody defines body for SearchModelInput for application/json ContentType.
+type SearchModelInputJSONRequestBody = WebSearchRequest
 
 // CreateOrgJSONRequestBody defines body for CreateOrg for application/json ContentType.
 type CreateOrgJSONRequestBody = CreateOrgRequest
@@ -3830,6 +4073,42 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /meta (the `GetMeta` operationId).
 	GetMeta(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ScanModelInputWithBody AI Review of text a model is about to read (agentry#608).
+	//
+	// Scans pushed text as model input: the deployment's judge is asked the model-input question set (injection, exfiltration, user deception, obfuscation), in 8 KiB chunks asked in parallel, and answers per chunk with scores. The text's score is the highest over its chunks and questions; 2 or more (the gate's medium) is `withheld`, and a chunk the judge could not answer (an error, a timeout, an answer out of shape) makes the text `not_scanned`, which a caller treats as withheld. Nothing of the text is kept or logged. `usage` counts the judge's requests and tokens for the record; it is never a price (AI Review is charged per operation, not per scan). Open to platform staff by session, and to a hosted job's credential in `X-Agentry-Job-Token` where an extension admits it; a token is refused whatever its scopes. 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /model-input/scan (the `ScanModelInput` operationId).
+	ScanModelInputWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ScanModelInput AI Review of text a model is about to read (agentry#608).
+	//
+	// Scans pushed text as model input: the deployment's judge is asked the model-input question set (injection, exfiltration, user deception, obfuscation), in 8 KiB chunks asked in parallel, and answers per chunk with scores. The text's score is the highest over its chunks and questions; 2 or more (the gate's medium) is `withheld`, and a chunk the judge could not answer (an error, a timeout, an answer out of shape) makes the text `not_scanned`, which a caller treats as withheld. Nothing of the text is kept or logged. `usage` counts the judge's requests and tokens for the record; it is never a price (AI Review is charged per operation, not per scan). Open to platform staff by session, and to a hosted job's credential in `X-Agentry-Job-Token` where an extension admits it; a token is refused whatever its scopes. 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /model-input/scan (the `ScanModelInput` operationId).
+	ScanModelInput(ctx context.Context, body ScanModelInputJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SearchModelInputWithBody Web search through the deployment's provider, every result scanned (agentry#608).
+	//
+	// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /model-input/search (the `SearchModelInput` operationId).
+	SearchModelInputWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SearchModelInput Web search through the deployment's provider, every result scanned (agentry#608).
+	//
+	// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /model-input/search (the `SearchModelInput` operationId).
+	SearchModelInput(ctx context.Context, body SearchModelInputJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateOrgWithBody Create an organization; the caller becomes its first admin.
 	//
@@ -5805,6 +6084,82 @@ func (c *Client) GetMcpServerScan(ctx context.Context, params *GetMcpServerScanP
 // Corresponds with GET /meta (the `GetMeta` operationId).
 func (c *Client) GetMeta(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetMetaRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ScanModelInputWithBody AI Review of text a model is about to read (agentry#608).
+//
+// Scans pushed text as model input: the deployment's judge is asked the model-input question set (injection, exfiltration, user deception, obfuscation), in 8 KiB chunks asked in parallel, and answers per chunk with scores. The text's score is the highest over its chunks and questions; 2 or more (the gate's medium) is `withheld`, and a chunk the judge could not answer (an error, a timeout, an answer out of shape) makes the text `not_scanned`, which a caller treats as withheld. Nothing of the text is kept or logged. `usage` counts the judge's requests and tokens for the record; it is never a price (AI Review is charged per operation, not per scan). Open to platform staff by session, and to a hosted job's credential in `X-Agentry-Job-Token` where an extension admits it; a token is refused whatever its scopes. 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /model-input/scan (the `ScanModelInput` operationId).
+func (c *Client) ScanModelInputWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewScanModelInputRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ScanModelInput AI Review of text a model is about to read (agentry#608).
+//
+// Scans pushed text as model input: the deployment's judge is asked the model-input question set (injection, exfiltration, user deception, obfuscation), in 8 KiB chunks asked in parallel, and answers per chunk with scores. The text's score is the highest over its chunks and questions; 2 or more (the gate's medium) is `withheld`, and a chunk the judge could not answer (an error, a timeout, an answer out of shape) makes the text `not_scanned`, which a caller treats as withheld. Nothing of the text is kept or logged. `usage` counts the judge's requests and tokens for the record; it is never a price (AI Review is charged per operation, not per scan). Open to platform staff by session, and to a hosted job's credential in `X-Agentry-Job-Token` where an extension admits it; a token is refused whatever its scopes. 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /model-input/scan (the `ScanModelInput` operationId).
+func (c *Client) ScanModelInput(ctx context.Context, body ScanModelInputJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewScanModelInputRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SearchModelInputWithBody Web search through the deployment's provider, every result scanned (agentry#608).
+//
+// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /model-input/search (the `SearchModelInput` operationId).
+func (c *Client) SearchModelInputWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSearchModelInputRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SearchModelInput Web search through the deployment's provider, every result scanned (agentry#608).
+//
+// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /model-input/search (the `SearchModelInput` operationId).
+func (c *Client) SearchModelInput(ctx context.Context, body SearchModelInputJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSearchModelInputRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -10238,6 +10593,86 @@ func NewGetMetaRequest(server string) (*http.Request, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewScanModelInputRequest calls the generic ScanModelInput builder with application/json body
+func NewScanModelInputRequest(server string, body ScanModelInputJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewScanModelInputRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewScanModelInputRequestWithBody constructs an http.Request for the ScanModelInput method, with any body, and a specified content type
+func NewScanModelInputRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/model-input/scan")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewSearchModelInputRequest calls the generic SearchModelInput builder with application/json body
+func NewSearchModelInputRequest(server string, body SearchModelInputJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSearchModelInputRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewSearchModelInputRequestWithBody constructs an http.Request for the SearchModelInput method, with any body, and a specified content type
+func NewSearchModelInputRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/model-input/search")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -15130,6 +15565,42 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /meta (the `GetMeta` operationId).
 	GetMetaWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMetaResponse, error)
 
+	// ScanModelInputWithBodyWithResponse AI Review of text a model is about to read (agentry#608).
+	//
+	// Scans pushed text as model input: the deployment's judge is asked the model-input question set (injection, exfiltration, user deception, obfuscation), in 8 KiB chunks asked in parallel, and answers per chunk with scores. The text's score is the highest over its chunks and questions; 2 or more (the gate's medium) is `withheld`, and a chunk the judge could not answer (an error, a timeout, an answer out of shape) makes the text `not_scanned`, which a caller treats as withheld. Nothing of the text is kept or logged. `usage` counts the judge's requests and tokens for the record; it is never a price (AI Review is charged per operation, not per scan). Open to platform staff by session, and to a hosted job's credential in `X-Agentry-Job-Token` where an extension admits it; a token is refused whatever its scopes. 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /model-input/scan (the `ScanModelInput` operationId).
+	ScanModelInputWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ScanModelInputResponse, error)
+
+	// ScanModelInputWithResponse AI Review of text a model is about to read (agentry#608).
+	//
+	// Scans pushed text as model input: the deployment's judge is asked the model-input question set (injection, exfiltration, user deception, obfuscation), in 8 KiB chunks asked in parallel, and answers per chunk with scores. The text's score is the highest over its chunks and questions; 2 or more (the gate's medium) is `withheld`, and a chunk the judge could not answer (an error, a timeout, an answer out of shape) makes the text `not_scanned`, which a caller treats as withheld. Nothing of the text is kept or logged. `usage` counts the judge's requests and tokens for the record; it is never a price (AI Review is charged per operation, not per scan). Open to platform staff by session, and to a hosted job's credential in `X-Agentry-Job-Token` where an extension admits it; a token is refused whatever its scopes. 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /model-input/scan (the `ScanModelInput` operationId).
+	ScanModelInputWithResponse(ctx context.Context, body ScanModelInputJSONRequestBody, reqEditors ...RequestEditorFn) (*ScanModelInputResponse, error)
+
+	// SearchModelInputWithBodyWithResponse Web search through the deployment's provider, every result scanned (agentry#608).
+	//
+	// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /model-input/search (the `SearchModelInput` operationId).
+	SearchModelInputWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SearchModelInputResponse, error)
+
+	// SearchModelInputWithResponse Web search through the deployment's provider, every result scanned (agentry#608).
+	//
+	// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /model-input/search (the `SearchModelInput` operationId).
+	SearchModelInputWithResponse(ctx context.Context, body SearchModelInputJSONRequestBody, reqEditors ...RequestEditorFn) (*SearchModelInputResponse, error)
+
 	// CreateOrgWithBodyWithResponse Create an organization; the caller becomes its first admin.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -18481,6 +18952,102 @@ func (r GetMetaResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetMetaResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ScanModelInputResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ModelInputScan
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ScanModelInputResponse) GetJSON200() *ModelInputScan {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ScanModelInputResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ScanModelInputResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ScanModelInputResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ScanModelInputResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ScanModelInputResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SearchModelInputResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *WebSearchResults
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SearchModelInputResponse) GetJSON200() *WebSearchResults {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r SearchModelInputResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SearchModelInputResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SearchModelInputResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SearchModelInputResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SearchModelInputResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -24025,6 +24592,66 @@ func (c *ClientWithResponses) GetMetaWithResponse(ctx context.Context, reqEditor
 	return ParseGetMetaResponse(rsp)
 }
 
+// ScanModelInputWithBodyWithResponse AI Review of text a model is about to read (agentry#608).
+//
+// Scans pushed text as model input: the deployment's judge is asked the model-input question set (injection, exfiltration, user deception, obfuscation), in 8 KiB chunks asked in parallel, and answers per chunk with scores. The text's score is the highest over its chunks and questions; 2 or more (the gate's medium) is `withheld`, and a chunk the judge could not answer (an error, a timeout, an answer out of shape) makes the text `not_scanned`, which a caller treats as withheld. Nothing of the text is kept or logged. `usage` counts the judge's requests and tokens for the record; it is never a price (AI Review is charged per operation, not per scan). Open to platform staff by session, and to a hosted job's credential in `X-Agentry-Job-Token` where an extension admits it; a token is refused whatever its scopes. 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /model-input/scan (the `ScanModelInput` operationId).
+func (c *ClientWithResponses) ScanModelInputWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ScanModelInputResponse, error) {
+	rsp, err := c.ScanModelInputWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseScanModelInputResponse(rsp)
+}
+
+// ScanModelInputWithResponse AI Review of text a model is about to read (agentry#608).
+//
+// Scans pushed text as model input: the deployment's judge is asked the model-input question set (injection, exfiltration, user deception, obfuscation), in 8 KiB chunks asked in parallel, and answers per chunk with scores. The text's score is the highest over its chunks and questions; 2 or more (the gate's medium) is `withheld`, and a chunk the judge could not answer (an error, a timeout, an answer out of shape) makes the text `not_scanned`, which a caller treats as withheld. Nothing of the text is kept or logged. `usage` counts the judge's requests and tokens for the record; it is never a price (AI Review is charged per operation, not per scan). Open to platform staff by session, and to a hosted job's credential in `X-Agentry-Job-Token` where an extension admits it; a token is refused whatever its scopes. 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /model-input/scan (the `ScanModelInput` operationId).
+func (c *ClientWithResponses) ScanModelInputWithResponse(ctx context.Context, body ScanModelInputJSONRequestBody, reqEditors ...RequestEditorFn) (*ScanModelInputResponse, error) {
+	rsp, err := c.ScanModelInput(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseScanModelInputResponse(rsp)
+}
+
+// SearchModelInputWithBodyWithResponse Web search through the deployment's provider, every result scanned (agentry#608).
+//
+// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /model-input/search (the `SearchModelInput` operationId).
+func (c *ClientWithResponses) SearchModelInputWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SearchModelInputResponse, error) {
+	rsp, err := c.SearchModelInputWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSearchModelInputResponse(rsp)
+}
+
+// SearchModelInputWithResponse Web search through the deployment's provider, every result scanned (agentry#608).
+//
+// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /model-input/search (the `SearchModelInput` operationId).
+func (c *ClientWithResponses) SearchModelInputWithResponse(ctx context.Context, body SearchModelInputJSONRequestBody, reqEditors ...RequestEditorFn) (*SearchModelInputResponse, error) {
+	rsp, err := c.SearchModelInput(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSearchModelInputResponse(rsp)
+}
+
 // CreateOrgWithBodyWithResponse Create an organization; the caller becomes its first admin.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -27406,6 +28033,72 @@ func ParseGetMetaResponse(rsp *http.Response) (*GetMetaResponse, error) {
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest Meta
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseScanModelInputResponse parses an HTTP response from a ScanModelInputWithResponse call
+func ParseScanModelInputResponse(rsp *http.Response) (*ScanModelInputResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ScanModelInputResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ModelInputScan
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSearchModelInputResponse parses an HTTP response from a SearchModelInputWithResponse call
+func ParseSearchModelInputResponse(rsp *http.Response) (*SearchModelInputResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SearchModelInputResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest WebSearchResults
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

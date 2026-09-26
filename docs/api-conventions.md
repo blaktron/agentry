@@ -161,7 +161,9 @@ RateLimit-Reset: 2314
 `RateLimit-Reset` is **seconds until the window resets**, not a timestamp.
 On a `429` the same headers are present plus **`Retry-After`**, in seconds.
 Honour it; the buckets are per-user for authenticated traffic and per-IP for
-anonymous traffic, and burst and sustained budgets are separate (§19).
+anonymous traffic, and burst and sustained budgets are separate (§19). The
+model-input routes draw from a budget of their own per caller, a staff
+member or one hosted job ([model-input.md](model-input.md)).
 
 Self-hosters behind a load balancer must configure trusted proxies or all
 anonymous traffic shares one bucket. See

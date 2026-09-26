@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/blaktron/agentry/pkg/websearch"
 )
 
 // Config is the full agentryd configuration tree.
@@ -43,6 +45,7 @@ type Config struct {
 	Limits    Limits    `yaml:"limits"`
 	Signing   Signing   `yaml:"signing"`
 	Judge     Judge     `yaml:"judge"`
+	WebSearch WebSearch `yaml:"webSearch"`
 	Scan      Scan      `yaml:"scan"`
 	Social    Social    `yaml:"social"`
 	Audit     Audit     `yaml:"audit"`
@@ -283,6 +286,12 @@ type Limits struct {
 	// minute and as its burst (600; agentry#453): a directory syncs from one
 	// place, so the organization, not the address, is what it spends.
 	SCIMPerMin int `yaml:"scimPerMin"`
+	// ModelInputPerMin is the model-input routes' budget per caller, per
+	// minute and as its burst (120; agentry#608): a platform staff member,
+	// or one hosted job. An address presenting job credentials may spend
+	// ten times that, which bounds guessing at credentials without
+	// starving the sandbox hosts behind one NAT.
+	ModelInputPerMin int `yaml:"modelInputPerMin"`
 
 	// Git/repo quotas (§19): 100 MB hard, 25 MB warn (the pre-receive hook
 	// tells the pusher), 25 MB single-object cap.
@@ -472,6 +481,19 @@ type Judge struct {
 	APIKey   string `yaml:"apiKey"`
 }
 
+// WebSearch is the web search provider the registry brokers for the
+// model-input search route (agentry#608; plan builder-rework.md D21): the
+// Drafter's `web_search`, with the key held here beside the judge's so no
+// sandbox host gains one. Provider is none (the default: the route answers
+// 503) or youcom (You.com's Web Search API). AGENTRY_WEB_SEARCH_PROVIDER,
+// AGENTRY_WEB_SEARCH_BASE_URL and AGENTRY_WEB_SEARCH_API_KEY set them; the
+// key is never logged.
+type WebSearch struct {
+	Provider string `yaml:"provider"`
+	BaseURL  string `yaml:"baseUrl"`
+	APIKey   string `yaml:"apiKey"`
+}
+
 // Scan configures the external scanner tools behind the §8.3 seams
 // (DEV-006, agentry#40). Every field is optional: unset, the native Go
 // scanners run alone. The OSV and opengrep seams went with the code kinds
@@ -593,6 +615,7 @@ func Default() Config {
 			AnonymousPerMin:            60,
 			LoginPerMin:                10,
 			SCIMPerMin:                 600,
+			ModelInputPerMin:           120,
 			RepoQuotaBytes:             100 << 20,
 			RepoWarnBytes:              25 << 20,
 			RepoMaxBlobBytes:           25 << 20,
@@ -772,6 +795,9 @@ func applyEnv(c *Config) error {
 	// AGENTRY_JUDGE_TYPE is the plain spelling for "which wire protocol";
 	// when set it wins over AGENTRY_JUDGE_PROVIDER.
 	str("AGENTRY_JUDGE_TYPE", &c.Judge.Provider)
+	str("AGENTRY_WEB_SEARCH_PROVIDER", &c.WebSearch.Provider)
+	str("AGENTRY_WEB_SEARCH_BASE_URL", &c.WebSearch.BaseURL)
+	str("AGENTRY_WEB_SEARCH_API_KEY", &c.WebSearch.APIKey)
 	// External scanner tools (§8.3 seams, agentry#40).
 	str("AGENTRY_SCAN_GITLEAKS_BIN", &c.Scan.GitleaksBin)
 	str("AGENTRY_SCAN_OSV_URL", &c.Scan.OSVURL)
@@ -913,6 +939,7 @@ func applyEnv(c *Config) error {
 		{"AGENTRY_LIMITS_ANONYMOUS_PER_MIN", &c.Limits.AnonymousPerMin},
 		{"AGENTRY_LIMITS_LOGIN_PER_MIN", &c.Limits.LoginPerMin},
 		{"AGENTRY_LIMITS_SCIM_PER_MIN", &c.Limits.SCIMPerMin},
+		{"AGENTRY_LIMITS_MODEL_INPUT_PER_MIN", &c.Limits.ModelInputPerMin},
 		{"AGENTRY_LIMITS_GIT_PUSHES_PER_HOUR", &c.Limits.GitPushesPerHour},
 		{"AGENTRY_LIMITS_SSH_KEY_OFFERS_PER_MIN", &c.Limits.SSHKeyOffersPerMin},
 		{"AGENTRY_LIMITS_GIT_CONCURRENT_PER_IP", &c.Limits.GitConcurrentPerIP},
@@ -1078,6 +1105,14 @@ func (c Config) Validate() error {
 		if c.Judge.BaseURL == "" {
 			return fmt.Errorf("config: judge.baseUrl (the classify endpoint) is required when judge.provider is %q", c.Judge.Provider)
 		}
+	}
+	// The names are pkg/websearch's own list, so a provider added there is
+	// accepted here without a second switch.
+	if !websearch.Known(c.WebSearch.Provider) {
+		return fmt.Errorf("config: webSearch.provider must be %s, got %q", strings.Join(websearch.Providers(), "|"), c.WebSearch.Provider)
+	}
+	if p := c.WebSearch.Provider; p != "" && p != "none" && c.WebSearch.APIKey == "" {
+		return fmt.Errorf("config: webSearch.apiKey is required when webSearch.provider is %q", p)
 	}
 	switch c.Audit.StreamKind {
 	case "", "none", "file", "log", "s3":
@@ -1249,6 +1284,7 @@ func (c Config) validateLimits() error {
 		{"limits.anonymousPerMin", int64(c.Limits.AnonymousPerMin)},
 		{"limits.loginPerMin", int64(c.Limits.LoginPerMin)},
 		{"limits.scimPerMin", int64(c.Limits.SCIMPerMin)},
+		{"limits.modelInputPerMin", int64(c.Limits.ModelInputPerMin)},
 		{"limits.repoQuotaBytes", int64(c.Limits.RepoQuotaBytes)},
 		{"limits.repoWarnBytes", int64(c.Limits.RepoWarnBytes)},
 		{"limits.repoMaxBlobBytes", int64(c.Limits.RepoMaxBlobBytes)},

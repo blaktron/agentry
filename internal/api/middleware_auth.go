@@ -106,6 +106,12 @@ func (s *Server) principalMiddlewareOpts(next http.Handler, opts principalOpts) 
 		switch {
 		case p.Anonymous && opts.unthrottled[r.Method+" "+r.URL.Path]:
 			res = limitResult{OK: true}
+		case p.Anonymous && s.modelInputJobRequest(r):
+			// A hosted job's credential on a model-input route: every
+			// sandbox host behind one NAT shares an address, so the route
+			// draws the call from its job's budget and the address's larger
+			// one instead (handlers_model_input.go, agentry#608).
+			res = limitResult{OK: true}
 		case p.Anonymous:
 			res = s.limits.Allow("anon", clientIP(r), s.classes.anon, s.classes.anonBurst)
 		default:

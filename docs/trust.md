@@ -124,6 +124,13 @@ rule about honesty, and these are the specific things behind it:
   may enforce nothing.
 - **Scanning happens at publication, not at push and not at run time.** A
   private repository's contents are not scanned until a version is submitted.
+  Text a model is about to read can also be scanned, by the registry's
+  model-input scan (`POST /model-input/scan`, [model-input.md](model-input.md)).
+  The Drafter will use it: AI Review will read each thing the Drafter is about
+  to read (the person's description, a search result, a page, a registry
+  answer), and the Drafter's model will not be given what AI Review flags or
+  cannot scan. That scan covers inputs, not a release, and a draft is scanned
+  at publication like any other.
 - **The shipped scanners are good, not identical to the tools PLAN §8.3
   names.** S2 uses a native Go implementation behind an adapter interface,
   with gitleaks optional beside it. It detects everything the committed
