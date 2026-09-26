@@ -115,6 +115,9 @@ type Server struct {
 	// extensions and eventHooks are the closed build's additions (extensions.go).
 	extensions []extensionMount
 	eventHooks []func(ctx context.Context, ev Event)
+	// accountErasers delete an extension's rows about an account inside
+	// the erasure and data-clear transactions (agentry#638).
+	accountErasers []namedEraser
 	// mounted is every pattern the recorder was given, in registration
 	// order; empty until NewHandler builds the handler.
 	mounted []string

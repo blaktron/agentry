@@ -235,6 +235,12 @@ content whenever the account has any:
 - **A transfer respects the organization's private-agent cap** (`422
   private-agent-cap`, nothing erased, nothing moved) and is refused into an
   organization in its decommission hold.
+- **An extension's rows go in the same transaction** (agentry#638): an
+  extension that keeps rows about the account deletes them inside the
+  erasure's transaction, and the `user.delete` event's detail counts them
+  under `extensions`. If it cannot, the account is not erased and the
+  answer is `500` (a yank or a transfer already made stands; both run
+  before the erasure).
 - **The `204` carries `X-Agentry-Directory-Erasure`** (agentry#499): where the
   sign-in account at the directory stands — `deleted`, `not-found`,
   `not-configured` (erasure is registry-only), `pending` (the directory
@@ -262,6 +268,11 @@ answers `204`, and the caller stays signed in.
 - **Extensions hear `user.data_cleared`** with the user id after the commit,
   so an extension clears what it holds for the account (the hosted-runs
   extension deletes the account's run history).
+- **An extension's rows go in the same transaction** (agentry#638), as on
+  an erasure: an extension that keeps credentials or history for the
+  account deletes them inside the clear's transaction, the detail counts
+  them under `extensions`, and if it cannot, nothing is cleared and the
+  answer is `500`.
 
 ## Organization lifecycle
 
