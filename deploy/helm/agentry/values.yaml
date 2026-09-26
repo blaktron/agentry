@@ -223,9 +223,15 @@ secret:
   smtpPassword: "" # required when config.notify.kind=smtp and smtp.username is set
 
 serviceAccount:
+  # One ServiceAccount per role (agentry#627): <release>-agentry-api, -worker
+  # and -git, so a pod's token names the role presenting it (OpenBao binds
+  # the encrypt policy to the api's and the decrypt policy to the worker's).
   create: true
+  # Only with create: false: the one existing account all three roles then
+  # share. Set with create: true, the render fails.
   name: ""
-  # On EKS, annotate with an IRSA role granting S3 + KMS (Sign for worker) access:
+  # Applied to all three. On EKS, annotate with an IRSA role granting S3 +
+  # KMS (Sign for worker) access:
   # eks.amazonaws.com/role-arn: arn:aws:iam::<acct>:role/agentry
   annotations: {}
 
