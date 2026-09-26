@@ -19,11 +19,16 @@ without the right scope is anywhere else
 `GET /api/v1/x/runs/status` answers anyone: whether this deployment can take
 runs at all (it needs a database, a credit ledger and an object store), how
 many workers were seen within the stale window, and how many runs are queued.
-A signed-in caller also gets `caller` — the tier a run of theirs is held at,
-`account` (whose row it is held on: their own, or the organization whose
-pool pays for their runs), that tier's caps, the credits a run holds and the
-tokens-per-credit rate — so a client can state the cost, and whose credits
-it is, before any run exists.
+It also answers the price list, to anyone, since it is the deployment's
+configuration and not a secret: `inputTokensPerCredit` and
+`outputTokensPerCredit`, every tier's caps and hold under `tiers` (each with
+the `build` caps and hold of a [knowledge build](#a-knowledge-build)), and
+`knowledgeBuild` — whether a build can run here, what it holds, and the
+pack scan's credit. A signed-in caller also gets `caller` — the tier a run
+of theirs is held at, `account` (whose row it is held on: their own, or the
+organization whose pool pays for their runs), that tier's caps, the credits
+a run holds, the two rates and the tier's `build` — so a client can state the
+cost, and whose credits it is, before any run exists.
 
 ## Who may do what
 
@@ -125,8 +130,8 @@ them to the CLI as its `--timeout` and `--max-turns`.
 
 | Tier | Wall time | Turns | Tokens | Credits held |
 |---|---|---|---|---|
-| Standard | 300 s | 20 | 20,000 | 20 |
-| Pro | 900 s | 60 | 200,000 | 200 |
+| Standard | 300 s | 20 | 500,000 | 20 |
+| Pro | 900 s | 60 | 5,000,000 | 200 |
 | Business | Pro's | Pro's | Pro's | 200 |
 | Enterprise | Pro's | Pro's | Pro's | 200 |
 
@@ -135,18 +140,23 @@ Those numbers are a deployment's configuration, not constants:
 `AGENTRY_RUNS_CAPS_BUSINESS` and `AGENTRY_RUNS_CAPS_ENTERPRISE` are
 `seconds,turns,tokens` — the organization tiers take Pro's numbers unless a
 deployment sets them apart, since a member has everything Pro has — and
-`AGENTRY_RUNS_TOKENS_PER_CREDIT` (1,000) is the rate the hold and the
-settlement are computed at. A deployment that sets a zero rate, an empty cap
-or a zero timeout is stopped at start-up rather than making every run free
-or every run refused. `GET /api/v1/x/runs/status` reports the live values
-for the caller's payer.
+`AGENTRY_RUNS_INPUT_TOKENS_PER_CREDIT` (50,000) and
+`AGENTRY_RUNS_OUTPUT_TOKENS_PER_CREDIT` (25,000) are the two rates the hold
+and the settlement are computed at: 1,000 credits buy about US$5 of
+inference at US$0.10 a million input tokens and US$0.20 a million output.
+They replaced a single tokens-per-credit rate; a deployment that still sets
+`AGENTRY_RUNS_TOKENS_PER_CREDIT` is stopped at start-up with a message naming
+the two, as is one that sets a zero rate, an empty cap or a zero timeout,
+rather than running with a price it did not mean. `GET /api/v1/x/runs/status`
+reports the live values.
 
 ## Credits: a hold, then a settlement or a refund
 
 Nothing is debited before a run. Creating one **holds**
-`ceil(maxTokens ÷ tokensPerCredit)` credits on the payer's row — the tier's
-token cap priced at the rate, so 20 for Standard and 200 for Pro, Business
-and Enterprise — in the same transaction as the run's row. A create the
+`ceil(maxTokens ÷ outputTokensPerCredit)` credits on the payer's row — the
+tier's token cap priced at the output rate, the dearer one, which bounds any
+mix of input and output within the cap: 20 for Standard and 200 for Pro,
+Business and Enterprise — in the same transaction as the run's row. A create the
 payer's balance cannot cover is `402 credits-exhausted` carrying `account`,
 `balance`, `hold`, `resetsAt` and `tier`, and no run is written.
 
@@ -167,12 +177,14 @@ A run cancelled while still queued is `cancelled`, not an outcome, and its
 hold is refunded in full. So is a run nobody claimed within the queue timeout;
 a run whose worker fell silent is closed as `error` and refunded.
 
-A run that **ran** settles `max(1, ceil(tokens ÷ tokensPerCredit))`, never
-more than the hold, with the rest of the hold released. `tokens` is the
-receipt's `usage.totalTokens`, or `inputTokens + outputTokens` when the
-harness reported the split — the docker-agent harness does, so on those runs
-the sum is what the settlement reads. The minimum of one credit means a run
-that started and produced nothing still costs one. The ledger records the
+A run that **ran** settles `max(1, ceil(input ÷ inputTokensPerCredit + output
+÷ outputTokensPerCredit))`, never more than the hold, with the rest of the
+hold released. `input` and `output` are the receipt's `usage.inputTokens` and
+`usage.outputTokens`; tokens its `usage.totalTokens` counts beyond them —
+all of them, when a harness reported no split — are priced at the output
+rate. Input counts tokens processed, cached prefixes included, so the price
+leans the platform's way rather than the account's. The minimum of one credit
+means a run that started and produced nothing still costs one. The ledger records the
 hold (`run_hold`), then either the whole hold released (`run_release`) and
 the cost charged (`run`), or the whole hold refunded (`run_refund`) — each
 line unique on its reason and the run's id, so a finish reported twice
@@ -255,19 +267,65 @@ walks through what a person sees.
 The payer's tier's wall time and turn count are the CLI's own budgets,
 enforced inside the run as they are on your own machine (exit 15 and 16).
 
-**The token cap is not live.** Nothing counts tokens while the run is going:
-the CLI narrates its usage as the run goes (agentry-cli#138, `--events`),
-but the worker does not read that narration yet and forwards the usage once,
-at the end (agentry-enterprise#27 is the live cap). A run can
-therefore spend past its tier's token cap; what it cannot do is cost more
-than the hold, because the settlement is capped there. `--max-cost` is not
-derived either — an OpenAI-compatible endpoint of the deployment's choosing
-reports no cost.
+**The token cap is live.** The CLI narrates its usage as the run goes
+(`usage: input=… output=… total=… turns=…` on stderr), and the execution
+plane interrupts the run as a cancel does when the narrated total first
+passes the tier's token cap; the run finishes `interrupted` and settles on
+what it spent. It can pass the cap by at most the tokens of the report that
+crossed it, and it cannot cost more than the hold, because the settlement is
+capped there. `--max-cost` is not derived — an OpenAI-compatible endpoint of
+the deployment's choosing reports no cost.
 
 Two sweeps run every minute. A run nobody claims within the queue timeout
 (`AGENTRY_RUNS_QUEUE_MAX`, 1 h) is cancelled and refunded. A claimed run
 whose worker has been silent past the stale window
 (`AGENTRY_RUNS_STALE`, 10 min) is closed as `error` and refunded.
+
+## A knowledge build
+
+A run of the kind `knowledge_build` runs the CLI's built-in Knowledge Creator
+over documents to make or extend a [knowledge pack](knowledge.md) in the
+registry's store, against the platform's model, for credits. It is created
+by the same `POST /api/v1/x/runs/` with `kind: knowledge_build`, the
+documents as `inputs`, and exactly one of `name` (a new pack of that name;
+an empty pack of that name, one a refused build left, is reused), `pack` (the
+id of one of the caller's packs) or `continue` (a finished build of the
+caller's, whose documents are copied for the new one). It names no `ref`,
+`task` or `intake`. A token needs `knowledge:read` and `knowledge:write`
+beside `run:write`, and downloading a build's output needs `knowledge:read`
+beside `run:read`, since the output holds the pack.
+
+A build holds `AGENTRY_RUNS_BUILD_CREDITS` (100) on the payer's row under
+its own ledger reasons (`knowledge_build_hold`, then `knowledge_build` and
+`knowledge_build_release`, or `knowledge_build_refund`), with caps of its
+own: `AGENTRY_RUNS_BUILD_SECONDS_STANDARD` (900 s) and
+`AGENTRY_RUNS_BUILD_SECONDS_{PRO,BUSINESS,ENTERPRISE}` (3,600 s),
+`AGENTRY_RUNS_BUILD_MAX_TURNS` (300), and as tokens what the hold buys at the
+input rate. It counts against one active run per account. It runs only on
+sandbox hosts Agentry pushes to: the pack's tree is staged for the host
+beside the documents, the host runs `agentry knowledge add` (or `create`)
+over it and stops the build when its narrated tokens, priced at the two
+rates, pass the hold less one credit. That credit is the pack's scan: when
+the build finishes, the registry opens its output for its runner, puts the
+pack's new tree into the store if the pack still holds the tree the build was
+handed — resealed under the pack's own key, counted against the allocation,
+and scanned as any upload is — and settles the tokens plus 1 credit for the
+scan, never past the hold. The run's `build` record says what happened: the
+pack's digest, pages and bytes when it was `applied`, or a `note` —
+`nothing` (the build made no pack), `changed` (the pack took another tree
+while it ran), `allocation`, or `deleted`, each settling the tokens spent,
+or `invalid` (the output held no valid pack), refunded in full.
+
+Refused before a pack is made or anything is held: a token without the
+scopes (`403`), a balance that cannot hold the build (`402`), a pack that is
+not the caller's (`404 knowledge-not-found`), a name a pack with a tree has
+(`409 knowledge-name-taken`), a pack being scanned (`409 knowledge-scanning`)
+or whose stored tree could not be read (`409 knowledge-failed`), documents
+that with what the pack holds pass its 10 MB (`413 knowledge-too-large`) or
+the allocation (`413 knowledge-allocation`), and a deployment with no sandbox
+hosts or no knowledge store (`503 knowledge-build-unavailable`). The Creator
+is part of the CLI the host runs, so a build runs without a registry scan of
+a package; the pack it makes is scanned before it is final.
 
 ## The execution plane
 
@@ -307,11 +365,16 @@ anything you want to keep before then; nothing is archived elsewhere.
 
 | Variable | Default | What |
 |---|---|---|
-| `AGENTRY_RUNS_CAPS_STANDARD` | `300,20,20000` | the Standard tier's seconds, turns, tokens |
-| `AGENTRY_RUNS_CAPS_PRO` | `900,60,200000` | the Pro tier's seconds, turns, tokens |
+| `AGENTRY_RUNS_CAPS_STANDARD` | `300,20,500000` | the Standard tier's seconds, turns, tokens |
+| `AGENTRY_RUNS_CAPS_PRO` | `900,60,5000000` | the Pro tier's seconds, turns, tokens |
 | `AGENTRY_RUNS_CAPS_BUSINESS` | Pro's | the Business tier's seconds, turns, tokens |
 | `AGENTRY_RUNS_CAPS_ENTERPRISE` | Pro's | the Enterprise tier's seconds, turns, tokens |
-| `AGENTRY_RUNS_TOKENS_PER_CREDIT` | `1000` | the rate the hold and the settlement are computed at |
+| `AGENTRY_RUNS_INPUT_TOKENS_PER_CREDIT` | `50000` | the input tokens a credit buys |
+| `AGENTRY_RUNS_OUTPUT_TOKENS_PER_CREDIT` | `25000` | the output tokens a credit buys; a run's hold is its token cap at this rate |
+| `AGENTRY_RUNS_BUILD_CREDITS` | `100` | what a knowledge build holds, its scan's 1 credit included |
+| `AGENTRY_RUNS_BUILD_SECONDS_STANDARD` | `900` | a knowledge build's wall time on Standard |
+| `AGENTRY_RUNS_BUILD_SECONDS_{PRO,BUSINESS,ENTERPRISE}` | `3600` | a knowledge build's wall time on the tiers above |
+| `AGENTRY_RUNS_BUILD_MAX_TURNS` | `300` | a knowledge build's turn cap |
 | `AGENTRY_RUNS_QUEUE_MAX` | `1h` | how long a run may wait for a worker before it is cancelled and refunded |
 | `AGENTRY_RUNS_STALE` | `10m` | how long a claimed run's worker may be silent before the run is closed as `error` and refunded |
 | `AGENTRY_RUNS_TASK_MAX_BYTES` | `65536` | the task text's cap |
