@@ -48,6 +48,9 @@ data:
       {{- with .Values.config.auth.staffDomain }}
       staffDomain: {{ . | quote }}
       {{- end }}
+      {{- with .Values.config.auth.idpStaffMirrorGroup }}
+      idpStaffMirrorGroup: {{ . | quote }}
+      {{- end }}
       {{- with .Values.config.auth.idpStaffGroup }}
       idpStaffGroup: {{ . | quote }}
       {{- end }}
