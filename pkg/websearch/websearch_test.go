@@ -134,7 +134,13 @@ func TestNewNamesTheProviders(t *testing.T) {
 	if p, err := New("youcom", "", "k"); err != nil || p.Name() != YouComName {
 		t.Fatalf("youcom: %v %v", p, err)
 	}
-	for _, unknown := range []string{"fake", "brave", "google"} {
+	if _, err := New("brave", "", ""); err != ErrNoKey {
+		t.Fatalf("brave, no key: %v", err)
+	}
+	if p, err := New("brave", "", "k"); err != nil || p.Name() != BraveName {
+		t.Fatalf("brave: %v %v", p, err)
+	}
+	for _, unknown := range []string{"fake", "google", "Brave"} {
 		if _, err := New(unknown, "", "k"); err == nil {
 			t.Fatalf("%q must be refused: no configuration names the fake or an unbuilt provider", unknown)
 		}
@@ -175,12 +181,12 @@ func TestOriginAndTheProviderList(t *testing.T) {
 	if Origin("not a url") != "" {
 		t.Fatal("no host, no origin")
 	}
-	for _, ok := range []string{"", "none", "youcom", " youcom "} {
+	for _, ok := range []string{"", "none", "youcom", " youcom ", "brave"} {
 		if !Known(ok) {
 			t.Fatalf("%q must be known", ok)
 		}
 	}
-	for _, bad := range []string{"fake", "brave", "YouCom"} {
+	for _, bad := range []string{"fake", "Brave", "YouCom"} {
 		if Known(bad) {
 			t.Fatalf("%q must not be known", bad)
 		}
