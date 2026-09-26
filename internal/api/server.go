@@ -56,6 +56,10 @@ type Server struct {
 	// dirEraser deletes the sign-in account in the directory service on
 	// erasure (agentry#20); nil when auth.idpAdminURL is unset.
 	dirEraser directoryEraser
+	// dirGroups writes the directory's mirror of platform staff
+	// (staff_mirror.go, agentry#598); nil unless auth.idpStaffMirrorGroup is
+	// set, which needs the admin URL and token.
+	dirGroups directoryGroups
 	// dirEraseAttempts overrides the directory erasure retry budget
 	// (directory_erasure.go; 0 is the default).
 	dirEraseAttempts int
@@ -339,7 +343,14 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 		// the renderer needs the server's signing key, so it is built here.
 		srv.renderer = render.NewWithOptions(render.Options{ImageProxy: srv.imageProxyURL})
 		if cfg.Auth.IdPAdminURL != "" && cfg.Auth.IdPAdminToken != "" {
-			srv.dirEraser = newAuthentikEraser(cfg.Auth.IdPAdminURL, cfg.Auth.IdPAdminToken)
+			ak := newAuthentikEraser(cfg.Auth.IdPAdminURL, cfg.Auth.IdPAdminToken)
+			srv.dirEraser = ak
+			if cfg.Auth.IdPStaffMirrorGroup != "" {
+				srv.dirGroups = ak
+				// On every role: a membership change on an API replica
+				// nudges the mirror as one on the worker does.
+				srv.reg.SetStaffChanged(srv.nudgeStaffMirror)
+			}
 		}
 		srv.reg.SetLogger(log)
 		// A ruleset semver we have never seen means the catalogue was judged
@@ -578,6 +589,7 @@ func (s *Server) RegisterQueueHandlers(q queue.Client) {
 	s.registerOrgLifecycle(q)     // the decommission sweep (handlers_org_lifecycle.go, agentry#363)
 	s.registerFoldIn(q)           // the fold-in sweep and the pending members digest (handlers_fold_in.go, agentry#364)
 	s.registerDirectoryErasure(q) // erasure's directory half, retried (directory_erasure.go, agentry#499)
+	s.registerStaffMirror(q)      // the directory's mirror of platform staff (staff_mirror.go, agentry#598)
 	if s.knowledge != nil {
 		s.knowledge.RegisterHandlers(q) // the knowledge pack scan (internal/knowledge, agentry#593)
 	}
