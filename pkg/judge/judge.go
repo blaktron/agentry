@@ -34,6 +34,15 @@ import (
 	"unicode/utf8"
 )
 
+// The borderline band both question sets share: an answer inside it is
+// asked twice more and the highest of the Samples kept, never the mean
+// (disagreement escalates). Part of every hash that names it.
+const (
+	BandLow  = 0.30
+	BandHigh = 0.70
+	Samples  = 3
+)
+
 const (
 	// DefaultBaseURL is TypeSafe's API.
 	DefaultBaseURL = "https://api.typesafe.ai"
@@ -96,10 +105,14 @@ func New(cfg Config) (*Client, error) {
 	if base == "" {
 		base = DefaultBaseURL
 	}
-	hc := cfg.HTTPClient
-	if hc == nil {
-		hc = &http.Client{Timeout: 60 * time.Second}
+	hc := &http.Client{Timeout: 60 * time.Second}
+	if cfg.HTTPClient != nil {
+		copied := *cfg.HTTPClient
+		hc = &copied
 	}
+	// A redirect is never followed: the key rides on every request, and an
+	// answer from anywhere but the endpoint is not an answer.
+	hc.CheckRedirect = refuseRedirect
 	wait := cfg.RetryWait
 	switch {
 	case wait == 0:
@@ -233,11 +246,12 @@ func (c *Client) post(ctx context.Context, payload []byte) ([]byte, error) {
 		if status == http.StatusOK {
 			return raw, nil
 		}
-		snippet := string(raw)
+		// Redact before cutting: a key that straddled the cut would keep
+		// its first half.
+		snippet := strings.ReplaceAll(string(raw), c.apiKey, "[key]")
 		if len(snippet) > 200 {
-			snippet = snippet[:200]
+			snippet = strings.ToValidUTF8(snippet[:200], "")
 		}
-		snippet = strings.ReplaceAll(snippet, c.apiKey, "[key]")
 		retryable := status == http.StatusTooManyRequests || status == 529
 		if !retryable || attempt >= 1 {
 			return nil, &StatusError{Status: status, Snippet: snippet}
@@ -253,7 +267,8 @@ func (c *Client) post(ctx context.Context, payload []byte) ([]byte, error) {
 }
 
 // StatusError is a non-200 answer: the status and a bounded snippet of the
-// body with the key redacted.
+// body with the key redacted. The snippet can echo what was asked, so a
+// caller that must not log scanned text logs Status alone.
 type StatusError struct {
 	Status  int
 	Snippet string
@@ -282,6 +297,10 @@ func (c *Client) once(ctx context.Context, payload []byte) ([]byte, int, error) 
 	return raw, resp.StatusCode, nil
 }
 
+// refuseRedirect makes a 3xx the answer itself, which Ask then refuses as
+// a non-200 status.
+func refuseRedirect(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+
 // redact strips the key from an error's text (a URL error can echo the
 // request), keeping the error otherwise intact.
 func redact(err error, key string) error {
@@ -289,6 +308,19 @@ func redact(err error, key string) error {
 		return err
 	}
 	return errors.New(strings.ReplaceAll(err.Error(), key, "[key]"))
+}
+
+// runeCut is the largest cut at or below n, and above zero, that starts a
+// character, looking back at most one character's length; with none there
+// (invalid UTF-8, or a character longer than n) it cuts at n, so every piece
+// is non-empty and the split always ends.
+func runeCut(s string, n int) int {
+	for b := n; b > 0 && b > n-utf8.UTFMax; b-- {
+		if utf8.RuneStart(s[b]) {
+			return b
+		}
+	}
+	return n
 }
 
 // Hash is the hash a question set is recorded under: SHA-256 over the
@@ -329,11 +361,8 @@ func Chunk(s string, n int) []string {
 	var out []string
 	for len(s) > n {
 		cut := strings.LastIndexByte(s[:n], '\n')
-		if cut < n/2 {
-			cut = n
-			for cut > n-utf8.UTFMax && cut > 0 && !utf8.RuneStart(s[cut]) {
-				cut--
-			}
+		if cut <= 0 || cut < n/2 {
+			cut = runeCut(s, n)
 		}
 		out = append(out, s[:cut])
 		s = s[cut:]

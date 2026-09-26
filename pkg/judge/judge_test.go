@@ -245,3 +245,59 @@ func TestTheQuestionSetsAreConstants(t *testing.T) {
 		t.Fatal("the rubric has six questions")
 	}
 }
+
+// Chunk ends for every size, a size smaller than one character included,
+// and never returns an empty piece before the last.
+func TestChunkEndsAtEverySize(t *testing.T) {
+	text := "€x\n日本\nabc" + string([]byte{0xff, 0xfe}) + "é"
+	for n := 1; n <= 12; n++ {
+		pieces := Chunk(text, n)
+		if strings.Join(pieces, "") != text {
+			t.Fatalf("n=%d: the pieces must join back to the text", n)
+		}
+		for i, p := range pieces[:len(pieces)-1] {
+			if p == "" {
+				t.Fatalf("n=%d: piece %d is empty", n, i)
+			}
+		}
+	}
+}
+
+// A key echoed across the snippet's cut is redacted whole: redaction runs
+// before the cut, so no half of it survives.
+func TestAKeyAcrossTheSnippetCutIsRedacted(t *testing.T) {
+	key := "tok-secret-value-that-is-long"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(strings.Repeat("x", 190) + key + " trailing"))
+	}))
+	defer srv.Close()
+	c, err := New(Config{BaseURL: srv.URL, APIKey: key, RetryWait: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = c.Ask(context.Background(), map[string]string{"content": "x"}, ModelInputQuestions())
+	if err == nil || strings.Contains(err.Error(), "tok-secret") {
+		t.Fatalf("a part of the key survived: %v", err)
+	}
+}
+
+// A redirect is never followed, so the key never reaches another host.
+func TestAskNeverFollowsARedirect(t *testing.T) {
+	var hit bool
+	elsewhere := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { hit = true }))
+	defer elsewhere.Close()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, elsewhere.URL+Path, http.StatusTemporaryRedirect)
+	}))
+	defer srv.Close()
+	c, err := New(Config{BaseURL: srv.URL, APIKey: "k", RetryWait: -1, HTTPClient: &http.Client{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = c.Ask(context.Background(), map[string]string{"content": "x"}, ModelInputQuestions())
+	var se *StatusError
+	if !asStatus(err, &se) || se.Status != http.StatusTemporaryRedirect || hit {
+		t.Fatalf("err %v, followed %v", err, hit)
+	}
+}

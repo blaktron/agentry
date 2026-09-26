@@ -2848,7 +2848,9 @@ type WebSearchResult struct {
 
 	// Title Present only when the result passed.
 	Title *string `json:"title,omitempty"`
-	Url   string  `json:"url"`
+
+	// Url The result's address when it passed; only its origin (scheme and host) when it was withheld or not scanned, since a path or a query can carry an instruction too.
+	Url string `json:"url"`
 
 	// Verdict `pass`: no question scored 2 or more. `withheld`: one did; the model gets the source's address and the reason, never the text. `not_scanned`: the judge could not answer for part of the text; a caller treats it as withheld.
 	Verdict ModelInputVerdict `json:"verdict"`
@@ -4092,7 +4094,7 @@ type ClientInterface interface {
 
 	// SearchModelInputWithBody Web search through the deployment's provider, every result scanned (agentry#608).
 	//
-	// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its address, verdict and scores, never its title or snippet. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
+	// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -4101,7 +4103,7 @@ type ClientInterface interface {
 
 	// SearchModelInput Web search through the deployment's provider, every result scanned (agentry#608).
 	//
-	// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its address, verdict and scores, never its title or snippet. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
+	// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -6132,7 +6134,7 @@ func (c *Client) ScanModelInput(ctx context.Context, body ScanModelInputJSONRequ
 
 // SearchModelInputWithBody Web search through the deployment's provider, every result scanned (agentry#608).
 //
-// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its address, verdict and scores, never its title or snippet. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
+// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
 //
 // Takes any type of body and a specified content type.
 //
@@ -6151,7 +6153,7 @@ func (c *Client) SearchModelInputWithBody(ctx context.Context, contentType strin
 
 // SearchModelInput Web search through the deployment's provider, every result scanned (agentry#608).
 //
-// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its address, verdict and scores, never its title or snippet. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
+// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -15583,7 +15585,7 @@ type ClientWithResponsesInterface interface {
 
 	// SearchModelInputWithBodyWithResponse Web search through the deployment's provider, every result scanned (agentry#608).
 	//
-	// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its address, verdict and scores, never its title or snippet. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
+	// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -15592,7 +15594,7 @@ type ClientWithResponsesInterface interface {
 
 	// SearchModelInputWithResponse Web search through the deployment's provider, every result scanned (agentry#608).
 	//
-	// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its address, verdict and scores, never its title or snippet. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
+	// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -24622,7 +24624,7 @@ func (c *ClientWithResponses) ScanModelInputWithResponse(ctx context.Context, bo
 
 // SearchModelInputWithBodyWithResponse Web search through the deployment's provider, every result scanned (agentry#608).
 //
-// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its address, verdict and scores, never its title or snippet. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
+// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -24637,7 +24639,7 @@ func (c *ClientWithResponses) SearchModelInputWithBodyWithResponse(ctx context.C
 
 // SearchModelInputWithResponse Web search through the deployment's provider, every result scanned (agentry#608).
 //
-// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its address, verdict and scores, never its title or snippet. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
+// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

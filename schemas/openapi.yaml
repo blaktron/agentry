@@ -3737,8 +3737,8 @@ paths:
         registry's own key, then scans each result (its title, address and
         snippet) as model input, as `POST /model-input/scan` does. Only
         scanned results come back: a `withheld` or `not_scanned` result
-        carries its address, verdict and scores, never its title or
-        snippet. The query goes to the search provider and is neither kept
+        carries its origin (scheme and host), verdict and scores, never its
+        title, its snippet or the rest of its address. The query goes to the search provider and is neither kept
         nor logged. Callers as for `POST /model-input/scan`. 503
         `web-search-unavailable` when no provider is configured, 503
         `model-input-unavailable` when there is no judge to scan the
@@ -5557,6 +5557,10 @@ components:
       properties:
         url:
           type: string
+          description: >-
+            The result's address when it passed; only its origin (scheme
+            and host) when it was withheld or not scanned, since a path or
+            a query can carry an instruction too.
         title:
           type: string
           description: Present only when the result passed.

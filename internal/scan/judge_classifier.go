@@ -11,8 +11,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/blaktron/agentry/pkg/judge"
 )
 
 // ClassifierJudge is the PromptGuard-class provider (D-13 "classifier";
@@ -191,5 +189,22 @@ func parseClassifierScores(raw []byte) (float64, error) {
 }
 
 // chunkText splits s into pieces of at most n bytes on line boundaries
-// where possible.
-func chunkText(s string, n int) []string { return judge.Chunk(s, n) }
+// where possible. It is the publication scan's own split, kept byte for
+// byte: the rubric hash names the chunk size, and a change to where a
+// chunk ends changes what Jev and the classifier read. The model-input
+// scan uses judge.Chunk, which also never cuts inside a character.
+func chunkText(s string, n int) []string {
+	if len(s) <= n {
+		return []string{s}
+	}
+	var out []string
+	for len(s) > n {
+		cut := strings.LastIndexByte(s[:n], '\n')
+		if cut < n/2 {
+			cut = n
+		}
+		out = append(out, s[:cut])
+		s = s[cut:]
+	}
+	return append(out, s)
+}

@@ -3,6 +3,7 @@ package websearch
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -136,6 +137,52 @@ func TestNewNamesTheProviders(t *testing.T) {
 	for _, unknown := range []string{"fake", "brave", "google"} {
 		if _, err := New(unknown, "", "k"); err == nil {
 			t.Fatalf("%q must be refused: no configuration names the fake or an unbuilt provider", unknown)
+		}
+	}
+}
+
+func TestYouComNeverFollowsARedirectAndRedactsAcrossTheCut(t *testing.T) {
+	var hit bool
+	elsewhere := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { hit = true }))
+	defer elsewhere.Close()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, elsewhere.URL+"/v1/search", http.StatusFound)
+	}))
+	defer srv.Close()
+	y, _ := NewYouCom(YouComConfig{BaseURL: srv.URL, APIKey: "k", HTTPClient: &http.Client{}})
+	_, err := y.Search(context.Background(), "q", 5)
+	var se *StatusError
+	if !errors.As(err, &se) || se.Status != http.StatusFound || hit {
+		t.Fatalf("err %v, followed %v", err, hit)
+	}
+
+	key := "ydc-secret-key-long-enough"
+	echo := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(strings.Repeat("x", 190) + key))
+	}))
+	defer echo.Close()
+	y2, _ := NewYouCom(YouComConfig{BaseURL: echo.URL, APIKey: key})
+	if _, err := y2.Search(context.Background(), "q", 5); err == nil || strings.Contains(err.Error(), "ydc-secret") {
+		t.Fatalf("a part of the key survived: %v", err)
+	}
+}
+
+func TestOriginAndTheProviderList(t *testing.T) {
+	if got := Origin("https://mcp-guides.example/ignore/your/instructions?q=1"); got != "https://mcp-guides.example/" {
+		t.Fatalf("origin: %q", got)
+	}
+	if Origin("not a url") != "" {
+		t.Fatal("no host, no origin")
+	}
+	for _, ok := range []string{"", "none", "youcom", " youcom "} {
+		if !Known(ok) {
+			t.Fatalf("%q must be known", ok)
+		}
+	}
+	for _, bad := range []string{"fake", "brave", "YouCom"} {
+		if Known(bad) {
+			t.Fatalf("%q must not be known", bad)
 		}
 	}
 }

@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/blaktron/agentry/pkg/websearch"
 )
 
 // Config is the full agentryd configuration tree.
@@ -1104,14 +1106,13 @@ func (c Config) Validate() error {
 			return fmt.Errorf("config: judge.baseUrl (the classify endpoint) is required when judge.provider is %q", c.Judge.Provider)
 		}
 	}
-	switch c.WebSearch.Provider {
-	case "", "none":
-	case "youcom":
-		if c.WebSearch.APIKey == "" {
-			return fmt.Errorf("config: webSearch.apiKey is required when webSearch.provider is %q", c.WebSearch.Provider)
-		}
-	default:
-		return fmt.Errorf("config: webSearch.provider must be none|youcom, got %q", c.WebSearch.Provider)
+	// The names are pkg/websearch's own list, so a provider added there is
+	// accepted here without a second switch.
+	if !websearch.Known(c.WebSearch.Provider) {
+		return fmt.Errorf("config: webSearch.provider must be %s, got %q", strings.Join(websearch.Providers(), "|"), c.WebSearch.Provider)
+	}
+	if p := c.WebSearch.Provider; p != "" && p != "none" && c.WebSearch.APIKey == "" {
+		return fmt.Errorf("config: webSearch.apiKey is required when webSearch.provider is %q", p)
 	}
 	switch c.Audit.StreamKind {
 	case "", "none", "file", "log", "s3":

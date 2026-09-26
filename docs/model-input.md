@@ -107,10 +107,13 @@ title to 300 characters and each snippet to 1,000, and scans every result
 as a `search_result`: its title, address and snippet together, since an
 address can carry an instruction too.
 
-Only scanned results come back. A result that passed carries its title and
-snippet; one that was withheld or not scanned carries its address, verdict,
-score and flags, never its text. `withheld` counts both. A provider that
-does not answer is `502 web-search-failed`; nothing is returned.
+Only scanned results come back. A result that passed carries its address,
+title and snippet. One that was withheld or not scanned carries only its
+origin (scheme and host), its verdict, score and flags: never its title, its
+snippet or the rest of its address, since a path or a query can carry an
+instruction too. `withheld` counts both. A provider that does not answer is
+`502 web-search-failed`; nothing is returned. A redirect from the provider
+is never followed, since the key rides on every request.
 
 The query goes to the provider and to nowhere else: it is neither kept nor
 logged. With no judge to scan the results the search is not made at all.
@@ -119,8 +122,11 @@ logged. With no judge to scan the results the search is not made at all.
 
 The scan needs the deployment's judge to be TypeSafe's Jev
 (`AGENTRY_JUDGE_TYPE=typesafe`; [self-hosting.md](self-hosting.md)), and
-uses its key and pinned model. With any other judge, or none, both routes
-answer `503 model-input-unavailable`.
+uses its key and pinned model. With any other judge, or none, the scan
+answers `503 model-input-unavailable`, and so does the search when a
+provider is configured: it makes no search whose results it could not
+scan. With no provider the search answers `503 web-search-unavailable`
+first.
 
 The search needs a provider:
 
@@ -140,11 +146,17 @@ Each caller (a staff member, or one job) has
 `limits.modelInputPerMin` calls a minute (`AGENTRY_LIMITS_MODEL_INPUT_PER_MIN`,
 120), refused with 429 past it. A job's calls are not drawn from the
 anonymous rate class by address, because every sandbox host behind one NAT
-shares an address; an address presenting job credentials has ten times a
-caller's budget instead, which bounds guessing at credentials. Across a
-replica, the routes' requests to the judge are paced under Jev's rate
-limit, leaving the publication pipeline its share of the key; a chunk that
-cannot be asked before its call's 45-second deadline is not scanned.
+shares an address. Instead an address presenting job credentials has ten
+times a caller's budget, spent before the body is read, which bounds
+guessing at credentials and sending bodies that will be refused.
+
+Each API replica paces the routes' requests to the judge at 15 a second
+(a burst of 20). Jev's limit, 1,200 a minute, is the key's, shared by every
+replica and by the publication pipeline, so more than one replica under
+full load can pass it. Jev then answers 429: the request is retried once,
+and a chunk still unanswered is not scanned, which fails closed. A chunk
+that cannot be asked before its call's 45-second deadline is not scanned
+either.
 
 ## What is recorded
 
@@ -152,8 +164,10 @@ Nothing of a text, a query or a result's address is kept. Each call
 writes one `model_input.call` log line ([logging.md](logging.md)) with its
 operation, caller kind, job, verdict, source and counts, and counts into
 the `ModelInputCalls{op,verdict}` and `ModelInputJudgeTokens{op}` metrics.
-A chunk that was not scanned also logs the judge client's error, with the
-key redacted.
+A chunk that was not scanned also logs why: the judge's status when it
+answered with an error, never its body, which could echo the text. A
+search the provider did not answer logs its status alone, for the same
+reason with the query.
 
 ## Scanning on a person's own machine
 

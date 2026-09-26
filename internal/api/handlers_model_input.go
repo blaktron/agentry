@@ -2,8 +2,11 @@ package api
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -48,6 +51,10 @@ const (
 	// minute, leaving the publication pipeline its share of the key.
 	judgeRequestsPerSecond = 15
 	judgeBurst             = 20
+	// searchScanParallel is how many of a search's results are scanned at
+	// once; each scan asks its own chunks in parallel too, and the pacer
+	// above bounds the sum.
+	searchScanParallel = 4
 )
 
 // ModelInputScanner scans text as model input: *judge.ModelInputScanner.
@@ -149,11 +156,14 @@ func (s *Server) modelInputWiring() (ModelInputScanner, websearch.Provider, Mode
 	return s.modelInput.scanner, s.modelInput.search, s.modelInput.callers
 }
 
+// judgeTypeSafe is the judge provider the model-input question set is for.
+const judgeTypeSafe = "typesafe"
+
 // newModelInputScanner builds the deployment's model-input scanner: Jev
 // alone, since the question set is Jev's. Any other judge, or none, leaves
 // the routes off.
 func newModelInputScanner(provider, model, baseURL, apiKey string) (ModelInputScanner, error) {
-	if provider != "typesafe" {
+	if provider != judgeTypeSafe {
 		return nil, nil
 	}
 	c, err := judge.New(judge.Config{BaseURL: baseURL, APIKey: apiKey, Model: model})
@@ -175,7 +185,11 @@ func (p *pacedAsker) Model() string { return p.asker.Model() }
 
 func (p *pacedAsker) Ask(ctx context.Context, state map[string]string, qs []judge.Question) (map[string]float64, judge.Usage, error) {
 	if err := p.lim.Wait(ctx); err != nil {
-		return nil, judge.Usage{}, context.DeadlineExceeded
+		if ctx.Err() != nil {
+			return nil, judge.Usage{}, ctx.Err() // cancelled, or the deadline passed while waiting
+		}
+		// The limiter saw the request could not start before the deadline.
+		return nil, judge.Usage{}, fmt.Errorf("%w: %v", context.DeadlineExceeded, err)
 	}
 	return p.asker.Ask(ctx, state, qs)
 }
@@ -195,52 +209,46 @@ func (s *Server) modelInputJobRequest(r *http.Request) bool {
 	return callers != nil
 }
 
-// modelInputCaller is who a model-input call is for.
+// callerKind is who a model-input call is for.
+type callerKind string
+
+const (
+	callerStaff callerKind = "staff"
+	callerJob   callerKind = "job"
+)
+
+// modelInputCaller is who a model-input call is for: a staff member, or a
+// job once the extension has named it.
 type modelInputCaller struct {
-	kind string // "staff" | "job"
-	key  string // the budget's key: the staff user, or the job
+	kind callerKind
+	cred string // the job credential, until the job is named
 	job  string
 }
 
-// admitModelInput resolves and budgets the caller, answering the refusal
-// itself when there is one.
-func (s *Server) admitModelInput(w http.ResponseWriter, r *http.Request, call ModelInputCall) (modelInputCaller, bool) {
+// gateModelInput decides who is calling before the body is read, and
+// draws the call from a budget there and then, so a caller cannot spend
+// the server's parsing for free with a body that will be refused. A staff
+// session spends the staff member's model-input budget; a job credential
+// spends its address's larger one, since the job it names is not known
+// until the extension says. It answers the refusal itself when there is
+// one.
+func (s *Server) gateModelInput(w http.ResponseWriter, r *http.Request) (modelInputCaller, bool) {
 	p := principalFrom(r.Context())
 	perMin := s.cfg.Limits.ModelInputPerMin
-	cred := r.Header.Get(jobTokenHeader)
-	if cred != "" {
+	if cred := r.Header.Get(jobTokenHeader); cred != "" {
 		if !p.Anonymous {
-			problemBadRequest(w, r, "Present one credential: a session, or a job credential, not both.")
+			problemBadRequest(w, r, "Present one credential: a session or a token, or a job credential, not both.")
 			return modelInputCaller{}, false
 		}
-		_, _, callers := s.modelInputWiring()
-		if callers == nil {
+		if _, _, callers := s.modelInputWiring(); callers == nil {
 			problemUnauthorized(w, r, "This registry admits no job credentials.")
 			return modelInputCaller{}, false
 		}
-		res := s.limits.Allow("model-input-address", clientIP(r), ratelimit.PerMinute(perMin*modelInputAddressFactor), perMin*modelInputAddressFactor)
-		writeRateLimitHeaders(w, res)
-		if !res.OK {
-			s.rateLimited(r, "model-input")
-			problemTooMany(w, r, "This address has presented too many job credentials. Wait for the Retry-After interval.")
+		if !s.allowModelInput(w, r, "address:"+clientIP(r), perMin*modelInputAddressFactor,
+			"This address has presented too many job credentials. Wait for the Retry-After interval.") {
 			return modelInputCaller{}, false
 		}
-		job, refusal, err := callers.AdmitModelInput(r.Context(), cred, call)
-		switch {
-		case err != nil:
-			s.log.WarnContext(r.Context(), "model input: admission", "op", string(call.Op), "err", err)
-			writeProblem(w, r, http.StatusServiceUnavailable, "model-input-admission-unavailable", "Job check unavailable",
-				"The registry could not check this job credential. Nothing was scanned; retry shortly.")
-			return modelInputCaller{}, false
-		case refusal != nil:
-			writeProblemWith(w, r, refusal.Status, refusal.Slug, refusal.Title, refusal.Detail, refusal.Fields)
-			return modelInputCaller{}, false
-		case job == "":
-			problemUnauthorized(w, r, "This job credential is not valid, or its job has ended.")
-			return modelInputCaller{}, false
-		}
-		c := modelInputCaller{kind: "job", key: "job:" + job, job: job}
-		return c, s.allowModelInput(w, r, c, perMin)
+		return modelInputCaller{kind: callerJob, cred: cred}, true
 	}
 	if p.Anonymous {
 		problemUnauthorized(w, r, "Sign in as platform staff, or present a hosted job's credential.")
@@ -254,17 +262,50 @@ func (s *Server) admitModelInput(w http.ResponseWriter, r *http.Request, call Mo
 		problemForbidden(w, r, "This route is open to platform staff and hosted jobs only.")
 		return modelInputCaller{}, false
 	}
-	c := modelInputCaller{kind: "staff", key: "user:" + p.UserID.String()}
-	return c, s.allowModelInput(w, r, c, perMin)
+	if !s.allowModelInput(w, r, "user:"+p.UserID.String(), perMin,
+		"This caller has made too many model-input calls. Wait for the Retry-After interval.") {
+		return modelInputCaller{}, false
+	}
+	return modelInputCaller{kind: callerStaff}, true
 }
 
-// allowModelInput draws one call from the caller's model-input budget.
-func (s *Server) allowModelInput(w http.ResponseWriter, r *http.Request, c modelInputCaller, perMin int) bool {
-	res := s.limits.Allow("model-input", c.key, ratelimit.PerMinute(perMin), perMin)
+// admitModelInput asks the extension which job a job credential acts for
+// and whether this call fits it, then draws the call from the job's own
+// budget. A staff caller was admitted by the gate.
+func (s *Server) admitModelInput(w http.ResponseWriter, r *http.Request, c modelInputCaller, call ModelInputCall) (modelInputCaller, bool) {
+	if c.kind != callerJob {
+		return c, true
+	}
+	_, _, callers := s.modelInputWiring()
+	job, refusal, err := callers.AdmitModelInput(r.Context(), c.cred, call)
+	switch {
+	case err != nil:
+		s.log.WarnContext(r.Context(), "model input: admission", "op", string(call.Op), "err", err)
+		writeProblem(w, r, http.StatusServiceUnavailable, "model-input-admission-unavailable", "Job check unavailable",
+			"The registry could not check this job credential. Nothing was scanned; retry shortly.")
+		return modelInputCaller{}, false
+	case refusal != nil:
+		writeProblemWith(w, r, refusal.Status, refusal.Slug, refusal.Title, refusal.Detail, refusal.Fields)
+		return modelInputCaller{}, false
+	case job == "":
+		problemUnauthorized(w, r, "This job credential is not valid, or its job has ended.")
+		return modelInputCaller{}, false
+	}
+	if !s.allowModelInput(w, r, "job:"+job, s.cfg.Limits.ModelInputPerMin,
+		"This job has made too many model-input calls. Wait for the Retry-After interval.") {
+		return modelInputCaller{}, false
+	}
+	return modelInputCaller{kind: callerJob, job: job}, true
+}
+
+// allowModelInput draws one call from a model-input budget, answering 429
+// with detail when it is spent.
+func (s *Server) allowModelInput(w http.ResponseWriter, r *http.Request, key string, perMin int, detail string) bool {
+	res := s.limits.Allow("model-input", key, ratelimit.PerMinute(perMin), perMin)
 	writeRateLimitHeaders(w, res)
 	if !res.OK {
 		s.rateLimited(r, "model-input")
-		problemTooMany(w, r, "This caller has made too many model-input calls. Wait for the Retry-After interval.")
+		problemTooMany(w, r, detail)
 		return false
 	}
 	return true
@@ -277,22 +318,25 @@ func (s *Server) problemModelInputOff(w http.ResponseWriter, r *http.Request) {
 
 // ScanModelInput implements POST /model-input/scan.
 func (s *Server) ScanModelInput(w http.ResponseWriter, r *http.Request) {
+	caller, ok := s.gateModelInput(w, r)
+	if !ok {
+		return
+	}
 	var req ModelInputScanRequest
 	if !readJSON(w, r, &req) {
 		return
 	}
 	src := judge.Source(req.Source)
 	if !judge.ValidSource(src) {
-		problemValidation(w, r, "source must be one of description, search_result, page, registry or input_file.")
+		problemValidation(w, r, "The source must be one of "+sourceList()+".")
 		return
 	}
 	if len(req.Text) > modelInputMaxBytes {
 		writeProblemWith(w, r, http.StatusRequestEntityTooLarge, "model-input-too-large", "Text too long",
-			"One scan takes at most 65,536 bytes of text. Send a longer text in parts.", map[string]any{"max": modelInputMaxBytes})
+			fmt.Sprintf("One scan takes at most %d bytes of text. Send a longer text in parts.", modelInputMaxBytes), map[string]any{"max": modelInputMaxBytes})
 		return
 	}
-	caller, ok := s.admitModelInput(w, r, ModelInputCall{Op: ModelInputOpScan, Source: src, Bytes: len(req.Text)})
-	if !ok {
+	if caller, ok = s.admitModelInput(w, r, caller, ModelInputCall{Op: ModelInputOpScan, Source: src, Bytes: len(req.Text)}); !ok {
 		return
 	}
 	scanner, _, callers := s.modelInputWiring()
@@ -309,27 +353,30 @@ func (s *Server) ScanModelInput(w http.ResponseWriter, r *http.Request) {
 	if res.Verdict != judge.VerdictPass {
 		use.Withheld = 1
 	}
-	s.recordModelInput(r.Context(), callers, caller, use, string(res.Verdict), string(src))
+	s.recordModelInput(r.Context(), callers, caller, use, res.Verdict, src)
 	writeJSON(w, http.StatusOK, modelInputScanBody(res))
 }
 
 // SearchModelInput implements POST /model-input/search.
 func (s *Server) SearchModelInput(w http.ResponseWriter, r *http.Request) {
+	caller, ok := s.gateModelInput(w, r)
+	if !ok {
+		return
+	}
 	var req WebSearchRequest
 	if !readJSON(w, r, &req) {
 		return
 	}
 	query, err := websearch.CleanQuery(req.Query)
 	if err != nil {
-		problemValidation(w, r, "The query must be 1 to 400 characters of text.")
+		problemValidation(w, r, fmt.Sprintf("The query must be 1 to %d characters of text, with no line breaks or other control characters.", websearch.MaxQuery))
 		return
 	}
 	count := websearch.DefaultCount
 	if req.Count != nil {
 		count = websearch.ClampCount(*req.Count)
 	}
-	caller, ok := s.admitModelInput(w, r, ModelInputCall{Op: ModelInputOpSearch, Count: count})
-	if !ok {
+	if caller, ok = s.admitModelInput(w, r, caller, ModelInputCall{Op: ModelInputOpSearch, Count: count}); !ok {
 		return
 	}
 	scanner, provider, callers := s.modelInputWiring()
@@ -348,7 +395,7 @@ func (s *Server) SearchModelInput(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	found, err := provider.Search(ctx, query, count)
 	if err != nil {
-		s.log.WarnContext(r.Context(), "model input: web search", "provider", provider.Name(), "err", err)
+		s.log.WarnContext(r.Context(), "model input: web search", "provider", provider.Name(), "failure", searchFailure(err))
 		writeProblem(w, r, http.StatusBadGateway, "web-search-failed", "Web search failed",
 			"The search provider did not answer. Nothing was returned; retry shortly.")
 		return
@@ -356,7 +403,7 @@ func (s *Server) SearchModelInput(w http.ResponseWriter, r *http.Request) {
 	results := websearch.Clean(found, count)
 	scans := make([]judge.ScanResult, len(results))
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, 4)
+	sem := make(chan struct{}, searchScanParallel)
 	for i, res := range results {
 		wg.Add(1)
 		sem <- struct{}{}
@@ -392,16 +439,20 @@ func (s *Server) SearchModelInput(w http.ResponseWriter, r *http.Request) {
 			title, snippet := res.Title, res.Snippet
 			item.Title, item.Snippet = &title, &snippet
 		} else {
+			// The address was scanned with the rest, and a path or a query
+			// can carry an instruction: a result that did not pass keeps
+			// only its origin.
+			item.Url = websearch.Origin(res.URL)
 			body.Withheld++
 		}
 		body.Results = append(body.Results, item)
 	}
 	use.Requests, use.InputTokens, use.Withheld = body.Usage.Requests, body.Usage.InputTokens, body.Withheld
-	verdict := "pass"
+	verdict := judge.VerdictPass
 	if body.Withheld > 0 {
-		verdict = "withheld"
+		verdict = judge.VerdictWithheld
 	}
-	s.recordModelInput(r.Context(), callers, caller, use, verdict, string(judge.SourceSearchResult))
+	s.recordModelInput(r.Context(), callers, caller, use, verdict, judge.SourceSearchResult)
 	writeJSON(w, http.StatusOK, body)
 }
 
@@ -415,12 +466,12 @@ func searchResultText(r websearch.Result) string {
 // recordModelInput records a call against its job, counts it, and writes
 // its one log line: counts and verdicts, never the text, the query or an
 // address.
-func (s *Server) recordModelInput(ctx context.Context, callers ModelInputCallers, c modelInputCaller, use ModelInputUse, verdict, source string) {
-	if c.kind == "job" && callers != nil {
+func (s *Server) recordModelInput(ctx context.Context, callers ModelInputCallers, c modelInputCaller, use ModelInputUse, verdict judge.Verdict, source judge.Source) {
+	if c.kind == callerJob && callers != nil {
 		callers.RecordModelInput(ctx, c.job, use)
 	}
-	s.mx.RecordModelInput(ctx, string(use.Op), verdict, use.InputTokens)
-	attrs := []any{logevent.ModelInput.Attr(), "op", string(use.Op), "caller", c.kind, "verdict", verdict, "source", source,
+	s.mx.RecordModelInput(ctx, string(use.Op), string(verdict), use.InputTokens)
+	attrs := []any{logevent.ModelInput.Attr(), "op", string(use.Op), "caller", string(c.kind), "verdict", string(verdict), "source", string(source),
 		"scanned", use.Scanned, "withheld", use.Withheld, "requests", use.Requests, "input_tokens", use.InputTokens}
 	if c.job != "" {
 		attrs = append(attrs, "job", c.job)
@@ -428,14 +479,46 @@ func (s *Server) recordModelInput(ctx context.Context, callers ModelInputCallers
 	s.log.InfoContext(ctx, "model input", attrs...)
 }
 
-// logModelInputChunkErrors logs why chunks were not scanned. The error is
-// the judge client's, with the key redacted; it never travels to a caller.
+// logModelInputChunkErrors logs why chunks were not scanned. A vendor's
+// answer is logged by its status alone: its body can echo the scanned text,
+// which no line carries. Other errors (a transport error, an answer out of
+// shape, a model mismatch) are the client's own words, the key redacted.
 func (s *Server) logModelInputChunkErrors(ctx context.Context, res judge.ScanResult) {
 	for _, c := range res.Chunks {
-		if c.Err != nil {
-			s.log.WarnContext(ctx, "model input: chunk not scanned", "chunk", c.Index, "failure", c.Failure, "err", c.Err)
+		if c.Err == nil {
+			continue
 		}
+		var se *judge.StatusError
+		if errors.As(c.Err, &se) {
+			s.log.WarnContext(ctx, "model input: chunk not scanned", "chunk", c.Index, "failure", c.Failure, "status", se.Status)
+			continue
+		}
+		s.log.WarnContext(ctx, "model input: chunk not scanned", "chunk", c.Index, "failure", c.Failure, "err", c.Err)
 	}
+}
+
+// searchFailure is what a provider's failure is logged as: its status, or
+// that it did not answer. Neither its body nor its error text is logged,
+// since either can echo the query.
+func searchFailure(err error) string {
+	var se *websearch.StatusError
+	if errors.As(err, &se) {
+		return fmt.Sprintf("status %d", se.Status)
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "timeout"
+	}
+	return "no answer"
+}
+
+// sourceList is the sources a scan takes, for a refusal's words.
+func sourceList() string {
+	srcs := judge.Sources()
+	parts := make([]string, len(srcs))
+	for i, src := range srcs {
+		parts[i] = string(src)
+	}
+	return strings.Join(parts[:len(parts)-1], ", ") + " or " + parts[len(parts)-1]
 }
 
 func modelInputScanBody(res judge.ScanResult) ModelInputScan {

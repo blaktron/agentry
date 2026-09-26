@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -246,11 +247,11 @@ func TestModelInputSearchReturnsOnlyScannedResults(t *testing.T) {
 	if pass.Verdict != "pass" || pass.Title == nil || *pass.Title != "GitHub MCP server" || pass.Snippet == nil {
 		t.Fatalf("a passing result keeps its text: %+v", pass)
 	}
-	if hostile.Verdict != "withheld" || hostile.Title != nil || hostile.Snippet != nil || hostile.URL != "https://mcp-guides.example/best" ||
+	if hostile.Verdict != "withheld" || hostile.Title != nil || hostile.Snippet != nil || hostile.URL != "https://mcp-guides.example/" ||
 		strings.Join(hostile.Flagged, ",") != "injection" {
-		t.Fatalf("a withheld result carries its address and verdict, never its text: %+v", hostile)
+		t.Fatalf("a withheld result carries its origin and verdict, never its text or its path: %+v", hostile)
 	}
-	if failed.Verdict != "not_scanned" || failed.Title != nil || failed.Snippet != nil {
+	if failed.Verdict != "not_scanned" || failed.Title != nil || failed.Snippet != nil || failed.URL != "https://example.org/" {
 		t.Fatalf("an unscanned result is withheld too: %+v", failed)
 	}
 	// Each result was scanned as a search result, its address included.
@@ -459,5 +460,44 @@ func TestModelInputBudgets(t *testing.T) {
 		if got, _ := call(staff, nil); got != want {
 			t.Fatalf("staff call %d: %d, want %d", i+1, got, want)
 		}
+	}
+}
+
+// The address budget: an address presenting job credentials has ten times
+// a caller's budget, and it is spent before the body is read, so neither
+// guessing at credentials nor sending bodies that will be refused is free.
+func TestModelInputAddressBudget(t *testing.T) {
+	callers := &fakeCallers{jobs: map[string]string{}}
+	env := newTestEnvCfg(t, func(c *config.Config) { c.Limits.ModelInputPerMin = 1 }, func(s *api.Server) {
+		s.SetModelInputScanner(judge.NewModelInputScanner(&fakeJudge{}))
+		s.SetModelInputCallers(callers)
+	})
+	post := func(i int) (int, string) {
+		req, err := http.NewRequest(http.MethodPost, env.srv.URL+"/api/v1/model-input/scan", strings.NewReader("{not json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Agentry-Job-Token", "agyj_guess_"+strconv.Itoa(i))
+		res, err := env.srv.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var p problemBody
+		readBody(t, res, &p)
+		return res.StatusCode, p.Detail
+	}
+	for i := 0; i < 10; i++ {
+		if got, _ := post(i); got != http.StatusBadRequest {
+			t.Fatalf("guess %d: %d, want the body refused", i+1, got)
+		}
+	}
+	if got, detail := post(10); got != http.StatusTooManyRequests || !strings.Contains(detail, "job credentials") {
+		t.Fatalf("the eleventh from one address: %d %q", got, detail)
+	}
+	callers.mu.Lock()
+	defer callers.mu.Unlock()
+	if len(callers.calls) != 0 {
+		t.Fatalf("a body that did not parse must never reach the extension: %d calls", len(callers.calls))
 	}
 }
