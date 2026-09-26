@@ -30,6 +30,7 @@ import (
 	"github.com/blaktron/agentry/internal/knowledge"
 	"github.com/blaktron/agentry/internal/queue"
 	"github.com/blaktron/agentry/internal/registry"
+	"github.com/blaktron/agentry/internal/scan"
 	"github.com/blaktron/agentry/internal/webhook"
 )
 
@@ -139,6 +140,73 @@ type (
 // a key that is not there.
 var ErrKeyNotOwner = knowledge.ErrNotOwner
 
+// Knowledge is the core's knowledge store as an extension may act on it
+// (agentry#624; plan knowledge.md §4.5, M6): SecureAgentry's hosted build
+// of the built-in Creator makes a pack, stages its tree for the sandbox
+// host, and puts back the tree the build made. The data key stays in the
+// core: an extension hands over plaintext files and reads metadata, and a
+// tree it puts back is sealed under the pack's own key and stored through
+// the same path as an upload through the routes — opened and checked,
+// counted against its pool under the pool's lock, the tree it replaces
+// deleted, its scan queued. Every call answers ErrKnowledgeUnconfigured
+// while the store is off. Deps.Knowledge is nil without a database.
+type Knowledge interface {
+	// Create makes an empty pack named name for owner, under a data key
+	// the core makes and wraps for owner. ErrKnowledgeName for a name
+	// that is not a pack's, ErrKnowledgeNameTaken for one owner already
+	// uses.
+	Create(ctx context.Context, owner KeyOwner, name string) (KnowledgePack, error)
+	// Pack reads one of owner's packs; ErrKnowledgeNotFound for another
+	// owner's and for none, one answer.
+	Pack(ctx context.Context, owner KeyOwner, id uuid.UUID) (KnowledgePack, error)
+	// Tree is one of owner's packs' tree decrypted, as the canonical tar
+	// whose SHA-256 is the pack's digest: ErrKnowledgeScanning while it
+	// is scanned, ErrKnowledgeNotFound for an empty pack. It is plaintext
+	// in memory; the caller keeps it no longer than it must.
+	Tree(ctx context.Context, owner KeyOwner, id uuid.UUID) (KnowledgePack, []byte, error)
+	// Replace makes files the tree of one of owner's packs if the pack
+	// still holds the tree whose digest is from ("" for an empty pack),
+	// else ErrKnowledgeChanged with nothing stored. A tree past the
+	// pool's cap is a *KnowledgeAllocationError, one that is not a pack's
+	// ErrKnowledgeTree or ErrKnowledgeTooLarge. A tree the pack already
+	// holds is not stored again, changed false, whatever from is, so a
+	// replace retried after it landed is not a conflict.
+	Replace(ctx context.Context, owner KeyOwner, id uuid.UUID, from string, files []KnowledgeFile) (pack KnowledgePack, changed bool, err error)
+	// Usage is owner's meter: what counts against its allocation and the
+	// cap (0 is none).
+	Usage(ctx context.Context, owner KeyOwner) (KnowledgeUsage, error)
+}
+
+// KnowledgePack, KnowledgeFile, KnowledgeUsage and KnowledgeAllocationError
+// are the knowledge store's types as the seam speaks them.
+type (
+	KnowledgePack            = knowledge.Info
+	KnowledgeFile            = scan.PackFile
+	KnowledgeUsage           = knowledge.Usage
+	KnowledgeAllocationError = knowledge.AllocationError
+	KnowledgeState           = knowledge.State
+)
+
+// The states a knowledge pack is in.
+const (
+	KnowledgeEmpty    = knowledge.StateEmpty
+	KnowledgeScanning = knowledge.StateScanning
+	KnowledgeReady    = knowledge.StateReady
+	KnowledgeFailed   = knowledge.StateFailed
+)
+
+// The knowledge seam's refusals.
+var (
+	ErrKnowledgeUnconfigured = knowledge.ErrUnconfigured
+	ErrKnowledgeNotFound     = knowledge.ErrNotFound
+	ErrKnowledgeScanning     = knowledge.ErrScanning
+	ErrKnowledgeChanged      = knowledge.ErrChanged
+	ErrKnowledgeName         = knowledge.ErrName
+	ErrKnowledgeNameTaken    = knowledge.ErrNameTaken
+	ErrKnowledgeTree         = knowledge.ErrTree
+	ErrKnowledgeTooLarge     = knowledge.ErrTooLarge
+)
+
 // AdmitsModelInput is the optional interface for an extension that admits
 // hosted jobs to the model-input routes (agentry#608; plan builder-rework.md
 // D20, D21): AI Review of text a model is about to read, and web search
@@ -180,16 +248,20 @@ type Unthrottles interface {
 // Principal is the resolved caller; Principal(ctx) reads it in a route.
 type Principal = auth.Principal
 
-// Scope is a PAT scope as the core spells it; the two an extension may
-// require are the hosted-run scopes (agentry#348). A session carries no
+// Scope is a PAT scope as the core spells it; those an extension may
+// require are the hosted-run scopes (agentry#348) and the knowledge scopes,
+// for a route that writes into a person's knowledge through the Knowledge
+// seam (agentry#624). A session carries no
 // scopes and the account's full authority; a PAT carries what it was
 // minted with, flat — no scope implies another.
 type Scope = auth.Scope
 
 // The scopes an extension route may require.
 const (
-	ScopeRunRead  = auth.ScopeRunRead
-	ScopeRunWrite = auth.ScopeRunWrite
+	ScopeRunRead        = auth.ScopeRunRead
+	ScopeRunWrite       = auth.ScopeRunWrite
+	ScopeKnowledgeRead  = auth.ScopeKnowledgeRead
+	ScopeKnowledgeWrite = auth.ScopeKnowledgeWrite
 )
 
 // ScopeAllows is how the core reads a scope for a route: an anonymous
@@ -278,6 +350,10 @@ type Deps struct {
 	// endpoints through the core's transport (agentry#430). nil when the
 	// server runs without a database, as DB is.
 	Webhooks Webhooks
+	// Knowledge is the core's knowledge store (agentry#624). nil when the
+	// server runs without a database, as DB is; while the store is off
+	// (no key wrapper yet) its calls answer ErrKnowledgeUnconfigured.
+	Knowledge Knowledge
 }
 
 // Notifier lets an extension tell a person something by mail without
