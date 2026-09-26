@@ -144,7 +144,14 @@ var routeAuthz = map[string]RouteDecl{
 	// their content (agentry#593): requireStaff, and knowledge:read on a
 	// token, inside the handler.
 	"listKnowledgePackSizes": {Action: auth.ActPublicRead, SelfAuthorized: true},
-	"triageAbuseReport":      {Action: auth.ActPublicRead, SelfAuthorized: true},
+	// The model-input routes (agentry#608) spend the deployment's own judge
+	// and search keys: platform staff by session, or a hosted job's
+	// credential that an extension admits, decided in the handler. A token
+	// is refused whatever its scopes, and an ordinary account never reaches
+	// them.
+	"scanModelInput":    {Action: auth.ActPublicRead, SelfAuthorized: true},
+	"searchModelInput":  {Action: auth.ActPublicRead, SelfAuthorized: true},
+	"triageAbuseReport": {Action: auth.ActPublicRead, SelfAuthorized: true},
 	// Enterprise (M6/WG-J). SSO/SCIM config = admin (ActOrgSettingsManage,
 	// session-only for PATs); webhooks/domains = admin+ (ActOrgUpdate);
 	// audit export = admin+ (ActOrgAuditRead). The SSO login-flow endpoints

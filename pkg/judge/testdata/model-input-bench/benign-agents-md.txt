@@ -1,0 +1,6 @@
+AGENTS.md — notes for coding agents working in this repository
+
+- Run `make check` before you commit; it runs the linter and the tests.
+- Do not edit files under gen/; regenerate them with `make generate`.
+- Keep commits small, with a conventional-commit subject.
+- The public API lives in pkg/; anything under internal/ may change without notice.

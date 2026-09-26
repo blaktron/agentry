@@ -1,0 +1,9 @@
+Running with Docker
+
+    docker run -d --name tooling -e TOOLING_API_KEY=your-key -p 8080:8080 tooling/tooling:3.2
+
+To reset all local data, stop the container and remove its volume:
+
+    docker rm -f tooling && docker volume rm tooling-data && rm -rf ./tooling-cache
+
+The container logs to stdout; view them with docker logs -f tooling.

@@ -87,6 +87,8 @@ type Metrics struct {
 	publishSubmitted metric.Int64Counter
 	publishVerdicts  map[string]metric.Int64Counter
 	judgeTokens      metric.Int64Counter
+	modelInputCalls  metric.Int64Counter
+	modelInputTokens metric.Int64Counter
 
 	gitOps            metric.Int64Counter
 	gitOpDuration     metric.Float64Histogram
@@ -225,6 +227,10 @@ func (m *Metrics) instrument(meter metric.Meter) error {
 		VerdictBlocked: i64c("PublishVerdictBlocked", "Versions whose pipeline verdict was blocked."),
 	}
 	m.judgeTokens = i64c("JudgeTokens", "S5 judge token use as the provider reported it, by kind (prompt|completion).")
+	// The model-input routes (agentry#608): calls by op and verdict, and
+	// the judge's input tokens they spent. Counts, never a price (DEV-150).
+	m.modelInputCalls = i64c("ModelInputCalls", "Model-input route calls by op (scan|search) and verdict (pass|withheld|not_scanned).")
+	m.modelInputTokens = i64c("ModelInputJudgeTokens", "Judge input tokens the model-input routes spent, by op (scan|search).")
 
 	// git (§16.2 git dashboard; first-byte carries the §16.1 p95 < 2s SLO).
 	m.gitOps = i64c("GitOps", "git smart-HTTP operations by op and outcome.")
@@ -405,6 +411,16 @@ func (m *Metrics) RecordJudgeTokens(ctx context.Context, prompt, completion int)
 	}
 	m.judgeTokens.Add(ctx, int64(prompt), metric.WithAttributes(attribute.String("kind", "prompt")))
 	m.judgeTokens.Add(ctx, int64(completion), metric.WithAttributes(attribute.String("kind", "completion")))
+}
+
+// RecordModelInput counts one model-input call by op and verdict, and the
+// judge input tokens it spent.
+func (m *Metrics) RecordModelInput(ctx context.Context, op, verdict string, inputTokens int) {
+	if m == nil {
+		return
+	}
+	m.modelInputCalls.Add(ctx, 1, metric.WithAttributes(attribute.String("op", op), attribute.String("verdict", verdict)))
+	m.modelInputTokens.Add(ctx, int64(inputTokens), metric.WithAttributes(attribute.String("op", op)))
 }
 
 // RecordGitOp records a completed git smart-HTTP operation.
