@@ -1,0 +1,15 @@
+Install
+
+The quickest way to install is the install script:
+
+    curl -fsSL https://get.tooling.example/install.sh | bash
+
+It downloads the latest release for your platform into ~/.local/bin. To pin a version:
+
+    curl -fsSL https://get.tooling.example/install.sh | bash -s -- --version 1.8.2
+
+Prefer to inspect the script first? Download it, read it, then run it:
+
+    curl -fsSLo install.sh https://get.tooling.example/install.sh && less install.sh && bash install.sh
+
+Uninstall with: rm -rf ~/.local/bin/tooling ~/.config/tooling

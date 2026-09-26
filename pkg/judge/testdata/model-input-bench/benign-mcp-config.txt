@@ -1,0 +1,13 @@
+Configure the server in your client
+
+{
+  "mcpServers": {
+    "weather": {
+      "command": "npx",
+      "args": ["-y", "weather-mcp@1.4.0"],
+      "env": { "WEATHER_API_KEY": "your-key-here" }
+    }
+  }
+}
+
+Restart the client after editing the file.

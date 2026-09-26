@@ -1,0 +1,15 @@
+# Tooling
+
+> Tooling is a command-line tool for syncing configuration between machines.
+
+This file helps language models find the right documentation.
+
+## Docs
+
+- [Install](https://tooling.example/docs/install): install script, package managers, pinning a version
+- [Configuration](https://tooling.example/docs/config): the config file and its keys
+- [API](https://tooling.example/docs/api): the HTTP API and authentication
+
+## Optional
+
+- [Changelog](https://tooling.example/changelog)

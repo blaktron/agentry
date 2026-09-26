@@ -139,6 +139,35 @@ type (
 // a key that is not there.
 var ErrKeyNotOwner = knowledge.ErrNotOwner
 
+// AdmitsModelInput is the optional interface for an extension that admits
+// hosted jobs to the model-input routes (agentry#608; plan builder-rework.md
+// D20, D21): AI Review of text a model is about to read, and web search
+// brokered by the registry. A sandbox host presents the credential the
+// extension minted for one job in X-Agentry-Job-Token; the core asks
+// AdmitModelInput which job it names, and whether the call fits the job
+// (a draft past its searches is refused), then records what the call spent
+// with RecordModelInput. The use is a count for the record, never a price:
+// AI Review is 1 credit an operation, however many scans it makes
+// (DEV-150). Without it only platform staff reach the routes.
+type AdmitsModelInput interface {
+	ModelInputCallers() ModelInputCallers
+}
+
+// ModelInputCallers, ModelInputCall, ModelInputUse and ModelInputOp are the
+// model-input routes' admission types.
+type (
+	ModelInputCallers = api.ModelInputCallers
+	ModelInputCall    = api.ModelInputCall
+	ModelInputUse     = api.ModelInputUse
+	ModelInputOp      = api.ModelInputOp
+)
+
+// The two model-input operations a call can be.
+const (
+	ModelInputOpScan   = api.ModelInputOpScan
+	ModelInputOpSearch = api.ModelInputOpSearch
+)
+
 // Unthrottles is the optional interface for an extension whose receiver of
 // signed callbacks must never be refused by the anonymous rate class (a
 // payment provider's webhook, plan subscription-tiers §5.5). The routes are

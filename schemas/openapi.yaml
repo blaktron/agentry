@@ -105,6 +105,16 @@ tags:
       Knowledge packs (agentry#593): an account's packs kept in the
       registry, sealed under data keys of their own, scanned on arrival,
       and the wrap and unwrap of their data keys.
+  - name: model-input
+    description: >-
+      AI Review of text a model is about to read, and web search brokered
+      by the registry (agentry#608; plan builder-rework.md D20–D24). The
+      caller pushes the text; the registry asks the deployment's judge
+      with the model-input question set and keeps the keys. Open to
+      platform staff by session and, where an extension admits them, to
+      hosted jobs by their job credential; never to an ordinary account's
+      token, since the routes spend the deployment's own judge and search
+      keys.
 
 paths:
   /meta:
@@ -3678,6 +3688,79 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /model-input/scan:
+    post:
+      operationId: scanModelInput
+      tags: [model-input]
+      summary: AI Review of text a model is about to read (agentry#608).
+      description: >-
+        Scans pushed text as model input: the deployment's judge is asked
+        the model-input question set (injection, exfiltration, user
+        deception, obfuscation), in 8 KiB chunks asked in parallel, and
+        answers per chunk with scores. The text's score is the highest over
+        its chunks and questions; 2 or more (the gate's medium) is
+        `withheld`, and a chunk the judge could not answer (an error, a
+        timeout, an answer out of shape) makes the text `not_scanned`,
+        which a caller treats as withheld. Nothing of the text is kept or
+        logged. `usage` counts the judge's requests and tokens for the
+        record; it is never a price (AI Review is charged per operation,
+        not per scan). Open to platform staff by session, and to a hosted
+        job's credential in `X-Agentry-Job-Token` where an extension admits
+        it; a token is refused whatever its scopes. 503
+        `model-input-unavailable` when the deployment's judge is not
+        TypeSafe's Jev.
+      security:
+        - session: []
+        - jobToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModelInputScanRequest"
+      responses:
+        "200":
+          description: The verdict, per chunk and for the whole text.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelInputScan"
+        default:
+          $ref: "#/components/responses/Problem"
+  /model-input/search:
+    post:
+      operationId: searchModelInput
+      tags: [model-input]
+      summary: Web search through the deployment's provider, every result scanned (agentry#608).
+      description: >-
+        Searches the web through the deployment's search provider with the
+        registry's own key, then scans each result (its title, address and
+        snippet) as model input, as `POST /model-input/scan` does. Only
+        scanned results come back: a `withheld` or `not_scanned` result
+        carries its origin (scheme and host), verdict and scores, never its
+        title, its snippet or the rest of its address. The query goes to the search provider and is neither kept
+        nor logged. Callers as for `POST /model-input/scan`. 503
+        `web-search-unavailable` when no provider is configured, 503
+        `model-input-unavailable` when there is no judge to scan the
+        results, 502 `web-search-failed` when the provider did not answer.
+      security:
+        - session: []
+        - jobToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebSearchRequest"
+      responses:
+        "200":
+          description: The scanned results.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebSearchResults"
+        default:
+          $ref: "#/components/responses/Problem"
   /mcp-servers/scan:
     get:
       operationId: getMcpServerScan
@@ -5344,6 +5427,179 @@ components:
           type: array
           items:
             type: string
+    ModelInputSource:
+      type: string
+      description: >-
+        What the text is: a person's description, one web search result, a
+        web page's text, an answer from the registry's public API, or a
+        hosted run's input file as decoded text. It rides beside the text
+        in the judge's state; nothing of the text reaches a question.
+      enum: [description, search_result, page, registry, input_file]
+    ModelInputVerdict:
+      type: string
+      description: >-
+        `pass`: no question scored 2 or more. `withheld`: one did; the model
+        gets the source's address and the reason, never the text.
+        `not_scanned`: the judge could not answer for part of the text; a
+        caller treats it as withheld.
+      enum: [pass, withheld, not_scanned]
+    ModelInputScores:
+      type: object
+      description: Per question, 0 to 3 (0.5, 0.7 and 0.9 are 1, 2 and 3).
+      required: [injection, exfiltration, deception, obfuscation]
+      properties:
+        injection:
+          type: integer
+          minimum: 0
+          maximum: 3
+        exfiltration:
+          type: integer
+          minimum: 0
+          maximum: 3
+        deception:
+          type: integer
+          minimum: 0
+          maximum: 3
+        obfuscation:
+          type: integer
+          minimum: 0
+          maximum: 3
+    ModelInputUsage:
+      type: object
+      description: >-
+        The judge's requests and input tokens, for the record. Never a
+        price: AI Review is charged per operation (DEV-150).
+      required: [requests, inputTokens]
+      properties:
+        requests:
+          type: integer
+        inputTokens:
+          type: integer
+    ModelInputScanRequest:
+      type: object
+      required: [source, text]
+      additionalProperties: false
+      properties:
+        source:
+          $ref: "#/components/schemas/ModelInputSource"
+        text:
+          type: string
+          description: >-
+            The text as the model would read it, at most 65,536 bytes of
+            UTF-8 (eight chunks); a longer text is sent in parts.
+    ModelInputChunk:
+      type: object
+      required: [index, bytes, verdict]
+      properties:
+        index:
+          type: integer
+        bytes:
+          type: integer
+        verdict:
+          $ref: "#/components/schemas/ModelInputVerdict"
+        scores:
+          $ref: "#/components/schemas/ModelInputScores"
+        failure:
+          type: string
+          description: Why a chunk was not scanned.
+          enum: [timeout, judge-error]
+    ModelInputScan:
+      type: object
+      required: [verdict, score, scores, flagged, chunks, model, questionSet, usage]
+      properties:
+        verdict:
+          $ref: "#/components/schemas/ModelInputVerdict"
+        score:
+          type: integer
+          minimum: 0
+          maximum: 3
+          description: The highest score over every chunk and question.
+        scores:
+          $ref: "#/components/schemas/ModelInputScores"
+        flagged:
+          type: array
+          description: The questions that scored 2 or more.
+          items:
+            type: string
+            enum: [injection, exfiltration, deception, obfuscation]
+        chunks:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModelInputChunk"
+        model:
+          type: string
+          description: The pinned judge model, such as `jev-1.13.0`.
+        questionSet:
+          type: string
+          description: >-
+            The hash of the question set and everything else that changes a
+            verdict (model, wording, chunk size, thresholds).
+        usage:
+          $ref: "#/components/schemas/ModelInputUsage"
+    WebSearchRequest:
+      type: object
+      required: [query]
+      additionalProperties: false
+      properties:
+        query:
+          type: string
+          minLength: 1
+          maxLength: 400
+        count:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 5
+          description: How many results to ask the provider for; clamped to 1–10.
+    WebSearchResult:
+      type: object
+      required: [url, verdict, score]
+      properties:
+        url:
+          type: string
+          description: >-
+            The result's address when it passed; only its origin (scheme
+            and host) when it was withheld or not scanned, since a path or
+            a query can carry an instruction too.
+        title:
+          type: string
+          description: Present only when the result passed.
+        snippet:
+          type: string
+          description: Present only when the result passed.
+        verdict:
+          $ref: "#/components/schemas/ModelInputVerdict"
+        score:
+          type: integer
+          minimum: 0
+          maximum: 3
+        scores:
+          $ref: "#/components/schemas/ModelInputScores"
+        flagged:
+          type: array
+          items:
+            type: string
+            enum: [injection, exfiltration, deception, obfuscation]
+    WebSearchResults:
+      type: object
+      required: [provider, results, withheld, model, questionSet, usage]
+      properties:
+        provider:
+          type: string
+          description: The search provider the deployment brokers.
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/WebSearchResult"
+        withheld:
+          type: integer
+          description: How many results were withheld or not scanned.
+        model:
+          type: string
+        questionSet:
+          type: string
+        usage:
+          $ref: "#/components/schemas/ModelInputUsage"
     McpServerScan:
       type: object
       required: [ecosystem, package, version, status, advisories, firstSeenAt, lastCheckedAt]
@@ -6153,6 +6409,14 @@ components:
       type: apiKey
       in: cookie
       name: agentry_session
+    jobToken:
+      type: apiKey
+      in: header
+      name: X-Agentry-Job-Token
+      description: >-
+        A hosted job's credential for the model-input routes, minted by an
+        extension for one job and valid while it runs (agentry#608). Never
+        a personal access token.
 
 security:
   - pat: []

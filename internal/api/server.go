@@ -39,6 +39,7 @@ import (
 	"github.com/blaktron/agentry/internal/version"
 	"github.com/blaktron/agentry/internal/webhook"
 	"github.com/blaktron/agentry/pkg/ruleset"
+	"github.com/blaktron/agentry/pkg/websearch"
 )
 
 // Server implements the generated ServerInterface plus non-spec endpoints
@@ -73,6 +74,9 @@ type Server struct {
 	// knowledge is the store of accounts' knowledge packs (agentry#593);
 	// nil without a database, and off (every route 503) with no wrapper.
 	knowledge *knowledge.Service
+	// modelInput is the model-input routes' scanner, search provider and
+	// the extension that admits hosted jobs (agentry#608).
+	modelInput modelInputState
 	// Enterprise (M6/WG-J): webhook fan-out and the DNS resolver for domain
 	// verification.
 	webhooks *webhook.Dispatcher
@@ -194,6 +198,24 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 	srv.samlRequests = samlsp.NewMemoryRequestTracker()
 	srv.SetOIDCEgressGuard(webhook.Guard{AllowLoopback: cfg.DevMode})
 	srv.imgKey = newImgProxyKey(cfg.Auth.SealingKey)
+	// The model-input routes (agentry#608) need no database: the scanner
+	// asks the deployment's judge when it is Jev, and the search route
+	// brokers the configured provider. Either off leaves its route 503; a
+	// configuration naming one that cannot be built refuses startup.
+	mis, merr := newModelInputScanner(judgeProviderName(cfg), cfg.Judge.Model, cfg.Judge.BaseURL, cfg.Judge.APIKey)
+	if merr != nil {
+		panic(merr) // startup-time config failure, never mid-request
+	}
+	if mis != nil {
+		srv.SetModelInputScanner(mis)
+	}
+	ws, werr := websearch.New(cfg.WebSearch.Provider, cfg.WebSearch.BaseURL, cfg.WebSearch.APIKey)
+	if werr != nil {
+		panic(werr) // startup-time config failure, never mid-request
+	}
+	if ws != nil {
+		srv.SetWebSearch(ws)
+	}
 	if st != nil {
 		// With a database the SAML sets live there, so a second replica
 		// refuses what the first consumed and completes what the first

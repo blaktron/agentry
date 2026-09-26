@@ -108,6 +108,7 @@ The enterprise build is one such module; the core carries none.
 | `internal/render` | the only path by which author markdown reaches a browser |
 | `internal/ui` | the server's own pages at `/ui/` (Go templates, no JavaScript build): device authorize, sign-in, account, review, staff, organizations |
 | `pkg/extension` | the seam a closed build extends the server through: routes, migrations, entitlements, hooks, jobs |
+| `pkg/judge` `pkg/websearch` | the one Jev client and its question sets, and the web search clients: the registry's model-input routes and a person's local scans use the same code |
 | `pkg/` | public: manifest spec + refs, rules engine, embedded ruleset, deterministic archives + extractor, attestation verify, generated API client — the surface the CLI and third parties build on |
 | `rules/` | the versioned S3/S4 rule bundle |
 | `testdata/attack-corpus/` | the golden corpus: attack fixtures and their benign twins |
@@ -126,6 +127,7 @@ The enterprise build is one such module; the core carries none.
 - [Running BriefAgents](docs/runner.md) — every command, flag, policy key and enforcement mechanism of the runner
 - [Hosted runs](docs/hosted-runs.md) — running a release on a deployment's own machine: the caps, the credit hold and its settlement, what is refused, and what the receipt carries (a deployment that mounts the runs extension; this repository's server carries none)
 - [Knowledge packs in the registry](docs/knowledge.md) — an account's packs kept sealed under keys of their own, the key-wrapper seam, what the scan reads, and when they are destroyed
+- [Model input](docs/model-input.md) — AI Review of text a model is about to read, and web search brokered by the registry: who may call, the question set and its bench, the verdicts, what is recorded
 - [The log contract](docs/logging.md) — what a line carries, what is never in one, the `event` names a dashboard keys on
 - [Operational runbooks](docs/ops/runbooks.md)
 - [Contributing](CONTRIBUTING.md) — including the rules that actually matter (route authorization, scanner fixtures)
