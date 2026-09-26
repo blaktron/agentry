@@ -485,7 +485,8 @@ type Judge struct {
 // model-input search route (agentry#608; plan builder-rework.md D21): the
 // Drafter's `web_search`, with the key held here beside the judge's so no
 // sandbox host gains one. Provider is none (the default: the route answers
-// 503) or youcom (You.com's Web Search API). AGENTRY_WEB_SEARCH_PROVIDER,
+// 503), youcom (You.com's Web Search API) or brave (Brave's LLM Context API,
+// agentry#631). AGENTRY_WEB_SEARCH_PROVIDER,
 // AGENTRY_WEB_SEARCH_BASE_URL and AGENTRY_WEB_SEARCH_API_KEY set them; the
 // key is never logged.
 type WebSearch struct {
