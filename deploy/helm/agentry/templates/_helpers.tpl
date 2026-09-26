@@ -37,13 +37,33 @@ app.kubernetes.io/name: {{ include "agentry.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
-{{/* ServiceAccount name */}}
-{{- define "agentry.serviceAccountName" -}}
-{{- if .Values.serviceAccount.create }}
-{{- default (include "agentry.fullname" .) .Values.serviceAccount.name }}
-{{- else }}
-{{- default "default" .Values.serviceAccount.name }}
+{{/* The roles that run under a ServiceAccount of their own (agentry#627):
+serviceaccount.yaml makes one for each, and a Deployment may name no other. */}}
+{{- define "agentry.serviceAccountRoles" -}}
+api worker git
 {{- end }}
+
+{{/* A role's ServiceAccount name: (dict "ctx" $ "role" "api").
+With serviceAccount.create (the default) each role has its own,
+<fullname>-<role>, so a pod's token names the role presenting it (OpenBao's
+Kubernetes auth binds the encrypt policy to the api's and the decrypt policy
+to the worker's; plan hosted-credentials-vault.md D6). With create: false,
+every role runs under the one existing account serviceAccount.name. */}}
+{{- define "agentry.serviceAccountName" -}}
+{{- $ctx := .ctx -}}
+{{- if not (has .role (splitList " " (include "agentry.serviceAccountRoles" $ctx))) -}}
+{{- fail (printf "no ServiceAccount is made for the role %q: the chart makes one for api, worker and git" .role) -}}
+{{- end -}}
+{{- if $ctx.Values.serviceAccount.create -}}
+{{- if $ctx.Values.serviceAccount.name -}}
+{{- fail "serviceAccount.name names an existing account, and needs serviceAccount.create=false: with create, the chart makes one account per role (<release>-agentry-api, -worker and -git)" -}}
+{{- end -}}
+{{- /* The fullname is cut to leave room for "-worker", the longest role, so
+truncation never makes two roles' names one. */ -}}
+{{- printf "%s-%s" (include "agentry.fullname" $ctx | trunc 56 | trimSuffix "-") .role -}}
+{{- else -}}
+{{- default "default" $ctx.Values.serviceAccount.name -}}
+{{- end -}}
 {{- end }}
 
 {{/* Secret name (created or existing) */}}

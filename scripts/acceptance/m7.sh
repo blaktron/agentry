@@ -112,6 +112,32 @@ for role in api worker git; do
   check "$role mounts nothing under the read-only /etc/agentry" "$(count "$r" 'mountPath: /etc/agentry/')" 0
   check "$role carries the pull secret" "$(count "$r" 'name: agentry-ghcr-pull')" 1
 done
+# A ServiceAccount per role (agentry#627; plan hosted-credentials-vault.md
+# D6): three rendered, each Deployment under its own, no two alike, so a
+# pod's token names its role (OpenBao binds the encrypt policy to the api's
+# and the decrypt policy to the worker's).
+render sa serviceaccount.yaml
+check "three ServiceAccounts render" "$(count "$sa" 'kind: ServiceAccount')" 3
+sas=""
+for role in api worker git; do
+  eval "r=\$$role"
+  name=$(printf '%s\n' "$r" | sed -n 's/^ *serviceAccountName: *//p')
+  check "$role runs under its own ServiceAccount" "$name" "acc-agentry-$role"
+  check "$role's ServiceAccount is one the chart makes" "$(count "$sa" "name: $name\$")" 1
+  sas="$sas $name"
+done
+check "no two roles share a ServiceAccount" "$(printf '%s\n' $sas | sort -u | wc -l | tr -d ' ')" 3
+long=$(printf 'a%.0s' $(seq 1 63))
+long_sas=$(helm template acc "$HELM_DIR" "${PROD[@]}" --set fullnameOverride="$long" --show-only templates/serviceaccount.yaml | sed -n 's/^  name: //p' | sort -u | wc -l | tr -d ' ')
+check "a 63-character fullname still gives three distinct accounts" "$long_sas" 3
+if helm template acc "$HELM_DIR" "${PROD[@]}" --set serviceAccount.name=shared >/dev/null 2>&1; then
+  echo "FAIL serviceAccount.name with create rendered (one account for every role)"; fail=1
+else
+  echo "ok   serviceAccount.name with create is refused"
+fi
+shared=$(helm template acc "$HELM_DIR" "${PROD[@]}" --set serviceAccount.create=false --set serviceAccount.name=shared | grep -c 'serviceAccountName: shared' || true)
+check "create=false keeps one existing account for all three" "$shared" 3
+
 if helm template acc "$HELM_DIR" "${BASE[@]}" --set config.signing.kind=file >/dev/null 2>&1; then
   echo "FAIL kind=file without signingKey.existingSecret rendered"; fail=1
 else
