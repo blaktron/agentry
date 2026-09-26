@@ -355,6 +355,14 @@ func objectKey(owner Owner, pack uuid.UUID) string {
 // against the allocation owner's packs draw on, under a lock on that pool,
 // then stores it sealed as it came.
 func (s *Service) Upload(ctx context.Context, owner Owner, id uuid.UUID, sealed []byte) (storegen.KnowledgePack, error) {
+	return s.upload(ctx, owner, id, sealed, nil)
+}
+
+// upload is the one path a tree is stored by, through the route and
+// through an extension's Replace alike; check, when given, is asked about
+// the pack as it stands under its row lock, and its error refuses the
+// upload with nothing stored.
+func (s *Service) upload(ctx context.Context, owner Owner, id uuid.UUID, sealed []byte, check func(storegen.KnowledgePack) error) (storegen.KnowledgePack, error) {
 	p, err := s.Get(ctx, owner, id)
 	if err != nil {
 		return p, err
@@ -382,6 +390,11 @@ func (s *Service) Upload(ctx context.Context, owner Owner, id uuid.UUID, sealed 
 		}
 		if err != nil {
 			return fmt.Errorf("knowledge: lock pack: %w", err)
+		}
+		if check != nil {
+			if err := check(cur); err != nil {
+				return err
+			}
 		}
 		others, err := q.SumKnowledgeBytesOfPool(ctx, pool.sumParams(id))
 		if err != nil {
