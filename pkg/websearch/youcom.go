@@ -87,14 +87,14 @@ func (y *YouCom) Search(ctx context.Context, query string, count int) ([]Result,
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, y.endpoint, bytes.NewReader(payload))
 	if err != nil {
-		return nil, fmt.Errorf("websearch: youcom request: %w", y.redact(err))
+		return nil, fmt.Errorf("websearch: youcom request: %w", redactKey(err, y.apiKey))
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("X-API-Key", y.apiKey)
 	resp, err := y.http.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("websearch: youcom request: %w", y.redact(err))
+		return nil, fmt.Errorf("websearch: youcom request: %w", redactKey(err, y.apiKey))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, youComMaxResponse))
@@ -102,12 +102,7 @@ func (y *YouCom) Search(ctx context.Context, query string, count int) ([]Result,
 		return nil, fmt.Errorf("websearch: youcom response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		// Redact before cutting, so no half of the key survives the cut.
-		snippet := strings.ReplaceAll(string(raw), y.apiKey, "[key]")
-		if len(snippet) > 200 {
-			snippet = strings.ToValidUTF8(snippet[:200], "")
-		}
-		return nil, &StatusError{Provider: YouComName, Status: resp.StatusCode, Snippet: snippet}
+		return nil, statusError(YouComName, resp.StatusCode, raw, y.apiKey)
 	}
 	var body struct {
 		Results struct {
@@ -133,11 +128,24 @@ func (y *YouCom) Search(ctx context.Context, query string, count int) ([]Result,
 	return out, nil
 }
 
-func (y *YouCom) redact(err error) error {
-	if !strings.Contains(err.Error(), y.apiKey) {
+// redactKey strips a provider's key from an error's text, keeping the error
+// otherwise intact.
+func redactKey(err error, key string) error {
+	if !strings.Contains(err.Error(), key) {
 		return err
 	}
-	return errors.New(strings.ReplaceAll(err.Error(), y.apiKey, "[key]"))
+	return errors.New(strings.ReplaceAll(err.Error(), key, "[key]"))
+}
+
+// statusError is a provider's non-200 answer as a StatusError, its body
+// cut to a bounded snippet with the key redacted first, so no half of the
+// key survives the cut.
+func statusError(provider string, status int, body []byte, key string) *StatusError {
+	snippet := strings.ReplaceAll(string(body), key, "[key]")
+	if len(snippet) > 200 {
+		snippet = strings.ToValidUTF8(snippet[:200], "")
+	}
+	return &StatusError{Provider: provider, Status: status, Snippet: snippet}
 }
 
 // StatusError is a provider's non-200 answer: its status and a bounded
@@ -154,7 +162,7 @@ func (e *StatusError) Error() string {
 }
 
 // Providers lists the names a deployment may configure, "none" first.
-func Providers() []string { return []string{"none", YouComName} }
+func Providers() []string { return []string{"none", YouComName, BraveName} }
 
 // Known reports whether a configured name is one of Providers; "" is none.
 func Known(provider string) bool {
@@ -171,14 +179,17 @@ func Known(provider string) bool {
 }
 
 // New builds the provider a deployment names: "" or "none" is no provider
-// (nil, nil), "youcom" is You.com. An unknown name, or a named provider
-// without its key, is an error the server refuses to start on.
+// (nil, nil), "youcom" is You.com and "brave" is Brave's LLM Context API.
+// An unknown name, or a named provider without its key, is an error the
+// server refuses to start on.
 func New(provider, baseURL, apiKey string) (Provider, error) {
 	switch strings.TrimSpace(provider) {
 	case "", "none":
 		return nil, nil
 	case YouComName:
 		return NewYouCom(YouComConfig{BaseURL: baseURL, APIKey: apiKey})
+	case BraveName:
+		return NewBrave(BraveConfig{BaseURL: baseURL, APIKey: apiKey})
 	}
 	return nil, fmt.Errorf("websearch: unknown provider %q (%s)", provider, strings.Join(Providers(), "|"))
 }
