@@ -59,9 +59,9 @@ const (
 	typesafeChunk          = judge.ChunkSize
 	typesafeInputLimit     = 50 << 10
 	typesafeBatch          = 1
-	typesafeBandLow        = 0.30
-	typesafeBandHigh       = 0.70
-	typesafeSamples        = 3
+	typesafeBandLow        = judge.BandLow
+	typesafeBandHigh       = judge.BandHigh
+	typesafeSamples        = judge.Samples
 	// typesafeDeclaredCap bounds the declared-capabilities JSON that rides
 	// in the state beside the content: a manifest's `mcpServers[].env` and
 	// `tools` can carry tens of kilobytes of free text, and the question is

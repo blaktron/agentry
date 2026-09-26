@@ -76,11 +76,10 @@ const (
 	// modelInputParallel is how many of one text's chunks are asked at
 	// once: a 32 KiB page (D24) is four.
 	modelInputParallel = 4
-	// The borderline band, as the gate's: an answer inside it is asked
-	// twice more and the highest of the three kept, never the mean.
-	modelInputBandLow  = 0.30
-	modelInputBandHigh = 0.70
-	modelInputSamples  = 3
+	// The borderline band is the gate's (BandLow, BandHigh, Samples).
+	modelInputBandLow  = BandLow
+	modelInputBandHigh = BandHigh
+	modelInputSamples  = Samples
 )
 
 // ChunkResult is one chunk's answer.

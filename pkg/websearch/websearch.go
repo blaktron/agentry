@@ -101,6 +101,17 @@ func Clean(rs []Result, count int) []Result {
 	return out
 }
 
+// Origin is an address's scheme and host alone, what a caller shows of a
+// result that did not pass its scan: a path or a query can carry an
+// instruction as readily as a snippet can.
+func Origin(address string) string {
+	u, err := url.Parse(address)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host + "/"
+}
+
 func cleanURL(raw string) (string, bool) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || len(raw) > maxURL || !utf8.ValidString(raw) {
