@@ -413,6 +413,41 @@ func TestJudgeEnvConfig(t *testing.T) {
 	// (scan.PinnedJudgeModel): one rule, where the provider is.
 }
 
+// The brokered web search (agentry#608) wires from three env vars; none is
+// the default, a provider needs its key, and an unknown name refuses to
+// start. The model-input budget has a default and must stay positive.
+func TestWebSearchEnvConfig(t *testing.T) {
+	t.Setenv("AGENTRY_DEV_MODE", "true")
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.WebSearch.Provider != "" || cfg.Limits.ModelInputPerMin != 120 {
+		t.Fatalf("defaults: %+v, %d", cfg.WebSearch, cfg.Limits.ModelInputPerMin)
+	}
+	t.Setenv("AGENTRY_WEB_SEARCH_PROVIDER", "youcom")
+	if _, err := Load(""); err == nil {
+		t.Error("a provider without its key must fail validation")
+	}
+	t.Setenv("AGENTRY_WEB_SEARCH_API_KEY", "ydc-test")
+	t.Setenv("AGENTRY_WEB_SEARCH_BASE_URL", "https://search.example.internal")
+	t.Setenv("AGENTRY_LIMITS_MODEL_INPUT_PER_MIN", "30")
+	cfg, err = Load("")
+	if err != nil || cfg.WebSearch.Provider != "youcom" || cfg.WebSearch.APIKey != "ydc-test" ||
+		cfg.WebSearch.BaseURL != "https://search.example.internal" || cfg.Limits.ModelInputPerMin != 30 {
+		t.Fatalf("env not applied: %v %+v %d", err, cfg.WebSearch, cfg.Limits.ModelInputPerMin)
+	}
+	t.Setenv("AGENTRY_WEB_SEARCH_PROVIDER", "fake")
+	if _, err := Load(""); err == nil {
+		t.Error("an unknown provider (the tests' fake included) must fail validation")
+	}
+	t.Setenv("AGENTRY_WEB_SEARCH_PROVIDER", "none")
+	t.Setenv("AGENTRY_LIMITS_MODEL_INPUT_PER_MIN", "0")
+	if _, err := Load(""); err == nil {
+		t.Error("a zero model-input budget must fail validation")
+	}
+}
+
 // The five social providers all wire from env: id/secret everywhere, plus
 // the endpoint overrides each protocol needs (issuer for the OIDC-proper
 // set, explicit URLs for the github shim).

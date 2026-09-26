@@ -1,0 +1,3 @@
+I want an agent that reads new issues in my GitHub repository each morning, labels them bug, feature or
+question, and drafts a short reply for each. It should use the GitHub MCP server, only read my repository,
+and never post anything without asking me first.

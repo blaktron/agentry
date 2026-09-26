@@ -210,6 +210,24 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 		{"listKnowledgePackSizes", "GET", "/api/v1/platform/knowledge?owner=" + plainH, nil, patUnscoped, deny3},
 		{"listKnowledgePackSizes", "GET", "/api/v1/platform/knowledge?owner=" + plainH, nil, patKnowledge, pass},
 
+		// scanModelInput / searchModelInput (agentry#608) — platform staff
+		// by session, never a token whatever its scopes (the staff PATs
+		// here carry review:act and knowledge:read), and a hosted job's
+		// credential only where an extension admits it (the model-input
+		// tests). This server has no Jev judge and no search provider, so
+		// staff stop at 503 with nothing spent.
+		{"scanModelInput", "POST", "/api/v1/model-input/scan", map[string]any{"source": "page", "text": "matrix"}, anonymous, deny1},
+		{"scanModelInput", "POST", "/api/v1/model-input/scan", map[string]any{"source": "page", "text": "matrix"}, plain, deny3},
+		{"scanModelInput", "POST", "/api/v1/model-input/scan", map[string]any{"source": "page", "text": "matrix"}, orgOwner, deny3},
+		{"scanModelInput", "POST", "/api/v1/model-input/scan", map[string]any{"source": "page", "text": "matrix"}, staffSess, pass},
+		{"scanModelInput", "POST", "/api/v1/model-input/scan", map[string]any{"source": "page", "text": "matrix"}, patScoped, deny3},
+		{"scanModelInput", "POST", "/api/v1/model-input/scan", map[string]any{"source": "page", "text": "matrix"}, patKnowledge, deny3},
+		{"searchModelInput", "POST", "/api/v1/model-input/search", map[string]any{"query": "matrix"}, anonymous, deny1},
+		{"searchModelInput", "POST", "/api/v1/model-input/search", map[string]any{"query": "matrix"}, plain, deny3},
+		{"searchModelInput", "POST", "/api/v1/model-input/search", map[string]any{"query": "matrix"}, staffSess, pass},
+		{"searchModelInput", "POST", "/api/v1/model-input/search", map[string]any{"query": "matrix"}, patScoped, deny3},
+		{"searchModelInput", "POST", "/api/v1/model-input/search", map[string]any{"query": "matrix"}, patUnscoped, deny3},
+
 		// listAbuseReports / triageAbuseReport — staff-only; triage of a
 		// random id gives authorized callers 404, nothing mutated.
 		{"listAbuseReports", "GET", "/api/v1/platform/abuse-reports?limit=1", nil, anonymous, deny1},
