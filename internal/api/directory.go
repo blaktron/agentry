@@ -77,10 +77,12 @@ func (a *authentikEraser) EraseByEmail(ctx context.Context, email string) (bool,
 	}
 	deleted := false
 	for _, u := range page.Results {
-		// The filter is a substring match on authentik's side; delete only
-		// exact, case-insensitive matches, and never a service account or a
-		// superuser — an operator's own account must not be erasable by a
-		// registry user who happens to share its address.
+		// Delete only exact, case-insensitive matches, and never a service
+		// account or a superuser — an operator's own account must not be
+		// erasable by a registry user who happens to share its address.
+		// authentik 2026.8's email= filter is itself exact and
+		// case-sensitive, so an address held with other capitals is not
+		// found at all (agentry#617; the staff mirror uses search=).
 		if !strings.EqualFold(u.Email, email) || u.IsSuperuser || strings.Contains(u.Type, "service") {
 			continue
 		}

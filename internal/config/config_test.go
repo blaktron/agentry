@@ -494,6 +494,40 @@ func TestStaffOrgAcceptsAHandleAndABareDomain(t *testing.T) {
 	}
 }
 
+// TestStaffMirrorGroupNeedsItsWriterAndItsSource (agentry#598): the mirror
+// group is written through the directory's admin API and filled from the
+// staff organization, so it is refused without either, and it can never be
+// the retired group that used to be a source of staff.
+func TestStaffMirrorGroupNeedsItsWriterAndItsSource(t *testing.T) {
+	full := func() Config {
+		cfg := devDefault()
+		cfg.Auth.StaffOrg, cfg.Auth.StaffDomain = "agentry", "secureagentry.net"
+		cfg.Auth.IdPAdminURL, cfg.Auth.IdPAdminToken = "http://authentik-server:9000", "token"
+		cfg.Auth.IdPStaffMirrorGroup = "agentry-staff"
+		return cfg
+	}
+	if cfg := full(); cfg.Validate() != nil {
+		t.Fatalf("a complete mirror configuration was refused: %v", cfg.Validate())
+	}
+	for name, edit := range map[string]func(*Config){
+		"no admin URL":      func(c *Config) { c.Auth.IdPAdminURL = "" },
+		"no admin token":    func(c *Config) { c.Auth.IdPAdminToken = "" },
+		"no staff org":      func(c *Config) { c.Auth.StaffOrg, c.Auth.StaffDomain = "", "" },
+		"the retired group": func(c *Config) { c.Auth.IdPStaffGroup = "agentry-staff" },
+	} {
+		cfg := full()
+		edit(&cfg)
+		if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "idpStaffMirrorGroup") {
+			t.Errorf("%s: %v, want a refusal naming auth.idpStaffMirrorGroup", name, err)
+		}
+	}
+	t.Setenv("AGENTRY_IDP_STAFF_MIRROR_GROUP", "agentry-staff")
+	got := devDefault()
+	if err := applyEnv(&got); err != nil || got.Auth.IdPStaffMirrorGroup != "agentry-staff" {
+		t.Fatalf("the environment did not set it: %q %v", got.Auth.IdPStaffMirrorGroup, err)
+	}
+}
+
 // TestRetiredStaffKeysAreNamed (agentry#556): the group and the domain-alone
 // keys still load, grant nothing, and are named for the start-up warning.
 func TestRetiredStaffKeysAreNamed(t *testing.T) {
