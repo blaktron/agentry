@@ -125,6 +125,21 @@ The meter (`GET /knowledge/usage`, and the account page under
 counts against the allocation (`used`, the pool's total when `pooled`),
 and the cap (`max`).
 
+**An extension's door.** A closed build reaches the store through
+`Deps.Knowledge` (`pkg/extension`), the way the hosted build of the
+Creator does in SecureAgentry: it makes a pack under a data key the
+registry makes and wraps for the owner, reads a pack's metadata and its
+tree decrypted (the canonical tar, refused while the pack is scanned),
+reads the owner's meter, and puts a tree back. A tree put back is sealed
+under the pack's own data key, keeping the stored tree's pack id in its
+header, and stored through the same path as an upload through the routes:
+opened and checked, counted against the pool under its lock, the tree it
+replaces deleted, the scan queued. It lands only if the pack still holds
+the tree the extension read (compared under the pack's row lock), so a
+build never overwrites an upload made while it ran; a tree the pack
+already holds is not stored again. The data key never leaves the core
+through it.
+
 ## The scan
 
 A pack is `scanning` from each upload until its `knowledge.scan` job ends

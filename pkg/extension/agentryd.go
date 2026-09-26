@@ -28,6 +28,7 @@ import (
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/gitsrv"
+	"github.com/blaktron/agentry/internal/knowledge"
 	"github.com/blaktron/agentry/internal/logx"
 	"github.com/blaktron/agentry/internal/metrics"
 	"github.com/blaktron/agentry/internal/queue"
@@ -387,6 +388,39 @@ func (n serverNotifier) OrgAdmins(ctx context.Context, orgID uuid.UUID) ([]uuid.
 	return n.srv.OrgAdminIDs(ctx, orgID)
 }
 
+// knowledgeOf adapts the server's knowledge store to Knowledge: nil
+// without a database, the way Deps.DB is. It is set whether or not the
+// store is on yet: a wrapper an extension adds after this Bind (the
+// knowledge extension's) turns it on, and the store says so per call.
+func knowledgeOf(srv *api.Server, pool *pgxpool.Pool) Knowledge {
+	if pool == nil || srv.Knowledge() == nil {
+		return nil
+	}
+	return serverKnowledge{srv.Knowledge()}
+}
+
+type serverKnowledge struct{ svc *knowledge.Service }
+
+func (k serverKnowledge) Create(ctx context.Context, owner KeyOwner, name string) (KnowledgePack, error) {
+	return k.svc.CreateSealed(ctx, owner, name)
+}
+
+func (k serverKnowledge) Pack(ctx context.Context, owner KeyOwner, id uuid.UUID) (KnowledgePack, error) {
+	return k.svc.Info(ctx, owner, id)
+}
+
+func (k serverKnowledge) Tree(ctx context.Context, owner KeyOwner, id uuid.UUID) (KnowledgePack, []byte, error) {
+	return k.svc.TreeOf(ctx, owner, id)
+}
+
+func (k serverKnowledge) Replace(ctx context.Context, owner KeyOwner, id uuid.UUID, from string, files []KnowledgeFile) (KnowledgePack, bool, error) {
+	return k.svc.Replace(ctx, owner, id, from, files)
+}
+
+func (k serverKnowledge) Usage(ctx context.Context, owner KeyOwner) (KnowledgeUsage, error) {
+	return k.svc.Usage(ctx, owner)
+}
+
 // webhooksOf adapts the server's webhook transport to Webhooks: nil
 // without a database, the way Deps.DB is.
 func webhooksOf(srv *api.Server, pool *pgxpool.Pool) Webhooks {
@@ -661,7 +695,7 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 			pool, log, write, writeIn := srv.ExtensionDeps()
 			b.Bind(Deps{DB: pool, Log: log.With("extension", e.Name()), Audit: auditWriter{write: write, writeIn: writeIn},
 				Entitlements: srv.CoreEntitlements(), Blobs: srv.Blobs(), Orgs: orgsOf(srv, pool), Agents: agentsOf(srv, pool),
-				Notifier: notifierOf(srv, pool), Webhooks: webhooksOf(srv, pool)})
+				Notifier: notifierOf(srv, pool), Webhooks: webhooksOf(srv, pool), Knowledge: knowledgeOf(srv, pool)})
 		}
 		srv.RegisterExtension(e.Name(), e.Routes)
 		if u, ok := e.(Unthrottles); ok {

@@ -2,6 +2,7 @@ package extension
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -135,6 +136,9 @@ func TestApplyExtensionsBindsAndRegistersActions(t *testing.T) {
 	}
 	if ext.deps.Webhooks != nil {
 		t.Fatal("a server without a database handed out a webhook transport: an endpoint is a row and a delivery is another")
+	}
+	if ext.deps.Knowledge != nil {
+		t.Fatal("a server without a database handed out the knowledge store")
 	}
 	if !audit.Registered("bound.tier_set") {
 		t.Fatal("the extension's audit action is not in the catalog")
@@ -332,3 +336,58 @@ func (poolingResolver) KnowledgePool(_ context.Context, o KeyOwner) (KnowledgePo
 }
 
 var _ PoolsKnowledge = poolingResolver{}
+
+// builder is the shape SecureAgentry's hosted build takes over the
+// knowledge store (agentry#624): it reads Deps.Knowledge and speaks only
+// the seam's aliases.
+type builder struct {
+	noop
+	store Knowledge
+}
+
+func (b *builder) Bind(d Deps) { b.store = d.Knowledge }
+
+// TestBindHandsTheKnowledgeStore: a bound extension gets the core's
+// knowledge store and can make a pack, put a tree in it — which is then
+// scanning, with the registry's counts — and is refused its tree while it
+// is scanned, all in the seam's own words.
+func TestBindHandsTheKnowledgeStore(t *testing.T) {
+	st := migratedStore(t)
+	cfg := config.Default()
+	cfg.DevMode = true
+	cfg.Scan.OSVURL = "none"
+	srv := api.New(cfg, st, slog.New(slog.DiscardHandler))
+	b := &builder{}
+	applyExtensions(srv, []Extension{b})
+	if b.store == nil {
+		t.Fatal("a server with a database handed out no knowledge store")
+	}
+	ctx := context.Background()
+	owner := KeyOwner{Kind: KeyOwnerUser, ID: uuid.New()}
+	p, err := b.store.Create(ctx, owner, "seam-"+owner.ID.String()[:8])
+	if err != nil || p.State != KnowledgeEmpty {
+		t.Fatalf("create: %+v %v", p, err)
+	}
+	files := []KnowledgeFile{
+		{Path: "sources/a.md", Content: []byte("# A\n")},
+		{Path: "wiki/index.md", Content: []byte("# Index\n")},
+		{Path: "wiki/topics/a.md", Content: []byte("---\ntitle: A\n---\nA. [src: doc:a.md]\n")},
+	}
+	got, changed, err := b.store.Replace(ctx, owner, p.ID, "", files)
+	if err != nil || !changed || got.State != KnowledgeScanning || got.Pages != 1 || got.Files != 3 {
+		t.Fatalf("replace: %+v %v %v", got, changed, err)
+	}
+	if _, _, err := b.store.Replace(ctx, owner, p.ID, "", files); !errors.Is(err, ErrKnowledgeChanged) {
+		t.Fatalf("a stale replace: %v", err)
+	}
+	if _, _, err := b.store.Tree(ctx, owner, p.ID); !errors.Is(err, ErrKnowledgeScanning) {
+		t.Fatalf("the tree of a scanning pack: %v", err)
+	}
+	if _, err := b.store.Pack(ctx, KeyOwner{Kind: KeyOwnerUser, ID: uuid.New()}, p.ID); !errors.Is(err, ErrKnowledgeNotFound) {
+		t.Fatalf("another owner's read: %v", err)
+	}
+	u, err := b.store.Usage(ctx, owner)
+	if err != nil || u.Used != got.Bytes {
+		t.Fatalf("usage: %+v %v", u, err)
+	}
+}
