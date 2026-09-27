@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.6.10](https://github.com/blaktron/agentry/compare/v0.6.0...v0.6.10) (2026-09-27)
+
+
+### Features
+
+* **auth:** the directory's mirror of platform staff, and the Dashboards provider in the bootstrap ([b1ae2fb](https://github.com/blaktron/agentry/commit/b1ae2fb3467952a8881d46ffa1b5a868ee31e872))
+* **auth:** the directory's mirror of platform staff, and the Dashboards provider in the bootstrap ([71fb2ec](https://github.com/blaktron/agentry/commit/71fb2ec30eb3401d724f78d929983544e9c59e38)), closes [#598](https://github.com/blaktron/agentry/issues/598)
+* **config:** the knowledge sealing key and the per-account knowledge cap ([2d15d0a](https://github.com/blaktron/agentry/commit/2d15d0ac0578b8978f8781c89a0ea34d0a94ec4c)), closes [#593](https://github.com/blaktron/agentry/issues/593)
+* **extension:** a Knowledge seam — an extension makes a pack, reads its tree and replaces it, sealed, counted and scanned ([72f069f](https://github.com/blaktron/agentry/commit/72f069fcf242b8a4a8db89c0e34350686c3e5626))
+* **extension:** a Knowledge seam — an extension makes a pack, reads its tree and replaces it, sealed, counted and scanned ([3d6a761](https://github.com/blaktron/agentry/commit/3d6a761569b09b4acbcbf682a9d69cb3beed02ec)), closes [#624](https://github.com/blaktron/agentry/issues/624)
+* **extension:** an account-erasure seam inside the erasure and data-clear transactions ([fe66d00](https://github.com/blaktron/agentry/commit/fe66d00be1fc8a45e47bba6f7583ee0e4d5c90be))
+* **extension:** an account-erasure seam inside the erasure and data-clear transactions ([72bcd23](https://github.com/blaktron/agentry/commit/72bcd2386aa3978869cd92652a20f2415882da38)), closes [#638](https://github.com/blaktron/agentry/issues/638)
+* **extension:** the knowledge scopes for an extension route; the seam test's stale replace uses another tree ([a565042](https://github.com/blaktron/agentry/commit/a565042078046d72e14501038c6321ef5d124607))
+* **helm:** a ServiceAccount per role — api, worker and git each run under their own, so a pod's token names its role ([16a6a9f](https://github.com/blaktron/agentry/commit/16a6a9f39527576c2bca1afa45e87796f4a0d77c))
+* **helm:** a ServiceAccount per role — api, worker and git each run under their own, so a pod's token names its role ([301a82e](https://github.com/blaktron/agentry/commit/301a82e7f0a40bd285d9a1e73b960ccbe44c66e6)), closes [#627](https://github.com/blaktron/agentry/issues/627)
+* **knowledge:** a pooled allocation seam, counted and locked by pool ([f543294](https://github.com/blaktron/agentry/commit/f54329467a013da1a1f90a3a80decf47d214129c)), closes [#612](https://github.com/blaktron/agentry/issues/612)
+* **knowledge:** erasure, a data clear and a decommission destroy an owner's packs ([1b3b61e](https://github.com/blaktron/agentry/commit/1b3b61e406c0cca0234c83075118768319adaa3b)), closes [#593](https://github.com/blaktron/agentry/issues/593)
+* **knowledge:** pkg/packseal, the sealed form of a knowledge pack ([44fd1c6](https://github.com/blaktron/agentry/commit/44fd1c6a42ee73fbbb021e41614488c57b34d68f))
+* **knowledge:** the registry's store of knowledge packs, sealed and scanned ([221400a](https://github.com/blaktron/agentry/commit/221400af5780f5e191e390998066c85ab0d7fa04)), closes [#593](https://github.com/blaktron/agentry/issues/593)
+* **model-input:** scan text as model input in the registry, broker web search, export the judge as pkg/judge ([c0d5e16](https://github.com/blaktron/agentry/commit/c0d5e16a818fd979e4236a6d5bcff21a8c854acc))
+* **model-input:** scan text as model input in the registry, broker web search, export the judge as pkg/judge ([7cf1bc5](https://github.com/blaktron/agentry/commit/7cf1bc5541e68920996b2da21cf90f907fa4d0ab)), closes [#608](https://github.com/blaktron/agentry/issues/608)
+* **scan:** the knowledge pack scan, and the judge's declared input limit ([27e4dc9](https://github.com/blaktron/agentry/commit/27e4dc9e8d1995a7b0f24ad28d9834d26b58659b)), closes [#593](https://github.com/blaktron/agentry/issues/593)
+* **ui:** the knowledge meter on the account page ([65c1677](https://github.com/blaktron/agentry/commit/65c1677a991d190cad7f5302be38fbc1306e3ca8)), closes [#593](https://github.com/blaktron/agentry/issues/593)
+* **websearch:** Brave's LLM Context API as a search provider, for dev and production (operator instruction) ([70c7ea4](https://github.com/blaktron/agentry/commit/70c7ea4224bb4e445e94750c20ab5c594a449249))
+* **websearch:** Brave's LLM Context API as a search provider, for dev and production (operator instruction) ([128e333](https://github.com/blaktron/agentry/commit/128e333568ca9a2b867b5a4a65d192658519e6f1)), closes [#631](https://github.com/blaktron/agentry/issues/631)
+
+
+### Bug Fixes
+
+* **helm:** review — the roles' account names never truncate into one, and the IRSA trust policy is named for the upgrade ([7270eb4](https://github.com/blaktron/agentry/commit/7270eb46adcc7834bad74ab01b347f976486fc2d)), closes [#627](https://github.com/blaktron/agentry/issues/627)
+* **knowledge:** a replace of a tree the pack already holds is unchanged whatever its from, so a retried replace is not a conflict ([3303a65](https://github.com/blaktron/agentry/commit/3303a6595842f5f7f749979921a4c8f510fff19c))
+* **knowledge:** the review's findings on the pool seam ([1cfe645](https://github.com/blaktron/agentry/commit/1cfe64526a3c405828002bdb82a2f331c9a58317)), closes [#612](https://github.com/blaktron/agentry/issues/612)
+* **knowledge:** the review's findings: a failed stage, the last attempt, erasure in the transaction ([8d4fd76](https://github.com/blaktron/agentry/commit/8d4fd767db45c118ec5bfa45e4f3d61fd27a77a7)), closes [#593](https://github.com/blaktron/agentry/issues/593)
+* **model-input:** budget before the body, no redirects, no vendor body in a log, origin only for a withheld result ([9a419a3](https://github.com/blaktron/agentry/commit/9a419a3d586990c880f18a1734f65b63fa5b6b91)), closes [#608](https://github.com/blaktron/agentry/issues/608)
+* **websearch:** the review's findings — Brave's query held to 75 words and 600 bytes, count left to Brave, a per-URL token cap, one shared client, honest comments ([78e8743](https://github.com/blaktron/agentry/commit/78e874324af68dad283446518edc773560b78975)), closes [#631](https://github.com/blaktron/agentry/issues/631)
+
 ## 0.6.0 (2026-09-25)
 
 
