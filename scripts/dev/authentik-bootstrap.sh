@@ -81,10 +81,19 @@ print(json.dumps({
   echo "created directory-verified email mapping $VERIFIED_PK"
 fi
 export VERIFIED_PK
+# The account-flows blueprint's `agentry` scope mapping carries whether the
+# sign-in asked to remember the browser (agentry#671, DEV-163). The registry
+# asks for the scope; without the mapping on the provider authentik drops
+# it, and then no browser is remembered and the code is asked every time.
+AGENTRY_SCOPE_PK=$(curlx -G --data-urlencode "name=agentry-remember-device" "$API/propertymappings/provider/scope/" | jget "(d['results'][0]['pk'] if d['results'] else '')")
+[ -n "$AGENTRY_SCOPE_PK" ] || echo "warning: the blueprint's agentry-remember-device scope mapping is not there yet; re-run once authentik has applied agentry-account-flows.yaml, or no browser will be remembered" >&2
+export AGENTRY_SCOPE_PK
 SCOPE_MAPPINGS=$(python3 -c '
 import json, os, sys
 pks = json.loads(os.environ["SCOPE_MAPPINGS"])
 pks = [p for p in pks if p != os.environ["EMAIL_MANAGED_PK"]] + [os.environ["VERIFIED_PK"]]
+if os.environ.get("AGENTRY_SCOPE_PK"):
+    pks.append(os.environ["AGENTRY_SCOPE_PK"])
 print(json.dumps(pks))')
 echo "authorization flow: $AUTHZ_FLOW"; echo "signing key: $CERT"; echo "scope mappings: $SCOPE_MAPPINGS"
 
