@@ -32,9 +32,11 @@ const desktopGrantTTL = 60 * time.Second
 // repo:write), identity (user:profile), and hosted runs — In Agentry on
 // RunPanel (run:read, run:write; plan hosted-runs.md §4.7), and the
 // Knowledge panel's packs and their keys (knowledge:read, knowledge:write;
-// plan knowledge.md §4.3). Deliberately no review:act and no org scopes.
+// plan knowledge.md §4.3), and the hosted-run start's secrets, set and
+// deleted, never read (secret:write; plan hosted-credentials-vault.md D13,
+// agentry#676). Deliberately no review:act and no org scopes.
 // Fixed server-side so a caller of the grant endpoint cannot widen it.
-var desktopScopes = []string{"agent:read", "agent:publish", "repo:read", "repo:write", "user:profile", "run:read", "run:write", "knowledge:read", "knowledge:write"}
+var desktopScopes = []string{"agent:read", "agent:publish", "repo:read", "repo:write", "user:profile", "run:read", "run:write", "knowledge:read", "knowledge:write", "secret:write"}
 
 var desktopStateRE = regexp.MustCompile(`^[A-Za-z0-9_-]{8,128}$`)
 

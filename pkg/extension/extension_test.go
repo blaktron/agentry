@@ -257,6 +257,9 @@ func TestScopeAllows(t *testing.T) {
 	if ScopeAllows(pat, ScopeKnowledgeWrite) || !ScopeAllows(&Principal{Via: "pat", Scopes: []string{"knowledge:write"}}, ScopeKnowledgeWrite) {
 		t.Fatal("knowledge:write is not read as the core reads it")
 	}
+	if ScopeAllows(pat, ScopeSecretWrite) || !ScopeAllows(&Principal{Via: "pat", Scopes: []string{"secret:write"}}, ScopeSecretWrite) {
+		t.Fatal("secret:write is not read as the core reads it")
+	}
 }
 
 // wrapperLike is the shape SecureAgentry's knowledge wrapper takes (plan

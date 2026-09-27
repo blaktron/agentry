@@ -54,8 +54,8 @@ func TestDesktopGrantExchange(t *testing.T) {
 		t.Fatal("exchange returned no token")
 	}
 	scopes, _ := pat["scopes"].([]any)
-	if len(scopes) != 9 {
-		t.Fatalf("desktop PAT scopes = %v, want the nine desktop scopes", scopes)
+	if len(scopes) != 10 {
+		t.Fatalf("desktop PAT scopes = %v, want the ten desktop scopes", scopes)
 	}
 	has := map[string]bool{}
 	for _, sc := range scopes {
@@ -75,6 +75,12 @@ func TestDesktopGrantExchange(t *testing.T) {
 	// unwraps, uploads and downloads packs with this token.
 	if !has["knowledge:read"] || !has["knowledge:write"] {
 		t.Fatalf("desktop PAT lacks the knowledge scopes: %v", scopes)
+	}
+	// And secret:write (agentry#676, vault D13): the hosted-run start sets
+	// a secret the account does not keep, and deletes it if the create is
+	// refused.
+	if !has["secret:write"] {
+		t.Fatalf("desktop PAT lacks secret:write: %v", scopes)
 	}
 	// The PAT authenticates.
 	var me struct {

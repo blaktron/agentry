@@ -165,7 +165,7 @@ type token struct {
 }
 
 // scopes is the PAT scope set the pages offer (§12.3), in the order shown.
-var scopes = []string{"agent:read", "agent:publish", "repo:read", "repo:write", "user:profile", "org:admin", "review:act", "audit:read", "run:read", "run:write", "knowledge:read", "knowledge:write"}
+var scopes = []string{"agent:read", "agent:publish", "repo:read", "repo:write", "user:profile", "org:admin", "review:act", "audit:read", "run:read", "run:write", "knowledge:read", "knowledge:write", "secret:write"}
 
 type tokensData struct {
 	Tokens []token
