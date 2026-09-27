@@ -590,7 +590,9 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 		}
 	}
 
-	caps, err := json.Marshal(m.Capabilities)
+	// The contract a person consents to: the capabilities and the names of
+	// the knowledge packs the release ships (plan knowledge.md §4.6).
+	caps, err := json.Marshal(m.Contract())
 	if err != nil {
 		return Version{}, err
 	}

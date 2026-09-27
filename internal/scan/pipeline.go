@@ -272,11 +272,22 @@ func (p *Pipeline) resumeFromRun(ctx context.Context, runID uuid.UUID) (Resume, 
 		return Resume{}, fmt.Errorf("scan: list stage results: %w", err)
 	}
 	skip := map[string]bool{}
+	var knowledge []ShippedPackScan
 	for _, s := range stages {
 		// Only clean stages are skippable; an errored stage must run again.
-		if s.Status == "ok" {
-			skip[s.Scanner] = true
+		if s.Status != "ok" {
+			continue
 		}
+		if s.Scanner == KnowledgeStageID {
+			// A clean SK whose record will not read runs again rather than
+			// leave the report without what it read.
+			var rec []ShippedPackScan
+			if DecodeKnowledgeRecord(s.Detail, &rec) != nil || len(rec) == 0 {
+				continue
+			}
+			knowledge = rec
+		}
+		skip[s.Scanner] = true
 	}
 	if len(skip) == 0 {
 		return Resume{}, nil
@@ -291,7 +302,7 @@ func (p *Pipeline) resumeFromRun(ctx context.Context, runID uuid.UUID) (Resume, 
 			prior = append(prior, findingFromRow(row))
 		}
 	}
-	return Resume{Skip: skip, Findings: prior}, nil
+	return Resume{Skip: skip, Findings: prior, Knowledge: knowledge}, nil
 }
 
 // runOrchestrator materializes the archive and runs the scanner DAG,
@@ -519,6 +530,11 @@ func (p *Pipeline) persistStage(ctx context.Context, runID uuid.UUID, res StageR
 	}
 	status := "ok"
 	detail := map[string]any{"findings": len(res.Findings)}
+	if len(res.Knowledge) > 0 {
+		// SK's record of what it read: the report's shipped-pack section,
+		// kept so a resumed run reports it as a fresh one would.
+		detail[knowledgeRecordKey] = res.Knowledge
+	}
 	if res.Err != nil {
 		status = "error"
 		detail["error"] = res.Err.Error()

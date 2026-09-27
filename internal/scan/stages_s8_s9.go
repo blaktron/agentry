@@ -256,7 +256,9 @@ func (s S9ReleaseDiff) Run(sc stageContext, in *Input) StageResult {
 	}
 	var findings []Finding
 	bump := bumpSize(in.PrevVersion, in.Version)
-	prevFiles := inventoryDir(in.PrevArchiveDir)
+	// Like the release's own files, the previous release's are read
+	// without the trees of the packs it shipped (SK reads a pack).
+	prevFiles := withoutShippedTrees(inventoryDir(in.PrevArchiveDir), shippedPacks(in.PrevManifestJSON))
 
 	findings = append(findings, s9ManifestDiff(in)...)
 	findings = append(findings, s9ContentDiff(in, prevFiles, bump)...)

@@ -14,15 +14,16 @@ import (
 	"unicode"
 
 	"github.com/blaktron/agentry/internal/scan"
+	"github.com/blaktron/agentry/pkg/manifest"
 )
 
 // MaxBytes caps a pack: every file of its tree, in MiB as the CLI counts
 // it (agentry-cli pkg/knowledge.MaxBytes; plan D16, "no knowledge set
 // should exceed 10mb").
-const MaxBytes = 10 << 20
+const MaxBytes = manifest.MaxKnowledgePackBytes
 
 // MaxFiles caps the files of one pack's tree.
-const MaxFiles = 2000
+const MaxFiles = manifest.MaxKnowledgePackFiles
 
 // MaxTreeBytes bounds a tree's tar: its files, and for each at most a PAX
 // header, a ustar header and a block of padding, and the end blocks.

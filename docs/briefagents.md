@@ -228,6 +228,74 @@ refuses a manifest carrying one as an unknown field, in the release's
 archive and in the registry's answer about it, so use it once your
 tools are current.
 
+### `knowledge`: packs the release ships
+
+A release may carry its own reference set: one or more
+[knowledge packs](knowledge.md) made with the Knowledge Creator
+(`agentry knowledge create`), each in the archive under
+`knowledge/<name>/` exactly as the CLI keeps it — `manifest.json`, `wiki/`
+with its `index.md` and `log.md`, and `sources/`. The runner is to mount
+each read-only at `/knowledge/<name>`, searched with the three knowledge
+tools (agentry-cli#320; until a CLI release carries it, a shipped pack is
+scanned and signed but not mounted). The block also says what a person
+may attach of their own, which the run setup shows and the agent never
+sees.
+
+```yaml
+knowledge:
+  ships:                          # ≤ 5 packs, each in the archive under knowledge/<name>/
+    - name: aws-docs
+  accepts:                        # optional: what to attach, shown to the person only
+    prompt: "Your own runbooks, if you have them"   # one plain line, ≤ 300 characters
+    required: false               # true: the setup's Knowledge step cannot be skipped
+
+publish:
+  include: [agent.yaml, AGENT.md, knowledge/**]    # the packs must be in the archive
+```
+
+| Rule | |
+|---|---|
+| `ships[].name` | a pack name (1–64 lowercase letters, digits, `.`, `-` or `_`, starting with a letter or digit), once each; the pack's directory under `knowledge/` (V11) |
+| the pack in the archive | matched by `publish.include`; `manifest.json`, `wiki/index.md` and `wiki/log.md` present; nothing but those, `wiki/` and `sources/` (V11) |
+| the pack's `manifest.json` | schema `knowledge/v1`, names the pack, and its `sha256`, `bytes` and `pages` are the files beside it — the check the CLI's pack loader makes before it uses a pack, so edit a pack with `agentry knowledge add`, never by hand (V11) |
+| the instruction file | not under `knowledge/`: it is the release's own, judged against its contract (V11) |
+| size | at most 10 MB a pack, `manifest.json` included, and 2,000 files; a pack's files are outside the release's own quotas — the file count, the per-file sizes, the 1 MiB text total and the archive total — so the archive's cap is raised by what it ships (V8). An upload through the API (`agentry publish`) is at most 16 MiB compressed, the edge's request cap; a larger release is published by pushing its tag, which has no such cap |
+| `knowledge/` | holds shipped packs only: a file there outside a pack `ships` names is refused (V11) |
+| `accepts.prompt` | one plain line: no control or format characters, not blank |
+| schema | v2 only; a v1 manifest carrying `knowledge` is refused (V1) |
+
+**The contract.** The names a release ships are part of the capability
+contract a person consents to: the version's `capabilities` carry them as
+`knowledge`, and a release that ships a pack the installed one did not
+asks for consent again ("ships knowledge: aws-docs"), as any widening
+does. A pack's contents changing under the same name does not re-ask; the
+scan reads every release's packs. What `accepts` asks for never widens
+the contract: attaching a person's own pack is the grant, as handing over
+inputs is.
+
+**The scan.** The registry scans each shipped pack as part of the
+version's scan, with the reading it gives a pack it stores
+([knowledge.md](knowledge.md#the-scan)): the secrets, hidden-content,
+signature and URL stages over every page and source, then AI Review over
+the pack's `sources/` and then its `wiki/`, in chunks no larger than the
+judge reads. Its findings are the release's (scanner `SK/…`, file paths
+under `knowledge/<name>/`) and the gate decides on them as on any other; a
+pack the scan could not read in full sends the version to review. The
+release's own stages, its own AI Review included, read the release's own
+files and not a pack's text; a pack's other files (an image, a source's
+original) are read by the release's stages as anywhere in the archive,
+and a text file in a pack that is not UTF-8 is a finding that sends the
+version to review. The report's `knowledge` section names, for each pack,
+the stages that read it, what they read, the judge and its model, and the
+chunks of each half, or "AI Review not configured". The attestation
+covers the archive digest, so a shipped pack is signed with the rest of
+the release, and a client that verifies the release verifies the pack
+with it.
+
+A CLI or desktop older than the core release that added the block refuses
+a manifest carrying one as an unknown field; use it once your tools are
+current.
+
 ### `runtime`: informational hints
 
 | Field | Meaning |

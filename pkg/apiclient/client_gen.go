@@ -1674,7 +1674,7 @@ type AgentVersion struct {
 	ArchiveDigest *string `json:"archiveDigest,omitempty"`
 	ArchiveSize   *int64  `json:"archiveSize,omitempty"`
 
-	// Capabilities The declared capability block (§5.4).
+	// Capabilities The capability contract (§5.4): the declared capability block, and under `knowledge` the names of the knowledge packs the release ships (the manifest's `knowledge.ships`), so a release shipping one more than an installed one asks for consent again.
 	Capabilities *map[string]interface{} `json:"capabilities,omitempty"`
 	Channel      AgentVersionChannel     `json:"channel"`
 	CommitSha    *string                 `json:"commitSha,omitempty"`
@@ -2576,8 +2576,11 @@ type ScanReport struct {
 	JudgeModel *string `json:"judgeModel,omitempty"`
 
 	// JudgeUsage The token use the AI Review model's provider reported for this scan run — what the review cost, as measured. Present for platform staff only, and absent when the provider reported none (the static and classifier judges, an endpoint without a usage block); absent means unknown, not zero. Not part of the signed report.
-	JudgeUsage   *JudgeUsage `json:"judgeUsage,omitempty"`
-	ReportDigest *string     `json:"reportDigest,omitempty"`
+	JudgeUsage *JudgeUsage `json:"judgeUsage,omitempty"`
+
+	// Knowledge What the scan read of each knowledge pack the release ships (plan knowledge.md §4.6; the manifest's `knowledge.ships`): every rule stage over every page and source, then AI Review over the pack's `sources/` and its `wiki/` in chunks no larger than the judge reads, or "AI Review not configured". The pack's findings are also the version's, in `findings`, under scanner `SK/…` with a file path in `knowledge/<name>/`; the release's own stages, AI Review included, do not read a shipped pack's tree. Absent for a release that ships no pack.
+	Knowledge    *[]ShippedKnowledgeScan `json:"knowledge,omitempty"`
+	ReportDigest *string                 `json:"reportDigest,omitempty"`
 
 	// RescanInFlight A later scan of this version still running (a ruleset or MCP rescan sweep, a manual rescan) while the report describes the latest run that finished. Present only when such a run exists: the verdict a release was published on stands until the rescan finishes, and the report says one is under way rather than going blank (agentry#542).
 	RescanInFlight *RescanInFlight     `json:"rescanInFlight,omitempty"`
@@ -2681,6 +2684,15 @@ type SessionInfo struct {
 // SessionList defines model for SessionList.
 type SessionList struct {
 	Sessions []SessionInfo `json:"sessions"`
+}
+
+// ShippedKnowledgeScan defines model for ShippedKnowledgeScan.
+type ShippedKnowledgeScan struct {
+	// Name The pack's name and its directory under `knowledge/` in the archive.
+	Name string `json:"name"`
+
+	// Report What a pack's scan read and found (plan knowledge.md §4.4, D19): a record, never a gate (D27). The stages that read prose over every text file, then AI Review over `sources/` and then `wiki/` in chunks no larger than the judge declares it reads.
+	Report KnowledgeScanReport `json:"report"`
 }
 
 // SocialLoginResult Outcome of a social-login callback: either a session (like password login) or a pending TOTP challenge to complete at POST /auth/2fa/totp/challenge.
