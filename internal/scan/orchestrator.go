@@ -29,6 +29,8 @@ type Orchestrator struct {
 	// stageTimeout bounds one stage; scanTimeout bounds the whole run.
 	stageTimeout time.Duration
 	scanTimeout  time.Duration
+	// knowledgeTimeout bounds SK, the scan of the packs a release ships.
+	knowledgeTimeout time.Duration
 	// mx records §16.2 per-stage durations and the ScanStageRuns/
 	// ScanStageErrors pair the §16.3 error-rate page alarm divides. nil is a
 	// working no-op.
@@ -74,7 +76,10 @@ func NewOrchestrator(bundle *rules.Bundle, judge JudgeProvider, log *slog.Logger
 	return &Orchestrator{
 		bundle: bundle, judge: judge, log: log,
 		stageTimeout: 5 * time.Minute,
-		scanTimeout:  30 * time.Minute, // §7: scanning > 30 min ⇒ error → review
+		// A shipped pack is read by AI Review in chunks, up to 10 MB of it
+		// a pack (plan knowledge.md §4.6), which is many judge calls.
+		knowledgeTimeout: 20 * time.Minute,
+		scanTimeout:      30 * time.Minute, // §7: scanning > 30 min ⇒ error → review
 	}
 }
 
@@ -111,6 +116,8 @@ type Resume struct {
 	Skip map[string]bool
 	// Findings are the skipped stages' findings.
 	Findings []Finding
+	// Knowledge is a skipped SK's record of what it read.
+	Knowledge []ShippedPackScan
 }
 
 func (r Resume) skips(id string) bool {
@@ -135,6 +142,10 @@ type Report struct {
 	JudgeModel    string    `json:"judgeModel"`
 	// Decision is the gate outcome.
 	Decision GateDecision `json:"decision"`
+	// Knowledge is what the scan of each pack the release ships read
+	// (SK); absent for a release that ships none, so such a report's
+	// digest is what it always was.
+	Knowledge []ShippedPackScan `json:"knowledge,omitempty"`
 }
 
 // RunResult bundles the report with its digest and the effective judge model.
@@ -161,6 +172,8 @@ type RunResult struct {
 	// from running them: §8.7 results-cache hits, or stages a previous
 	// attempt at this run had already completed.
 	Skipped []string
+	// Knowledge is the report's shipped-pack section (Report.Knowledge).
+	Knowledge []ShippedPackScan
 }
 
 // Run executes the full pipeline synchronously (§8.2). The worker calls this
@@ -191,8 +204,27 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 			p.OnStage(res)
 		}
 	}
+	// S1 first — it populates in.Files for everyone else, so it always runs.
+	s1 := o.runStage(sc, S1Inventory{}, in)
+	ships := shippedPacks(in.ManifestJSON)
+	s1.Findings = withoutTruncatedPackFiles(s1.Findings, ships)
+	record(s1)
+	allFindings = append(allFindings, s1.Findings...)
+	if s1.Err != nil {
+		stageErrs = append(stageErrs, "S1: "+s1.Err.Error())
+	}
+
+	// The release's own stages read the release's own files; the trees of
+	// the packs it ships are SK's (plan knowledge.md §4.6).
+	release := in
+	if len(ships) > 0 {
+		cp := *in
+		cp.Files = withoutShippedTrees(in.Files, ships)
+		release = &cp
+	}
+
 	// exec runs a stage unless its result is already known.
-	exec := func(st Stage) StageResult {
+	exec := func(st Stage, in *Input) StageResult {
 		if p.Resume.skips(st.ID()) {
 			ranMu.Lock()
 			skipped = append(skipped, st.ID())
@@ -202,14 +234,6 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 		res := o.runStage(sc, st, in)
 		record(res)
 		return res
-	}
-
-	// S1 first — it populates in.Files for everyone else, so it always runs.
-	s1 := o.runStage(sc, S1Inventory{}, in)
-	record(s1)
-	allFindings = append(allFindings, s1.Findings...)
-	if s1.Err != nil {
-		stageErrs = append(stageErrs, "S1: "+s1.Err.Error())
 	}
 
 	// S2–S8 in parallel (S9 needs the others' findings; run it after).
@@ -224,13 +248,20 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 		S7MCPServers{},
 		S8Metadata{PopularAgentNames: p.PopularAgentNames, AgentName: p.AgentName},
 	}
+	if len(ships) > 0 {
+		parallel = append(parallel, SKKnowledge{o: o, ships: ships})
+	}
 	results := make([]StageResult, len(parallel))
 	var wg sync.WaitGroup
 	for i, st := range parallel {
 		wg.Add(1)
 		go func(i int, st Stage) {
 			defer wg.Done()
-			results[i] = exec(st)
+			stIn := release
+			if st.ID() == knowledgeStageID {
+				stIn = in
+			}
+			results[i] = exec(st, stIn)
 		}(i, st)
 	}
 	wg.Wait()
@@ -238,15 +269,21 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 	judgeForcesReview := o.judge.RequiresHumanReview()
 	judgePromptHash := ""
 	var judgeUsage *JudgeUsage
+	knowledge := p.Resume.Knowledge
 	for _, r := range results {
 		allFindings = append(allFindings, r.Findings...)
-		if r.Scanner == "S5" {
-			if r.PromptHash != "" {
-				judgePromptHash = r.PromptHash
+		if r.Scanner == "S5" && r.PromptHash != "" {
+			judgePromptHash = r.PromptHash
+		}
+		if u := r.JudgeUsage; u != nil {
+			if judgeUsage == nil {
+				judgeUsage = &JudgeUsage{}
 			}
-			if r.JudgeUsage != nil {
-				judgeUsage = r.JudgeUsage
-			}
+			judgeUsage.PromptTokens += u.PromptTokens
+			judgeUsage.CompletionTokens += u.CompletionTokens
+		}
+		if r.Scanner == knowledgeStageID && !r.Skipped {
+			knowledge = r.Knowledge
 		}
 		if r.Err != nil {
 			stageErrs = append(stageErrs, r.Scanner+": "+r.Err.Error())
@@ -255,7 +292,7 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 	}
 
 	// S9 last (reads the accumulated findings to escalate).
-	s9 := exec(S9ReleaseDiff{CurrentFindings: allFindings})
+	s9 := exec(S9ReleaseDiff{CurrentFindings: allFindings}, release)
 	allFindings = append(allFindings, s9.Findings...)
 	if s9.Err != nil {
 		stageErrs = append(stageErrs, "S9: "+s9.Err.Error())
@@ -290,12 +327,14 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 		StageErrors:   stageErrs,
 		JudgeModel:    judgeModelOf(o.judge),
 		Decision:      decision,
+		Knowledge:     knowledge,
 	}
 	digest, digestErr := reportDigest(report)
 	out := RunResult{
 		Report: report, ReportDigest: digest,
 		Findings: allFindings, Decision: decision, JudgeModel: judgeModelOf(o.judge),
 		JudgePromptHash: judgePromptHash, JudgeUsage: judgeUsage, Ran: ran, Skipped: skipped,
+		Knowledge: knowledge,
 	}
 	if digestErr != nil {
 		// The digest is the subject of the DSSE attestation (§8.8). An empty
@@ -310,7 +349,11 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 // runStage applies a per-stage timeout and converts a panic into a stage
 // error (fail closed, never crash the worker).
 func (o *Orchestrator) runStage(sc stageContext, st Stage, in *Input) (res StageResult) {
-	stageCtx, cancel := context.WithTimeout(sc.ctx, o.stageTimeout)
+	limit := o.stageTimeout
+	if st.ID() == knowledgeStageID && o.knowledgeTimeout > limit {
+		limit = o.knowledgeTimeout
+	}
+	stageCtx, cancel := context.WithTimeout(sc.ctx, limit)
 	defer cancel()
 	inner := sc
 	inner.ctx = stageCtx

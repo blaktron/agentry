@@ -135,6 +135,16 @@ func DiffCapabilities(old, next Capabilities) CapabilityDiff {
 		}
 	}
 
+	// Shipped knowledge (plan knowledge.md §4.6): a pack is text that
+	// enters the agent's context, so one more asks again.
+	added, removed = diffSets(old.Knowledge, next.Knowledge)
+	for _, k := range added {
+		d.Widened = append(d.Widened, "ships knowledge: "+k)
+	}
+	for _, k := range removed {
+		d.Narrowed = append(d.Narrowed, "no longer ships knowledge: "+k)
+	}
+
 	return d
 }
 

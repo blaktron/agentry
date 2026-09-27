@@ -127,6 +127,31 @@ var packRuleStages = []PackStage{
 // chunk is counted on the review (Complete reports it) and the rule
 // stages' findings stand.
 func (o *Orchestrator) ScanPack(ctx context.Context, files []PackFile) PackReport {
+	r, hits := o.scanPack(ctx, files)
+	for _, h := range hits {
+		f := h.finding
+		pf := PackFinding{
+			Scanner: f.Scanner, Severity: f.Severity, Confidence: f.Confidence, Title: f.Title,
+			Part: h.part, File: f.FilePath, Line: f.LineStart, Chunk: h.chunk,
+		}
+		r.Findings = append(r.Findings, pf)
+	}
+	return r
+}
+
+// packHit is one finding of a pack's scan, whole, with where it is: the
+// half, and for AI Review the chunk (1-based within its half) and, when
+// the chunk read one file, that file.
+type packHit struct {
+	finding Finding
+	part    PackPart
+	chunk   int
+}
+
+// scanPack is ScanPack's reading: the report without its findings, and
+// the findings whole — excerpts included — for a caller that keeps them
+// where excerpts belong (a release's own report, ScanShipped).
+func (o *Orchestrator) scanPack(ctx context.Context, files []PackFile) (PackReport, []packHit) {
 	r := PackReport{Schema: PackReportSchema, Stages: append([]PackStage(nil), packRuleStages...), Findings: []PackFinding{}}
 	r.Read.NotRead = []string{}
 	in := &Input{}
@@ -175,27 +200,25 @@ func (o *Orchestrator) ScanPack(ctx context.Context, files []PackFile) PackRepor
 	for i := range r.Stages {
 		r.Stages[i].Failed = failed[r.Stages[i].ID]
 	}
+	hits := make([]packHit, 0, len(found))
 	for _, f := range found {
-		r.Findings = append(r.Findings, PackFinding{
-			Scanner: f.Scanner, Severity: f.Severity, Confidence: f.Confidence, Title: f.Title,
-			Part: part[f.FilePath], File: f.FilePath, Line: f.LineStart,
-		})
+		hits = append(hits, packHit{finding: f, part: part[f.FilePath]})
 	}
 
-	o.reviewPack(ctx, &r, in.Files, part)
-	return r
+	return r, append(hits, o.reviewPack(ctx, &r, in.Files, part)...)
 }
 
 // reviewPack runs AI Review over the sources, then over the wiki.
-func (o *Orchestrator) reviewPack(ctx context.Context, r *PackReport, files []FileEntry, part map[string]PackPart) {
+func (o *Orchestrator) reviewPack(ctx context.Context, r *PackReport, files []FileEntry, part map[string]PackPart) []packHit {
 	j := o.judge
 	r.Review.Provider = j.Name()
 	r.Review.Model = j.ModelID()
 	limit := j.InputLimit()
 	if limit <= 0 {
 		r.Review.Note = AIReviewNotConfigured
-		return
+		return nil
 	}
+	var hits []packHit
 	r.Stages = append(r.Stages, PackStage{ID: "S5", Name: "AI Review"})
 	r.Review.Configured = true
 	r.Review.ChunkBytes = limit
@@ -239,13 +262,12 @@ func (o *Orchestrator) reviewPack(ctx context.Context, r *PackReport, files []Fi
 				r.Review.Usage.CompletionTokens += verdict.Usage.CompletionTokens
 			}
 			for _, f := range verdictFindings(verdict) {
-				r.Findings = append(r.Findings, PackFinding{
-					Scanner: f.Scanner, Severity: f.Severity, Confidence: f.Confidence, Title: f.Title,
-					Part: half, File: chunk.file(), Chunk: i + 1,
-				})
+				f.FilePath = chunk.file()
+				hits = append(hits, packHit{finding: f, part: half, chunk: i + 1})
 			}
 		}
 	}
+	return hits
 }
 
 // judgeChunk is one Judge call's files and the pack file each came from.
