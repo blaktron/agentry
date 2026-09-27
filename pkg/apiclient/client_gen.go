@@ -853,6 +853,7 @@ const (
 	ReviewAct      Scope = "review:act"
 	RunRead        Scope = "run:read"
 	RunWrite       Scope = "run:write"
+	SecretWrite    Scope = "secret:write"
 	UserProfile    Scope = "user:profile"
 )
 
@@ -880,6 +881,8 @@ func (e Scope) Valid() bool {
 	case RunRead:
 		return true
 	case RunWrite:
+		return true
+	case SecretWrite:
 		return true
 	case UserProfile:
 		return true
@@ -2620,6 +2623,9 @@ type ScimTokenCreated struct {
 // consumed only by a registry that mounts the runs extension, and
 // unlock nothing on one that does not. `knowledge:read` and
 // `knowledge:write` read and write the account's knowledge packs.
+// `secret:write` sets and deletes the account's hosted-run secrets and
+// never lists or reads one; it is consumed only by a registry that
+// mounts the vault extension.
 type Scope string
 
 // ScopeGranted A scope as it appears on a token the registry reports back (the

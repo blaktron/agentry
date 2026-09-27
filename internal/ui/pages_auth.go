@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/blaktron/agentry/internal/auth"
 )
 
 // landing: /ui/ — the signed-in go to their account, the signed-out to
@@ -172,11 +174,13 @@ type authorizeData struct {
 	Port  int
 	State string
 	Valid bool
+	// Scopes are what approving grants, from the grant's own list.
+	Scopes string
 }
 
 func parseAuthorizeParams(port, state string) authorizeData {
 	n, err := strconv.Atoi(port)
-	d := authorizeData{Port: n, State: state}
+	d := authorizeData{Port: n, State: state, Scopes: strings.Join(auth.SignInGrantScopes(), ", ")}
 	d.Valid = err == nil && n >= portMin && n <= portMax && stateRE.MatchString(state)
 	return d
 }

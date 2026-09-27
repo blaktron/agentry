@@ -29,6 +29,12 @@ const (
 	// create, upload, delete and wrap (knowledge:write).
 	ScopeKnowledgeRead  Scope = "knowledge:read"
 	ScopeKnowledgeWrite Scope = "knowledge:write"
+	// The vault scope (plan hosted-credentials-vault.md D13, agentry#676):
+	// a token that may set and delete the caller's hosted-run secrets and
+	// never list or read one. No core route consumes it; the enterprise
+	// build's vault requires it through pkg/extension, and keeps its list
+	// for a session alone.
+	ScopeSecretWrite Scope = "secret:write"
 )
 
 // AllScopes enumerates every valid scope (validation, docs, UI).
@@ -37,6 +43,25 @@ func AllScopes() []Scope {
 		ScopeRepoRead, ScopeRepoWrite, ScopeAgentPublish, ScopeAgentRead,
 		ScopeOrgAdmin, ScopeReviewAct, ScopeAuditRead, ScopeUserProfile,
 		ScopeRunRead, ScopeRunWrite, ScopeKnowledgeRead, ScopeKnowledgeWrite,
+		ScopeSecretWrite,
+	}
+}
+
+// SignInGrantScopes is the scope set the desktop app's and the CLI's
+// sign-in grant mints: browse and install (agent:read, repo:read), Build →
+// publish (agent:publish, repo:write), identity (user:profile), and hosted
+// runs — In Agentry on RunPanel (run:read, run:write; plan hosted-runs.md
+// §4.7), the Knowledge panel's packs and their keys (knowledge:read,
+// knowledge:write; plan knowledge.md §4.3), and the hosted-run start's
+// secrets, set and deleted, never read (secret:write; plan
+// hosted-credentials-vault.md D13, agentry#676). Deliberately no review:act
+// and no org scopes. Fixed server-side so a caller of the grant endpoint
+// cannot widen it, and shown verbatim on the approval page.
+func SignInGrantScopes() []string {
+	return []string{
+		string(ScopeAgentRead), string(ScopeAgentPublish), string(ScopeRepoRead), string(ScopeRepoWrite),
+		string(ScopeUserProfile), string(ScopeRunRead), string(ScopeRunWrite),
+		string(ScopeKnowledgeRead), string(ScopeKnowledgeWrite), string(ScopeSecretWrite),
 	}
 }
 
