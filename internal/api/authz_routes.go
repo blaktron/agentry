@@ -26,6 +26,11 @@ type RouteDecl struct {
 	// AgentScoped routes resolve {ns}/{name} and check the caller's
 	// effective agent role via auth.CheckAgent.
 	AgentScoped bool
+	// HiddenFromOutsiders org-scoped routes answer a signed-in caller who is
+	// not an active member of the organization 404 rather than 403, so they
+	// say nothing of what the organization keeps (an organization's shared
+	// knowledge, agentry#646). The matrix expects that 404 as the denial.
+	HiddenFromOutsiders bool
 	// SelfAuthorized routes perform their own bespoke authorization inside
 	// the handler (platform-staff / org-reviewer / author checks that the
 	// generic chokepoint cannot express). The matrix test skips outcome
@@ -207,17 +212,32 @@ var routeAuthz = map[string]RouteDecl{
 	"wrapKnowledgeKey":      {Action: auth.ActKnowledgeWrite},
 	"unwrapKnowledgeKey":    {Action: auth.ActKnowledgeRead},
 	"getKnowledgeUsage":     {Action: auth.ActKnowledgeRead},
-	"getMeta":               {Action: auth.ActPublicRead, Anonymous: true, NoAuthz: true},
-	"getOrg":                {Action: auth.ActOrgRead, OrgScoped: true, Anonymous: true},
-	"getUserProfile":        {Action: auth.ActPublicRead, Anonymous: true},
-	"listOrgAudit":          {Action: auth.ActOrgAuditRead, OrgScoped: true},
-	"listOrgMembers":        {Action: auth.ActOrgMembersRead, OrgScoped: true},
-	"listTeamMembers":       {Action: auth.ActOrgTeamsRead, OrgScoped: true},
-	"listTeams":             {Action: auth.ActOrgTeamsRead, OrgScoped: true},
-	"listTokens":            {Action: auth.ActUserTokensRead},
-	"listSshKeys":           {Action: auth.ActUserTokensRead},
-	"addSshKey":             {Action: auth.ActUserTokensManage, SessionOnly: true},
-	"removeSshKey":          {Action: auth.ActUserTokensManage, SessionOnly: true},
+	// An organization's shared knowledge (agentry#646): members read and
+	// unwrap, admins write; outsiders are 404. The export is a read that a
+	// member makes only of a pack marked exportable, which the handler
+	// decides with the pack in hand (org_knowledge_test.go).
+	"listOrgKnowledgePacks":    {Action: auth.ActOrgKnowledgeRead, OrgScoped: true, HiddenFromOutsiders: true},
+	"createOrgKnowledgePack":   {Action: auth.ActOrgKnowledgeWrite, OrgScoped: true, HiddenFromOutsiders: true},
+	"getOrgKnowledgePack":      {Action: auth.ActOrgKnowledgeRead, OrgScoped: true, HiddenFromOutsiders: true},
+	"updateOrgKnowledgePack":   {Action: auth.ActOrgKnowledgeWrite, OrgScoped: true, HiddenFromOutsiders: true},
+	"deleteOrgKnowledgePack":   {Action: auth.ActOrgKnowledgeWrite, OrgScoped: true, HiddenFromOutsiders: true},
+	"uploadOrgKnowledgeTree":   {Action: auth.ActOrgKnowledgeWrite, OrgScoped: true, HiddenFromOutsiders: true},
+	"downloadOrgKnowledgeTree": {Action: auth.ActOrgKnowledgeRead, OrgScoped: true, HiddenFromOutsiders: true},
+	"exportOrgKnowledgePack":   {Action: auth.ActOrgKnowledgeRead, OrgScoped: true, HiddenFromOutsiders: true},
+	"wrapOrgKnowledgeKey":      {Action: auth.ActOrgKnowledgeWrite, OrgScoped: true, HiddenFromOutsiders: true},
+	"unwrapOrgKnowledgeKey":    {Action: auth.ActOrgKnowledgeRead, OrgScoped: true, HiddenFromOutsiders: true},
+	"getOrgKnowledgeUsage":     {Action: auth.ActOrgKnowledgeRead, OrgScoped: true, HiddenFromOutsiders: true},
+	"getMeta":                  {Action: auth.ActPublicRead, Anonymous: true, NoAuthz: true},
+	"getOrg":                   {Action: auth.ActOrgRead, OrgScoped: true, Anonymous: true},
+	"getUserProfile":           {Action: auth.ActPublicRead, Anonymous: true},
+	"listOrgAudit":             {Action: auth.ActOrgAuditRead, OrgScoped: true},
+	"listOrgMembers":           {Action: auth.ActOrgMembersRead, OrgScoped: true},
+	"listTeamMembers":          {Action: auth.ActOrgTeamsRead, OrgScoped: true},
+	"listTeams":                {Action: auth.ActOrgTeamsRead, OrgScoped: true},
+	"listTokens":               {Action: auth.ActUserTokensRead},
+	"listSshKeys":              {Action: auth.ActUserTokensRead},
+	"addSshKey":                {Action: auth.ActUserTokensManage, SessionOnly: true},
+	"removeSshKey":             {Action: auth.ActUserTokensManage, SessionOnly: true},
 	// Sessions: listing rides the self-read action so a `user:profile` PAT is
 	// admitted and answered with an empty list (a PAT has no sessions of its
 	// own); revoking is session-only, like logout — a token must not be able

@@ -609,7 +609,7 @@ through the entitlements resolver. The defaults:
 | `limits.versionsPerDay` | 20 | per agent |
 | `limits.webhookEndpointsPerOrg` / `webhookDeliveriesPerSecond` | 20 / 5 | |
 | `limits.authedPerHour`, `authedBurstPerMin`, `anonymousPerMin`, `loginPerMin` | 5000, 100, 60, 10 | the API rate buckets (also enforced at the edge) |
-| `limits.knowledgeBytesPerAccount` | 0 (no cap) | the bytes of knowledge packs one account keeps in the registry (`AGENTRY_KNOWLEDGE_BYTES_PER_ACCOUNT`); past it no pack is added or grown, and none is deleted ([Knowledge packs](knowledge.md)) |
+| `limits.knowledgeBytesPerAccount` | 0 (no cap) | the bytes of knowledge packs one account keeps in the registry, and apart from its members' the bytes of one organization's shared packs (`AGENTRY_KNOWLEDGE_BYTES_PER_ACCOUNT`); past it no pack is added or grown, and none is deleted ([Knowledge packs](knowledge.md)) |
 | `limits.modelInputPerMin` | 120 | model-input calls ([Model input](model-input.md)) per caller per minute, and the burst: a platform staff member, or one hosted job. An address presenting job credentials may spend ten times that (`AGENTRY_LIMITS_MODEL_INPUT_PER_MIN`) |
 | `limits.scimPerMin` | 600 | SCIM requests per organization per minute, and the burst a directory may spend at once. An initial sync of a few hundred people fits; past it the IdP gets 429 with `Retry-After` and paces itself. Raise it for a directory of thousands, since a directory's size is a property of the deployment |
 

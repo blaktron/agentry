@@ -305,6 +305,7 @@ type KnowledgePack struct {
 	WrappedKey       []byte     `json:"wrapped_key"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
+	Exportable       bool       `json:"exportable"`
 }
 
 type McpDependencyAlert struct {

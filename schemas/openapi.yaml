@@ -2804,11 +2804,262 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  # An organization's shared knowledge (plan knowledge.md §4.7, D13, D26;
+  # agentry#646): packs the organization owns, wrapped to its key, written
+  # by its admins and read by its active members, membership checked at
+  # every call. A caller who is not an active member — another
+  # organization's member, platform staff — is answered 404 on every route,
+  # as for another account's pack.
+  /orgs/{org}/knowledge/packs:
+    parameters:
+      - $ref: "#/components/parameters/OrgHandle"
+    get:
+      operationId: listOrgKnowledgePacks
+      tags: [knowledge]
+      summary: The organization's shared packs, by name, for any active member.
+      responses:
+        "200":
+          description: Packs, each with `shared`, `org` and `exportable`.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/KnowledgePack"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createOrgKnowledgePack
+      tags: [knowledge]
+      summary: Create a shared pack, empty, with its data key wrapped for the organization (admins).
+      description: >-
+        As `POST /knowledge/packs`, with the data key wrapped by
+        `POST /orgs/{org}/knowledge/keys/wrap`: the registry checks that
+        it opens for the organization. The pack is not exportable by
+        members until an admin marks it. Recorded in the organization's
+        audit log (`org.knowledge_create`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateKnowledgePackRequest"
+      responses:
+        "201":
+          description: The pack, in state `empty`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgePack"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/knowledge/packs/{packId}:
+    parameters:
+      - $ref: "#/components/parameters/OrgHandle"
+      - $ref: "#/components/parameters/KnowledgePackId"
+    get:
+      operationId: getOrgKnowledgePack
+      tags: [knowledge]
+      summary: One of the organization's shared packs with its scan report.
+      responses:
+        "200":
+          description: The pack.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgePack"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateOrgKnowledgePack
+      tags: [knowledge]
+      summary: Mark a shared pack exportable by the organization's members, or not (admins).
+      description: >-
+        Recorded in the organization's audit log
+        (`org.knowledge_update`, with `exportable`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateKnowledgePackRequest"
+      responses:
+        "200":
+          description: The pack.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgePack"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteOrgKnowledgePack
+      tags: [knowledge]
+      summary: Delete a shared pack, its stored trees and its wrapped key (admins).
+      description: >-
+        Recorded in the organization's audit log (`org.knowledge_delete`).
+        A member's downloaded copy stays sealed under a data key only the
+        organization's unwrap opens.
+      responses:
+        "204":
+          description: Deleted.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/knowledge/packs/{packId}/tree:
+    parameters:
+      - $ref: "#/components/parameters/OrgHandle"
+      - $ref: "#/components/parameters/KnowledgePackId"
+    put:
+      operationId: uploadOrgKnowledgeTree
+      tags: [knowledge]
+      summary: Upload a shared pack's sealed tree, which replaces the one before and is scanned (admins).
+      description: >-
+        As `PUT /knowledge/packs/{packId}/tree`, counted against the
+        allocation the organization's packs draw on.
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "202":
+          description: Stored; the pack is `scanning`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgePack"
+        default:
+          $ref: "#/components/responses/Problem"
+    get:
+      operationId: downloadOrgKnowledgeTree
+      tags: [knowledge]
+      summary: A shared pack's sealed tree, as stored, for any active member (409 `knowledge-scanning` while it is scanned).
+      responses:
+        "200":
+          description: The sealed tree.
+          headers:
+            X-Agentry-Knowledge-Digest:
+              schema:
+                type: string
+              description: "sha256:<hex>, the digest of the tree inside."
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/knowledge/packs/{packId}/export:
+    parameters:
+      - $ref: "#/components/parameters/OrgHandle"
+      - $ref: "#/components/parameters/KnowledgePackId"
+    get:
+      operationId: exportOrgKnowledgePack
+      tags: [knowledge]
+      summary: A shared pack's tree, decrypted as it streams, to an admin, or to a member once the pack is marked exportable.
+      description: >-
+        As `GET /knowledge/packs/{packId}/export`. A member's export of a
+        pack not marked exportable is 403 `knowledge-not-exportable`.
+        Recorded in the organization's audit log (`org.knowledge_export`).
+      responses:
+        "200":
+          description: The tree.
+          content:
+            application/x-tar:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/knowledge/keys/wrap:
+    parameters:
+      - $ref: "#/components/parameters/OrgHandle"
+    post:
+      operationId: wrapOrgKnowledgeKey
+      tags: [knowledge]
+      summary: Wrap a data key for the organization (admins).
+      description: >-
+        The wrapper seals the 32-byte data key for the organization: on a
+        core registry under the deployment's knowledge sealing key, on an
+        extension's to the organization's own key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KnowledgeDataKey"
+      responses:
+        "200":
+          description: The wrapped key.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeWrappedKey"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/knowledge/keys/unwrap:
+    parameters:
+      - $ref: "#/components/parameters/OrgHandle"
+    post:
+      operationId: unwrapOrgKnowledgeKey
+      tags: [knowledge]
+      summary: Unwrap a data key wrapped for the organization, for any active member; refused once they are not one.
+      description: >-
+        The one door to a shared pack's words on a member's machine: the
+        client keeps the answer in memory and asks again next time, so a
+        member who is removed keeps sealed bytes they can no longer open.
+        A wrapped key that does not open for the organization is 404
+        `knowledge-key-not-found`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KnowledgeWrappedKey"
+      responses:
+        "200":
+          description: The data key.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeDataKey"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /orgs/{org}/knowledge/usage:
+    parameters:
+      - $ref: "#/components/parameters/OrgHandle"
+    get:
+      operationId: getOrgKnowledgeUsage
+      tags: [knowledge]
+      summary: What the organization keeps in the registry against the allocation its packs draw on.
+      responses:
+        "200":
+          description: The meter; `bytes` and `packs` are the organization's own packs.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeUsage"
+        default:
+          $ref: "#/components/responses/Problem"
+
   /platform/knowledge:
     get:
       operationId: listKnowledgePackSizes
       tags: [platform]
-      summary: An account's packs by name and size, for support (platform staff).
+      summary: An account's or an organization's packs by name and size, for support (platform staff).
       description: >-
         Names, states and sizes only: never a byte of content, a digest,
         a scan report or a key.
@@ -2818,7 +3069,7 @@ paths:
           required: true
           schema:
             type: string
-          description: The account's handle.
+          description: The account's or the organization's handle.
       responses:
         "200":
           description: Packs.
@@ -4500,7 +4751,7 @@ components:
         A knowledge pack the caller keeps in the registry (plan
         knowledge.md §4.4): what may be read of it without its data key,
         and the key as the caller's wrapper wrapped it.
-      required: [id, name, state, bytes, files, pages, digest, wrappedKey, createdAt, updatedAt]
+      required: [id, name, state, bytes, files, pages, digest, wrappedKey, shared, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -4509,6 +4760,20 @@ components:
           type: string
         state:
           $ref: "#/components/schemas/KnowledgePackState"
+        shared:
+          type: boolean
+          description: >-
+            An organization's shared pack (agentry#646), read through
+            `/orgs/{org}/knowledge/`; false for the caller's own.
+        org:
+          type: string
+          description: The organization's handle, on a shared pack.
+        exportable:
+          type: boolean
+          description: >-
+            On a shared pack: whether its members may export it, which an
+            admin marks (D26). Its admins export it either way; a
+            person's own pack is theirs to export and carries no flag.
         bytes:
           type: integer
           format: int64
@@ -4564,6 +4829,13 @@ components:
         updatedAt:
           type: string
           format: date-time
+
+    UpdateKnowledgePackRequest:
+      type: object
+      required: [exportable]
+      properties:
+        exportable:
+          type: boolean
 
     CreateKnowledgePackRequest:
       type: object
