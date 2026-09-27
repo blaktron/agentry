@@ -5,9 +5,13 @@ per-endpoint semantics that are easy to get wrong. The authoritative
 contract is `schemas/openapi.yaml`; this document explains the parts a
 schema cannot express.
 
-Base path is `/api/v1`. Two surfaces sit deliberately outside it: `/scim/v2`
-(the SCIM 2.0 spec fixes that path) and `/sso/{org}` (a browser destination
-people paste into address bars and IdP consoles, not a JSON operation).
+Base path is `/api/v1`. Three surfaces sit deliberately outside it: `/scim/v2`
+(the SCIM 2.0 spec fixes that path), `/sso/{org}` (a browser destination
+people paste into address bars and IdP consoles, not a JSON operation), and
+`/internal/directory/trusted-device` (the directory's own trust check on the
+private network, gated by a shared secret and never routed by an edge; see
+`docs/self-hosting.md`, agentry#670). The last is not part of the public API
+and answers bare status codes.
 
 ## Versioning
 

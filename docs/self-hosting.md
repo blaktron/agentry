@@ -1218,30 +1218,75 @@ A remembered browser is a second credential class, not a longer session:
 §12.4's 24-hour cap still binds every session, and a `trusted_devices` record
 lengthens none of them.
 
-**What is not built yet.** The credential exists; the surface for managing it
-does not. The page that lists remembered browsers and removes one is agentry#462,
-and the expiry sweep is agentry#464; account erasure already deletes the
-account's records in the erasure transaction (`handlers_gdpr.go`). Until
-those land there is no product surface for withdrawing a remembered browser:
-deleting that browser's `agentry_trusted_device` cookie stops it being
-presented, and a record can be revoked in SQL
+**What is not built yet.** The credential exists; the surface for withdrawing
+it does not. The route that clears all of an account's remembered browsers is
+agentry#672 (the hosted site offers it as one button), and the expiry sweep is
+agentry#464; account erasure already deletes the account's records in the
+erasure transaction (`handlers_gdpr.go`), and SCIM deactivation revokes them.
+Until the clear route lands, deleting a browser's `agentry_trusted_device`
+cookie stops it being presented, and a record can be revoked in SQL
 (`UPDATE trusted_devices SET revoked_at = now() WHERE …`), but an account
 holder can do neither from a page. Anything not revoked expires at the end of
 its lifetime.
 
-In practice nothing mints one yet either. The flag is per-request and no
-shipped client sends it — the browser-facing checkbox is agentry#463 — so a
-record is only created by a hand-written API call that asks for one. A
-deployment that wants the credential off until the management surface exists
-has no switch to turn, but also has nothing turning it on.
+On the native path nothing mints one unless asked: the flag is per-request and
+no shipped client sends it, so a record is only created by an API call that
+asks for one.
 
-None of this applies under `AGENTRY_AUTH_EXTERNAL_ONLY=true`. The native login
-endpoint answers 410, the directory performs the second-factor challenge, and
-the registry never sees it, so there is no native code to skip and nothing for
-it to remember. The directory's own remember-this-device behaviour is its
-configuration to make, and it is not equivalent: it keeps no server-side record
-of the browsers it remembers, so they can be neither listed nor individually
-revoked (agentry#460).
+**Remembering a browser on the directory's sign-in.** Under
+`AGENTRY_AUTH_EXTERNAL_ONLY=true` the native login answers 410 and the
+directory asks for the second factor, so the choice and the skip both happen
+there (agentry#670, DEV-163). The registry keeps the same record, with the same
+lifetime, ceiling and fail-closed lookup:
+
+- **Minting.** The registry asks the directory for one more scope, `agentry`.
+  The directory's flow shows "Remember this device for 30 days" on its code
+  page (unticked), and its `agentry` scope mapping passes the choice back as
+  the ID-token claim `agentry_remember_device`. On the OIDC callback the
+  registry mints a record only when that claim is `true`, the token's `amr`
+  names a second factor, **and** its `auth_time` is within five minutes. The
+  last matters because a live directory session answers a later sign-in
+  silently, repeating the claim and the `amr` of the sign-in that started it;
+  only `auth_time` shows it is old. So a sign-in whose code was skipped, or
+  never asked, cannot extend its own trust. The cookie is httpOnly and scoped
+  to the directory's flow executor (`Path=/api/v3/flows/executor/`); no route
+  of the registry reads it. The `user.trusted_device_add` row carries
+  `"via": "directory"`.
+- **The check.** Before asking for the code, the directory's flow calls
+  `POST /internal/directory/trusted-device` with `{token, sub}` and the bearer
+  secret `AGENTRY_IDP_TRUST_CHECK_TOKEN` (at least 32 characters; the
+  directory holds the same value). The answer is `{"trusted": true}` only for
+  a live record owned by the active account linked to that directory subject;
+  anything else is `false`, and a store that cannot answer is a 503, which
+  the directory treats as "ask for the code". A `true` records the use
+  (`last_seen_at`, and a `user.trusted_device_use` audit row) before it is
+  given. The route answers 404 while the secret is unset.
+- **Keep `/internal/` private.** The route is for the directory on the private
+  network, calling the api directly. The compose edge answers `/internal/`
+  with 404, and the server itself answers 404 to any request carrying
+  `X-Forwarded-For` or `Forwarded`, which is what an ingress or a proxy in
+  front of the api adds. So a directory that reaches the api through a proxy
+  of its own is refused too, and asks for the code.
+- **The cookie's domain.** The registry sets the cookie on the callback, at
+  `AGENTRY_PUBLIC_URL`'s host, and the directory has to receive it. A
+  directory on the same host (another port) gets a host-only cookie; one on a
+  subdomain of the registry's host (`auth.example.com` under
+  `example.com`) gets a cookie for the registry's host. For sibling hosts set
+  `AGENTRY_AUTH_DIRECTORY_COOKIE_DOMAIN` to a parent domain of both. A
+  configuration that cannot work is refused at startup. A parent-domain
+  cookie reaches every host under that domain at the executor's path, not
+  only the directory: if a staging or development deployment runs under the
+  production registry's name, production's tokens reach its directory too.
+  Keep such deployments on a name of their own, or accept that they receive
+  those tokens (the hosted deployment accepts it, DEV-163).
+
+Setting the secret switches the registry's half on. The directory's half — the
+checkbox on the code page, the scope mapping and the policy that calls the
+check — is agentry#671; until it is applied the directory sends no claim and
+never asks, so nothing is minted and nothing is skipped. The directory's own
+remember-this-device behaviour is a different thing and is not used: it keeps
+no server-side record of the browsers it remembers, so they could be neither
+cleared nor individually revoked (agentry#460).
 
 The directory's flows are unbranded here and call the deployment
 `AGENTRY_BRAND_NAME`; a site that fronts the registry applies its own
