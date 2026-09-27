@@ -24,11 +24,13 @@ configuration and not a secret: `inputTokensPerCredit` and
 `outputTokensPerCredit`, every tier's caps and hold under `tiers` (each with
 the `build` caps and hold of a [knowledge build](#a-knowledge-build)), and
 `knowledgeBuild` — whether a build can run here, what it holds, and the
-pack scan's credit. A signed-in caller also gets `caller` — the tier a run
-of theirs is held at, `account` (whose row it is held on: their own, or the
-organization whose pool pays for their runs), that tier's caps, the credits
-a run holds, the two rates and the tier's `build` — so a client can state the
-cost, and whose credits it is, before any run exists.
+pack scan's credit — and `draft`, the terms of a [hosted
+draft](#a-hosted-draft). A signed-in caller also gets `caller` — the tier a
+run of theirs is held at, `account` (whose row it is held on: their own, or
+the organization whose pool pays for their runs), that tier's caps, the
+credits a run holds, the two rates, the tier's `build` and the `draft` hold —
+so a client can state the cost, and whose credits it is, before any run
+exists.
 
 ## Who may do what
 
@@ -327,6 +329,61 @@ hosts or no knowledge store (`503 knowledge-build-unavailable`). The Creator
 is part of the CLI the host runs, so a build runs without a registry scan of
 a package; the pack it makes is scanned before it is final.
 
+## A hosted draft
+
+A run of the kind `draft` runs the CLI's built-in Drafter, which turns a
+description of a task into a draft of a BriefAgent (the CLI's `agentry
+draft`), on a sandbox host against the platform's
+model, for credits. It is created by the same `POST /api/v1/x/runs/` with
+`kind: draft`, a `description` (at most 24 KiB of text) and up to ten
+`hints` (the services or sites it works with, whether it runs on its own or
+in a conversation, an example of the output wanted; one line of at most 500
+bytes each, blank ones dropped). It names no `ref`, and takes no `task`,
+`intake`, `inputs` or `knowledge`: each is `422`. A token needs `run:write`
+only. The description is the run's `task`; the hints are in its `draft`
+record.
+
+A draft holds the same on every tier: its model tokens' credits
+(`AGENTRY_RUNS_DRAFT_TOKEN_CREDITS`, 30), its searches at their price
+(`AGENTRY_RUNS_DRAFT_SEARCHES`, 10, at `AGENTRY_RUNS_SEARCH_CREDITS`, 1
+each) and AI Review's 1 credit — 41 by default, under its own ledger reasons
+(`draft_hold`, then `draft` and `draft_release`, or `draft_refund`). Its caps
+are `AGENTRY_RUNS_DRAFT_SECONDS` (900 s), `AGENTRY_RUNS_DRAFT_MAX_TURNS` (100)
+and as tokens what its token credits buy at the input rate. It pays under
+the same payer rule as a run and counts against one active run per account.
+A balance that cannot hold it is `402` with nothing held, and a deployment
+with no sandbox hosts is `503 draft-unavailable`.
+
+It runs only on sandbox hosts Agentry pushes to. When a host takes the
+draft, the registry mints it a credential for this one draft, keeps only its
+digest, and hands it to the host with the job. The host runs `agentry draft
+--hosted --output-format json` with the credential in the CLI's
+environment and no key of the platform's, and stops the draft when its
+narrated tokens, priced at the two rates, pass its token credits. The
+Drafter's web tools send every search result, page and registry answer to
+the registry's [model-input routes](model-input.md) with that credential
+before the model reads it, and its searches to the registry's search route.
+The registry counts each call against the draft's own caps — its searches,
+`AGENTRY_RUNS_DRAFT_PAGES` (60) pages, 60 registry answers — and refuses
+what passes them (`403`). The credential answers only while its draft is
+claimed or running and not asked to stop; every hand-back to the queue and
+every close clears it, and it never enters the run's containers.
+
+A draft that ran settles its tokens (at most its token credits), the
+searches the provider answered at their price, and 1 credit for AI Review,
+however many texts it read, never past the hold. A draft that did not run is
+refunded in full: one whose description AI Review did not pass (the CLI's
+exit 11 at stage `description`, before anything is searched or read) and
+one the platform failed. The run's `draft` record keeps what the calls
+spent: the searches, the texts scanned and withheld, the judge's requests
+and input tokens (for the record: AI Review is 1 credit), and the parts of
+the settlement. Its output is the sealed `output.tar`, for its runner alone,
+holding `draft.json`, the rendered `package/`, the reports and the receipts.
+
+The Drafter is part of the CLI the host runs, like the Knowledge Creator:
+a draft runs without a registry scan of a package. What it drafts is not
+published by it: a submission of the draft is scanned like any other.
+
 ## The execution plane
 
 The worker is a puller beside a docker daemon on a sandbox host, and reaches
@@ -375,6 +432,12 @@ anything you want to keep before then; nothing is archived elsewhere.
 | `AGENTRY_RUNS_BUILD_SECONDS_STANDARD` | `900` | a knowledge build's wall time on Standard |
 | `AGENTRY_RUNS_BUILD_SECONDS_{PRO,BUSINESS,ENTERPRISE}` | `3600` | a knowledge build's wall time on the tiers above |
 | `AGENTRY_RUNS_BUILD_MAX_TURNS` | `300` | a knowledge build's turn cap |
+| `AGENTRY_RUNS_DRAFT_TOKEN_CREDITS` | `30` | what a hosted draft's model tokens may cost; the host stops it there |
+| `AGENTRY_RUNS_DRAFT_SEARCHES` | `10` | the web searches the registry brokers for one draft |
+| `AGENTRY_RUNS_SEARCH_CREDITS` | `1` | what one search costs a draft |
+| `AGENTRY_RUNS_DRAFT_PAGES` | `60` | the pages AI Review reads for one draft |
+| `AGENTRY_RUNS_DRAFT_SECONDS` | `900` | a draft's wall time, on every tier |
+| `AGENTRY_RUNS_DRAFT_MAX_TURNS` | `100` | a draft's turn cap |
 | `AGENTRY_RUNS_QUEUE_MAX` | `1h` | how long a run may wait for a worker before it is cancelled and refunded |
 | `AGENTRY_RUNS_STALE` | `10m` | how long a claimed run's worker may be silent before the run is closed as `error` and refunded |
 | `AGENTRY_RUNS_TASK_MAX_BYTES` | `65536` | the task text's cap |
