@@ -41,6 +41,15 @@ func requireClearedCookie(t *testing.T, cookies []*http.Cookie, name string, sec
 // package.
 func requireSetCookie(t *testing.T, cookies []*http.Cookie, name string, wantMaxAge int, secure bool) *http.Cookie {
 	t.Helper()
+	return requireSetCookieAt(t, cookies, name, "/", "", wantMaxAge, secure)
+}
+
+// requireSetCookieAt is requireSetCookie for a cookie scoped somewhere other
+// than the whole host: the directory path's remembered-browser cookie is set
+// for authentik's flow executor alone, and on a parent domain when the
+// directory is a subdomain (agentry#670). wantDomain "" means host-only.
+func requireSetCookieAt(t *testing.T, cookies []*http.Cookie, name, wantPath, wantDomain string, wantMaxAge int, secure bool) *http.Cookie {
+	t.Helper()
 	for _, c := range cookies {
 		if c.Name != name {
 			continue
@@ -54,8 +63,11 @@ func requireSetCookie(t *testing.T, cookies []*http.Cookie, name string, wantMax
 		if c.SameSite != http.SameSiteLaxMode {
 			t.Fatalf("%s issued with SameSite=%v, want Lax", name, c.SameSite)
 		}
-		if c.Path != "/" {
-			t.Fatalf("%s issued with Path=%q, want \"/\": a narrower path is not presented on the sign-in form, where it is read", name, c.Path)
+		if c.Path != wantPath {
+			t.Fatalf("%s issued with Path=%q, want %q: it must reach exactly where it is read", name, c.Path, wantPath)
+		}
+		if c.Domain != wantDomain {
+			t.Fatalf("%s issued with Domain=%q, want %q", name, c.Domain, wantDomain)
 		}
 		if c.Secure != secure {
 			t.Fatalf("%s issued with Secure=%v, want %v (the server's cookieSecure setting)", name, c.Secure, secure)
@@ -78,9 +90,9 @@ func requireSetCookie(t *testing.T, cookies []*http.Cookie, name string, wantMax
 // The name parameter takes the cookie's name so that all three helpers read as
 // one family at the call site. Every caller today passes the trusted-device
 // cookie; the second name arrives with the revoke route, which has to clear it
-// (agentry#462).
+// (agentry#672).
 //
-//nolint:unparam // one caller today, a second with agentry#462
+//nolint:unparam // one caller today, a second with agentry#672
 func requireNoCookie(t *testing.T, cookies []*http.Cookie, name string) {
 	t.Helper()
 	for _, c := range cookies {
