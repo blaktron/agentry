@@ -204,9 +204,6 @@ func TestSecretWriteIsValidFlatAndUnlocksNoCoreAction(t *testing.T) {
 	if !found {
 		t.Fatal("secret:write is not enumerated")
 	}
-	if len(AllScopes()) != 13 {
-		t.Fatalf("AllScopes has %d scopes, want thirteen", len(AllScopes()))
-	}
 	if HasScope([]string{"secret:write"}, ScopeRunWrite) || HasScope([]string{"run:write", "knowledge:write"}, ScopeSecretWrite) {
 		t.Fatal("secret:write implied or was implied by another scope; the list is flat")
 	}

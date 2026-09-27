@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/blaktron/agentry/internal/auth"
 )
 
 // The one session and CSRF pair the fake authorizes; sessCookie and
@@ -173,6 +175,11 @@ func TestAuthorizeNeedsASession(t *testing.T) {
 	w = get(newUI(t, Options{}), "/ui/authorize?port=40123&state=abcdefghij", sessCookie, csrfCookieV)
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "127.0.0.1:40123") || !strings.Contains(w.Body.String(), "chris") {
 		t.Fatalf("page: %d %s", w.Code, w.Body.String())
+	}
+	// The page names exactly what approving grants: the grant's own list
+	// (agentry#676), not a hand-kept copy that fell behind it.
+	if want := "Scopes: " + strings.Join(auth.SignInGrantScopes(), ", ") + "."; !strings.Contains(w.Body.String(), want) || !strings.Contains(want, "secret:write") {
+		t.Fatalf("authorize page does not name the grant's scopes %q:\n%s", want, w.Body.String())
 	}
 	if csp := w.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "form-action 'self' http://127.0.0.1:*") || !strings.Contains(csp, "default-src 'none'") {
 		t.Fatalf("csp: %q", csp)
@@ -1150,5 +1157,30 @@ func TestAccountShowsTheKnowledgeMeter(t *testing.T) {
 	w = get(newUI(t, Options{API: off}), "/ui/account", sessCookie, csrfCookieV)
 	if body := w.Body.String(); !strings.Contains(body, "This registry keeps no knowledge packs.") || strings.Contains(body, "could not fetch your knowledge") {
 		t.Fatalf("account with the store off:\n%s", body)
+	}
+}
+
+// TestTokenFormOffersEveryScope: the token form's list, kept in the order
+// the page shows it, is the closed scope list exactly — a scope added to
+// auth and not to the form (or the reverse) fails here (agentry#676).
+func TestTokenFormOffersEveryScope(t *testing.T) {
+	want := map[string]bool{}
+	for _, s := range auth.AllScopes() {
+		want[string(s)] = true
+	}
+	got := map[string]bool{}
+	for _, s := range scopes {
+		if got[s] {
+			t.Errorf("the form offers %s twice", s)
+		}
+		got[s] = true
+		if !want[s] {
+			t.Errorf("the form offers %s, which is no scope", s)
+		}
+	}
+	for s := range want {
+		if !got[s] {
+			t.Errorf("the form does not offer %s", s)
+		}
 	}
 }
