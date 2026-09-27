@@ -1218,16 +1218,16 @@ A remembered browser is a second credential class, not a longer session:
 §12.4's 24-hour cap still binds every session, and a `trusted_devices` record
 lengthens none of them.
 
-**What is not built yet.** The credential exists; the surface for withdrawing
-it does not. The route that clears all of an account's remembered browsers is
-agentry#672 (the hosted site offers it as one button), and the expiry sweep is
-agentry#464; account erasure already deletes the account's records in the
-erasure transaction (`handlers_gdpr.go`), and SCIM deactivation revokes them.
-Until the clear route lands, deleting a browser's `agentry_trusted_device`
-cookie stops it being presented, and a record can be revoked in SQL
-(`UPDATE trusted_devices SET revoked_at = now() WHERE …`), but an account
-holder can do neither from a page. Anything not revoked expires at the end of
-its lifetime.
+**Withdrawing it.** `GET /api/v1/user/trusted-devices` answers how many live
+remembered browsers the caller's account has, and `DELETE` on the same path
+revokes all of them, this browser's included, and clears this browser's
+cookie (agentry#672). Both are for a session: a personal access token reads 0
+and is refused the clear. There is no list and no per-browser removal; the
+hosted site offers the clear as one "Clear remembered devices" button. Account
+erasure deletes the account's records in the erasure transaction
+(`handlers_gdpr.go`), and SCIM deactivation revokes them. The expiry sweep is
+agentry#464; until it lands, expired and revoked rows stay in the table,
+inert.
 
 On the native path nothing mints one unless asked: the flag is per-request and
 no shipped client sends it, so a record is only created by an API call that

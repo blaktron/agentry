@@ -1037,6 +1037,47 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /user/trusted-devices:
+    get:
+      operationId: countTrustedDevices
+      tags: [users]
+      summary: How many browsers skip the caller's second factor (agentry#672).
+      description: >
+        The number of the caller's live remembered browsers: browsers where
+        "Remember this device for 30 days" was ticked and whose record has
+        not expired or been revoked. There is no list: the account's control
+        is one button that clears them all (DEV-163). A PAT-authenticated
+        caller gets 0, as it gets an empty session list: a token is not a
+        way to take an inventory of someone's browsers.
+      responses:
+        "200":
+          description: The count.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustedDevicesCount"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: clearTrustedDevices
+      tags: [users]
+      summary: Clear every remembered browser of the caller's account (agentry#672).
+      description: >
+        Revokes all of the caller's remembered browsers, this one included:
+        each is asked for the second factor at its next sign-in. Sessions and
+        authenticators are untouched. The response clears this browser's
+        remembered-browser cookie, since its record is gone. Session-only: a
+        PAT is refused (403), as on the session-revoking routes.
+      responses:
+        "200":
+          description: The number of remembered browsers cleared (0 when there were none).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustedDevicesCleared"
+        default:
+          $ref: "#/components/responses/Problem"
+
   /user/sessions/{sessionId}:
     delete:
       operationId: revokeUserSession
@@ -5436,6 +5477,22 @@ components:
           type: string
           description: Opaque; absent on the last page.
 
+    TrustedDevicesCount:
+      type: object
+      required: [count]
+      properties:
+        count:
+          type: integer
+          minimum: 0
+          description: Live remembered browsers of the caller's account.
+    TrustedDevicesCleared:
+      type: object
+      required: [cleared]
+      properties:
+        cleared:
+          type: integer
+          minimum: 0
+          description: Remembered browsers revoked by this request.
     SessionList:
       type: object
       required: [sessions]
