@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -19,12 +20,34 @@ import (
 // than the judge reads. Its findings are the release's, gated like any
 // other; a pack the scan could not read in full fails the stage, which
 // sends the version to a person. The release's own stages read the
-// release's own files: a pack's tree is this stage's, since S5 would read
-// it in one call past what the judge takes, and S1's 1 MiB text cap would
-// cut a pack's long source short.
+// release's own files and a pack's files that are not text (an image, a
+// PDF source's original), which S1 and S3's image reading cover as
+// anywhere else; a pack's text is this stage's, since S5 would read it in
+// one call past what the judge takes, and S1's 1 MiB text cap would cut a
+// pack's long source short. A pack file S1 took for text that the pack
+// scan cannot read (not UTF-8) is a finding, so nothing in a pack goes
+// unread without one.
 
-// knowledgeStageID is the stage's id and its findings' scanner prefix.
-const knowledgeStageID = "SK"
+// KnowledgeStageID is the stage's id and its findings' scanner prefix.
+const KnowledgeStageID = "SK"
+
+// knowledgeRecordKey is where SK's record sits in its stage row's detail.
+const knowledgeRecordKey = "knowledge"
+
+// DecodeKnowledgeRecord reads SK's record out of its stage row's detail
+// into into (a slice of ShippedPackScan, or the API's shape of it); a
+// detail without one leaves into as it is.
+func DecodeKnowledgeRecord(detail []byte, into any) error {
+	var d map[string]json.RawMessage
+	if err := json.Unmarshal(detail, &d); err != nil {
+		return err
+	}
+	raw, ok := d[knowledgeRecordKey]
+	if !ok {
+		return nil
+	}
+	return json.Unmarshal(raw, into)
+}
 
 // ShippedPackScan is what the scan of one shipped pack read and found, in
 // the terms a stored pack's report uses (the findings without excerpts,
@@ -42,16 +65,17 @@ type SKKnowledge struct {
 }
 
 // ID implements Stage.
-func (SKKnowledge) ID() string { return knowledgeStageID }
+func (SKKnowledge) ID() string { return KnowledgeStageID }
 
-// Run implements Stage: one pack scan per shipped pack, over the files S1
-// inventoried under the pack's wiki/ and sources/, read whole off disk.
+// Run implements Stage: one pack scan per shipped pack, over the text
+// files S1 inventoried under the pack's wiki/ and sources/, read whole off
+// disk.
 func (s SKKnowledge) Run(sc stageContext, in *Input) StageResult {
-	res := StageResult{Scanner: knowledgeStageID}
+	res := StageResult{Scanner: KnowledgeStageID}
 	byPack := map[string][]PackFile{}
 	var errs []error
 	for _, f := range in.Files {
-		name, ok := manifest.ShippedPackFile(s.ships, f.Path)
+		name, ok := packText(s.ships, f)
 		if !ok {
 			continue
 		}
@@ -67,16 +91,26 @@ func (s SKKnowledge) Run(sc stageContext, in *Input) StageResult {
 		if len(files) == 0 {
 			// V11 refuses a submission without it; a rescan of an archive
 			// that lacks it has nothing to stand behind.
-			errs = append(errs, fmt.Errorf("knowledge pack %s: the archive holds none of its files", name))
+			errs = append(errs, fmt.Errorf("knowledge pack %s: the archive holds none of its text", name))
 			continue
 		}
 		report, hits := s.o.scanPack(sc.Context(), files)
+		for _, p := range report.Read.NotRead {
+			// S1 took it for text; the pack scan cannot read it as such.
+			hits = append(hits, packHit{part: partOf(p), finding: Finding{
+				Scanner: "unread-text", Severity: SevMedium, Confidence: ConfHigh,
+				Title:    "A text file in a shipped knowledge pack is not UTF-8 and was not read",
+				FilePath: p,
+				Detail:   map[string]any{"reason": "content no stage read cannot be cleared automatically"},
+			}})
+		}
 		for _, h := range hits {
+			pf := h.packFinding()
 			f := h.finding
 			if f.FilePath != "" {
 				f.FilePath = manifest.KnowledgeDir + "/" + name + "/" + f.FilePath
 			}
-			f.Scanner = knowledgeStageID + "/" + f.Scanner
+			f.Scanner = KnowledgeStageID + "/" + f.Scanner
 			detail := map[string]any{"pack": name, "part": string(h.part)}
 			for k, v := range f.Detail {
 				detail[k] = v
@@ -86,21 +120,12 @@ func (s SKKnowledge) Run(sc stageContext, in *Input) StageResult {
 			}
 			f.Detail = detail
 			res.Findings = append(res.Findings, f)
-			report.Findings = append(report.Findings, PackFinding{
-				Scanner: h.finding.Scanner, Severity: f.Severity, Confidence: f.Confidence, Title: f.Title,
-				Part: h.part, File: h.finding.FilePath, Line: f.LineStart, Chunk: h.chunk,
-			})
+			report.Findings = append(report.Findings, pf)
 		}
-		if u := report.Review.Usage; u != nil {
-			if res.JudgeUsage == nil {
-				res.JudgeUsage = &JudgeUsage{}
-			}
-			res.JudgeUsage.PromptTokens += u.PromptTokens
-			res.JudgeUsage.CompletionTokens += u.CompletionTokens
-			// Token use is the run's measurement, not the signed report's
-			// (see JudgeUsage).
-			report.Review.Usage = nil
-		}
+		// Token use is the run's measurement, not the signed report's (see
+		// JudgeUsage).
+		report.Review.Usage.add(&res.JudgeUsage)
+		report.Review.Usage = nil
 		if !report.Complete() {
 			errs = append(errs, fmt.Errorf("knowledge pack %s: the scan did not read all of it (%s)", name, incompleteWhy(report)))
 		}
@@ -146,10 +171,27 @@ func shippedPacks(manifestJSON []byte) []string {
 		}
 	}
 	sort.Strings(out)
-	return out
+	return slices.Compact(out)
 }
 
-// withoutShippedTrees drops the files of shipped packs' trees from an
+// packText says whether f is SK's to read: a text file (as S1 classified
+// it) of a shipped pack's tree, and which pack.
+func packText(ships []string, f FileEntry) (string, bool) {
+	if !f.IsText {
+		return "", false
+	}
+	return manifest.ShippedPackFile(ships, f.Path)
+}
+
+// partOf is the half of a pack a path in it belongs to.
+func partOf(p string) PackPart {
+	if strings.HasPrefix(p, string(PartWiki)+"/") {
+		return PartWiki
+	}
+	return PartSources
+}
+
+// withoutShippedTrees drops the text of shipped packs' trees from an
 // inventory: what the release's own stages read.
 func withoutShippedTrees(files []FileEntry, ships []string) []FileEntry {
 	if len(ships) == 0 {
@@ -157,7 +199,7 @@ func withoutShippedTrees(files []FileEntry, ships []string) []FileEntry {
 	}
 	out := make([]FileEntry, 0, len(files))
 	for _, f := range files {
-		if _, ok := manifest.ShippedPackFile(ships, f.Path); !ok {
+		if _, ok := packText(ships, f); !ok {
 			out = append(out, f)
 		}
 	}
@@ -165,15 +207,20 @@ func withoutShippedTrees(files []FileEntry, ships []string) []FileEntry {
 }
 
 // withoutTruncatedPackFiles drops S1's text-scan-truncated findings on a
-// shipped pack's files: SK reads them whole, so nothing past the cap goes
-// unread.
-func withoutTruncatedPackFiles(findings []Finding, ships []string) []Finding {
+// shipped pack's text: SK reads it whole, or reports it unread.
+func withoutTruncatedPackFiles(findings []Finding, inv []FileEntry, ships []string) []Finding {
 	if len(ships) == 0 {
 		return findings
 	}
+	text := map[string]bool{}
+	for _, f := range inv {
+		if _, ok := packText(ships, f); ok {
+			text[f.Path] = true
+		}
+	}
 	out := findings[:0:0]
 	for _, f := range findings {
-		if _, ok := manifest.ShippedPackFile(ships, f.FilePath); ok && f.Scanner == "S1/text-scan-truncated" {
+		if f.Scanner == scannerTextTruncated && text[f.FilePath] {
 			continue
 		}
 		out = append(out, f)

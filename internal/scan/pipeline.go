@@ -278,16 +278,14 @@ func (p *Pipeline) resumeFromRun(ctx context.Context, runID uuid.UUID) (Resume, 
 		if s.Status != "ok" {
 			continue
 		}
-		if s.Scanner == knowledgeStageID {
+		if s.Scanner == KnowledgeStageID {
 			// A clean SK whose record will not read runs again rather than
 			// leave the report without what it read.
-			var d struct {
-				Knowledge []ShippedPackScan `json:"knowledge"`
-			}
-			if json.Unmarshal(s.Detail, &d) != nil || len(d.Knowledge) == 0 {
+			var rec []ShippedPackScan
+			if DecodeKnowledgeRecord(s.Detail, &rec) != nil || len(rec) == 0 {
 				continue
 			}
-			knowledge = d.Knowledge
+			knowledge = rec
 		}
 		skip[s.Scanner] = true
 	}
@@ -535,7 +533,7 @@ func (p *Pipeline) persistStage(ctx context.Context, runID uuid.UUID, res StageR
 	if len(res.Knowledge) > 0 {
 		// SK's record of what it read: the report's shipped-pack section,
 		// kept so a resumed run reports it as a fresh one would.
-		detail["knowledge"] = res.Knowledge
+		detail[knowledgeRecordKey] = res.Knowledge
 	}
 	if res.Err != nil {
 		status = "error"

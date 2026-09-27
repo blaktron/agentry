@@ -231,6 +231,9 @@ func TestShippedPackInTheArchive(t *testing.T) {
 			}
 			return ctx
 		}, "V11", "do not match the digest"},
+		{"instruction inside a pack", func(t *testing.T) Context {
+			return knowledgeContext(t, "aws-docs", packTree(), nil)
+		}, "V11", "which holds knowledge packs"},
 		{"pack over 10 MB", func(t *testing.T) Context {
 			ctx := knowledgeContext(t, "aws-docs", packTree(), nil)
 			for i := range ctx.Files {
@@ -251,9 +254,14 @@ func TestShippedPackInTheArchive(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			mm := m
-			if c.name == "pack not included" {
+			switch c.name {
+			case "pack not included":
 				cp := *m
 				cp.Publish.Include = []string{"agent.yaml", "README.md", "AGENT.md", "LICENSE"}
+				mm = &cp
+			case "instruction inside a pack":
+				cp := *m
+				cp.Entrypoints.Instruction = "knowledge/aws-docs/wiki/index.md"
 				mm = &cp
 			}
 			issues := blockingIssues(ValidateInContext(mm, c.ctx(t)))

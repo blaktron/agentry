@@ -122,16 +122,14 @@ func shippedKnowledgeOf(ctx context.Context, q *storegen.Queries, runID uuid.UUI
 		return nil, err
 	}
 	for _, st := range stages {
-		if st.Scanner != "SK" {
+		if st.Scanner != scan.KnowledgeStageID {
 			continue
 		}
-		var d struct {
-			Knowledge []ShippedKnowledgeScan `json:"knowledge"`
+		var rec []ShippedKnowledgeScan
+		if err := scan.DecodeKnowledgeRecord(st.Detail, &rec); err != nil {
+			return nil, fmt.Errorf("scan report: the knowledge stage's record: %w", err)
 		}
-		if err := json.Unmarshal(st.Detail, &d); err != nil {
-			return nil, fmt.Errorf("scan report: SK record: %w", err)
-		}
-		return d.Knowledge, nil
+		return rec, nil
 	}
 	return nil, nil
 }

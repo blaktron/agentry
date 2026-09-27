@@ -71,6 +71,19 @@ type JudgeUsage struct {
 	CompletionTokens int `json:"completionTokens"`
 }
 
+// add counts u into *acc, allocating it on the first use; a nil u adds
+// nothing, so a total stays nil when no provider reported any use.
+func (u *JudgeUsage) add(acc **JudgeUsage) {
+	if u == nil {
+		return
+	}
+	if *acc == nil {
+		*acc = &JudgeUsage{}
+	}
+	(*acc).PromptTokens += u.PromptTokens
+	(*acc).CompletionTokens += u.CompletionTokens
+}
+
 // JudgeProvider is the D-13 provider interface.
 type JudgeProvider interface {
 	// Name identifies the provider (openai|anthropic|bedrock|typesafe|classifier|none|static).

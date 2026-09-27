@@ -190,6 +190,13 @@ func knowledgeLine(s *issues, p, v string) {
 // it describes; nothing else lives under knowledge/.
 func validateShippedPacks(s *issues, m *Manifest, ctx Context, resolved []FileInfo) {
 	ships := m.ShippedPacks()
+	// The instruction is the release's own and is judged against its
+	// contract; a pack's files are read as data, so it cannot be one.
+	for _, cand := range m.InstructionCandidates() {
+		if strings.HasPrefix(cand, KnowledgeDir+"/") {
+			s.errf("V11", "entrypoints", "the instruction file %q is under %s/, which holds knowledge packs", cand, KnowledgeDir)
+		}
+	}
 	inRepo := map[string]bool{}
 	for _, f := range ctx.Files {
 		inRepo[f.Path] = true

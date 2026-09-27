@@ -129,12 +129,7 @@ var packRuleStages = []PackStage{
 func (o *Orchestrator) ScanPack(ctx context.Context, files []PackFile) PackReport {
 	r, hits := o.scanPack(ctx, files)
 	for _, h := range hits {
-		f := h.finding
-		pf := PackFinding{
-			Scanner: f.Scanner, Severity: f.Severity, Confidence: f.Confidence, Title: f.Title,
-			Part: h.part, File: f.FilePath, Line: f.LineStart, Chunk: h.chunk,
-		}
-		r.Findings = append(r.Findings, pf)
+		r.Findings = append(r.Findings, h.packFinding())
 	}
 	return r
 }
@@ -148,6 +143,16 @@ type packHit struct {
 	chunk   int
 }
 
+// packFinding is the hit as a pack's report places it: by half, file and
+// line, or chunk, with no excerpt.
+func (h packHit) packFinding() PackFinding {
+	f := h.finding
+	return PackFinding{
+		Scanner: f.Scanner, Severity: f.Severity, Confidence: f.Confidence, Title: f.Title,
+		Part: h.part, File: f.FilePath, Line: f.LineStart, Chunk: h.chunk,
+	}
+}
+
 // scanPack is ScanPack's reading: the report without its findings, and
 // the findings whole — excerpts included — for a caller that keeps them
 // where excerpts belong (a release's own report, ScanShipped).
@@ -159,10 +164,7 @@ func (o *Orchestrator) scanPack(ctx context.Context, files []PackFile) (PackRepo
 	sorted := append([]PackFile(nil), files...)
 	sort.Slice(sorted, func(i, k int) bool { return sorted[i].Path < sorted[k].Path })
 	for _, f := range sorted {
-		p := PartSources
-		if strings.HasPrefix(f.Path, string(PartWiki)+"/") {
-			p = PartWiki
-		}
+		p := partOf(f.Path)
 		head := f.Content
 		if len(head) > 512 {
 			head = head[:512]
@@ -254,13 +256,7 @@ func (o *Orchestrator) reviewPack(ctx context.Context, r *PackReport, files []Fi
 					r.Review.Model = verdict.Model
 				}
 			}
-			if verdict.Usage != nil {
-				if r.Review.Usage == nil {
-					r.Review.Usage = &JudgeUsage{}
-				}
-				r.Review.Usage.PromptTokens += verdict.Usage.PromptTokens
-				r.Review.Usage.CompletionTokens += verdict.Usage.CompletionTokens
-			}
+			verdict.Usage.add(&r.Review.Usage)
 			for _, f := range verdictFindings(verdict) {
 				f.FilePath = chunk.file()
 				hits = append(hits, packHit{finding: f, part: half, chunk: i + 1})
