@@ -2783,6 +2783,18 @@ type TotpSetupResult struct {
 	Secret string `json:"secret"`
 }
 
+// TrustedDevicesCleared defines model for TrustedDevicesCleared.
+type TrustedDevicesCleared struct {
+	// Cleared Remembered browsers revoked by this request.
+	Cleared int `json:"cleared"`
+}
+
+// TrustedDevicesCount defines model for TrustedDevicesCount.
+type TrustedDevicesCount struct {
+	// Count Live remembered browsers of the caller's account.
+	Count int `json:"count"`
+}
+
 // UIInfo The server's own browser surface under `/ui/` (DEV-091). `mode` is `full` (device authorize, sign-in, account, review, staff, org admin), `authorize` (only the device-authorize page — a site fronts this server) or `off`. `authorizeUrl` is the absolute page a CLI or the desktop app opens for browser sign-in, when served.
 type UIInfo struct {
 	AuthorizeUrl *string    `json:"authorizeUrl,omitempty"`
@@ -5065,6 +5077,20 @@ type ClientInterface interface {
 	//
 	// Corresponds with DELETE /user/tokens/{tokenId} (the `RevokeToken` operationId).
 	RevokeToken(ctx context.Context, tokenId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ClearTrustedDevices Clear every remembered browser of the caller's account (agentry#672).
+	//
+	// Revokes all of the caller's remembered browsers, this one included: each is asked for the second factor at its next sign-in. Sessions and authenticators are untouched. The response clears this browser's remembered-browser cookie, since its record is gone. Session-only: a PAT is refused (403), as on the session-revoking routes.
+	//
+	// Corresponds with DELETE /user/trusted-devices (the `ClearTrustedDevices` operationId).
+	ClearTrustedDevices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CountTrustedDevices How many browsers skip the caller's second factor (agentry#672).
+	//
+	// The number of the caller's live remembered browsers: browsers where "Remember this device for 30 days" was ticked and whose record has not expired or been revoked. There is no list: the account's control is one button that clears them all (DEV-163). A PAT-authenticated caller gets 0, as it gets an empty session list: a token is not a way to take an inventory of someone's browsers.
+	//
+	// Corresponds with GET /user/trusted-devices (the `CountTrustedDevices` operationId).
+	CountTrustedDevices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetUserProfile Public profile for a user handle.
 	//
@@ -8611,6 +8637,40 @@ func (c *Client) CreateDesktopGrant(ctx context.Context, body CreateDesktopGrant
 // Corresponds with DELETE /user/tokens/{tokenId} (the `RevokeToken` operationId).
 func (c *Client) RevokeToken(ctx context.Context, tokenId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRevokeTokenRequest(c.Server, tokenId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ClearTrustedDevices Clear every remembered browser of the caller's account (agentry#672).
+//
+// Revokes all of the caller's remembered browsers, this one included: each is asked for the second factor at its next sign-in. Sessions and authenticators are untouched. The response clears this browser's remembered-browser cookie, since its record is gone. Session-only: a PAT is refused (403), as on the session-revoking routes.
+//
+// Corresponds with DELETE /user/trusted-devices (the `ClearTrustedDevices` operationId).
+func (c *Client) ClearTrustedDevices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewClearTrustedDevicesRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CountTrustedDevices How many browsers skip the caller's second factor (agentry#672).
+//
+// The number of the caller's live remembered browsers: browsers where "Remember this device for 30 days" was ticked and whose record has not expired or been revoked. There is no list: the account's control is one button that clears them all (DEV-163). A PAT-authenticated caller gets 0, as it gets an empty session list: a token is not a way to take an inventory of someone's browsers.
+//
+// Corresponds with GET /user/trusted-devices (the `CountTrustedDevices` operationId).
+func (c *Client) CountTrustedDevices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCountTrustedDevicesRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -15822,6 +15882,60 @@ func NewRevokeTokenRequest(server string, tokenId openapi_types.UUID) (*http.Req
 	return req, nil
 }
 
+// NewClearTrustedDevicesRequest constructs an http.Request for the ClearTrustedDevices method
+func NewClearTrustedDevicesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/trusted-devices")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCountTrustedDevicesRequest constructs an http.Request for the CountTrustedDevices method
+func NewCountTrustedDevicesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/trusted-devices")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetUserProfileRequest constructs an http.Request for the GetUserProfile method
 func NewGetUserProfileRequest(server string, handle Handle) (*http.Request, error) {
 	var err error
@@ -17558,6 +17672,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with DELETE /user/tokens/{tokenId} (the `RevokeToken` operationId).
 	RevokeTokenWithResponse(ctx context.Context, tokenId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokeTokenResponse, error)
+
+	// ClearTrustedDevicesWithResponse Clear every remembered browser of the caller's account (agentry#672).
+	//
+	// Revokes all of the caller's remembered browsers, this one included: each is asked for the second factor at its next sign-in. Sessions and authenticators are untouched. The response clears this browser's remembered-browser cookie, since its record is gone. Session-only: a PAT is refused (403), as on the session-revoking routes.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /user/trusted-devices (the `ClearTrustedDevices` operationId).
+	ClearTrustedDevicesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ClearTrustedDevicesResponse, error)
+
+	// CountTrustedDevicesWithResponse How many browsers skip the caller's second factor (agentry#672).
+	//
+	// The number of the caller's live remembered browsers: browsers where "Remember this device for 30 days" was ticked and whose record has not expired or been revoked. There is no list: the account's control is one button that clears them all (DEV-163). A PAT-authenticated caller gets 0, as it gets an empty session list: a token is not a way to take an inventory of someone's browsers.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /user/trusted-devices (the `CountTrustedDevices` operationId).
+	CountTrustedDevicesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*CountTrustedDevicesResponse, error)
 
 	// GetUserProfileWithResponse Public profile for a user handle.
 	//
@@ -25099,6 +25231,102 @@ func (r RevokeTokenResponse) ContentType() string {
 	return ""
 }
 
+type ClearTrustedDevicesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *TrustedDevicesCleared
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ClearTrustedDevicesResponse) GetJSON200() *TrustedDevicesCleared {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ClearTrustedDevicesResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ClearTrustedDevicesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ClearTrustedDevicesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ClearTrustedDevicesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ClearTrustedDevicesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CountTrustedDevicesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *TrustedDevicesCount
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r CountTrustedDevicesResponse) GetJSON200() *TrustedDevicesCount {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r CountTrustedDevicesResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CountTrustedDevicesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CountTrustedDevicesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CountTrustedDevicesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CountTrustedDevicesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetUserProfileResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -28084,6 +28312,36 @@ func (c *ClientWithResponses) RevokeTokenWithResponse(ctx context.Context, token
 		return nil, err
 	}
 	return ParseRevokeTokenResponse(rsp)
+}
+
+// ClearTrustedDevicesWithResponse Clear every remembered browser of the caller's account (agentry#672).
+//
+// Revokes all of the caller's remembered browsers, this one included: each is asked for the second factor at its next sign-in. Sessions and authenticators are untouched. The response clears this browser's remembered-browser cookie, since its record is gone. Session-only: a PAT is refused (403), as on the session-revoking routes.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /user/trusted-devices (the `ClearTrustedDevices` operationId).
+func (c *ClientWithResponses) ClearTrustedDevicesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ClearTrustedDevicesResponse, error) {
+	rsp, err := c.ClearTrustedDevices(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseClearTrustedDevicesResponse(rsp)
+}
+
+// CountTrustedDevicesWithResponse How many browsers skip the caller's second factor (agentry#672).
+//
+// The number of the caller's live remembered browsers: browsers where "Remember this device for 30 days" was ticked and whose record has not expired or been revoked. There is no list: the account's control is one button that clears them all (DEV-163). A PAT-authenticated caller gets 0, as it gets an empty session list: a token is not a way to take an inventory of someone's browsers.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /user/trusted-devices (the `CountTrustedDevices` operationId).
+func (c *ClientWithResponses) CountTrustedDevicesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*CountTrustedDevicesResponse, error) {
+	rsp, err := c.CountTrustedDevices(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCountTrustedDevicesResponse(rsp)
 }
 
 // GetUserProfileWithResponse Public profile for a user handle.
@@ -33392,6 +33650,72 @@ func ParseRevokeTokenResponse(rsp *http.Response) (*RevokeTokenResponse, error) 
 	switch {
 	case rsp.StatusCode == 204:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseClearTrustedDevicesResponse parses an HTTP response from a ClearTrustedDevicesWithResponse call
+func ParseClearTrustedDevicesResponse(rsp *http.Response) (*ClearTrustedDevicesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ClearTrustedDevicesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TrustedDevicesCleared
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCountTrustedDevicesResponse parses an HTTP response from a CountTrustedDevicesWithResponse call
+func ParseCountTrustedDevicesResponse(rsp *http.Response) (*CountTrustedDevicesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CountTrustedDevicesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TrustedDevicesCount
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
