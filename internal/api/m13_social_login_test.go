@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -614,6 +615,13 @@ type fakeOIDC struct {
 	// preferredUsername, when set, rides the ID token as the
 	// `preferred_username` claim (agentry#517).
 	preferredUsername string
+	// extra claims ride the ID token as given (agentry#670's
+	// agentry_remember_device).
+	extra map[string]any
+	// base, when set, is the issuer and endpoint origin the fake advertises
+	// instead of its listener's address, so a test can give the IdP a host
+	// name (agentry#670's cookie domain); pair it with hostClient.
+	base string
 }
 
 func newFakeOIDC(t *testing.T) *fakeOIDC {
@@ -627,10 +635,10 @@ func newFakeOIDC(t *testing.T) *fakeOIDC {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
 		writeTestJSON(w, map[string]any{
-			"issuer":                                p.srv.URL,
-			"authorization_endpoint":                p.srv.URL + "/authorize",
-			"token_endpoint":                        p.srv.URL + "/token",
-			"jwks_uri":                              p.srv.URL + "/jwks",
+			"issuer":                                p.origin(),
+			"authorization_endpoint":                p.origin() + "/authorize",
+			"token_endpoint":                        p.origin() + "/token",
+			"jwks_uri":                              p.origin() + "/jwks",
 			"id_token_signing_alg_values_supported": []string{"RS256"},
 			"response_types_supported":              []string{"code"},
 			"subject_types_supported":               []string{"public"},
@@ -655,7 +663,7 @@ func newFakeOIDC(t *testing.T) *fakeOIDC {
 			return
 		}
 		claimMap := map[string]any{
-			"iss": p.srv.URL, "aud": p.clientID, "sub": p.sub,
+			"iss": p.origin(), "aud": p.clientID, "sub": p.sub,
 			"iat": time.Now().Unix(), "exp": time.Now().Add(time.Hour).Unix(),
 			"email": p.email, "email_verified": !p.emailUnverified,
 			"nonce": p.nonce,
@@ -669,6 +677,9 @@ func newFakeOIDC(t *testing.T) *fakeOIDC {
 		if p.preferredUsername != "" {
 			claimMap["preferred_username"] = p.preferredUsername
 		}
+		for k, v := range p.extra {
+			claimMap[k] = v
+		}
 		claims, _ := json.Marshal(claimMap)
 		writeTestJSON(w, map[string]any{
 			"access_token": "at", "token_type": "Bearer", "expires_in": 3600,
@@ -678,6 +689,26 @@ func newFakeOIDC(t *testing.T) *fakeOIDC {
 	p.srv = httptest.NewServer(mux)
 	t.Cleanup(p.srv.Close)
 	return p
+}
+
+// origin is where the fake says it lives: base when a test named one, else
+// its listener.
+func (p *fakeOIDC) origin() string {
+	if p.base != "" {
+		return p.base
+	}
+	return p.srv.URL
+}
+
+// hostClient reaches the fake whatever host name a URL uses, the way a
+// resolver pointing that name at it would.
+func (p *fakeOIDC) hostClient() *http.Client {
+	addr := p.srv.Listener.Addr().String()
+	return &http.Client{Transport: &http.Transport{
+		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, network, addr)
+		},
+	}}
 }
 
 // TestSocialLoginGoogleOIDC exercises the OIDC-proper provider end to end —

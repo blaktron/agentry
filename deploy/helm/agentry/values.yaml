@@ -65,6 +65,11 @@ config:
     # idpAdminURL (+ secret.idpAdminToken) lets account erasure reach it.
     externalOnly: false
     idpAdminURL: ""
+    # Remembered browsers on the directory's sign-in (agentry#670) are on
+    # while secret.idpTrustCheckToken is set. The cookie is set for the
+    # registry's host, which covers a directory on a subdomain of it; for
+    # sibling hosts name a parent domain of both here.
+    directoryCookieDomain: ""
     # Platform staff is membership of the staff organization (agentry#556):
     # an active member of staffOrg whose verified address is at exactly
     # staffDomain; the organization admits nobody else. Set both or neither.
@@ -209,9 +214,15 @@ databaseCA:
 # external-secrets / sealed-secrets) over inlining here.
 secret:
   create: true
-  existingSecret: "" # if set, must provide keys: AGENTRY_DATABASE_URL, AGENTRY_AUTH_SEALING_KEY, and optionally AGENTRY_KNOWLEDGE_SEALING_KEY / AGENTRY_REDIS_URL / AGENTRY_SMTP_PASS / AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET / AGENTRY_IDP_ADMIN_TOKEN
+  existingSecret: "" # if set, must provide keys: AGENTRY_DATABASE_URL, AGENTRY_AUTH_SEALING_KEY, and optionally AGENTRY_KNOWLEDGE_SEALING_KEY / AGENTRY_REDIS_URL / AGENTRY_SMTP_PASS / AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET / AGENTRY_IDP_ADMIN_TOKEN / AGENTRY_IDP_TRUST_CHECK_TOKEN
   authentikClientSecret: "" # OIDC client secret for config.social.authentik
   idpAdminToken: "" # directory API token for account erasure (config.auth.idpAdminURL)
+  # The secret the directory's sign-in presents to the registry's trust check
+  # (agentry#670), 32+ characters, the same value on the directory's side.
+  # Empty: remembered browsers are off on the directory path. The check lives
+  # at /internal/directory/trusted-device: exclude /internal/ from any
+  # ingress in front of the api, as /metrics must be.
+  idpTrustCheckToken: ""
   databaseUrl: "" # postgres://user:pass@host:5432/agentry?sslmode=require
   redisUrl: "" # rediss://:pass@host:6379/0 (optional)
   sealingKey: "" # base64 32 bytes; required outside dev (§ config Validate)

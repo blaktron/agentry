@@ -11,6 +11,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/auth/social"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
@@ -81,7 +82,11 @@ func (s *Server) trustedDeviceSkip(ctx context.Context, r *http.Request, userID 
 // is that a problem confined to this table — a migration that did not apply,
 // say — turns a sign-in that asked to be remembered into a 500 while one that
 // did not still works. That asymmetry is the tell, and it points at the table.
-func (s *Server) createTrustedDevice(ctx context.Context, q *storegen.Queries, r *http.Request, userID uuid.UUID) (string, error) {
+//
+// detail rides the user.trusted_device_add row: the directory path marks its
+// records {"via": "directory"}, so an investigator can tell which sign-in
+// earned one (agentry#670).
+func (s *Server) createTrustedDevice(ctx context.Context, q *storegen.Queries, r *http.Request, userID uuid.UUID, detail map[string]any) (string, error) {
 	token, err := auth.NewToken(auth.TrustedDevicePrefix)
 	if err != nil {
 		return "", err
@@ -100,6 +105,7 @@ func (s *Server) createTrustedDevice(ctx context.Context, q *storegen.Queries, r
 	e := auditEvent(r, audit.ActionTrustedDeviceAdd)
 	e.Actor, e.ActorKind = userID, audit.ActorUser
 	e.TargetKind, e.TargetID = "user", userID
+	e.Detail = detail
 	if err := s.auditW.Write(ctx, q, e); err != nil {
 		return "", err
 	}
@@ -114,13 +120,79 @@ func (s *Server) createTrustedDevice(ctx context.Context, q *storegen.Queries, r
 // agentry#413 established: a clear written bare carries nothing today and a
 // value the day someone edits it.
 func setTrustedDeviceCookie(w http.ResponseWriter, token string, ttl time.Duration, secure bool) {
+	setTrustedDeviceCookieAt(w, token, ttl, secure, "/", "")
+}
+
+// setTrustedDeviceCookieAt is the one place the cookie's flags are written;
+// the native path scopes it to the whole host, the directory path to the
+// directory's flow executor.
+func setTrustedDeviceCookieAt(w http.ResponseWriter, token string, ttl time.Duration, secure bool, path, domain string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     trustedDeviceCookieName,
 		Value:    token,
-		Path:     "/",
+		Path:     path,
+		Domain:   domain,
 		HttpOnly: true,
 		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   int(ttl.Seconds()),
 	})
+}
+
+// The directory path (agentry#670, DEV-163). Dev and production sign in
+// through the directory, which shows the "Remember this device for 30 days"
+// box on its own code page and passes the choice on as the ID-token claim
+// agentry_remember_device. The registry mints the same record as above on the
+// OIDC callback, and the directory asks the registry about it (the check
+// route, directory_trust.go) before asking for the code.
+
+// directoryFlowExecutorPath is where authentik's flow executor serves, and so
+// the one path the directory-path cookie is scoped to. The directory's policy
+// reads the cookie on the executor's requests; nothing of the registry's
+// ever needs it, so no request to the registry carries it.
+const directoryFlowExecutorPath = "/api/v3/flows/executor/"
+
+// directoryRememberWindow is how recent the directory's sign-in must be for
+// its token to earn a remembered browser: the seconds between answering the
+// code and arriving at the callback, with room for clock skew.
+const directoryRememberWindow = 5 * time.Minute
+
+// directoryRemembers reports whether this directory sign-in earned a
+// remembered browser. Everything must hold:
+//
+//   - the directory path is on (auth.idpTrustCheckToken is set);
+//   - the token is the directory's own: another provider asserting the claim
+//     is not the directory the registry takes it from;
+//   - the claim asks, and `amr` names a second factor;
+//   - `auth_time` is within directoryRememberWindow of now. The claim and
+//     `amr` both come from the directory session's login event, so a later
+//     authorize that a live directory session answers silently repeats them
+//     with no code asked. Only auth_time, which is that event's time, says
+//     the sign-in is old. Without this, each registry sign-in against one
+//     directory session would mint a fresh 30 days and trust would renew
+//     itself, which D9 forbids.
+//
+// A sign-in the directory let skip the factor carries no `mfa`, so a skip
+// can never mint either: trust stays absolute.
+func (s *Server) directoryRemembers(provider string, id *social.Identity) bool {
+	if s.cfg.Auth.IdPTrustCheckToken == "" || provider != social.ProviderAuthentik {
+		return false
+	}
+	if !id.RememberDevice || !id.MFAAsserted() || id.AuthTime.IsZero() {
+		return false
+	}
+	age := time.Since(id.AuthTime)
+	return age <= directoryRememberWindow && age >= -directoryRememberWindow
+}
+
+// setDirectoryTrustedDeviceCookie sets the directory path's cookie, scoped
+// to the directory's flow executor and, when the directory is a subdomain of
+// the registry, set for the domain that covers both (config's
+// DirectoryTrustCookieDomain; "" is host-only). That domain also covers the
+// registry's other subdomains, so on a deployment whose dev or staging host
+// sits under the production registry's name, the token reaches their flow
+// executors too; DEV-163 accepts this for the estate, where every such host is
+// its own.
+func setDirectoryTrustedDeviceCookie(w http.ResponseWriter, token string, ttl time.Duration, secure bool, domain string) {
+	setTrustedDeviceCookieAt(w, token, ttl, secure, directoryFlowExecutorPath, domain)
 }

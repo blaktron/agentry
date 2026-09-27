@@ -373,7 +373,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		// so a sign-in that earns trust records the session, the device and
 		// the audit rows together, or none of them.
 		if totpAnswered && req.RememberDevice != nil && *req.RememberDevice {
-			tok, err := s.createTrustedDevice(ctx, q, r, row.ID)
+			tok, err := s.createTrustedDevice(ctx, q, r, row.ID, nil)
 			if err != nil {
 				return err
 			}

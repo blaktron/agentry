@@ -361,7 +361,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 		return
 	}
 
-	s.issueSocialSession(w, r, user, name, st.Next, id.AMR)
+	s.issueSocialSession(w, r, user, name, st.Next, id.AMR, s.directoryRemembers(name, id))
 }
 
 // readSocialState opens and clears the single-use state cookie.
@@ -561,16 +561,28 @@ func (s *Server) TotpChallenge(w http.ResponseWriter, r *http.Request) {
 		problemUnauthorized(w, r, "That code did not match. Try the current code from the authenticator app.")
 		return
 	}
-	s.issueSocialSession(w, r, user, blob.Provider, "", nil)
+	s.issueSocialSession(w, r, user, blob.Provider, "", nil, false)
 }
 
-// issueSocialSession opens an ordinary session (no org SSO tag) and writes
-// the LoginResult-shaped body both social endpoints return.
-// issueSocialSession creates the session and answers: a 303 to next in
-// browser mode (next non-empty, already validated by safeNextPath), else the
-// JSON result.
-func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user storegen.GetUserByIDRow, provider, next string, amr []string) {
+// issueSocialSession opens an ordinary session (no org SSO tag) and answers:
+// a 303 to next in browser mode (next non-empty, already validated by
+// safeNextPath), else the LoginResult-shaped body both social endpoints
+// return. remember mints a remembered browser in the same transaction
+// (directoryRemembers decided it; agentry#670).
+func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user storegen.GetUserByIDRow, provider, next string, amr []string, remember bool) {
 	ctx := r.Context()
+	var cookieDomain string
+	if remember {
+		// Validated at start-up, so this cannot fail in a running server; if
+		// it somehow did, the sign-in still completes and simply is not
+		// remembered, rather than minting a cookie the directory never sees.
+		d, derr := s.cfg.DirectoryTrustCookieDomain()
+		if derr != nil {
+			s.log.WarnContext(ctx, "directory sign-in: not remembering the browser", "err", derr)
+			remember = false
+		}
+		cookieDomain = d
+	}
 	sessToken, err := auth.NewToken(auth.SessionPrefix)
 	if err != nil {
 		problemInternal(w, r)
@@ -586,6 +598,7 @@ func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user
 		ipPtr = &ip
 	}
 	ua := r.UserAgent()
+	var deviceToken string
 	err = s.st.WithTx(ctx, func(q *storegen.Queries) error {
 		if _, err := q.CreateSession(ctx, storegen.CreateSessionParams{
 			ID: newUUID(), TokenSha256: auth.HashToken(sessToken), UserID: user.ID,
@@ -606,7 +619,19 @@ func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user
 		} else {
 			e.Detail["amr"] = []string{}
 		}
-		return s.auditW.Write(ctx, q, e)
+		if err := s.auditW.Write(ctx, q, e); err != nil {
+			return err
+		}
+		if remember {
+			// Inside the session's transaction, like the native mint: a
+			// sign-in that asked to be remembered is remembered or fails.
+			tok, err := s.createTrustedDevice(ctx, q, r, user.ID, map[string]any{"via": "directory", "provider": provider})
+			if err != nil {
+				return err
+			}
+			deviceToken = tok
+		}
+		return nil
 	})
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "social session", "err", err)
@@ -618,6 +643,9 @@ func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user
 		Secure: s.cfg.Auth.CookieSecure, SameSite: http.SameSiteLaxMode,
 		MaxAge: int(s.cfg.Auth.SessionTTL.Seconds()),
 	})
+	if deviceToken != "" {
+		setDirectoryTrustedDeviceCookie(w, deviceToken, s.cfg.Auth.TrustedDeviceTTL, s.cfg.Auth.CookieSecure, cookieDomain)
+	}
 	if next != "" {
 		// Browser mode has no JSON body to carry the CSRF token, and the web
 		// tier can only echo what it holds: set it as the cookie the web

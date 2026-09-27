@@ -42,6 +42,9 @@ data:
       {{- with .Values.config.auth.idpAdminURL }}
       idpAdminURL: {{ . | quote }}
       {{- end }}
+      {{- with .Values.config.auth.directoryCookieDomain }}
+      directoryCookieDomain: {{ . | quote }}
+      {{- end }}
       {{- with .Values.config.auth.staffOrg }}
       staffOrg: {{ . | quote }}
       {{- end }}

@@ -533,6 +533,83 @@ func TestStaffMirrorGroupNeedsItsWriterAndItsSource(t *testing.T) {
 	}
 }
 
+// TestDirectoryTrustCheckConfiguration (agentry#670, DEV-163): remembered
+// browsers on the directory path need the check's secret, the directory it
+// answers, and a cookie the browser will both accept from the registry's
+// host and send to the directory's. A configuration that cannot give the
+// browser such a cookie is refused at start-up rather than minting cookies
+// the directory never sees.
+func TestDirectoryTrustCheckConfiguration(t *testing.T) {
+	const token = "0123456789abcdef0123456789abcdef"
+	with := func(base, issuer, domain string) Config {
+		cfg := devDefault()
+		cfg.BaseURL = base
+		cfg.Social.Authentik = SocialProvider{ClientID: "id", ClientSecret: "s", Issuer: issuer}
+		cfg.Auth.IdPTrustCheckToken = token
+		cfg.Auth.DirectoryCookieDomain = domain
+		return cfg
+	}
+	if cfg := devDefault(); cfg.Validate() != nil {
+		t.Fatalf("off by default, and the default was refused: %v", cfg.Validate())
+	}
+	for _, tc := range []struct {
+		name, base, issuer, domain, want string
+	}{
+		// dev and production: the directory is a subdomain of the registry.
+		{"subdomain", "https://dev.secureagentry.net", "https://auth.dev.secureagentry.net/application/o/agentry/", "", "dev.secureagentry.net"},
+		// compose without DNS: one host, the directory on another port, and
+		// cookies ignore ports, so a host-only cookie reaches both.
+		{"same host", "http://localhost:8080", "http://localhost:8443/application/o/agentry/", "", ""},
+		{"siblings under a named parent", "https://app.example.com", "https://auth.example.com/application/o/agentry/", "example.com", "example.com"},
+		{"a leading dot is tolerated", "https://app.example.com", "https://auth.example.com/", ".Example.COM", "example.com"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := with(tc.base, tc.issuer, tc.domain)
+			if err := cfg.Validate(); err != nil {
+				t.Fatalf("refused: %v", err)
+			}
+			got, err := cfg.DirectoryTrustCookieDomain()
+			if err != nil || got != tc.want {
+				t.Fatalf("cookie domain = %q, %v; want %q", got, err, tc.want)
+			}
+		})
+	}
+	for _, tc := range []struct {
+		name  string
+		cfg   Config
+		names string
+	}{
+		{"siblings with no parent named", with("https://app.example.com", "https://auth.example.com/", ""), "auth.example.com"},
+		{"a parent that does not cover the directory", with("https://app.example.com", "https://auth.other.com/", "example.com"), "directoryCookieDomain"},
+		{"a parent that does not cover the registry", with("https://app.other.com", "https://auth.example.com/", "example.com"), "directoryCookieDomain"},
+		{"a bare top-level label", with("https://app.example", "https://auth.app.example/", "example"), "directoryCookieDomain"},
+		{"an address for a parent", with("http://10.0.0.1:8080", "http://10.0.0.1:8443/", "10.0.0.1"), "directoryCookieDomain"},
+		{"no public origin", with("", "https://auth.example.com/", ""), "baseURL"},
+		{"no directory", func() Config {
+			c := with("https://example.com", "", "")
+			c.Social.Authentik = SocialProvider{}
+			return c
+		}(), "social.authentik"},
+		{"a short secret", func() Config {
+			c := with("https://example.com", "https://auth.example.com/", "")
+			c.Auth.IdPTrustCheckToken = "short"
+			return c
+		}(), "idpTrustCheckToken"},
+	} {
+		t.Run("refuses "+tc.name, func(t *testing.T) {
+			if err := tc.cfg.Validate(); err == nil || !strings.Contains(err.Error(), tc.names) {
+				t.Fatalf("%v, want a refusal naming %s", err, tc.names)
+			}
+		})
+	}
+	t.Setenv("AGENTRY_IDP_TRUST_CHECK_TOKEN", token)
+	t.Setenv("AGENTRY_AUTH_DIRECTORY_COOKIE_DOMAIN", "example.com")
+	got := devDefault()
+	if err := applyEnv(&got); err != nil || got.Auth.IdPTrustCheckToken != token || got.Auth.DirectoryCookieDomain != "example.com" {
+		t.Fatalf("the environment did not set them: %q %q %v", got.Auth.IdPTrustCheckToken, got.Auth.DirectoryCookieDomain, err)
+	}
+}
+
 // TestRetiredStaffKeysAreNamed (agentry#556): the group and the domain-alone
 // keys still load, grant nothing, and are named for the start-up warning.
 func TestRetiredStaffKeysAreNamed(t *testing.T) {

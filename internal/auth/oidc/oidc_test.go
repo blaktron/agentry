@@ -29,8 +29,9 @@ type fakeIDP struct {
 	emailVerified  bool
 	nonce          string
 	code           string
-	issuerOverride string // discovery reports this issuer (for issuer-pin test)
-	preferredUser  string // rides the ID token as preferred_username when set
+	issuerOverride string         // discovery reports this issuer (for issuer-pin test)
+	preferredUser  string         // rides the ID token as preferred_username when set
+	extra          map[string]any // more claims for the ID token, set as given
 }
 
 func newFakeIDP(t *testing.T) *fakeIDP {
@@ -76,6 +77,9 @@ func newFakeIDP(t *testing.T) *fakeIDP {
 		}
 		if idp.preferredUser != "" {
 			claims["preferred_username"] = idp.preferredUser
+		}
+		for k, v := range idp.extra {
+			claims[k] = v
 		}
 		cb, _ := json.Marshal(claims)
 		idToken := oidctest.SignIDToken(idp.key, idp.keyID, "RS256", string(cb))
@@ -180,5 +184,73 @@ func TestOIDC_PreferredUsernameSurfaced(t *testing.T) {
 	}
 	if claims.PreferredUsername != "blaktron" {
 		t.Fatalf("PreferredUsername = %q, want blaktron", claims.PreferredUsername)
+	}
+}
+
+// TestOIDC_RememberDeviceIsOnlyAJSONTrue (agentry#670, DEV-163): the
+// directory's `agentry_remember_device` claim is half of what mints a
+// credential, so only the JSON boolean its scope mapping emits counts. A
+// string, a number or an absent claim is "not asked", never a guess.
+func TestOIDC_RememberDeviceIsOnlyAJSONTrue(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		value any
+		set   bool
+		want  bool
+	}{
+		{"true", true, true, true},
+		{"false", false, true, false},
+		{"absent", nil, false, false},
+		{"the string true", "true", true, false},
+		{"one", 1, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			idp := newFakeIDP(t)
+			if tc.set {
+				idp.extra = map[string]any{"agentry_remember_device": tc.value}
+			}
+			rp, err := New(idp.ctx(), Config{Issuer: idp.srv.URL, ClientID: idp.clientID}, idp.srv.URL+"/callback")
+			if err != nil {
+				t.Fatal(err)
+			}
+			claims, err := rp.Exchange(idp.ctx(), idp.code, "verifier-abcdefabcdefabcdefabcdefabcdef1234", idp.nonce)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if claims.RememberDevice != tc.want {
+				t.Fatalf("RememberDevice = %v for %#v, want %v", claims.RememberDevice, tc.value, tc.want)
+			}
+		})
+	}
+}
+
+// TestOIDC_AuthTimeSurfaced: the directory's auth_time reaches the caller,
+// which refuses to mint a remembered browser from a stale one (agentry#670).
+func TestOIDC_AuthTimeSurfaced(t *testing.T) {
+	for name, tc := range map[string]struct {
+		set  bool
+		at   int64
+		want time.Time
+	}{
+		"present": {true, 1_790_000_000, time.Unix(1_790_000_000, 0)},
+		"absent":  {false, 0, time.Time{}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			idp := newFakeIDP(t)
+			if tc.set {
+				idp.extra = map[string]any{"auth_time": tc.at}
+			}
+			rp, err := New(idp.ctx(), Config{Issuer: idp.srv.URL, ClientID: idp.clientID}, idp.srv.URL+"/callback")
+			if err != nil {
+				t.Fatal(err)
+			}
+			claims, err := rp.Exchange(idp.ctx(), idp.code, "verifier-abcdefabcdefabcdefabcdefabcdef1234", idp.nonce)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !claims.AuthTime.Equal(tc.want) {
+				t.Fatalf("AuthTime = %v, want %v", claims.AuthTime, tc.want)
+			}
+		})
 	}
 }

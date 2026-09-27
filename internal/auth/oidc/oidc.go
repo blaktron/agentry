@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	coreoidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
@@ -54,6 +55,18 @@ type Claims struct {
 	// account's handle, never an identifier: OIDC Core §5.7 does not make
 	// it unique or stable, so nothing is looked up by it (agentry#517).
 	PreferredUsername string
+	// RememberDevice is the directory's `agentry_remember_device` claim
+	// (agentry#670, DEV-163): the person ticked "Remember this device for 30
+	// days" on the directory's code page, in the sign-in this token closes.
+	// True only for a JSON true. It asks for a remembered browser; it proves
+	// nothing about a factor, which is AMR's to say.
+	RememberDevice bool
+	// AuthTime is the `auth_time` claim: when the person last actually
+	// authenticated at the IdP, zero when absent. A token minted silently
+	// against a live IdP session carries the original time, which is how
+	// the registry tells a fresh sign-in from a replayed session
+	// (agentry#670).
+	AuthTime time.Time
 }
 
 // New builds the RP. coreoidc.NewProvider performs discovery and pins the
@@ -134,6 +147,8 @@ func (rp *RP) Exchange(ctx context.Context, code, verifier, expectedNonce string
 		ACR           string `json:"acr"`
 		Groups        any    `json:"groups"`
 		PreferredUser string `json:"preferred_username"`
+		RememberDev   any    `json:"agentry_remember_device"`
+		AuthTime      int64  `json:"auth_time"`
 	}
 	if err := idToken.Claims(&raw); err != nil {
 		return nil, fmt.Errorf("oidc: decode claims: %w", err)
@@ -148,6 +163,14 @@ func (rp *RP) Exchange(ctx context.Context, code, verifier, expectedNonce string
 		Groups:        asStrings(raw.Groups),
 		// Trimmed only: the handle grammar is the caller's to apply.
 		PreferredUsername: strings.TrimSpace(raw.PreferredUser),
+	}
+	// Strictly the boolean: this claim is half of what mints a credential,
+	// so nothing that merely looks like yes counts.
+	if v, ok := raw.RememberDev.(bool); ok && v {
+		c.RememberDevice = true
+	}
+	if raw.AuthTime > 0 {
+		c.AuthTime = time.Unix(raw.AuthTime, 0)
 	}
 	if c.Subject == "" {
 		c.Subject = raw.Sub

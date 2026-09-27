@@ -42,9 +42,10 @@ type CreateTrustedDeviceRow struct {
 // from it skips the code.
 //
 // These are the auth-path queries: establish and touch the credential. The
-// account-facing ones — list, revoke, revoke others — arrive with the page
-// that uses them (agentry#462), following the split auth.sql and
-// sessions_api.sql already set.
+// account-facing one — clear all of an account's records — arrives with the
+// route that uses it (agentry#672; the list and per-browser removal of the
+// closed agentry#462 were dropped by DEV-163), following the split auth.sql
+// and sessions_api.sql already set.
 func (q *Queries) CreateTrustedDevice(ctx context.Context, arg CreateTrustedDeviceParams) (CreateTrustedDeviceRow, error) {
 	row := q.db.QueryRow(ctx, createTrustedDevice,
 		arg.ID,
@@ -146,8 +147,8 @@ UPDATE trusted_devices SET revoked_at = now() WHERE user_id = $1 AND revoked_at 
 // nulls the password hash, so its rows are already inert as credentials, and
 // what it owes is the removal of the personal data they hold.
 //
-// The account-facing revocations — one record, and "all other browsers" —
-// arrive with the page that offers them (agentry#462).
+// The account-facing revocation — every record, from the site's "Clear
+// remembered devices" button — arrives with agentry#672 (DEV-163).
 func (q *Queries) RevokeTrustedDevicesForUser(ctx context.Context, userID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, revokeTrustedDevicesForUser, userID)
 	if err != nil {
