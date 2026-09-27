@@ -3,8 +3,10 @@
 A knowledge pack is an LLM wiki: compiled markdown pages with an index,
 together with the documents they were compiled from, at most 10 MB, that a
 run searches through the knowledge tools over a read-only `/knowledge`
-mount. [Running BriefAgents](runner.md#knowledge-packs) covers making one
-and attaching it to a run. This page is the registry's side: how a
+mount. [Running BriefAgents](runner.md#knowledge-packs) covers making one,
+keeping it in the local store and attaching it to a run, and
+[Hosted runs](hosted-runs.md#knowledge-attached-to-a-run) attaching it to
+a run on Agentry's infrastructure. This page is the registry's side: how a
 signed-in account keeps its packs here, how they are sealed, what the
 registry reads of them, and when they are destroyed.
 
