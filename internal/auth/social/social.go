@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	coreoidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
@@ -48,6 +49,14 @@ const (
 	// (e.g. https://auth.example/application/o/agentry/).
 	ProviderAuthentik = "authentik"
 )
+
+// ScopeAgentry is the scope the directory's `agentry_remember_device`
+// mapping answers to (agentry#670, DEV-163). Only the directory is asked for
+// it: no other provider has such a mapping, and one that invented the claim
+// would still not be the directory the registry trusts it from. authentik
+// drops a requested scope its provider has no mapping for, so asking before
+// the directory's flow carries the mapping is harmless.
+const ScopeAgentry = "agentry"
 
 // Providers lists the supported provider ids, in the order the sign-in
 // page offers them. The API layer validates provider names against its
@@ -79,6 +88,15 @@ type Identity struct {
 	// the name chosen at the IdP, which seeds a new account's handle
 	// (agentry#517). Never used to find an account.
 	Username string
+	// RememberDevice is the ID token's `agentry_remember_device` claim: the
+	// person ticked "Remember this device for 30 days" on the directory's
+	// code page (agentry#670). The API honours it from the directory alone,
+	// and only beside an AMR that names a second factor.
+	RememberDevice bool
+	// AuthTime is the ID token's `auth_time`: when the person last actually
+	// authenticated at the IdP (zero when absent). A remembered browser is
+	// minted only from a fresh one (agentry#670).
+	AuthTime time.Time
 }
 
 // MFAAsserted reports whether AMR names a second factor: the RFC 8176
@@ -142,7 +160,11 @@ func New(ctx context.Context, name string, cfg Config, redirectURL string) (Prov
 		return newOIDC(ctx, ProviderClaude, "", cfg, redirectURL)
 	case ProviderAuthentik:
 		// The stack's own directory service (DEV-057). No default issuer:
-		// every deployment's Authentik lives at its own URL.
+		// every deployment's Authentik lives at its own URL. It is also the
+		// one provider asked for the agentry scope (ScopeAgentry).
+		if len(cfg.Scopes) == 0 {
+			cfg.Scopes = []string{coreoidc.ScopeOpenID, "email", "profile", ScopeAgentry}
+		}
 		return newOIDC(ctx, ProviderAuthentik, "", cfg, redirectURL)
 	case ProviderGitHub:
 		return newGitHub(cfg, redirectURL), nil
@@ -164,6 +186,11 @@ const (
 type oidcProvider struct {
 	name string
 	rp   *oidcrp.RP
+	// client is Config.HTTPClient, nil for the default. Discovery used it
+	// through New's context; the token exchange runs on the request's
+	// context and needs it passed again, or it quietly falls back to the
+	// default client.
+	client *http.Client
 }
 
 func newOIDC(ctx context.Context, name, defaultIssuer string, cfg Config, redirectURL string) (Provider, error) {
@@ -187,7 +214,7 @@ func newOIDC(ctx context.Context, name, defaultIssuer string, cfg Config, redire
 	if err != nil {
 		return nil, err
 	}
-	return &oidcProvider{name: name, rp: rp}, nil
+	return &oidcProvider{name: name, rp: rp, client: cfg.HTTPClient}, nil
 }
 
 func (p *oidcProvider) Name() string   { return p.name }
@@ -198,6 +225,9 @@ func (p *oidcProvider) AuthURL(state, nonce, verifier string) string {
 }
 
 func (p *oidcProvider) Exchange(ctx context.Context, code, verifier, nonce string) (*Identity, error) {
+	if p.client != nil {
+		ctx = coreoidc.ClientContext(ctx, p.client)
+	}
 	claims, err := p.rp.Exchange(ctx, code, verifier, nonce)
 	if err != nil {
 		return nil, err
@@ -212,6 +242,8 @@ func (p *oidcProvider) Exchange(ctx context.Context, code, verifier, nonce strin
 		ACR:               claims.ACR,
 		Groups:            claims.Groups,
 		Username:          claims.PreferredUsername,
+		RememberDevice:    claims.RememberDevice,
+		AuthTime:          claims.AuthTime,
 	}, nil
 }
 

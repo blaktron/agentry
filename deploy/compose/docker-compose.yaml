@@ -356,6 +356,14 @@ services:
       # has to say so).
       AGENTRY_IDP_ADMIN_URL: ${AGENTRY_IDP_ADMIN_URL:-}
       AGENTRY_IDP_ADMIN_TOKEN: ${AGENTRY_IDP_ADMIN_TOKEN:-}
+      # Remembered browsers on the directory's sign-in (agentry#670): the
+      # secret the directory's flow presents when it asks the server whether
+      # a browser is remembered. At least 32 characters; the directory holds
+      # the same value. Empty turns the directory path off. The cookie's
+      # domain is derived from AGENTRY_PUBLIC_URL and the directory's issuer;
+      # the override below is needed only when the two are sibling hosts.
+      AGENTRY_IDP_TRUST_CHECK_TOKEN: ${AGENTRY_IDP_TRUST_CHECK_TOKEN:-}
+      AGENTRY_AUTH_DIRECTORY_COOKIE_DOMAIN: ${AGENTRY_AUTH_DIRECTORY_COOKIE_DOMAIN:-}
       # Platform staff is membership of the staff organization (agentry#556):
       # an active member of AGENTRY_STAFF_ORG whose verified address is at
       # exactly AGENTRY_STAFF_DOMAIN, and the organization admits nobody

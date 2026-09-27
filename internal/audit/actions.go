@@ -27,8 +27,14 @@ const (
 	// itself carries the skip in its detail.
 	ActionTrustedDeviceAdd    Action = "user.trusted_device_add"
 	ActionTrustedDeviceRevoke Action = "user.trusted_device_revoke"
-	ActionPATCreate           Action = "pat.create"
-	ActionPATRevoke           Action = "pat.revoke"
+	// ActionTrustedDeviceUse is the directory path's skip (agentry#670): the
+	// directory asked whether a browser was remembered and was told yes, so
+	// its code page was not shown. The native path records its skip on the
+	// user.login row instead; the directory's sign-in reaches the registry
+	// only afterwards, as a callback that no longer knows.
+	ActionTrustedDeviceUse Action = "user.trusted_device_use"
+	ActionPATCreate        Action = "pat.create"
+	ActionPATRevoke        Action = "pat.revoke"
 	// SSH keys for the git transport (agentry#70).
 	ActionSSHKeyAdd          Action = "ssh_key.add"
 	ActionSSHKeyRemove       Action = "ssh_key.remove"
@@ -151,7 +157,7 @@ func init() {
 		ActionUserRegister, ActionUserLogin, ActionUserLoginFailed,
 		ActionUserLogout, ActionUserEmailVerified, ActionUserUpdate,
 		ActionUserTOTPEnabled, ActionPATCreate, ActionPATRevoke, ActionSSHKeyAdd, ActionSSHKeyRemove, ActionUserDelete, ActionUserDataClear, ActionUserDirectoryErase, ActionUserStaffSync, ActionDirectoryStaffMirror,
-		ActionTrustedDeviceAdd, ActionTrustedDeviceRevoke,
+		ActionTrustedDeviceAdd, ActionTrustedDeviceRevoke, ActionTrustedDeviceUse,
 		ActionOrgCreate, ActionOrgUpdate, ActionOrgMemberSet,
 		ActionOrgMemberRemove, ActionOrgInviteCreate, ActionOrgInviteRevoke,
 		ActionOrgInviteAccept, ActionOrgMemberDecline, ActionOrgMemberPending,
