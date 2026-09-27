@@ -180,9 +180,15 @@ func WrappedKeyOf(p storegen.KnowledgePack) WrappedKey {
 	return WrappedKey{Kind: p.WrapperKind, Recipient: p.WrapperRecipient, Blob: p.WrappedKey}
 }
 
+// Also is what a caller records in the same transaction as a change to a
+// pack — an organization's audit event — so the change and its record
+// commit or roll back together. It sees the pack as the change left it.
+type Also func(q *storegen.Queries, p storegen.KnowledgePack) error
+
 // Create makes an empty pack whose data key is w, which must open for
-// owner: a pack is never created with a key its owner cannot use.
-func (s *Service) Create(ctx context.Context, owner Owner, name string, w WrappedKey) (storegen.KnowledgePack, error) {
+// owner: a pack is never created with a key its owner cannot use. also,
+// when given, runs in the same transaction.
+func (s *Service) Create(ctx context.Context, owner Owner, name string, w WrappedKey, also Also) (storegen.KnowledgePack, error) {
 	if err := s.ready(); err != nil {
 		return storegen.KnowledgePack{}, err
 	}
@@ -192,16 +198,58 @@ func (s *Service) Create(ctx context.Context, owner Owner, name string, w Wrappe
 	if _, err := s.Unwrap(ctx, owner, w); err != nil {
 		return storegen.KnowledgePack{}, err
 	}
-	p, err := s.st.Queries().CreateKnowledgePack(ctx, storegen.CreateKnowledgePackParams{
-		OwnerKind: string(owner.Kind), OwnerID: owner.ID, Name: name,
-		WrapperKind: w.Kind, WrapperRecipient: w.Recipient, WrappedKey: w.Blob,
+	var p storegen.KnowledgePack
+	err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
+		var err error
+		p, err = q.CreateKnowledgePack(ctx, storegen.CreateKnowledgePackParams{
+			OwnerKind: string(owner.Kind), OwnerID: owner.ID, Name: name,
+			WrapperKind: w.Kind, WrapperRecipient: w.Recipient, WrappedKey: w.Blob,
+		})
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return ErrNameTaken
+		}
+		if err != nil {
+			return fmt.Errorf("knowledge: create pack: %w", err)
+		}
+		if also != nil {
+			return also(q, p)
+		}
+		return nil
 	})
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-		return storegen.KnowledgePack{}, ErrNameTaken
-	}
 	if err != nil {
-		return p, fmt.Errorf("knowledge: create pack: %w", err)
+		return storegen.KnowledgePack{}, err
+	}
+	return p, nil
+}
+
+// SetExportable marks whether one of an organization's packs may be
+// exported by its members (D26), with also run in its transaction. A
+// person's own pack has no such mark: its owner exports it.
+func (s *Service) SetExportable(ctx context.Context, owner Owner, id uuid.UUID, exportable bool, also Also) (storegen.KnowledgePack, error) {
+	if err := s.ready(); err != nil {
+		return storegen.KnowledgePack{}, err
+	}
+	if owner.Kind != OwnerOrg {
+		return storegen.KnowledgePack{}, ErrNotFound
+	}
+	var p storegen.KnowledgePack
+	err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
+		var err error
+		p, err = q.SetKnowledgePackExportable(ctx, storegen.SetKnowledgePackExportableParams{ID: id, OwnerKind: string(owner.Kind), OwnerID: owner.ID, Exportable: exportable})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("knowledge: mark the pack: %w", err)
+		}
+		if also != nil {
+			return also(q, p)
+		}
+		return nil
+	})
+	if err != nil {
+		return storegen.KnowledgePack{}, err
 	}
 	return p, nil
 }
@@ -490,9 +538,29 @@ func (s *Service) SealedTree(ctx context.Context, owner Owner, id uuid.UUID) (st
 // whose digest is the pack's. It is opened and checked in full before a
 // byte is written, so a tree that does not open writes nothing.
 func (s *Service) Export(ctx context.Context, owner Owner, id uuid.UUID) (storegen.KnowledgePack, *Tree, error) {
-	p, rc, err := s.SealedTree(ctx, owner, id)
+	return s.ExportIf(ctx, owner, id, nil)
+}
+
+// ErrNotExportable is an organization's shared pack its admins have not
+// marked exportable, exported by a member (D26).
+var ErrNotExportable = errors.New("knowledge: the pack is not marked exportable")
+
+// ExportIf is Export, refused when allow answers an error for the pack as
+// the export read it (nil: always allowed), so that the rule and the tree
+// come from one read of the row.
+func (s *Service) ExportIf(ctx context.Context, owner Owner, id uuid.UUID, allow func(storegen.KnowledgePack) error) (storegen.KnowledgePack, *Tree, error) {
+	p, err := s.usable(ctx, owner, id)
 	if err != nil {
 		return p, nil, err
+	}
+	if allow != nil {
+		if err := allow(p); err != nil {
+			return p, nil, err
+		}
+	}
+	rc, err := s.blobs.Get(ctx, p.ObjectKey)
+	if err != nil {
+		return p, nil, fmt.Errorf("knowledge: read the stored tree: %w", err)
 	}
 	defer func() { _ = rc.Close() }()
 	tree, err := s.open(ctx, owner, p, rc)
@@ -502,23 +570,28 @@ func (s *Service) Export(ctx context.Context, owner Owner, id uuid.UUID) (storeg
 // Delete removes one of owner's packs, its objects and their blobs. The
 // pack row is locked first, so an upload racing the delete either lands
 // before it (and its object goes with the pack) or finds no pack.
-func (s *Service) Delete(ctx context.Context, owner Owner, id uuid.UUID) error {
+// also, when given, runs in the same transaction with the pack as it stood
+// before it went.
+func (s *Service) Delete(ctx context.Context, owner Owner, id uuid.UUID, also Also) error {
 	if err := s.ready(); err != nil {
 		return err
 	}
 	var keys []string
 	err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
-		if _, err := q.GetKnowledgePackForUpdate(ctx, storegen.GetKnowledgePackForUpdateParams{ID: id, OwnerKind: string(owner.Kind), OwnerID: owner.ID}); errors.Is(err, pgx.ErrNoRows) {
+		p, err := q.GetKnowledgePackForUpdate(ctx, storegen.GetKnowledgePackForUpdateParams{ID: id, OwnerKind: string(owner.Kind), OwnerID: owner.ID})
+		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		} else if err != nil {
 			return fmt.Errorf("knowledge: lock pack: %w", err)
 		}
-		var err error
 		if keys, err = q.ListKnowledgeObjectsOfPack(ctx, id); err != nil {
 			return fmt.Errorf("knowledge: list the pack's trees: %w", err)
 		}
 		if _, err = q.DeleteKnowledgePack(ctx, storegen.DeleteKnowledgePackParams{ID: id, OwnerKind: string(owner.Kind), OwnerID: owner.ID}); err != nil {
 			return fmt.Errorf("knowledge: delete pack: %w", err)
+		}
+		if also != nil {
+			return also(q, p)
 		}
 		return nil
 	})

@@ -57,7 +57,7 @@ func (s *Service) CreateSealed(ctx context.Context, owner Owner, name string) (I
 	if err != nil {
 		return Info{}, fmt.Errorf("knowledge: wrap a new pack's key: %w", err)
 	}
-	p, err := s.Create(ctx, owner, name, w)
+	p, err := s.Create(ctx, owner, name, w, nil)
 	if err != nil {
 		return Info{}, err
 	}
