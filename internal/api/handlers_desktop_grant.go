@@ -27,16 +27,9 @@ import (
 
 const desktopGrantTTL = 60 * time.Second
 
-// desktopScopes is the scope set the desktop app's surfaces use: browse and
-// install (agent:read, repo:read), Build → publish (agent:publish,
-// repo:write), identity (user:profile), and hosted runs — In Agentry on
-// RunPanel (run:read, run:write; plan hosted-runs.md §4.7), and the
-// Knowledge panel's packs and their keys (knowledge:read, knowledge:write;
-// plan knowledge.md §4.3), and the hosted-run start's secrets, set and
-// deleted, never read (secret:write; plan hosted-credentials-vault.md D13,
-// agentry#676). Deliberately no review:act and no org scopes.
-// Fixed server-side so a caller of the grant endpoint cannot widen it.
-var desktopScopes = []string{"agent:read", "agent:publish", "repo:read", "repo:write", "user:profile", "run:read", "run:write", "knowledge:read", "knowledge:write", "secret:write"}
+// desktopScopes is the fixed scope set a sign-in grant mints; auth owns
+// it so the approval page names exactly what is granted.
+var desktopScopes = auth.SignInGrantScopes()
 
 var desktopStateRE = regexp.MustCompile(`^[A-Za-z0-9_-]{8,128}$`)
 

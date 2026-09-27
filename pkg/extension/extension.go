@@ -285,9 +285,9 @@ type Principal = auth.Principal
 // Scope is a PAT scope as the core spells it; those an extension may
 // require are the hosted-run scopes (agentry#348), the knowledge scopes,
 // for a route that writes into a person's knowledge through the Knowledge
-// seam (agentry#624), and the vault's secret:write (agentry#676). A session carries no
-// scopes and the account's full authority; a PAT carries what it was
-// minted with, flat — no scope implies another.
+// seam (agentry#624), and the vault's secret:write (agentry#676). A
+// session carries no scopes and the account's full authority; a PAT
+// carries what it was minted with, flat — no scope implies another.
 type Scope = auth.Scope
 
 // The scopes an extension route may require.

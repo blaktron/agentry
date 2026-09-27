@@ -47,6 +47,24 @@ func AllScopes() []Scope {
 	}
 }
 
+// SignInGrantScopes is the scope set the desktop app's and the CLI's
+// sign-in grant mints: browse and install (agent:read, repo:read), Build →
+// publish (agent:publish, repo:write), identity (user:profile), and hosted
+// runs — In Agentry on RunPanel (run:read, run:write; plan hosted-runs.md
+// §4.7), the Knowledge panel's packs and their keys (knowledge:read,
+// knowledge:write; plan knowledge.md §4.3), and the hosted-run start's
+// secrets, set and deleted, never read (secret:write; plan
+// hosted-credentials-vault.md D13, agentry#676). Deliberately no review:act
+// and no org scopes. Fixed server-side so a caller of the grant endpoint
+// cannot widen it, and shown verbatim on the approval page.
+func SignInGrantScopes() []string {
+	return []string{
+		string(ScopeAgentRead), string(ScopeAgentPublish), string(ScopeRepoRead), string(ScopeRepoWrite),
+		string(ScopeUserProfile), string(ScopeRunRead), string(ScopeRunWrite),
+		string(ScopeKnowledgeRead), string(ScopeKnowledgeWrite), string(ScopeSecretWrite),
+	}
+}
+
 // ValidScope reports whether s is in the closed scope list.
 func ValidScope(s Scope) bool {
 	for _, v := range AllScopes() {

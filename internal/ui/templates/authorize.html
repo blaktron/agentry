@@ -5,7 +5,7 @@
 <section class="card">
 <p>A program on <strong>this computer</strong> — the {{$.Brand.Name}} command line or desktop app — is asking for access as <strong>{{$.User.Handle}}</strong>.</p>
 <p>Approving hands the program listening on <code>127.0.0.1:{{.Port}}</code> a one-time code, good for a minute. The program exchanges that code for a personal access token from its own process, so the token never appears in your browser.</p>
-<p class="muted">Scopes: agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write. The token appears under Tokens, where you can revoke it. If you did not just start a sign-in from the program, close this tab.</p>
+<p class="muted">Scopes: {{.Scopes}}. The token appears under Tokens, where you can revoke it. If you did not just start a sign-in from the program, close this tab.</p>
 <form method="post" action="/ui/authorize">
   <input type="hidden" name="_csrf" value="{{$.CSRF}}">
   <input type="hidden" name="port" value="{{.Port}}">
