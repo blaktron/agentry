@@ -15,6 +15,10 @@ one is loaded. A registry built from this repository has none, and a token
 carrying only `run:read` and `run:write` is refused there exactly as a token
 without the right scope is anywhere else
 ([API conventions](api-conventions.md#personal-access-tokens-and-their-scopes)).
+The secrets a run declares are kept by a second extension, the vault
+(`/api/v1/x/vault/`), which returns no value on any route. `secret:write` is
+the scope it is to admit a token by to set and delete the account's secrets
+(agentry-enterprise#251); listing them stays a signed-in session's.
 
 `GET /api/v1/x/runs/status` answers anyone: whether this deployment can take
 runs at all (it needs a database, a credit ledger and an object store), how
