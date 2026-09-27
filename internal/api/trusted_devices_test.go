@@ -19,8 +19,16 @@ package api_test
 //	the cookie carries its attributes        → TestTrustedDeviceCookieAttributes
 //	deactivation takes the browser away      → TestSCIMDeactivationRevokesTrustedDevices
 //	erasure removes the row, not just trust  → TestErasureDeletesTrustedDevices
+//	the sweep deletes only what has expired  → TestTrustedDeviceSweepDeletesOnlyWhatHasExpired
+//	logout leaves the browser remembered     → TestTrustedDeviceSurvivesLogout
+//	so does "sign out everywhere else"       → TestTrustedDeviceSurvivesSignOutEverywhereElse
 //
-// All eleven were mutation-checked on 2026-09-22 before this file was
+// The last three came with agentry#464 on 2026-09-27, and five mutations
+// between them were each caught: a sweep that also deletes revoked rows, one
+// that deletes everything, one that spares revoked rows past their expiry, a
+// logout that revokes, and a "sign out everywhere else" that revokes.
+//
+// The first eleven were mutation-checked on 2026-09-22 before this file was
 // committed, with twelve mutations between them — the dead-credential control
 // takes two, one for expiry and one for revocation. Each control was broken in
 // turn and the named test failed; then the control was restored and the suite
@@ -52,6 +60,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/config"
 )
@@ -553,5 +562,110 @@ func TestErasureDeletesTrustedDevices(t *testing.T) {
 
 	if got := deviceState(t, env, c.device); got != "gone" {
 		t.Fatalf("after erasure the record is %s, want gone: a revoked row would still hold an address and a user agent belonging to a person who asked to be deleted", got)
+	}
+}
+
+// TestTrustedDeviceSweepDeletesOnlyWhatHasExpired (agentry#464): the sweep
+// removes records past their own expiry and nothing else. A live record stays,
+// and so does a revoked one that has not expired: no cap of the sweep's
+// decides when a record goes, its own lifetime does.
+func TestTrustedDeviceSweepDeletesOnlyWhatHasExpired(t *testing.T) {
+	var srv *api.Server
+	env := newTestEnvCfg(t, func(c *config.Config) { c.Auth.TrustedDeviceTTL = deviceTTL }, func(s *api.Server) { srv = s })
+	ctx := context.Background()
+	h := env.register("td-sweep")
+	var userID string
+	if err := env.st.Pool().QueryRow(ctx, `SELECT id::text FROM handles WHERE handle = $1`, h).Scan(&userID); err != nil {
+		t.Fatal(err)
+	}
+	live := insertTrustedDevice(t, env, userID)
+	expired := insertTrustedDevice(t, env, userID)
+	revoked := insertTrustedDevice(t, env, userID)
+	revokedExpired := insertTrustedDevice(t, env, userID)
+	for _, stmt := range []struct {
+		sql, token string
+	}{
+		{`UPDATE trusted_devices SET expires_at = now() - interval '1 minute' WHERE token_sha256 = $1`, expired},
+		{`UPDATE trusted_devices SET revoked_at = now() WHERE token_sha256 = $1`, revoked},
+		{`UPDATE trusted_devices SET revoked_at = now() - interval '2 days', expires_at = now() - interval '1 minute' WHERE token_sha256 = $1`, revokedExpired},
+	} {
+		if _, err := env.st.Pool().Exec(ctx, stmt.sql, auth.HashToken(stmt.token)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	n, err := srv.RunTrustedDeviceSweep(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The test database is shared, so another test's expired rows may go
+	// too; what this test owns is its own three records.
+	if n < 1 {
+		t.Fatalf("the sweep deleted %d records, want at least this test's expired one", n)
+	}
+	for name, tc := range map[string]struct{ token, want string }{
+		"live":                 {live, "live"},
+		"expired":              {expired, "gone"},
+		"revoked, not expired": {revoked, "revoked"},
+		// A revoked record is kept to its own lifetime, and then it goes too.
+		"revoked and expired": {revokedExpired, "gone"},
+	} {
+		if got := deviceState(t, env, tc.token); got != tc.want {
+			t.Errorf("%s record after the sweep: %s, want %s", name, got, tc.want)
+		}
+	}
+	// Nothing of this test's left to sweep: a second run leaves the rest.
+	if _, err := srv.RunTrustedDeviceSweep(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if deviceState(t, env, live) != "live" || deviceState(t, env, revoked) != "revoked" {
+		t.Error("a second sweep touched a record that had not expired")
+	}
+}
+
+// TestTrustedDeviceSurvivesLogout (agentry#464): signing out ends the session
+// and leaves the remembered browser alone, because surviving it is the point
+// of the feature. A future reader who "fixes" logout to revoke it fails here.
+func TestTrustedDeviceSurvivesLogout(t *testing.T) {
+	env := newTrustedDeviceEnv(t)
+	h, _, c := earnTrustedDevice(t, env, "td-logout")
+	out := env.do(c, http.MethodPost, "/api/v1/auth/logout", nil)
+	_ = out.Body.Close()
+	if out.StatusCode != http.StatusNoContent {
+		t.Fatalf("logout: %d", out.StatusCode)
+	}
+	// The browser keeps its cookie: logout ends the session, not the trust.
+	requireNoCookie(t, out.Cookies(), trustedDeviceCookie)
+	if got := deviceState(t, env, c.device); got != "live" {
+		t.Fatalf("the remembered browser after logout: %s, want live", got)
+	}
+	res := env.do(caller{device: c.device}, http.MethodPost, "/api/v1/auth/login", passwordOnly(h))
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("a sign-in from the remembered browser after logout was refused: %d", res.StatusCode)
+	}
+}
+
+// TestTrustedDeviceSurvivesSignOutEverywhereElse (agentry#464): "sign out
+// everywhere else" is a session control. It must not also take away the
+// remembered browsers, silently: that is the clear-all's job
+// (DELETE /user/trusted-devices), which says so.
+func TestTrustedDeviceSurvivesSignOutEverywhereElse(t *testing.T) {
+	env := newTrustedDeviceEnv(t)
+	h, secret, c := earnTrustedDevice(t, env, "td-elsewhere")
+	code, err := totpCode(secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A second browser's session, which the control ends.
+	other, _ := env.loginWith(h, loginOpts{totpCode: code})
+	env.doJSON(other, http.MethodDelete, "/api/v1/user/sessions", nil, nil, http.StatusNoContent)
+	if got := deviceState(t, env, c.device); got != "live" {
+		t.Fatalf("the remembered browser after signing out everywhere else: %s, want live", got)
+	}
+	res := env.do(caller{device: c.device}, http.MethodPost, "/api/v1/auth/login", passwordOnly(h))
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("a sign-in from the remembered browser after signing out everywhere else was refused: %d", res.StatusCode)
 	}
 }

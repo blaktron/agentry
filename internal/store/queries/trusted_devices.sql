@@ -3,8 +3,8 @@
 -- from it skips the code.
 --
 -- The credential's queries: establish and touch it, take it away when access
--- is taken away (SCIM, erasure), and the account's own count and clear
--- (agentry#672). There is no list and no per-browser removal: DEV-163
+-- is taken away (SCIM, erasure), the account's own count and clear
+-- (agentry#672), and the expiry sweep (agentry#464). There is no list and no per-browser removal: DEV-163
 -- dropped them with the closed agentry#462.
 
 -- name: CreateTrustedDevice :one
@@ -72,6 +72,15 @@ WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now();
 -- name: ClearLiveTrustedDevicesForUser :execrows
 UPDATE trusted_devices SET revoked_at = now()
 WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now();
+
+-- DeleteExpiredTrustedDevices is the expiry sweep (agentry#464): it removes
+-- the rows past their own expiry, and only those. A revoked record that has
+-- not expired yet is kept until it does: it is already inert, and keeping it
+-- to its own lifetime means no cap or clock of the sweep's ever decides when
+-- a record goes. Every read already filters on expiry, so a row the sweep
+-- has not reached behaves exactly like one it has.
+-- name: DeleteExpiredTrustedDevices :execrows
+DELETE FROM trusted_devices WHERE expires_at <= now();
 
 -- DeleteTrustedDevicesForUser is the erasure half (§12.7), and it deletes
 -- rather than revokes. A revoked row still holds an address and a user agent,
