@@ -60,6 +60,14 @@ const (
 	// key served, never the bytes.
 	ActionOrgLogoSet     Action = "org.logo_set"
 	ActionOrgLogoRemoved Action = "org.logo_removed"
+	// An organization's shared knowledge (agentry#646): a pack created or
+	// deleted by an admin, marked exportable or not (detail: exportable),
+	// and exported unencrypted (by an admin, or a member of a pack marked
+	// exportable). The detail names the pack, never a byte of it.
+	ActionOrgKnowledgeCreate Action = "org.knowledge_create"
+	ActionOrgKnowledgeUpdate Action = "org.knowledge_update"
+	ActionOrgKnowledgeDelete Action = "org.knowledge_delete"
+	ActionOrgKnowledgeExport Action = "org.knowledge_export"
 	// The fold-in (agentry#364): an existing account at the organization's
 	// domain became a pending member, at its sign-in or by the sweep.
 	ActionOrgMemberPending Action = "org.member_pending"
@@ -148,6 +156,7 @@ func init() {
 		ActionOrgMemberRemove, ActionOrgInviteCreate, ActionOrgInviteRevoke,
 		ActionOrgInviteAccept, ActionOrgMemberDecline, ActionOrgMemberPending,
 		ActionOrgLogoSet, ActionOrgLogoRemoved,
+		ActionOrgKnowledgeCreate, ActionOrgKnowledgeUpdate, ActionOrgKnowledgeDelete, ActionOrgKnowledgeExport,
 		ActionOrgDecommission, ActionOrgErase, ActionOrgSuspend, ActionOrgReinstate, ActionOrgAccessRequest,
 		ActionTeamCreate, ActionTeamDelete,
 		ActionTeamMemberAdd, ActionTeamMemberRemove,

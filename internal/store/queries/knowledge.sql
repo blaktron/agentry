@@ -86,3 +86,9 @@ RETURNING salt;
 
 -- name: DeleteKnowledgeOwnerSalt :exec
 DELETE FROM knowledge_owner_keys WHERE owner_kind = $1 AND owner_id = $2;
+
+-- name: SetKnowledgePackExportable :one
+-- Whether an organization's members may export its shared pack (D26).
+UPDATE knowledge_packs SET exportable = $4, updated_at = now()
+WHERE id = $1 AND owner_kind = $2 AND owner_id = $3
+RETURNING *;
