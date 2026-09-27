@@ -317,6 +317,9 @@ func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st 
 	// The pending members digest (agentry#364): daily by default, and once
 	// at start; the handler mails only what no digest has named yet.
 	go periodicTicker(ctx, q, api.JobPendingMembersDigest, "core", api.PendingDigestPeriod(cfg), log)
+	// Remembered browsers past their expiry (agentry#464): hourly, and once
+	// at start; the handler deletes only what has expired.
+	go periodicTicker(ctx, q, api.JobTrustedDeviceSweep, "core", time.Hour, log)
 	return q, nil
 }
 

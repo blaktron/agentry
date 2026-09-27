@@ -587,12 +587,13 @@ func (s *Server) RegisterQueueHandlers(q queue.Client) {
 		}
 		return s.reg.StoreTagArchive(ctx, args, scan.QueuePipeline{Q: q})
 	})
-	s.registerAuditRetention(q)   // §4.3 hot-table retention (audit_retention.go)
-	s.registerRedTeam(q)          // §17.5 report-only red-team job (handlers_redteam.go)
-	s.registerOrgLifecycle(q)     // the decommission sweep (handlers_org_lifecycle.go, agentry#363)
-	s.registerFoldIn(q)           // the fold-in sweep and the pending members digest (handlers_fold_in.go, agentry#364)
-	s.registerDirectoryErasure(q) // erasure's directory half, retried (directory_erasure.go, agentry#499)
-	s.registerStaffMirror(q)      // the directory's mirror of platform staff (staff_mirror.go, agentry#598)
+	s.registerAuditRetention(q)     // §4.3 hot-table retention (audit_retention.go)
+	s.registerRedTeam(q)            // §17.5 report-only red-team job (handlers_redteam.go)
+	s.registerOrgLifecycle(q)       // the decommission sweep (handlers_org_lifecycle.go, agentry#363)
+	s.registerFoldIn(q)             // the fold-in sweep and the pending members digest (handlers_fold_in.go, agentry#364)
+	s.registerDirectoryErasure(q)   // erasure's directory half, retried (directory_erasure.go, agentry#499)
+	s.registerStaffMirror(q)        // the directory's mirror of platform staff (staff_mirror.go, agentry#598)
+	s.registerTrustedDeviceSweep(q) // remembered browsers past their expiry (trusted_device_sweep.go, agentry#464)
 	if s.knowledge != nil {
 		s.knowledge.RegisterHandlers(q) // the knowledge pack scan (internal/knowledge, agentry#593)
 	}
