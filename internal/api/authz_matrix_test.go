@@ -506,6 +506,37 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			},
 		},
 		"getKnowledgeUsage": {method: "GET", path: sPath("/api/v1/knowledge/usage")},
+		// An organization's shared knowledge (agentry#646): the same shapes
+		// under the fixture organization, every pack id a stranger's and
+		// every key short or foreign, so an authorized caller meets a 404 or
+		// a 422 past the gate and nothing is stored.
+		"listOrgKnowledgePacks": {method: "GET", path: orgPath("/knowledge/packs")},
+		"createOrgKnowledgePack": {
+			method: "POST", path: orgPath("/knowledge/packs"),
+			body: func(*matrixSeed, string) any {
+				return map[string]any{"name": "mx-pack", "wrappedKey": map[string]any{"kind": "deployment", "recipient": "deployment:none", "key": "AAAA"}}
+			},
+		},
+		"getOrgKnowledgePack": {method: "GET", path: orgPath("/knowledge/packs/00000000-0000-0000-0000-000000000000")},
+		"updateOrgKnowledgePack": {
+			method: "PATCH", path: orgPath("/knowledge/packs/00000000-0000-0000-0000-000000000000"),
+			body: func(*matrixSeed, string) any { return map[string]any{"exportable": true} },
+		},
+		"deleteOrgKnowledgePack":   {method: "DELETE", path: orgPath("/knowledge/packs/00000000-0000-0000-0000-000000000000")},
+		"uploadOrgKnowledgeTree":   {method: "PUT", path: orgPath("/knowledge/packs/00000000-0000-0000-0000-000000000000/tree"), body: func(*matrixSeed, string) any { return "not a sealed tree" }},
+		"downloadOrgKnowledgeTree": {method: "GET", path: orgPath("/knowledge/packs/00000000-0000-0000-0000-000000000000/tree")},
+		"exportOrgKnowledgePack":   {method: "GET", path: orgPath("/knowledge/packs/00000000-0000-0000-0000-000000000000/export")},
+		"wrapOrgKnowledgeKey": {
+			method: "POST", path: orgPath("/knowledge/keys/wrap"),
+			body: func(*matrixSeed, string) any { return map[string]any{"key": "c2hvcnQ="} },
+		},
+		"unwrapOrgKnowledgeKey": {
+			method: "POST", path: orgPath("/knowledge/keys/unwrap"),
+			body: func(*matrixSeed, string) any {
+				return map[string]any{"kind": "deployment", "recipient": "deployment:none", "key": "AAAA"}
+			},
+		},
+		"getOrgKnowledgeUsage": {method: "GET", path: orgPath("/knowledge/usage")},
 		// The fixture agent has no published version, so an authorized
 		// caller gets 404 (not denied) and nothing is recorded.
 		"putAccountInstall": {
@@ -792,6 +823,13 @@ func TestAuthzMatrix(t *testing.T) {
 
 				allowed := expectAllowed(decl, mc.principal, seed.orgID)
 				gotDenied := res.StatusCode == http.StatusUnauthorized || res.StatusCode == http.StatusForbidden
+				if decl.HiddenFromOutsiders && !mc.principal.Anonymous && mc.principal.Role(seed.orgID) == auth.RoleNone {
+					// An outsider is refused as a 404, and only as a 404.
+					if res.StatusCode != http.StatusNotFound {
+						t.Fatalf("%s %s as %s: expected 404 for a caller outside the organization, got %d", fac.method, path, mc.caller.name, res.StatusCode)
+					}
+					return
+				}
 				if allowed && gotDenied {
 					t.Fatalf("%s %s as %s: expected authz PASS, got %d", fac.method, path, mc.caller.name, res.StatusCode)
 				}

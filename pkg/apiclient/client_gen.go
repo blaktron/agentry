@@ -1985,10 +1985,16 @@ type KnowledgePack struct {
 	CreatedAt time.Time `json:"createdAt"`
 
 	// Digest sha256:<hex> of the tree; empty before an upload.
-	Digest string             `json:"digest"`
-	Files  int                `json:"files"`
-	Id     openapi_types.UUID `json:"id"`
-	Name   string             `json:"name"`
+	Digest string `json:"digest"`
+
+	// Exportable On a shared pack: whether its members may export it, which an admin marks (D26). Its admins export it either way; a person's own pack is theirs to export and carries no flag.
+	Exportable *bool              `json:"exportable,omitempty"`
+	Files      int                `json:"files"`
+	Id         openapi_types.UUID `json:"id"`
+	Name       string             `json:"name"`
+
+	// Org The organization's handle, on a shared pack.
+	Org *string `json:"org,omitempty"`
 
 	// Pages The wiki's pages, the index and the log aside.
 	Pages int `json:"pages"`
@@ -1996,6 +2002,9 @@ type KnowledgePack struct {
 	// Scan What a pack's scan read and found (plan knowledge.md §4.4, D19): a record, never a gate (D27). The stages that read prose over every text file, then AI Review over `sources/` and then `wiki/` in chunks no larger than the judge declares it reads.
 	Scan      *KnowledgeScanReport `json:"scan,omitempty"`
 	ScannedAt *time.Time           `json:"scannedAt,omitempty"`
+
+	// Shared An organization's shared pack (agentry#646), read through `/orgs/{org}/knowledge/`; false for the caller's own.
+	Shared bool `json:"shared"`
 
 	// State `empty` until a tree is uploaded; `scanning` from each upload until its scan ends, when the pack cannot be downloaded or exported (409 `knowledge-scanning`); `ready` after it, findings or not; `failed` when the stored tree could not be read to scan.
 	State     KnowledgePackState `json:"state"`
@@ -2765,6 +2774,11 @@ type UIInfo struct {
 // UIInfoMode defines model for UIInfo.Mode.
 type UIInfoMode string
 
+// UpdateKnowledgePackRequest defines model for UpdateKnowledgePackRequest.
+type UpdateKnowledgePackRequest struct {
+	Exportable bool `json:"exportable"`
+}
+
 // User defines model for User.
 type User struct {
 	// CookieAckAt When this account acknowledged the cookie notice.
@@ -3256,7 +3270,7 @@ type ListPlatformAuditParams struct {
 
 // ListKnowledgePackSizesParams defines parameters for ListKnowledgePackSizes.
 type ListKnowledgePackSizesParams struct {
-	// Owner The account's handle.
+	// Owner The account's or the organization's handle.
 	Owner string `form:"owner" json:"owner"`
 }
 
@@ -3448,6 +3462,18 @@ type VerifyDomainClaimJSONRequestBody VerifyDomainClaimJSONBody
 
 // CreateInvitationJSONRequestBody defines body for CreateInvitation for application/json ContentType.
 type CreateInvitationJSONRequestBody = CreateInvitationRequest
+
+// UnwrapOrgKnowledgeKeyJSONRequestBody defines body for UnwrapOrgKnowledgeKey for application/json ContentType.
+type UnwrapOrgKnowledgeKeyJSONRequestBody = KnowledgeWrappedKey
+
+// WrapOrgKnowledgeKeyJSONRequestBody defines body for WrapOrgKnowledgeKey for application/json ContentType.
+type WrapOrgKnowledgeKeyJSONRequestBody = KnowledgeDataKey
+
+// CreateOrgKnowledgePackJSONRequestBody defines body for CreateOrgKnowledgePack for application/json ContentType.
+type CreateOrgKnowledgePackJSONRequestBody = CreateKnowledgePackRequest
+
+// UpdateOrgKnowledgePackJSONRequestBody defines body for UpdateOrgKnowledgePack for application/json ContentType.
+type UpdateOrgKnowledgePackJSONRequestBody = UpdateKnowledgePackRequest
 
 // PutOrgLogoMultipartRequestBody defines body for PutOrgLogo for multipart/form-data ContentType.
 type PutOrgLogoMultipartRequestBody PutOrgLogoMultipartBody
@@ -4238,6 +4264,121 @@ type ClientInterface interface {
 	// Corresponds with DELETE /orgs/{org}/invitations/{id} (the `RevokeInvitation` operationId).
 	RevokeInvitation(ctx context.Context, org OrgHandle, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// UnwrapOrgKnowledgeKeyWithBody Unwrap a data key wrapped for the organization, for any active member; refused once they are not one.
+	//
+	// The one door to a shared pack's words on a member's machine: the client keeps the answer in memory and asks again next time, so a member who is removed keeps sealed bytes they can no longer open. A wrapped key that does not open for the organization is 404 `knowledge-key-not-found`.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/knowledge/keys/unwrap (the `UnwrapOrgKnowledgeKey` operationId).
+	UnwrapOrgKnowledgeKeyWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UnwrapOrgKnowledgeKey Unwrap a data key wrapped for the organization, for any active member; refused once they are not one.
+	//
+	// The one door to a shared pack's words on a member's machine: the client keeps the answer in memory and asks again next time, so a member who is removed keeps sealed bytes they can no longer open. A wrapped key that does not open for the organization is 404 `knowledge-key-not-found`.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/knowledge/keys/unwrap (the `UnwrapOrgKnowledgeKey` operationId).
+	UnwrapOrgKnowledgeKey(ctx context.Context, org OrgHandle, body UnwrapOrgKnowledgeKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// WrapOrgKnowledgeKeyWithBody Wrap a data key for the organization (admins).
+	//
+	// The wrapper seals the 32-byte data key for the organization: on a core registry under the deployment's knowledge sealing key, on an extension's to the organization's own key.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/knowledge/keys/wrap (the `WrapOrgKnowledgeKey` operationId).
+	WrapOrgKnowledgeKeyWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// WrapOrgKnowledgeKey Wrap a data key for the organization (admins).
+	//
+	// The wrapper seals the 32-byte data key for the organization: on a core registry under the deployment's knowledge sealing key, on an extension's to the organization's own key.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/knowledge/keys/wrap (the `WrapOrgKnowledgeKey` operationId).
+	WrapOrgKnowledgeKey(ctx context.Context, org OrgHandle, body WrapOrgKnowledgeKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListOrgKnowledgePacks The organization's shared packs, by name, for any active member.
+	//
+	// Corresponds with GET /orgs/{org}/knowledge/packs (the `ListOrgKnowledgePacks` operationId).
+	ListOrgKnowledgePacks(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateOrgKnowledgePackWithBody Create a shared pack, empty, with its data key wrapped for the organization (admins).
+	//
+	// As `POST /knowledge/packs`, with the data key wrapped by `POST /orgs/{org}/knowledge/keys/wrap`: the registry checks that it opens for the organization. The pack is not exportable by members until an admin marks it. Recorded in the organization's audit log (`org.knowledge_create`).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/knowledge/packs (the `CreateOrgKnowledgePack` operationId).
+	CreateOrgKnowledgePackWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateOrgKnowledgePack Create a shared pack, empty, with its data key wrapped for the organization (admins).
+	//
+	// As `POST /knowledge/packs`, with the data key wrapped by `POST /orgs/{org}/knowledge/keys/wrap`: the registry checks that it opens for the organization. The pack is not exportable by members until an admin marks it. Recorded in the organization's audit log (`org.knowledge_create`).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/knowledge/packs (the `CreateOrgKnowledgePack` operationId).
+	CreateOrgKnowledgePack(ctx context.Context, org OrgHandle, body CreateOrgKnowledgePackJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteOrgKnowledgePack Delete a shared pack, its stored trees and its wrapped key (admins).
+	//
+	// Recorded in the organization's audit log (`org.knowledge_delete`). A member's downloaded copy stays sealed under a data key only the organization's unwrap opens.
+	//
+	// Corresponds with DELETE /orgs/{org}/knowledge/packs/{packId} (the `DeleteOrgKnowledgePack` operationId).
+	DeleteOrgKnowledgePack(ctx context.Context, org OrgHandle, packId KnowledgePackId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOrgKnowledgePack One of the organization's shared packs with its scan report.
+	//
+	// Corresponds with GET /orgs/{org}/knowledge/packs/{packId} (the `GetOrgKnowledgePack` operationId).
+	GetOrgKnowledgePack(ctx context.Context, org OrgHandle, packId KnowledgePackId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateOrgKnowledgePackWithBody Mark a shared pack exportable by the organization's members, or not (admins).
+	//
+	// Recorded in the organization's audit log (`org.knowledge_update`, with `exportable`).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /orgs/{org}/knowledge/packs/{packId} (the `UpdateOrgKnowledgePack` operationId).
+	UpdateOrgKnowledgePackWithBody(ctx context.Context, org OrgHandle, packId KnowledgePackId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateOrgKnowledgePack Mark a shared pack exportable by the organization's members, or not (admins).
+	//
+	// Recorded in the organization's audit log (`org.knowledge_update`, with `exportable`).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /orgs/{org}/knowledge/packs/{packId} (the `UpdateOrgKnowledgePack` operationId).
+	UpdateOrgKnowledgePack(ctx context.Context, org OrgHandle, packId KnowledgePackId, body UpdateOrgKnowledgePackJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ExportOrgKnowledgePack A shared pack's tree, decrypted as it streams, to an admin, or to a member once the pack is marked exportable.
+	//
+	// As `GET /knowledge/packs/{packId}/export`. A member's export of a pack not marked exportable is 403 `knowledge-not-exportable`. Recorded in the organization's audit log (`org.knowledge_export`).
+	//
+	// Corresponds with GET /orgs/{org}/knowledge/packs/{packId}/export (the `ExportOrgKnowledgePack` operationId).
+	ExportOrgKnowledgePack(ctx context.Context, org OrgHandle, packId KnowledgePackId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DownloadOrgKnowledgeTree A shared pack's sealed tree, as stored, for any active member (409 `knowledge-scanning` while it is scanned).
+	//
+	// Corresponds with GET /orgs/{org}/knowledge/packs/{packId}/tree (the `DownloadOrgKnowledgeTree` operationId).
+	DownloadOrgKnowledgeTree(ctx context.Context, org OrgHandle, packId KnowledgePackId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UploadOrgKnowledgeTreeWithBody Upload a shared pack's sealed tree, which replaces the one before and is scanned (admins).
+	//
+	// As `PUT /knowledge/packs/{packId}/tree`, counted against the allocation the organization's packs draw on.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /orgs/{org}/knowledge/packs/{packId}/tree (the `UploadOrgKnowledgeTree` operationId).
+	UploadOrgKnowledgeTreeWithBody(ctx context.Context, org OrgHandle, packId KnowledgePackId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOrgKnowledgeUsage What the organization keeps in the registry against the allocation its packs draw on.
+	//
+	// Corresponds with GET /orgs/{org}/knowledge/usage (the `GetOrgKnowledgeUsage` operationId).
+	GetOrgKnowledgeUsage(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// DeleteOrgLogo Remove the organization's logo (admin).
 	//
 	// Corresponds with DELETE /orgs/{org}/logo (the `DeleteOrgLogo` operationId).
@@ -4575,7 +4716,7 @@ type ClientInterface interface {
 	// Corresponds with GET /platform/audit (the `ListPlatformAudit` operationId).
 	ListPlatformAudit(ctx context.Context, params *ListPlatformAuditParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListKnowledgePackSizes An account's packs by name and size, for support (platform staff).
+	// ListKnowledgePackSizes An account's or an organization's packs by name and size, for support (platform staff).
 	//
 	// Names, states and sizes only: never a byte of content, a digest, a scan report or a key.
 	//
@@ -6498,6 +6639,271 @@ func (c *Client) RevokeInvitation(ctx context.Context, org OrgHandle, id openapi
 	return c.Client.Do(req)
 }
 
+// UnwrapOrgKnowledgeKeyWithBody Unwrap a data key wrapped for the organization, for any active member; refused once they are not one.
+//
+// The one door to a shared pack's words on a member's machine: the client keeps the answer in memory and asks again next time, so a member who is removed keeps sealed bytes they can no longer open. A wrapped key that does not open for the organization is 404 `knowledge-key-not-found`.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/knowledge/keys/unwrap (the `UnwrapOrgKnowledgeKey` operationId).
+func (c *Client) UnwrapOrgKnowledgeKeyWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUnwrapOrgKnowledgeKeyRequestWithBody(c.Server, org, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UnwrapOrgKnowledgeKey Unwrap a data key wrapped for the organization, for any active member; refused once they are not one.
+//
+// The one door to a shared pack's words on a member's machine: the client keeps the answer in memory and asks again next time, so a member who is removed keeps sealed bytes they can no longer open. A wrapped key that does not open for the organization is 404 `knowledge-key-not-found`.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/knowledge/keys/unwrap (the `UnwrapOrgKnowledgeKey` operationId).
+func (c *Client) UnwrapOrgKnowledgeKey(ctx context.Context, org OrgHandle, body UnwrapOrgKnowledgeKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUnwrapOrgKnowledgeKeyRequest(c.Server, org, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// WrapOrgKnowledgeKeyWithBody Wrap a data key for the organization (admins).
+//
+// The wrapper seals the 32-byte data key for the organization: on a core registry under the deployment's knowledge sealing key, on an extension's to the organization's own key.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/knowledge/keys/wrap (the `WrapOrgKnowledgeKey` operationId).
+func (c *Client) WrapOrgKnowledgeKeyWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewWrapOrgKnowledgeKeyRequestWithBody(c.Server, org, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// WrapOrgKnowledgeKey Wrap a data key for the organization (admins).
+//
+// The wrapper seals the 32-byte data key for the organization: on a core registry under the deployment's knowledge sealing key, on an extension's to the organization's own key.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/knowledge/keys/wrap (the `WrapOrgKnowledgeKey` operationId).
+func (c *Client) WrapOrgKnowledgeKey(ctx context.Context, org OrgHandle, body WrapOrgKnowledgeKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewWrapOrgKnowledgeKeyRequest(c.Server, org, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListOrgKnowledgePacks The organization's shared packs, by name, for any active member.
+//
+// Corresponds with GET /orgs/{org}/knowledge/packs (the `ListOrgKnowledgePacks` operationId).
+func (c *Client) ListOrgKnowledgePacks(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListOrgKnowledgePacksRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateOrgKnowledgePackWithBody Create a shared pack, empty, with its data key wrapped for the organization (admins).
+//
+// As `POST /knowledge/packs`, with the data key wrapped by `POST /orgs/{org}/knowledge/keys/wrap`: the registry checks that it opens for the organization. The pack is not exportable by members until an admin marks it. Recorded in the organization's audit log (`org.knowledge_create`).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/knowledge/packs (the `CreateOrgKnowledgePack` operationId).
+func (c *Client) CreateOrgKnowledgePackWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateOrgKnowledgePackRequestWithBody(c.Server, org, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateOrgKnowledgePack Create a shared pack, empty, with its data key wrapped for the organization (admins).
+//
+// As `POST /knowledge/packs`, with the data key wrapped by `POST /orgs/{org}/knowledge/keys/wrap`: the registry checks that it opens for the organization. The pack is not exportable by members until an admin marks it. Recorded in the organization's audit log (`org.knowledge_create`).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/knowledge/packs (the `CreateOrgKnowledgePack` operationId).
+func (c *Client) CreateOrgKnowledgePack(ctx context.Context, org OrgHandle, body CreateOrgKnowledgePackJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateOrgKnowledgePackRequest(c.Server, org, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteOrgKnowledgePack Delete a shared pack, its stored trees and its wrapped key (admins).
+//
+// Recorded in the organization's audit log (`org.knowledge_delete`). A member's downloaded copy stays sealed under a data key only the organization's unwrap opens.
+//
+// Corresponds with DELETE /orgs/{org}/knowledge/packs/{packId} (the `DeleteOrgKnowledgePack` operationId).
+func (c *Client) DeleteOrgKnowledgePack(ctx context.Context, org OrgHandle, packId KnowledgePackId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteOrgKnowledgePackRequest(c.Server, org, packId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetOrgKnowledgePack One of the organization's shared packs with its scan report.
+//
+// Corresponds with GET /orgs/{org}/knowledge/packs/{packId} (the `GetOrgKnowledgePack` operationId).
+func (c *Client) GetOrgKnowledgePack(ctx context.Context, org OrgHandle, packId KnowledgePackId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgKnowledgePackRequest(c.Server, org, packId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateOrgKnowledgePackWithBody Mark a shared pack exportable by the organization's members, or not (admins).
+//
+// Recorded in the organization's audit log (`org.knowledge_update`, with `exportable`).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /orgs/{org}/knowledge/packs/{packId} (the `UpdateOrgKnowledgePack` operationId).
+func (c *Client) UpdateOrgKnowledgePackWithBody(ctx context.Context, org OrgHandle, packId KnowledgePackId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateOrgKnowledgePackRequestWithBody(c.Server, org, packId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateOrgKnowledgePack Mark a shared pack exportable by the organization's members, or not (admins).
+//
+// Recorded in the organization's audit log (`org.knowledge_update`, with `exportable`).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /orgs/{org}/knowledge/packs/{packId} (the `UpdateOrgKnowledgePack` operationId).
+func (c *Client) UpdateOrgKnowledgePack(ctx context.Context, org OrgHandle, packId KnowledgePackId, body UpdateOrgKnowledgePackJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateOrgKnowledgePackRequest(c.Server, org, packId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ExportOrgKnowledgePack A shared pack's tree, decrypted as it streams, to an admin, or to a member once the pack is marked exportable.
+//
+// As `GET /knowledge/packs/{packId}/export`. A member's export of a pack not marked exportable is 403 `knowledge-not-exportable`. Recorded in the organization's audit log (`org.knowledge_export`).
+//
+// Corresponds with GET /orgs/{org}/knowledge/packs/{packId}/export (the `ExportOrgKnowledgePack` operationId).
+func (c *Client) ExportOrgKnowledgePack(ctx context.Context, org OrgHandle, packId KnowledgePackId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewExportOrgKnowledgePackRequest(c.Server, org, packId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DownloadOrgKnowledgeTree A shared pack's sealed tree, as stored, for any active member (409 `knowledge-scanning` while it is scanned).
+//
+// Corresponds with GET /orgs/{org}/knowledge/packs/{packId}/tree (the `DownloadOrgKnowledgeTree` operationId).
+func (c *Client) DownloadOrgKnowledgeTree(ctx context.Context, org OrgHandle, packId KnowledgePackId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDownloadOrgKnowledgeTreeRequest(c.Server, org, packId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UploadOrgKnowledgeTreeWithBody Upload a shared pack's sealed tree, which replaces the one before and is scanned (admins).
+//
+// As `PUT /knowledge/packs/{packId}/tree`, counted against the allocation the organization's packs draw on.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /orgs/{org}/knowledge/packs/{packId}/tree (the `UploadOrgKnowledgeTree` operationId).
+func (c *Client) UploadOrgKnowledgeTreeWithBody(ctx context.Context, org OrgHandle, packId KnowledgePackId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUploadOrgKnowledgeTreeRequestWithBody(c.Server, org, packId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetOrgKnowledgeUsage What the organization keeps in the registry against the allocation its packs draw on.
+//
+// Corresponds with GET /orgs/{org}/knowledge/usage (the `GetOrgKnowledgeUsage` operationId).
+func (c *Client) GetOrgKnowledgeUsage(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgKnowledgeUsageRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // DeleteOrgLogo Remove the organization's logo (admin).
 //
 // Corresponds with DELETE /orgs/{org}/logo (the `DeleteOrgLogo` operationId).
@@ -7365,7 +7771,7 @@ func (c *Client) ListPlatformAudit(ctx context.Context, params *ListPlatformAudi
 	return c.Client.Do(req)
 }
 
-// ListKnowledgePackSizes An account's packs by name and size, for support (platform staff).
+// ListKnowledgePackSizes An account's or an organization's packs by name and size, for support (platform staff).
 //
 // Names, states and sizes only: never a byte of content, a digest, a scan report or a key.
 //
@@ -11261,6 +11667,476 @@ func NewRevokeInvitationRequest(server string, org OrgHandle, id openapi_types.U
 	}
 
 	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUnwrapOrgKnowledgeKeyRequest calls the generic UnwrapOrgKnowledgeKey builder with application/json body
+func NewUnwrapOrgKnowledgeKeyRequest(server string, org OrgHandle, body UnwrapOrgKnowledgeKeyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUnwrapOrgKnowledgeKeyRequestWithBody(server, org, "application/json", bodyReader)
+}
+
+// NewUnwrapOrgKnowledgeKeyRequestWithBody constructs an http.Request for the UnwrapOrgKnowledgeKey method, with any body, and a specified content type
+func NewUnwrapOrgKnowledgeKeyRequestWithBody(server string, org OrgHandle, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/knowledge/keys/unwrap", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewWrapOrgKnowledgeKeyRequest calls the generic WrapOrgKnowledgeKey builder with application/json body
+func NewWrapOrgKnowledgeKeyRequest(server string, org OrgHandle, body WrapOrgKnowledgeKeyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewWrapOrgKnowledgeKeyRequestWithBody(server, org, "application/json", bodyReader)
+}
+
+// NewWrapOrgKnowledgeKeyRequestWithBody constructs an http.Request for the WrapOrgKnowledgeKey method, with any body, and a specified content type
+func NewWrapOrgKnowledgeKeyRequestWithBody(server string, org OrgHandle, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/knowledge/keys/wrap", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListOrgKnowledgePacksRequest constructs an http.Request for the ListOrgKnowledgePacks method
+func NewListOrgKnowledgePacksRequest(server string, org OrgHandle) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/knowledge/packs", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateOrgKnowledgePackRequest calls the generic CreateOrgKnowledgePack builder with application/json body
+func NewCreateOrgKnowledgePackRequest(server string, org OrgHandle, body CreateOrgKnowledgePackJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateOrgKnowledgePackRequestWithBody(server, org, "application/json", bodyReader)
+}
+
+// NewCreateOrgKnowledgePackRequestWithBody constructs an http.Request for the CreateOrgKnowledgePack method, with any body, and a specified content type
+func NewCreateOrgKnowledgePackRequestWithBody(server string, org OrgHandle, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/knowledge/packs", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteOrgKnowledgePackRequest constructs an http.Request for the DeleteOrgKnowledgePack method
+func NewDeleteOrgKnowledgePackRequest(server string, org OrgHandle, packId KnowledgePackId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "packId", packId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/knowledge/packs/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetOrgKnowledgePackRequest constructs an http.Request for the GetOrgKnowledgePack method
+func NewGetOrgKnowledgePackRequest(server string, org OrgHandle, packId KnowledgePackId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "packId", packId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/knowledge/packs/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateOrgKnowledgePackRequest calls the generic UpdateOrgKnowledgePack builder with application/json body
+func NewUpdateOrgKnowledgePackRequest(server string, org OrgHandle, packId KnowledgePackId, body UpdateOrgKnowledgePackJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateOrgKnowledgePackRequestWithBody(server, org, packId, "application/json", bodyReader)
+}
+
+// NewUpdateOrgKnowledgePackRequestWithBody constructs an http.Request for the UpdateOrgKnowledgePack method, with any body, and a specified content type
+func NewUpdateOrgKnowledgePackRequestWithBody(server string, org OrgHandle, packId KnowledgePackId, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "packId", packId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/knowledge/packs/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewExportOrgKnowledgePackRequest constructs an http.Request for the ExportOrgKnowledgePack method
+func NewExportOrgKnowledgePackRequest(server string, org OrgHandle, packId KnowledgePackId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "packId", packId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/knowledge/packs/%s/export", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDownloadOrgKnowledgeTreeRequest constructs an http.Request for the DownloadOrgKnowledgeTree method
+func NewDownloadOrgKnowledgeTreeRequest(server string, org OrgHandle, packId KnowledgePackId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "packId", packId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/knowledge/packs/%s/tree", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUploadOrgKnowledgeTreeRequestWithBody constructs an http.Request for the UploadOrgKnowledgeTree method, with any body, and a specified content type
+func NewUploadOrgKnowledgeTreeRequestWithBody(server string, org OrgHandle, packId KnowledgePackId, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "packId", packId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/knowledge/packs/%s/tree", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetOrgKnowledgeUsageRequest constructs an http.Request for the GetOrgKnowledgeUsage method
+func NewGetOrgKnowledgeUsageRequest(server string, org OrgHandle) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/knowledge/usage", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -15741,6 +16617,133 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /orgs/{org}/invitations/{id} (the `RevokeInvitation` operationId).
 	RevokeInvitationWithResponse(ctx context.Context, org OrgHandle, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokeInvitationResponse, error)
 
+	// UnwrapOrgKnowledgeKeyWithBodyWithResponse Unwrap a data key wrapped for the organization, for any active member; refused once they are not one.
+	//
+	// The one door to a shared pack's words on a member's machine: the client keeps the answer in memory and asks again next time, so a member who is removed keeps sealed bytes they can no longer open. A wrapped key that does not open for the organization is 404 `knowledge-key-not-found`.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/knowledge/keys/unwrap (the `UnwrapOrgKnowledgeKey` operationId).
+	UnwrapOrgKnowledgeKeyWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UnwrapOrgKnowledgeKeyResponse, error)
+
+	// UnwrapOrgKnowledgeKeyWithResponse Unwrap a data key wrapped for the organization, for any active member; refused once they are not one.
+	//
+	// The one door to a shared pack's words on a member's machine: the client keeps the answer in memory and asks again next time, so a member who is removed keeps sealed bytes they can no longer open. A wrapped key that does not open for the organization is 404 `knowledge-key-not-found`.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/knowledge/keys/unwrap (the `UnwrapOrgKnowledgeKey` operationId).
+	UnwrapOrgKnowledgeKeyWithResponse(ctx context.Context, org OrgHandle, body UnwrapOrgKnowledgeKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*UnwrapOrgKnowledgeKeyResponse, error)
+
+	// WrapOrgKnowledgeKeyWithBodyWithResponse Wrap a data key for the organization (admins).
+	//
+	// The wrapper seals the 32-byte data key for the organization: on a core registry under the deployment's knowledge sealing key, on an extension's to the organization's own key.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/knowledge/keys/wrap (the `WrapOrgKnowledgeKey` operationId).
+	WrapOrgKnowledgeKeyWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*WrapOrgKnowledgeKeyResponse, error)
+
+	// WrapOrgKnowledgeKeyWithResponse Wrap a data key for the organization (admins).
+	//
+	// The wrapper seals the 32-byte data key for the organization: on a core registry under the deployment's knowledge sealing key, on an extension's to the organization's own key.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/knowledge/keys/wrap (the `WrapOrgKnowledgeKey` operationId).
+	WrapOrgKnowledgeKeyWithResponse(ctx context.Context, org OrgHandle, body WrapOrgKnowledgeKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*WrapOrgKnowledgeKeyResponse, error)
+
+	// ListOrgKnowledgePacksWithResponse The organization's shared packs, by name, for any active member.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/knowledge/packs (the `ListOrgKnowledgePacks` operationId).
+	ListOrgKnowledgePacksWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListOrgKnowledgePacksResponse, error)
+
+	// CreateOrgKnowledgePackWithBodyWithResponse Create a shared pack, empty, with its data key wrapped for the organization (admins).
+	//
+	// As `POST /knowledge/packs`, with the data key wrapped by `POST /orgs/{org}/knowledge/keys/wrap`: the registry checks that it opens for the organization. The pack is not exportable by members until an admin marks it. Recorded in the organization's audit log (`org.knowledge_create`).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/knowledge/packs (the `CreateOrgKnowledgePack` operationId).
+	CreateOrgKnowledgePackWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateOrgKnowledgePackResponse, error)
+
+	// CreateOrgKnowledgePackWithResponse Create a shared pack, empty, with its data key wrapped for the organization (admins).
+	//
+	// As `POST /knowledge/packs`, with the data key wrapped by `POST /orgs/{org}/knowledge/keys/wrap`: the registry checks that it opens for the organization. The pack is not exportable by members until an admin marks it. Recorded in the organization's audit log (`org.knowledge_create`).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/knowledge/packs (the `CreateOrgKnowledgePack` operationId).
+	CreateOrgKnowledgePackWithResponse(ctx context.Context, org OrgHandle, body CreateOrgKnowledgePackJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateOrgKnowledgePackResponse, error)
+
+	// DeleteOrgKnowledgePackWithResponse Delete a shared pack, its stored trees and its wrapped key (admins).
+	//
+	// Recorded in the organization's audit log (`org.knowledge_delete`). A member's downloaded copy stays sealed under a data key only the organization's unwrap opens.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/knowledge/packs/{packId} (the `DeleteOrgKnowledgePack` operationId).
+	DeleteOrgKnowledgePackWithResponse(ctx context.Context, org OrgHandle, packId KnowledgePackId, reqEditors ...RequestEditorFn) (*DeleteOrgKnowledgePackResponse, error)
+
+	// GetOrgKnowledgePackWithResponse One of the organization's shared packs with its scan report.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/knowledge/packs/{packId} (the `GetOrgKnowledgePack` operationId).
+	GetOrgKnowledgePackWithResponse(ctx context.Context, org OrgHandle, packId KnowledgePackId, reqEditors ...RequestEditorFn) (*GetOrgKnowledgePackResponse, error)
+
+	// UpdateOrgKnowledgePackWithBodyWithResponse Mark a shared pack exportable by the organization's members, or not (admins).
+	//
+	// Recorded in the organization's audit log (`org.knowledge_update`, with `exportable`).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /orgs/{org}/knowledge/packs/{packId} (the `UpdateOrgKnowledgePack` operationId).
+	UpdateOrgKnowledgePackWithBodyWithResponse(ctx context.Context, org OrgHandle, packId KnowledgePackId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateOrgKnowledgePackResponse, error)
+
+	// UpdateOrgKnowledgePackWithResponse Mark a shared pack exportable by the organization's members, or not (admins).
+	//
+	// Recorded in the organization's audit log (`org.knowledge_update`, with `exportable`).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /orgs/{org}/knowledge/packs/{packId} (the `UpdateOrgKnowledgePack` operationId).
+	UpdateOrgKnowledgePackWithResponse(ctx context.Context, org OrgHandle, packId KnowledgePackId, body UpdateOrgKnowledgePackJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateOrgKnowledgePackResponse, error)
+
+	// ExportOrgKnowledgePackWithResponse A shared pack's tree, decrypted as it streams, to an admin, or to a member once the pack is marked exportable.
+	//
+	// As `GET /knowledge/packs/{packId}/export`. A member's export of a pack not marked exportable is 403 `knowledge-not-exportable`. Recorded in the organization's audit log (`org.knowledge_export`).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/knowledge/packs/{packId}/export (the `ExportOrgKnowledgePack` operationId).
+	ExportOrgKnowledgePackWithResponse(ctx context.Context, org OrgHandle, packId KnowledgePackId, reqEditors ...RequestEditorFn) (*ExportOrgKnowledgePackResponse, error)
+
+	// DownloadOrgKnowledgeTreeWithResponse A shared pack's sealed tree, as stored, for any active member (409 `knowledge-scanning` while it is scanned).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/knowledge/packs/{packId}/tree (the `DownloadOrgKnowledgeTree` operationId).
+	DownloadOrgKnowledgeTreeWithResponse(ctx context.Context, org OrgHandle, packId KnowledgePackId, reqEditors ...RequestEditorFn) (*DownloadOrgKnowledgeTreeResponse, error)
+
+	// UploadOrgKnowledgeTreeWithBodyWithResponse Upload a shared pack's sealed tree, which replaces the one before and is scanned (admins).
+	//
+	// As `PUT /knowledge/packs/{packId}/tree`, counted against the allocation the organization's packs draw on.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /orgs/{org}/knowledge/packs/{packId}/tree (the `UploadOrgKnowledgeTree` operationId).
+	UploadOrgKnowledgeTreeWithBodyWithResponse(ctx context.Context, org OrgHandle, packId KnowledgePackId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadOrgKnowledgeTreeResponse, error)
+
+	// GetOrgKnowledgeUsageWithResponse What the organization keeps in the registry against the allocation its packs draw on.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/knowledge/usage (the `GetOrgKnowledgeUsage` operationId).
+	GetOrgKnowledgeUsageWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*GetOrgKnowledgeUsageResponse, error)
+
 	// DeleteOrgLogoWithResponse Remove the organization's logo (admin).
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -16138,7 +17141,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /platform/audit (the `ListPlatformAudit` operationId).
 	ListPlatformAuditWithResponse(ctx context.Context, params *ListPlatformAuditParams, reqEditors ...RequestEditorFn) (*ListPlatformAuditResponse, error)
 
-	// ListKnowledgePackSizesWithResponse An account's packs by name and size, for support (platform staff).
+	// ListKnowledgePackSizesWithResponse An account's or an organization's packs by name and size, for support (platform staff).
 	//
 	// Names, states and sizes only: never a byte of content, a digest, a scan report or a key.
 	//
@@ -19686,6 +20689,527 @@ func (r RevokeInvitationResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r RevokeInvitationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// UnwrapOrgKnowledgeKeyResponse200Headers the declared response headers of an HTTP 200 response for UnwrapOrgKnowledgeKey
+type UnwrapOrgKnowledgeKeyResponse200Headers struct {
+	CacheControl *string
+}
+
+type UnwrapOrgKnowledgeKeyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *KnowledgeDataKey
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *UnwrapOrgKnowledgeKeyResponse200Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UnwrapOrgKnowledgeKeyResponse) GetJSON200() *KnowledgeDataKey {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r UnwrapOrgKnowledgeKeyResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r UnwrapOrgKnowledgeKeyResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UnwrapOrgKnowledgeKeyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UnwrapOrgKnowledgeKeyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UnwrapOrgKnowledgeKeyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type WrapOrgKnowledgeKeyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *KnowledgeWrappedKey
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r WrapOrgKnowledgeKeyResponse) GetJSON200() *KnowledgeWrappedKey {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r WrapOrgKnowledgeKeyResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r WrapOrgKnowledgeKeyResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r WrapOrgKnowledgeKeyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r WrapOrgKnowledgeKeyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r WrapOrgKnowledgeKeyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListOrgKnowledgePacksResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]KnowledgePack
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListOrgKnowledgePacksResponse) GetJSON200() *[]KnowledgePack {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListOrgKnowledgePacksResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListOrgKnowledgePacksResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListOrgKnowledgePacksResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListOrgKnowledgePacksResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListOrgKnowledgePacksResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateOrgKnowledgePackResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *KnowledgePack
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateOrgKnowledgePackResponse) GetJSON201() *KnowledgePack {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r CreateOrgKnowledgePackResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateOrgKnowledgePackResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateOrgKnowledgePackResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateOrgKnowledgePackResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateOrgKnowledgePackResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteOrgKnowledgePackResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DeleteOrgKnowledgePackResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteOrgKnowledgePackResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteOrgKnowledgePackResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteOrgKnowledgePackResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteOrgKnowledgePackResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetOrgKnowledgePackResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *KnowledgePack
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOrgKnowledgePackResponse) GetJSON200() *KnowledgePack {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetOrgKnowledgePackResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOrgKnowledgePackResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgKnowledgePackResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgKnowledgePackResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOrgKnowledgePackResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UpdateOrgKnowledgePackResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *KnowledgePack
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UpdateOrgKnowledgePackResponse) GetJSON200() *KnowledgePack {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r UpdateOrgKnowledgePackResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r UpdateOrgKnowledgePackResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateOrgKnowledgePackResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateOrgKnowledgePackResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdateOrgKnowledgePackResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ExportOrgKnowledgePackResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ExportOrgKnowledgePackResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ExportOrgKnowledgePackResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ExportOrgKnowledgePackResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ExportOrgKnowledgePackResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ExportOrgKnowledgePackResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// DownloadOrgKnowledgeTreeResponse200Headers the declared response headers of an HTTP 200 response for DownloadOrgKnowledgeTree
+type DownloadOrgKnowledgeTreeResponse200Headers struct {
+	XAgentryKnowledgeDigest *string
+}
+
+type DownloadOrgKnowledgeTreeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *DownloadOrgKnowledgeTreeResponse200Headers
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DownloadOrgKnowledgeTreeResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DownloadOrgKnowledgeTreeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DownloadOrgKnowledgeTreeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DownloadOrgKnowledgeTreeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DownloadOrgKnowledgeTreeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UploadOrgKnowledgeTreeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *KnowledgePack
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r UploadOrgKnowledgeTreeResponse) GetJSON202() *KnowledgePack {
+	return r.JSON202
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r UploadOrgKnowledgeTreeResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r UploadOrgKnowledgeTreeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UploadOrgKnowledgeTreeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UploadOrgKnowledgeTreeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UploadOrgKnowledgeTreeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetOrgKnowledgeUsageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *KnowledgeUsage
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOrgKnowledgeUsageResponse) GetJSON200() *KnowledgeUsage {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetOrgKnowledgeUsageResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOrgKnowledgeUsageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgKnowledgeUsageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgKnowledgeUsageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOrgKnowledgeUsageResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -24912,6 +26436,223 @@ func (c *ClientWithResponses) RevokeInvitationWithResponse(ctx context.Context, 
 	return ParseRevokeInvitationResponse(rsp)
 }
 
+// UnwrapOrgKnowledgeKeyWithBodyWithResponse Unwrap a data key wrapped for the organization, for any active member; refused once they are not one.
+//
+// The one door to a shared pack's words on a member's machine: the client keeps the answer in memory and asks again next time, so a member who is removed keeps sealed bytes they can no longer open. A wrapped key that does not open for the organization is 404 `knowledge-key-not-found`.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/knowledge/keys/unwrap (the `UnwrapOrgKnowledgeKey` operationId).
+func (c *ClientWithResponses) UnwrapOrgKnowledgeKeyWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UnwrapOrgKnowledgeKeyResponse, error) {
+	rsp, err := c.UnwrapOrgKnowledgeKeyWithBody(ctx, org, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUnwrapOrgKnowledgeKeyResponse(rsp)
+}
+
+// UnwrapOrgKnowledgeKeyWithResponse Unwrap a data key wrapped for the organization, for any active member; refused once they are not one.
+//
+// The one door to a shared pack's words on a member's machine: the client keeps the answer in memory and asks again next time, so a member who is removed keeps sealed bytes they can no longer open. A wrapped key that does not open for the organization is 404 `knowledge-key-not-found`.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/knowledge/keys/unwrap (the `UnwrapOrgKnowledgeKey` operationId).
+func (c *ClientWithResponses) UnwrapOrgKnowledgeKeyWithResponse(ctx context.Context, org OrgHandle, body UnwrapOrgKnowledgeKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*UnwrapOrgKnowledgeKeyResponse, error) {
+	rsp, err := c.UnwrapOrgKnowledgeKey(ctx, org, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUnwrapOrgKnowledgeKeyResponse(rsp)
+}
+
+// WrapOrgKnowledgeKeyWithBodyWithResponse Wrap a data key for the organization (admins).
+//
+// The wrapper seals the 32-byte data key for the organization: on a core registry under the deployment's knowledge sealing key, on an extension's to the organization's own key.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/knowledge/keys/wrap (the `WrapOrgKnowledgeKey` operationId).
+func (c *ClientWithResponses) WrapOrgKnowledgeKeyWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*WrapOrgKnowledgeKeyResponse, error) {
+	rsp, err := c.WrapOrgKnowledgeKeyWithBody(ctx, org, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseWrapOrgKnowledgeKeyResponse(rsp)
+}
+
+// WrapOrgKnowledgeKeyWithResponse Wrap a data key for the organization (admins).
+//
+// The wrapper seals the 32-byte data key for the organization: on a core registry under the deployment's knowledge sealing key, on an extension's to the organization's own key.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/knowledge/keys/wrap (the `WrapOrgKnowledgeKey` operationId).
+func (c *ClientWithResponses) WrapOrgKnowledgeKeyWithResponse(ctx context.Context, org OrgHandle, body WrapOrgKnowledgeKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*WrapOrgKnowledgeKeyResponse, error) {
+	rsp, err := c.WrapOrgKnowledgeKey(ctx, org, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseWrapOrgKnowledgeKeyResponse(rsp)
+}
+
+// ListOrgKnowledgePacksWithResponse The organization's shared packs, by name, for any active member.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/knowledge/packs (the `ListOrgKnowledgePacks` operationId).
+func (c *ClientWithResponses) ListOrgKnowledgePacksWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListOrgKnowledgePacksResponse, error) {
+	rsp, err := c.ListOrgKnowledgePacks(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListOrgKnowledgePacksResponse(rsp)
+}
+
+// CreateOrgKnowledgePackWithBodyWithResponse Create a shared pack, empty, with its data key wrapped for the organization (admins).
+//
+// As `POST /knowledge/packs`, with the data key wrapped by `POST /orgs/{org}/knowledge/keys/wrap`: the registry checks that it opens for the organization. The pack is not exportable by members until an admin marks it. Recorded in the organization's audit log (`org.knowledge_create`).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/knowledge/packs (the `CreateOrgKnowledgePack` operationId).
+func (c *ClientWithResponses) CreateOrgKnowledgePackWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateOrgKnowledgePackResponse, error) {
+	rsp, err := c.CreateOrgKnowledgePackWithBody(ctx, org, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateOrgKnowledgePackResponse(rsp)
+}
+
+// CreateOrgKnowledgePackWithResponse Create a shared pack, empty, with its data key wrapped for the organization (admins).
+//
+// As `POST /knowledge/packs`, with the data key wrapped by `POST /orgs/{org}/knowledge/keys/wrap`: the registry checks that it opens for the organization. The pack is not exportable by members until an admin marks it. Recorded in the organization's audit log (`org.knowledge_create`).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/knowledge/packs (the `CreateOrgKnowledgePack` operationId).
+func (c *ClientWithResponses) CreateOrgKnowledgePackWithResponse(ctx context.Context, org OrgHandle, body CreateOrgKnowledgePackJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateOrgKnowledgePackResponse, error) {
+	rsp, err := c.CreateOrgKnowledgePack(ctx, org, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateOrgKnowledgePackResponse(rsp)
+}
+
+// DeleteOrgKnowledgePackWithResponse Delete a shared pack, its stored trees and its wrapped key (admins).
+//
+// Recorded in the organization's audit log (`org.knowledge_delete`). A member's downloaded copy stays sealed under a data key only the organization's unwrap opens.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/knowledge/packs/{packId} (the `DeleteOrgKnowledgePack` operationId).
+func (c *ClientWithResponses) DeleteOrgKnowledgePackWithResponse(ctx context.Context, org OrgHandle, packId KnowledgePackId, reqEditors ...RequestEditorFn) (*DeleteOrgKnowledgePackResponse, error) {
+	rsp, err := c.DeleteOrgKnowledgePack(ctx, org, packId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteOrgKnowledgePackResponse(rsp)
+}
+
+// GetOrgKnowledgePackWithResponse One of the organization's shared packs with its scan report.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/knowledge/packs/{packId} (the `GetOrgKnowledgePack` operationId).
+func (c *ClientWithResponses) GetOrgKnowledgePackWithResponse(ctx context.Context, org OrgHandle, packId KnowledgePackId, reqEditors ...RequestEditorFn) (*GetOrgKnowledgePackResponse, error) {
+	rsp, err := c.GetOrgKnowledgePack(ctx, org, packId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgKnowledgePackResponse(rsp)
+}
+
+// UpdateOrgKnowledgePackWithBodyWithResponse Mark a shared pack exportable by the organization's members, or not (admins).
+//
+// Recorded in the organization's audit log (`org.knowledge_update`, with `exportable`).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /orgs/{org}/knowledge/packs/{packId} (the `UpdateOrgKnowledgePack` operationId).
+func (c *ClientWithResponses) UpdateOrgKnowledgePackWithBodyWithResponse(ctx context.Context, org OrgHandle, packId KnowledgePackId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateOrgKnowledgePackResponse, error) {
+	rsp, err := c.UpdateOrgKnowledgePackWithBody(ctx, org, packId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateOrgKnowledgePackResponse(rsp)
+}
+
+// UpdateOrgKnowledgePackWithResponse Mark a shared pack exportable by the organization's members, or not (admins).
+//
+// Recorded in the organization's audit log (`org.knowledge_update`, with `exportable`).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /orgs/{org}/knowledge/packs/{packId} (the `UpdateOrgKnowledgePack` operationId).
+func (c *ClientWithResponses) UpdateOrgKnowledgePackWithResponse(ctx context.Context, org OrgHandle, packId KnowledgePackId, body UpdateOrgKnowledgePackJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateOrgKnowledgePackResponse, error) {
+	rsp, err := c.UpdateOrgKnowledgePack(ctx, org, packId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateOrgKnowledgePackResponse(rsp)
+}
+
+// ExportOrgKnowledgePackWithResponse A shared pack's tree, decrypted as it streams, to an admin, or to a member once the pack is marked exportable.
+//
+// As `GET /knowledge/packs/{packId}/export`. A member's export of a pack not marked exportable is 403 `knowledge-not-exportable`. Recorded in the organization's audit log (`org.knowledge_export`).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/knowledge/packs/{packId}/export (the `ExportOrgKnowledgePack` operationId).
+func (c *ClientWithResponses) ExportOrgKnowledgePackWithResponse(ctx context.Context, org OrgHandle, packId KnowledgePackId, reqEditors ...RequestEditorFn) (*ExportOrgKnowledgePackResponse, error) {
+	rsp, err := c.ExportOrgKnowledgePack(ctx, org, packId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseExportOrgKnowledgePackResponse(rsp)
+}
+
+// DownloadOrgKnowledgeTreeWithResponse A shared pack's sealed tree, as stored, for any active member (409 `knowledge-scanning` while it is scanned).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/knowledge/packs/{packId}/tree (the `DownloadOrgKnowledgeTree` operationId).
+func (c *ClientWithResponses) DownloadOrgKnowledgeTreeWithResponse(ctx context.Context, org OrgHandle, packId KnowledgePackId, reqEditors ...RequestEditorFn) (*DownloadOrgKnowledgeTreeResponse, error) {
+	rsp, err := c.DownloadOrgKnowledgeTree(ctx, org, packId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDownloadOrgKnowledgeTreeResponse(rsp)
+}
+
+// UploadOrgKnowledgeTreeWithBodyWithResponse Upload a shared pack's sealed tree, which replaces the one before and is scanned (admins).
+//
+// As `PUT /knowledge/packs/{packId}/tree`, counted against the allocation the organization's packs draw on.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /orgs/{org}/knowledge/packs/{packId}/tree (the `UploadOrgKnowledgeTree` operationId).
+func (c *ClientWithResponses) UploadOrgKnowledgeTreeWithBodyWithResponse(ctx context.Context, org OrgHandle, packId KnowledgePackId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadOrgKnowledgeTreeResponse, error) {
+	rsp, err := c.UploadOrgKnowledgeTreeWithBody(ctx, org, packId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUploadOrgKnowledgeTreeResponse(rsp)
+}
+
+// GetOrgKnowledgeUsageWithResponse What the organization keeps in the registry against the allocation its packs draw on.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/knowledge/usage (the `GetOrgKnowledgeUsage` operationId).
+func (c *ClientWithResponses) GetOrgKnowledgeUsageWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*GetOrgKnowledgeUsageResponse, error) {
+	rsp, err := c.GetOrgKnowledgeUsage(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgKnowledgeUsageResponse(rsp)
+}
+
 // DeleteOrgLogoWithResponse Remove the organization's logo (admin).
 //
 // Returns a wrapper object for the known response body format(s).
@@ -25627,7 +27368,7 @@ func (c *ClientWithResponses) ListPlatformAuditWithResponse(ctx context.Context,
 	return ParseListPlatformAuditResponse(rsp)
 }
 
-// ListKnowledgePackSizesWithResponse An account's packs by name and size, for support (platform staff).
+// ListKnowledgePackSizesWithResponse An account's or an organization's packs by name and size, for support (platform staff).
 //
 // Names, states and sizes only: never a byte of content, a digest, a scan report or a key.
 //
@@ -28549,6 +30290,377 @@ func ParseRevokeInvitationResponse(rsp *http.Response) (*RevokeInvitationRespons
 	switch {
 	case rsp.StatusCode == 204:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUnwrapOrgKnowledgeKeyResponse parses an HTTP response from a UnwrapOrgKnowledgeKeyWithResponse call
+func ParseUnwrapOrgKnowledgeKeyResponse(rsp *http.Response) (*UnwrapOrgKnowledgeKeyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UnwrapOrgKnowledgeKeyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest KnowledgeDataKey
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers UnwrapOrgKnowledgeKeyResponse200Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = &value
+		}
+		response.Headers200 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseWrapOrgKnowledgeKeyResponse parses an HTTP response from a WrapOrgKnowledgeKeyWithResponse call
+func ParseWrapOrgKnowledgeKeyResponse(rsp *http.Response) (*WrapOrgKnowledgeKeyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &WrapOrgKnowledgeKeyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest KnowledgeWrappedKey
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListOrgKnowledgePacksResponse parses an HTTP response from a ListOrgKnowledgePacksWithResponse call
+func ParseListOrgKnowledgePacksResponse(rsp *http.Response) (*ListOrgKnowledgePacksResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListOrgKnowledgePacksResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []KnowledgePack
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateOrgKnowledgePackResponse parses an HTTP response from a CreateOrgKnowledgePackWithResponse call
+func ParseCreateOrgKnowledgePackResponse(rsp *http.Response) (*CreateOrgKnowledgePackResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateOrgKnowledgePackResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest KnowledgePack
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteOrgKnowledgePackResponse parses an HTTP response from a DeleteOrgKnowledgePackWithResponse call
+func ParseDeleteOrgKnowledgePackResponse(rsp *http.Response) (*DeleteOrgKnowledgePackResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteOrgKnowledgePackResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOrgKnowledgePackResponse parses an HTTP response from a GetOrgKnowledgePackWithResponse call
+func ParseGetOrgKnowledgePackResponse(rsp *http.Response) (*GetOrgKnowledgePackResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgKnowledgePackResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest KnowledgePack
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateOrgKnowledgePackResponse parses an HTTP response from a UpdateOrgKnowledgePackWithResponse call
+func ParseUpdateOrgKnowledgePackResponse(rsp *http.Response) (*UpdateOrgKnowledgePackResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateOrgKnowledgePackResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest KnowledgePack
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseExportOrgKnowledgePackResponse parses an HTTP response from a ExportOrgKnowledgePackWithResponse call
+func ParseExportOrgKnowledgePackResponse(rsp *http.Response) (*ExportOrgKnowledgePackResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ExportOrgKnowledgePackResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDownloadOrgKnowledgeTreeResponse parses an HTTP response from a DownloadOrgKnowledgeTreeWithResponse call
+func ParseDownloadOrgKnowledgeTreeResponse(rsp *http.Response) (*DownloadOrgKnowledgeTreeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DownloadOrgKnowledgeTreeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers DownloadOrgKnowledgeTreeResponse200Headers
+		if values := rsp.Header.Values("X-Agentry-Knowledge-Digest"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Agentry-Knowledge-Digest", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XAgentryKnowledgeDigest = &value
+		}
+		response.Headers200 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseUploadOrgKnowledgeTreeResponse parses an HTTP response from a UploadOrgKnowledgeTreeWithResponse call
+func ParseUploadOrgKnowledgeTreeResponse(rsp *http.Response) (*UploadOrgKnowledgeTreeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UploadOrgKnowledgeTreeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest KnowledgePack
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOrgKnowledgeUsageResponse parses an HTTP response from a GetOrgKnowledgeUsageWithResponse call
+func ParseGetOrgKnowledgeUsageResponse(rsp *http.Response) (*GetOrgKnowledgeUsageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgKnowledgeUsageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest KnowledgeUsage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

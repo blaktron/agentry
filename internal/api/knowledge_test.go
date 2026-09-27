@@ -550,7 +550,7 @@ func seedKnowledge(t *testing.T, env *testEnv, owner knowledge.Owner) seededKnow
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := svc.Create(ctx, owner, "erased-"+env.sfxDigits(), wk)
+	p, err := svc.Create(ctx, owner, "erased-"+env.sfxDigits(), wk, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
