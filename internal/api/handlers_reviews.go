@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -101,7 +102,36 @@ func (s *Server) scanReportFrom(r *http.Request, run storegen.ScanRun, versionSt
 	if rs, err := q.GetRulesetByID(r.Context(), run.RulesetReleaseID); err == nil {
 		rep.RulesetVersion = &rs.Semver
 	}
+	shipped, err := shippedKnowledgeOf(r.Context(), q, run.ID)
+	if err != nil {
+		return ScanReport{}, err
+	}
+	if len(shipped) > 0 {
+		rep.Knowledge = &shipped
+	}
 	return rep, nil
+}
+
+// shippedKnowledgeOf is what a run's scan read of the knowledge packs the
+// release ships, as the SK stage recorded it (plan knowledge.md §4.6):
+// none for a release that ships no pack, or a run whose SK has not
+// finished.
+func shippedKnowledgeOf(ctx context.Context, q *storegen.Queries, runID uuid.UUID) ([]ShippedKnowledgeScan, error) {
+	stages, err := q.ListStageResults(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	for _, st := range stages {
+		if st.Scanner != scan.KnowledgeStageID {
+			continue
+		}
+		var rec []ShippedKnowledgeScan
+		if err := scan.DecodeKnowledgeRecord(st.Detail, &rec); err != nil {
+			return nil, fmt.Errorf("scan report: the knowledge stage's record: %w", err)
+		}
+		return rec, nil
+	}
+	return nil, nil
 }
 
 // scanRunStandsBehindReport reports whether a run's status lets a report

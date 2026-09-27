@@ -256,6 +256,7 @@ func Validate(m *Manifest) []error {
 	validateIntake(&s, m)
 	validateInteractive(&s, m)
 	validateGuide(&s, m)
+	validateKnowledge(&s, m)
 
 	return s.list
 }
@@ -905,7 +906,8 @@ func ValidateInContext(m *Manifest, ctx Context) []error {
 	resolved := resolveInclude(&s, m, ctx.Files)
 	validateEntrypointInclusion(&s, m, ctx.Files, resolved)
 	validatePublicPublish(&s, m, ctx)
-	validateQuotas(&s, ctx, resolved)
+	validateShippedPacks(&s, m, ctx, resolved)
+	validateQuotas(&s, m, ctx, resolved)
 	validateFrontmatter(&s, m, ctx)
 
 	return s.list
@@ -1111,11 +1113,21 @@ func validatePublicPublish(s *issues, m *Manifest, ctx Context) {
 }
 
 // validateQuotas is V8's context half: §19 archive quotas over the
-// resolved include set.
-func validateQuotas(s *issues, ctx Context, resolved []FileInfo) {
+// resolved include set. The trees of the packs the release ships are held
+// to a pack's own caps instead (validateShippedPacks): they are outside the
+// file count, the per-file sizes, the text total and the archive total, so
+// the archive's cap is raised by what it ships (plan knowledge.md §4.6).
+func validateQuotas(s *issues, m *Manifest, ctx Context, all []FileInfo) {
 	q := DefaultQuotas()
 	if ctx.Quotas != nil {
 		q = *ctx.Quotas
+	}
+	ships := m.ShippedPacks()
+	resolved := make([]FileInfo, 0, len(all))
+	for _, f := range all {
+		if _, ok := ShippedPackFile(ships, f.Path); !ok {
+			resolved = append(resolved, f)
+		}
 	}
 	if len(resolved) > q.MaxFiles {
 		s.errf("V8", "publish.include", "archive would contain %d files; the maximum is %d", len(resolved), q.MaxFiles)

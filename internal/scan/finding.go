@@ -104,9 +104,11 @@ type StageResult struct {
 	// PromptHash is set by S5: the hash of the rubric/prompt version the
 	// judge adjudicated with (§8.4.4, recorded on the scan run).
 	PromptHash string
-	// JudgeUsage is set by S5: the token use the provider reported, nil
-	// when it reported none.
+	// JudgeUsage is set by S5 and SK: the token use the provider reported,
+	// nil when it reported none.
 	JudgeUsage *JudgeUsage
+	// Knowledge is set by SK: what the scan of each shipped pack read.
+	Knowledge []ShippedPackScan
 }
 
 // Input is the unpacked archive plus context a stage may need.
