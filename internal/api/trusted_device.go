@@ -196,3 +196,95 @@ func (s *Server) directoryRemembers(provider string, id *social.Identity) bool {
 func setDirectoryTrustedDeviceCookie(w http.ResponseWriter, token string, ttl time.Duration, secure bool, domain string) {
 	setTrustedDeviceCookieAt(w, token, ttl, secure, directoryFlowExecutorPath, domain)
 }
+
+// The account's control over remembered browsers (agentry#672, DEV-163): one
+// count and one clear, on the session routes' rule. A remembered browser is a
+// credential that can still act for its owner, so only a session may clear
+// them, and a token sees a count of 0 rather than an inventory of someone's
+// browsers.
+
+// CountTrustedDevices implements GET /user/trusted-devices.
+func (s *Server) CountTrustedDevices(w http.ResponseWriter, r *http.Request) {
+	if !s.authorize(w, r, auth.ActUserSelfRead, uuid.Nil) {
+		return
+	}
+	if !s.requireDB(w, r) {
+		return
+	}
+	p := principalFrom(r.Context())
+	if p.Via != "session" {
+		writeJSON(w, http.StatusOK, TrustedDevicesCount{Count: 0})
+		return
+	}
+	n, err := s.q().CountLiveTrustedDevicesForUser(r.Context(), p.UserID)
+	if err != nil {
+		s.log.ErrorContext(r.Context(), "count remembered browsers", "err", err)
+		problemInternal(w, r)
+		return
+	}
+	writeJSON(w, http.StatusOK, TrustedDevicesCount{Count: int(n)})
+}
+
+// ClearTrustedDevices implements DELETE /user/trusted-devices: every live
+// remembered browser of the caller's account is revoked, this one included,
+// so each is asked for the second factor at its next sign-in. Sessions and
+// authenticators are untouched. Revoked rather than deleted: the rows keep
+// what an investigator may need until the sweep (agentry#464) removes them.
+// One audit row carries the count; a clear that found nothing writes none,
+// since nothing was revoked.
+func (s *Server) ClearTrustedDevices(w http.ResponseWriter, r *http.Request) {
+	if !s.authorize(w, r, auth.ActUserSecurityManage, uuid.Nil) {
+		return
+	}
+	if !s.requireDB(w, r) {
+		return
+	}
+	p := principalFrom(r.Context())
+	if p.Via != "session" {
+		problemForbidden(w, r, "Clearing remembered devices requires a session, not a token.")
+		return
+	}
+	var cleared int64
+	err := s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
+		n, err := q.ClearLiveTrustedDevicesForUser(r.Context(), p.UserID)
+		if err != nil {
+			return err
+		}
+		cleared = n
+		if n == 0 {
+			return nil
+		}
+		e := auditEvent(r, audit.ActionTrustedDeviceRevoke)
+		e.TargetKind, e.TargetID = "user", p.UserID
+		e.Detail = map[string]any{"scope": "all", "count": n}
+		return s.auditW.Write(r.Context(), q, e)
+	})
+	if err != nil {
+		s.log.ErrorContext(r.Context(), "clear remembered browsers", "err", err)
+		problemInternal(w, r)
+		return
+	}
+	s.clearTrustedDeviceCookies(w)
+	writeJSON(w, http.StatusOK, TrustedDevicesCleared{Cleared: int(cleared)})
+}
+
+// clearTrustedDeviceCookies expires this browser's remembered-browser cookie
+// wherever this server may have set it, with the attributes it was set with
+// (agentry#413): the native path's, host-wide, and the directory path's,
+// scoped to the directory's flow executor. A clear that named another path
+// or domain would be a different cookie to the browser.
+func (s *Server) clearTrustedDeviceCookies(w http.ResponseWriter) {
+	secure := s.cfg.Auth.CookieSecure
+	setTrustedDeviceCookieAt(w, "", -time.Second, secure, "/", "")
+	if s.cfg.Auth.IdPTrustCheckToken == "" {
+		return
+	}
+	domain, err := s.cfg.DirectoryTrustCookieDomain()
+	if err != nil {
+		// Validated at start-up, so this cannot happen in a running server;
+		// the records are revoked either way, and the cookie is only inert.
+		s.log.Warn("clear remembered browsers: not clearing the directory-path cookie", "err", err)
+		return
+	}
+	setTrustedDeviceCookieAt(w, "", -time.Second, secure, directoryFlowExecutorPath, domain)
+}

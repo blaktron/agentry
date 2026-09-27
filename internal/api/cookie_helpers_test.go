@@ -27,6 +27,23 @@ func requireClearedCookie(t *testing.T, cookies []*http.Cookie, name string, sec
 	t.Fatalf("no Set-Cookie clearing %s", name)
 }
 
+// requireClearedCookieAt is requireClearedCookie for the Set-Cookie with this
+// exact path and domain: a clear that names another path or domain is, to a
+// browser, a different cookie, and clears nothing (agentry#672).
+func requireClearedCookieAt(t *testing.T, cookies []*http.Cookie, name, path, domain string, secure bool) {
+	t.Helper()
+	var at []*http.Cookie
+	for _, c := range cookies {
+		if c.Name == name && c.Path == path && c.Domain == domain {
+			at = append(at, c)
+		}
+	}
+	if len(at) == 0 {
+		t.Fatalf("no Set-Cookie clearing %s at Path=%q Domain=%q", name, path, domain)
+	}
+	requireClearedCookie(t, at, name, secure)
+}
+
 // requireSetCookie asserts that among a response's cookies the named one is
 // issued with the attributes this server sets every cookie with, and a Max-Age
 // equal to wantMaxAge. It returns the cookie so a caller can assert on its

@@ -317,6 +317,8 @@ func requestFactories(env *testEnv) map[string]opRequest {
 		// Non-destructive by construction: the query spares the calling
 		// session, and every matrix caller holds exactly one.
 		"revokeOtherUserSessions": {method: "DELETE", path: sPath("/api/v1/user/sessions")},
+		"countTrustedDevices":     {method: "GET", path: sPath("/api/v1/user/trusted-devices")},
+		"clearTrustedDevices":     {method: "DELETE", path: sPath("/api/v1/user/trusted-devices")},
 		"revokeUserSession": {
 			// A random id belongs to nobody, so an authorized caller gets 404
 			// (not denied) and no fixture session is destroyed.

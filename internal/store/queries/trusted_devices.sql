@@ -2,11 +2,10 @@
 -- browser earns by answering the second factor, so a later password sign-in
 -- from it skips the code.
 --
--- These are the auth-path queries: establish and touch the credential. The
--- account-facing one — clear all of an account's records — arrives with the
--- route that uses it (agentry#672; the list and per-browser removal of the
--- closed agentry#462 were dropped by DEV-163), following the split auth.sql
--- and sessions_api.sql already set.
+-- The credential's queries: establish and touch it, take it away when access
+-- is taken away (SCIM, erasure), and the account's own count and clear
+-- (agentry#672). There is no list and no per-browser removal: DEV-163
+-- dropped them with the closed agentry#462.
 
 -- name: CreateTrustedDevice :one
 INSERT INTO trusted_devices (id, user_id, token_sha256, ip, user_agent, expires_at)
@@ -52,10 +51,27 @@ UPDATE trusted_devices SET last_seen_at = now() WHERE id = $1;
 -- nulls the password hash, so its rows are already inert as credentials, and
 -- what it owes is the removal of the personal data they hold.
 --
--- The account-facing revocation — every record, from the site's "Clear
--- remembered devices" button — arrives with agentry#672 (DEV-163).
+-- The account-facing clear is ClearLiveTrustedDevicesForUser below, which
+-- touches live records only so that what it reports matches the count.
 -- name: RevokeTrustedDevicesForUser :execrows
 UPDATE trusted_devices SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL;
+
+-- CountLiveTrustedDevicesForUser is what the site's "Clear remembered
+-- devices" button reads to say whether there is anything to clear
+-- (agentry#672). Live is what the lookup honours: not revoked, not expired,
+-- so the number is exactly the browsers that would skip the code.
+-- name: CountLiveTrustedDevicesForUser :one
+SELECT count(*) FROM trusted_devices
+WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now();
+
+-- ClearLiveTrustedDevicesForUser is the site's "Clear remembered devices"
+-- (DELETE /user/trusted-devices, agentry#672, DEV-163), for the caller's own
+-- account only. It revokes exactly the rows the count counts, live ones, so
+-- the number the button reports is the number it showed; expired rows are
+-- already inert and are the sweep's (agentry#464).
+-- name: ClearLiveTrustedDevicesForUser :execrows
+UPDATE trusted_devices SET revoked_at = now()
+WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now();
 
 -- DeleteTrustedDevicesForUser is the erasure half (§12.7), and it deletes
 -- rather than revokes. A revoked row still holds an address and a user agent,
