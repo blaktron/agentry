@@ -1668,3 +1668,108 @@ account erasure's and the data clear's own transaction (`ErasesAccounts`),
 run a job on a period, and register audit actions under its own name. The core carries no extension and behaves identically with none:
 a self-hosted registry has no subscription tiers, caps nothing, and never
 answers `402`.
+
+## OpenBao, the key service for hosted-run secrets
+
+A registry built from this repository needs none of this section. It
+concerns a deployment of the closed enterprise build that mounts its vault,
+the extension that keeps an account's secrets for
+[hosted runs](hosted-runs.md#a-runs-secrets). The vault is the first part
+of the application that depends on a service besides the database and the
+object store: [OpenBao](https://openbao.org/), whose Transit engine
+encrypts and decrypts each secret, so the key never rests in the
+registry's database. The vault is off while `AGENTRY_VAULT_ADDR` is unset.
+A release that declares a secret is then refused for a hosted run
+(`409 secrets-declared`) and a set is `503`.
+
+### What OpenBao must carry
+
+| Item | What |
+|---|---|
+| Transit | mounted at `transit/`, with one key, `hosted-vault`, of type `aes256-gcm96` and **derived**. Each secret is encrypted with `user:<account id>` as the context, so each account's rows are under a key of their own |
+| policy `encrypt` | `update` on `transit/encrypt/hosted-vault` and nothing else: the api's |
+| policy `decrypt` | `update` on `transit/decrypt/hosted-vault` and nothing else: the worker's |
+| an operator's policy | rotate the key, read its versions, rewrap, and set the version floors, never `exportable` or plaintext backup, which cannot be turned off once set. It never decrypts |
+| two login roles | one bound to `encrypt` and one to `decrypt`, each **without the default policy**, so their tokens cannot renew themselves. The server logs in again at three quarters of the lease and once more on a `403` |
+
+The roles log in by AppRole (`AGENTRY_VAULT_AUTH=approle`) or by the pod's
+ServiceAccount token (`kubernetes`). On Kubernetes, bind the encrypt role to
+the api's ServiceAccount and the decrypt role to the worker's, which the
+chart gives each role ([the Helm chart](#the-helm-chart)). A compose stack
+runs every role in one process, which then holds both roles' AppRole
+credentials. That is weaker than a cluster, where each role holds only its
+own.
+
+The server talks to OpenBao over HTTPS alone and checks its certificate
+against the runs CA's root and nothing else (`AGENTRY_RUNS_CA_*`, the CA that
+signs the sandbox hosts' certificates). The name it checks must be a cluster
+service's (`<service>.<namespace>.svc`), because the sandbox hosts'
+certificates come from the same CA and none of them is named in that space.
+Serve OpenBao a server-authentication certificate for such a name, and set
+`AGENTRY_VAULT_TLS_SERVER_NAME` when the address's host is not that name.
+The server refuses to start with the vault configured and any of this
+missing.
+
+| Variable | What |
+|---|---|
+| `AGENTRY_VAULT_ADDR` | OpenBao's `https://` address; unset, the vault is off |
+| `AGENTRY_VAULT_AUTH` | `approle` or `kubernetes`; required with an address |
+| `AGENTRY_VAULT_ENCRYPT_ROLE_ID`, `AGENTRY_VAULT_ENCRYPT_SECRET_ID` | the encrypt role's AppRole, both or neither |
+| `AGENTRY_VAULT_DECRYPT_ROLE_ID`, `AGENTRY_VAULT_DECRYPT_SECRET_ID` | the decrypt role's AppRole, both or neither |
+| `AGENTRY_VAULT_ENCRYPT_ROLE`, `AGENTRY_VAULT_DECRYPT_ROLE` | the Kubernetes auth roles; a process that names neither logs in as `api` to encrypt |
+| `AGENTRY_VAULT_KUBERNETES_TOKEN_FILE` | the ServiceAccount token, read at every login; the pod's own by default |
+| `AGENTRY_VAULT_TLS_SERVER_NAME` | the name OpenBao's certificate is checked for |
+
+Give the api the encrypt role alone and the worker the decrypt role alone.
+The api then writes rows it cannot read, and the worker opens them only at
+a run's hand-off.
+
+### Its seal, its storage and its audit
+
+- **Storage.** OpenBao's `postgresql` storage in a database and user of its
+  own, beside the registry's. Both tables it creates have a primary key.
+- **Seal.** OpenBao's static seal: a 32-byte key it reads at start-up and
+  unseals with. A restart comes back unsealed with no one present, and a
+  wrong key leaves it running and sealed, so health-check with
+  `bao status`, not the port. Where OpenBao initialises itself from its
+  configuration file (Transit, the key, the policies, the roles), as
+  Agentry's own deployments do, it revokes the root token it made and,
+  under a static seal, makes no recovery keys. Administration then
+  needs a login of its own, such as a break-glass role that no pod uses.
+- **Audit.** A `file` device on standard output puts one JSON line per
+  request and response in the log stack. Each line names the path, the
+  role and the policies, and replaces every value with a keyed hash.
+
+### What to back up, and what it opens
+
+- **The seal key.** Without it, OpenBao's storage cannot be unsealed and
+  every account's secrets are lost. Keep a copy off the cluster.
+- **OpenBao's database**, with the registry's own backups. The Transit key
+  lives there, encrypted under the seal key.
+- **The certificate's renewal date.** Its expiry stops every set and every
+  hosted run with a secret.
+
+The seal key and a copy of OpenBao's database together open the Transit
+key. With the registry's database beside them, which holds the ciphertexts,
+they open every secret. A static seal moves the key out of the registry's
+database. It does not put it beyond the cluster: whoever can read the
+cluster's Secrets and reach PostgreSQL has all three. Guard the seal key's
+copies as you guard the database's backups, and do not store them together.
+
+What the design does and does not keep from whom:
+
+- **The api cannot read a secret.** It writes the rows and its role cannot
+  decrypt.
+- **The worker can open any account's secret it reads from the database.**
+  The derived key stops a row opening under another account's context, but
+  the worker supplies the context: its policy limits the operation, not the
+  account.
+- **A value is plaintext during a run:** in the worker at the hand-off, in
+  the job on its mutual-TLS call to the sandbox host, and on that host for
+  the run's life.
+- **OpenBao's operator policy** rotates and rewraps but cannot decrypt.
+  Anyone who holds the break-glass role, or the seal key and the storage,
+  can.
+
+Each row records the key version that encrypted it. Never raise the key's
+minimum decryption version past the oldest version still in use.
