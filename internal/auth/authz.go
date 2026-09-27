@@ -89,6 +89,15 @@ const (
 	// having a data key unwrapped; write covers the rest.
 	ActKnowledgeRead  Action = "knowledge.read"
 	ActKnowledgeWrite Action = "knowledge.write"
+	// An organization's shared knowledge (plan knowledge.md §4.7, D13,
+	// D26; agentry#646): org-scoped, so membership is checked at every
+	// call through the roles the request resolved. Read covers the packs,
+	// their trees, the meter and having a data key unwrapped, for any
+	// active member; write covers the rest, for its admins. Exporting is
+	// a read an admin may always make and a member only once the pack is
+	// marked exportable, which the handler decides with the pack in hand.
+	ActOrgKnowledgeRead  Action = "org.knowledge.read"
+	ActOrgKnowledgeWrite Action = "org.knowledge.write" // admin
 	// ActReviewAct is the review surface (§12.3 review:act). Check only
 	// enforces the PAT scope gate for it: WHO may review — platform staff or
 	// an org security_reviewer who is not the version's author (§12.2) — is a
@@ -189,6 +198,8 @@ var scopeFor = map[Action]Scope{
 	ActReviewAct:            ScopeReviewAct,
 	ActKnowledgeRead:        ScopeKnowledgeRead,
 	ActKnowledgeWrite:       ScopeKnowledgeWrite,
+	ActOrgKnowledgeRead:     ScopeKnowledgeRead,
+	ActOrgKnowledgeWrite:    ScopeKnowledgeWrite,
 }
 
 // minRole is the role threshold per org-scoped action.
@@ -205,6 +216,8 @@ var minRole = map[Action]OrgRole{
 	ActOrgInvitationsManage: RoleAdmin,
 	ActOrgDecommission:      RoleAdmin,
 	ActOrgLeave:             RoleMember,
+	ActOrgKnowledgeRead:     RoleMember,
+	ActOrgKnowledgeWrite:    RoleAdmin,
 }
 
 // ReadOnly reports whether an action only reads. The audit export creates
@@ -213,7 +226,7 @@ func ReadOnly(act Action) bool {
 	switch act {
 	case ActOrgRead, ActOrgMembersRead, ActOrgTeamsRead, ActOrgAuditRead,
 		ActPublicRead, ActUserSelfRead, ActUserTokensRead,
-		ActAgentRead, ActAgentRepoRead, ActKnowledgeRead:
+		ActAgentRead, ActAgentRepoRead, ActKnowledgeRead, ActOrgKnowledgeRead:
 		return true
 	}
 	return false
