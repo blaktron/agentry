@@ -76,8 +76,8 @@ type CreateTrustedDeviceRow struct {
 // from it skips the code.
 //
 // The credential's queries: establish and touch it, take it away when access
-// is taken away (SCIM, erasure), and the account's own count and clear
-// (agentry#672). There is no list and no per-browser removal: DEV-163
+// is taken away (SCIM, erasure), the account's own count and clear
+// (agentry#672), and the expiry sweep (agentry#464). There is no list and no per-browser removal: DEV-163
 // dropped them with the closed agentry#462.
 func (q *Queries) CreateTrustedDevice(ctx context.Context, arg CreateTrustedDeviceParams) (CreateTrustedDeviceRow, error) {
 	row := q.db.QueryRow(ctx, createTrustedDevice,
@@ -97,6 +97,24 @@ func (q *Queries) CreateTrustedDevice(ctx context.Context, arg CreateTrustedDevi
 		&i.ExpiresAt,
 	)
 	return i, err
+}
+
+const deleteExpiredTrustedDevices = `-- name: DeleteExpiredTrustedDevices :execrows
+DELETE FROM trusted_devices WHERE expires_at <= now()
+`
+
+// DeleteExpiredTrustedDevices is the expiry sweep (agentry#464): it removes
+// the rows past their own expiry, and only those. A revoked record that has
+// not expired yet is kept until it does: it is already inert, and keeping it
+// to its own lifetime means no cap or clock of the sweep's ever decides when
+// a record goes. Every read already filters on expiry, so a row the sweep
+// has not reached behaves exactly like one it has.
+func (q *Queries) DeleteExpiredTrustedDevices(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteExpiredTrustedDevices)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deleteTrustedDevicesForUser = `-- name: DeleteTrustedDevicesForUser :execrows

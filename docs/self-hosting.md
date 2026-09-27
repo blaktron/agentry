@@ -1225,9 +1225,13 @@ cookie (agentry#672). Both are for a session: a personal access token reads 0
 and is refused the clear. There is no list and no per-browser removal; the
 hosted site offers the clear as one "Clear remembered devices" button. Account
 erasure deletes the account's records in the erasure transaction
-(`handlers_gdpr.go`), and SCIM deactivation revokes them. The expiry sweep is
-agentry#464; until it lands, expired and revoked rows stay in the table,
-inert.
+(`handlers_gdpr.go`), and SCIM deactivation revokes them. Every lookup ignores a
+record past its expiry, and an hourly sweep on the worker role
+(`trusted_device.sweep`, agentry#464) deletes those rows, with the address and
+user agent they hold. A revoked record is kept until its own expiry, inert,
+and swept then. Signing out, and "sign out everywhere else", leave remembered
+browsers alone: surviving them is the point, and the clear above is the
+control that ends them.
 
 On the native path nothing mints one unless asked: the flag is per-request and
 no shipped client sends it, so a record is only created by an API call that
