@@ -88,7 +88,9 @@ passes.
 the latest published release), the `task` text the harness receives, the
 release's `intake` answers as a JSON object, and up to twenty `inputs` — ids
 from `POST /api/v1/x/runs/inputs?name=<relative name>`, which stores one file
-each and sweeps unclaimed uploads after a day. The response is the run:
+each and sweeps unclaimed uploads after a day. It may also name up to five
+knowledge packs by id in `knowledge`, for the run to search
+([below](#knowledge-attached-to-a-run)). The response is the run:
 its resolved ref and archive digest, its caps, the credits held and `payer`
 — the handle whose row holds them — its queue position, and `expiresAt`.
 
@@ -203,7 +205,12 @@ changes nothing.
 | The payer is an organization whose subscription is not in force | `402 subscription-inactive`, with `account`, `standing` and `tier` |
 | A task over 64 KB, more than twenty inputs, or an input over 10 MB | `413 too-large` |
 | The ref names nothing published, or nothing this caller may read | `404` — a private release the caller holds no `read` on, or any release of a suspended organization, is `404`, never a leak that it exists |
-| Malformed intake, or an input id that is not the caller's | `422 validation` |
+| Malformed intake, an input id that is not the caller's, or a knowledge pack named twice | `422 validation` |
+| Knowledge attached on a token without `knowledge:read` | `403 forbidden` |
+| A knowledge pack that is neither the caller's nor shared by their organization | `404 knowledge-not-found` — the same answer for another account's pack as for none |
+| A knowledge pack being scanned, whose stored tree could not be read, or with no pages yet | `409 knowledge-scanning`, `409 knowledge-failed`, `409 knowledge-empty` |
+| More than five knowledge packs, or a pack past 10 MB | `413 too-large`, `413 knowledge-too-large` |
+| Knowledge attached on a deployment with no sandbox hosts or no knowledge store | `503 knowledge-attach-unavailable` |
 | The deployment has no database, ledger or object store | `503 runs-unavailable` |
 
 The same `413 too-large` guards the worker's side: a run keeps at most 50 MB
@@ -283,6 +290,53 @@ Two sweeps run every minute. A run nobody claims within the queue timeout
 whose worker has been silent past the stale window
 (`AGENTRY_RUNS_STALE`, 10 min) is closed as `error` and refunded.
 
+## Knowledge attached to a run
+
+A run can search [knowledge packs](knowledge.md) the way a local
+`agentry run --knowledge` does. The create's `knowledge` names up to five
+packs by id. Each must be the caller's own, or one their organization
+shares (below), `ready` and at most 10 MB, and the token needs
+`knowledge:read` beside `run:write`, since the run reads the packs and its
+output can carry what it found. `GET /api/v1/x/runs/status` says whether a
+deployment attaches knowledge at all, as `knowledgeAttach: {enabled,
+maxPacks}`. The run records each pack's `pack` and `name`, and from its
+hand-off the `digest` of the tree it was given.
+
+Attached knowledge runs only on sandbox hosts Agentry pushes to; the pull
+worker never claims such a run. At the hand-off the dispatcher reads each
+pack's tree through the core's store, which decrypts it there, so the pack's
+data key never leaves the core. It stages the tree for the host beside the
+run's inputs, with the same posture inputs have, and the host passes each
+pack to the CLI as a `--knowledge` directory. The CLI mounts it read-only at
+`/knowledge/<name>` on the tools container and names it in the receipt by
+digest, as for a local run ([Running them](runner.md#knowledge-packs)). The
+staged trees are deleted with the job's inputs on every path: the collect,
+a requeue, a cancel and the sweep.
+
+What happens to a pack between the create and the hand-off:
+
+- **Deleted, or no longer readable:** the run is closed and refunded
+  before it starts.
+- **Being scanned again** (a new tree was uploaded or built into it): the
+  run waits in the queue until the scan ends, then takes the tree as it
+  stands.
+
+**An organization's shared packs.** A member of an organization can attach
+a pack the organization shares, by its id in the same `knowledge` list. The
+pack is read as the organization's, and the run records its `org` and
+`shared: true`. Membership is read as the core's knowledge routes read it,
+an active membership of an organization that is not suspended, and it is
+read three times:
+
+1. **At the create.** Someone who is not a member gets
+   `404 knowledge-not-found`.
+2. **At the hand-off.** A runner who has left the organization since has
+   the run closed and refunded, with nothing staged. A run already on its
+   host when its runner leaves keeps what it was handed until it ends.
+3. **At the output download.** A run that attached a shared pack, like a
+   build of one, serves its sealed output to its runner only while they are
+   still the organization's member; to anyone else it is a `404`.
+
 ## A knowledge build
 
 A run of the kind `knowledge_build` runs the CLI's built-in Knowledge Creator
@@ -293,7 +347,13 @@ documents as `inputs`, and exactly one of `name` (a new pack of that name;
 an empty pack of that name, one a refused build left, is reused), `pack` (the
 id of one of the caller's packs) or `continue` (a finished build of the
 caller's, whose documents are copied for the new one). It names no `ref`,
-`task` or `intake`. A token needs `knowledge:read` and `knowledge:write`
+`task` or `intake`. With `org` (an organization's handle) the build makes
+or extends that organization's shared pack: only its admins may, a caller
+who is not a member gets `404`, one who is not an admin `403`, and an
+organization in its decommission hold `409 org-decommissioning`, since its
+shared knowledge is read-only then. Membership is read again at the
+hand-off and at the output download, as for a run that attaches a shared
+pack (above). A token needs `knowledge:read` and `knowledge:write`
 beside `run:write`, and downloading a build's output needs `knowledge:read`
 beside `run:read`, since the output holds the pack.
 

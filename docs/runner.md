@@ -637,8 +637,9 @@ a canonical tar of `wiki/` and `sources/`, the form the registry's store
 checks too ([Knowledge packs in the registry](knowledge.md)).
 
 **Making one.** `agentry knowledge create NAME --file PATH…` makes a pack
-in `--dir` (default `./NAME`), and `agentry knowledge add DIR --file PATH…`
-extends one. The built-in Knowledge Creator does the work. It is a package
+and keeps it sealed in the local store (below), and `agentry knowledge add
+NAME --file PATH…` extends a kept one. `create --dir DIR` makes a plain pack
+directory instead, in the clear, and `add DIR` extends one. The built-in Knowledge Creator does the work. It is a package
 this binary embeds and runs with the attestation state `builtin`, never a
 release anyone installs. The runner first decodes the documents in an
 image that holds only `pdftotext`, `pandoc` and `tesseract`, with no
@@ -650,13 +651,54 @@ records `not scanned`. `--timeout`, `--max-turns` and `--max-cost` bound
 the run, and an `add` with the same documents continues a build that
 stopped.
 
-**Attaching one.** `run … --knowledge DIR` loads and verifies each pack
+**Keeping packs: the local store.** Packs are kept under the runner home,
+in `~/.agentry/runner/knowledge/<pack id>/`, which Agentry Desktop shares.
+Each is a `manifest.json` in the clear, the tree as one sealed file
+(`pack.sealed`: AES-256-GCM frames under a random data key per pack, the
+format of the core's `pkg/packseal`), and `key.json`, that data key as it is
+wrapped:
+
+- **Signed in**, the registry wraps the key for your account
+  (`POST /api/v1/knowledge/keys/wrap`). The pack then opens on any computer
+  you sign in on, and the unwrapped key is cached in the OS keychain so it
+  opens offline afterwards. What holds the wrapping key is the registry's:
+  on a core registry its deployment key, on SecureAgentry your account's
+  key, which Agentry holds.
+- **Signed out**, this computer's key in the keychain wraps it. That is not
+  portable, and the next signed-in command rewraps it to your account.
+  With `AGENTRY_NO_KEYRING` and no sign-in, nothing can be kept sealed.
+
+| Command | What it does |
+|---|---|
+| `knowledge list` | the packs kept here: pages, size, scan record, what their key is wrapped to |
+| `knowledge list --org ORG` | the packs organization ORG shares in the registry, and whether its members may export each |
+| `knowledge import DIR` | keep a pack directory sealed here (DIR is left as it is) |
+| `knowledge upload NAME` | send it to the registry, sealed, where it is scanned and counted against your allocation |
+| `knowledge download NAME` | keep the registry's copy here, checked in full |
+| `knowledge download --org ORG NAME` | keep ORG's shared pack here; its key stays the organization's, asked for at every open and never cached, so it opens only while you are a member and signed in |
+| `knowledge export NAME --to DIR` | write it out unencrypted into a new or empty DIR, after a typed `yes` (`--yes` for scripts); a shared pack is exported through the registry, which allows it to the organization's admins, and to its members once an admin marks it exportable |
+| `knowledge delete NAME` | delete it and its cached key; `--remote` also deletes the registry's copy; the only copy goes after a typed `yes` |
+
+A kept `create` or `add` opens the pack into a 0700 directory inside the
+store, and removes it with the Creator run's output unless `--out DIR`
+keeps that output. The registry's side of all this (the routes, the
+wrapper, the scan, an organization's shared packs) is
+[Knowledge packs in the registry](knowledge.md).
+
+**Attaching one.** `run … --knowledge NAME` (or `DIR`) loads and verifies each pack
 (the manifest, the layout, the 10 MB cap, the digest) before anything is
 resolved. It mounts one read-only `/knowledge` volume, and the tools server
 grants `knowledge_list`, `knowledge_search` and `knowledge_read` for that
 run only. Attaching a pack changes neither the compiled plan nor its hash.
 The receipt's `capabilities_enforced.knowledge` names each pack by digest
-and says whether a registry scanned it.
+and says whether a registry scanned it. A bare `NAME` is looked up in the
+store first, and a directory of that name in the working directory is
+taken only when the store keeps no such pack. A kept pack is opened into a
+0700 directory inside the store for the run to copy, and removed at
+teardown; the run's copy goes at teardown too, even with `--keep-run-dir`.
+A pack that is not kept, or will not open (signed out of the registry that
+wraps its key, another account's, altered), is refused before the run
+with exit 11, naming the pack.
 
 **A pack the release ships.** A release can carry packs of its own under
 `knowledge/<name>/`, named in its manifest's `knowledge.ships`
