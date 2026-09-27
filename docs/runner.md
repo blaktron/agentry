@@ -613,6 +613,39 @@ run only. Attaching a pack changes neither the compiled plan nor its hash.
 The receipt's `capabilities_enforced.knowledge` names each pack by digest
 and says whether a registry scanned it.
 
+**A pack the release ships.** A release can carry packs of its own under
+`knowledge/<name>/`, named in its manifest's `knowledge.ships`
+([briefagents.md](briefagents.md#knowledge-packs-the-release-ships)).
+A run mounts each one read-only at `/knowledge/<name>`, beside any pack
+attached with `--knowledge`, through the same run-time grant. The plan
+names no pack.
+
+- The pack is loaded from the installed release's own files, once the
+  manifest validates. It is staged from the run's copy of the release,
+  after that copy is checked against the install record. So what is
+  mounted is what the archive digest and the attestation cover, and it is
+  never fetched again.
+- A shipped pack that does not load, or a file of it changed after the
+  install, is exit 10 before any container starts.
+- A pack attached with `--knowledge` cannot take a shipped pack's name
+  (exit 1).
+- The receipt names a shipped pack as the release's, with no scan field
+  of its own: the attestation line says what covers the archive.
+
+  ```
+  <name> shipped with the release (archive sha256:…) mounted read-only at /knowledge/<name> (sha256:…, N pages, M bytes)
+  ```
+
+  For `--local` it names the `local package tree` digest instead.
+- The consent lists `knowledge: ships <name> (<size>)` with the other
+  capabilities, and `installed.yaml` records the names under
+  `capabilities.knowledge`, so an update that ships one more pack asks
+  again.
+- `agentry publish` refuses, before uploading, a release whose
+  `publish.include` leaves a shipped pack out. It also refuses an upload
+  past 16 MiB compressed, the most the registry's upload takes; publish a
+  larger release from its tag.
+
 ## Machine-readable output
 
 A client that drives the CLI — the desktop app, the `agentry-mcp` server
