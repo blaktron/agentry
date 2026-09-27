@@ -932,6 +932,11 @@ func NewHandlerWithGit(s *Server, mountGit func(httpmux.Mux)) http.Handler {
 	// SCIM — it is a browser destination, not part of the JSON API surface.
 	s.mountSSOLanding(mux)
 
+	// The directory's trust check (agentry#670): the directory's sign-in
+	// asks whether a browser is remembered. A root mount outside /api/ that
+	// no edge routes to the registry, gated by its own secret.
+	s.mountDirectoryTrust(mux)
+
 	// Extension routes (DEV-091, extensions.go): /api/v1/x/<name>/ behind
 	// the principal middleware, registered before the generated routes so a
 	// clash with a generated path is a start-up panic, never a shadow.
