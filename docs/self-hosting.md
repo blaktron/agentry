@@ -1277,8 +1277,8 @@ lifetime, ceiling and fail-closed lookup:
   cookie reaches every host under that domain at the executor's path, not
   only the directory: if a staging or development deployment runs under the
   production registry's name, production's tokens reach its directory too.
-  Keep such deployments on a name of their own, or accept that they are
-  trusted with those tokens (the hosted deployment accepts it, DEV-163).
+  Keep such deployments on a name of their own, or accept that they receive
+  those tokens (the hosted deployment accepts it, DEV-163).
 
 Setting the secret switches the registry's half on. The directory's half — the
 checkbox on the code page, the scope mapping and the policy that calls the
