@@ -305,6 +305,10 @@ const (
 	// GatePrincipal is behind the principal middleware, as the generated
 	// surface is.
 	GatePrincipal MountGate = "principal"
+	// GateDirectoryToken is gated by auth.idpTrustCheckToken, the secret the
+	// directory's sign-in flow presents (agentry#670). The route is absent
+	// (404) while that is unset.
+	GateDirectoryToken MountGate = "directory-token"
 )
 
 // RateNone says a mount draws from no §19 bucket. It is a claim rather than
@@ -408,6 +412,17 @@ var mountAuthz = map[string]MountDecl{
 	"GET /metrics": {
 		Gate: GatePublic, Class: RateNone,
 		Why: "a scraper is infrastructure, not a principal; the compose edge 404s it (agentry#408); a Helm ingress must exclude it",
+	},
+
+	// The directory's trust check (agentry#670, DEV-163): the directory's
+	// MFA-stage policy asks whether a browser is remembered before asking
+	// for the code. It is outside /api/ on purpose: the site's edge and the
+	// production chart route only /api/, /ui/, /scim/ and /.well-known/ to
+	// the registry, so nothing outside reaches it there, and the core's
+	// headless edge answers /internal/ with 404 (deploy/compose/edge).
+	"POST /internal/directory/trusted-device": {
+		Gate: GateDirectoryToken, Class: RateNone,
+		Why: "the directory calls it once per sign-in over the private network, behind a 32-character secret; the site's edge never routes /internal/ to the registry, the compose edge 404s it, and a Helm ingress must exclude it as it does /metrics",
 	},
 
 	// The discovery documents are what a client reads before it holds

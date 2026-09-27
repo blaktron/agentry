@@ -192,6 +192,22 @@ type Auth struct {
 	// session. The lifetime is absolute — using it does not extend it — and
 	// the ceiling below is a hard product limit like the others.
 	TrustedDeviceTTL time.Duration `yaml:"trustedDeviceTTL"`
+	// IdPTrustCheckToken turns on remembered browsers on the directory's
+	// sign-in (agentry#670, DEV-163): the directory's sign-in flow presents
+	// it as a bearer secret when it asks the registry whether a browser's
+	// cookie is a live record, and the registry mints records from a
+	// directory sign-in only while it is set. Empty means the directory path
+	// is off: nothing is minted there and the check route answers 404. At
+	// least 32 characters; the directory's side holds the same value.
+	IdPTrustCheckToken string `yaml:"idpTrustCheckToken"`
+	// DirectoryCookieDomain is the parent domain the remembered-browser
+	// cookie of the directory path is set on (the native path's cookie is
+	// always host-only), when the directory and the registry are sibling
+	// hosts (app.example.com and auth.example.com under example.com). Empty
+	// derives it: a directory on the registry's own host gets a host-only
+	// cookie, and one on a subdomain of it gets the registry's host. See
+	// DirectoryTrustCookieDomain.
+	DirectoryCookieDomain string `yaml:"directoryCookieDomain"`
 	// CookieSecure marks session cookies Secure (default true outside dev).
 	CookieSecure bool `yaml:"cookieSecure"`
 	// SealingKey is a base64 32-byte key encrypting small secrets at rest
@@ -432,6 +448,65 @@ type Brand struct {
 	SecurityEmail string `yaml:"securityEmail"`
 	PrivacyURL    string `yaml:"privacyURL"`
 	TermsURL      string `yaml:"termsURL"`
+}
+
+// DirectoryTrustCookieDomain says where the remembered-browser cookie of the
+// directory path is set (agentry#670, DEV-163). The registry sets it on the
+// OIDC callback, on its own host, and the browser has to send it to the
+// directory's flow executor, which is where the directory asks the registry
+// about it. Cookies ignore ports, so:
+//
+//   - a directory on the registry's own host gets a host-only cookie ("");
+//   - a directory on a subdomain of the registry's host gets a cookie for
+//     the registry's host, which covers its subdomains;
+//   - sibling hosts need auth.directoryCookieDomain, a parent domain of
+//     both, and a browser refuses one that does not cover the host setting
+//     it, so this refuses it first.
+//
+// An explicit domain must be a DNS name with at least two labels: a browser
+// ignores a Domain attribute that is an address or a public suffix, and the
+// cookie would then silently be host-only.
+func (c Config) DirectoryTrustCookieDomain() (string, error) {
+	if !c.Social.Authentik.Configured() || c.Social.Authentik.Issuer == "" {
+		return "", fmt.Errorf("config: auth.idpTrustCheckToken needs the directory configured (social.authentik with its issuer): it is the directory that asks")
+	}
+	registry := hostOf(c.BaseURL)
+	if registry == "" {
+		return "", fmt.Errorf("config: auth.idpTrustCheckToken needs baseURL: the registry sets the cookie on the callback at its public origin, and the directory has to be able to receive it")
+	}
+	directory := hostOf(c.Social.Authentik.Issuer)
+	if directory == "" {
+		return "", fmt.Errorf("config: social.authentik.issuer %q has no host", c.Social.Authentik.Issuer)
+	}
+	covers := func(parent, host string) bool { return host == parent || strings.HasSuffix(host, "."+parent) }
+	d := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(c.Auth.DirectoryCookieDomain), "."))
+	if d == "" {
+		switch {
+		case directory == registry:
+			return "", nil
+		case covers(registry, directory):
+			return registry, nil
+		default:
+			return "", fmt.Errorf("config: the directory (%s) is not on the registry's host (%s) or under it: set auth.directoryCookieDomain to a parent domain of both", directory, registry)
+		}
+	}
+	if _, err := netip.ParseAddr(d); err == nil || !strings.Contains(d, ".") {
+		return "", fmt.Errorf("config: auth.directoryCookieDomain %q must be a domain name of at least two labels; a browser ignores an address or a bare label there", d)
+	}
+	if !covers(d, registry) || !covers(d, directory) {
+		return "", fmt.Errorf("config: auth.directoryCookieDomain %q must cover both the registry (%s) and the directory (%s)", d, registry, directory)
+	}
+	return d, nil
+}
+
+// hostOf is the lower-cased host name of a URL, without its port; "" when
+// the URL has none.
+func hostOf(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(u.Hostname())
 }
 
 // DisplayName is what notification bodies, authenticator apps and the
@@ -832,6 +907,8 @@ func applyEnv(c *Config) error {
 	str("AGENTRY_SOCIAL_AUTHENTIK_ISSUER", &c.Social.Authentik.Issuer)
 	str("AGENTRY_IDP_ADMIN_URL", &c.Auth.IdPAdminURL)
 	str("AGENTRY_IDP_ADMIN_TOKEN", &c.Auth.IdPAdminToken)
+	str("AGENTRY_IDP_TRUST_CHECK_TOKEN", &c.Auth.IdPTrustCheckToken)
+	str("AGENTRY_AUTH_DIRECTORY_COOKIE_DOMAIN", &c.Auth.DirectoryCookieDomain)
 	str("AGENTRY_STAFF_ORG", &c.Auth.StaffOrg)
 	str("AGENTRY_STAFF_DOMAIN", &c.Auth.StaffDomain)
 	str("AGENTRY_IDP_STAFF_GROUP", &c.Auth.IdPStaffGroup)
@@ -1044,6 +1121,18 @@ func (c Config) Validate() error {
 		}
 		if g == c.Auth.IdPStaffGroup {
 			return fmt.Errorf("config: auth.idpStaffMirrorGroup must not be the retired auth.idpStaffGroup (%q): that group was a source of staff, the mirror is written by the registry", g)
+		}
+	}
+	if c.Auth.IdPTrustCheckToken != "" {
+		// Remembered browsers on the directory path (agentry#670): refused
+		// here rather than discovered at the first sign-in, where a cookie
+		// the directory never receives would look like a feature that
+		// silently does nothing.
+		if len(c.Auth.IdPTrustCheckToken) < 32 {
+			return fmt.Errorf("config: auth.idpTrustCheckToken must be at least 32 characters (got %d)", len(c.Auth.IdPTrustCheckToken))
+		}
+		if _, err := c.DirectoryTrustCookieDomain(); err != nil {
+			return err
 		}
 	}
 	if o := c.Auth.StaffOrg; o != "" && !staffOrgRE.MatchString(o) {

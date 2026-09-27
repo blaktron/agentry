@@ -138,6 +138,14 @@ truncation never makes two roles' names one. */ -}}
       key: AGENTRY_IDP_ADMIN_TOKEN
       optional: true
 {{- end }}
+{{- if or .Values.secret.idpTrustCheckToken .Values.secret.existingSecret }}
+- name: AGENTRY_IDP_TRUST_CHECK_TOKEN
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "agentry.secretName" . }}
+      key: AGENTRY_IDP_TRUST_CHECK_TOKEN
+      optional: true
+{{- end }}
 {{- with .Values.extraEnv }}
 {{ toYaml . }}
 {{- end }}
