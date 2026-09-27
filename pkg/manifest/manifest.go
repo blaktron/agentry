@@ -174,6 +174,11 @@ type Manifest struct {
 	// shown to people only: it never reaches the agent, the run plan, the
 	// capability diff or the consent.
 	Guide *Guide `yaml:"guide,omitempty" json:"guide,omitempty"`
+	// Knowledge names the knowledge packs the release ships in its archive
+	// under knowledge/<name>/ and what a person may attach of their own
+	// (v2, V11; plan knowledge.md §4.6). The shipped names are part of the
+	// contract (Contract); what is accepted is shown to people only.
+	Knowledge *Knowledge `yaml:"knowledge,omitempty" json:"knowledge,omitempty"`
 	// Runtime carries informational runtime hints and install targets.
 	Runtime Runtime `yaml:"runtime,omitempty" json:"runtime,omitempty"`
 	// Capabilities is the security contract (closed vocabulary, V5).
@@ -379,6 +384,11 @@ type Capabilities struct {
 	// are EXACT pins (V5): they are part of the release's content, so a new
 	// agent version is a new supply-chain decision by construction.
 	MCPServers []MCPServer `yaml:"mcpServers,omitempty" json:"mcpServers,omitempty"`
+	// Knowledge names the packs the release ships, as the contract a
+	// person consents to records them (Manifest.Contract). It is never
+	// written under capabilities in agent.yaml: the knowledge block is
+	// where a release declares its packs.
+	Knowledge []string `yaml:"-" json:"knowledge,omitempty"`
 }
 
 // MCPServer is one declared MCP server requirement (§5.4, RUNNER-PLAN-3).

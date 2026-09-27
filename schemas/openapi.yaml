@@ -6023,7 +6023,11 @@ components:
         capabilities:
           type: object
           additionalProperties: true
-          description: The declared capability block (§5.4).
+          description: >-
+            The capability contract (§5.4): the declared capability block,
+            and under `knowledge` the names of the knowledge packs the
+            release ships (the manifest's `knowledge.ships`), so a release
+            shipping one more than an installed one asks for consent again.
         createdAt:
           type: string
           format: date-time
@@ -6156,8 +6160,32 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ScanFinding"
+        knowledge:
+          type: array
+          description: >-
+            What the scan read of each knowledge pack the release ships
+            (plan knowledge.md §4.6; the manifest's `knowledge.ships`):
+            every rule stage over every page and source, then AI Review over
+            the pack's `sources/` and its `wiki/` in chunks no larger than
+            the judge reads, or "AI Review not configured". The pack's
+            findings are also the version's, in `findings`, under scanner
+            `SK/…` with a file path in `knowledge/<name>/`; the release's
+            own stages, AI Review included, do not read a shipped pack's
+            tree. Absent for a release that ships no pack.
+          items:
+            $ref: "#/components/schemas/ShippedKnowledgeScan"
         rescanInFlight:
           $ref: "#/components/schemas/RescanInFlight"
+
+    ShippedKnowledgeScan:
+      type: object
+      required: [name, report]
+      properties:
+        name:
+          type: string
+          description: The pack's name and its directory under `knowledge/` in the archive.
+        report:
+          $ref: "#/components/schemas/KnowledgeScanReport"
 
     RescanInFlight:
       type: object

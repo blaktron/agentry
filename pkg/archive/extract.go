@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/klauspost/compress/zstd"
+
+	"github.com/blaktron/agentry/pkg/manifest"
 )
 
 // The hardened archive extractor (§8.2): the single shared unpacker for
@@ -27,12 +29,16 @@ type ExtractLimits struct {
 	MaxRatio int64
 }
 
-// DefaultLimits are the §19 release-archive quotas.
+// DefaultLimits are the §19 release-archive quotas, raised by the most a
+// release may ship in knowledge packs (plan knowledge.md §4.6): the
+// extractor bounds what any archive can unpack to, and the manifest's V8
+// holds each release to its own quotas and each pack to a pack's.
 func DefaultLimits() ExtractLimits {
+	const packs = manifest.MaxShippedPacks
 	return ExtractLimits{
-		MaxFileBytes:  5 << 20,  // images up to 5 MB
-		MaxTotalBytes: 10 << 20, // 10 MB post-filter
-		MaxFiles:      2000,
+		MaxFileBytes:  manifest.MaxKnowledgePackBytes,                // images up to 5 MB; a pack's source up to its pack's 10 MB
+		MaxTotalBytes: 10<<20 + packs*manifest.MaxKnowledgePackBytes, // 10 MB post-filter, and five packs
+		MaxFiles:      2000 + packs*manifest.MaxKnowledgePackFiles,
 		MaxRatio:      200,
 	}
 }
