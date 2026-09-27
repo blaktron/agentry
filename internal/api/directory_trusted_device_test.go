@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -395,4 +396,160 @@ func TestDirectoryRememberCookieCoversTheDirectorysHost(t *testing.T) {
 	env := newRememberEnv(t, idp, true, "http://registry.test")
 	res, _ := directorySignIn(t, env, idp, "authentik")
 	requireSetCookieAt(t, res.Cookies(), trustedDeviceCookie, flowExecutorPath, "registry.test", int(deviceTTL.Seconds()), false)
+}
+
+// signInCaller is directorySignIn for a test that goes on to call the API as
+// that browser: the session cookie it was given and the CSRF token the
+// callback's body carries.
+func signInCaller(t *testing.T, env *testEnv, idp *fakeOIDC) (caller, *http.Response) {
+	t.Helper()
+	authURL, state, cookie := env.socialStart(t, "authentik")
+	visit, err := idp.hostClient().Get(authURL.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = visit.Body.Close()
+	res := env.socialCallback(t, "authentik", state, cookie)
+	t.Cleanup(func() { _ = res.Body.Close() })
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("callback: got %d want 200", res.StatusCode)
+	}
+	var out struct {
+		CsrfToken string `json:"csrfToken"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	c := caller{name: "directory user", csrf: out.CsrfToken}
+	for _, ck := range res.Cookies() {
+		if ck.Name == "agentry_session" {
+			c.session = ck.Value
+		}
+	}
+	if c.session == "" || c.csrf == "" {
+		t.Fatal("the callback gave no session or no CSRF token")
+	}
+	return c, res
+}
+
+// TestClearTrustedDevices is the account's one control over remembered
+// browsers (agentry#672, DEV-163): a count the site shows, and a clear that
+// revokes every one of the caller's, this browser's included. It follows the
+// session routes' rule: a token reads 0 and cannot clear.
+func TestClearTrustedDevices(t *testing.T) {
+	idp := newFakeOIDC(t)
+	idp.amr = []string{"pwd", "mfa"}
+	idp.extra = map[string]any{"agentry_remember_device": true, "auth_time": fresh()}
+	env := newRememberEnv(t, idp, true)
+	ctx := context.Background()
+
+	// Two remembered browsers for this person.
+	me, first := signInCaller(t, env, idp)
+	firstToken := requireSetCookieAt(t, first.Cookies(), trustedDeviceCookie, flowExecutorPath, "", int(deviceTTL.Seconds()), false).Value
+	idp.extra["auth_time"] = fresh()
+	_, second := signInCaller(t, env, idp)
+	secondToken := requireSetCookieAt(t, second.Cookies(), trustedDeviceCookie, flowExecutorPath, "", int(deviceTTL.Seconds()), false).Value
+	sub := idp.sub
+
+	// Someone else, remembered too, whose record a clear must not touch.
+	idp.sub, idp.email = "other-"+randSuffix(), "other-"+randSuffix()+"@example.test"
+	idp.extra["auth_time"] = fresh()
+	_, otherRes := signInCaller(t, env, idp)
+	otherToken := requireSetCookieAt(t, otherRes.Cookies(), trustedDeviceCookie, flowExecutorPath, "", int(deviceTTL.Seconds()), false).Value
+	otherSub := idp.sub
+
+	// An expired record of this person's: inert, so neither counted nor
+	// reported as cleared.
+	if _, err := env.st.Pool().Exec(ctx,
+		`INSERT INTO trusted_devices (id, user_id, token_sha256, expires_at)
+		 SELECT gen_random_uuid(), user_id, sha256(random()::text::bytea), now() - interval '1 hour'
+		 FROM identities WHERE subject = $1`, "authentik:"+sub); err != nil {
+		t.Fatal(err)
+	}
+
+	var count struct {
+		Count *int `json:"count"`
+	}
+	env.doJSON(me, http.MethodGet, "/api/v1/user/trusted-devices", nil, &count, http.StatusOK)
+	if count.Count == nil || *count.Count != 2 {
+		t.Fatalf("count = %s, want 2", intOrNil(count.Count))
+	}
+
+	// A token: no inventory, and no clear.
+	_, pat := env.mintPAT(me, "clear-check", "user:profile")
+	tokenCaller := caller{name: "pat", pat: pat}
+	env.doJSON(tokenCaller, http.MethodGet, "/api/v1/user/trusted-devices", nil, &count, http.StatusOK)
+	if count.Count == nil || *count.Count != 0 {
+		t.Fatalf("a token read count = %s, want 0", intOrNil(count.Count))
+	}
+	env.doJSON(tokenCaller, http.MethodDelete, "/api/v1/user/trusted-devices", nil, nil, http.StatusForbidden)
+
+	// A browser request without the CSRF header is refused, as every
+	// cookie-authenticated mutation is.
+	noCSRF := me
+	noCSRF.csrf = ""
+	env.doJSON(noCSRF, http.MethodDelete, "/api/v1/user/trusted-devices", nil, nil, http.StatusForbidden)
+
+	// The clear.
+	res := env.do(me, http.MethodDelete, "/api/v1/user/trusted-devices", nil)
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("clear: status %d", res.StatusCode)
+	}
+	var cleared struct {
+		Cleared *int `json:"cleared"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&cleared); err != nil || cleared.Cleared == nil || *cleared.Cleared != 2 {
+		t.Fatalf("cleared = %s (%v), want 2", intOrNil(cleared.Cleared), err)
+	}
+	// This browser's cookie is cleared wherever this server may have set it:
+	// the directory path's and the native path's.
+	requireClearedCookieAt(t, res.Cookies(), trustedDeviceCookie, flowExecutorPath, "", false)
+	requireClearedCookieAt(t, res.Cookies(), trustedDeviceCookie, "/", "", false)
+
+	env.doJSON(me, http.MethodGet, "/api/v1/user/trusted-devices", nil, &count, http.StatusOK)
+	if count.Count == nil || *count.Count != 0 {
+		t.Fatalf("count after the clear = %s, want 0", intOrNil(count.Count))
+	}
+	// Cleared means the directory's next check says no for each of them:
+	// the code is asked.
+	for i, tok := range []string{firstToken, secondToken} {
+		if st, ok := checkTrust(t, env, directoryTrustToken, map[string]string{"token": tok, "sub": sub}); st != http.StatusOK || ok {
+			t.Fatalf("cleared browser %d: %d trusted=%v, want 200 false", i+1, st, ok)
+		}
+	}
+	// And someone else's browser is still remembered.
+	if st, ok := checkTrust(t, env, directoryTrustToken, map[string]string{"token": otherToken, "sub": otherSub}); st != http.StatusOK || !ok {
+		t.Fatalf("another account's browser after the clear: %d trusted=%v, want 200 true", st, ok)
+	}
+
+	// The audit trail is this account's: the test database is shared, so
+	// every audit query is scoped to the person, found by their identity.
+	var myID string
+	if err := env.st.Pool().QueryRow(ctx,
+		`SELECT user_id::text FROM identities WHERE subject = $1`, "authentik:"+sub).Scan(&myID); err != nil {
+		t.Fatal(err)
+	}
+	var audited int
+	if err := env.st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM audit_events WHERE action = 'user.trusted_device_revoke' AND actor_id = $1::uuid AND detail->>'scope' = 'all' AND (detail->>'count')::int = 2`, myID).Scan(&audited); err != nil || audited != 1 {
+		t.Fatalf("%d user.trusted_device_revoke rows for the clear, want 1 (%v)", audited, err)
+	}
+
+	// Nothing left: a second clear answers 0 and writes no audit row.
+	env.doJSON(me, http.MethodDelete, "/api/v1/user/trusted-devices", nil, &cleared, http.StatusOK)
+	if cleared.Cleared == nil || *cleared.Cleared != 0 {
+		t.Fatalf("a second clear = %s, want 0", intOrNil(cleared.Cleared))
+	}
+	if err := env.st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM audit_events WHERE action = 'user.trusted_device_revoke' AND actor_id = $1::uuid AND detail->>'scope' = 'all'`, myID).Scan(&audited); err != nil || audited != 1 {
+		t.Fatalf("%d clear audit rows after a clear with nothing to clear, want still 1 (%v)", audited, err)
+	}
+}
+
+func intOrNil(p *int) string {
+	if p == nil {
+		return "absent"
+	}
+	return strconv.Itoa(*p)
 }

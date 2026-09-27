@@ -253,6 +253,10 @@ var routeAuthz = map[string]RouteDecl{
 	"deleteUserDirectoryDevice":      {Action: auth.ActUserSelfUpdate},
 	"revokeUserSession":              {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	"revokeOtherUserSessions":        {Action: auth.ActUserSecurityManage, SessionOnly: true},
+	// Remembered browsers (agentry#672), on the sessions' rule: a token
+	// reads a count of 0 and cannot clear them.
+	"countTrustedDevices": {Action: auth.ActUserSelfRead},
+	"clearTrustedDevices": {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	// The rule bundle is the same artifact the CLI already embeds; serving it
 	// discloses nothing that shipping the binary did not.
 	"getLatestRulesetBundle":      {Action: auth.ActPublicRead, Anonymous: true, NoAuthz: true},
