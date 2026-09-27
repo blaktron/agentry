@@ -29,6 +29,12 @@ const (
 	// create, upload, delete and wrap (knowledge:write).
 	ScopeKnowledgeRead  Scope = "knowledge:read"
 	ScopeKnowledgeWrite Scope = "knowledge:write"
+	// The vault scope (plan hosted-credentials-vault.md D13, agentry#676):
+	// a token that may set and delete the caller's hosted-run secrets and
+	// never list or read one. No core route consumes it; the enterprise
+	// build's vault requires it through pkg/extension, and keeps its list
+	// for a session alone.
+	ScopeSecretWrite Scope = "secret:write"
 )
 
 // AllScopes enumerates every valid scope (validation, docs, UI).
@@ -37,6 +43,7 @@ func AllScopes() []Scope {
 		ScopeRepoRead, ScopeRepoWrite, ScopeAgentPublish, ScopeAgentRead,
 		ScopeOrgAdmin, ScopeReviewAct, ScopeAuditRead, ScopeUserProfile,
 		ScopeRunRead, ScopeRunWrite, ScopeKnowledgeRead, ScopeKnowledgeWrite,
+		ScopeSecretWrite,
 	}
 }
 

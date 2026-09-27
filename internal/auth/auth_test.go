@@ -190,6 +190,33 @@ func TestRunScopesAreValidFlatAndUnlockNoCoreAction(t *testing.T) {
 	}
 }
 
+// The vault scope (agentry#676, plan hosted-credentials-vault.md D13):
+// valid, enumerated, flat, and mapped to no core action — only the
+// enterprise build's vault consumes it.
+func TestSecretWriteIsValidFlatAndUnlocksNoCoreAction(t *testing.T) {
+	if !ValidScope(ScopeSecretWrite) {
+		t.Fatal("secret:write is not a valid scope")
+	}
+	found := false
+	for _, v := range AllScopes() {
+		found = found || v == ScopeSecretWrite
+	}
+	if !found {
+		t.Fatal("secret:write is not enumerated")
+	}
+	if len(AllScopes()) != 13 {
+		t.Fatalf("AllScopes has %d scopes, want thirteen", len(AllScopes()))
+	}
+	if HasScope([]string{"secret:write"}, ScopeRunWrite) || HasScope([]string{"run:write", "knowledge:write"}, ScopeSecretWrite) {
+		t.Fatal("secret:write implied or was implied by another scope; the list is flat")
+	}
+	for act, sc := range scopeFor {
+		if sc == ScopeSecretWrite {
+			t.Errorf("core action %v is unlocked by secret:write", act)
+		}
+	}
+}
+
 // TestNamespaceDerivedAgentRole pins what a membership confers on an org's
 // agents before any grant (§12.2, D6, D19; agentry#360, agentry#362): an
 // admin administers them, an active member may release them, and everyone

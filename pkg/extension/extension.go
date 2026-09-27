@@ -283,9 +283,9 @@ type Unthrottles interface {
 type Principal = auth.Principal
 
 // Scope is a PAT scope as the core spells it; those an extension may
-// require are the hosted-run scopes (agentry#348) and the knowledge scopes,
+// require are the hosted-run scopes (agentry#348), the knowledge scopes,
 // for a route that writes into a person's knowledge through the Knowledge
-// seam (agentry#624). A session carries no
+// seam (agentry#624), and the vault's secret:write (agentry#676). A session carries no
 // scopes and the account's full authority; a PAT carries what it was
 // minted with, flat — no scope implies another.
 type Scope = auth.Scope
@@ -296,6 +296,9 @@ const (
 	ScopeRunWrite       = auth.ScopeRunWrite
 	ScopeKnowledgeRead  = auth.ScopeKnowledgeRead
 	ScopeKnowledgeWrite = auth.ScopeKnowledgeWrite
+	// ScopeSecretWrite lets a token set and delete the caller's hosted-run
+	// secrets (agentry#676); the vault extension requires it.
+	ScopeSecretWrite = auth.ScopeSecretWrite
 )
 
 // ScopeAllows is how the core reads a scope for a route: an anonymous
