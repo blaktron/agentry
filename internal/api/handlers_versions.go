@@ -18,12 +18,15 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// Upload limits for cli-upload archives (§19: 10 MB post-filter; accept a
-// little padding for the container itself). maxUploadBytes caps the whole
-// request body; multipartMemoryBytes is only how much of it net/http may hold
-// in memory before spooling.
+// Upload limits for cli-upload archives. maxUploadBytes caps the whole
+// request body, compressed: a release's 10 MB post-filter compresses well
+// below it, and a release that ships knowledge packs (plan knowledge.md
+// §4.6) has up to the edge's own 16 MiB request cap on this door — a
+// larger one is published by a tag push, which has no body cap.
+// multipartMemoryBytes is only how much of it net/http may hold in memory
+// before spooling.
 const (
-	maxUploadBytes       = 12 << 20
+	maxUploadBytes       = 16 << 20
 	multipartMemoryBytes = 1 << 20
 )
 

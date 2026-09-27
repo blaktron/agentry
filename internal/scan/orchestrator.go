@@ -207,7 +207,7 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 	// S1 first — it populates in.Files for everyone else, so it always runs.
 	s1 := o.runStage(sc, S1Inventory{}, in)
 	ships := shippedPacks(in.ManifestJSON)
-	s1.Findings = withoutTruncatedPackFiles(s1.Findings, ships)
+	s1.Findings = withoutTruncatedPackFiles(s1.Findings, in.Files, ships)
 	record(s1)
 	allFindings = append(allFindings, s1.Findings...)
 	if s1.Err != nil {
@@ -258,7 +258,7 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 		go func(i int, st Stage) {
 			defer wg.Done()
 			stIn := release
-			if st.ID() == knowledgeStageID {
+			if st.ID() == KnowledgeStageID {
 				stIn = in
 			}
 			results[i] = exec(st, stIn)
@@ -275,14 +275,8 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 		if r.Scanner == "S5" && r.PromptHash != "" {
 			judgePromptHash = r.PromptHash
 		}
-		if u := r.JudgeUsage; u != nil {
-			if judgeUsage == nil {
-				judgeUsage = &JudgeUsage{}
-			}
-			judgeUsage.PromptTokens += u.PromptTokens
-			judgeUsage.CompletionTokens += u.CompletionTokens
-		}
-		if r.Scanner == knowledgeStageID && !r.Skipped {
+		r.JudgeUsage.add(&judgeUsage)
+		if r.Scanner == KnowledgeStageID && !r.Skipped {
 			knowledge = r.Knowledge
 		}
 		if r.Err != nil {
@@ -350,7 +344,7 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 // error (fail closed, never crash the worker).
 func (o *Orchestrator) runStage(sc stageContext, st Stage, in *Input) (res StageResult) {
 	limit := o.stageTimeout
-	if st.ID() == knowledgeStageID && o.knowledgeTimeout > limit {
+	if st.ID() == KnowledgeStageID && o.knowledgeTimeout > limit {
 		limit = o.knowledgeTimeout
 	}
 	stageCtx, cancel := context.WithTimeout(sc.ctx, limit)

@@ -20,6 +20,7 @@ import (
 	"github.com/blaktron/agentry/internal/scan"
 	"github.com/blaktron/agentry/internal/store"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/pkg/manifest"
 	"github.com/blaktron/agentry/pkg/packseal"
 )
 
@@ -137,20 +138,7 @@ func (s *Service) ready() error {
 
 // ValidName is the CLI's rule for a pack name (agentry-cli
 // pkg/knowledge.ValidName): the name is the pack's directory.
-func ValidName(name string) bool {
-	if name == "" || len(name) > 64 {
-		return false
-	}
-	for i, r := range name {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
-		case i > 0 && (r == '.' || r == '-' || r == '_'):
-		default:
-			return false
-		}
-	}
-	return true
-}
+func ValidName(name string) bool { return manifest.ValidKnowledgePackName(name) }
 
 // Wrap wraps a data key for owner.
 func (s *Service) Wrap(ctx context.Context, owner Owner, dataKey []byte) (WrappedKey, error) {

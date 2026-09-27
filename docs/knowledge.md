@@ -274,11 +274,20 @@ the version's scan, `SK`. What differs is what the result does:
   AI Review, and counted on the run.
 
 The release's own stages read the release's own files: none of them reads
-a shipped pack's tree, since the release's AI Review would read it in one
+a shipped pack's text, since the release's AI Review would read it in one
 call past what the judge takes. S1 still inventories every file of the
 archive, so an executable or a nested archive in a pack is refused as
-anywhere else, and the pack's `manifest.json` is read as a release file.
-`SK` has 20 minutes, within the scan's 30.
+anywhere else; a pack's files that are not text (an image, a source's
+original) are the release's stages' as anywhere else; a text file in a
+pack that is not UTF-8, which the pack scan cannot read, is the finding
+`SK/unread-text` (medium), so nothing in a pack goes unread without one;
+and the pack's `manifest.json` is read as a release file. `SK` has 20
+minutes, within the scan's 30.
+
+The archive extractor's bounds are raised to hold the most a release may
+ship: 60 MB unpacked, 12,000 files and 10 MB a file, every other quota
+being the manifest's to enforce. An upload through the API is at most
+16 MiB compressed, the edge's request cap.
 
 ## What the registry reads
 
