@@ -9,7 +9,9 @@ signed-in account keeps its packs here, how they are sealed, what the
 registry reads of them, and when they are destroyed.
 
 No route publishes a pack, lists it anywhere public, or lets another
-account read it. What the registry itself reads of a pack is below
+account read it. The one exception is an organization's shared pack, which
+its active members read ([Shared knowledge](#shared-knowledge-in-an-organization)).
+What the registry itself reads of a pack is below
 ([What the registry reads](#what-the-registry-reads)).
 
 ## What the registry holds
@@ -68,7 +70,7 @@ sealer.
 
 ## The routes
 
-Every route is the caller's own. A session works, or a personal access
+Every route under `/knowledge/` is the caller's own. A session works, or a personal access
 token with `knowledge:read` (list, read, download, export, unwrap, the
 meter) or `knowledge:write` (create, upload, delete, wrap). A pack is
 looked up by its owner, so another account's pack is one that does not
@@ -86,7 +88,7 @@ exist: 404, for a fellow member of the owner's organization too.
 | `GET /api/v1/knowledge/packs/{id}/export` | the tree decrypted, `application/x-tar`, `no-store`: the canonical tar whose SHA-256 is the digest. 409 `knowledge-scanning` while the pack is scanned |
 | `DELETE /api/v1/knowledge/packs/{id}` | the pack, its stored trees and its wrapped key |
 | `GET /api/v1/knowledge/usage` | the meter: `bytes` kept here, the allocation `max` (0 is no cap), `packs` |
-| `GET /api/v1/platform/knowledge?owner=<handle>` | platform staff only (a staff token needs `knowledge:read`): an account's packs by name, state and size, and nothing of their content, digest, report or key |
+| `GET /api/v1/platform/knowledge?owner=<handle>` | platform staff only (a staff token needs `knowledge:read`): an account's or an organization's packs by name, state and size, and nothing of their content, digest, report or key |
 
 **The upload.** A tree arrives as one PUT of the sealed tree. A body
 larger than a sealed 10 MB pack can be is 413 `upload-too-large`. The
@@ -140,6 +142,56 @@ build never overwrites an upload made while it ran; a tree the pack
 already holds is not stored again, and is no conflict, so a retried
 replace that already landed is harmless. The data key never leaves the
 core through it.
+
+## Shared knowledge in an organization
+
+An organization can keep packs of its own, which every active member
+reads. Its admins create them, upload to them, mark them exportable and
+delete them. The data key is wrapped for the organization: on a core
+registry under the knowledge sealing key with the organization's own salt,
+and on SecureAgentry to the organization's own key. The routes are the
+personal ones under the organization, with the same bodies and answers:
+
+| Route | Who |
+|---|---|
+| `POST /api/v1/orgs/{org}/knowledge/keys/wrap` | admins: wrap a data key for the organization |
+| `POST /api/v1/orgs/{org}/knowledge/keys/unwrap` | members: the data key a wrapped key of the organization's holds (`no-store`) |
+| `POST /api/v1/orgs/{org}/knowledge/packs` | admins: create an empty pack, its wrapped key opening for the organization |
+| `PUT /api/v1/orgs/{org}/knowledge/packs/{id}/tree` | admins: upload the sealed tree |
+| `PATCH /api/v1/orgs/{org}/knowledge/packs/{id}` | admins: `{"exportable": true}` lets members export the pack; `false` takes it back |
+| `DELETE /api/v1/orgs/{org}/knowledge/packs/{id}` | admins |
+| `GET /api/v1/orgs/{org}/knowledge/packs`, `…/{id}`, `…/{id}/tree` | members: the list, one pack, the sealed tree |
+| `GET /api/v1/orgs/{org}/knowledge/packs/{id}/export` | admins, and members once the pack is marked exportable; otherwise 403 `knowledge-not-exportable` |
+| `GET /api/v1/orgs/{org}/knowledge/usage` | members: the organization's meter |
+
+A shared pack reads `shared: true`, `org` (the organization's handle) and
+`exportable`. A token needs `knowledge:read` or `knowledge:write` as for a
+person's own packs, and an organization that requires SSO requires it here
+as on its other routes. While an organization is in its decommission hold,
+the reads still work and the writes do not.
+
+**Membership is checked at every call.** The roles a request is judged
+by are its caller's active memberships, read again for every request. A
+member who is removed, or who leaves, is refused the next unwrap, so a
+sealed copy on their machine stays sealed: the client asks for the key
+each time it opens the pack and keeps it only in memory. A pending member
+holds nothing. Anyone who is not an active member of the organization,
+another organization's members and platform staff included, is answered
+404 on every route, as for another account's pack. Staff see an
+organization's packs by name and size through `GET /platform/knowledge`.
+
+**The allocation.** An organization's packs count against the allocation
+the organization draws on. On a core registry that is the organization
+alone under `AGENTRY_KNOWLEDGE_BYTES_PER_ACCOUNT`, apart from its members'
+own packs. A closed build's resolver may pool them; SecureAgentry counts a
+paid organization's shared packs and its members' in one pool.
+
+**The audit log.** Creating a shared pack, marking it exportable or not,
+exporting it and deleting it are recorded in the organization's audit log
+(`org.knowledge_create`, `org.knowledge_update` with `exportable`,
+`org.knowledge_export`, `org.knowledge_delete`), each naming the pack and
+nothing of its content. The organization's packs and its key go with it
+when it is erased after its decommission ([Erasure](#erasure)).
 
 ## The scan
 

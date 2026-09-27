@@ -61,7 +61,7 @@ const createKnowledgePack = `-- name: CreateKnowledgePack :one
 
 INSERT INTO knowledge_packs (owner_kind, owner_id, name, wrapper_kind, wrapper_recipient, wrapped_key)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, owner_kind, owner_id, name, state, bytes, files, pages, digest, object_key, scan_report, scanned_at, wrapper_kind, wrapper_recipient, wrapped_key, created_at, updated_at
+RETURNING id, owner_kind, owner_id, name, state, bytes, files, pages, digest, object_key, scan_report, scanned_at, wrapper_kind, wrapper_recipient, wrapped_key, created_at, updated_at, exportable
 `
 
 type CreateKnowledgePackParams struct {
@@ -104,6 +104,7 @@ func (q *Queries) CreateKnowledgePack(ctx context.Context, arg CreateKnowledgePa
 		&i.WrappedKey,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Exportable,
 	)
 	return i, err
 }
@@ -243,7 +244,7 @@ func (q *Queries) GetKnowledgeOwnerSalt(ctx context.Context, arg GetKnowledgeOwn
 }
 
 const getKnowledgePack = `-- name: GetKnowledgePack :one
-SELECT id, owner_kind, owner_id, name, state, bytes, files, pages, digest, object_key, scan_report, scanned_at, wrapper_kind, wrapper_recipient, wrapped_key, created_at, updated_at FROM knowledge_packs WHERE id = $1 AND owner_kind = $2 AND owner_id = $3
+SELECT id, owner_kind, owner_id, name, state, bytes, files, pages, digest, object_key, scan_report, scanned_at, wrapper_kind, wrapper_recipient, wrapped_key, created_at, updated_at, exportable FROM knowledge_packs WHERE id = $1 AND owner_kind = $2 AND owner_id = $3
 `
 
 type GetKnowledgePackParams struct {
@@ -273,12 +274,13 @@ func (q *Queries) GetKnowledgePack(ctx context.Context, arg GetKnowledgePackPara
 		&i.WrappedKey,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Exportable,
 	)
 	return i, err
 }
 
 const getKnowledgePackByObject = `-- name: GetKnowledgePackByObject :one
-SELECT id, owner_kind, owner_id, name, state, bytes, files, pages, digest, object_key, scan_report, scanned_at, wrapper_kind, wrapper_recipient, wrapped_key, created_at, updated_at FROM knowledge_packs WHERE id = $1 AND object_key = $2
+SELECT id, owner_kind, owner_id, name, state, bytes, files, pages, digest, object_key, scan_report, scanned_at, wrapper_kind, wrapper_recipient, wrapped_key, created_at, updated_at, exportable FROM knowledge_packs WHERE id = $1 AND object_key = $2
 `
 
 type GetKnowledgePackByObjectParams struct {
@@ -308,12 +310,13 @@ func (q *Queries) GetKnowledgePackByObject(ctx context.Context, arg GetKnowledge
 		&i.WrappedKey,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Exportable,
 	)
 	return i, err
 }
 
 const getKnowledgePackForUpdate = `-- name: GetKnowledgePackForUpdate :one
-SELECT id, owner_kind, owner_id, name, state, bytes, files, pages, digest, object_key, scan_report, scanned_at, wrapper_kind, wrapper_recipient, wrapped_key, created_at, updated_at FROM knowledge_packs WHERE id = $1 AND owner_kind = $2 AND owner_id = $3 FOR UPDATE
+SELECT id, owner_kind, owner_id, name, state, bytes, files, pages, digest, object_key, scan_report, scanned_at, wrapper_kind, wrapper_recipient, wrapped_key, created_at, updated_at, exportable FROM knowledge_packs WHERE id = $1 AND owner_kind = $2 AND owner_id = $3 FOR UPDATE
 `
 
 type GetKnowledgePackForUpdateParams struct {
@@ -343,6 +346,7 @@ func (q *Queries) GetKnowledgePackForUpdate(ctx context.Context, arg GetKnowledg
 		&i.WrappedKey,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Exportable,
 	)
 	return i, err
 }
@@ -420,7 +424,7 @@ func (q *Queries) ListKnowledgePackSizes(ctx context.Context, arg ListKnowledgeP
 }
 
 const listKnowledgePacks = `-- name: ListKnowledgePacks :many
-SELECT id, owner_kind, owner_id, name, state, bytes, files, pages, digest, object_key, scan_report, scanned_at, wrapper_kind, wrapper_recipient, wrapped_key, created_at, updated_at FROM knowledge_packs WHERE owner_kind = $1 AND owner_id = $2 ORDER BY name
+SELECT id, owner_kind, owner_id, name, state, bytes, files, pages, digest, object_key, scan_report, scanned_at, wrapper_kind, wrapper_recipient, wrapped_key, created_at, updated_at, exportable FROM knowledge_packs WHERE owner_kind = $1 AND owner_id = $2 ORDER BY name
 `
 
 type ListKnowledgePacksParams struct {
@@ -455,6 +459,7 @@ func (q *Queries) ListKnowledgePacks(ctx context.Context, arg ListKnowledgePacks
 			&i.WrappedKey,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Exportable,
 		); err != nil {
 			return nil, err
 		}
@@ -466,12 +471,57 @@ func (q *Queries) ListKnowledgePacks(ctx context.Context, arg ListKnowledgePacks
 	return items, nil
 }
 
+const setKnowledgePackExportable = `-- name: SetKnowledgePackExportable :one
+UPDATE knowledge_packs SET exportable = $4, updated_at = now()
+WHERE id = $1 AND owner_kind = $2 AND owner_id = $3
+RETURNING id, owner_kind, owner_id, name, state, bytes, files, pages, digest, object_key, scan_report, scanned_at, wrapper_kind, wrapper_recipient, wrapped_key, created_at, updated_at, exportable
+`
+
+type SetKnowledgePackExportableParams struct {
+	ID         uuid.UUID `json:"id"`
+	OwnerKind  string    `json:"owner_kind"`
+	OwnerID    uuid.UUID `json:"owner_id"`
+	Exportable bool      `json:"exportable"`
+}
+
+// Whether an organization's members may export its shared pack (D26).
+func (q *Queries) SetKnowledgePackExportable(ctx context.Context, arg SetKnowledgePackExportableParams) (KnowledgePack, error) {
+	row := q.db.QueryRow(ctx, setKnowledgePackExportable,
+		arg.ID,
+		arg.OwnerKind,
+		arg.OwnerID,
+		arg.Exportable,
+	)
+	var i KnowledgePack
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerKind,
+		&i.OwnerID,
+		&i.Name,
+		&i.State,
+		&i.Bytes,
+		&i.Files,
+		&i.Pages,
+		&i.Digest,
+		&i.ObjectKey,
+		&i.ScanReport,
+		&i.ScannedAt,
+		&i.WrapperKind,
+		&i.WrapperRecipient,
+		&i.WrappedKey,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Exportable,
+	)
+	return i, err
+}
+
 const setKnowledgeTree = `-- name: SetKnowledgeTree :one
 UPDATE knowledge_packs
 SET state = 'scanning', bytes = $2, files = $3, pages = $4, digest = $5, object_key = $6,
     scan_report = NULL, scanned_at = NULL, updated_at = now()
 WHERE id = $1
-RETURNING id, owner_kind, owner_id, name, state, bytes, files, pages, digest, object_key, scan_report, scanned_at, wrapper_kind, wrapper_recipient, wrapped_key, created_at, updated_at
+RETURNING id, owner_kind, owner_id, name, state, bytes, files, pages, digest, object_key, scan_report, scanned_at, wrapper_kind, wrapper_recipient, wrapped_key, created_at, updated_at, exportable
 `
 
 type SetKnowledgeTreeParams struct {
@@ -512,6 +562,7 @@ func (q *Queries) SetKnowledgeTree(ctx context.Context, arg SetKnowledgeTreePara
 		&i.WrappedKey,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Exportable,
 	)
 	return i, err
 }
