@@ -1680,13 +1680,13 @@ object store: [OpenBao](https://openbao.org/), whose Transit engine
 encrypts and decrypts each secret, so the key never rests in the
 registry's database. The vault is off while `AGENTRY_VAULT_ADDR` is unset.
 A release that declares a secret is then refused for a hosted run
-(`409 secrets-declared`) and a set is `503`.
+(`409 secrets-declared`), and a set is `503 vault-unavailable`.
 
 ### What OpenBao must carry
 
 | Item | What |
 |---|---|
-| Transit | mounted at `transit/`, with one key, `hosted-vault`, of type `aes256-gcm96` and **derived**. Each secret is encrypted with `user:<account id>` as the context, so each account's rows are under a key of their own |
+| Transit | mounted at `transit/`, with one key, `hosted-vault`, of type `aes256-gcm96` and **derived**, so that each secret, encrypted with `user:<account id>` as the context, is under a key of its account's own |
 | policy `encrypt` | `update` on `transit/encrypt/hosted-vault` and nothing else: the api's |
 | policy `decrypt` | `update` on `transit/decrypt/hosted-vault` and nothing else: the worker's |
 | an operator's policy | rotate the key, read its versions, rewrap, and set the version floors, never `exportable` or plaintext backup, which cannot be turned off once set. It never decrypts |
@@ -1707,8 +1707,10 @@ service's (`<service>.<namespace>.svc`), because the sandbox hosts'
 certificates come from the same CA and none of them is named in that space.
 Serve OpenBao a server-authentication certificate for such a name, and set
 `AGENTRY_VAULT_TLS_SERVER_NAME` when the address's host is not that name.
-The server refuses to start with the vault configured and any of this
-missing.
+The server refuses to start when the address is not `https://`, the checked
+name is not a service's, or the runs CA is missing. A certificate OpenBao
+does not serve correctly shows only at first use: a set is
+`503 vault-unavailable` and a run with a secret fails, refunded.
 
 | Variable | What |
 |---|---|
@@ -1756,20 +1758,17 @@ database. It does not put it beyond the cluster: whoever can read the
 cluster's Secrets and reach PostgreSQL has all three. Guard the seal key's
 copies as you guard the database's backups, and do not store them together.
 
-What the design does and does not keep from whom:
+Each secret records the key version that encrypted it. After a rotation,
+never raise the key's minimum decryption version past the oldest version
+still in use, or those secrets stop opening.
 
-- **The api cannot read a secret.** It writes the rows and its role cannot
-  decrypt.
-- **The worker can open any account's secret it reads from the database.**
-  The derived key stops a row opening under another account's context, but
-  the worker supplies the context: its policy limits the operation, not the
-  account.
-- **A value is plaintext during a run:** in the worker at the hand-off, in
-  the job on its mutual-TLS call to the sandbox host, and on that host for
-  the run's life.
+What the vault does not protect, from the worker role to a leaked token, is
+in [Hosted runs](hosted-runs.md#what-this-does-not-protect). Two more points
+concern the operator:
+
+- **On a compose stack the api can read a secret.** Its one process holds
+  the decrypt role beside the encrypt role. Only where the api and the
+  worker run apart does the api write secrets it cannot open.
 - **OpenBao's operator policy** rotates and rewraps but cannot decrypt.
   Anyone who holds the break-glass role, or the seal key and the storage,
   can.
-
-Each row records the key version that encrypted it. Never raise the key's
-minimum decryption version past the oldest version still in use.
