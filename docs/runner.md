@@ -434,9 +434,15 @@ present); it never falls back to another, because a run that quietly landed on
 did not have. `agentry doctor` reports the same check as `docker:runtime` —
 ok when the daemon has the runtime, fail with the same two lists and the fix
 when it does not. `docker.gatewayRuntime` is held to the same check, and
-doctor reports it as `docker:gatewayRuntime`. A sandbox host's runhost
-renders it from `AGENTRY_RUNHOST_GATEWAY_RUNTIME` and, before it takes a
-job, also checks that the registration runs `docker.runtime`'s binary with
+by what it runs as well as its name, since the receipt says the gateway ran
+under it: its registration must run `docker.runtime`'s binary with
+`docker.runtime`'s own `runtimeArgs` plus `--host-uds=open`, in any order
+and nothing else. A registration that runs `runc`, lacks the flag, or adds
+another beside it (`--network=host`, `--host-uds=all`) stops the run at
+ensure (exit 13) with the extra or missing flags named, and doctor reports
+the same as `docker:gatewayRuntime`. A sandbox host's runhost renders it
+from `AGENTRY_RUNHOST_GATEWAY_RUNTIME` and, before it takes a job, also
+checks that the registration runs `docker.runtime`'s binary with
 `--host-uds=open`.
 
 The runtime is part of the compiled plan, so changing it recompiles rather
