@@ -282,7 +282,10 @@ original) are the release's stages' as anywhere else; a text file in a
 pack that is not UTF-8, which the pack scan cannot read, is the finding
 `SK/unread-text` (medium), so nothing in a pack goes unread without one;
 and the pack's `manifest.json` is read as a release file. `SK` has 20
-minutes, within the scan's 30.
+minutes, within the scan's 30. The release's own AI Review is told the
+packs it ships and where they are mounted (`/knowledge/<name>`), so an
+instruction that reads its own pack is not taken for a capability the
+release left out.
 
 The archive extractor's bounds are raised to hold the most a release may
 ship: 60 MB unpacked, 12,000 files and 10 MB a file, every other quota

@@ -307,7 +307,7 @@ func checkPackManifest(s *issues, name, dir string, files []FileInfo, read func(
 		s.errf("V11", "knowledge.ships", "pack %q: its files do not match the digest in its manifest.json (manifest %s, files %s)", name, pm.SHA256, digest)
 	}
 	if pm.Bytes != bytes || pm.Pages != pages {
-		s.errf("V11", "knowledge.ships", "pack %q: manifest.json says %d pages and %d bytes, the files are %d pages and %d bytes", name, pm.Pages, pm.Bytes, pages, bytes)
+		s.errf("V11", "knowledge.ships", "pack %q: manifest.json says %s and %d bytes, the files are %s and %d bytes", name, countPages(pm.Pages), pm.Bytes, countPages(pages), bytes)
 	}
 }
 
@@ -340,4 +340,12 @@ func KnowledgeTreeDigest(files map[string][]byte) (digest string, bytes int64, p
 		return "", 0, 0, err
 	}
 	return "sha256:" + hex.EncodeToString(h.Sum(nil)), bytes, pages, nil
+}
+
+// countPages is a page count as a person reads it: "1 page", "3 pages".
+func countPages(n int) string {
+	if n == 1 {
+		return "1 page"
+	}
+	return fmt.Sprintf("%d pages", n)
 }
