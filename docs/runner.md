@@ -434,7 +434,10 @@ present); it never falls back to another, because a run that quietly landed on
 did not have. `agentry doctor` reports the same check as `docker:runtime` —
 ok when the daemon has the runtime, fail with the same two lists and the fix
 when it does not. `docker.gatewayRuntime` is held to the same check, and
-doctor reports it as `docker:gatewayRuntime`.
+doctor reports it as `docker:gatewayRuntime`. A sandbox host's runhost
+renders it from `AGENTRY_RUNHOST_GATEWAY_RUNTIME` and, before it takes a
+job, also checks that the registration runs `docker.runtime`'s binary with
+`--host-uds=open`.
 
 The runtime is part of the compiled plan, so changing it recompiles rather
 than reinterpreting a cached plan. `capabilities_enforced.runtime` in the
