@@ -19,6 +19,7 @@ The secrets a run declares are kept by a second extension, the vault
 (`/api/v1/x/vault/`), which returns no value on any route. `secret:write` is
 the scope it is to admit a token by to set and delete the account's secrets
 (agentry-enterprise#251); listing them stays a signed-in session's.
+[A run's secrets](#a-runs-secrets) says how a run gets them.
 
 `GET /api/v1/x/runs/status` answers anyone: whether this deployment can take
 runs at all (it needs a database, a credit ledger and an object store), how
@@ -203,7 +204,9 @@ changes nothing.
 | What | Answer |
 |---|---|
 | The release does not declare the autonomous mode | `409 mode-not-declared` |
-| The release declares `secrets:` | `409 secrets-declared` — the hosted credentials vault is planned; a release that declares a secret runs on your own machine today, where its keys are yours |
+| The release, or an MCP server it declares, declares a secret the caller has not set | `409 secret-missing`, with `missing` (the names not set) and `secrets` (every declared name); set them, then create the run again ([below](#a-runs-secrets)) |
+| The release declares a secret and the deployment keeps none, or pushes to no sandbox host | `409 secrets-declared`, with `secrets` — such a release runs on your own machine, where its keys are yours |
+| The release declares more than 32 secrets, where the deployment keeps secrets | `422 validation` |
 | The account already has a run queued, claimed or running | `409 run-active` — one active run per account, held by a partial unique index rather than a read-then-write |
 | The payer's balance is short of the hold | `402 credits-exhausted`, with `account`, `balance`, `hold`, `resetsAt` and `tier` |
 | The payer is an organization whose subscription is not in force | `402 subscription-inactive`, with `account`, `standing` and `tier` |
@@ -341,6 +344,164 @@ read three times:
    build of one, serves its sealed output to its runner only while they are
    still the organization's member; to anyone else it is a `404`.
 
+## A run's secrets
+
+A release can declare secrets: its own, in `capabilities.secrets`, and each
+declared MCP server's, in that server's `secrets`. On your own machine the
+CLI resolves them from your profile or the policy's secret source
+([Running them](runner.md)). A hosted run gets them from the account's
+secrets in the vault, the extension named above. Where no vault is
+configured, such a release is refused with `409 secrets-declared` and runs
+on your own machine.
+
+### What the account sets
+
+A secret is a name and a value. The name is an environment variable's
+(`^[A-Za-z_][A-Za-z0-9_]*$`, at most 128 characters, capitals significant),
+and any release that declares that name can use it. The value is valid
+UTF-8, at most 8 KiB, not empty, and one line with no white space at either
+end. A hosted run hands it to the CLI as a line of an environment file,
+which the CLI trims and does not unquote. So a multi-line value, such as a
+PEM key, cannot be kept yet. An account keeps at most 100.
+
+| Route | Credential | Does |
+|---|---|---|
+| `GET /api/v1/x/vault/me/secrets` | session only; every token is `403` | the account's secrets by name, with when each was set, changed and last used by a run, and `keep`; `max` is the cap |
+| `PUT /api/v1/x/vault/me/secrets/{name}` | session, or a PAT with `secret:write` | sets `{"value": …}`, with an optional `keep`; `201` new, `200` replaced |
+| `DELETE /api/v1/x/vault/me/secrets/{name}` | session, or a PAT with `secret:write` | deletes one; `204`, or `404` when there is none of that name |
+
+No route returns a value, and none returns the stored ciphertext. A value
+that breaks the rules above is `422 validation`, or `413 too-large` when it
+is too long, and a 101st name is `409 vault-full`. The values are encrypted
+by the deployment's key service (OpenBao,
+[in Self-hosting](self-hosting.md#openbao-the-key-service-for-hosted-run-secrets)).
+When it does not answer, the set is `503 vault-unavailable` and nothing is
+stored.
+
+**Kept, or for one run.** `keep` is `true` when it is absent. A secret set
+with `"keep": false` is not kept. It waits for a run and is deleted when the
+next run of the account that declares its name ends, however that run ends.
+If no run takes it, it is deleted a day after it was set. A later set of the
+same name decides `keep` again. The site's run setup and the desktop's
+Start ask for a missing secret with **Keep it for later runs** unticked, so
+a value typed for one run is gone after it unless the person chose to keep
+it.
+
+**What a token may do.** A PAT with `secret:write` sets and deletes, and
+never lists. It cannot replace or delete a secret that was kept from a
+signed-in session, and it cannot unkeep any kept secret. Each of those is
+`409 secret-kept`, and the person does it from a session instead (on
+Agentry's service, the site's Secrets page). A token's writes are audited
+as the token.
+
+### At create
+
+The run's declared names are checked against the caller's secrets. The
+release's names and its MCP servers' are one namespace. A name that is not
+set is `409 secret-missing`, with `missing` naming each and `secrets`
+naming all, and nothing is held or queued. More than 32 declared names is
+`422 validation`. With every name set, the run records the names
+(`secrets`, names only) and is queued.
+
+A secret that is not kept counts only for the credential that set it: the
+same session, or the same token. To any other caller it is missing, so
+that start asks for it again. Run create takes a PAT with `run:write`, so a
+token holder can learn which of a release's declared names the account has
+set. It never learns a value.
+
+### At the hand-off
+
+A run with secrets goes only to a sandbox host Agentry pushes to; the pull
+worker never claims one. The dispatcher, in the worker role, locks the run
+while it is claimed on its host. Then, in one transaction committed just
+before the job is sent, it:
+
+- decrypts each declared name's secret, under the key of the account that
+  created the run;
+- sets the secret's last use;
+- writes one `vault.secret_used` audit event per name, with the run and the
+  host.
+
+A hand-off the host does not take goes back to the queue. The next one
+decrypts and records again, so the record is one use per name **per
+hand-off**.
+
+The run fails before any host sees it, with its hold refunded and its error
+naming the secret alone, when a secret:
+
+- was deleted since the create;
+- does not open, or the key service does not answer (the run fails rather
+  than waiting in the queue);
+- is not one line;
+- is not kept and was set by a credential other than the one that created
+  the run;
+- was set by another token after the run was created.
+
+The values travel in the job, over the mutual-TLS call to the host, and
+nowhere else. The host writes them to an owner-only `secrets.env` in the
+job's directory. The policy it renders names that file as the CLI's
+`envFile` secret source, so a declared secret never resolves from the
+host's own environment. The CLI then does what it does on your machine
+([What a run enforces](runner.md#what-a-run-enforces)). It gives each value
+to the MCP gateway's container and to the tools container or the declared
+server's container, and never to the agent's. The file is deleted as soon
+as the CLI exits, and so is the gateway's copy if a killed CLI left one.
+
+### After the run
+
+A secret that is not kept is deleted in the same transaction that closes
+the run, and audited `vault.secret_deleted` with the run and the reason
+`run-ended`. An hourly sweep deletes one that no run took a day after it
+was set, reason `unused`. That day is why `AGENTRY_RUNS_QUEUE_MAX` may be at
+most 12 hours. A kept secret stays until the account deletes it. An
+account's erasure and its data clear delete every secret it keeps, inside
+their own transaction.
+
+### What the record says
+
+The receipt's `capabilities_enforced.secrets` names the release's declared
+secrets by name, never a value. Today it says `none declared` when only a
+declared MCP server declares a secret, although that secret was resolved and
+injected (agentry-cli#376).
+
+The registry's audit log, which platform staff read, holds three events.
+None carries a value:
+
+- `vault.secret_set`: the name, whether it replaced one, and `keep`;
+- `vault.secret_deleted`: the name, plus the run and the reason when the
+  system deleted it;
+- `vault.secret_used`: the name, the run and the host.
+
+The key service keeps its own audit, in which every value is a keyed hash.
+
+### What this does not protect
+
+- **The worker role can open any account's secret.** Each secret is
+  encrypted under a key derived for its account, so it does not open under
+  another account's. But the worker reads the database and its role may
+  decrypt, so its policy limits the operation, not the account. Where the
+  api runs apart from the worker, it writes the secrets and cannot decrypt
+  them.
+- **The value is plaintext for the run's life.** It is in the worker's
+  memory at the hand-off and in the job on its way to the host. On the
+  sandbox host it is in the environment file and in the containers that use
+  it. A tool given a secret can send it anywhere the run's egress allows.
+  The contract bounds where a secret goes, not what a tool does with it.
+- **The guards on output are partial.** The gateway refuses a tool result
+  that looks like a secret, by pattern, not by the declared values.
+  Redaction masks the declared values in the receipts, but not a value
+  shorter than eight characters or an encoded copy of one
+  ([The output folder](runner.md#the-output-folder)).
+- **A leaked `secret:write` token** can replace or delete a secret that was
+  kept from a token, and add kept secrets under new names. Every later run
+  that declares those names uses its values. It can also overwrite a
+  secret that is not kept, in the moment between another start's set and
+  its create, or while an abandoned start's secret waits for the sweep, and
+  the value then reaches that run. It can delete or overwrite a secret
+  another start's queued run waits for, and that run fails, refunded. Every
+  write names the token in the audit log, and revoking the token ends all
+  of it.
+
 ## A knowledge build
 
 A run of the kind `knowledge_build` runs the CLI's built-in Knowledge Creator
@@ -458,7 +619,9 @@ token, stages the run under its own home at `0700`, renders one policy per run
 from the CLI's own defaults — the platform's model with its endpoint as the
 egress proxy's only allowed host and its key named by an environment variable
 and never written, the run's caps as the budgets, `secretSource: env` with no
-names, and `docker.runtime: runsc` — and runs the installed `agentry` CLI as
+names (a sandbox host's runhost names the job's own `secrets.env` as an
+`envFile` source instead, [above](#at-the-hand-off)), and
+`docker.runtime: runsc` — and runs the installed `agentry` CLI as
 a subprocess with typed arguments and a minimal environment. The worker token
 never reaches the CLI; the CLI gets the worker's own registry token, which
 carries `agent:read` and `user:profile` and nothing more.
@@ -513,7 +676,7 @@ anything you want to keep before then; nothing is archived elsewhere.
 | `AGENTRY_RUNS_DRAFT_PAGES` | `60` | the pages AI Review reads for one draft |
 | `AGENTRY_RUNS_DRAFT_SECONDS` | `900` | a draft's wall time, on every tier |
 | `AGENTRY_RUNS_DRAFT_MAX_TURNS` | `100` | a draft's turn cap |
-| `AGENTRY_RUNS_QUEUE_MAX` | `1h` | how long a run may wait for a worker before it is cancelled and refunded |
+| `AGENTRY_RUNS_QUEUE_MAX` | `1h` | how long a run may wait for a worker before it is cancelled and refunded; at most `12h`, half the day a secret held for one run waits for it |
 | `AGENTRY_RUNS_STALE` | `10m` | how long a claimed run's worker may be silent before the run is closed as `error` and refunded |
 | `AGENTRY_RUNS_TASK_MAX_BYTES` | `65536` | the task text's cap |
 | `AGENTRY_RUNS_INPUT_MAX_FILES` | `20` | input files per run |
