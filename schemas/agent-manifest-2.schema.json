@@ -130,6 +130,35 @@
         }
       }
     },
+    "knowledge": {
+      "type": "object",
+      "description": "The knowledge packs the release ships in its archive under knowledge/<name>/, and what a person may attach of their own (V11; plan knowledge.md §4.6). Each shipped pack is the CLI's layout (manifest.json, wiki/ with index.md and log.md, sources/), at most 10 MB and 2,000 files, outside the archive's own quotas (V8), and scanned with the version. A newly shipped name widens the contract; accepts is shown to people only.",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "ships": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$", "description": "The pack's name and its directory under knowledge/." }
+            }
+          }
+        },
+        "accepts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["prompt"],
+          "properties": {
+            "prompt": { "type": "string", "minLength": 1, "maxLength": 300, "pattern": "^[^\\u0000-\\u001f\\u007f]*$", "description": "One plain line shown in the run setup's Knowledge step, never to the agent." },
+            "required": { "type": "boolean", "description": "The Knowledge step cannot be skipped." }
+          }
+        }
+      }
+    },
     "runtime": {
       "type": "object",
       "additionalProperties": false,
