@@ -314,6 +314,7 @@ its digest, so a run record says which file a run obeyed.
 | `harness.<adapter>.baseUrl` / `.model` / `.apiKeyEnv` | the model endpoint that adapter is given, in its own vendor's terms — a host-run harness speaks its vendor's API, which is not always the one `model.*` describes. The host must also be in `model.proxyAllow` or the run's proxy denies it (`agentry doctor --adapter <name>` says so before a run finds out). |
 | `images.nodeRuntime` / `images.pythonRuntime` | pinned runtime images that install and run declared npm/PyPI MCP servers |
 | `docker.runtime` | the daemon-registered OCI runtime the containers holding the BriefAgent's code are created with (unset: the daemon's default) — below |
+| `docker.resolvers` | at most three IPv4 name servers of the host's that the built-in Drafter's web tools resolve through under a sandboxed runtime (unset: docker's DNS) — below |
 
 The policy participates in the plan hash: editing it invalidates cached
 plans, which recompile on next use.
@@ -333,18 +334,53 @@ store, and the MCP server installer that builds a declared server's dependency
 closure. Unset, the shipped default, every container takes the daemon's own
 default and the receipt says nothing about a runtime.
 
-What keeps the daemon's default, measured on a live run rather than assumed
-(DR-23): the runner's own llm-proxy, gateway and probe, and everything the
-gateway launches itself — the tools server, the declared MCP servers, and the
-per-host relays. Two mechanisms are why. A sandboxed runtime's own network
-stack does not reach docker's embedded DNS at `127.0.0.11`, so the run
-network's two aliases (`gateway`, `llm-proxy`) are pinned into the sandboxed
-agent's `/etc/hosts` from the containers' addresses instead of being resolved;
-and the gateway is the one container that drives the host's docker socket,
-which a sandboxed runtime allows only with `--host-uds`, while the pinned
-docker/mcp-gateway release offers no runtime option for what it launches. The
-knob covers the stranger's code, and the receipt claims no more ground than
-that.
+Since agentry-cli#221 the runtime also holds the gateway's health probe and,
+through the run's docker filter, the tools server and the declared MCP servers
+the gateway launches. What keeps the daemon's default, measured on a live run
+rather than assumed (DR-23), is four classes: the llm-proxy, the MCP server
+install proxy and the relays, which resolve hosts through docker's embedded
+DNS, and the gateway, which reaches the daemon through a host Unix socket. A
+sandboxed runtime's own network stack does not reach docker's embedded DNS at
+`127.0.0.11`, so the containers under it find the ones they talk to through
+`/etc/hosts` entries pinned from the containers' addresses. It also does not
+open a host socket without `--host-uds`. The receipt's runtime line names
+each class, and each that takes the default and why.
+
+### The web tools' name servers (`docker.resolvers`)
+
+```yaml
+docker:
+  runtime: runsc
+  resolvers: [192.168.122.1]
+```
+
+The built-in Drafter's web tools reach past the host by name, on a network
+of the run's own. Under a sandboxed runtime their container cannot reach
+docker's embedded DNS there. `--dns` only sets that server's upstream on a
+user-defined network. gVisor's `--reproduce-nat`, which would copy docker's
+DNS rule into the sandbox, does not start a container on a host whose docker
+writes its rules through nftables. Both were measured on 2026-09-27
+(agentry-cli#386).
+
+So the runner writes the policy's `docker.resolvers` into a `resolv.conf` of
+the run's own, and the docker filter binds it read-only at `/etc/resolv.conf`
+in the web tools' server alone. That server takes no DNS setting, hosts
+entry, volume or tmpfs of the gateway's, and nothing under `/etc` but its
+tools spec.
+
+Name the host's upstream name servers: at most three, IPv4 (the run's web
+network has none of IPv6), never a loopback stub such as systemd-resolved's
+`127.0.0.53`, which is the container's own loopback inside it. The address
+rule of `web_read` still holds on every address a name resolves to, at every
+connection.
+
+Under a runtime with no resolvers, `agentry draft` is refused at compile
+(exit 11) rather than left to read nothing, and `agentry doctor` warns about
+it as `docker:resolvers`. On the daemon's default runtime nothing needs
+setting. The resolvers are part of the compiled plan, and the receipt's
+runtime line and its `web.resolvers` line name them. A sandbox host's runhost
+renders them from `AGENTRY_RUNHOST_RESOLVERS`: on production, the host's own
+resolvers, the only ones its firewall admits on port 53.
 
 A set runtime is enforced, not preferred. Before anything is pulled or
 started, `agentry run` asks the daemon which runtimes it has and stops the run
@@ -356,10 +392,12 @@ ok when the daemon has the runtime, fail with the same two lists and the fix
 when it does not.
 
 The runtime is part of the compiled plan, so changing it recompiles rather
-than reinterpreting a cached plan, and `capabilities_enforced.runtime` in the
-receipt carries the sentence the plan compiled — for `runsc`:
-
-> `runsc: the agent container — the BriefAgent's code — and the MCP server installer are created with docker --runtime runsc, the run network's aliases pinned into the agent's /etc/hosts; the runner's own llm-proxy, gateway and probe, and what the gateway launches itself (the tools server, the declared MCP servers), take the daemon's default runtime`
+than reinterpreting a cached plan. `capabilities_enforced.runtime` in the
+receipt is written at run time, because two of its facts are the run's:
+whether the docker filter runs (not on Docker Desktop, agentry-cli#322) and
+what the run started. It names what was created under the runtime, what the
+gateway's containers were given through the filter, and each class on the
+daemon's default with its measured reason.
 
 Hosted runs are why the knob exists: the platform's run worker renders
 `docker.runtime: runsc` into the policy of every run it drives. That side is
@@ -574,6 +612,39 @@ grants `knowledge_list`, `knowledge_search` and `knowledge_read` for that
 run only. Attaching a pack changes neither the compiled plan nor its hash.
 The receipt's `capabilities_enforced.knowledge` names each pack by digest
 and says whether a registry scanned it.
+
+**A pack the release ships.** A release can carry packs of its own under
+`knowledge/<name>/`, named in its manifest's `knowledge.ships`
+([briefagents.md](briefagents.md#knowledge-packs-the-release-ships)).
+A run mounts each one read-only at `/knowledge/<name>`, beside any pack
+attached with `--knowledge`, through the same run-time grant. The plan
+names no pack.
+
+- The pack is loaded from the installed release's own files, once the
+  manifest validates. It is staged from the run's copy of the release,
+  after that copy is checked against the install record. So what is
+  mounted is what the archive digest and the attestation cover, and it is
+  never fetched again.
+- A shipped pack that does not load, or a file of it changed after the
+  install, is exit 10 before any container starts.
+- A pack attached with `--knowledge` cannot take a shipped pack's name
+  (exit 1).
+- The receipt names a shipped pack as the release's, with no scan field
+  of its own: the attestation line says what covers the archive.
+
+  ```
+  <name> shipped with the release (archive sha256:…) mounted read-only at /knowledge/<name> (sha256:…, N pages, M bytes)
+  ```
+
+  For `--local` it names the `local package tree` digest instead.
+- The consent lists `knowledge: ships <name> (<size>)` with the other
+  capabilities, and `installed.yaml` records the names under
+  `capabilities.knowledge`, so an update that ships one more pack asks
+  again.
+- `agentry publish` refuses, before uploading, a release whose
+  `publish.include` leaves a shipped pack out. It also refuses an upload
+  past 16 MiB compressed, the most the registry's upload takes; publish a
+  larger release from its tag.
 
 ## Machine-readable output
 
