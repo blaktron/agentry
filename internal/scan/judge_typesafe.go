@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/blaktron/agentry/pkg/manifest"
 	"strings"
 	"time"
 
@@ -221,16 +222,43 @@ func (j *TypeSafeJudge) judgeAxes(ctx context.Context, content JudgeContent) (ma
 
 // declaredCapabilitiesJSON is the manifest's `capabilities` block as compact
 // JSON, bounded, for the state's declared_capabilities field. An absent or
-// unreadable block reads as none declared.
+// unreadable block reads as none declared. The knowledge packs the release
+// ships (plan knowledge.md §4.6) are declared too, with where the runner
+// mounts them: an instruction that reads its own pack at /knowledge/<name>
+// uses what the release declares, and the judge sees only this field of
+// the manifest.
 func declaredCapabilitiesJSON(manifestJSON []byte) string {
 	var m struct {
 		Capabilities json.RawMessage `json:"capabilities"`
 	}
-	if json.Unmarshal(manifestJSON, &m) != nil || len(m.Capabilities) == 0 {
+	if json.Unmarshal(manifestJSON, &m) != nil {
+		return "{}"
+	}
+	caps := map[string]json.RawMessage{}
+	if len(m.Capabilities) > 0 && json.Unmarshal(m.Capabilities, &caps) != nil {
+		return "{}"
+	}
+	if ships := shippedPacks(manifestJSON); len(ships) > 0 {
+		at := make([]string, len(ships))
+		for i, s := range ships {
+			at[i] = "/" + manifest.KnowledgeDir + "/" + s
+		}
+		raw, err := json.Marshal(map[string]any{"ships": ships, "mountedReadOnlyAt": at})
+		if err != nil {
+			return "{}"
+		}
+		caps["knowledge"] = raw
+	}
+	if len(caps) == 0 {
+		return "{}"
+	}
+	// Keys in order, so the field is the same for the same manifest.
+	enc, err := json.Marshal(caps)
+	if err != nil {
 		return "{}"
 	}
 	var buf bytes.Buffer
-	if json.Compact(&buf, m.Capabilities) != nil || buf.Len() == 0 {
+	if json.Compact(&buf, enc) != nil || buf.Len() == 0 {
 		return "{}"
 	}
 	s := buf.String()
