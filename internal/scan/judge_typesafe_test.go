@@ -376,6 +376,24 @@ func TestTypeSafeJudgeKeepsTheVersionOutOfTheQuestion(t *testing.T) {
 	}
 }
 
+// TestTypeSafeJudgeIsToldTheShippedKnowledge: a release's own packs are
+// declared to the judge with where they are mounted, so an instruction
+// that reads /knowledge/<name> is not a capability the release left out
+// (agentry#594); a release that ships none reads as before.
+func TestTypeSafeJudgeIsToldTheShippedKnowledge(t *testing.T) {
+	got := declaredCapabilitiesJSON([]byte(`{"capabilities":{"network":{"egress":["api.example"]}},"knowledge":{"ships":[{"name":"aws-docs"}]}}`))
+	want := `{"knowledge":{"mountedReadOnlyAt":["/knowledge/aws-docs"],"ships":["aws-docs"]},"network":{"egress":["api.example"]}}`
+	if got != want {
+		t.Fatalf("declared = %s\nwant       %s", got, want)
+	}
+	if got := declaredCapabilitiesJSON([]byte(`{"knowledge":{"ships":[{"name":"aws-docs"}]}}`)); !strings.Contains(got, `"ships":["aws-docs"]`) {
+		t.Fatalf("a release with only knowledge declared = %s", got)
+	}
+	if got := declaredCapabilitiesJSON([]byte(`{"capabilities":{"exec":"none"}}`)); got != `{"exec":"none"}` {
+		t.Fatalf("a release without knowledge declared = %s", got)
+	}
+}
+
 func TestTypeSafeJudgeNeverPutsTheKeyInAnError(t *testing.T) {
 	echo := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadGateway)

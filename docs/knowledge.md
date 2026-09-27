@@ -235,6 +235,63 @@ and line, or by chunk for AI Review.
 The report says what read the pack and what it found, and claims nothing
 more: scanned, N findings.
 
+## A release that ships a pack
+
+A BriefAgent may carry packs of its own in its release archive, under
+`knowledge/<name>/`, declared in its manifest's `knowledge.ships`
+([briefagents.md](briefagents.md#knowledge-packs-the-release-ships)).
+Such a pack is not in this store: it has no owner, no data key and no
+seal, because it is part of a release, which is public or private as the
+BriefAgent is and signed with the rest of its archive.
+
+At submit the registry refuses a release whose packs are not what its
+manifest says (rule V11): a name with no pack, a pack outside the CLI's
+layout, a `manifest.json` whose digest, bytes or pages are not the files
+beside it, or a file under `knowledge/` in no shipped pack. Each pack is
+held to its own caps, 10 MB and 2,000 files, outside the release's own
+quotas (V8).
+
+The version's scan reads each shipped pack as this store's scan reads a
+pack — the same prose stages over every page and source, the same AI
+Review over `sources/` and then `wiki/` in chunks — as one more stage of
+the version's scan, `SK`. What differs is what the result does:
+
+- **Its findings gate.** They are the release's findings, under scanner
+  `SK/<stage>/<rule>` with file paths in `knowledge/<name>/` and the pack,
+  the half and the chunk in their detail, and the gate decides on them as
+  on any other. They keep their excerpts, as a release's findings do.
+- **An incomplete read fails closed.** A stage that did not finish, or a
+  chunk the judge could not read, fails `SK`, and the version goes to
+  review, as any failed stage sends it.
+- **The report is the version's.** The version's report
+  (`GET …/versions/{version}/report`) carries a `knowledge` section, one
+  `ShippedKnowledgeScan` a pack: its name and its `KnowledgeScanReport`
+  (the stages, what was read, the review with its provider, model, chunk
+  size and chunks of each half, or "AI Review not configured", and the
+  pack's findings as this store places them). The section is part of the
+  signed report, so the attestation's report digest covers what the scan
+  read; the token use is left out of it, as it is for the version's own
+  AI Review, and counted on the run.
+
+The release's own stages read the release's own files: none of them reads
+a shipped pack's text, since the release's AI Review would read it in one
+call past what the judge takes. S1 still inventories every file of the
+archive, so an executable or a nested archive in a pack is refused as
+anywhere else; a pack's files that are not text (an image, a source's
+original) are the release's stages' as anywhere else; a text file in a
+pack that is not UTF-8, which the pack scan cannot read, is the finding
+`SK/unread-text` (medium), so nothing in a pack goes unread without one;
+and the pack's `manifest.json` is read as a release file. `SK` has 20
+minutes, within the scan's 30. The release's own AI Review is told the
+packs it ships and where they are mounted (`/knowledge/<name>`), so an
+instruction that reads its own pack is not taken for a capability the
+release left out.
+
+The archive extractor's bounds are raised to hold the most a release may
+ship: 60 MB unpacked, 12,000 files and 10 MB a file, every other quota
+being the manifest's to enforce. An upload through the API is at most
+16 MiB compressed, the edge's request cap.
+
 ## What the registry reads
 
 The seal keeps a pack's words out of every blob, table and backup. It does

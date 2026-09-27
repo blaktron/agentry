@@ -20,6 +20,9 @@ import (
 // text. It populates Input.Files for the downstream stages.
 type S1Inventory struct{}
 
+// scannerTextTruncated is S1's finding on a text file past textScanCap.
+const scannerTextTruncated = "S1/text-scan-truncated"
+
 func (S1Inventory) ID() string { return "S1" }
 
 // Content classification (magic tables, text heuristic, image extensions)
@@ -104,7 +107,7 @@ func (S1Inventory) Run(sc stageContext, in *Input) StageResult {
 				// already passed its own scan as the previous release.)
 				entry.Content = data[:textScanCap]
 				findings = append(findings, Finding{
-					Scanner: "S1/text-scan-truncated", Severity: SevMedium, Confidence: ConfHigh,
+					Scanner: scannerTextTruncated, Severity: SevMedium, Confidence: ConfHigh,
 					Title:    "Text file exceeds the scan cap — content past 1 MiB was not scanned",
 					FilePath: rel,
 					Detail:   map[string]any{"fileBytes": len(data), "scannedBytes": textScanCap},
