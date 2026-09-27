@@ -345,7 +345,7 @@ record.
 
 A draft holds the same on every tier: its model tokens' credits
 (`AGENTRY_RUNS_DRAFT_TOKEN_CREDITS`, 30), its searches at their price
-(`AGENTRY_RUNS_DRAFT_SEARCHES`, 10, at `AGENTRY_RUNS_SEARCH_CREDITS`, 1
+(`AGENTRY_RUNS_DRAFT_SEARCHES`, 10, at `AGENTRY_RUNS_DRAFT_SEARCH_CREDITS`, 1
 each) and AI Review's 1 credit — 41 by default, under its own ledger reasons
 (`draft_hold`, then `draft` and `draft_release`, or `draft_refund`). Its caps
 are `AGENTRY_RUNS_DRAFT_SECONDS` (900 s), `AGENTRY_RUNS_DRAFT_MAX_TURNS` (100)
@@ -436,7 +436,7 @@ anything you want to keep before then; nothing is archived elsewhere.
 | `AGENTRY_RUNS_BUILD_MAX_TURNS` | `300` | a knowledge build's turn cap |
 | `AGENTRY_RUNS_DRAFT_TOKEN_CREDITS` | `30` | what a hosted draft's model tokens may cost; the host stops it there |
 | `AGENTRY_RUNS_DRAFT_SEARCHES` | `10` | the web searches the registry brokers for one draft |
-| `AGENTRY_RUNS_SEARCH_CREDITS` | `1` | what one search costs a draft |
+| `AGENTRY_RUNS_DRAFT_SEARCH_CREDITS` | `1` | what one search costs a draft |
 | `AGENTRY_RUNS_DRAFT_PAGES` | `60` | the pages AI Review reads for one draft |
 | `AGENTRY_RUNS_DRAFT_SECONDS` | `900` | a draft's wall time, on every tier |
 | `AGENTRY_RUNS_DRAFT_MAX_TURNS` | `100` | a draft's turn cap |
