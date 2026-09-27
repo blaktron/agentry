@@ -367,7 +367,9 @@ The registry counts each call against the draft's own caps — its searches,
 `AGENTRY_RUNS_DRAFT_PAGES` (60) pages, 60 registry answers — and refuses
 what passes them (`403`). The credential answers only while its draft is
 claimed or running and not asked to stop; every hand-back to the queue and
-every close clears it, and it never enters the run's containers.
+every close clears it. The CLI writes it into the run's gateway secrets
+file for the tools container, where the web tools run; it never enters the
+agent's container.
 
 A draft that ran settles its tokens (at most its token credits), the
 searches the provider answered at their price, and 1 credit for AI Review,
