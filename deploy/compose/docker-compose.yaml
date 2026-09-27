@@ -151,6 +151,13 @@ services:
       # accounts created per hour, agentry#53); formatted into the
       # account-flows blueprint's rate-limit policy at apply time.
       AUTHENTIK_ACCOUNT_FLOW_MAX_PER_HOUR: ${AUTHENTIK_ACCOUNT_FLOW_MAX_PER_HOUR:-10}
+      # Remembered browsers (agentry#671, DEV-163): the sign-in's MFA-stage
+      # policy asks the registry, at this address and with the same secret
+      # the server holds, whether a browser is remembered, before it asks
+      # for the code. Read when the policy runs, never written into the
+      # directory's database. Unset, the code is always asked.
+      AGENTRY_IDP_TRUST_CHECK_TOKEN: ${AGENTRY_IDP_TRUST_CHECK_TOKEN:-}
+      AGENTRY_REGISTRY_INTERNAL_URL: ${AGENTRY_REGISTRY_INTERNAL_URL:-http://server:8080}
       # First boot creates akadmin with this password, and an API token
       # (intent api) with this value — what the bootstrap script uses.
       AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD:-}

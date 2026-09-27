@@ -582,6 +582,152 @@ entries:
       name: agentry-enrollment-password-policy
 
   # ==========================================================================
+  # Remembered browsers (agentry#671, DEV-163)
+  # ==========================================================================
+  # "Remember this device for 30 days" is offered on the sign-in's code page
+  # and honoured by skipping that page. The record is the registry's (DEV-123):
+  # it mints one on the OIDC callback and answers whether a browser holds a
+  # live one. The directory's part is the four entries below plus the flow
+  # page's template (templates/if/flow.html), which draws the unticked box on
+  # the code page and, when it is ticked, sets the short-lived intent cookie
+  # `agentry_remember_intent` on this host.
+  #
+  # The environment carries the two values the skip needs, read when the
+  # policy runs rather than formatted in here, so the secret never lands in
+  # the directory's database or its admin console:
+  #   AGENTRY_IDP_TRUST_CHECK_TOKEN  the registry's auth.idpTrustCheckToken
+  #   AGENTRY_REGISTRY_INTERNAL_URL  the registry as this container reaches it
+  # With either unset the policy asks for the code, always. Never run the
+  # directory with AUTHENTIK_DEBUG where the secret matters: its debug HTTP
+  # session logs outgoing requests, this one's headers included.
+  #
+  # Two traps, each pinned by a test (TestDirectoryRememberBlueprint):
+  # - The stock MFA binding already carries authentik's passwordless-WebAuthn
+  #   policy, in engine mode `any`. Under `any` a second policy answering
+  #   "skip" changes nothing, because the stock one passes. So the binding
+  #   is restated here in mode `all`: the stage runs only when the sign-in
+  #   was not passwordless WebAuthn and the browser is not remembered, and
+  #   is skipped when either holds, which is the meaning both policies
+  #   intend.
+  # - A policy that raises counts as failed, and a failed binding policy
+  #   SKIPS its stage. Only `failure_result: true` on our binding turns an
+  #   exception into "ask for the code". Without it this fails open.
+  - model: authentik_policies_expression.expressionpolicy
+    id: policy-remembered-browser-skip
+    identifiers:
+      name: agentry-remembered-browser-skip
+    attrs:
+      execution_logging: false
+      expression: |
+        # Skip the code only when the registry says this browser's cookie is
+        # a live remembered browser of the person signing in. Anything else,
+        # including no answer, asks for the code.
+        import os
+        secret = os.environ.get("AGENTRY_IDP_TRUST_CHECK_TOKEN", "")
+        base = os.environ.get("AGENTRY_REGISTRY_INTERNAL_URL", "")
+        if not secret or not base:
+            return True
+        cookie = request.http_request.COOKIES.get("agentry_trusted_device") if request.http_request else None
+        user = request.context.get("pending_user")
+        if not cookie or user is None:
+            return True
+        try:
+            answer = requests.post(
+                base.rstrip("/") + "/internal/directory/trusted-device",
+                json={"token": cookie, "sub": user.uid},
+                headers={"Authorization": "Bearer " + secret},
+                timeout=2,
+                allow_redirects=False,
+            )
+            if answer.status_code == 200 and answer.json().get("trusted") is True:
+                ak_logger.info("agentry: a remembered browser, the code is not asked")
+                return False
+        except Exception as exc:
+            ak_logger.warning("agentry: the registry's check did not answer, the code is asked", error=type(exc).__name__)
+        return True
+  - model: authentik_policies_expression.expressionpolicy
+    id: policy-remember-intent
+    identifiers:
+      name: agentry-remember-intent
+    attrs:
+      execution_logging: false
+      expression: |
+        # Carry a ticked "Remember this device" into the sign-in's record,
+        # only when this flow validated a second factor. It always passes:
+        # it exists for its side effect, not to gate the login stage.
+        plan = context.get("flow_plan")
+        if plan is None:
+            return True
+        args = plan.context.get("auth_method_args") or {}
+        # On https only the __Host- name counts: a sibling host under the
+        # same parent domain can set the plain one, never the prefixed one.
+        req = request.http_request
+        name = "__Host-agentry_remember_intent" if req is not None and req.is_secure() else "agentry_remember_intent"
+        ticked = req is not None and req.COOKIES.get(name) == "1"
+        if ticked and "mfa_devices" in args:
+            args["agentry_remember_device"] = True
+            plan.context["auth_method_args"] = args
+        return True
+  # The claim. The login event is where authentik keeps this sign-in's
+  # auth_method_args, and the same event gives the token its amr and its
+  # auth_time; the registry mints only when all three agree (agentry#670).
+  - model: authentik_providers_oauth2.scopemapping
+    id: scope-agentry
+    identifiers:
+      name: agentry-remember-device
+    attrs:
+      scope_name: agentry
+      description: Whether this sign-in asked to remember the browser
+      expression: |
+        from authentik.events.signals import get_login_event
+        event = get_login_event(token.session) if token is not None and getattr(token, "session", None) else None
+        args = (event.context.get("auth_method_args") or {}) if event else {}
+        return {"agentry_remember_device": args.get("agentry_remember_device") is True}
+  # The shipped sign-in flow's two bindings, restated by their shipped
+  # identifiers so this updates them in place. Both policies must run when
+  # the stage is reached, not when the plan is made: the cookie arrives with
+  # the executor's requests, and the factor is validated after the plan.
+  - model: authentik_flows.flowstagebinding
+    id: binding-signin-mfa
+    identifiers:
+      order: 30
+      stage: !Find [authentik_stages_authenticator_validate.authenticatorvalidatestage, [name, default-authentication-mfa-validation]]
+      target: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
+    attrs:
+      policy_engine_mode: all
+      evaluate_on_plan: false
+      re_evaluate_policies: true
+  - model: authentik_policies.policybinding
+    identifiers:
+      order: 20
+      target: !KeyOf binding-signin-mfa
+      policy: !KeyOf policy-remembered-browser-skip
+    attrs:
+      enabled: true
+      negate: false
+      failure_result: true
+      timeout: 5
+  - model: authentik_flows.flowstagebinding
+    id: binding-signin-login
+    identifiers:
+      order: 100
+      stage: !Find [authentik_stages_user_login.userloginstage, [name, default-authentication-login]]
+      target: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
+    attrs:
+      evaluate_on_plan: false
+      re_evaluate_policies: true
+  - model: authentik_policies.policybinding
+    identifiers:
+      order: 10
+      target: !KeyOf binding-signin-login
+      policy: !KeyOf policy-remember-intent
+    attrs:
+      enabled: true
+      negate: false
+      failure_result: true
+      timeout: 5
+
+  # ==========================================================================
   # Seamless integration (agentry#164): every flow ends back in Agentry and
   # the directory never shows its own panels
   # ==========================================================================

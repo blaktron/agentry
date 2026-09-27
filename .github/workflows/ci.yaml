@@ -288,6 +288,22 @@ jobs:
       - name: directory email acceptance (scripts/acceptance/directory-email.sh)
         run: ./scripts/acceptance/directory-email.sh
 
+  # Remembered browsers, the directory's half (agentry#671, DEV-163): the
+  # flow page's template is still the pinned image's plus one block, the code
+  # stage it writes into still exists, and a throwaway directory running the
+  # account-flows blueprint asks for the code unless a stand-in registry says
+  # the browser is remembered, failing closed on every error.
+  directory-remember:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: directory remembered-browser acceptance (scripts/acceptance/directory-remember.sh)
+        run: ./scripts/acceptance/directory-remember.sh
+
   # The headless helm chart: lint, a template render with the required
   # values, and the assertion that nothing web-shaped renders (the site is
   # its own deployment since the cut-over, DEV-091). This lived in
