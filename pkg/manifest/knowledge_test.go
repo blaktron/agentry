@@ -141,7 +141,7 @@ func TestKnowledgeBlockRefusals(t *testing.T) {
 		{"empty prompt", func(k *Knowledge) { k.Accepts.Prompt = "  " }, "knowledge.accepts.prompt"},
 		{"prompt too long", func(k *Knowledge) { k.Accepts.Prompt = strings.Repeat("é", MaxKnowledgePromptChars+1) }, "knowledge.accepts.prompt"},
 		{"prompt on two lines", func(k *Knowledge) { k.Accepts.Prompt = "one\ntwo" }, "knowledge.accepts.prompt"},
-		{"prompt with a bidi override", func(k *Knowledge) { k.Accepts.Prompt = "attach ‮it" }, "knowledge.accepts.prompt"},
+		{"prompt with a bidi override", func(k *Knowledge) { k.Accepts.Prompt = "attach \u202Eit" }, "knowledge.accepts.prompt"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
