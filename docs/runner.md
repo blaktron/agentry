@@ -314,7 +314,8 @@ its digest, so a run record says which file a run obeyed.
 | `harness.<adapter>.baseUrl` / `.model` / `.apiKeyEnv` | the model endpoint that adapter is given, in its own vendor's terms — a host-run harness speaks its vendor's API, which is not always the one `model.*` describes. The host must also be in `model.proxyAllow` or the run's proxy denies it (`agentry doctor --adapter <name>` says so before a run finds out). |
 | `images.nodeRuntime` / `images.pythonRuntime` | pinned runtime images that install and run declared npm/PyPI MCP servers |
 | `docker.runtime` | the daemon-registered OCI runtime the containers holding the BriefAgent's code are created with (unset: the daemon's default) — below |
-| `docker.resolvers` | at most three IPv4 name servers of the host's that the built-in Drafter's web tools resolve through under a sandboxed runtime (unset: docker's DNS) — below |
+| `docker.gatewayRuntime` | the daemon-registered runtime the gateway alone is created with: a second registration of gVisor with `--host-uds=open` (unset: the daemon's default; needs `docker.runtime`) — below |
+| `docker.resolvers` | at most three IPv4 name servers of the host's that the built-in Drafter's web tools, and under `docker.runtime` the llm-proxy, the MCP server install proxy and the relays, resolve through (unset: docker's DNS) — below |
 
 The policy participates in the plan hash: editing it invalidates cached
 plans, which recompile on next use.
@@ -336,17 +337,57 @@ default and the receipt says nothing about a runtime.
 
 Since agentry-cli#221 the runtime also holds the gateway's health probe and,
 through the run's docker filter, the tools server and the declared MCP servers
-the gateway launches. What keeps the daemon's default, measured on a live run
-rather than assumed (DR-23), is four classes: the llm-proxy, the MCP server
-install proxy and the relays, which resolve hosts through docker's embedded
-DNS, and the gateway, which reaches the daemon through a host Unix socket. A
-sandboxed runtime's own network stack does not reach docker's embedded DNS at
-`127.0.0.11`, so the containers under it find the ones they talk to through
-`/etc/hosts` entries pinned from the containers' addresses. It also does not
-open a host socket without `--host-uds`. The receipt's runtime line names
-each class, and each that takes the default and why.
+the gateway launches. A sandboxed runtime's own network stack does not reach
+docker's embedded DNS at `127.0.0.11`, so the containers under it find the
+ones they talk to through `/etc/hosts` entries pinned from the containers'
+addresses.
 
-### The web tools' name servers (`docker.resolvers`)
+Four classes need more than that, measured on a live run rather than assumed
+(DR-23), and since agentry-cli#337 each can move under a sandbox too:
+
+- **The llm-proxy, the MCP server install proxy and the relays** resolve the
+  hosts they forward to by name. With `docker.resolvers` (below) they run
+  under `docker.runtime`, reading a `resolv.conf` of the run's own. Each is
+  created with every network it joins, because a sandboxed container takes
+  no network connected after it starts. So the proxies leave through an
+  egress network of their own rather than docker's default bridge, which
+  docker does not attach beside another network at create. The docker
+  filter refuses to connect a started container under the runtime to a
+  network. Without resolvers the three stay on the daemon's default. So does
+  the proxy of a host-run harness, which publishes ports to the host, and so
+  do the relays where the docker filter does not run (Docker Desktop,
+  agentry-cli#322).
+- **The gateway** reaches the run's docker filter through a bind-mounted host
+  Unix socket, which `runsc` opens only when registered with
+  `--host-uds=open`. `docker.gatewayRuntime` names such a registration for
+  the gateway alone:
+
+  ```json
+  "runtimes": {
+    "runsc":     { "path": "/usr/bin/runsc" },
+    "runsc-uds": { "path": "/usr/bin/runsc", "runtimeArgs": ["--host-uds=open"] }
+  }
+  ```
+
+  ```yaml
+  docker:
+    runtime: runsc
+    gatewayRuntime: runsc-uds
+    resolvers: [192.168.122.1]
+  ```
+
+  The flag opens only the sockets bind-mounted into that container, and the
+  gateway's one socket is the filter's. `docker.gatewayRuntime` needs
+  `docker.runtime`: the gateway is never sandboxed while the BriefAgent's
+  code is not. Unset, the gateway stays on the daemon's default.
+
+gVisor's `--reproduce-nat`, the other flag the measurements tried, starts no
+container on a host whose docker writes its rules through nftables. The
+receipt's runtime line names each class, and each that takes the default and
+why; with both settings it says that no class of the run is on the daemon's
+default.
+
+### The host's name servers (`docker.resolvers`)
 
 ```yaml
 docker:
@@ -364,13 +405,16 @@ writes its rules through nftables. Both were measured on 2026-09-27
 
 So the runner writes the policy's `docker.resolvers` into a `resolv.conf` of
 the run's own, and the docker filter binds it read-only at `/etc/resolv.conf`
-in the web tools' server alone. That server takes no DNS setting, hosts
+in the web tools' server and, under the runtime, in each relay. The runner
+binds it into the llm-proxy too, and the install proxy gets one of its own
+(agentry-cli#337). That server takes no DNS setting, hosts
 entry, volume or tmpfs of the gateway's, and nothing under `/etc` but its
 tools spec.
 
 Name the host's upstream name servers: at most three, IPv4 (the run's web
 network has none of IPv6), never a loopback stub such as systemd-resolved's
-`127.0.0.53`, which is the container's own loopback inside it. The address
+`127.0.0.53`, which is the container's own loopback inside it. The same
+servers answer every class that reads them. The address
 rule of `web_read` still holds on every address a name resolves to, at every
 connection.
 
@@ -389,7 +433,8 @@ present); it never falls back to another, because a run that quietly landed on
 `runc` after asking for `runsc` would carry a receipt claiming an isolation it
 did not have. `agentry doctor` reports the same check as `docker:runtime` —
 ok when the daemon has the runtime, fail with the same two lists and the fix
-when it does not.
+when it does not. `docker.gatewayRuntime` is held to the same check, and
+doctor reports it as `docker:gatewayRuntime`.
 
 The runtime is part of the compiled plan, so changing it recompiles rather
 than reinterpreting a cached plan. `capabilities_enforced.runtime` in the
