@@ -553,3 +553,26 @@ func intOrNil(p *int) string {
 	}
 	return strconv.Itoa(*p)
 }
+
+// TestDirectoryRememberedBrowserSurvivesLogout (agentry#464): signing out of
+// the registry leaves a browser remembered through the directory's sign-in,
+// and the directory's next check still says yes. The directory's own sign-out
+// (the agentry-invalidation flow) ends the directory's session and calls
+// nothing of the registry's, so it cannot touch the record at all.
+func TestDirectoryRememberedBrowserSurvivesLogout(t *testing.T) {
+	idp := newFakeOIDC(t)
+	idp.amr = []string{"pwd", "mfa"}
+	idp.extra = map[string]any{"agentry_remember_device": true, "auth_time": fresh()}
+	env := newRememberEnv(t, idp, true)
+	me, res := signInCaller(t, env, idp)
+	token := requireSetCookieAt(t, res.Cookies(), trustedDeviceCookie, flowExecutorPath, "", int(deviceTTL.Seconds()), false).Value
+	out := env.do(me, http.MethodPost, "/api/v1/auth/logout", nil)
+	_ = out.Body.Close()
+	if out.StatusCode != http.StatusNoContent {
+		t.Fatalf("logout: %d", out.StatusCode)
+	}
+	requireNoCookie(t, out.Cookies(), trustedDeviceCookie)
+	if st, ok := checkTrust(t, env, directoryTrustToken, map[string]string{"token": token, "sub": idp.sub}); st != http.StatusOK || !ok {
+		t.Fatalf("after logout: %d trusted=%v, want 200 true", st, ok)
+	}
+}
