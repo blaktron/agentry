@@ -1,0 +1,133 @@
+{% extends "base/skeleton.html" %}
+
+{% load i18n %}
+{% load static %}
+{% load authentik_core %}
+
+
+{% block head_before %}
+{{ block.super }}
+<link rel="prefetch" href="{{ flow_background_url }}" />
+{% if flow.compatibility_mode and not inspector %}
+{% comment %}
+    @see {@link web/types/webcomponents.d.ts} for type definitions.
+{% endcomment %}
+<script data-id="shady-dom">
+    "use strict";
+
+    window.ShadyDOM = window.ShadyDOM || {}
+    window.ShadyDOM.force = true
+</script>
+{% endif %}
+{% include "base/header_js.html" %}
+<script data-id="flow-config">
+    "use strict";
+
+    window.authentik.flow = {
+        "layout": "{{ flow.layout }}",
+        "background": "{{ flow.background }}",
+        "title": "{{ flow.title }}",
+    };
+</script>
+{% endblock %}
+
+{% block interface_stylesheet %}
+<link rel="stylesheet" type="text/css" href="{% versioned_script 'dist/styles/flow-%v.css' %}" />
+{% endblock %}
+
+{% block head %}
+<script src="{% versioned_script 'dist/flow/FlowInterface-%v.js' %}" type="module"></script>
+<style data-id="flow-css">
+  :root {
+      --ak-global--background-image: url("{{ flow_background_url|iriencode|safe }}");
+  }
+</style>
+{% endblock %}
+
+{% block body %}
+<ak-skip-to-content></ak-skip-to-content>
+<ak-message-container></ak-message-container>
+<ak-drawer id="flow-drawer">
+    <ak-flow-executor
+        slug="{{ flow.slug }}"
+        data-layout="{{ flow.layout|default:'stacked' }}"
+        loading
+    >
+        {% include "base/placeholder.html" %}
+        
+        <ak-brand-links name="flow-links" slot="footer"></ak-brand-links>
+    </ak-flow-executor>
+    
+    <ak-flow-inspector
+        slot="panel"
+        id="flow-inspector"
+        data-registration="lazy"
+        slug="{{ flow.slug }}"
+    ></ak-flow-inspector>
+</ak-drawer>
+{% endblock %}
+{# agentry:begin remembered-browser (agentry#671, DEV-163) #}
+{% comment %}
+    Everything above is authentik's own flows/templates/if/flow.html at the
+    image deploy/compose/docker-compose.yaml pins, byte for byte, and
+    scripts/acceptance/directory-remember.sh fails when it is not. This block
+    is the only addition: "Remember this device for 30 days", unticked, on
+    the sign-in flow's code page. authentik's code stage takes no extra
+    field, so a ticked box travels as a short-lived cookie on this host,
+    which the account-flows blueprint's agentry-remember-intent policy reads
+    once a factor has been validated. On https the cookie is __Host-
+    prefixed, so no other host under the same parent domain can plant it.
+    Nothing here decides anything: the registry mints only when the
+    directory's token also says a second factor was answered, just now.
+{% endcomment %}
+{% block scripts %}
+{{ block.super }}
+{% if flow.slug == "default-authentication-flow" %}
+<script data-id="agentry-remember-device">
+"use strict";
+(() => {
+    const COOKIE = "agentry_remember_intent";
+    const ID = "agentry-remember-device";
+    // __Host- (Secure, Path=/, no Domain) is a name only this host can set.
+    // Plain http, a compose stack without TLS, cannot use it.
+    const https = location.protocol === "https:";
+    const name = (https ? "__Host-" : "") + COOKIE;
+    const setIntent = (on) => {
+        document.cookie = name + "=" + (on ? "1" : "") + "; Path=/; SameSite=Lax" + (https ? "; Secure" : "") + "; Max-Age=" + (on ? 600 : 0);
+    };
+    // Never pre-ticked: every load of the flow page clears this page's own
+    // intent.
+    setIntent(false);
+    const codeStages = (root, out) => {
+        for (const el of root.querySelectorAll("*")) {
+            if (el.localName === "ak-stage-authenticator-validate-code") out.push(el);
+            if (el.shadowRoot) codeStages(el.shadowRoot, out);
+        }
+        return out;
+    };
+    const offer = (stage) => {
+        const form = stage.shadowRoot && stage.shadowRoot.querySelector("form");
+        if (!form || form.querySelector("#" + ID)) return;
+        const code = form.querySelector('input[name="code"]');
+        const actions = form.querySelector("fieldset.pf-m-action");
+        if (!code || !actions) return;
+        const group = document.createElement("div");
+        group.className = "pf-c-form__group";
+        const label = document.createElement("label");
+        label.setAttribute("for", ID);
+        label.style.cssText = "display:flex;align-items:center;gap:0.5rem;cursor:pointer";
+        const box = document.createElement("input");
+        box.type = "checkbox";
+        box.id = ID;
+        box.checked = false;
+        box.addEventListener("change", () => setIntent(box.checked));
+        label.append(box, document.createTextNode("Remember this device for 30 days"));
+        group.append(label);
+        form.insertBefore(group, actions);
+    };
+    setInterval(() => codeStages(document, []).forEach(offer), 250);
+})();
+</script>
+{% endif %}
+{% endblock %}
+{# agentry:end remembered-browser #}

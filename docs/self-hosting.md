@@ -1280,13 +1280,46 @@ lifetime, ceiling and fail-closed lookup:
   Keep such deployments on a name of their own, or accept that they receive
   those tokens (the hosted deployment accepts it, DEV-163).
 
-Setting the secret switches the registry's half on. The directory's half — the
-checkbox on the code page, the scope mapping and the policy that calls the
-check — is agentry#671; until it is applied the directory sends no claim and
-never asks, so nothing is minted and nothing is skipped. The directory's own
-remember-this-device behaviour is a different thing and is not used: it keeps
-no server-side record of the browsers it remembers, so they could be neither
-cleared nor individually revoked (agentry#460).
+The directory's half ships with the compose stack (agentry#671):
+
+- **The checkbox.** `deploy/compose/authentik/templates/if/flow.html` is
+  authentik's own flow page, byte for byte, plus one marked block that draws
+  an unticked "Remember this device for 30 days" on the code page. authentik
+  reads it from the `/templates` mount the mails already use. The box is
+  offered on the sign-in flow only. A ticked box becomes a ten-minute
+  `agentry_remember_intent` cookie on the directory's host, `__Host-`
+  prefixed on https so no other host under the same parent domain can set
+  it, and every load of the flow page clears it. The label says 30 days, the
+  default and the ceiling; a deployment that shortens
+  `AGENTRY_AUTH_TRUSTED_DEVICE_TTL` should change the label to match.
+- **The claim.** The account-flows blueprint's `agentry-remember-intent`
+  policy, on the sign-in's login stage, copies that choice into the sign-in's
+  record, but only when a second factor was validated in the same flow. Its
+  `agentry-remember-device` scope mapping answers the `agentry` scope with
+  `agentry_remember_device`. `scripts/dev/authentik-bootstrap.sh` attaches the
+  mapping to the registry's provider; re-run it once after upgrading.
+- **The skip.** The blueprint's `agentry-remembered-browser-skip` policy, on
+  the sign-in's MFA stage, calls the check before the code page. It reads
+  `AGENTRY_IDP_TRUST_CHECK_TOKEN` and `AGENTRY_REGISTRY_INTERNAL_URL`
+  (default `http://server:8080`) from the directory containers' environment
+  when it runs, so the secret is never stored in the directory's database. It
+  skips the code only on the registry's explicit `trusted: true`. The
+  blueprint restates the MFA binding in policy mode `all`, and binds the
+  policy with `failure_result: true`. Without both, the stock passwordless
+  policy would hide the skip, and a policy error would skip the code. Do
+  not run the directory with `AUTHENTIK_DEBUG` where the secret matters:
+  authentik's debug HTTP session logs outgoing requests with their headers.
+
+With the secret unset on either side, the code is asked every time. After an
+authentik upgrade, re-copy the new image's `flows/templates/if/flow.html`
+above the marked block: `scripts/acceptance/directory-remember.sh` fails
+until the two match, and it also checks that the code stage the block writes
+into still exists. The checkbox is not offered on a passkey sign-in or on
+authentik's simplified flow page for old browsers, which asks for the code
+as before. The directory's own remember-this-device behaviour is a
+different thing and is not used: it keeps no server-side record of the
+browsers it remembers, so they could be neither cleared nor individually
+revoked (agentry#460).
 
 The directory's flows are unbranded here and call the deployment
 `AGENTRY_BRAND_NAME`; a site that fronts the registry applies its own
