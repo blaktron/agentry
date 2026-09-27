@@ -464,10 +464,19 @@ the worker's declared capacity), so two workers polling together never both
 take the same run.
 
 What this arrangement gives a run is the isolation the
-[Runner reference](runner.md) describes, plus the runtime: the BriefAgent's
-container is created under gVisor's `runsc`, and the receipt names which
-containers were and which were not
-([the `docker.runtime` knob](runner.md#the-oci-runtime-dockerruntime)). It is
+[Runner reference](runner.md) describes, plus the runtime: its containers are
+created under gVisor's `runsc`, and the receipt names which were and which
+were not ([the `docker.runtime` knob](runner.md#the-oci-runtime-dockerruntime)).
+A sandbox host's runhost sets two more of the policy's runtime settings:
+`AGENTRY_RUNHOST_RESOLVERS` becomes `docker.resolvers`, the host's own name
+servers, through which the llm-proxy, the MCP server install proxy, the
+relays and the Drafter's web tools resolve under `runsc`; and
+`AGENTRY_RUNHOST_GATEWAY_RUNTIME` becomes `docker.gatewayRuntime`, a second
+registration of `runsc` with `--host-uds=open` (`runsc-uds` on Agentry's
+hosts), under which the MCP gateway reaches its run's docker filter. runhost
+refuses to start when the daemon lacks either runtime, or when the gateway's
+is not `runsc`'s own binary with that flag. With both set, no container of a
+hosted run is on the daemon's default runtime. It is
 not a machine per run. A daemon shared with anything else is a kernel shared
 with the run's sandbox, and that is a property of the deployment, not of the
 receipt.
