@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.6.14](https://github.com/blaktron/agentry/compare/v0.6.10...v0.6.14) (2026-09-28)
+
+
+### Features
+
+* **account:** count and clear an account's remembered browsers, for the site's "Clear remembered devices" ([c1bc1fd](https://github.com/blaktron/agentry/commit/c1bc1fd53499a9f2af00de968ec12f62cea46016))
+* **account:** count and clear an account's remembered browsers, for the site's "Clear remembered devices" ([1fec0ad](https://github.com/blaktron/agentry/commit/1fec0ad915fad15ae01cbd609d6e1e318002598c)), closes [#467](https://github.com/blaktron/agentry/issues/467)
+* **api:** /meta lists the configured sign-in providers ([d026fec](https://github.com/blaktron/agentry/commit/d026fec6ff3983414ccbbcf24712421119c10a4d))
+* **api:** /meta lists the configured sign-in providers ([9ba5a92](https://github.com/blaktron/agentry/commit/9ba5a92c1f9ba261edfa1a7bcb35e2348ddbfb58)), closes [#694](https://github.com/blaktron/agentry/issues/694)
+* **auth:** a secret:write PAT scope — set and delete the account's hosted-run secrets, never read them ([7fc1cf3](https://github.com/blaktron/agentry/commit/7fc1cf3e6628f930192a5a7b9619fe45ff7b4d2f))
+* **auth:** a secret:write PAT scope — set and delete the account's hosted-run secrets, never read them ([64c725f](https://github.com/blaktron/agentry/commit/64c725f44eb8c458d3b63d0a3d4db5693ca39b48)), closes [#676](https://github.com/blaktron/agentry/issues/676)
+* **auth:** mint a remembered browser from a directory sign-in, and answer the directory's trust check ([8a98583](https://github.com/blaktron/agentry/commit/8a98583cdd4431896d2c09b6e997d18185d5d51d))
+* **auth:** mint a remembered browser from a directory sign-in, and answer the directory's trust check ([08beef1](https://github.com/blaktron/agentry/commit/08beef1e54525389d950ed4e459ffb331a57525d)), closes [#467](https://github.com/blaktron/agentry/issues/467)
+* **auth:** sweep remembered browsers past their expiry, and pin that signing out leaves them alone ([042f3b8](https://github.com/blaktron/agentry/commit/042f3b8f38946080b7b2e8ffa4e74ef6f7f388c1))
+* **auth:** sweep remembered browsers past their expiry, and pin that signing out leaves them alone ([8a2483e](https://github.com/blaktron/agentry/commit/8a2483ec1e8d95d642abb1e2a5d1effb2e63887b)), closes [#464](https://github.com/blaktron/agentry/issues/464)
+* **directory:** "Remember this device for 30 days" on the sign-in's code page, and the MFA stage asks the registry before asking for the code ([3e8f764](https://github.com/blaktron/agentry/commit/3e8f7649a41e06aee425148610eb8f2c55635867))
+* **directory:** "Remember this device for 30 days" on the sign-in's code page, and the MFA stage asks the registry before asking for the code ([c60a923](https://github.com/blaktron/agentry/commit/c60a923784136fc8088dea8d6dec7e24f2158698)), closes [#467](https://github.com/blaktron/agentry/issues/467)
+* **knowledge:** an organization's shared packs under /orgs/{org}/knowledge/ ([82d138a](https://github.com/blaktron/agentry/commit/82d138a1cdfdfe94b4d198d748eb4e0a45399221))
+* **knowledge:** an organization's shared packs under /orgs/{org}/knowledge/ ([de346ac](https://github.com/blaktron/agentry/commit/de346ac851500635b8ea089d1d6528a9ffedb208))
+* **manifest,scan:** a release ships knowledge packs — the knowledge block (V11), V8's pack quota, the version's scan of each pack (SK) and the report's section ([93a1fb9](https://github.com/blaktron/agentry/commit/93a1fb9a1e0f272eb02bb238fb506801344792f5))
+* **manifest,scan:** a release ships knowledge packs — the knowledge block (V11), V8's pack quota, the version's scan of each pack (SK) and the report's section ([0a9d3fc](https://github.com/blaktron/agentry/commit/0a9d3fce0afb2d744c566d5ccea1ddfce2c9178e)), closes [#594](https://github.com/blaktron/agentry/issues/594)
+
+
+### Bug Fixes
+
+* **auth:** the review's findings — the approval page names the grant's own scopes ([ac9efe4](https://github.com/blaktron/agentry/commit/ac9efe4264c3c93d3d18b3cd80fb118a56295746)), closes [#676](https://github.com/blaktron/agentry/issues/676)
+* **directory:** no authentik_device cookie on any login stage ([ed51f20](https://github.com/blaktron/agentry/commit/ed51f20e5037dbd6426b15d7cec866861f40f475))
+* **directory:** no authentik_device cookie on any login stage ([865b266](https://github.com/blaktron/agentry/commit/865b266458cb94ead4788e582c3bf1991405ea6b)), closes [#460](https://github.com/blaktron/agentry/issues/460)
+* **directory:** the review's corrections to the device-cookie change ([a39ed2c](https://github.com/blaktron/agentry/commit/a39ed2c6b54910c607ec7b4a1f2a1e1b597a3dd8)), closes [#460](https://github.com/blaktron/agentry/issues/460)
+* **scan,manifest:** nothing in a shipped pack goes unread, no instruction inside a pack, and the extractor holds what a release may ship ([299d922](https://github.com/blaktron/agentry/commit/299d922c4c88963aea1b769a0ca40b58c248725e)), closes [#594](https://github.com/blaktron/agentry/issues/594)
+* **scan:** the release's AI Review is told the knowledge packs it ships, and where they are mounted ([e140f0a](https://github.com/blaktron/agentry/commit/e140f0ac0f82459b53b45a5fbd9d7b4c3995a85f))
+* **scan:** the release's AI Review is told the knowledge packs it ships, and where they are mounted ([c72d0e4](https://github.com/blaktron/agentry/commit/c72d0e4a3ce0a2ce3aac38320e90b9cf9658d200)), closes [#594](https://github.com/blaktron/agentry/issues/594)
+* **ui:** /ui/login offers only the providers that can start ([28f24bc](https://github.com/blaktron/agentry/commit/28f24bc7823bd50298bb3663c73f2bb1313a80b5)), closes [#694](https://github.com/blaktron/agentry/issues/694)
+
 ## [0.6.10](https://github.com/blaktron/agentry/compare/v0.6.0...v0.6.10) (2026-09-27)
 
 
