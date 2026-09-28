@@ -31,6 +31,11 @@ type samlTestIdP struct {
 	key      *rsa.PrivateKey
 	certDER  []byte
 	certPEM  string
+	// authnContext is the AuthnStatement's context class (Password when
+	// empty); attrs, when set, become a signed AttributeStatement
+	// (agentry#705).
+	authnContext string
+	attrs        map[string][]string
 }
 
 func newSAMLTestIdP(t *testing.T) *samlTestIdP {
@@ -101,8 +106,22 @@ func (k *samlTestIdP) signedResponseFor(t *testing.T, audience, recipient, nameI
 	cond.CreateElement("saml:AudienceRestriction").CreateElement("saml:Audience").SetText(audience)
 	authn := a.CreateElement("saml:AuthnStatement")
 	authn.CreateAttr("AuthnInstant", time.Now().UTC().Format(time.RFC3339))
+	classRef := k.authnContext
+	if classRef == "" {
+		classRef = "urn:oasis:names:tc:SAML:2.0:ac:classes:Password"
+	}
 	authn.CreateElement("saml:AuthnContext").CreateElement("saml:AuthnContextClassRef").
-		SetText("urn:oasis:names:tc:SAML:2.0:ac:classes:Password")
+		SetText(classRef)
+	if len(k.attrs) > 0 {
+		as := a.CreateElement("saml:AttributeStatement")
+		for name, vals := range k.attrs {
+			at := as.CreateElement("saml:Attribute")
+			at.CreateAttr("Name", name)
+			for _, v := range vals {
+				at.CreateElement("saml:AttributeValue").SetText(v)
+			}
+		}
+	}
 
 	ctx := dsig.NewDefaultSigningContext(k)
 	ctx.Canonicalizer = dsig.MakeC14N10ExclusiveCanonicalizerWithPrefixList("")
