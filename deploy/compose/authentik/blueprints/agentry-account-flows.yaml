@@ -722,9 +722,9 @@ entries:
   # tokens"). A User Login stage's `remember_device` defaults to days=30 and
   # writes `authentik_device`, a JWT the directory keeps no record of: it
   # cannot be listed or revoked, and rotating AUTHENTIK_SECRET_KEY does not
-  # end it (its key derives from the installation's identifier). The
-  # remembered browser above is the one device credential. The shipped
-  # stages are restated by name, like the identification stage below;
+  # end it (its key derives from the installation's identifier and the
+  # stage). The remembered browser above is the one device credential. The
+  # shipped stages are restated by name, like the identification stage;
   # authentik's default blueprints name them with no attributes, so a
   # re-apply of those does not undo this.
   #
