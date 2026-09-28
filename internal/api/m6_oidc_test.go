@@ -29,8 +29,10 @@ type oidcEndpointIdP struct {
 	clientID      string
 	email         string
 	emailVerified bool
-	mu            sync.Mutex
-	nonces        map[string]string
+	// amr, when set, is the ID token's `amr` claim (agentry#705).
+	amr    []string
+	mu     sync.Mutex
+	nonces map[string]string
 }
 
 func newOIDCEndpointIdP(t *testing.T) *oidcEndpointIdP {
@@ -78,6 +80,9 @@ func newOIDCEndpointIdP(t *testing.T) *oidcEndpointIdP {
 			"iss": idp.srv.URL, "aud": idp.clientID, "sub": "oidc-subject-1",
 			"iat": time.Now().Unix(), "exp": time.Now().Add(time.Hour).Unix(),
 			"nonce": nonce, "email": idp.email, "email_verified": idp.emailVerified,
+		}
+		if idp.amr != nil {
+			claims["amr"] = idp.amr
 		}
 		cb, _ := json.Marshal(claims)
 		idToken := oidctest.SignIDToken(key, "k1", "RS256", string(cb))

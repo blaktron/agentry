@@ -79,6 +79,9 @@ type Result struct {
 	// SessionIndex is the IdP's session handle from the AuthnStatement, the
 	// key a Single Logout request may name (§12.4, agentry#62).
 	SessionIndex string
+	// AuthnContextClassRefs are the signed AuthnStatements' context classes:
+	// how the IdP says it authenticated the person (agentry#705, MFAAsserted).
+	AuthnContextClassRefs []string
 }
 
 // New builds an SP from config and the SP's own metadata/ACS URLs. replay may
@@ -242,9 +245,11 @@ func (sp *SP) ParseAndValidate(ctx context.Context, samlResponseB64 string) (*Re
 		res.NameID = strings.TrimSpace(assertion.Subject.NameID.Value)
 	}
 	for _, st := range assertion.AuthnStatements {
-		if st.SessionIndex != "" {
+		if res.SessionIndex == "" && st.SessionIndex != "" {
 			res.SessionIndex = st.SessionIndex
-			break
+		}
+		if ref := st.AuthnContext.AuthnContextClassRef; ref != nil && ref.Value != "" {
+			res.AuthnContextClassRefs = append(res.AuthnContextClassRefs, ref.Value)
 		}
 	}
 	for _, st := range assertion.AttributeStatements {
