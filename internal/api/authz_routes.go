@@ -155,6 +155,7 @@ var routeAuthz = map[string]RouteDecl{
 	// is refused whatever its scopes, and an ordinary account never reaches
 	// them.
 	"scanModelInput":    {Action: auth.ActPublicRead, SelfAuthorized: true},
+	"checkDraft":        {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"searchModelInput":  {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"triageAbuseReport": {Action: auth.ActPublicRead, SelfAuthorized: true},
 	// Enterprise (M6/WG-J). SSO/SCIM config = admin (ActOrgSettingsManage,

@@ -1,0 +1,75 @@
+# drafted by the Drafter (agentry draft); review every line before you submit it
+schemaVersion: "2"
+name: pr-review-summary
+namespace: draft
+version: 0.1.0
+summary: Reads a pull request's diff and comments on GitHub and writes a review summary of the risks it carries and the questions to ask the author.
+license: Apache-2.0
+tags:
+  - github
+  - code-review
+  - pull-request
+  - risks
+  - review-summary
+modes:
+  - autonomous
+entrypoints:
+  instruction: AGENT.md
+intake:
+  - id: repository
+    prompt: Which repository? owner/repo, or the pull request's full GitHub URL.
+    type: text
+    required: true
+  - id: pull_request_number
+    prompt: Which open pull request number? Leave blank if you pasted the full URL above.
+    type: text
+    required: false
+guide:
+  overview: 'Reads one open GitHub pull request through a read-only server: its diff hunk by hunk, its commits, its reviews and comments. Returns report.md with what the change does, the risks ranked worst first each tied to a file and hunk, the questions only the author can answer, and a suggested review depth. It never comments on, approves or merges the pull request.'
+  prepare:
+    - The repository as owner/repo and the pull request number, or just its GitHub URL.
+    - A fine-grained GitHub personal access token that can read that repository, for GITHUB_TOKEN.
+    - Anything the description leaves out, such as the area of the change you most want examined.
+    - 'Optional: a concern to weight the review toward, for example a migration, auth, or a performance fix.'
+  task: e.g. acme/payments-api#412; I especially want the migration and rollback risk looked at.
+  connect:
+    GITHUB_TOKEN: |-
+      Create a fine-grained personal access token at https://github.com/settings/personal-access-tokens/new.
+
+      1. Pick the Single repository option and choose the repository under review.
+      2. Under Repository permissions set Pull requests: Read-only and Contents: Read-only. Metadata: Read-only is added automatically.
+      3. Set an Expiration and leave it scoped to that one repository.
+
+      No write permission is requested, so the pull request cannot be commented on, approved or merged with this token. A token that can also read pull requests on other repositories lets the BriefAgent review a pull request you name there.
+capabilities:
+  network:
+    egress: none
+  filesystem:
+    read: none
+    write: none
+  exec: none
+  secrets:
+    - GITHUB_TOKEN
+  dataAccess:
+    - code
+  mcpServers:
+    - npm: github-mcp-server-js
+      version: 0.1.7
+      tools:
+        - get_pull_request
+        - list_pull_request_files
+        - list_pull_request_commits
+        - list_pull_request_reviews
+        - list_comments
+      egress:
+        - api.github.com
+      secrets:
+        - GITHUB_TOKEN
+      env:
+        GITHUB_PERMISSION: read-only
+publish:
+  include:
+    - agent.yaml
+    - AGENT.md
+    - README.md
+    - LICENSE

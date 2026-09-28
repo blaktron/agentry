@@ -1,0 +1,52 @@
+# drafted by the Drafter (agentry draft); review every line before you submit it
+schemaVersion: "2"
+name: three-line-weather-brief
+namespace: draft
+version: 0.1.0
+summary: 'Looks up a city you name on Open-Meteo and answers in exactly three lines: right now, today, tomorrow. No API key.'
+license: Apache-2.0
+tags:
+  - weather
+  - forecast
+  - open-meteo
+  - travel
+  - daily-brief
+modes:
+  - autonomous
+entrypoints:
+  instruction: AGENT.md
+intake:
+  - id: city
+    prompt: Which city? A country or state after a comma makes it unambiguous, e.g. Springfield, US
+    type: text
+    required: true
+  - id: units
+    prompt: Units for temperature and wind?
+    type: choice
+    choices:
+      - celsius
+      - fahrenheit
+    required: false
+guide:
+  overview: Type a city and get a three-line weather brief back. The BriefAgent resolves the name to coordinates with Open-Meteo's free geocoding API, then reads current conditions and a two-day forecast from its forecast API. Line 1 is right now, line 2 is today with sunrise and sunset, line 3 is tomorrow. Neither call needs an API key.
+  prepare:
+    - The city name. Add a country or state after a comma if more than one place shares it.
+    - Decide celsius or fahrenheit; metric is the default if you skip the question.
+  task: e.g. Give me a brief for Lisbon, and tell me if I need a jacket tomorrow.
+capabilities:
+  network:
+    egress:
+      - geocoding-api.open-meteo.com
+      - api.open-meteo.com
+  filesystem:
+    read: none
+    write: none
+  exec: none
+  dataAccess: []
+  mcpServers: []
+publish:
+  include:
+    - agent.yaml
+    - AGENT.md
+    - README.md
+    - LICENSE

@@ -1,11 +1,9 @@
 package scan
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/blaktron/agentry/pkg/manifest"
 	"strings"
 	"time"
 
@@ -59,15 +57,10 @@ const (
 	typesafeDefaultModel   = judge.DefaultModel
 	typesafeChunk          = judge.ChunkSize
 	typesafeInputLimit     = 50 << 10
-	typesafeBatch          = 1
-	typesafeBandLow        = judge.BandLow
-	typesafeBandHigh       = judge.BandHigh
-	typesafeSamples        = judge.Samples
+	typesafeBatch          = judge.RubricBatchOne
 	// typesafeDeclaredCap bounds the declared-capabilities JSON that rides
-	// in the state beside the content: a manifest's `mcpServers[].env` and
-	// `tools` can carry tens of kilobytes of free text, and the question is
-	// about the contract's shape, not its prose.
-	typesafeDeclaredCap = 4 << 10
+	// in the state beside the content (judge.DeclaredCapabilitiesCap).
+	typesafeDeclaredCap = judge.DeclaredCapabilitiesCap
 )
 
 // typesafeQuestions are the six rubric axes as questions the model answers
@@ -111,19 +104,20 @@ func PinnedJudgeModel(model string) bool { return judge.PinnedModel(model) }
 
 // hash is the rubric hash (§8.4.4) over everything that changes a verdict:
 // the model, the axes and their wording, the request shape, the chunk size,
-// the capability bound, the thresholds, the band and the sample count.
+// the capability bound, the thresholds, the band and the sample count. It
+// is pkg/judge's (RubricScanner.Hash), which a draft's check records too.
 func (j *TypeSafeJudge) hash() string {
-	cats := AllJudgeCategories()
-	questions := make([]string, 0, len(cats))
-	for _, c := range cats {
-		questions = append(questions, string(c)+"="+typesafeQuestions[c])
-	}
-	return RubricHash(rubricStatement, "provider=typesafe", "model="+j.model,
-		"axes=C1..C6", "questions="+strings.Join(questions, "\n"),
-		fmt.Sprintf("batch=%d", j.batch), fmt.Sprintf("chunk=%d", typesafeChunk),
-		fmt.Sprintf("declared-cap=%d", typesafeDeclaredCap),
-		"thresholds=0.5/0.7/0.9", fmt.Sprintf("band=%.2f/%.2f", typesafeBandLow, typesafeBandHigh),
-		fmt.Sprintf("samples=%d", typesafeSamples))
+	return judge.NewRubricScannerShape(modelOnly(j.model), j.batch).Hash()
+}
+
+// modelOnly is an Asker that only names a model, for the hash of a judge
+// whose client could not be built.
+type modelOnly string
+
+func (m modelOnly) Model() string { return string(m) }
+
+func (m modelOnly) Ask(context.Context, map[string]string, []judge.Question) (map[string]float64, judge.Usage, error) {
+	return nil, judge.Usage{}, errors.New("judge: no client")
 }
 
 // Name implements JudgeProvider.
@@ -186,166 +180,32 @@ func (j *TypeSafeJudge) Judge(ctx context.Context, content JudgeContent) (JudgeV
 	return v, nil
 }
 
-// judgeAxes asks about every chunk of the manifest and every file and
+// judgeAxes asks about every chunk of the manifest and every file through
+// pkg/judge's RubricScanner, the code a draft's check asks through too, and
 // returns, per axis, the chunk that scored highest with its samples, plus
 // the token use of every request. The bench reads this directly.
 func (j *TypeSafeJudge) judgeAxes(ctx context.Context, content JudgeContent) (map[JudgeCategory]*typesafeAxisResult, JudgeUsage, error) {
-	declared := declaredCapabilitiesJSON(content.ManifestJSON)
-	axes := map[JudgeCategory]*typesafeAxisResult{}
-	var usage JudgeUsage
-	inputs := []JudgeFile{{Path: "agent.yaml", Content: string(content.ManifestJSON)}}
-	inputs = append(inputs, content.Files...)
-	for _, f := range inputs {
-		for _, chunk := range chunkText(f.Content, typesafeChunk) {
-			if strings.TrimSpace(chunk) == "" {
-				continue
-			}
-			probs, err := j.askChunk(ctx, f.Path, chunk, declared, &usage)
-			if err != nil {
-				return nil, JudgeUsage{}, err
-			}
-			for cat, samples := range probs {
-				best := samples[0]
-				for _, p := range samples[1:] {
-					if p > best {
-						best = p
-					}
-				}
-				if cur := axes[cat]; cur == nil || best > cur.best {
-					axes[cat] = &typesafeAxisResult{best: best, samples: samples, path: f.Path, line: firstLine(chunk)}
-				}
-			}
-		}
-	}
-	return axes, usage, nil
-}
-
-// declaredCapabilitiesJSON is the manifest's `capabilities` block as compact
-// JSON, bounded, for the state's declared_capabilities field. An absent or
-// unreadable block reads as none declared. The knowledge packs the release
-// ships (plan knowledge.md §4.6) are declared too, with where the runner
-// mounts them: an instruction that reads its own pack at /knowledge/<name>
-// uses what the release declares, and the judge sees only this field of
-// the manifest.
-func declaredCapabilitiesJSON(manifestJSON []byte) string {
-	var m struct {
-		Capabilities json.RawMessage `json:"capabilities"`
-	}
-	if json.Unmarshal(manifestJSON, &m) != nil {
-		return "{}"
-	}
-	caps := map[string]json.RawMessage{}
-	if len(m.Capabilities) > 0 && json.Unmarshal(m.Capabilities, &caps) != nil {
-		return "{}"
-	}
-	if ships := shippedPacks(manifestJSON); len(ships) > 0 {
-		at := make([]string, len(ships))
-		for i, s := range ships {
-			at[i] = "/" + manifest.KnowledgeDir + "/" + s
-		}
-		raw, err := json.Marshal(map[string]any{"ships": ships, "mountedReadOnlyAt": at})
-		if err != nil {
-			return "{}"
-		}
-		caps["knowledge"] = raw
-	}
-	if len(caps) == 0 {
-		return "{}"
-	}
-	// Keys in order, so the field is the same for the same manifest.
-	enc, err := json.Marshal(caps)
-	if err != nil {
-		return "{}"
-	}
-	var buf bytes.Buffer
-	if json.Compact(&buf, enc) != nil || buf.Len() == 0 {
-		return "{}"
-	}
-	s := buf.String()
-	if len(s) > typesafeDeclaredCap {
-		s = s[:typesafeDeclaredCap] + "…(truncated)"
-	}
-	return s
-}
-
-// askChunk asks every axis about one chunk in j.batch requests, then asks
-// the borderline axes twice more in the same request shape (each group's
-// borderline members together). It returns every sample per axis.
-func (j *TypeSafeJudge) askChunk(ctx context.Context, path, chunk, declared string, usage *JudgeUsage) (map[JudgeCategory][]float64, error) {
-	groups := j.groups()
-	out := map[JudgeCategory][]float64{}
-	for _, g := range groups {
-		probs, err := j.ask(ctx, path, chunk, declared, g, usage)
-		if err != nil {
-			return nil, err
-		}
-		for cat, p := range probs {
-			out[cat] = []float64{p}
-		}
-	}
-	for i := 1; i < typesafeSamples; i++ {
-		for _, g := range groups {
-			var again []JudgeCategory
-			for _, cat := range g {
-				if p := out[cat][0]; p >= typesafeBandLow && p <= typesafeBandHigh {
-					again = append(again, cat)
-				}
-			}
-			if len(again) == 0 {
-				continue
-			}
-			probs, err := j.ask(ctx, path, chunk, declared, again, usage)
-			if err != nil {
-				return nil, err
-			}
-			for cat, p := range probs {
-				out[cat] = append(out[cat], p)
-			}
-		}
-	}
-	return out, nil
-}
-
-// groups is the request shape: which axes travel together. Only the three
-// shapes the plan compares exist; anything else is the shipped shape.
-func (j *TypeSafeJudge) groups() [][]JudgeCategory {
-	switch j.batch {
-	case 2:
-		return [][]JudgeCategory{{CatInjection, CatUndeclaredCap, CatObfuscation}, {CatExfiltration, CatDeception, CatDestructive}}
-	case 6:
-		out := make([][]JudgeCategory, 0, 6)
-		for _, c := range AllJudgeCategories() {
-			out = append(out, []JudgeCategory{c})
-		}
-		return out
-	default:
-		return [][]JudgeCategory{AllJudgeCategories()}
-	}
-}
-
-// ask posts one request for the given axes over one chunk and returns each
-// axis's probability, through the shared client: one retry on 429/529, and
-// every other failure, a missing answer, a probability outside [0,1] or a
-// response naming a model other than the pinned one is an error.
-func (j *TypeSafeJudge) ask(ctx context.Context, path, chunk, declared string, cats []JudgeCategory, usage *JudgeUsage) (map[JudgeCategory]float64, error) {
 	if j.err != nil {
-		return nil, fmt.Errorf("scan: typesafe judge: %w", j.err)
+		return nil, JudgeUsage{}, fmt.Errorf("scan: typesafe judge: %w", j.err)
 	}
-	qs := make([]judge.Question, 0, len(cats))
-	for _, c := range cats {
-		qs = append(qs, judge.Question{ID: string(c), Text: typesafeQuestions[c]})
+	files := make([]judge.RubricFile, len(content.Files))
+	for i, f := range content.Files {
+		files[i] = judge.RubricFile{Path: f.Path, Content: f.Content}
 	}
-	probs, u, err := j.client.Ask(ctx, map[string]string{"path": path, "content": chunk, "declared_capabilities": declared}, qs)
+	res, u, err := judge.NewRubricScannerShape(j.client, j.batch).Scan(ctx, content.ManifestJSON, shippedPacks(content.ManifestJSON), files)
 	if err != nil {
-		return nil, fmt.Errorf("scan: %w", err)
+		return nil, JudgeUsage{}, fmt.Errorf("scan: %w", err)
 	}
-	out := make(map[JudgeCategory]float64, len(cats))
-	for _, c := range cats {
-		out[c] = probs[string(c)]
+	axes := make(map[JudgeCategory]*typesafeAxisResult, len(res))
+	for id, r := range res {
+		axes[JudgeCategory(id)] = &typesafeAxisResult{best: r.Best, samples: r.Samples, path: r.Path, line: r.Line}
 	}
-	if usage != nil {
-		usage.PromptTokens += u.InputTokens
-		usage.CompletionTokens += u.OutputTokens
-	}
-	return out, nil
+	return axes, JudgeUsage{PromptTokens: u.InputTokens, CompletionTokens: u.OutputTokens}, nil
+}
+
+// declaredCapabilitiesJSON is the state's declared_capabilities field for
+// a manifest: its capabilities block and the packs it ships
+// (judge.DeclaredCapabilities).
+func declaredCapabilitiesJSON(manifestJSON []byte) string {
+	return judge.DeclaredCapabilities(manifestJSON, shippedPacks(manifestJSON))
 }

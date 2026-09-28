@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
-	"sort"
 	"strings"
 
 	"github.com/blaktron/agentry/pkg/manifest"
@@ -152,27 +150,8 @@ func incompleteWhy(r PackReport) string {
 }
 
 // shippedPacks reads the names of the packs a manifest ships from its
-// canonical JSON, sorted; none for a manifest without the block.
-func shippedPacks(manifestJSON []byte) []string {
-	var m struct {
-		Knowledge struct {
-			Ships []struct {
-				Name string `json:"name"`
-			} `json:"ships"`
-		} `json:"knowledge"`
-	}
-	if len(manifestJSON) == 0 || json.Unmarshal(manifestJSON, &m) != nil {
-		return nil
-	}
-	var out []string
-	for _, s := range m.Knowledge.Ships {
-		if manifest.ValidKnowledgePackName(s.Name) {
-			out = append(out, s.Name)
-		}
-	}
-	sort.Strings(out)
-	return slices.Compact(out)
-}
+// canonical JSON (manifest.ShippedPacksOf).
+func shippedPacks(manifestJSON []byte) []string { return manifest.ShippedPacksOf(manifestJSON) }
 
 // packText says whether f is SK's to read: a text file (as S1 classified
 // it) of a shipped pack's tree, and which pack.

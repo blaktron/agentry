@@ -1,0 +1,51 @@
+# drafted by the Drafter (agentry draft); review every line before you submit it
+schemaVersion: "2"
+name: csv-column-quality-check
+namespace: draft
+version: 0.1.0
+summary: Checks a CSV you add for missing values, duplicate rows and mixed-format columns, and reports the problems per column with line numbers.
+license: Apache-2.0
+tags:
+  - csv
+  - data-quality
+  - validation
+  - duplicates
+  - missing-values
+  - formats
+modes:
+  - autonomous
+entrypoints:
+  instruction: AGENT.md
+intake:
+  - id: csv_file
+    prompt: Add the CSV file to check.
+    type: file
+    required: true
+  - id: focus
+    prompt: 'Optional: any columns that must be complete, unique, or all one format?'
+    type: text
+    required: false
+guide:
+  overview: 'Reads the CSV you add from end to end and reports three kinds of problem per column: missing values, duplicate rows, and columns whose values are not all in the same format. You get back report.md: a summary table worst column first, then counts, percentages and the line numbers of every finding. It needs no accounts, no keys and no network, because the file''s own bytes are the whole input.'
+  prepare:
+    - The CSV file, with its header row intact.
+    - Note any column that is a key (id, email, order number) so duplicates there get called out.
+    - If the file is a TSV or semicolon-separated, say so in the task line; otherwise the delimiter is detected.
+    - Anything you already suspect is wrong, so the report checks it first.
+  files: Add one CSV (or TSV) file. Nothing else is needed; large files are read in pages.
+  task: e.g. Check every column; email must be unique and dates must all be YYYY-MM-DD.
+capabilities:
+  network:
+    egress: none
+  filesystem:
+    read: none
+    write: none
+  exec: none
+  dataAccess:
+    - files
+publish:
+  include:
+    - agent.yaml
+    - AGENT.md
+    - README.md
+    - LICENSE
