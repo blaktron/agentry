@@ -127,7 +127,7 @@ func (q *Queries) CreateDomainClaim(ctx context.Context, arg CreateDomainClaimPa
 const createIdentity = `-- name: CreateIdentity :one
 INSERT INTO identities (id, user_id, provider_kind, sso_connection_id, subject)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, user_id, provider_kind, sso_connection_id, subject, created_at
+RETURNING id, user_id, provider_kind, sso_connection_id, subject, created_at, directory_account_id
 `
 
 type CreateIdentityParams struct {
@@ -154,6 +154,7 @@ func (q *Queries) CreateIdentity(ctx context.Context, arg CreateIdentityParams) 
 		&i.SsoConnectionID,
 		&i.Subject,
 		&i.CreatedAt,
+		&i.DirectoryAccountID,
 	)
 	return i, err
 }
@@ -498,7 +499,7 @@ func (q *Queries) GetEnabledSSOConnection(ctx context.Context, arg GetEnabledSSO
 
 const getIdentityBySubject = `-- name: GetIdentityBySubject :one
 
-SELECT id, user_id, provider_kind, sso_connection_id, subject, created_at FROM identities WHERE sso_connection_id = $1 AND subject = $2
+SELECT id, user_id, provider_kind, sso_connection_id, subject, created_at, directory_account_id FROM identities WHERE sso_connection_id = $1 AND subject = $2
 `
 
 type GetIdentityBySubjectParams struct {
@@ -517,6 +518,7 @@ func (q *Queries) GetIdentityBySubject(ctx context.Context, arg GetIdentityBySub
 		&i.SsoConnectionID,
 		&i.Subject,
 		&i.CreatedAt,
+		&i.DirectoryAccountID,
 	)
 	return i, err
 }
@@ -634,7 +636,7 @@ func (q *Queries) GetScimUser(ctx context.Context, arg GetScimUserParams) (GetSc
 }
 
 const getSocialIdentity = `-- name: GetSocialIdentity :one
-SELECT id, user_id, provider_kind, sso_connection_id, subject, created_at FROM identities
+SELECT id, user_id, provider_kind, sso_connection_id, subject, created_at, directory_account_id FROM identities
 WHERE sso_connection_id IS NULL AND provider_kind = 'social' AND subject = $1
 `
 
@@ -650,6 +652,7 @@ func (q *Queries) GetSocialIdentity(ctx context.Context, subject string) (Identi
 		&i.SsoConnectionID,
 		&i.Subject,
 		&i.CreatedAt,
+		&i.DirectoryAccountID,
 	)
 	return i, err
 }
