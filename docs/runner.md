@@ -526,11 +526,21 @@ Hosted runs are why the knob exists: the platform's run worker renders
 | the agent container itself | internal-only network; reachable endpoints: the gateway (Bearer token) and the egress proxy (allowlist = `model.proxyAllow`); `/plan` is its only mount |
 | the gateway on an SELinux host | the gateway is the one container that drives the host's docker daemon, so on a daemon with SELinux enabled it runs with label confinement off (`--security-opt label=disable`) — a confined container cannot open that socket at all. Everything else in the run stays confined, and the run's own directories are relabelled so the tool containers can use them; the socket itself is never relabelled, which would hand daemon access to every container on the machine. |
 | a tool **result** that looks like a secret | the pinned gateway refuses it before the harness sees it, and the agent gets `Error calling tool: … a secret is being returned by the …` instead of the value. This is docker/mcp-gateway's own `--block-secrets`, on by default in the pinned version rather than something the run asks for, so it guards every tool — including `run_command`. Worth knowing when writing a BriefAgent whose job is to *find* credentials: a `git log -p` that would print one is refused, and the work has to be done on patterns that are not themselves secret-shaped. |
-| a **host-run** harness instead (`--adapter claude`) | no agent container: the gateway's catalog is still the whole tool surface, and the proxy variables are still the route to the model, but they are configuration the harness is asked to honour rather than a network it cannot leave. The receipt says so in `capabilities_enforced["harness.isolation"]`, and `receipts/proxy.log` shows every CONNECT it actually made. |
+| a **host-run** harness instead (`--adapter claude`) | no agent container: the gateway's catalog is still the whole tool surface, and the proxy variables are still the route to the model, but they are configuration the harness is asked to honour rather than a network it cannot leave. The receipt says so in `capabilities_enforced["harness.isolation"]`, and `receipts/proxy.log` shows every CONNECT it actually made. Beside it, `capabilities_enforced["harness.env"]` names the variables of your own environment the harness is given unchanged: `HOME` and `PATH`, and on Windows also `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `TEMP`, `TMP`, `PATHEXT`, `ComSpec` and `SystemRoot`. Everything else it has is set by the plan and the run. |
 
 Every claim above appears, mechanism named, in the run's
 `capabilities_enforced` — the receipts stay honest about what is enforced
 versus declared.
+
+One line appears only when something went wrong: `teardown`. Teardown
+deletes the run's `secrets.env` and its copies of any knowledge packs, even
+with `--keep-run-dir`. On Windows it retries a failed delete for a few
+seconds, since Docker Desktop can hold a file briefly after its container
+is removed. A file that still stands after the whole teardown is named in a
+warning on stderr and in `capabilities_enforced.teardown`. `result.json` is
+written again with that line, and the run exits 1 even when the BriefAgent
+itself succeeded. The named files may hold secret values or a pack's pages
+in the clear: delete them by hand.
 
 When a BriefAgent declares `exec: {commands: […]}`, its tools server runs in a
 per-BriefAgent **exec image**: the runner image with the packages the
@@ -692,6 +702,17 @@ checks (`scripts/acceptance/runner-r2.sh`). Each script points
 `AGENTRY_CONFIG_DIR` (r0 and r2 the runner home as well) at its own
 throwaway directory, so the consent records `agentry run` writes never
 reach your `~/.config/agentry/installed.yaml`.
+
+The runner's Windows behaviour is tested natively on a Windows machine with
+Docker Desktop and, where none is at hand, as Windows test binaries run
+under Wine in `agentry-cli`'s `scripts/windows-tests` box: a throwaway
+container with no network, no capabilities and read-only mounts
+(`scripts/windows-tests/run.sh ./pkg/...`). Never run those binaries under
+Wine on your own machine. Wine's `Z:` drive is your whole filesystem, and a
+test's cleanup follows directory links, so it can delete real files. A pass
+under Wine is evidence, not proof: Wine does not enforce Windows' file
+sharing rules, so a fault that only an open handle causes shows up on
+Windows alone.
 
 ## Knowledge packs
 
