@@ -183,7 +183,7 @@ func TestTheDraftBenchCorpusReads(t *testing.T) {
 		}
 		fixtures++
 		d := readBenchDraft(t, e.Name())
-		if _, _, _, _, err := Read(Package{Description: d.description, Files: d.files}); err != nil {
+		if _, err := Read(Package{Description: d.description, Files: d.files}); err != nil {
 			t.Fatalf("%s: %v", e.Name(), err)
 		}
 	}
@@ -193,14 +193,14 @@ func TestTheDraftBenchCorpusReads(t *testing.T) {
 			t.Fatalf("%s: class %q, what %q", v.Fixture, v.Class, v.What)
 		}
 		p := v.build(t)
-		mj, _, _, _, err := Read(p)
+		rd, err := Read(p)
 		if err != nil {
 			t.Fatalf("%s/%s: %v", v.Fixture, v.Class, err)
 		}
 		if v.Capabilities != "" {
 			d := readBenchDraft(t, v.Fixture)
-			base, _, _, _, _ := Read(Package{Description: d.description, Files: d.files})
-			if judge.DeclaredCapabilities(base, nil) == judge.DeclaredCapabilities(mj, nil) {
+			base, _ := Read(Package{Description: d.description, Files: d.files})
+			if judge.DeclaredCapabilities(base.ManifestJSON, nil) == judge.DeclaredCapabilities(rd.ManifestJSON, nil) {
 				t.Fatalf("%s/%s: the capabilities did not change", v.Fixture, v.Class)
 			}
 		}
@@ -265,11 +265,11 @@ func TestDraftBench(t *testing.T) {
 	tokens, requests := 0, 0
 	for _, v := range readVariants(t) {
 		p := v.build(t)
-		mj, _, instruction, _, err := Read(p)
+		rd, err := Read(p)
 		if err != nil {
 			t.Fatal(err)
 		}
-		state := map[string]string{"description": p.Description, "manifest": string(mj), "instruction": instruction}
+		state := map[string]string{"description": p.Description, "manifest": string(rd.ManifestJSON), "instruction": rd.Instruction}
 		var runs []map[string]float64
 		for i := 0; i < samples; i++ {
 			probs, u, err := c.Ask(ctx, state, qs)
@@ -348,12 +348,12 @@ func TestDraftBench(t *testing.T) {
 	sort.Strings(names)
 	for _, n := range names {
 		d := readBenchDraft(t, n)
-		mj, ships, _, files, err := Read(Package{Description: d.description, Files: d.files})
+		rd, err := Read(Package{Description: d.description, Files: d.files})
 		if err != nil {
 			t.Fatal(err)
 		}
 		var u judge.Usage
-		r := ck.askRubric(ctx, mj, ships, files, &u)
+		r := ck.askRubric(ctx, rd, &u)
 		var parts, found []string
 		for _, q := range judge.RubricQuestions() {
 			parts = append(parts, fmt.Sprintf("%s=%d", q.ID[:2], r.Scores[q.ID]))
@@ -366,9 +366,9 @@ func TestDraftBench(t *testing.T) {
 		// Per file, the undeclared-capability question's probability: the
 		// question the drafts' findings came from.
 		var perFile []string
-		for _, f := range append([]judge.RubricFile{{Path: "agent.yaml(canonical)", Content: string(mj)}}, files...) {
+		for _, f := range append([]judge.RubricFile{{Path: "agent.yaml(canonical)", Content: string(rd.ManifestJSON)}}, rd.Files...) {
 			probs, _, err := c.Ask(ctx, map[string]string{"path": f.Path, "content": f.Content,
-				"declared_capabilities": judge.DeclaredCapabilities(mj, ships)}, []judge.Question{judge.RubricQuestions()[2]})
+				"declared_capabilities": judge.DeclaredCapabilities(rd.ManifestJSON, rd.Ships)}, []judge.Question{judge.RubricQuestions()[2]})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -403,11 +403,11 @@ func compareWordings(t *testing.T, c *judge.Client) {
 	per := map[string]*tally{}
 	for _, v := range readVariants(t) {
 		p := v.build(t)
-		mj, _, instruction, _, err := Read(p)
+		rd, err := Read(p)
 		if err != nil {
 			t.Fatal(err)
 		}
-		probs, _, err := c.Ask(context.Background(), map[string]string{"description": p.Description, "manifest": string(mj), "instruction": instruction}, benchAlternatives)
+		probs, _, err := c.Ask(context.Background(), map[string]string{"description": p.Description, "manifest": string(rd.ManifestJSON), "instruction": rd.Instruction}, benchAlternatives)
 		if err != nil {
 			t.Fatal(err)
 		}

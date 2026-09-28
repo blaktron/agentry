@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/blaktron/agentry/internal/api"
+	"github.com/blaktron/agentry/internal/registry"
 	"github.com/blaktron/agentry/pkg/draftcheck"
 	"github.com/blaktron/agentry/pkg/judge"
 )
@@ -208,7 +209,11 @@ func TestTheDraftCheckReadsThePackageAsS5AndAsksTheDraftSet(t *testing.T) {
 // a token whatever its scopes, and a job's check is admitted as the check
 // op and recorded against it.
 func TestTheDraftCheckAnswersStaffAndAdmittedJobsOnly(t *testing.T) {
-	callers := &fakeCallers{jobs: map[string]string{"agyj_valid": "01draft"}}
+	callers := &fakeCallers{
+		jobs: map[string]string{"agyj_valid": "01draft"},
+		refuse: map[string]*registry.Refusal{"agyj_capped": {Status: http.StatusForbidden, Slug: "draft-cap-reached",
+			Title: "The draft's cap is reached", Detail: "This draft has made its 2 checks."}},
+	}
 	env := newTestEnvWith(t, func(s *api.Server) {
 		s.SetDraftChecker(draftcheck.New(&draftJudge{}))
 		s.SetModelInputCallers(callers)
@@ -232,9 +237,17 @@ func TestTheDraftCheckAnswersStaffAndAdmittedJobsOnly(t *testing.T) {
 		{"staff by session", staff, nil, http.StatusOK},
 		{"an admitted job", anonymous, job("agyj_valid"), http.StatusOK},
 		{"a credential that names no job", anonymous, job("agyj_unknown"), http.StatusUnauthorized},
+		{"a job the extension refuses", anonymous, job("agyj_capped"), http.StatusForbidden},
 	} {
 		if st, _, _ := checkDraft(t, env, c.caller, c.headers, body); st != c.want {
 			t.Fatalf("%s: %d, want %d", c.name, st, c.want)
+		}
+	}
+	// What the check will not read is refused before the extension is
+	// asked, so it costs a job nothing.
+	for _, files := range [][]map[string]string{{{"path": "AGENT.md", "content": "x"}}, draftFiles(strings.Repeat("x", draftcheck.MaxBytes))} {
+		if st, _, _ := checkDraft(t, env, anonymous, job("agyj_valid"), map[string]any{"description": "d", "files": files}); st != http.StatusUnprocessableEntity && st != http.StatusRequestEntityTooLarge {
+			t.Fatalf("a refused package from a job: %d", st)
 		}
 	}
 	callers.mu.Lock()
@@ -245,7 +258,7 @@ func TestTheDraftCheckAnswersStaffAndAdmittedJobsOnly(t *testing.T) {
 			checks = append(checks, call)
 		}
 	}
-	if len(checks) != 2 || checks[0].Bytes != len(draftYAML)+len("# Weather\n") || checks[0].Source != "" {
+	if len(checks) != 3 || checks[0].Bytes != len(draftYAML)+len("# Weather\n") || checks[0].Source != "" {
 		t.Fatalf("admitted as: %+v", checks)
 	}
 	if len(callers.uses) != 1 || callers.usesJob[0] != "01draft" || callers.uses[0].Op != api.ModelInputOpCheck ||

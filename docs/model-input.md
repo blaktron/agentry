@@ -127,7 +127,7 @@ logged. With no judge to scan the results the search is not made at all.
 The request is `{"description": …, "files": [{"path": …, "content": …}]}`:
 the person's description, at most 8,192 bytes, and every text file of the
 rendered package, `agent.yaml` and its instruction file among them, at
-most 32 files and 131,072 bytes in all. Each path must be relative and
+most 32 files and 65,536 bytes in all. Each path must be relative and
 clean and named once, and each file UTF-8. A package with no
 `agent.yaml`, one that does not parse, or one without the instruction file
 it names is `422 draft-unreadable`, and one past the bounds is
