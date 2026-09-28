@@ -2210,6 +2210,9 @@ type Meta struct {
 	// MinCLIVersion Oldest supported agentry CLI version (§11 distribution note).
 	MinCLIVersion *string `json:"minCLIVersion,omitempty"`
 
+	// SignInProviders The individual sign-in providers this registry has configured (the `provider` ids of `/auth/oidc/{provider}/start`, in that enum's order), so a front end can offer them without starting a flow to find out (agentry#694). Empty when none is configured. A provider is listed when its client id and secret are set, and an issuer where it has no default; a listed provider's start redirects and an unlisted one's answers 404. A listed provider whose issuer cannot be reached at that moment also answers 404 there, since its discovery fails.
+	SignInProviders *[]string `json:"signInProviders,omitempty"`
+
 	// Ui The server's own browser surface under `/ui/` (DEV-091). `mode` is `full` (device authorize, sign-in, account, review, staff, org admin), `authorize` (only the device-authorize page — a site fronts this server) or `off`. `authorizeUrl` is the absolute page a CLI or the desktop app opens for browser sign-in, when served.
 	Ui *UIInfo `json:"ui,omitempty"`
 
