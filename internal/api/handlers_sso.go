@@ -378,7 +378,10 @@ type samlSessionLink struct {
 // instead of a problem document. next has already been through
 // safeNextPath, so it is a same-origin path and nothing else. API mode —
 // next empty — is unchanged.
-func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, orgRow storegen.GetOrgByHandleRow, connID uuid.UUID, providerKind, subject, email string, samlLink *samlSessionLink, next string) {
+// mfa is whether the validated assertion or ID token named a second factor
+// (agentry#705); it stamps users.idp_mfa_at, the evidence the public-publish
+// gate accepts, as the directory's sign-in does (agentry#23, DEV-080).
+func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, orgRow storegen.GetOrgByHandleRow, connID uuid.UUID, providerKind, subject, email string, samlLink *samlSessionLink, next string, mfa bool) {
 	ctx := r.Context()
 	q := s.q()
 	browserFail := func(msg string) bool { return s.browserFail(w, r, next, msg) }
@@ -413,6 +416,11 @@ func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, org
 		}
 		problemInternal(w, r)
 		return
+	}
+	if mfa {
+		if err := q.SetUserIdPMFA(ctx, userID); err != nil {
+			s.log.WarnContext(ctx, "sso sign-in: record idp mfa", "org", orgRow.Handle, "err", err)
+		}
 	}
 
 	sessToken, err := auth.NewToken(auth.SessionPrefix)

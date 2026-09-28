@@ -1216,6 +1216,30 @@ names a second factor — `mfa`, `otp`, `hwk`, `webauthn` and the like, never
 emits `amr` on its ID tokens; check one sign-in's token (or the
 `user.login` audit row) before enabling the flag, because with it on and a
 directory that never asserts a factor, nobody can publish publicly.
+
+An organization's own SSO connection counts the same way. When a member
+signs in through the organization's SAML or OIDC connection and the
+validated assertion says a second factor was used, the registry stamps
+`users.idp_mfa_at` as it does for the directory. For OIDC that is the ID
+token's `amr`, by the list above. For SAML it is the signed
+AuthnStatement's `AuthnContextClassRef`, or Entra ID's
+`http://schemas.microsoft.com/claims/authnmethodsreferences` attribute,
+naming one of:
+
+| Value | Sent by |
+|---|---|
+| `https://refeds.org/profile/mfa` | IdPs that follow the REFEDS MFA profile |
+| `http://schemas.microsoft.com/claims/multipleauthn` | AD FS, Entra ID |
+| `urn:oasis:names:tc:SAML:2.0:ac:classes:MobileTwoFactorContract` | SAML 2.0 context class |
+| `urn:oasis:names:tc:SAML:2.0:ac:classes:MobileTwoFactorUnregistered` | SAML 2.0 context class |
+| `urn:oasis:names:tc:SAML:2.0:ac:classes:TimeSyncToken` | SAML 2.0 context class |
+
+A password context class (`Password`, `PasswordProtectedTransport`) is one
+factor and stamps nothing. The list is `MFAAuthnContexts` in
+`internal/auth/saml`. Some IdPs send the multi-factor class only when the
+service provider asks for it. Check one member's assertion before relying
+on it.
+
 Whichever way it is set, `GET /api/v1/meta` reports the gate's state as
 `features.publicPublish2FA`, which is what a front end reads before it
 tells anyone that publishing needs a second factor.
