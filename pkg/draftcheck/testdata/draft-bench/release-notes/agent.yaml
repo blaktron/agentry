@@ -1,0 +1,48 @@
+# drafted by the Drafter (agentry draft); review every line before you submit it
+schemaVersion: "2"
+name: commit-log-release-notes
+namespace: draft
+version: 0.1.0
+summary: Turns a list of commit messages you paste in into Markdown release notes grouped into breaking changes, features and fixes.
+license: Apache-2.0
+tags:
+  - release-notes
+  - changelog
+  - git
+  - commits
+  - markdown
+  - offline
+  - docs
+modes:
+  - autonomous
+entrypoints:
+  instruction: AGENT.md
+intake:
+  - id: release_label
+    prompt: Version or date for the release notes heading (optional; leave blank for a plain title).
+    type: text
+    required: false
+guide:
+  overview: 'You paste a list of commit messages and get Markdown release notes back, grouped into Breaking Changes, Features and Fixes, with an extra Other Changes section for developer-only churn. It works only from the text you give it: no repository, no git, no network, and it rewrites terse log lines into bullets aimed at users rather than committers. The result arrives as report release-notes.md and inline.'
+  prepare:
+    - 'Copy the commit messages: git log --oneline v1.4.0..HEAD is enough.'
+    - 'Include commit bodies when they matter; a BREAKING CHANGE: line or a ''!'' prefix decides the Breaking Changes group.'
+    - Paste them into the task, or add them as a file if the list is long.
+    - Optionally give a version or date for the heading.
+  task: e.g. Turn these commits into release notes for 2.3.0, breaking changes first.
+  files: 'Optional: a text or markdown file of commit messages under /inputs, for lists too long to paste.'
+capabilities:
+  network:
+    egress: none
+  filesystem:
+    read: none
+    write: none
+  exec: none
+  dataAccess: []
+  mcpServers: []
+publish:
+  include:
+    - agent.yaml
+    - AGENT.md
+    - README.md
+    - LICENSE

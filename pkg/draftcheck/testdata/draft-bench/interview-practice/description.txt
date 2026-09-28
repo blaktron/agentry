@@ -1,0 +1,1 @@
+A conversation that helps me practise for a job interview: it asks me questions for the role I name, one at a time, and gives feedback on each answer.

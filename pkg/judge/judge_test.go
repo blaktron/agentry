@@ -209,7 +209,7 @@ func TestScoreFromProbability(t *testing.T) {
 // ids are distinct, a caller that changes its slice changes nobody else's,
 // and no text is a template anything could be rendered into.
 func TestTheQuestionSetsAreConstants(t *testing.T) {
-	for name, set := range map[string]func() []Question{"rubric": RubricQuestions, "model input": ModelInputQuestions} {
+	for name, set := range map[string]func() []Question{"rubric": RubricQuestions, "model input": ModelInputQuestions, "draft": DraftQuestions} {
 		a, b := set(), set()
 		a[0].Text = "changed by a caller"
 		if b[0].Text == "changed by a caller" || set()[0].Text == "changed by a caller" {
@@ -243,6 +243,47 @@ func TestTheQuestionSetsAreConstants(t *testing.T) {
 	}
 	if len(RubricQuestions()) != 6 {
 		t.Fatal("the rubric has six questions")
+	}
+	draft := map[string]string{DraftIDOffTask: DraftOffTask}
+	if got := DraftQuestions(); len(got) != len(draft) {
+		t.Fatalf("the draft set has %d questions, want %d", len(got), len(draft))
+	}
+	for _, q := range DraftQuestions() {
+		if draft[q.ID] != q.Text {
+			t.Fatalf("%s is not its constant", q.ID)
+		}
+	}
+}
+
+// Every set's hash names every question's wording (agentry#703): change one
+// question's text, or its id, and the hash changes. A hash that dropped the
+// texts would make two differently worded sets read as one.
+func TestEveryQuestionSetHashNamesEachQuestionsWording(t *testing.T) {
+	for name, c := range map[string]struct {
+		set  func() []Question
+		hash func([]Question) string
+	}{
+		"model input": {ModelInputQuestions, func(qs []Question) string { return modelInputHashOf(DefaultModel, true, qs) }},
+		"draft":       {DraftQuestions, func(qs []Question) string { return draftHashOf(DefaultModel, qs) }},
+		"rubric":      {RubricQuestions, func(qs []Question) string { return rubricHashOf(DefaultModel, RubricBatchOne, qs) }},
+	} {
+		base := c.hash(c.set())
+		for i := range c.set() {
+			worded := c.set()
+			worded[i].Text += " Reworded."
+			if c.hash(worded) == base {
+				t.Fatalf("%s: question %s's wording is not in the hash", name, worded[i].ID)
+			}
+			renamed := c.set()
+			renamed[i].ID += "_x"
+			if c.hash(renamed) == base {
+				t.Fatalf("%s: question %s's id is not in the hash", name, renamed[i].ID)
+			}
+		}
+	}
+	if modelInputHash(DefaultModel, true) != modelInputHashOf(DefaultModel, true, ModelInputQuestions()) ||
+		draftHash(DefaultModel) != draftHashOf(DefaultModel, DraftQuestions()) {
+		t.Fatal("a scanner's hash is the hash of the set it asks")
 	}
 }
 

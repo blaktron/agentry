@@ -88,6 +88,32 @@ func (m *Manifest) ShippedPacks() []string {
 	return slices.Compact(out)
 }
 
+// ShippedPacksOf reads the valid names of the packs a manifest ships from
+// its canonical JSON, sorted and without repeats; none for a manifest
+// without the block or one that does not parse. It is what the pipeline's
+// stages and its AI Review read, and what a draft's check reads before
+// submission, so both declare the same packs.
+func ShippedPacksOf(manifestJSON []byte) []string {
+	var m struct {
+		Knowledge struct {
+			Ships []struct {
+				Name string `json:"name"`
+			} `json:"ships"`
+		} `json:"knowledge"`
+	}
+	if len(manifestJSON) == 0 || json.Unmarshal(manifestJSON, &m) != nil {
+		return nil
+	}
+	var out []string
+	for _, s := range m.Knowledge.Ships {
+		if ValidKnowledgePackName(s.Name) {
+			out = append(out, s.Name)
+		}
+	}
+	sort.Strings(out)
+	return slices.Compact(out)
+}
+
 // Contract is the capability contract a person consents to: the declared
 // capabilities, and the names of the packs the release ships, so that a
 // later release shipping one more asks again (plan §4.6). It is what the
