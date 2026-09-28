@@ -201,6 +201,62 @@ claude-skill|agents-md` remains. The claude-skill target compiles the
 capability contract into `allowed-tools` frontmatter; agents-md records
 it as a Tools note. Plugin-system distribution per provider is planned.
 
+### `agentry draft "<description>"`
+
+Drafts a BriefAgent from a plain description of what it should do
+(`--description-file FILE` reads it from a file; `--hint TEXT`, repeatable,
+adds the services or sites it works with, how it runs, or an example of the
+output wanted). The built-in **Drafter** does the work: the second package
+the CLI embeds, run with the attestation state `builtin` like the Knowledge
+Creator, never fetched from a registry. It searches the registry for a
+published BriefAgent that already does the task, researches how the task is
+done, and writes a draft. It never submits anything.
+
+- **AI Review reads what the Drafter reads, first.** TypeSafe's Jev reads the
+  description and the hints before the Drafter starts; one it flags, or
+  cannot scan, stops the draft at stage `description` (exit 11) before
+  anything is searched or read. While the Drafter works, AI Review reads
+  every search result, page and registry answer before the Drafter's model
+  does. What it flags, or cannot scan, is withheld: the model gets the
+  address and the reason, never the text, and the draft lists it. On this
+  machine the scans use **your own Jev key** (`$TYPESAFE_API_KEY`, the
+  variable the policy's `judge.apiKeyEnv` names, or with
+  `judge.apiKeySource: keyring` the keychain entry `provider:typesafe`), and
+  without one the Drafter does not run.
+- **The web tools** (`web_search`, `web_read`, `registry_search`) are the
+  Drafter's alone; the compiler refuses them to any other package. They run in the
+  tools container, which holds the scan and search keys; the agent container
+  holds no Jev key, no search key and no registry credential. `web_read`
+  makes GET requests only, over http and https on ports 80 and 443, to
+  public addresses only, checked at every connection and redirect hop, sends
+  no cookie or credential, and returns at most 32 KiB of a page's text.
+  `web_search` needs a search provider of your own in the policy's
+  `webSearch` block (`brave` with `$BRAVE_API_KEY`, or `youcom` with
+  `$YDC_API_KEY`, or the keychain); without one the Drafter reads the
+  registry and the pages it already knows. Under a sandboxed runtime the
+  Drafter does not run without
+  [`docker.resolvers`](#the-hosts-name-servers-dockerresolvers).
+- **Where the words go.** The description, the searches and the pages go to
+  the search provider, to TypeSafe and to the sites read, so the description
+  should hold no secret. The draft runs against the model the policy names,
+  for no credits.
+- **The result**, in `--out DIR` (default
+  `./agentry-out/agentry-drafter-<runid>`): `draft.json` (the manifest as
+  JSON, the instructions, the notes, the matching published BriefAgents, the
+  sources, the open questions, AI Review's record, and `validation`, the
+  report `agentry validate --json` gives on the rendered package) and
+  `package/` (`agent.yaml`, the instruction file, `AGENT.md` unless the
+  draft names another, a README and a LICENSE placeholder), beside the run's
+  `reports/` and `receipts/`.
+  A draft that fails the rules is kept with its problems for you to fix;
+  review every part before you publish it. `--timeout`, `--max-turns` and
+  `--max-cost` bound the run.
+- **In Agentry.** `agentry draft --hosted --output-format json` is what a
+  sandbox host runs for a draft made in Agentry, from the site's or the
+  desktop's Describe it: the scans and the search go through the registry
+  with the job's credential in `$AGENTRY_JOB_TOKEN`, and no Jev or search key
+  is on the host ([the draft kind](hosted-runs.md#a-hosted-draft)).
+
 ## MCP profiles
 
 A profile is the persistent, credentialed half of a BriefAgent's gateway
@@ -620,7 +676,10 @@ exchanges the code for a scoped token from its own process (the token
 never appears in the browser); a sign-in that stalls can be cancelled
 from Settings. Its Build tab authors and submits BriefAgents through the
 same pipeline as `agentry publish`, with a structured editor for
-`capabilities.mcpServers`.
+`capabilities.mcpServers`. Its Describe it drafts one with the built-in
+Drafter, on this computer (the same packages `agentry draft` drives, with
+your own Jev key) or In Agentry (a hosted draft), and reads the draft into
+its form as data; nothing is written into a BriefAgent folder until you save.
 
 ## Verifying a runner installation
 
@@ -768,6 +827,8 @@ key variable's **name** only.
 | `setup --json` | `policyPath`, `provider`, `model`, `apiKeyEnv` (a name), `baseUrl`, `images` ready\|skipped |
 | `run ns/name --plan --json` (or `--local DIR`) | the consent-free preview a client shows before a person consents: `ref`, `version`, `digest`, `mode`, `modes`, `plan` (the compiled plan, canonical — what a run would enforce), `planSha256` (the receipt's `runPlanSha256`, over the plan's canonical indented form — match it, do not re-derive it from the compact `plan` bytes), `contract`, `contractDigest`, `attestation` verified\|unsigned\|local\|mismatch\|unverifiable, `keyId`, `signed`, `installed`, `diff`, `needsConfirmation`, `reason`, `refusals[]` (every refusal the attestation and vulnerable-server gates would meet, in the order a run meets them: `kind` attestation\|vulnerable_server, `message`, `lift` — the flag that lifts it, `--allow-unsigned`, `--allow-unscanned` or `--allow-vulnerable-mcp`, absent when none does), `refusal` (deprecated: the first refusal's message). Asks nothing, records nothing, materializes into a temp home; exit 0 whether or not a run would be refused (`--dry-run` is the plan for a person who consented on the terminal) |
 | `run … --output-format json` | the result envelope: `agentry` (`run/v1`), `status`, `exitCode` and `exitClass`, `error`, `runId`, `ref`, `digest`, `attestation`, `capabilities_enforced`, `harness`, `usage`, `result`, `outDir`, `resultFile`, `receipts` (`dir`, `runPlanSha256`), and `policy` (`path` of the operator policy file the run enforced, absolute; `source` default\|flag\|env — the runner home's file, `--policy`, or a home relocated by `AGENTRY_RUNNER_HOME`; `sha256`, the plan's `policySha256` — the digest of that file) |
+| `draft … --json` | the draft itself, `draft.json`: `manifest` (the v2 manifest as JSON), `instructions`, `notes`, `matches[]` (`ref`, `why`), `sources[]` (`url`, `used`, `withheld`), `openQuestions[]`, `drafter` (`ref`, `build`, `model`, `runId`), `aiReview` (the description's verdict, the receipt's web counts as its own fields — `scan`, `pages`, `read`, `passed`, `withheld`, … — and `withheldSources[]` with `tool`, `url` and `reason`), `validation` (the `validate --json` report on the rendered package), `manifestError` |
+| `draft … --output-format json` | the Drafter run's result envelope, as `run … --output-format json` writes one (its `usage`, the attestation `builtin`, the `web` counts), with an empty `result` and the draft's report under `draft`: `file` (where `draft.json` is), `rendered`, `passed`, `manifestError` (a flag), `matches`, `openQuestions` and `withheld` (counts). A draft that stops before the Drafter runs still writes one envelope with its class and stage |
 | `knowledge create NAME --json` / `knowledge add DIR --json` | `dir`, `manifest` (the pack's `manifest.json`: `schema`, `name`, `id`, `created`, `updated`, `creator`, `pages`, `bytes`, `sha256`, and `scan`, the string `not scanned` or a registry's record), `documents[]` (what the run was given), `skipped[]` (documents not ingested), `written[]` (the paths the build applied), `dropped[]` (`path`, `reason`, `kept`), `receipts` (the Creator run's receipt directory), `decode` (the decode step's report, when documents were decoded), `stopped` (the budget or error that stopped the run early, when one did) |
 | `--version` | `agentry version <v>` — a release version, or a git describe on a source build |
 
