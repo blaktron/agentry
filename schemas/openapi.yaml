@@ -4082,7 +4082,7 @@ paths:
         DEV-150). Callers as for `POST /model-input/scan`. 422
         `draft-unreadable` for a package with no `agent.yaml`, one that
         does not parse, or no instruction file; 413 `draft-too-large` past
-        32 files or 131,072 bytes of text; 503 `model-input-unavailable`
+        32 files or 65,536 bytes of text; 503 `model-input-unavailable`
         when the deployment's judge is not TypeSafe's Jev.
       security:
         - session: []
@@ -5998,7 +5998,7 @@ components:
           maxItems: 32
           description: >-
             Every text file of the rendered package, `agent.yaml` and the
-            instruction file among them; at most 131,072 bytes in all.
+            instruction file among them; at most 65,536 bytes in all.
           items:
             $ref: "#/components/schemas/DraftCheckFile"
     DraftRubricScores:

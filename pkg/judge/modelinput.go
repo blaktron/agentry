@@ -2,7 +2,6 @@ package judge
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -238,47 +237,20 @@ func (s *ModelInputScanner) Scan(ctx context.Context, source Source, text string
 // the borderline ones twice more and keeps each question's highest answer.
 func (s *ModelInputScanner) chunk(ctx context.Context, source Source, index int, piece string) (ChunkResult, Usage) {
 	out := ChunkResult{Index: index, Bytes: len(piece)}
-	state := map[string]string{"source": string(source), "content": piece}
-	var usage Usage
+	samples := 1
+	if s.resample {
+		samples = modelInputSamples
+	}
 	qs := ModelInputQuestions()
-	first, u, err := s.asker.Ask(ctx, state, qs)
-	usage.Add(u)
+	best, usage, err := askBanded(ctx, s.asker, map[string]string{"source": string(source), "content": piece}, qs, samples)
 	if err != nil {
 		return notScanned(ctx, out, err), usage
-	}
-	best := make(map[string]float64, len(first))
-	for id, p := range first {
-		best[id] = p
-	}
-	for i := 1; s.resample && i < modelInputSamples; i++ {
-		var again []Question
-		for _, q := range qs {
-			if p := best[q.ID]; p >= modelInputBandLow && p <= modelInputBandHigh {
-				again = append(again, q)
-			}
-		}
-		if len(again) == 0 {
-			break
-		}
-		probs, u, err := s.asker.Ask(ctx, state, again)
-		usage.Add(u)
-		if err != nil {
-			return notScanned(ctx, out, err), usage
-		}
-		for id, p := range probs {
-			if p > best[id] {
-				best[id] = p
-			}
-		}
 	}
 	out.Verdict = VerdictPass
 	out.Scores = make(map[string]int, len(qs))
 	out.Probabilities = make(map[string]float64, len(qs))
 	for _, q := range qs {
-		p, ok := best[q.ID]
-		if !ok {
-			return notScanned(ctx, ChunkResult{Index: index, Bytes: len(piece)}, fmt.Errorf("judge: no answer for %s", q.ID)), usage
-		}
+		p := best[q.ID]
 		out.Probabilities[q.ID] = p
 		out.Scores[q.ID] = ScoreFromProbability(p)
 		if out.Scores[q.ID] >= WithholdScore {
@@ -292,9 +264,6 @@ func notScanned(ctx context.Context, c ChunkResult, err error) ChunkResult {
 	c.Verdict = VerdictNotScanned
 	c.Scores, c.Probabilities = nil, nil
 	c.Err = err
-	c.Failure = FailureJudgeError
-	if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		c.Failure = FailureTimeout
-	}
+	c.Failure = FailureOf(ctx, err)
 	return c
 }

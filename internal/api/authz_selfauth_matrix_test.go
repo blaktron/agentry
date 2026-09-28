@@ -242,6 +242,7 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 		{"checkDraft", "POST", "/api/v1/model-input/check", matrixDraft, staffSess, pass},
 		{"checkDraft", "POST", "/api/v1/model-input/check", matrixDraft, patScoped, deny3},
 		{"checkDraft", "POST", "/api/v1/model-input/check", matrixDraft, patKnowledge, deny3},
+		{"checkDraft", "POST", "/api/v1/model-input/check", matrixDraft, patUnscoped, deny3},
 
 		// listAbuseReports / triageAbuseReport — staff-only; triage of a
 		// random id gives authorized callers 404, nothing mutated.

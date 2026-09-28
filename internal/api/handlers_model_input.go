@@ -508,21 +508,20 @@ func (s *Server) CheckDraft(w http.ResponseWriter, r *http.Request) {
 		pkg.Files[i] = draftcheck.File{Path: f.Path, Content: f.Content}
 		total += len(f.Content)
 	}
-	if len(req.Files) > draftcheck.MaxFiles || total > draftcheck.MaxBytes {
-		writeProblemWith(w, r, http.StatusRequestEntityTooLarge, "draft-too-large", "Draft too large",
-			fmt.Sprintf("A check reads at most %d files and %d bytes of text: a draft's package.", draftcheck.MaxFiles, draftcheck.MaxBytes),
-			map[string]any{"maxFiles": draftcheck.MaxFiles, "maxBytes": draftcheck.MaxBytes})
-		return
-	}
 	// Refuse what the check will not read before the job is charged a
 	// call: Read is the checker's own reading.
-	if _, _, _, _, err := draftcheck.Read(pkg); err != nil {
-		if errors.Is(err, draftcheck.ErrNotADraft) {
+	if _, err := draftcheck.Read(pkg); err != nil {
+		switch {
+		case errors.Is(err, draftcheck.ErrTooLarge):
+			writeProblemWith(w, r, http.StatusRequestEntityTooLarge, "draft-too-large", "Draft too large",
+				fmt.Sprintf("A check reads at most %d files and %d bytes of text: a draft's package.", draftcheck.MaxFiles, draftcheck.MaxBytes),
+				map[string]any{"maxFiles": draftcheck.MaxFiles, "maxBytes": draftcheck.MaxBytes})
+		case errors.Is(err, draftcheck.ErrNotADraft):
 			writeProblem(w, r, http.StatusUnprocessableEntity, "draft-unreadable", "Not a draft",
 				"The files are not a draft's package: it needs an agent.yaml that parses and the instruction file it names.")
-			return
+		default:
+			problemValidation(w, r, "Each file needs a relative, clean path named once, and UTF-8 text.")
 		}
-		problemValidation(w, r, "Each file needs a relative, clean path named once, and UTF-8 text.")
 		return
 	}
 	if caller, ok = s.admitModelInput(w, r, caller, ModelInputCall{Op: ModelInputOpCheck, Bytes: total}); !ok {

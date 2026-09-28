@@ -3,7 +3,6 @@ package judge
 import (
 	"context"
 	"fmt"
-	"sort"
 )
 
 // The draft question set (plan builder-simplify.md D6, agentry#708): what
@@ -15,16 +14,11 @@ import (
 // is the problem, as the rubric's are, so a score of WithholdScore or more
 // is a flag.
 //
-// The set was benched on the Drafter's ten fixture drafts and fifty
-// variants of them before anything used it (pkg/draftcheck TestDraftBench;
-// agentry-notes measurements/draft-check-bench.md). Of the three questions
-// benched, only this one separated the good drafts from the broken ones
-// at the flag line: a draft for another task scored 0.96 or more, a good
-// draft 0.18 at most. A question on capabilities the manifest does not
-// grant flagged two good drafts, and one on asking for what the
-// description gave missed seven of ten; both were dropped. This one also
-// misses most drafts that leave out one part of the task (three of ten
-// flagged), which the record says.
+// The set was benched on the Drafter's fixture drafts before anything used
+// it (pkg/draftcheck TestDraftBench; agentry-notes
+// measurements/draft-check-bench.md): this was the one question of three
+// that flagged no good draft and every draft made for another task. It
+// misses most drafts that leave out one part of the task.
 const DraftOffTask = "The state holds a person's description of a task (description), the manifest of an AI agent " +
 	"drafted for it (manifest) and the instruction that agent follows (instruction). Would an agent that " +
 	"follows this instruction fail to do the task the description asks for: because it does a different " +
@@ -93,13 +87,12 @@ type DraftResult struct {
 // DraftScanner asks the draft set about one draft. It is safe for
 // concurrent use.
 type DraftScanner struct {
-	asker    Asker
-	resample bool
+	asker Asker
 }
 
 // NewDraftScanner builds a scanner over an Asker, a *Client or a fake.
 func NewDraftScanner(a Asker) *DraftScanner {
-	return &DraftScanner{asker: a, resample: true}
+	return &DraftScanner{asker: a}
 }
 
 // Model is the pinned model id the scanner's answers come from.
@@ -108,26 +101,22 @@ func (s *DraftScanner) Model() string { return s.asker.Model() }
 // QuestionSet is the hash of the draft set and everything else that
 // changes a verdict: the model, the question ids and texts, the state's
 // shape, its bounds, the thresholds, the flag line and the band.
-func (s *DraftScanner) QuestionSet() string { return draftHash(s.asker.Model(), s.resample) }
+func (s *DraftScanner) QuestionSet() string { return draftHash(s.asker.Model()) }
 
-func draftHash(model string, resample bool) string {
-	return draftHashOf(model, resample, DraftQuestions())
+func draftHash(model string) string {
+	return draftHashOf(model, DraftQuestions())
 }
 
 // draftHashOf is the hash over a given set, so a test can show that a
 // question's wording is in it.
-func draftHashOf(model string, resample bool, qs []Question) string {
+func draftHashOf(model string, qs []Question) string {
 	parts := []string{"agentry/draft-check/v1", "provider=typesafe", "model=" + model, "state=description,manifest,instruction"}
 	for _, q := range qs {
 		parts = append(parts, "question="+q.ID+"="+q.Text)
 	}
 	parts = append(parts, fmt.Sprintf("bounds=%d/%d/%d", DraftMaxDescription, DraftMaxManifest, DraftMaxInstruction),
-		"thresholds=0.5/0.7/0.9", fmt.Sprintf("flag=%d", WithholdScore))
-	if resample {
-		parts = append(parts, fmt.Sprintf("band=%.2f/%.2f", BandLow, BandHigh), fmt.Sprintf("samples=%d", Samples))
-	} else {
-		parts = append(parts, "samples=1")
-	}
+		"thresholds=0.5/0.7/0.9", fmt.Sprintf("flag=%d", WithholdScore),
+		fmt.Sprintf("band=%.2f/%.2f", BandLow, BandHigh), fmt.Sprintf("samples=%d", Samples))
 	return Hash(parts...)
 }
 
@@ -144,65 +133,26 @@ func (s *DraftScanner) Scan(ctx context.Context, in DraftInput) DraftResult {
 			len(in.Instruction), DraftMaxDescription, DraftMaxManifest, DraftMaxInstruction)
 		return res
 	}
-	state := map[string]string{"description": in.Description, "manifest": string(in.ManifestJSON), "instruction": in.Instruction}
 	qs := DraftQuestions()
-	first, u, err := s.asker.Ask(ctx, state, qs)
-	res.Usage.Add(u)
+	best, u, err := askBanded(ctx, s.asker, map[string]string{"description": in.Description, "manifest": string(in.ManifestJSON), "instruction": in.Instruction}, qs, Samples)
+	res.Usage = u
 	if err != nil {
-		return draftNotScanned(ctx, res, err)
-	}
-	best := make(map[string]float64, len(first))
-	for id, p := range first {
-		best[id] = p
-	}
-	for i := 1; s.resample && i < Samples; i++ {
-		var again []Question
-		for _, q := range qs {
-			if p := best[q.ID]; p >= BandLow && p <= BandHigh {
-				again = append(again, q)
-			}
-		}
-		if len(again) == 0 {
-			break
-		}
-		probs, u, err := s.asker.Ask(ctx, state, again)
-		res.Usage.Add(u)
-		if err != nil {
-			return draftNotScanned(ctx, res, err)
-		}
-		for id, p := range probs {
-			if p > best[id] {
-				best[id] = p
-			}
-		}
+		res.Verdict, res.Failure, res.Err = VerdictNotScanned, FailureOf(ctx, err), err
+		return res
 	}
 	res.Verdict = VerdictPass
 	res.Scores = make(map[string]int, len(qs))
 	res.Probabilities = make(map[string]float64, len(qs))
 	for _, q := range qs {
-		p, ok := best[q.ID]
-		if !ok {
-			return draftNotScanned(ctx, res, fmt.Errorf("judge: no answer for %s", q.ID))
-		}
-		sc := ScoreFromProbability(p)
-		res.Probabilities[q.ID], res.Scores[q.ID] = p, sc
-		if sc > res.Score {
-			res.Score = sc
-		}
+		sc := ScoreFromProbability(best[q.ID])
+		res.Probabilities[q.ID], res.Scores[q.ID] = best[q.ID], sc
+		res.Score = max(res.Score, sc)
 		if sc >= WithholdScore {
 			res.Flagged = append(res.Flagged, q.ID)
 		}
 	}
-	sort.Strings(res.Flagged)
 	if len(res.Flagged) > 0 {
 		res.Verdict = VerdictFlagged
 	}
-	return res
-}
-
-func draftNotScanned(ctx context.Context, res DraftResult, err error) DraftResult {
-	c := notScanned(ctx, ChunkResult{}, err)
-	res.Verdict, res.Failure, res.Err = VerdictNotScanned, c.Failure, c.Err
-	res.Score, res.Scores, res.Probabilities, res.Flagged = 0, nil, nil, nil
 	return res
 }
