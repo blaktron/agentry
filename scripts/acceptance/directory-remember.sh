@@ -19,7 +19,9 @@
 #      browser is remembered for this user; a ticked box reaches the ID token
 #      only beside a validated factor; a remembered sign-in cannot mint again;
 #      and a registry that errors, hangs or answers garbage, a revoked record,
-#      and a skip policy that raises all mean the code is asked.
+#      and a skip policy that raises all mean the code is asked. And no
+#      sign-in writes authentik's own 30-day `authentik_device` cookie, which
+#      the blueprint turns off on every login stage (agentry#460).
 #
 # Needs docker and the pinned images, nothing else. Files go in with docker
 # cp, not bind mounts: a CI job drives the host's daemon from inside a runner
