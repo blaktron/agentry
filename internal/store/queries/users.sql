@@ -32,6 +32,18 @@ UPDATE users SET totp_secret_enc = $2, totp_enabled = false, updated_at = now() 
 -- name: EnableUserTOTP :exec
 UPDATE users SET totp_enabled = true, updated_at = now() WHERE id = $1;
 
+-- name: GetUserDirectorySubject :one
+-- The directory subject the account is linked to by a directory sign-in,
+-- "authentik:" stripped (agentry#706): the uid that picks its directory
+-- account, since the directory does not keep addresses unique. The oldest
+-- link, so the answer does not move while the account keeps one.
+SELECT substring(i.subject from 11)::text AS directory_subject
+FROM identities i
+WHERE i.user_id = $1 AND i.provider_kind = 'social'
+  AND i.sso_connection_id IS NULL AND i.subject LIKE 'authentik:%'
+ORDER BY i.created_at, i.id
+LIMIT 1;
+
 -- name: ListStaffMirrorAccounts :many
 -- Every account that is platform staff and active, with its verified
 -- address (lower-cased; the directory's match is case-blind) and each

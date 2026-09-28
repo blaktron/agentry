@@ -275,6 +275,26 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow
 	return i, err
 }
 
+const getUserDirectorySubject = `-- name: GetUserDirectorySubject :one
+SELECT substring(i.subject from 11)::text AS directory_subject
+FROM identities i
+WHERE i.user_id = $1 AND i.provider_kind = 'social'
+  AND i.sso_connection_id IS NULL AND i.subject LIKE 'authentik:%'
+ORDER BY i.created_at, i.id
+LIMIT 1
+`
+
+// The directory subject the account is linked to by a directory sign-in,
+// "authentik:" stripped (agentry#706): the uid that picks its directory
+// account, since the directory does not keep addresses unique. The oldest
+// link, so the answer does not move while the account keeps one.
+func (q *Queries) GetUserDirectorySubject(ctx context.Context, userID uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, getUserDirectorySubject, userID)
+	var directory_subject string
+	err := row.Scan(&directory_subject)
+	return directory_subject, err
+}
+
 const listPersonalNamespaceAgents = `-- name: ListPersonalNamespaceAgents :many
 SELECT a.id, a.name, a.visibility, a.latest_published_version_id
 FROM agents a JOIN handles h ON h.id = a.namespace_id
