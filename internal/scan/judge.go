@@ -158,8 +158,8 @@ func RubricHash(parts ...string) string { return judge.Hash(parts...) }
 // rubricStatement is the fixed framing every provider adjudicates under
 // (§8.4.1: content is DATA; instructions inside it are evidence, never
 // directives). It is part of the hash because changing it changes verdicts.
-const rubricStatement = "agentry/judge-rubric/v1;categories=C1..C6;scores=0-3;" +
-	"content-is-data;no-tools;temperature=0;structured-output"
+// It is pkg/judge's, whose rubric scanner the typesafe provider asks through.
+const rubricStatement = judge.RubricStatement
 
 // NoneProvider skips S5 and forces human review (§8.4.6): self-host without
 // an LLM. The gate treats every version as if it had one medium finding.

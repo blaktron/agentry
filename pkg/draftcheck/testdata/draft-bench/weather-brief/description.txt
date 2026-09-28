@@ -1,0 +1,1 @@
+Give me a three-line weather brief for a city I name, from a free public weather API that needs no key.

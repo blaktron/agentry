@@ -4059,6 +4059,49 @@ paths:
                 $ref: "#/components/schemas/WebSearchResults"
         default:
           $ref: "#/components/responses/Problem"
+  /model-input/check:
+    post:
+      operationId: checkDraft
+      tags: [model-input]
+      summary: AI Review of a finished draft before it is submitted (agentry#708).
+      description: >-
+        Reads a finished BriefAgent draft's rendered package the two ways
+        AI Review will: with the release rubric that stage S5 of the
+        pipeline asks at publish (the manifest as its canonical JSON and
+        every text file, in the same chunks, state and request shape, under
+        the same rubric hash), so the person knows before Submit what AI
+        Review will flag; and with the draft question set, which asks
+        whether the draft's instruction does the task its description asks
+        for.
+        A rubric question at 2 or more (the gate's medium) is a finding
+        and `flagged`; so is a draft question at 2 or more. A half the
+        judge could not answer for is `not_scanned`. This is not the
+        publication scan: a submitted version is scanned in full whatever
+        this said. Nothing of the package is kept or logged. `usage` is for
+        the record, never a price (AI Review is 1 credit for a whole draft,
+        DEV-150). Callers as for `POST /model-input/scan`. 422
+        `draft-unreadable` for a package with no `agent.yaml`, one that
+        does not parse, or no instruction file; 413 `draft-too-large` past
+        32 files or 65,536 bytes of text; 503 `model-input-unavailable`
+        when the deployment's judge is not TypeSafe's Jev.
+      security:
+        - session: []
+        - jobToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DraftCheckRequest"
+      responses:
+        "200":
+          description: The rubric's verdict and the draft set's.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DraftCheck"
+        default:
+          $ref: "#/components/responses/Problem"
   /mcp-servers/scan:
     get:
       operationId: getMcpServerScan
@@ -5911,6 +5954,159 @@ components:
           description: >-
             The hash of the question set and everything else that changes a
             verdict (model, wording, chunk size, thresholds).
+        usage:
+          $ref: "#/components/schemas/ModelInputUsage"
+    DraftCheckVerdict:
+      type: string
+      description: >-
+        `pass`: no question scored 2 or more. `flagged`: one did.
+        `not_scanned`: the judge could not answer for this half.
+      enum: [pass, flagged, not_scanned]
+    DraftCheckFailure:
+      type: string
+      description: >-
+        Why a half was not scanned: the judge timed out, failed, or (the
+        draft set only) a part of the draft is past its bound.
+      enum: [timeout, judge-error, too-large]
+    DraftCheckFile:
+      type: object
+      required: [path, content]
+      additionalProperties: false
+      properties:
+        path:
+          type: string
+          minLength: 1
+          maxLength: 512
+          description: The file's path in the package, relative and clean.
+        content:
+          type: string
+          description: The file's text, UTF-8.
+    DraftCheckRequest:
+      type: object
+      required: [description, files]
+      additionalProperties: false
+      properties:
+        description:
+          type: string
+          maxLength: 8192
+          description: >-
+            The person's description the draft was made from, as the
+            Drafter read it. It is asked about as data, beside the draft.
+        files:
+          type: array
+          minItems: 1
+          maxItems: 32
+          description: >-
+            Every text file of the rendered package, `agent.yaml` and the
+            instruction file among them; at most 65,536 bytes in all.
+          items:
+            $ref: "#/components/schemas/DraftCheckFile"
+    DraftRubricScores:
+      type: object
+      description: Per rubric question, 0 to 3, as S5 scores it.
+      required: [C1_injection, C2_exfiltration, C3_undeclared_capability, C4_user_deception, C5_obfuscation, C6_destructive_actions]
+      properties:
+        C1_injection:
+          type: integer
+          minimum: 0
+          maximum: 3
+        C2_exfiltration:
+          type: integer
+          minimum: 0
+          maximum: 3
+        C3_undeclared_capability:
+          type: integer
+          minimum: 0
+          maximum: 3
+        C4_user_deception:
+          type: integer
+          minimum: 0
+          maximum: 3
+        C5_obfuscation:
+          type: integer
+          minimum: 0
+          maximum: 3
+        C6_destructive_actions:
+          type: integer
+          minimum: 0
+          maximum: 3
+    DraftRubricFinding:
+      type: object
+      required: [id, score, path]
+      properties:
+        id:
+          type: string
+          enum: [C1_injection, C2_exfiltration, C3_undeclared_capability, C4_user_deception, C5_obfuscation, C6_destructive_actions]
+        score:
+          type: integer
+          minimum: 2
+          maximum: 3
+        path:
+          type: string
+          description: The file whose part scored highest (`agent.yaml` for the manifest).
+    DraftRubricCheck:
+      type: object
+      required: [verdict, findings, rubricHash]
+      properties:
+        verdict:
+          $ref: "#/components/schemas/DraftCheckVerdict"
+        scores:
+          $ref: "#/components/schemas/DraftRubricScores"
+        findings:
+          type: array
+          description: What S5 would record as findings, and so send to review.
+          items:
+            $ref: "#/components/schemas/DraftRubricFinding"
+        rubricHash:
+          type: string
+          description: The rubric hash S5 records under the same model.
+        failure:
+          $ref: "#/components/schemas/DraftCheckFailure"
+    DraftSetScores:
+      type: object
+      description: >-
+        Per draft question, 0 to 3. `off_task`: the instruction would not do
+        the task the description asks for (a different task, a part left
+        out, a different kind of result).
+      required: [off_task]
+      properties:
+        off_task:
+          type: integer
+          minimum: 0
+          maximum: 3
+    DraftSetCheck:
+      type: object
+      required: [verdict, score, flagged, questionSet]
+      properties:
+        verdict:
+          $ref: "#/components/schemas/DraftCheckVerdict"
+        score:
+          type: integer
+          minimum: 0
+          maximum: 3
+        scores:
+          $ref: "#/components/schemas/DraftSetScores"
+        flagged:
+          type: array
+          items:
+            type: string
+            enum: [off_task]
+        questionSet:
+          type: string
+          description: The hash of the draft question set and everything that changes its verdict.
+        failure:
+          $ref: "#/components/schemas/DraftCheckFailure"
+    DraftCheck:
+      type: object
+      required: [rubric, draft, model, usage]
+      properties:
+        rubric:
+          $ref: "#/components/schemas/DraftRubricCheck"
+        draft:
+          $ref: "#/components/schemas/DraftSetCheck"
+        model:
+          type: string
+          description: The pinned judge model, such as `jev-1.13.0`.
         usage:
           $ref: "#/components/schemas/ModelInputUsage"
     WebSearchRequest:

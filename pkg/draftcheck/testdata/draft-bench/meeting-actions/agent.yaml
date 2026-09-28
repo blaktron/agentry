@@ -1,0 +1,54 @@
+# drafted by the Drafter (agentry draft); review every line before you submit it
+schemaVersion: "2"
+name: meeting-decisions-actions
+namespace: draft
+version: 0.1.0
+summary: Turns the meeting notes you give it into the decisions made and the action items owed, each with an owner and a due date when the notes…
+license: Apache-2.0
+tags:
+  - meetings
+  - notes
+  - decisions
+  - action-items
+  - productivity
+modes:
+  - autonomous
+entrypoints:
+  instruction: AGENT.md
+intake:
+  - id: notes_file
+    prompt: Which file holds the meeting notes? Skip this if you paste the notes into the task.
+    type: file
+    required: false
+  - id: output_format
+    prompt: What format should the list come back in?
+    type: choice
+    choices:
+      - markdown
+      - json
+    required: true
+guide:
+  overview: 'Reads the meeting notes you paste or add and returns two lists: the decisions the meeting made, and the action items that came out of it, each with the owner and due date the notes actually give. Missing owners and dates are written as "not stated" and collected into a follow-up list, never guessed. Returns report.md (or report.json, if you ask for JSON) with the same content as its reply.'
+  prepare:
+    - The notes for one meeting, pasted into the task or added as a file.
+    - The meeting date, if the notes do not carry one and you want relative dates like "next Friday" turned into real dates.
+    - Names of who was in the room, if the notes refer to people as "he", "she" or "they".
+    - Say so in the task if the notes cover more than one meeting.
+  files: Add the meeting notes or transcript as one file (.md, .txt or .docx exported to text). No other files are needed.
+  task: e.g. Turn these notes into decisions and action items; flag any action with no owner.
+capabilities:
+  network:
+    egress: none
+  filesystem:
+    read: none
+    write: none
+  exec: none
+  dataAccess:
+    - files
+  mcpServers: []
+publish:
+  include:
+    - agent.yaml
+    - AGENT.md
+    - README.md
+    - LICENSE

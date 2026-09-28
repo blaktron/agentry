@@ -1,0 +1,69 @@
+# drafted by the Drafter (agentry draft); review every line before you submit it
+schemaVersion: "2"
+name: slack-standup-summary
+namespace: draft
+version: 0.1.0
+summary: Turns the standup notes you paste into one formatted Slack summary and posts it to the channel you name.
+license: Apache-2.0
+tags:
+  - slack
+  - standup
+  - summary
+  - status-report
+modes:
+  - autonomous
+entrypoints:
+  instruction: AGENT.md
+intake:
+  - id: notes
+    prompt: Today's standup notes — paste them in full.
+    type: text
+    required: true
+  - id: channel
+    prompt: 'Slack channel to post to: an ID like C01234567, or a name like #engineering.'
+    type: text
+    required: true
+  - id: mode
+    prompt: Post it, or show it first?
+    type: choice
+    choices:
+      - post
+      - preview
+    required: true
+guide:
+  overview: 'Reads the standup notes you give it and writes one Slack summary: Done, In progress, Blocked, Heads-up, using only what your notes say. It sends that message once to the channel you name through Slack''s chat.postMessage, and returns the message plus whether it posted. In preview mode it returns the message without posting.'
+  prepare:
+    - A Slack bot token (xoxb-…) from an app with the chat:write scope, entered when connecting.
+    - The app invited to that channel, or the chat:write.public scope for channels it has not joined.
+    - The channel ID (C01234567) — the channel's About tab, or More > Copy link.
+    - 'Today''s notes: pasted in the task, or added as a file.'
+  files: 'Optional: today''s notes as a .md, .txt or .csv file, instead of pasting them in the task.'
+  task: e.g. Shipped the retry fix; Ana's review still pending; blocked on staging creds; release Thursday.
+  connect:
+    SLACK_BOT_TOKEN: |-
+      Where to get it:
+      1. At api.slack.com/apps, open (or create) the app for your workspace.
+      2. OAuth & Permissions > Bot Token Scopes, add `chat:write`. Add `chat:write.public` as well if the app is not a member of the channel.
+      3. Install to Workspace, then copy the Bot User OAuth Token, which starts with `xoxb-`.
+      4. Invite the app to the channel: /invite @<app-name>.
+
+      How this BriefAgent uses it: for one call, `chat.postMessage`, to the channel you name. It sends no other request to Slack.
+capabilities:
+  network:
+    egress:
+      - slack.com
+  filesystem:
+    read: none
+    write: none
+  exec: none
+  secrets:
+    - SLACK_BOT_TOKEN
+  dataAccess:
+    - messages
+  mcpServers: []
+publish:
+  include:
+    - agent.yaml
+    - AGENT.md
+    - README.md
+    - LICENSE

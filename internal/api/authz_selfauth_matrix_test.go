@@ -32,6 +32,13 @@ import (
 	"github.com/blaktron/agentry/internal/api"
 )
 
+// matrixDraft is a draft package the check route reads: an agent.yaml
+// and the instruction it names.
+var matrixDraft = map[string]any{"description": "matrix", "files": []map[string]string{
+	{"path": "agent.yaml", "content": "schemaVersion: \"2\"\nname: matrix\nnamespace: draft\nversion: 0.1.0\nsummary: m\nlicense: Apache-2.0\nmodes: [autonomous]\nentrypoints:\n  instruction: AGENT.md\n"},
+	{"path": "AGENT.md", "content": "# m\n"},
+}}
+
 func TestSelfAuthorizedMatrix(t *testing.T) {
 	env := newTestEnv(t)
 
@@ -227,6 +234,15 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 		{"searchModelInput", "POST", "/api/v1/model-input/search", map[string]any{"query": "matrix"}, staffSess, pass},
 		{"searchModelInput", "POST", "/api/v1/model-input/search", map[string]any{"query": "matrix"}, patScoped, deny3},
 		{"searchModelInput", "POST", "/api/v1/model-input/search", map[string]any{"query": "matrix"}, patUnscoped, deny3},
+		// checkDraft (agentry#708) — the same callers: the draft's check
+		// spends the deployment's own judge key.
+		{"checkDraft", "POST", "/api/v1/model-input/check", matrixDraft, anonymous, deny1},
+		{"checkDraft", "POST", "/api/v1/model-input/check", matrixDraft, plain, deny3},
+		{"checkDraft", "POST", "/api/v1/model-input/check", matrixDraft, orgOwner, deny3},
+		{"checkDraft", "POST", "/api/v1/model-input/check", matrixDraft, staffSess, pass},
+		{"checkDraft", "POST", "/api/v1/model-input/check", matrixDraft, patScoped, deny3},
+		{"checkDraft", "POST", "/api/v1/model-input/check", matrixDraft, patKnowledge, deny3},
+		{"checkDraft", "POST", "/api/v1/model-input/check", matrixDraft, patUnscoped, deny3},
 
 		// listAbuseReports / triageAbuseReport — staff-only; triage of a
 		// random id gives authorized callers 404, nothing mutated.

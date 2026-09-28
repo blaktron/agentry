@@ -1,0 +1,1 @@
+Review an open pull request on GitHub: read its diff and its comments and write a review summary that lists the risks and the questions to ask the author.
