@@ -1216,8 +1216,16 @@ origin as the server reaches it: `http://authentik-server:9000` on the
 compose stack) and `AGENTRY_IDP_ADMIN_TOKEN` (an authentik API token with
 rights over users, and to view OAuth source connections for the settings
 page below; the bootstrap token works) and erasure also deletes the
-directory account with the same email — never a superuser or a service
-account. Each attempt is recorded as its own `user.directory_erase` audit
+person's directory account — never a superuser or a service account. The
+account is the one the directory's own id names, which the registry records
+on the person's directory identity at every sign-in (the `agentry` scope's
+`agentry_directory_id` claim, below), confirmed by its `uid`; for an
+identity that has not signed in since, the account at the registry's
+address carrying that `uid`; and for an account that never signed in
+through the directory, the account at its address only when exactly one
+account holds it (authentik does not keep addresses unique). The settings
+page's authenticators and sign-in facts read the account by the same rule
+(agentry#727). Each attempt is recorded as its own `user.directory_erase` audit
 event (`deleted`, `not-found`, `failed`, `not-configured`, or `abandoned`),
 beside the `user.delete` event, and the erasure's 204 carries the
 outcome in the `X-Agentry-Directory-Erasure` header. A failure does not undo the registry
@@ -1389,7 +1397,9 @@ The directory's half ships with the compose stack (agentry#671):
   policy, on the sign-in's login stage, copies that choice into the sign-in's
   record, but only when a second factor was validated in the same flow. Its
   `agentry-remember-device` scope mapping answers the `agentry` scope with
-  `agentry_remember_device`. `scripts/dev/authentik-bootstrap.sh` attaches the
+  `agentry_remember_device`, and with `agentry_directory_id`, the signed-in
+  account's directory id, which the registry records on the identity and
+  reads the account by (agentry#727). `scripts/dev/authentik-bootstrap.sh` attaches the
   mapping to the registry's provider; re-run it once after upgrading.
 - **The skip.** The blueprint's `agentry-remembered-browser-skip` policy, on
   the sign-in's MFA stage, calls the check before the code page. It reads

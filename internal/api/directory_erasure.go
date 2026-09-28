@@ -76,7 +76,13 @@ func (s *Server) eraseDirectoryAccount(ctx context.Context, base audit.Event, us
 	detail := map[string]any{}
 	var failure error
 	if s.dirEraser != nil {
-		deleted, err := s.dirEraser.EraseByEmail(ctx, email)
+		// The identity rows outlive the registry's erasure, so the request
+		// and every retry read the same link.
+		link, err := s.directoryLinkFor(ctx, userID, email)
+		deleted := false
+		if err == nil {
+			deleted, err = s.dirEraser.EraseAccount(ctx, link)
+		}
 		switch {
 		case err != nil:
 			outcome, failure = dirEraseFailed, err
