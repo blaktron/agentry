@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // directoryEraser deletes a person's sign-in account in the external
@@ -20,9 +22,10 @@ import (
 // account. Erasure is only erasure if both halves happen.
 type directoryEraser interface {
 	// EraseAccount deletes the directory account the link names (see
-	// findAccount), never a superuser or a service account. Returns
-	// (false, nil) when no account qualifies.
-	EraseAccount(ctx context.Context, link directoryLink) (bool, error)
+	// findAccount), never a superuser or a service account, and says which
+	// rule it looked by. Returns false with no error when no account
+	// qualifies.
+	EraseAccount(ctx context.Context, link directoryLink) (bool, directoryLookup, error)
 }
 
 // directoryLink is how the registry names a person's directory account
@@ -38,12 +41,57 @@ type directoryLink struct {
 	Email     string
 }
 
-// How findAccount found the account, for the erasure's audit row.
+// directoryLookup is how findAccount ended: the rule that found the
+// account, or why none was taken. The erasure's audit row records it.
+type directoryLookup string
+
 const (
-	dirLookupByID      = "id"
-	dirLookupByUID     = "uid"
-	dirLookupByAddress = "address"
+	dirLookupByID      directoryLookup = "id"
+	dirLookupByUID     directoryLookup = "uid"
+	dirLookupByAddress directoryLookup = "address"
+	// The three that leave an account the person may hold in place: more
+	// than one account at the address, the recorded id now holding an
+	// account with another uid, and a superuser, which erasure never
+	// deletes. Erasure reports these as unresolved, for the operator.
+	dirLookupAddressShared directoryLookup = "address-shared"
+	dirLookupIDMismatch    directoryLookup = "id-mismatch"
+	dirLookupSuperuser     directoryLookup = "superuser"
 )
+
+// unresolved reports a lookup that may have left the person's account in
+// the directory.
+func (l directoryLookup) unresolved() bool {
+	return l == dirLookupAddressShared || l == dirLookupIDMismatch || l == dirLookupSuperuser
+}
+
+// directoryLinksFor names every directory account the person is linked to
+// (agentry#727), oldest first: the directory's id and uid from each
+// directory sign-in, with the registry's address as the last resort. With
+// no directory sign-in it is the address alone.
+func (s *Server) directoryLinksFor(ctx context.Context, userID uuid.UUID, email string) ([]directoryLink, error) {
+	rows, err := s.q().ListUserDirectoryLinks(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("read the account's directory links: %w", err)
+	}
+	if len(rows) == 0 {
+		return []directoryLink{{Email: email}}, nil
+	}
+	links := make([]directoryLink, 0, len(rows))
+	for _, r := range rows {
+		links = append(links, directoryLink{AccountID: r.DirectoryAccountID, UID: r.DirectorySubject, Email: email})
+	}
+	return links, nil
+}
+
+// directoryLinkFor is the oldest of directoryLinksFor, which the settings
+// page reads so its answer does not move while the account keeps it.
+func (s *Server) directoryLinkFor(ctx context.Context, userID uuid.UUID, email string) (directoryLink, error) {
+	links, err := s.directoryLinksFor(ctx, userID, email)
+	if err != nil {
+		return directoryLink{Email: email}, err
+	}
+	return links[0], nil
+}
 
 // authentikEraser speaks authentik's core users API with a bearer token.
 type authentikEraser struct {
@@ -80,22 +128,25 @@ func (a *authentikEraser) do(ctx context.Context, method, path string) (*http.Re
 // agentry#617):
 //
 //  1. When the registry has learnt the directory's id for the account, the
-//     account at that id, and only if its uid is the linked one: an id the
-//     directory reassigned never reaches somebody else's account.
+//     account at that id, and only if its uid is the linked one: an id that
+//     holds another account now never reaches it (id-mismatch).
 //  2. For an identity that signed in before the directory sent the id, the
 //     account at the registry's address that carries the linked uid.
 //  3. For an account that never signed in through the directory, the
 //     account at the address, and only when exactly one holds it: authentik
 //     does not keep addresses unique (agentry#712), and a guess between two
-//     is somebody else's account half the time.
+//     is somebody else's account half the time (address-shared).
 //
 // Addresses match exactly and case-blind; a service account never counts.
 // nil, with how it looked, when no account qualifies.
-func (a *authentikEraser) findAccount(ctx context.Context, link directoryLink) (*authentikUser, string, error) {
+func (a *authentikEraser) findAccount(ctx context.Context, link directoryLink) (*authentikUser, directoryLookup, error) {
 	if link.AccountID > 0 {
 		u, err := a.accountByID(ctx, link.AccountID)
-		if err != nil || u == nil || link.UID == "" || u.UID != link.UID || strings.Contains(u.Type, "service") {
+		if err != nil || u == nil {
 			return nil, dirLookupByID, err
+		}
+		if link.UID == "" || u.UID != link.UID || u.isService() {
+			return nil, dirLookupIDMismatch, nil
 		}
 		return u, dirLookupByID, nil
 	}
@@ -114,8 +165,12 @@ func (a *authentikEraser) findAccount(ctx context.Context, link directoryLink) (
 		}
 		return nil, dirLookupByUID, nil
 	}
-	if len(accounts) != 1 {
+	switch len(accounts) {
+	case 0:
 		return nil, dirLookupByAddress, nil
+	case 1:
+	default:
+		return nil, dirLookupAddressShared, nil
 	}
 	return &accounts[0], dirLookupByAddress, nil
 }
@@ -157,7 +212,7 @@ func (a *authentikEraser) accountsAt(ctx context.Context, email string) ([]authe
 			return nil, fmt.Errorf("directory lookup: %w", err)
 		}
 		for _, u := range users.Results {
-			if strings.EqualFold(u.Email, email) && !strings.Contains(u.Type, "service") {
+			if strings.EqualFold(u.Email, email) && !u.isService() {
 				out = append(out, u)
 			}
 		}
@@ -169,25 +224,28 @@ func (a *authentikEraser) accountsAt(ctx context.Context, email string) ([]authe
 // EraseAccount implements directoryEraser. A superuser is never deleted,
 // however it was found: an operator's own account must not be erasable
 // through a registry account.
-func (a *authentikEraser) EraseAccount(ctx context.Context, link directoryLink) (bool, error) {
-	u, _, err := a.findAccount(ctx, link)
-	if err != nil || u == nil || u.IsSuperuser {
-		return false, err
+func (a *authentikEraser) EraseAccount(ctx context.Context, link directoryLink) (bool, directoryLookup, error) {
+	u, how, err := a.findAccount(ctx, link)
+	if err != nil || u == nil {
+		return false, how, err
+	}
+	if u.IsSuperuser {
+		return false, dirLookupSuperuser, nil
 	}
 	res, err := a.do(ctx, http.MethodDelete, fmt.Sprintf("/api/v3/core/users/%d/", u.PK))
 	if err != nil {
-		return false, fmt.Errorf("directory delete: %w", err)
+		return false, how, fmt.Errorf("directory delete: %w", err)
 	}
 	_, _ = io.Copy(io.Discard, res.Body)
 	_ = res.Body.Close()
 	switch res.StatusCode {
 	case http.StatusNoContent:
-		return true, nil
+		return true, how, nil
 	case http.StatusNotFound:
 		// Gone between the lookup and the delete: nothing left to erase.
-		return false, nil
+		return false, how, nil
 	}
-	return false, fmt.Errorf("directory delete: %d", res.StatusCode)
+	return false, how, fmt.Errorf("directory delete: %d", res.StatusCode)
 }
 
 // directoryDevices is the read side of the same admin access: the

@@ -1226,7 +1226,9 @@ through the directory, the account at its address only when exactly one
 account holds it (authentik does not keep addresses unique). The settings
 page's authenticators and sign-in facts read the account by the same rule
 (agentry#727). Each attempt is recorded as its own `user.directory_erase` audit
-event (`deleted`, `not-found`, `failed`, `not-configured`, or `abandoned`),
+event (`deleted`, `not-found`, `unresolved`, `failed`, `not-configured`, or
+`abandoned`, with `directoryLookup` naming the rule each linked account was
+found by),
 beside the `user.delete` event, and the erasure's 204 carries the
 outcome in the `X-Agentry-Directory-Erasure` header. A failure does not undo the registry
 erasure: the request answers `pending` and a `gdpr.directory_erase` job on
@@ -1236,7 +1238,11 @@ directory deletes the account or finds none (agentry#499). When the
 retries run out the last attempt is audited `abandoned` and the server
 logs `failopen.directory_erasure` at ERROR and counts
 `FailOpenEvents{path="directory_erasure"}`: alert on either, then delete the
-sign-in account in authentik by hand. Leave the variables unset and the privacy
+sign-in account in authentik by hand. An erasure that could not tell the
+person's directory account apart (two accounts at the address, a recorded
+account id that now names an account with another `uid`, or a superuser) is
+`unresolved`: nothing is deleted, it is not retried, and it is raised the
+same way. Leave the variables unset and the privacy
 policy's promise that deletion removes personal information is one you
 have to keep manually.
 

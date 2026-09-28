@@ -63,30 +63,36 @@ func erasureDirectory(t *testing.T, accounts func(at string) []map[string]any, a
 	return idp.URL, deleted, searches
 }
 
-func lastDirectoryErasure(t *testing.T, env *testEnv, userID string) (outcome string) {
+func lastDirectoryErasure(t *testing.T, env *testEnv, userID string) (outcome, lookup string) {
 	t.Helper()
 	if err := env.st.Pool().QueryRow(context.Background(),
-		`SELECT detail->>'directoryErasure' FROM audit_events
-		 WHERE action = 'user.directory_erase' AND target_id = $1::uuid ORDER BY occurred_at DESC LIMIT 1`, userID).Scan(&outcome); err != nil {
+		`SELECT detail->>'directoryErasure', coalesce(detail->>'directoryLookup', '') FROM audit_events
+		 WHERE action = 'user.directory_erase' AND target_id = $1::uuid ORDER BY occurred_at DESC LIMIT 1`, userID).Scan(&outcome, &lookup); err != nil {
 		t.Fatal(err)
 	}
-	return outcome
+	return outcome, lookup
 }
 
 // TestErasureDeletesDirectoryAccount: erasure deletes exactly the person's
-// directory account (agentry#617, agentry#727): the one the directory's id
-// names when a directory sign-in recorded it, whatever address it holds;
-// else, for an account that never signed in through the directory, the one
-// account at its address, case-blind; never a superuser or a service
-// account, and nothing when two accounts hold the address.
+// directory accounts (agentry#617, agentry#727): the one each directory
+// sign-in's recorded id names, whatever address it holds; else, for an
+// account that never signed in through the directory, the one account at
+// its address, case-blind. It never deletes a superuser or a service
+// account, and an account it cannot tell apart is left in place and
+// reported unresolved, not not-found.
 func TestErasureDeletesDirectoryAccount(t *testing.T) {
+	// uid is the directory's uid for pk when a directory sign-in linked it.
+	uid := func(pk int, at string) string { return fmt.Sprintf("uid-%d-%s", pk, at) }
 	for _, tc := range []struct {
 		name     string
 		accounts func(at string) []map[string]any
-		// link, when set, is the directory identity a sign-in recorded.
-		link        bool
-		wantDeleted string
+		// links are the directory accounts (by pk) directory sign-ins
+		// recorded, oldest first; none means the person never signed in
+		// through the directory.
+		links       []int
+		wantDeleted []string
 		wantOutcome string
+		wantLookup  string
 		wantSearch  bool
 	}{
 		{
@@ -98,7 +104,7 @@ func TestErasureDeletesDirectoryAccount(t *testing.T) {
 					{"pk": 99, "uid": "uid-99", "email": "x" + at, "type": "internal", "is_superuser": false},
 				}
 			},
-			wantDeleted: "/api/v3/core/users/41/", wantOutcome: "deleted", wantSearch: true,
+			wantDeleted: []string{"/api/v3/core/users/41/"}, wantOutcome: "deleted", wantLookup: "address", wantSearch: true,
 		},
 		{
 			name: "two accounts at the address: neither is deleted",
@@ -108,25 +114,49 @@ func TestErasureDeletesDirectoryAccount(t *testing.T) {
 					{"pk": 1, "uid": "uid-1", "email": at, "type": "internal", "is_superuser": true},
 				}
 			},
-			wantOutcome: "not-found", wantSearch: true,
+			wantOutcome: "unresolved", wantLookup: "address-shared", wantSearch: true,
 		},
 		{
 			name: "the only account at the address is a superuser",
 			accounts: func(at string) []map[string]any {
 				return []map[string]any{{"pk": 1, "uid": "uid-1", "email": at, "type": "internal", "is_superuser": true}}
 			},
-			wantOutcome: "not-found", wantSearch: true,
+			wantOutcome: "unresolved", wantLookup: "superuser", wantSearch: true,
+		},
+		{
+			name: "no account at the address",
+			accounts: func(at string) []map[string]any {
+				return []map[string]any{{"pk": 99, "uid": "uid-99", "email": "x" + at, "type": "internal", "is_superuser": false}}
+			},
+			wantOutcome: "not-found", wantLookup: "address", wantSearch: true,
 		},
 		{
 			name: "the linked account by its id, at another address, beside another at the erased one",
 			accounts: func(at string) []map[string]any {
 				return []map[string]any{
-					// The uid the directory sign-in linked (below).
-					{"pk": 41, "uid": "uid-" + at, "email": "elsewhere@dev.local", "type": "internal", "is_superuser": false},
+					{"pk": 41, "uid": uid(41, at), "email": "elsewhere@dev.local", "type": "internal", "is_superuser": false},
 					{"pk": 42, "uid": "uid-42", "email": at, "type": "internal", "is_superuser": false},
 				}
 			},
-			link: true, wantDeleted: "/api/v3/core/users/41/", wantOutcome: "deleted",
+			links: []int{41}, wantDeleted: []string{"/api/v3/core/users/41/"}, wantOutcome: "deleted", wantLookup: "id",
+		},
+		{
+			name: "every linked account: the oldest gone, the newer one deleted",
+			accounts: func(at string) []map[string]any {
+				return []map[string]any{
+					{"pk": 43, "uid": uid(43, at), "email": at, "type": "internal", "is_superuser": false},
+				}
+			},
+			links: []int{41, 43}, wantDeleted: []string{"/api/v3/core/users/43/"}, wantOutcome: "deleted", wantLookup: "id,id",
+		},
+		{
+			name: "the recorded id now names an account with another uid",
+			accounts: func(at string) []map[string]any {
+				return []map[string]any{
+					{"pk": 41, "uid": "uid-someone-else", "email": at, "type": "internal", "is_superuser": false},
+				}
+			},
+			links: []int{41}, wantOutcome: "unresolved", wantLookup: "id-mismatch",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -143,27 +173,32 @@ func TestErasureDeletesDirectoryAccount(t *testing.T) {
 			if err := env.st.Pool().QueryRow(context.Background(), `SELECT id::text FROM users WHERE email = $1`, at).Scan(&userID); err != nil {
 				t.Fatal(err)
 			}
-			if tc.link {
+			for i, pk := range tc.links {
 				if _, err := env.st.Pool().Exec(context.Background(),
-					`INSERT INTO identities (id, user_id, provider_kind, subject, directory_account_id)
-					 VALUES (gen_random_uuid(), $1::uuid, 'social', 'authentik:uid-' || $2, 41)`, userID, at); err != nil {
+					`INSERT INTO identities (id, user_id, provider_kind, subject, directory_account_id, created_at)
+					 VALUES (gen_random_uuid(), $1::uuid, 'social', 'authentik:' || $2, $3, now() + make_interval(secs => $4))`,
+					userID, uid(pk, at), pk, i); err != nil {
 					t.Fatal(err)
 				}
 			}
 			sess := env.login(user)
-			env.doJSON(sess, http.MethodPost, "/api/v1/user/delete", nil, nil, http.StatusNoContent)
+			res := env.do(sess, http.MethodPost, "/api/v1/user/delete", nil)
+			_ = res.Body.Close()
+			if res.StatusCode != http.StatusNoContent {
+				t.Fatalf("erase: %d, want 204", res.StatusCode)
+			}
+			if h := res.Header.Get("X-Agentry-Directory-Erasure"); h != tc.wantOutcome {
+				t.Fatalf("X-Agentry-Directory-Erasure = %q, want %s", h, tc.wantOutcome)
+			}
 
 			if got := len(*searches) > 0; got != tc.wantSearch {
 				t.Fatalf("address searches = %v, want some: %v", *searches, tc.wantSearch)
 			}
-			switch {
-			case tc.wantDeleted == "" && len(*deleted) != 0:
-				t.Fatalf("directory deletes = %v, want none", *deleted)
-			case tc.wantDeleted != "" && (len(*deleted) != 1 || (*deleted)[0] != tc.wantDeleted):
-				t.Fatalf("directory deletes = %v, want exactly %s", *deleted, tc.wantDeleted)
+			if strings.Join(*deleted, " ") != strings.Join(tc.wantDeleted, " ") {
+				t.Fatalf("directory deletes = %v, want %v", *deleted, tc.wantDeleted)
 			}
-			if got := lastDirectoryErasure(t, env, userID); got != tc.wantOutcome {
-				t.Fatalf("audit directoryErasure = %q, want %s", got, tc.wantOutcome)
+			if got, lookup := lastDirectoryErasure(t, env, userID); got != tc.wantOutcome || lookup != tc.wantLookup {
+				t.Fatalf("audit directoryErasure = %q by %q, want %s by %s", got, lookup, tc.wantOutcome, tc.wantLookup)
 			}
 		})
 	}

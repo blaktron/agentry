@@ -15,6 +15,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -27,8 +29,13 @@ import (
 // The outcomes a user.directory_erase row and the erasure's response header
 // carry.
 const (
-	dirEraseDeleted       = "deleted"
-	dirEraseNotFound      = "not-found"
+	dirEraseDeleted  = "deleted"
+	dirEraseNotFound = "not-found"
+	// dirEraseUnresolved is a lookup that could not tell the person's
+	// account apart (a shared address, an id holding another account now,
+	// a superuser): nothing it could not tell apart is deleted, and the
+	// operator is alerted to finish it by hand (agentry#727).
+	dirEraseUnresolved    = "unresolved"
 	dirEraseNotConfigured = "not-configured"
 	dirEraseFailed        = "failed"
 	// dirErasePending is the response's word for "a retry is queued".
@@ -68,26 +75,43 @@ func (s *Server) directoryEraseAttempts() int {
 }
 
 // eraseDirectoryAccount makes one attempt and audits it on base (whose
-// actor the caller sets): deleted, not-found, not-configured, or failed
-// with the error. attempt is 0 for the request's own attempt and the job's
-// attempt number for a retry. The error is returned for a failed attempt.
+// actor the caller sets): deleted, not-found, unresolved, not-configured, or
+// failed with the error. It deletes the directory account of every
+// directory sign-in linked to the person, or with none, the one account at
+// the address (findAccount). attempt is 0 for the request's own attempt and
+// the job's attempt number for a retry. The error is returned for a failed
+// attempt.
 func (s *Server) eraseDirectoryAccount(ctx context.Context, base audit.Event, userID uuid.UUID, email string, attempt int) (string, error) {
 	outcome := dirEraseNotConfigured
 	detail := map[string]any{}
 	var failure error
 	if s.dirEraser != nil {
 		// The identity rows outlive the registry's erasure, so the request
-		// and every retry read the same link.
-		link, err := s.directoryLinkFor(ctx, userID, email)
-		deleted := false
-		if err == nil {
-			deleted, err = s.dirEraser.EraseAccount(ctx, link)
+		// and every retry read the same links.
+		deleted, unresolved := false, false
+		var lookups []string
+		links, err := s.directoryLinksFor(ctx, userID, email)
+		for _, link := range links {
+			if err != nil {
+				break
+			}
+			var ok bool
+			var how directoryLookup
+			ok, how, err = s.dirEraser.EraseAccount(ctx, link)
+			lookups = append(lookups, string(how))
+			deleted = deleted || ok
+			unresolved = unresolved || how.unresolved()
+		}
+		if len(lookups) > 0 {
+			detail["directoryLookup"] = strings.Join(lookups, ",")
 		}
 		switch {
 		case err != nil:
 			outcome, failure = dirEraseFailed, err
 			detail["error"] = err.Error()
 			s.log.WarnContext(ctx, "gdpr: directory erasure attempt failed", "user", userID, "attempt", attempt, "err", err)
+		case unresolved:
+			outcome = dirEraseUnresolved
 		case deleted:
 			outcome = dirEraseDeleted
 		default:
@@ -102,6 +126,11 @@ func (s *Server) eraseDirectoryAccount(ctx context.Context, base audit.Event, us
 	}
 	detail["directoryErasure"] = outcome
 	s.auditDirectoryErasure(ctx, base, userID, detail)
+	if outcome == dirEraseUnresolved {
+		// Not retried: another attempt would find the same accounts.
+		s.alertDirectoryErasure(ctx, userID, attempt,
+			fmt.Errorf("the directory account could not be told apart (%v): nothing was deleted that might be somebody else's", detail["directoryLookup"]))
+	}
 	return outcome, failure
 }
 

@@ -1,15 +1,12 @@
 package api
 
 import (
-	"context"
-	"errors"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 
 	"github.com/blaktron/agentry/internal/auth"
 )
@@ -66,6 +63,7 @@ func (s *Server) GetUserDirectory(w http.ResponseWriter, r *http.Request) {
 		}
 		link, err := s.directoryLinkFor(r.Context(), p.UserID, row.Email)
 		if err != nil {
+			s.log.ErrorContext(r.Context(), "user directory: linked account", "err", err)
 			problemInternal(w, r)
 			return
 		}
@@ -113,22 +111,6 @@ func (s *Server) addSignInFacts(r *http.Request, link directoryLink, out *UserDi
 	out.HasPassword = f.HasPassword
 }
 
-// directoryLinkFor is how the registry names the caller's directory account
-// (agentry#727): the directory's id and uid from the oldest directory
-// sign-in linked to it, and the registry's address as the last resort.
-func (s *Server) directoryLinkFor(ctx context.Context, userID uuid.UUID, email string) (directoryLink, error) {
-	link := directoryLink{Email: email}
-	row, err := s.q().GetUserDirectoryLink(ctx, userID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return link, nil
-	}
-	if err != nil {
-		return link, err
-	}
-	link.UID, link.AccountID = row.DirectorySubject, row.DirectoryAccountID
-	return link, nil
-}
-
 // DeleteUserDirectoryDevice implements DELETE /user/directory/devices/{kind}/{deviceId}
 // (agentry#164): the caller removes one of their own authenticators from the
 // directory without ever seeing the directory's settings panel. The
@@ -156,6 +138,7 @@ func (s *Server) DeleteUserDirectoryDevice(w http.ResponseWriter, r *http.Reques
 	}
 	link, err := s.directoryLinkFor(r.Context(), p.UserID, row.Email)
 	if err != nil {
+		s.log.ErrorContext(r.Context(), "user directory: linked account", "err", err)
 		problemInternal(w, r)
 		return
 	}
