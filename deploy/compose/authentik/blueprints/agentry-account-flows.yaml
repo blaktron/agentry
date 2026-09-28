@@ -691,12 +691,19 @@ entries:
       name: agentry-remember-device
     attrs:
       scope_name: agentry
-      description: Whether this sign-in asked to remember the browser
+      description: Whether this sign-in asked to remember the browser, and the account's directory id
       expression: |
         from authentik.events.signals import get_login_event
         event = get_login_event(token.session) if token is not None and getattr(token, "session", None) else None
         args = (event.context.get("auth_method_args") or {}) if event else {}
-        return {"agentry_remember_device": args.get("agentry_remember_device") is True}
+        claims = {"agentry_remember_device": args.get("agentry_remember_device") is True}
+        # The directory's own id for the account (agentry#727): the registry
+        # reads the account by it rather than by an address, which the
+        # directory does not keep unique.
+        account = request.user if request is not None else None
+        if account is not None and getattr(account, "pk", None):
+            claims["agentry_directory_id"] = account.pk
+        return claims
   # The shipped sign-in flow's two bindings, restated by their shipped
   # identifiers so this updates them in place. Both policies must run when
   # the stage is reached, not when the plan is made: the cookie arrives with

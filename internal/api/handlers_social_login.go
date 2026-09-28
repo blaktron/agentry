@@ -342,6 +342,18 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 			s.log.WarnContext(r.Context(), "social login: record idp mfa", "err", err)
 		}
 	}
+	// The directory's own id for the account (agentry#727): every later
+	// directory lookup reads the account by it. Only the directory's token
+	// is believed, and it is recorded on the identity this token signed in,
+	// so it is a directory fact and never one a person sets.
+	if name == social.ProviderAuthentik && id.DirectoryAccountID > 0 {
+		dirID := id.DirectoryAccountID
+		if err := s.q().SetSocialIdentityDirectoryAccount(r.Context(), storegen.SetSocialIdentityDirectoryAccountParams{
+			Subject: id.NamespacedSubject, DirectoryAccountID: &dirID,
+		}); err != nil {
+			s.log.WarnContext(r.Context(), "social login: record the directory account id", "err", err)
+		}
+	}
 	// Platform staff is membership of the staff organization
 	// (agentry#556): recomputed at every sign-in, from facts nobody sets
 	// about themselves. The directory group and the domain-alone rule are

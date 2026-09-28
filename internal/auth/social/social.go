@@ -97,6 +97,10 @@ type Identity struct {
 	// authenticated at the IdP (zero when absent). A remembered browser is
 	// minted only from a fresh one (agentry#670).
 	AuthTime time.Time
+	// DirectoryAccountID is the ID token's `agentry_directory_id` claim: the
+	// directory's own id for the account (agentry#727). The API records it
+	// from the directory alone, on the identity the token signs in.
+	DirectoryAccountID int64
 }
 
 // MFAAsserted reports whether AMR names a second factor, by the rule the
@@ -244,17 +248,18 @@ func (p *oidcProvider) Exchange(ctx context.Context, code, verifier, nonce strin
 		return nil, err
 	}
 	return &Identity{
-		Provider:          p.name,
-		Subject:           claims.Subject,
-		NamespacedSubject: p.name + ":" + claims.Subject,
-		Email:             claims.Email,
-		EmailVerified:     claims.EmailVerified,
-		AMR:               claims.AMR,
-		ACR:               claims.ACR,
-		Groups:            claims.Groups,
-		Username:          claims.PreferredUsername,
-		RememberDevice:    claims.RememberDevice,
-		AuthTime:          claims.AuthTime,
+		Provider:           p.name,
+		Subject:            claims.Subject,
+		NamespacedSubject:  p.name + ":" + claims.Subject,
+		Email:              claims.Email,
+		EmailVerified:      claims.EmailVerified,
+		AMR:                claims.AMR,
+		ACR:                claims.ACR,
+		Groups:             claims.Groups,
+		Username:           claims.PreferredUsername,
+		RememberDevice:     claims.RememberDevice,
+		AuthTime:           claims.AuthTime,
+		DirectoryAccountID: claims.DirectoryAccountID,
 	}, nil
 }
 

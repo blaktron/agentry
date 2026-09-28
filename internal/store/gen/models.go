@@ -248,12 +248,13 @@ type IdempotencyKey struct {
 }
 
 type Identity struct {
-	ID              uuid.UUID  `json:"id"`
-	UserID          uuid.UUID  `json:"user_id"`
-	ProviderKind    string     `json:"provider_kind"`
-	SsoConnectionID *uuid.UUID `json:"sso_connection_id"`
-	Subject         string     `json:"subject"`
-	CreatedAt       time.Time  `json:"created_at"`
+	ID                 uuid.UUID  `json:"id"`
+	UserID             uuid.UUID  `json:"user_id"`
+	ProviderKind       string     `json:"provider_kind"`
+	SsoConnectionID    *uuid.UUID `json:"sso_connection_id"`
+	Subject            string     `json:"subject"`
+	CreatedAt          time.Time  `json:"created_at"`
+	DirectoryAccountID *int64     `json:"directory_account_id"`
 }
 
 type Job struct {

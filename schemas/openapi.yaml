@@ -509,7 +509,13 @@ paths:
               description: >
                 The directory half of the erasure (agentry#499). `deleted`:
                 the sign-in account at the directory is gone. `not-found`:
-                the directory holds no account with this address.
+                the directory holds no account this person signed in with,
+                nor one at this address. `unresolved` (agentry#727): the
+                directory holds an account the registry could not tell
+                apart as this person's (two accounts at the address, a
+                recorded account id that now names another account, or an
+                administrator's account), so nothing was deleted; the
+                operator is alerted and finishes it by hand.
                 `not-configured`: the deployment reaches no directory, so
                 erasure is registry-only. `pending`: the directory could not
                 be reached; a job retries it with backoff for about four and
@@ -518,7 +524,7 @@ paths:
                 operator is alerted and finishes it by hand.
               schema:
                 type: string
-                enum: [deleted, not-found, not-configured, pending, failed]
+                enum: [deleted, not-found, unresolved, not-configured, pending, failed]
         default:
           $ref: "#/components/responses/Problem"
 
