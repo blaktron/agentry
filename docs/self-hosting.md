@@ -1216,9 +1216,19 @@ origin as the server reaches it: `http://authentik-server:9000` on the
 compose stack) and `AGENTRY_IDP_ADMIN_TOKEN` (an authentik API token with
 rights over users, and to view OAuth source connections for the settings
 page below; the bootstrap token works) and erasure also deletes the
-directory account with the same email — never a superuser or a service
-account. Each attempt is recorded as its own `user.directory_erase` audit
-event (`deleted`, `not-found`, `failed`, `not-configured`, or `abandoned`),
+person's directory account — never a superuser or a service account. The
+account is the one the directory's own id names, which the registry records
+on the person's directory identity at every sign-in (the `agentry` scope's
+`agentry_directory_id` claim, below), confirmed by its `uid`; for an
+identity that has not signed in since, the account at the registry's
+address carrying that `uid`; and for an account that never signed in
+through the directory, the account at its address only when exactly one
+account holds it (authentik does not keep addresses unique). The settings
+page's authenticators and sign-in facts read the account by the same rule
+(agentry#727). Each attempt is recorded as its own `user.directory_erase` audit
+event (`deleted`, `not-found`, `unresolved`, `failed`, `not-configured`, or
+`abandoned`, with `directoryLookup` naming the rule each linked account was
+found by),
 beside the `user.delete` event, and the erasure's 204 carries the
 outcome in the `X-Agentry-Directory-Erasure` header. A failure does not undo the registry
 erasure: the request answers `pending` and a `gdpr.directory_erase` job on
@@ -1228,7 +1238,11 @@ directory deletes the account or finds none (agentry#499). When the
 retries run out the last attempt is audited `abandoned` and the server
 logs `failopen.directory_erasure` at ERROR and counts
 `FailOpenEvents{path="directory_erasure"}`: alert on either, then delete the
-sign-in account in authentik by hand. Leave the variables unset and the privacy
+sign-in account in authentik by hand. An erasure that could not tell the
+person's directory account apart (two accounts at the address, a recorded
+account id that now names an account with another `uid`, or a superuser) is
+`unresolved`: nothing is deleted, it is not retried, and it is raised the
+same way. Leave the variables unset and the privacy
 policy's promise that deletion removes personal information is one you
 have to keep manually.
 
@@ -1389,7 +1403,9 @@ The directory's half ships with the compose stack (agentry#671):
   policy, on the sign-in's login stage, copies that choice into the sign-in's
   record, but only when a second factor was validated in the same flow. Its
   `agentry-remember-device` scope mapping answers the `agentry` scope with
-  `agentry_remember_device`. `scripts/dev/authentik-bootstrap.sh` attaches the
+  `agentry_remember_device`, and with `agentry_directory_id`, the signed-in
+  account's directory id, which the registry records on the identity and
+  reads the account by (agentry#727). `scripts/dev/authentik-bootstrap.sh` attaches the
   mapping to the registry's provider; re-run it once after upgrading.
 - **The skip.** The blueprint's `agentry-remembered-browser-skip` policy, on
   the sign-in's MFA stage, calls the check before the code page. It reads

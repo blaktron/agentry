@@ -11,7 +11,7 @@ import (
 // caller signs in at the directory (agentry#706): the social provider the
 // account was first connected to, and whether it has a password.
 type directorySignInFacts interface {
-	SignInFacts(ctx context.Context, email, uid string) (DirectorySignInFacts, error)
+	SignInFacts(ctx context.Context, link directoryLink) (DirectorySignInFacts, error)
 }
 
 // DirectorySignInFacts is what the directory says; a nil field is one it
@@ -27,40 +27,28 @@ type DirectorySource struct {
 	Name string
 }
 
-// SignInFacts reads the facts for the directory account at email whose uid
-// is uid, the subject the caller's directory sign-in is linked to. An
-// address alone never picks the account: authentik does not keep addresses
-// unique (agentry#712), so with no linked uid, or no account carrying it,
-// nothing is reported. The first connection is the earliest one the account
-// has. Whether it has a password is the account's agentry_has_password
-// attribute, which the account-flows blueprint keeps (authentik's API has no
-// such field); nil until the account has signed in or written a password
-// under a blueprint that keeps it.
-func (a *authentikEraser) SignInFacts(ctx context.Context, email, uid string) (DirectorySignInFacts, error) {
+// SignInFacts reads the facts for the directory account the caller's
+// directory sign-in is linked to (findAccount's first two rules). An
+// address alone never picks the account here: with no linked uid, or no
+// account carrying it, nothing is reported. The first connection is the
+// earliest one the account has. Whether it has a password is the account's
+// agentry_has_password attribute, which the account-flows blueprint keeps
+// (authentik's API has no such field); nil until the account has signed in
+// or written a password under a blueprint that keeps it.
+func (a *authentikEraser) SignInFacts(ctx context.Context, link directoryLink) (DirectorySignInFacts, error) {
 	var out DirectorySignInFacts
-	if uid == "" {
+	if link.UID == "" {
 		return out, nil
 	}
-	accounts, err := a.AccountsByEmail(ctx, email)
-	if err != nil {
-		return out, fmt.Errorf("directory lookup: %w", err)
-	}
-	pk := 0
-	var hasPassword *bool
-	for _, acc := range accounts {
-		if acc.UID == uid {
-			pk, hasPassword = acc.PK, acc.HasPassword
-			break
-		}
-	}
-	if pk == 0 {
-		return out, nil
+	u, _, err := a.findAccount(ctx, link)
+	if err != nil || u == nil {
+		return out, err
 	}
 
 	// The two answers are independent: a failed connections read still
 	// returns the password answer, with the error.
-	out.HasPassword = hasPassword
-	src, err := a.firstConnection(ctx, pk)
+	out.HasPassword = jsonBool(u.Attributes.HasPassword)
+	src, err := a.firstConnection(ctx, u.PK)
 	out.FirstSource = src
 	return out, err
 }

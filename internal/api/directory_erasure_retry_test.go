@@ -37,7 +37,7 @@ func (d *flakyDirectory) handler(w http.ResponseWriter, r *http.Request) {
 	defer d.mu.Unlock()
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/core/users/":
-		if !strings.EqualFold(r.URL.Query().Get("email"), d.email) {
+		if !strings.EqualFold(r.URL.Query().Get("search"), d.email) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"results":[]}`))
 			return
@@ -49,7 +49,7 @@ func (d *flakyDirectory) handler(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"results": []map[string]any{
-			{"pk": 41, "email": r.URL.Query().Get("email"), "type": "internal", "is_superuser": false},
+			{"pk": 41, "email": d.email, "type": "internal", "is_superuser": false},
 		}})
 	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/v3/core/users/"):
 		d.deleted = append(d.deleted, r.URL.Path)
