@@ -116,6 +116,12 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 OPENER = urllib.request.build_opener(NoRedirect)
 
 
+# Every authentik_device cookie the directory wrote, in any browser: authentik's
+# own 30-day "known device" JWT, which the blueprint turns off on every login
+# stage (agentry#460). It must stay empty.
+DEVICE_COOKIES = []
+
+
 class Browser:
     """One browser profile against the directory: its cookies, with their
     paths, sent where a browser would send them."""
@@ -145,6 +151,8 @@ class Browser:
         for raw in res.headers.get_all("Set-Cookie") or []:
             parts = [p.strip() for p in raw.split(";")]
             name, _, value = parts[0].partition("=")
+            if name == "authentik_device" and value:
+                DEVICE_COOKIES.append(raw[:80])
             attrs = {p.split("=", 1)[0].lower(): (p.split("=", 1) + [""])[1] for p in parts[1:]}
             if attrs.get("max-age") == "0" or not value:
                 self.cookies.pop(name, None)
@@ -327,6 +335,9 @@ def scenarios():
 
     r = sign_in(Browser(), "dr-one")
     expect("a browser that was never remembered: the code is asked", r["asked"], r)
+
+    expect("no sign-in wrote authentik's own 30-day authentik_device cookie",
+           not DEVICE_COOKIES, DEVICE_COOKIES)
 
 
 def raise_scenario():
