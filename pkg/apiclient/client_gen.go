@@ -2845,7 +2845,7 @@ type UserDirectory struct {
 	Devices *[]struct {
 		CreatedAt *time.Time `json:"createdAt,omitempty"`
 
-		// Id The directory's id for the device; pass it to DELETE /user/directory/devices/{kind}/{deviceId}.
+		// Id The directory's id for the authenticator; pass it to DELETE /user/directory/devices/{kind}/{deviceId}.
 		Id *string `json:"id,omitempty"`
 
 		// Kind totp | webauthn | static | duo | sms | email | other
@@ -2853,7 +2853,7 @@ type UserDirectory struct {
 		Name string `json:"name"`
 	} `json:"devices,omitempty"`
 
-	// DevicesError Set when the device lookup was attempted and failed; the links still work.
+	// DevicesError Set when the authenticator lookup was attempted and failed; the links still work.
 	DevicesError *string `json:"devicesError,omitempty"`
 
 	// Managed True when a directory service owns credentials for this deployment.
@@ -4906,14 +4906,14 @@ type ClientInterface interface {
 
 	// GetUserDirectory Where the caller manages password, MFA and profile when a directory service owns the account (DEV-057).
 	//
-	// With auth.externalOnly, credentials live in the directory service (Authentik). This answers the settings page's question "where do I change my password or add an authenticator?" with the directory's flow URLs, and lists the caller's enrolled authenticator devices when the server has directory admin access (auth.idpAdminURL). Without a directory, `managed` is false and the rest is absent.
+	// With auth.externalOnly, credentials live in the directory service (Authentik). This answers the settings page's question "where do I change my password or add an authenticator?" with the directory's flow URLs, and lists the caller's enrolled authenticators when the server has directory admin access (auth.idpAdminURL). Without a directory, `managed` is false and the rest is absent.
 	//
 	// Corresponds with GET /user/directory (the `GetUserDirectory` operationId).
 	GetUserDirectory(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteUserDirectoryDevice Remove one of the caller's own authenticators from the directory service (agentry#164).
 	//
-	// With auth.externalOnly and directory admin access, removes the caller's authenticator device of this kind and id through the directory's admin API, so the settings page manages MFA without ever showing the directory's own panel. The device must be on the caller's own account: an id that is somebody else's answers 404 exactly like a missing one. 404 when the server has no directory admin access; 502 when the directory did not answer.
+	// With auth.externalOnly and directory admin access, removes the caller's authenticator of this kind and id through the directory's admin API, so the settings page manages MFA without ever showing the directory's own panel. The authenticator must be on the caller's own account: an id that is somebody else's answers 404 exactly like a missing one. 404 when the server has no directory admin access; 502 when the directory did not answer.
 	//
 	// Corresponds with DELETE /user/directory/devices/{kind}/{deviceId} (the `DeleteUserDirectoryDevice` operationId).
 	DeleteUserDirectoryDevice(ctx context.Context, kind DeleteUserDirectoryDeviceParamsKind, deviceId string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -8215,7 +8215,7 @@ func (c *Client) ListUserDependencyAlerts(ctx context.Context, reqEditors ...Req
 
 // GetUserDirectory Where the caller manages password, MFA and profile when a directory service owns the account (DEV-057).
 //
-// With auth.externalOnly, credentials live in the directory service (Authentik). This answers the settings page's question "where do I change my password or add an authenticator?" with the directory's flow URLs, and lists the caller's enrolled authenticator devices when the server has directory admin access (auth.idpAdminURL). Without a directory, `managed` is false and the rest is absent.
+// With auth.externalOnly, credentials live in the directory service (Authentik). This answers the settings page's question "where do I change my password or add an authenticator?" with the directory's flow URLs, and lists the caller's enrolled authenticators when the server has directory admin access (auth.idpAdminURL). Without a directory, `managed` is false and the rest is absent.
 //
 // Corresponds with GET /user/directory (the `GetUserDirectory` operationId).
 func (c *Client) GetUserDirectory(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8232,7 +8232,7 @@ func (c *Client) GetUserDirectory(ctx context.Context, reqEditors ...RequestEdit
 
 // DeleteUserDirectoryDevice Remove one of the caller's own authenticators from the directory service (agentry#164).
 //
-// With auth.externalOnly and directory admin access, removes the caller's authenticator device of this kind and id through the directory's admin API, so the settings page manages MFA without ever showing the directory's own panel. The device must be on the caller's own account: an id that is somebody else's answers 404 exactly like a missing one. 404 when the server has no directory admin access; 502 when the directory did not answer.
+// With auth.externalOnly and directory admin access, removes the caller's authenticator of this kind and id through the directory's admin API, so the settings page manages MFA without ever showing the directory's own panel. The authenticator must be on the caller's own account: an id that is somebody else's answers 404 exactly like a missing one. 404 when the server has no directory admin access; 502 when the directory did not answer.
 //
 // Corresponds with DELETE /user/directory/devices/{kind}/{deviceId} (the `DeleteUserDirectoryDevice` operationId).
 func (c *Client) DeleteUserDirectoryDevice(ctx context.Context, kind DeleteUserDirectoryDeviceParamsKind, deviceId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -17469,7 +17469,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetUserDirectoryWithResponse Where the caller manages password, MFA and profile when a directory service owns the account (DEV-057).
 	//
-	// With auth.externalOnly, credentials live in the directory service (Authentik). This answers the settings page's question "where do I change my password or add an authenticator?" with the directory's flow URLs, and lists the caller's enrolled authenticator devices when the server has directory admin access (auth.idpAdminURL). Without a directory, `managed` is false and the rest is absent.
+	// With auth.externalOnly, credentials live in the directory service (Authentik). This answers the settings page's question "where do I change my password or add an authenticator?" with the directory's flow URLs, and lists the caller's enrolled authenticators when the server has directory admin access (auth.idpAdminURL). Without a directory, `managed` is false and the rest is absent.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -17478,7 +17478,7 @@ type ClientWithResponsesInterface interface {
 
 	// DeleteUserDirectoryDeviceWithResponse Remove one of the caller's own authenticators from the directory service (agentry#164).
 	//
-	// With auth.externalOnly and directory admin access, removes the caller's authenticator device of this kind and id through the directory's admin API, so the settings page manages MFA without ever showing the directory's own panel. The device must be on the caller's own account: an id that is somebody else's answers 404 exactly like a missing one. 404 when the server has no directory admin access; 502 when the directory did not answer.
+	// With auth.externalOnly and directory admin access, removes the caller's authenticator of this kind and id through the directory's admin API, so the settings page manages MFA without ever showing the directory's own panel. The authenticator must be on the caller's own account: an id that is somebody else's answers 404 exactly like a missing one. 404 when the server has no directory admin access; 502 when the directory did not answer.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -27954,7 +27954,7 @@ func (c *ClientWithResponses) ListUserDependencyAlertsWithResponse(ctx context.C
 
 // GetUserDirectoryWithResponse Where the caller manages password, MFA and profile when a directory service owns the account (DEV-057).
 //
-// With auth.externalOnly, credentials live in the directory service (Authentik). This answers the settings page's question "where do I change my password or add an authenticator?" with the directory's flow URLs, and lists the caller's enrolled authenticator devices when the server has directory admin access (auth.idpAdminURL). Without a directory, `managed` is false and the rest is absent.
+// With auth.externalOnly, credentials live in the directory service (Authentik). This answers the settings page's question "where do I change my password or add an authenticator?" with the directory's flow URLs, and lists the caller's enrolled authenticators when the server has directory admin access (auth.idpAdminURL). Without a directory, `managed` is false and the rest is absent.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -27969,7 +27969,7 @@ func (c *ClientWithResponses) GetUserDirectoryWithResponse(ctx context.Context, 
 
 // DeleteUserDirectoryDeviceWithResponse Remove one of the caller's own authenticators from the directory service (agentry#164).
 //
-// With auth.externalOnly and directory admin access, removes the caller's authenticator device of this kind and id through the directory's admin API, so the settings page manages MFA without ever showing the directory's own panel. The device must be on the caller's own account: an id that is somebody else's answers 404 exactly like a missing one. 404 when the server has no directory admin access; 502 when the directory did not answer.
+// With auth.externalOnly and directory admin access, removes the caller's authenticator of this kind and id through the directory's admin API, so the settings page manages MFA without ever showing the directory's own panel. The authenticator must be on the caller's own account: an id that is somebody else's answers 404 exactly like a missing one. 404 when the server has no directory admin access; 502 when the directory did not answer.
 //
 // Returns a wrapper object for the known response body format(s).
 //
