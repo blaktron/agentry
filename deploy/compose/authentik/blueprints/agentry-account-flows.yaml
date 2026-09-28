@@ -343,6 +343,7 @@ entries:
       stage: !KeyOf stage-enrollment-prompt
       order: 10
   - model: authentik_flows.flowstagebinding
+    id: binding-enrollment-write
     identifiers:
       target: !KeyOf flow-enrollment
       stage: !KeyOf stage-enrollment-user-write
@@ -513,13 +514,16 @@ entries:
       policy_engine_mode: any
       invalid_response_action: retry
   - model: authentik_flows.flowstagebinding
+    id: binding-recovery-write
     identifiers:
       target: !KeyOf flow-recovery
       stage: !KeyOf stage-recovery-user-write
       order: 40
     attrs:
-      evaluate_on_plan: true
-      re_evaluate_policies: false
+      # When the stage is reached, not when the flow is planned: the
+      # has-password policy below reads the new password (agentry#706).
+      evaluate_on_plan: false
+      re_evaluate_policies: true
       policy_engine_mode: any
       invalid_response_action: retry
   - model: authentik_flows.flowstagebinding
@@ -899,6 +903,7 @@ entries:
       stage: !KeyOf stage-password-change-prompt
       order: 10
   - model: authentik_flows.flowstagebinding
+    id: binding-password-change-write
     identifiers:
       target: !KeyOf flow-password-change
       stage: !KeyOf stage-password-change-write
@@ -1032,3 +1037,97 @@ entries:
       flow_user_settings: null
       flow_invalidation: !KeyOf flow-invalidation
       flow_recovery: !KeyOf flow-recovery
+
+  # ==========================================================================
+  # Whether an account has a password (agentry#706)
+  # ==========================================================================
+  # The site's Settings offers "Add a password" to an account that has none,
+  # and authentik's API has no such field. The directory therefore keeps the
+  # answer on the account, attributes.agentry_has_password, which the
+  # registry reads with the view-user right it already holds. (Reading it
+  # through the property-mapping test endpoint was tried and refused: for a
+  # token that is not a superuser that endpoint needs the global right to
+  # add property mappings, which run code in the directory.)
+  #
+  # One policy, on every binding that writes a password and on sign-in. When
+  # the flow is about to write a password, it adds the attribute to that same
+  # write. Otherwise it records the account's real state: an account a
+  # social provider created holds the empty string, which Django calls
+  # usable, so "has a password" is non-empty and usable. The sign-in half
+  # also gives every account that predates this its answer. It always
+  # passes: it exists for its side effect. That matters where a binding
+  # runs in engine mode `any`, as the sign-in's login step does: a policy
+  # meant to skip that step must not be added beside this one without
+  # changing the mode. The site's social flows bind it on their own login
+  # steps by this name.
+  - model: authentik_policies_expression.expressionpolicy
+    id: policy-record-has-password
+    identifiers:
+      name: agentry-record-has-password
+    attrs:
+      execution_logging: false
+      expression: |
+        plan = context.get("flow_plan")
+        if plan is None:
+            return True
+        prompt = plan.context.get("prompt_data") or {}
+        if prompt.get("password"):
+            prompt["attributes.agentry_has_password"] = True
+            plan.context["prompt_data"] = prompt
+            return True
+        user = plan.context.get("pending_user")
+        if user is None or not getattr(user, "pk", None):
+            return True
+        # Read the account again: the copy in the plan was loaded at
+        # identification, and saving it would undo any other attribute
+        # changed since.
+        from authentik.core.models import User
+        fresh = User.objects.filter(pk=user.pk).first()
+        if fresh is None:
+            return True
+        has = bool(fresh.password) and fresh.has_usable_password()
+        if fresh.attributes.get("agentry_has_password") is not has:
+            fresh.attributes["agentry_has_password"] = has
+            fresh.save(update_fields=["attributes"])
+            user.attributes["agentry_has_password"] = has
+        return True
+  - model: authentik_policies.policybinding
+    identifiers:
+      policy: !KeyOf policy-record-has-password
+      target: !KeyOf binding-enrollment-write
+      order: 50
+    attrs:
+      enabled: true
+      negate: false
+      failure_result: true
+      timeout: 5
+  - model: authentik_policies.policybinding
+    identifiers:
+      policy: !KeyOf policy-record-has-password
+      target: !KeyOf binding-recovery-write
+      order: 50
+    attrs:
+      enabled: true
+      negate: false
+      failure_result: true
+      timeout: 5
+  - model: authentik_policies.policybinding
+    identifiers:
+      policy: !KeyOf policy-record-has-password
+      target: !KeyOf binding-password-change-write
+      order: 50
+    attrs:
+      enabled: true
+      negate: false
+      failure_result: true
+      timeout: 5
+  - model: authentik_policies.policybinding
+    identifiers:
+      policy: !KeyOf policy-record-has-password
+      target: !KeyOf binding-signin-login
+      order: 50
+    attrs:
+      enabled: true
+      negate: false
+      failure_result: true
+      timeout: 5

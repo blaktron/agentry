@@ -2859,6 +2859,18 @@ type UserDirectory struct {
 	// DevicesError Set when the authenticator lookup was attempted and failed; the links still work.
 	DevicesError *string `json:"devicesError,omitempty"`
 
+	// FirstSocialProvider The social provider the caller's directory account was first connected to (agentry#706), for the account's profile. Absent when the account has none, the server has no directory admin access, or the directory did not answer.
+	FirstSocialProvider *struct {
+		// Id The directory's slug for the provider, e.g. google.
+		Id string `json:"id"`
+
+		// Name The provider's display name, e.g. Google.
+		Name string `json:"name"`
+	} `json:"firstSocialProvider,omitempty"`
+
+	// HasPassword Whether the caller's directory account has a password (agentry#706): false for an account a social provider created and no password was added to. Absent when the directory did not answer or has not recorded it yet (the account has not signed in or set a password since the directory began keeping it).
+	HasPassword *bool `json:"hasPassword,omitempty"`
+
 	// Managed True when a directory service owns credentials for this deployment.
 	Managed           bool    `json:"managed"`
 	PasswordChangeUrl *string `json:"passwordChangeUrl,omitempty"`

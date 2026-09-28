@@ -1,12 +1,14 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/blaktron/agentry/internal/auth"
 )
@@ -76,8 +78,41 @@ func (s *Server) GetUserDirectory(w http.ResponseWriter, r *http.Request) {
 			}
 			out.Devices = &list
 		}
+		s.addSignInFacts(r, row.Email, &out)
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// addSignInFacts adds the directory's first social connection and password
+// answer (agentry#706) for the account the caller's directory sign-in is
+// linked to. Anything the directory does not answer is left out: the page
+// shows nothing rather than a guess.
+func (s *Server) addSignInFacts(r *http.Request, email string, out *UserDirectory) {
+	facts, ok := s.dirEraser.(directorySignInFacts)
+	if !ok {
+		return
+	}
+	p := principalFrom(r.Context())
+	uid, err := s.q().GetUserDirectorySubject(r.Context(), p.UserID)
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			s.log.WarnContext(r.Context(), "user directory: linked subject", "err", err)
+		}
+		return
+	}
+	f, err := facts.SignInFacts(r.Context(), email, uid)
+	if err != nil {
+		// What was read is still reported: the password answer does not
+		// depend on the connections read.
+		s.log.WarnContext(r.Context(), "user directory: sign-in facts", "err", err)
+	}
+	if f.FirstSource != nil {
+		out.FirstSocialProvider = &struct {
+			Id   string `json:"id"`
+			Name string `json:"name"`
+		}{Id: f.FirstSource.Slug, Name: f.FirstSource.Name}
+	}
+	out.HasPassword = f.HasPassword
 }
 
 // DeleteUserDirectoryDevice implements DELETE /user/directory/devices/{kind}/{deviceId}
