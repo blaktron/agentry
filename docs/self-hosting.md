@@ -1217,12 +1217,15 @@ emits `amr` on its ID tokens; check one sign-in's token (or the
 `user.login` audit row) before enabling the flag, because with it on and a
 directory that never asserts a factor, nobody can publish publicly.
 
-An organization's own SSO connection counts the same way. When a member
-signs in through the organization's SAML or OIDC connection and the
-validated assertion says a second factor was used, the registry stamps
-`users.idp_mfa_at` as it does for the directory. For OIDC that is the ID
-token's `amr`, by the list above. For SAML it is the signed
-AuthnStatement's `AuthnContextClassRef`, or Entra ID's
+With the same flag set, an organization's own SSO connection is evidence
+too. When a member signs in through the organization's SAML or OIDC
+connection and the validated assertion says a second factor was used, the
+registry stamps `users.idp_mfa_at` as it does for the directory. Only with
+the flag, because the organization's IdP belongs to that organization's
+admins, not to you, and the stamp is account-wide and kept. With the flag
+off, the gate asks for native TOTP, and an organization's claim never stands
+in for it. For OIDC the evidence is the ID token's `amr`, by the list above. For SAML
+it is the signed AuthnStatement's `AuthnContextClassRef`, or Entra ID's
 `http://schemas.microsoft.com/claims/authnmethodsreferences` attribute,
 naming one of:
 
@@ -1235,10 +1238,11 @@ naming one of:
 | `urn:oasis:names:tc:SAML:2.0:ac:classes:TimeSyncToken` | SAML 2.0 context class |
 
 A password context class (`Password`, `PasswordProtectedTransport`) is one
-factor and stamps nothing. The list is `MFAAuthnContexts` in
-`internal/auth/saml`. Some IdPs send the multi-factor class only when the
-service provider asks for it. Check one member's assertion before relying
-on it.
+factor and stamps nothing. Some IdPs send the multi-factor class only when
+the service provider asks for it. Check one member's assertion before relying
+on it. The `sso.login` audit row records, for each sign-in, whether the
+assertion named a second factor (`mfaAsserted`) and whether the registry
+recorded it (`mfaRecorded`).
 
 Whichever way it is set, `GET /api/v1/meta` reports the gate's state as
 `features.publicPublish2FA`, which is what a front end reads before it
