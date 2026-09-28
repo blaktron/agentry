@@ -378,7 +378,14 @@ type samlSessionLink struct {
 // instead of a problem document. next has already been through
 // safeNextPath, so it is a same-origin path and nothing else. API mode —
 // next empty — is unchanged.
-func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, orgRow storegen.GetOrgByHandleRow, connID uuid.UUID, providerKind, subject, email string, samlLink *samlSessionLink, next string) {
+// mfa is whether the validated assertion or ID token named a second factor
+// (agentry#705). It stamps users.idp_mfa_at, the evidence the public-publish
+// gate accepts (agentry#23, DEV-080), only on a deployment that has opted into
+// IdP-asserted evidence with auth.requireIdpMFA: the stamp is account-wide and
+// kept, and an organization's IdP is its admins', not the operator's, so on a
+// registry whose gate asks for native TOTP an organization's claim must not
+// stand in for it.
+func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, orgRow storegen.GetOrgByHandleRow, connID uuid.UUID, providerKind, subject, email string, samlLink *samlSessionLink, next string, mfa bool) {
 	ctx := r.Context()
 	q := s.q()
 	browserFail := func(msg string) bool { return s.browserFail(w, r, next, msg) }
@@ -413,6 +420,12 @@ func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, org
 		}
 		problemInternal(w, r)
 		return
+	}
+	recordMFA := mfa && s.cfg.Auth.RequireIdPMFA
+	if recordMFA {
+		if err := q.SetUserIdPMFA(ctx, userID); err != nil {
+			s.log.WarnContext(ctx, "sso sign-in: record idp mfa", "org", orgRow.Handle, "provider", providerKind, "err", err)
+		}
 	}
 
 	sessToken, err := auth.NewToken(auth.SessionPrefix)
@@ -469,7 +482,8 @@ func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, org
 		e.Actor, e.ActorKind = userID, audit.ActorUser
 		e.OrgID = orgRow.ID
 		e.TargetKind, e.TargetID = "user", userID
-		e.Detail = map[string]any{"provider": providerKind}
+		// Which organization's IdP granted the publish-gate evidence, if any.
+		e.Detail = map[string]any{"provider": providerKind, "mfaAsserted": mfa, "mfaRecorded": recordMFA}
 		return s.auditW.Write(ctx, q, e)
 	})
 	if err != nil {

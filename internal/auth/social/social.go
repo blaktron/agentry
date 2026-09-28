@@ -99,17 +99,10 @@ type Identity struct {
 	AuthTime time.Time
 }
 
-// MFAAsserted reports whether AMR names a second factor: the RFC 8176
-// values for possession/biometric/OTP factors, "mfa" itself, and the
-// provider-specific spellings seen in practice. "pwd" alone is not one.
+// MFAAsserted reports whether AMR names a second factor, by the rule the
+// organization OIDC callback shares (oidcrp.AMRNamesSecondFactor).
 func (id *Identity) MFAAsserted() bool {
-	for _, m := range id.AMR {
-		switch strings.ToLower(m) {
-		case "mfa", "otp", "hwk", "swk", "sms", "tel", "face", "fpt", "iris", "retina", "vbm", "pin", "totp", "webauthn", "u2f", "hotp":
-			return true
-		}
-	}
-	return false
+	return oidcrp.AMRNamesSecondFactor(id.AMR)
 }
 
 // Config configures one provider. The URL overrides exist so tests can point
