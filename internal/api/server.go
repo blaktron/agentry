@@ -687,6 +687,8 @@ func (s *Server) GetMeta(w http.ResponseWriter, r *http.Request) {
 	if names := s.ExtensionNames(); len(names) > 0 {
 		meta.Extensions = &names
 	}
+	providers := s.configuredSocialProviders()
+	meta.SignInProviders = &providers
 	if s.cfg.MinCLIVersion != "" {
 		meta.MinCLIVersion = &s.cfg.MinCLIVersion
 	}
