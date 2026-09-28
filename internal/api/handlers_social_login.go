@@ -118,24 +118,48 @@ type totpChallengeBlob struct {
 	Provider  string    `json:"p"`
 }
 
-// socialProviderConfig returns the configured provider settings, or false.
+// socialProviderIDs is the closed set of individual sign-in providers, in the
+// order the spec's provider enum lists them.
+var socialProviderIDs = []string{
+	social.ProviderGoogle, social.ProviderGitHub, social.ProviderMicrosoft,
+	social.ProviderOpenAI, social.ProviderClaude, social.ProviderAuthentik,
+}
+
+// configuredSocialProviders lists the providers socialProviderConfig accepts,
+// which are the ones SocialOidcStart can redirect for. /meta reports it so a
+// front end never has to start a flow to learn what is offered (agentry#694).
+func (s *Server) configuredSocialProviders() []string {
+	out := []string{}
+	for _, id := range socialProviderIDs {
+		if _, ok := s.socialProviderConfig(id); ok {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// socialProviderConfig returns a provider's settings, and whether they are
+// enough to start a sign-in with (social.Startable: a client id and secret,
+// and an issuer where the provider has no default).
 func (s *Server) socialProviderConfig(name string) (config.SocialProvider, bool) {
+	var pc config.SocialProvider
 	switch name {
 	case social.ProviderGoogle:
-		return s.cfg.Social.Google, s.cfg.Social.Google.Configured()
+		pc = s.cfg.Social.Google
 	case social.ProviderGitHub:
-		return s.cfg.Social.GitHub, s.cfg.Social.GitHub.Configured()
+		pc = s.cfg.Social.GitHub
 	case social.ProviderMicrosoft:
-		return s.cfg.Social.Microsoft, s.cfg.Social.Microsoft.Configured()
+		pc = s.cfg.Social.Microsoft
 	case social.ProviderOpenAI:
-		return s.cfg.Social.OpenAI, s.cfg.Social.OpenAI.Configured()
+		pc = s.cfg.Social.OpenAI
 	case social.ProviderClaude:
-		return s.cfg.Social.Claude, s.cfg.Social.Claude.Configured()
+		pc = s.cfg.Social.Claude
 	case social.ProviderAuthentik:
-		return s.cfg.Social.Authentik, s.cfg.Social.Authentik.Configured()
+		pc = s.cfg.Social.Authentik
 	default:
 		return config.SocialProvider{}, false
 	}
+	return pc, social.Startable(name, social.Config{ClientID: pc.ClientID, ClientSecret: pc.ClientSecret, Issuer: pc.Issuer})
 }
 
 // socialRedirectURL is the provider's registered redirect URI for this server.
@@ -175,9 +199,11 @@ func (s *Server) SocialOidcStart(w http.ResponseWriter, r *http.Request, provide
 	name := string(provider)
 	rp, err := s.socialProvider(r, name)
 	if err != nil {
-		// An unconfigured provider is genuinely absent from this deployment;
-		// 404 rather than 422 so probing cannot distinguish "misconfigured"
-		// from "not offered".
+		// A provider that is not configured, or not completely, is absent
+		// from this deployment: 404, never 422, so its settings are not
+		// probed. /meta lists the configured ones (agentry#694), so a
+		// listed provider answering 404 here says only that its issuer
+		// could not be reached just now.
 		problemNotFound(w, r)
 		return
 	}
