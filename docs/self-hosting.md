@@ -1098,17 +1098,23 @@ page:
   is a signed token the directory keeps no record of: it cannot be listed,
   cannot be revoked per browser, and survives a password change, a logout
   and a rotation of `AUTHENTIK_SECRET_KEY`, because its key derives from the
-  installation's identifier. The blueprint sets `remember_device:
-  seconds=0` on every login stage, the sign-in's, sign-up's and recovery's
-  and authentik's two source stages, so the directory never writes it
-  (agentry#460). The one browser credential is the remembered browser
+  installation's identifier and the stage. The blueprint sets
+  `remember_device: seconds=0` on every login stage, the sign-in's,
+  sign-up's and recovery's and authentik's two source stages, so the
+  directory never writes it
+  (agentry#460). A cookie written before that change is not revoked, since
+  nothing can revoke it: it expires within its 30 days, and nothing in
+  Agentry reads it. authentik also uses the cookie to refresh a person's
+  other open sign-in tabs once they have signed in, which no longer
+  happens. The one browser credential is the remembered browser
   below, which the registry records and a person can clear. Leave each
   stage's `remember_me_offset` at zero as well: above zero authentik shows
   its own "Remember me" box beside the remembered-browser one, and a login
   made with that box's answer never writes the device cookie at all, so
   the two settings interact without saying so.
-  `TestDirectoryIssuesNoDeviceCookie` fails if a login stage is added or
-  changed without both.
+  `TestDirectoryIssuesNoDeviceCookie` fails if a login stage is added to
+  the blueprint, or changed in it, without both; a stage made in the admin
+  interface or by an example blueprint is not covered.
 - Both forms enforce the **same password policy** (12 characters minimum
   plus a zxcvbn strength score), because a password chosen during a reset
   should be held to the same bar as one chosen at sign-up. There is no

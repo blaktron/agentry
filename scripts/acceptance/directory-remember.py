@@ -152,7 +152,8 @@ class Browser:
             parts = [p.strip() for p in raw.split(";")]
             name, _, value = parts[0].partition("=")
             if name == "authentik_device" and value:
-                DEVICE_COOKIES.append(raw[:80])
+                # Where it was set, never its value.
+                DEVICE_COOKIES.append(path)
             attrs = {p.split("=", 1)[0].lower(): (p.split("=", 1) + [""])[1] for p in parts[1:]}
             if attrs.get("max-age") == "0" or not value:
                 self.cookies.pop(name, None)
@@ -343,6 +344,7 @@ def scenarios():
 def raise_scenario():
     r = sign_in(remembered_browser(), "dr-one")
     expect("the skip policy raises: the code is asked", r["asked"], r)
+    expect("that sign-in wrote no authentik_device cookie either", not DEVICE_COOKIES, DEVICE_COOKIES)
 
 
 def main():
