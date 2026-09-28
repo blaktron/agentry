@@ -173,6 +173,24 @@ func New(ctx context.Context, name string, cfg Config, redirectURL string) (Prov
 	}
 }
 
+// Startable reports whether a provider's settings are enough for New to build
+// it: a client id and secret, and an issuer for an OIDC provider that has no
+// default endpoints (openai, claude, authentik). It needs no network, so it
+// can answer for a provider whose issuer is down; New can still fail then.
+func Startable(name string, cfg Config) bool {
+	if cfg.ClientID == "" || cfg.ClientSecret == "" {
+		return false
+	}
+	switch name {
+	case ProviderGoogle, ProviderMicrosoft, ProviderGitHub:
+		return true
+	case ProviderOpenAI, ProviderClaude, ProviderAuthentik:
+		return cfg.Issuer != ""
+	default:
+		return false
+	}
+}
+
 // ---- OIDC proper (google, microsoft, and any operator-configured issuer) ----
 
 const (

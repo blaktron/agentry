@@ -480,6 +480,11 @@ Register the callback with each provider as
 `{baseURL}/api/v1/auth/oidc/{provider}/callback`, so `baseURL` must be
 set correctly for social login to work at all.
 
+`GET /api/v1/meta` lists the configured providers as `signInProviders`
+(an empty list when there are none), so a front end offers them without
+calling `/auth/oidc/{provider}/start`, which begins a flow and is rate
+limited like any anonymous request (agentry#694).
+
 Two behaviours worth knowing before you enable this (DEV-019, DEV-055):
 
 - **Google and Microsoft are real OIDC**: discovery, issuer pinning, PKCE,
