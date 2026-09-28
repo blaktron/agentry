@@ -144,8 +144,14 @@ func (s *ModelInputScanner) QuestionSet() string {
 }
 
 func modelInputHash(model string, resample bool) string {
+	return modelInputHashOf(model, resample, ModelInputQuestions())
+}
+
+// modelInputHashOf is the hash over a given set, so a test can show that a
+// question's wording is in it (agentry#703).
+func modelInputHashOf(model string, resample bool, qs []Question) string {
 	parts := []string{"agentry/model-input/v1", "provider=typesafe", "model=" + model, "state=source,content"}
-	for _, q := range ModelInputQuestions() {
+	for _, q := range qs {
 		parts = append(parts, "question="+q.ID+"="+q.Text)
 	}
 	var srcs []string

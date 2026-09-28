@@ -130,7 +130,10 @@ rule about honesty, and these are the specific things behind it:
   to read (the person's description, a search result, a page, a registry
   answer), and the Drafter's model will not be given what AI Review flags or
   cannot scan. That scan covers inputs, not a release, and a draft is scanned
-  at publication like any other.
+  at publication like any other. A finished draft can also be read the way
+  AI Review will read it at publication, before it is submitted
+  (`POST /model-input/check`): that tells the person what will be flagged,
+  and changes nothing about the publication scan.
 - **The shipped scanners are good, not identical to the tools PLAN §8.3
   names.** S2 uses a native Go implementation behind an adapter interface,
   with gitleaks optional beside it. It detects everything the committed

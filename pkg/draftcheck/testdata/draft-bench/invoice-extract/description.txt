@@ -1,0 +1,1 @@
+Extract the invoice number, date, vendor, line items and totals from the invoices I add, which are already text, and return them as JSON.

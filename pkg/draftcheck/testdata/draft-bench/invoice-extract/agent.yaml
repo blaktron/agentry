@@ -1,0 +1,41 @@
+# drafted by the Drafter (agentry draft); review every line before you submit it
+schemaVersion: "2"
+name: invoice-fields-to-json
+namespace: draft
+version: 0.1.0
+summary: Extracts invoice number, date, vendor, line items and totals from the invoice text files you add into one JSON document, flagging bad sums.
+license: Apache-2.0
+tags:
+  - invoices
+  - finance
+  - extraction
+  - json
+  - accounts-payable
+modes:
+  - autonomous
+entrypoints:
+  instruction: AGENT.md
+guide:
+  overview: 'Reads the invoice files you add — plain text, CSV, markdown or HTML — and pulls the invoice number, issue date, vendor, line items and totals out of each into one JSON document, returned as invoices/invoice-data.json. Values are only taken from the text: anything absent comes back as null. It also adds the line items up and reports, per invoice, every total that does not match, without changing the numbers.'
+  prepare:
+    - Add the invoice files; each one must already be text, not a scanned image.
+    - Name the vendor and the paying party clearly in the file if both addresses appear.
+    - In the task, say so if you want a particular currency, date order or a subset of files.
+  task: e.g. Extract every invoice; report each file separately and keep the totals that do not add up.
+capabilities:
+  network:
+    egress: none
+  filesystem:
+    read: none
+    write: none
+  exec: none
+  dataAccess:
+    - files
+    - payments
+  mcpServers: []
+publish:
+  include:
+    - agent.yaml
+    - AGENT.md
+    - README.md
+    - LICENSE
