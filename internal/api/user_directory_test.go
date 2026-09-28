@@ -137,3 +137,97 @@ func TestUserDirectoryLinksAndDevices(t *testing.T) {
 		t.Fatalf("directory delete calls after misses: %d", deleted.Load())
 	}
 }
+
+// GET /user/directory names the social provider the caller's directory
+// account was first connected to and whether it has a password (agentry#706),
+// for the site's Profile and "Add a password". The directory account is the
+// one carrying the caller's linked uid; a directory that fails the read
+// leaves both out and answers the rest as before.
+func TestUserDirectoryNamesFirstProviderAndPassword(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		connectionsFail bool
+	}{
+		{"the directory answers", false},
+		{"the connections read fails", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			oidc := newFakeOIDC(t)
+			idp := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.Path {
+				case "/api/v3/core/users/":
+					_ = json.NewEncoder(w).Encode(map[string]any{"pagination": map[string]any{"next": 0}, "results": []map[string]any{
+						{"pk": 51, "email": oidc.email, "uid": "somebody-else", "type": "internal", "is_active": true},
+						{"pk": 52, "email": oidc.email, "uid": oidc.sub, "type": "internal", "is_active": true, "attributes": map[string]any{"agentry_has_password": false}},
+					}})
+				case "/api/v3/authenticators/admin/all/":
+					_ = json.NewEncoder(w).Encode([]map[string]any{})
+				case "/api/v3/sources/user_connections/all/":
+					if tc.connectionsFail || r.URL.Query().Get("user") != "52" {
+						http.Error(w, "no", http.StatusInternalServerError)
+						return
+					}
+					_ = json.NewEncoder(w).Encode(map[string]any{"pagination": map[string]any{"next": 0}, "results": []map[string]any{
+						{"pk": 1, "created": "2026-09-21T10:00:00Z", "source_obj": map[string]any{"slug": "github", "name": "GitHub"}},
+						{"pk": 2, "created": "2026-09-20T10:00:00Z", "source_obj": map[string]any{"slug": "google", "name": "Google"}},
+					}})
+				default:
+					http.Error(w, "unexpected "+r.URL.Path, http.StatusNotFound)
+				}
+			}))
+			defer idp.Close()
+			env := newTestEnvCfg(t, func(c *config.Config) {
+				c.Auth.ExternalOnly = true
+				c.Auth.IdPAdminURL = idp.URL
+				c.Auth.IdPAdminToken = "idp-admin-token"
+				c.Social.Authentik = config.SocialProvider{ClientID: oidc.clientID, ClientSecret: "s", Issuer: oidc.srv.URL}
+			}, func(s *api.Server) { s.SetOIDCHTTPClient(oidc.srv.Client()) })
+			authURL, state, cookie := env.socialStart(t, "authentik")
+			visit, err := oidc.srv.Client().Get(authURL.String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			_ = visit.Body.Close()
+			res := env.socialCallback(t, "authentik", state, cookie)
+			defer func() { _ = res.Body.Close() }()
+			var login struct {
+				CsrfToken string `json:"csrfToken"`
+			}
+			if err := json.NewDecoder(res.Body).Decode(&login); err != nil {
+				t.Fatal(err)
+			}
+			sess := caller{name: "dir-facts", csrf: login.CsrfToken}
+			for _, ck := range res.Cookies() {
+				if ck.Name == "agentry_session" {
+					sess.session = ck.Value
+				}
+			}
+			var got struct {
+				Managed             bool `json:"managed"`
+				FirstSocialProvider *struct {
+					Id   string `json:"id"`
+					Name string `json:"name"`
+				} `json:"firstSocialProvider"`
+				HasPassword *bool            `json:"hasPassword"`
+				Devices     []map[string]any `json:"devices"`
+			}
+			env.doJSON(sess, http.MethodGet, "/api/v1/user/directory", nil, &got, http.StatusOK)
+			if !got.Managed || got.Devices == nil {
+				t.Fatalf("the rest of the status: %+v", got)
+			}
+			if tc.connectionsFail {
+				if got.FirstSocialProvider != nil || got.HasPassword != nil {
+					t.Fatalf("a failed read reported %+v / %v", got.FirstSocialProvider, got.HasPassword)
+				}
+				return
+			}
+			if got.FirstSocialProvider == nil || got.FirstSocialProvider.Id != "google" || got.FirstSocialProvider.Name != "Google" {
+				t.Fatalf("firstSocialProvider = %+v, want google/Google", got.FirstSocialProvider)
+			}
+			if got.HasPassword == nil || *got.HasPassword {
+				t.Fatalf("hasPassword = %v, want false", got.HasPassword)
+			}
+		})
+	}
+}

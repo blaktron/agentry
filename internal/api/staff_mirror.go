@@ -81,6 +81,9 @@ type directoryAccount struct {
 	Email  string
 	UID    string
 	Active bool
+	// HasPassword is the directory's own record of whether the account has
+	// a password (agentry#706); nil when it has none yet.
+	HasPassword *bool
 }
 
 // StaffMirrorOutcome is what one run did, for its log line and the tests.
@@ -335,11 +338,19 @@ func (a *authentikEraser) doJSON(ctx context.Context, method, path string, body 
 func pathOnly(path string) string { return strings.SplitN(path, "?", 2)[0] }
 
 type authentikUser struct {
-	PK       int    `json:"pk"`
-	UID      string `json:"uid"`
-	Email    string `json:"email"`
-	Type     string `json:"type"`
-	IsActive bool   `json:"is_active"`
+	PK         int    `json:"pk"`
+	UID        string `json:"uid"`
+	Email      string `json:"email"`
+	Type       string `json:"type"`
+	IsActive   bool   `json:"is_active"`
+	Attributes struct {
+		// Kept by the account-flows blueprint's agentry-record-has-password
+		// policy (agentry#706); absent on an account that has not signed in
+		// or written a password since. Raw, so a value someone edited into
+		// the wrong type reads as unknown instead of failing the lookup the
+		// staff mirror shares.
+		HasPassword json.RawMessage `json:"agentry_has_password"`
+	} `json:"attributes"`
 }
 
 type authentikPage[T any] struct {
@@ -405,7 +416,7 @@ func (a *authentikEraser) AccountsByEmail(ctx context.Context, email string) ([]
 			if !strings.EqualFold(u.Email, email) || strings.Contains(u.Type, "service") || !u.IsActive {
 				continue
 			}
-			out = append(out, directoryAccount{PK: u.PK, Email: u.Email, UID: u.UID, Active: true})
+			out = append(out, directoryAccount{PK: u.PK, Email: u.Email, UID: u.UID, Active: true, HasPassword: jsonBool(u.Attributes.HasPassword)})
 		}
 		page = users.Pagination.Next
 	}
@@ -418,4 +429,13 @@ func (a *authentikEraser) SetMember(ctx context.Context, groupID string, account
 		op = "add_user"
 	}
 	return a.doJSON(ctx, http.MethodPost, "/api/v3/core/groups/"+url.PathEscape(groupID)+"/"+op+"/", map[string]any{"pk": accountPK}, nil)
+}
+
+// jsonBool is a JSON true or false, and nil for anything else.
+func jsonBool(raw json.RawMessage) *bool {
+	var b bool
+	if len(raw) == 0 || json.Unmarshal(raw, &b) != nil {
+		return nil
+	}
+	return &b
 }
