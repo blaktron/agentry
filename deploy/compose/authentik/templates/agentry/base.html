@@ -10,10 +10,15 @@ Colours are the light scheme of the core's /ui/ palette and nothing else
 mode.
 
 Everything is inline and table-based because mail clients drop <style> and
-<link>; the wordmark is text, so nothing depends on remote images, which most
-clients block, or on an inline attachment. "Agentry" is the core's default
-AGENTRY_BRAND_NAME: a deployment that renames itself mounts its own copies of
-these files at /templates (docs/self-hosting.md, "Account flows").
+<link>. The header is the Agentry mark and the wordmark (agentry#720): the
+mark is cid:logo, an inline attachment authentik adds to any mail that names
+it, read from its logo path, where the stack mounts the core's
+deploy/compose/authentik/brand/mail-logo.png. Nothing is a remote image, which
+most clients block; the wordmark stays text, so the header reads "Agentry"
+even where images are off, and the image's alt is empty. "Agentry" is the
+core's default AGENTRY_BRAND_NAME: a deployment that renames itself mounts its
+own copies of these files at /templates and its own logo at that path
+(docs/self-hosting.md, "Account flows").
 {% endcomment %}<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -30,7 +35,14 @@ these files at /templates (docs/self-hosting.md, "Account flows").
     <td align="center" style="padding:32px 16px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;">
         <tr>
-          <td style="padding:0 4px 16px 4px; font-size:22px; line-height:28px; font-weight:600; letter-spacing:-0.02em; color:#231b12;">Agentry</td>
+          <td style="padding:0 4px 16px 4px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="padding:0 10px 0 0; vertical-align:middle;"><img src="cid:logo" width="32" height="32" alt="" border="0" style="display:block; width:32px; height:32px; border:0; outline:none; text-decoration:none;"></td>
+                <td style="vertical-align:middle; font-size:22px; line-height:28px; font-weight:600; letter-spacing:-0.02em; color:#231b12;">Agentry</td>
+              </tr>
+            </table>
+          </td>
         </tr>
         <tr>
           <td style="background-color:#faf6ee; border:1px solid #e6dccb; border-radius:12px; padding:28px 28px 24px 28px;">
