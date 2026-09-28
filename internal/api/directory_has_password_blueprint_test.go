@@ -23,7 +23,7 @@ func TestDirectoryRecordsHasPasswordBlueprint(t *testing.T) {
 			expr = scalar(e.Attrs["expression"])
 		}
 	}
-	for _, want := range []string{`prompt.get("password")`, `"attributes.agentry_has_password"`, "bool(user.password)", "user.has_usable_password()", `update_fields=["attributes"]`} {
+	for _, want := range []string{`prompt.get("password")`, `"attributes.agentry_has_password"`, "bool(fresh.password)", "fresh.has_usable_password()", "User.objects.filter(pk=user.pk)", `update_fields=["attributes"]`} {
 		if !strings.Contains(expr, want) {
 			t.Errorf("the policy's expression lacks %s", want)
 		}

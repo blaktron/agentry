@@ -29,7 +29,7 @@ func fakeSignInDirectory(t *testing.T, attr any) *httptest.Server {
 			},
 		})
 	})
-	mux.HandleFunc("GET /api/v3/sources/user_connections/all/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/v3/sources/user_connections/oauth/", func(w http.ResponseWriter, r *http.Request) {
 		// The API ignores unknown filters and would answer every account's
 		// connections; the client must ask by user pk.
 		if r.URL.Query().Get("user") != "12" {
@@ -41,6 +41,8 @@ func fakeSignInDirectory(t *testing.T, attr any) *httptest.Server {
 			"results": []map[string]any{
 				{"pk": 3, "user": 12, "created": "2026-09-20T10:00:00.000000Z", "source_obj": map[string]any{"slug": "github", "name": "GitHub"}},
 				{"pk": 2, "user": 12, "created": "2026-09-01T10:00:00.000000Z", "source_obj": map[string]any{"slug": "google", "name": "Google"}},
+				// Older, and somebody else's: a filter the API stopped honouring.
+				{"pk": 9, "user": 99, "created": "2026-07-01T10:00:00.000000Z", "source_obj": map[string]any{"slug": "discord", "name": "Discord"}},
 			},
 		})
 	})

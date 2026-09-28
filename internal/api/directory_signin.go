@@ -7,10 +7,10 @@ import (
 	"time"
 )
 
-// directorySignIns is what the settings page needs to know about how the
+// directorySignInFacts is what the settings page needs to know about how the
 // caller signs in at the directory (agentry#706): the social provider the
 // account was first connected to, and whether it has a password.
-type directorySignIns interface {
+type directorySignInFacts interface {
 	SignInFacts(ctx context.Context, email, uid string) (DirectorySignInFacts, error)
 }
 
@@ -57,35 +57,41 @@ func (a *authentikEraser) SignInFacts(ctx context.Context, email, uid string) (D
 		return out, nil
 	}
 
-	src, err := a.firstConnection(ctx, pk)
-	if err != nil {
-		return out, err
-	}
-	out.FirstSource = src
+	// The two answers are independent: a failed connections read still
+	// returns the password answer, with the error.
 	out.HasPassword = hasPassword
-	return out, nil
+	src, err := a.firstConnection(ctx, pk)
+	out.FirstSource = src
+	return out, err
 }
 
-// firstConnection is the account's earliest source connection, by pk (the
-// connections API ignores filters it does not know, so it is asked by the
-// user's pk and nothing else).
+// firstConnection is the account's earliest social connection: an OAuth
+// source's, since every social provider is one (an LDAP, SAML or Kerberos
+// connection is not a way someone signed up). It reads the OAuth connections
+// list, not the list of all connections, whose rows name every source by
+// the base model and so cannot say which kind it is (seen on 2026.8.0); the
+// token needs view on OAuth source connections for it. It asks by the
+// user's pk and keeps only rows that say they are that user's: the API
+// ignores filters it does not know, and a renamed one must not report
+// somebody else's.
 func (a *authentikEraser) firstConnection(ctx context.Context, pk int) (*DirectorySource, error) {
 	var first *DirectorySource
 	var firstAt time.Time
 	for page := 1; page > 0; {
 		var conns authentikPage[struct {
+			User      int       `json:"user"`
 			Created   time.Time `json:"created"`
 			SourceObj struct {
 				Slug string `json:"slug"`
 				Name string `json:"name"`
 			} `json:"source_obj"`
 		}]
-		path := fmt.Sprintf("/api/v3/sources/user_connections/all/?page_size=50&page=%d&user=%d", page, pk)
+		path := fmt.Sprintf("/api/v3/sources/user_connections/oauth/?page_size=50&page=%d&user=%d", page, pk)
 		if err := a.doJSON(ctx, http.MethodGet, path, nil, &conns); err != nil {
 			return nil, fmt.Errorf("directory connections: %w", err)
 		}
 		for _, c := range conns.Results {
-			if c.SourceObj.Slug == "" {
+			if c.User != pk || c.SourceObj.Slug == "" {
 				continue
 			}
 			if first == nil || c.Created.Before(firstAt) {

@@ -163,14 +163,14 @@ func TestUserDirectoryNamesFirstProviderAndPassword(t *testing.T) {
 					}})
 				case "/api/v3/authenticators/admin/all/":
 					_ = json.NewEncoder(w).Encode([]map[string]any{})
-				case "/api/v3/sources/user_connections/all/":
+				case "/api/v3/sources/user_connections/oauth/":
 					if tc.connectionsFail || r.URL.Query().Get("user") != "52" {
 						http.Error(w, "no", http.StatusInternalServerError)
 						return
 					}
 					_ = json.NewEncoder(w).Encode(map[string]any{"pagination": map[string]any{"next": 0}, "results": []map[string]any{
-						{"pk": 1, "created": "2026-09-21T10:00:00Z", "source_obj": map[string]any{"slug": "github", "name": "GitHub"}},
-						{"pk": 2, "created": "2026-09-20T10:00:00Z", "source_obj": map[string]any{"slug": "google", "name": "Google"}},
+						{"pk": 1, "user": 52, "created": "2026-09-21T10:00:00Z", "source_obj": map[string]any{"slug": "github", "name": "GitHub"}},
+						{"pk": 2, "user": 52, "created": "2026-09-20T10:00:00Z", "source_obj": map[string]any{"slug": "google", "name": "Google"}},
 					}})
 				default:
 					http.Error(w, "unexpected "+r.URL.Path, http.StatusNotFound)
@@ -217,8 +217,10 @@ func TestUserDirectoryNamesFirstProviderAndPassword(t *testing.T) {
 				t.Fatalf("the rest of the status: %+v", got)
 			}
 			if tc.connectionsFail {
-				if got.FirstSocialProvider != nil || got.HasPassword != nil {
-					t.Fatalf("a failed read reported %+v / %v", got.FirstSocialProvider, got.HasPassword)
+				// The provider is left out; the password answer, read from
+				// the account, is still reported.
+				if got.FirstSocialProvider != nil || got.HasPassword == nil || *got.HasPassword {
+					t.Fatalf("a failed connections read: %+v / %v", got.FirstSocialProvider, got.HasPassword)
 				}
 				return
 			}

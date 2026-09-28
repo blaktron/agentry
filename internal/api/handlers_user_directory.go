@@ -88,7 +88,7 @@ func (s *Server) GetUserDirectory(w http.ResponseWriter, r *http.Request) {
 // linked to. Anything the directory does not answer is left out: the page
 // shows nothing rather than a guess.
 func (s *Server) addSignInFacts(r *http.Request, email string, out *UserDirectory) {
-	facts, ok := s.dirEraser.(directorySignIns)
+	facts, ok := s.dirEraser.(directorySignInFacts)
 	if !ok {
 		return
 	}
@@ -102,8 +102,9 @@ func (s *Server) addSignInFacts(r *http.Request, email string, out *UserDirector
 	}
 	f, err := facts.SignInFacts(r.Context(), email, uid)
 	if err != nil {
+		// What was read is still reported: the password answer does not
+		// depend on the connections read.
 		s.log.WarnContext(r.Context(), "user directory: sign-in facts", "err", err)
-		return
 	}
 	if f.FirstSource != nil {
 		out.FirstSocialProvider = &struct {

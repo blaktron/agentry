@@ -1180,11 +1180,13 @@ default) restores the native flows — nothing was removed.
 and token, `GET /api/v1/user/directory` also reports the social provider
 the caller's directory account was first connected to
 (`firstSocialProvider`) and whether it has a password (`hasPassword`), so a
-front end can say "Signed up with Google" and offer "Add a password". The
-account is the one carrying the caller's linked directory `uid`, never one
-found by address alone, since authentik does not keep addresses unique. The
-provider comes from authentik's source connections, so the token needs to
-view them (`authentik_core.view_usersourceconnection`) as well as users.
+front end can say "Signed up with Google" and offer "Add a password". For
+these two fields the account is the one carrying the caller's linked
+directory `uid`, never one found by address alone, since authentik does not
+keep addresses unique. Only OAuth sources count as a social provider. The
+provider comes from authentik's OAuth source connections, so the token
+needs to view them (`authentik_sources_oauth.view_useroauthsourceconnection`)
+as well as users.
 The password answer is the account's `agentry_has_password` attribute,
 which the account-flows blueprint's `agentry-record-has-password` policy
 keeps: set when a flow writes a password, refreshed from the account at
@@ -1200,7 +1202,8 @@ registry account (§12.7); the sign-in account — email, display name,
 password hash — lives in authentik. Set `AGENTRY_IDP_ADMIN_URL` (the API
 origin as the server reaches it: `http://authentik-server:9000` on the
 compose stack) and `AGENTRY_IDP_ADMIN_TOKEN` (an authentik API token with
-rights over users; the bootstrap token works) and erasure also deletes the
+rights over users, and to view OAuth source connections for the settings
+page below; the bootstrap token works) and erasure also deletes the
 directory account with the same email — never a superuser or a service
 account. Each attempt is recorded as its own `user.directory_erase` audit
 event (`deleted`, `not-found`, `failed`, `not-configured`, or `abandoned`),
