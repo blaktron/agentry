@@ -4432,6 +4432,20 @@ components:
             (DEV-091, pkg/extension); absent on the core build.
           items:
             type: string
+        signInProviders:
+          type: array
+          description: >
+            The individual sign-in providers this registry has configured
+            (the `provider` ids of `/auth/oidc/{provider}/start`, in that
+            enum's order), so a front end can offer them without starting a
+            flow to find out (agentry#694). Empty when none is configured.
+            A provider is listed when its client id and secret are set, and
+            an issuer where it has no default; a listed provider's start
+            redirects and an unlisted one's answers 404. A listed provider
+            whose issuer cannot be reached at that moment also answers 404
+            there, since its discovery fails.
+          items:
+            type: string
 
     BrandInfo:
       type: object
