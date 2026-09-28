@@ -356,6 +356,10 @@ type authentikUser struct {
 	} `json:"attributes"`
 }
 
+// isService reports a service account, which is never a person's sign-in
+// account.
+func (u *authentikUser) isService() bool { return strings.Contains(u.Type, "service") }
+
 type authentikPage[T any] struct {
 	Pagination struct {
 		Next int `json:"next"`

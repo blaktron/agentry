@@ -275,34 +275,6 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow
 	return i, err
 }
 
-const getUserDirectoryLink = `-- name: GetUserDirectoryLink :one
-SELECT substring(i.subject from 11)::text AS directory_subject,
-       COALESCE(i.directory_account_id, 0)::bigint AS directory_account_id
-FROM identities i
-WHERE i.user_id = $1 AND i.provider_kind = 'social'
-  AND i.sso_connection_id IS NULL AND i.subject LIKE 'authentik:%'
-ORDER BY i.created_at, i.id
-LIMIT 1
-`
-
-type GetUserDirectoryLinkRow struct {
-	DirectorySubject   string `json:"directory_subject"`
-	DirectoryAccountID int64  `json:"directory_account_id"`
-}
-
-// The directory account the account is linked to by a directory sign-in
-// (agentry#706, agentry#727): its subject, "authentik:" stripped (the uid
-// the directory reports for it), and the directory's own id for it, learnt
-// at sign-in (0 until the identity signs in under a directory that sends
-// it). The oldest link, so the answer does not move while the account
-// keeps one.
-func (q *Queries) GetUserDirectoryLink(ctx context.Context, userID uuid.UUID) (GetUserDirectoryLinkRow, error) {
-	row := q.db.QueryRow(ctx, getUserDirectoryLink, userID)
-	var i GetUserDirectoryLinkRow
-	err := row.Scan(&i.DirectorySubject, &i.DirectoryAccountID)
-	return i, err
-}
-
 const listPersonalNamespaceAgents = `-- name: ListPersonalNamespaceAgents :many
 SELECT a.id, a.name, a.visibility, a.latest_published_version_id
 FROM agents a JOIN handles h ON h.id = a.namespace_id
@@ -436,6 +408,46 @@ func (q *Queries) ListStaffSyncCandidates(ctx context.Context, orgID uuid.UUID) 
 			return nil, err
 		}
 		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUserDirectoryLinks = `-- name: ListUserDirectoryLinks :many
+SELECT substring(i.subject from 11)::text AS directory_subject,
+       COALESCE(i.directory_account_id, 0)::bigint AS directory_account_id
+FROM identities i
+WHERE i.user_id = $1 AND i.provider_kind = 'social'
+  AND i.sso_connection_id IS NULL AND i.subject LIKE 'authentik:%'
+ORDER BY i.created_at, i.id
+`
+
+type ListUserDirectoryLinksRow struct {
+	DirectorySubject   string `json:"directory_subject"`
+	DirectoryAccountID int64  `json:"directory_account_id"`
+}
+
+// The directory accounts the account is linked to by directory sign-ins
+// (agentry#706, agentry#727), oldest first: each one's subject, "authentik:"
+// stripped (the uid the directory reports for it), and the directory's own
+// id for it, learnt at sign-in (0 until the identity signs in under a
+// directory that sends it). The settings page reads the oldest, so its
+// answer does not move while the account keeps one; erasure takes them all.
+func (q *Queries) ListUserDirectoryLinks(ctx context.Context, userID uuid.UUID) ([]ListUserDirectoryLinksRow, error) {
+	rows, err := q.db.Query(ctx, listUserDirectoryLinks, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUserDirectoryLinksRow
+	for rows.Next() {
+		var i ListUserDirectoryLinksRow
+		if err := rows.Scan(&i.DirectorySubject, &i.DirectoryAccountID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

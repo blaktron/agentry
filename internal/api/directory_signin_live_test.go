@@ -66,6 +66,19 @@ func TestDirectorySignInFactsAgainstALiveDirectory(t *testing.T) {
 	if got, _, err := a.findAccount(ctx, directoryLink{AccountID: int64(u.PK), UID: "not-" + accounts[0].UID, Email: email}); err != nil || got != nil {
 		t.Fatalf("by id with another uid: %+v %v, want none", got, err)
 	}
+	// The reported symptom: the directory has recorded a password, and the
+	// facts found by id at another registry address say so.
+	if err := a.doJSON(ctx, http.MethodPatch, fmt.Sprintf("/api/v3/core/users/%d/", u.PK), map[string]any{
+		"attributes": map[string]any{"agentry_has_password": true},
+	}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if f, err := a.SignInFacts(ctx, byID); err != nil || f.HasPassword == nil || !*f.HasPassword {
+		t.Fatalf("sign-in facts by id at another registry address: %+v %v, want hasPassword true", f, err)
+	}
+	if f, err := a.SignInFacts(ctx, directoryLink{UID: accounts[0].UID, Email: elsewhere}); err != nil || f.HasPassword != nil {
+		t.Fatalf("sign-in facts by uid at the other address: %+v %v, want none (agentry#727's bug)", f, err)
+	}
 	if devs, err := a.Devices(ctx, byID); err != nil || len(devs) != 0 {
 		t.Fatalf("devices by id: %+v %v, want an empty list", devs, err)
 	}

@@ -147,12 +147,12 @@ func TestDirectoryFindAccount(t *testing.T) {
 		name string
 		link directoryLink
 		pk   int // 0: none
-		how  string
+		how  directoryLookup
 	}{
 		{"by id, the registry's address being another", directoryLink{AccountID: 12, UID: "uid-pat", Email: "pat@authentik.social.local"}, 12, dirLookupByID},
-		{"by id, but another account's uid there now", directoryLink{AccountID: 12, UID: "uid-bob", Email: "bob@example.test"}, 0, dirLookupByID},
+		{"by id, but another account's uid there now", directoryLink{AccountID: 12, UID: "uid-bob", Email: "bob@example.test"}, 0, dirLookupIDMismatch},
 		{"by id, the account gone", directoryLink{AccountID: 999, UID: "uid-pat"}, 0, dirLookupByID},
-		{"by id, a service account", directoryLink{AccountID: 77, UID: "uid-svc"}, 0, dirLookupByID},
+		{"by id, a service account", directoryLink{AccountID: 77, UID: "uid-svc"}, 0, dirLookupIDMismatch},
 		{"by id, an inactive account", directoryLink{AccountID: 20, UID: "uid-gone"}, 20, dirLookupByID},
 		{"by uid, held with capitals", directoryLink{UID: "uid-alice", Email: "alice@example.test"}, 7, dirLookupByUID},
 		{"by uid, one of two at the address", directoryLink{UID: "uid-s2", Email: "shared@example.test"}, 13, dirLookupByUID},
@@ -160,7 +160,7 @@ func TestDirectoryFindAccount(t *testing.T) {
 		{"by address, the only holder (a service account never counts)", directoryLink{Email: "alice@example.test"}, 7, dirLookupByAddress},
 		{"by address, the registry's copy in capitals", directoryLink{Email: "BOB@EXAMPLE.TEST"}, 8, dirLookupByAddress},
 		{"by address, an inactive account", directoryLink{Email: "gone@example.test"}, 20, dirLookupByAddress},
-		{"by address, two holders", directoryLink{Email: "shared@example.test"}, 0, dirLookupByAddress},
+		{"by address, two holders", directoryLink{Email: "shared@example.test"}, 0, dirLookupAddressShared},
 		{"by address, a prefix of an address is not it", directoryLink{Email: "shared@example"}, 0, dirLookupByAddress},
 		{"by address, nobody", directoryLink{Email: "nobody@example.test"}, 0, dirLookupByAddress},
 		{"nothing to go on", directoryLink{}, 0, dirLookupByAddress},
@@ -270,7 +270,7 @@ func TestDirectoryEraseAccount(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			a, d := fakeAuthentik(t)
-			deleted, err := a.EraseAccount(ctx, tc.link)
+			deleted, _, err := a.EraseAccount(ctx, tc.link)
 			if err != nil {
 				t.Fatal(err)
 			}
