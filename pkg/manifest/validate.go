@@ -406,14 +406,17 @@ func validateRuntime(s *issues, m *Manifest) {
 const MaxIntakeQuestions = 20
 
 // The guide's bounds (plan guided-runs.md §6): it is read before a run, so
-// each part stays the size a person reads at a glance.
+// each part stays the size a person reads at a glance. A key's help is
+// markdown of up to 2,000 characters (plan builder-simplify.md D5, D11;
+// agentry#707): where to create a key and which scopes to give it can take
+// a few numbered steps and a link.
 const (
 	MaxGuideOverviewBytes = 4096
 	MaxGuidePrepare       = 10
 	MaxGuidePrepareChars  = 200
 	MaxGuideFilesChars    = 500
 	MaxGuideTaskChars     = 200
-	MaxGuideConnectChars  = 300
+	MaxGuideConnectChars  = 2000
 )
 
 // MaxOpeningChars bounds interactive.opening: it is a first message, not a
@@ -490,17 +493,18 @@ func validateInteractive(s *issues, m *Manifest) {
 }
 
 // validateGuide is V10's third half: the author's words for the run setup
-// (plan guided-runs.md §6). The overview is markdown and may span lines;
-// every other part is one plain line. A connect key must be a secret the
-// release declares, in capabilities.secrets or a declared MCP server's
-// secrets, so help never names a key the run cannot take. No part may carry
-// a format character (a bidi override, a zero-width space) or a C1 control:
-// the guide is read by a person deciding what to hand a run, and the
-// connect help is read by one deciding where to create a key, so what it
-// says must be what it shows. The overview keeps newlines and tabs and
-// refuses every other C0 control and DEL (agentry#558): ESC starts a
-// terminal escape sequence and CR rewrites a printed line, and a client
-// that prints the overview should not have to remember to clean it.
+// (plan guided-runs.md §6). The overview and each key's connect help are
+// markdown and may span lines (the help since agentry#707); every other part
+// is one plain line. A connect key must be a secret the release declares, in
+// capabilities.secrets or a declared MCP server's secrets, so help never
+// names a key the run cannot take. No part may carry a format character (a
+// bidi override, a zero-width space) or a C1 control: the guide is read by a
+// person deciding what to hand a run, and the connect help is read by one
+// deciding where to create a key, so what it says must be what it shows.
+// The markdown parts keep newlines and tabs and refuse every other C0
+// control and DEL (agentry#558): ESC starts a terminal escape sequence and
+// CR rewrites a printed line, and a client that prints them should not have
+// to remember to clean them.
 func validateGuide(s *issues, m *Manifest) {
 	if m.Major() != 2 || m.Guide == nil {
 		return
@@ -509,12 +513,7 @@ func validateGuide(s *issues, m *Manifest) {
 	if n := len(g.Overview); n > MaxGuideOverviewBytes {
 		s.errf("V10", "guide.overview", "overview is %d bytes; the maximum is %d", n, MaxGuideOverviewBytes)
 	}
-	for _, r := range g.Overview {
-		if (r < 0x20 && r != '\n' && r != '\t') || r == 0x7f || hiddenRune(r) {
-			s.errf("V10", "guide.overview", "overview must not contain a control character other than a newline or a tab, or a format character (U+%04X)", r)
-			break
-		}
-	}
+	guideMarkdownRunes(s, "guide.overview", "overview", g.Overview)
 	if len(g.Prepare) > MaxGuidePrepare {
 		s.errf("V10", "guide.prepare", "%d prepare items; the maximum is %d", len(g.Prepare), MaxGuidePrepare)
 	}
@@ -543,7 +542,22 @@ func validateGuide(s *issues, m *Manifest) {
 		if !declared[n] {
 			s.errf("V10", p, "%q is not a secret this release declares (capabilities.secrets or an MCP server's secrets)", n)
 		}
-		guideLine(s, p, "connect help for "+n, g.Connect[n], MaxGuideConnectChars, true)
+		what := "connect help for " + n
+		if guideText(s, p, what, g.Connect[n], MaxGuideConnectChars, true) {
+			guideMarkdownRunes(s, p, what, g.Connect[n])
+		}
+	}
+}
+
+// guideMarkdownRunes checks one markdown part of the guide: a newline and a
+// tab are the only control characters it may carry, and it carries no
+// format character. It reports the first offending rune once.
+func guideMarkdownRunes(s *issues, p, what, v string) {
+	for _, r := range v {
+		if (r < 0x20 && r != '\n' && r != '\t') || r == 0x7f || hiddenRune(r) {
+			s.errf("V10", p, "%s must not contain a control character other than a newline or a tab, or a format character (U+%04X)", what, r)
+			return
+		}
 	}
 }
 
@@ -554,17 +568,28 @@ func hiddenRune(r rune) bool {
 	return (r >= 0x80 && r <= 0x9f) || unicode.Is(unicode.Cf, r)
 }
 
-// guideLine checks one single-line part of the guide, naming it as what in
-// every message.
-func guideLine(s *issues, p, what, v string, maxChars int, required bool) {
+// guideText checks what every text part of the guide but the overview
+// shares: not blank (when required, or when given at all) and at most
+// maxChars characters, naming the part as what in every message. It reports
+// whether the part has text whose characters are worth checking.
+func guideText(s *issues, p, what, v string, maxChars int, required bool) bool {
 	if strings.TrimSpace(v) == "" {
 		if required || v != "" {
 			s.errf("V10", p, "%s must not be empty", what)
 		}
-		return
+		return false
 	}
 	if n := utf8.RuneCountInString(v); n > maxChars {
 		s.errf("V10", p, "%s is %d characters; the maximum is %d", what, n, maxChars)
+	}
+	return true
+}
+
+// guideLine checks one single-line part of the guide, naming it as what in
+// every message.
+func guideLine(s *issues, p, what, v string, maxChars int, required bool) {
+	if !guideText(s, p, what, v, maxChars, required) {
+		return
 	}
 	for _, r := range v {
 		if r < 0x20 || r == 0x7f || hiddenRune(r) {
