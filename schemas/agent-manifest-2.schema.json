@@ -125,8 +125,8 @@
         },
         "connect": {
           "type": "object",
-          "description": "Help per declared secret name: where to create the key and which scopes it needs. Every key must be a secret the release declares, in capabilities.secrets or a declared MCP server's secrets (V10; JSON schema cannot express that cross-reference).",
-          "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 300, "pattern": "^[^\\u0000-\\u001f\\u007f]*$" }
+          "description": "Help per declared secret name: where to create the key and which scopes it needs, in markdown a person reads (never the agent). At most 2,000 characters each; newlines and tabs are the only control characters it may carry (agentry#707). Every key must be a secret the release declares, in capabilities.secrets or a declared MCP server's secrets (V10; JSON schema cannot express that cross-reference).",
+          "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 2000, "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f]*$" }
         }
       }
     },
