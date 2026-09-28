@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // The guide block (V10; plan guided-runs.md §6, agentry#529): the author's
@@ -87,8 +88,18 @@ func TestGuideRefusals(t *testing.T) {
 		{"connect for an undeclared secret", func(g *Guide) { g.Connect = map[string]string{"AWS_SECRET": "x"} }, "guide.connect.AWS_SECRET"},
 		{"empty connect help", func(g *Guide) { g.Connect = map[string]string{"PAGERDUTY_TOKEN": ""} }, "guide.connect.PAGERDUTY_TOKEN"},
 		{"connect help too long", func(g *Guide) {
-			g.Connect = map[string]string{"PAGERDUTY_TOKEN": strings.Repeat("a", MaxGuideConnectChars+1)}
+			g.Connect = map[string]string{"PAGERDUTY_TOKEN": strings.Repeat("é", MaxGuideConnectChars+1)}
 		}, "guide.connect.PAGERDUTY_TOKEN"},
+		// agentry#707: the help is Markdown over several lines, and keeps
+		// the overview's character rule.
+		{"connect help of blank lines", func(g *Guide) { g.Connect = map[string]string{"PAGERDUTY_TOKEN": "\n\t\n"} }, "guide.connect.PAGERDUTY_TOKEN"},
+		{"connect help with ESC", func(g *Guide) {
+			g.Connect = map[string]string{"PAGERDUTY_TOKEN": "Create a key\x1b]8;;https://evil.example/\x07here"}
+		}, "guide.connect.PAGERDUTY_TOKEN"},
+		{"connect help with CR", func(g *Guide) { g.Connect = map[string]string{"PAGERDUTY_TOKEN": "read-only\rread-write"} }, "guide.connect.PAGERDUTY_TOKEN"},
+		{"connect help with NUL", func(g *Guide) { g.Connect = map[string]string{"PAGERDUTY_TOKEN": "a\x00b"} }, "guide.connect.PAGERDUTY_TOKEN"},
+		{"connect help with a C1 control", func(g *Guide) { g.Connect = map[string]string{"PAGERDUTY_TOKEN": "a\u0085b"} }, "guide.connect.PAGERDUTY_TOKEN"},
+		{"connect help with a zero-width space", func(g *Guide) { g.Connect = map[string]string{"PAGERDUTY_TOKEN": "read\u200B-only"} }, "guide.connect.PAGERDUTY_TOKEN"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -119,6 +130,34 @@ func TestGuideOverviewKeepsNewlinesAndTabs(t *testing.T) {
 		if is, ok := AsIssue(err); ok && is.Severity == SeverityError && is.Path == "guide.overview" {
 			t.Fatalf("a newline or a tab is refused: %v", is)
 		}
+	}
+}
+
+// TestGuideConnectIsMarkdownOfUpTo2000Characters (agentry#707, plan
+// builder-simplify.md D5, D11): a key's help is Markdown a person reads,
+// never an agent, of up to 2,000 characters (runes, not bytes), with line
+// breaks and tabs.
+func TestGuideConnectIsMarkdownOfUpTo2000Characters(t *testing.T) {
+	if MaxGuideConnectChars != 2000 {
+		t.Fatalf("MaxGuideConnectChars = %d, want 2000 (D11)", MaxGuideConnectChars)
+	}
+	md := "1. Open **PagerDuty → Integrations → API Access Keys**.\n" +
+		"2. Create a *read-only* key.\n\n" +
+		"\t- [Their guide](https://support.pagerduty.com/)\n"
+	for name, help := range map[string]string{
+		"markdown over lines":  md,
+		"2,000 characters":     md + strings.Repeat("é", MaxGuideConnectChars-utf8.RuneCountInString(md)),
+		"2,000 two-byte runes": strings.Repeat("é", MaxGuideConnectChars),
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := mustParse(t, guideYAML)
+			m.Guide.Connect = map[string]string{"PAGERDUTY_TOKEN": help}
+			for _, err := range Validate(m) {
+				if is, ok := AsIssue(err); ok && is.Severity == SeverityError && is.Path == "guide.connect.PAGERDUTY_TOKEN" {
+					t.Fatalf("valid help is refused: %v", is)
+				}
+			}
+		})
 	}
 }
 
@@ -212,7 +251,8 @@ func TestV2SchemaGuideShape(t *testing.T) {
 					} `json:"task"`
 					Connect struct {
 						AdditionalProperties struct {
-							MaxLength int `json:"maxLength"`
+							MaxLength int    `json:"maxLength"`
+							Pattern   string `json:"pattern"`
 						} `json:"additionalProperties"`
 					} `json:"connect"`
 				} `json:"properties"`
@@ -231,6 +271,10 @@ func TestV2SchemaGuideShape(t *testing.T) {
 	// control and DEL (agentry#558).
 	if want := `^[^\u0000-\u0008\u000b-\u001f\u007f]*$`; p.Overview.Pattern != want {
 		t.Errorf("schema overview pattern is %q, want %q", p.Overview.Pattern, want)
+	}
+	// A key's help is Markdown too, under the same character rule (agentry#707).
+	if p.Connect.AdditionalProperties.Pattern != p.Overview.Pattern {
+		t.Errorf("schema connect pattern is %q, want the overview's %q", p.Connect.AdditionalProperties.Pattern, p.Overview.Pattern)
 	}
 	for name, pair := range map[string][2]int{
 		"overview":     {p.Overview.MaxLength, MaxGuideOverviewBytes},
