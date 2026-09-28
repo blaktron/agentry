@@ -1009,22 +1009,20 @@ func (s *Server) uiBrand() ui.Brand {
 // socialProviders lists the configured individual-login providers in the
 // order the sign-in page offers them: the directory first when there is
 // one (it is THE way in under externalOnly, agentry#164), then the rest.
+// "Configured" is socialProviderConfig's, the start route's own check, as
+// /meta's list is (agentry#694), so the page offers no button that 404s.
 func (s *Server) socialProviders() []ui.Provider {
-	soc := s.cfg.Social
-	all := []struct {
-		id, label string
-		cfg       config.SocialProvider
-	}{
-		{"authentik", "your " + s.cfg.DisplayName() + " account", soc.Authentik},
-		{"google", "Google", soc.Google},
-		{"github", "GitHub", soc.GitHub},
-		{"microsoft", "Microsoft", soc.Microsoft},
-		{"openai", "OpenAI", soc.OpenAI},
-		{"claude", "Claude", soc.Claude},
+	all := []struct{ id, label string }{
+		{"authentik", "your " + s.cfg.DisplayName() + " account"},
+		{"google", "Google"},
+		{"github", "GitHub"},
+		{"microsoft", "Microsoft"},
+		{"openai", "OpenAI"},
+		{"claude", "Claude"},
 	}
 	var out []ui.Provider
 	for _, p := range all {
-		if p.cfg.ClientID != "" {
+		if _, ok := s.socialProviderConfig(p.id); ok {
 			out = append(out, ui.Provider{ID: p.id, Label: p.label})
 		}
 	}
