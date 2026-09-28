@@ -459,10 +459,12 @@ their own transaction.
 
 ### What the record says
 
-The receipt's `capabilities_enforced.secrets` names the release's declared
-secrets by name, never a value. Today it says `none declared` when only a
-declared MCP server declares a secret, although that secret was resolved and
-injected (agentry-cli#376).
+The receipt's `capabilities_enforced.secrets` names every declared secret by
+name, never a value: the release's own, and each declared MCP server's with
+that server. It says where each goes, and that the MCP gateway's container
+holds every value it injects. A sandbox host whose CLI predates
+agentry-cli#376 still writes `none declared` when only a declared server
+declares a secret, although that secret was resolved and injected.
 
 The registry's audit log, which platform staff read, holds three events.
 None carries a value:
