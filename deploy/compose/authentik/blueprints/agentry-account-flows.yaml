@@ -1055,8 +1055,11 @@ entries:
   # social provider created holds the empty string, which Django calls
   # usable, so "has a password" is non-empty and usable. The sign-in half
   # also gives every account that predates this its answer. It always
-  # passes: it exists for its side effect. The site's social flows bind it
-  # on their own login steps by this name.
+  # passes: it exists for its side effect. That matters where a binding
+  # runs in engine mode `any`, as the sign-in's login step does: a policy
+  # meant to skip that step must not be added beside this one without
+  # changing the mode. The site's social flows bind it on their own login
+  # steps by this name.
   - model: authentik_policies_expression.expressionpolicy
     id: policy-record-has-password
     identifiers:
@@ -1075,10 +1078,18 @@ entries:
         user = plan.context.get("pending_user")
         if user is None or not getattr(user, "pk", None):
             return True
-        has = bool(user.password) and user.has_usable_password()
-        if user.attributes.get("agentry_has_password") is not has:
+        # Read the account again: the copy in the plan was loaded at
+        # identification, and saving it would undo any other attribute
+        # changed since.
+        from authentik.core.models import User
+        fresh = User.objects.filter(pk=user.pk).first()
+        if fresh is None:
+            return True
+        has = bool(fresh.password) and fresh.has_usable_password()
+        if fresh.attributes.get("agentry_has_password") is not has:
+            fresh.attributes["agentry_has_password"] = has
+            fresh.save(update_fields=["attributes"])
             user.attributes["agentry_has_password"] = has
-            user.save(update_fields=["attributes"])
         return True
   - model: authentik_policies.policybinding
     identifiers:

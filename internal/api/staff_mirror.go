@@ -82,7 +82,8 @@ type directoryAccount struct {
 	UID    string
 	Active bool
 	// HasPassword is the directory's own record of whether the account has
-	// a password (agentry#706); nil when it has none yet.
+	// a password (agentry#706); nil when it has none yet. Only
+	// AccountsByEmail reads it; the mirror's group listing leaves it nil.
 	HasPassword *bool
 }
 
