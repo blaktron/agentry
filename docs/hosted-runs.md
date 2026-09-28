@@ -585,7 +585,8 @@ It runs only on sandbox hosts Agentry pushes to. When a host takes the
 draft, the registry mints it a credential for this one draft, keeps only its
 digest, and hands it to the host with the job. The host runs `agentry draft
 --hosted --output-format json` with the credential in the CLI's
-environment and no key of the platform's, and stops the draft when its
+environment beside the platform model's key, as for any run, and no Jev or
+search key, and stops the draft when its
 narrated tokens, priced at the two rates, pass its token credits. The
 Drafter's web tools send every search result, page and registry answer to
 the registry's [model-input routes](model-input.md) with that credential
