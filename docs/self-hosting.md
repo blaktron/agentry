@@ -1100,7 +1100,10 @@ page:
   files, and its own logo, at the same paths (the subjects already follow
   the variable). An authentik upgrade that moves its logo path would
   attach authentik's own logo instead, so check the path in the new
-  image's `authentik/stages/email/utils.py` when bumping it.
+  image's `authentik/stages/email/utils.py` when bumping it. The logo is a
+  single-file bind mount, so a changed PNG reaches authentik only when the
+  server and the worker are recreated (`up -d --force-recreate --no-deps
+  authentik-server authentik-worker`).
   `scripts/acceptance/directory-email.sh` renders the mails in the pinned
   image and checks that the attached logo is the core's.
   Before agentry#518 `/templates` was an empty named volume,
