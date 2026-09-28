@@ -210,15 +210,17 @@ guide:
     - Your negotiation playbook, if you have one
   files: "The contract, and optionally your playbook."   # ≤ 500 characters
   task: "e.g. 3-year SaaS subscription, 200 seats, EU data"   # the task field's placeholder, ≤ 200 characters
-  connect:                 # help per declared secret, ≤ 300 characters each
-    GITHUB_TOKEN: "A fine-grained token with read access to pull requests"
+  connect:                 # help per declared secret, markdown, ≤ 2,000 characters each
+    GITHUB_TOKEN: |
+      A fine-grained token with **read** access to pull requests:
+      GitHub → Settings → Developer settings → Fine-grained tokens.
 ```
 
 | Rule | |
 |---|---|
-| `overview` | markdown; clients render it with no HTML and no images |
-| `prepare`, `files`, `task`, `connect` values | one plain line each: no control characters and no format characters (bidi overrides, zero-width characters); a `prepare` item and a `connect` value may not be empty or blank |
-| `overview` characters | newlines and tabs, and no other control character (no ESC, CR, BEL, NUL, DEL or C1 control); no format character |
+| `overview`, `connect` values | markdown a person reads, never the agent; clients render it with no HTML and no images; a `connect` value is at most 2,000 characters (counted as characters, not bytes) and may not be empty or blank |
+| `prepare`, `files`, `task` | one plain line each: no control characters and no format characters (bidi overrides, zero-width characters); a `prepare` item may not be empty or blank |
+| `overview` and `connect` characters | newlines and tabs, and no other control character (no ESC, CR, BEL, NUL, DEL or C1 control); no format character |
 | `connect` keys | each must be a secret the release declares, under `capabilities.secrets` or a declared MCP server's `secrets` |
 | schema | v2 only; a v1 manifest carrying `guide` is refused (V1) |
 

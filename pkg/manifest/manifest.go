@@ -329,7 +329,8 @@ type Guide struct {
 	// Task is the placeholder for the task field.
 	Task string `yaml:"task,omitempty" json:"task,omitempty"`
 	// Connect is help per declared secret name: where to create the key,
-	// which scopes it needs. Every key must be a declared secret (V10).
+	// which scopes it needs, in markdown that may span lines. Every key must
+	// be a declared secret (V10).
 	Connect map[string]string `yaml:"connect,omitempty" json:"connect,omitempty"`
 }
 
