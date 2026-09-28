@@ -313,6 +313,11 @@ entries:
     id: stage-enrollment-login
     identifiers:
       name: agentry-enrollment-login
+    attrs:
+      # No authentik_device cookie (agentry#460): see the sign-in's login
+      # stage below.
+      remember_device: seconds=0
+      remember_me_offset: seconds=0
 
   # Authenticator (TOTP) setup inside enrollment (agentry#53, DEV-062):
   # every new account leaves the flow with an authenticator, which is what
@@ -438,6 +443,11 @@ entries:
     id: stage-recovery-login
     identifiers:
       name: agentry-recovery-login
+    attrs:
+      # No authentik_device cookie (agentry#460): see the sign-in's login
+      # stage below.
+      remember_device: seconds=0
+      remember_me_offset: seconds=0
 
   # When the user returns by clicking the emailed link, the flow plan is
   # restored and the identification stage has already been answered — this
@@ -707,6 +717,39 @@ entries:
       negate: false
       failure_result: true
       timeout: 5
+  # authentik's own "known device" cookie is off on every login stage
+  # (agentry#460; operator decision 2026-09-25, "do not create unrecoverable
+  # tokens"). A User Login stage's `remember_device` defaults to days=30 and
+  # writes `authentik_device`, a JWT the directory keeps no record of: it
+  # cannot be listed or revoked, and rotating AUTHENTIK_SECRET_KEY does not
+  # end it (its key derives from the installation's identifier). The
+  # remembered browser above is the one device credential. The shipped
+  # stages are restated by name, like the identification stage below;
+  # authentik's default blueprints name them with no attributes, so a
+  # re-apply of those does not undo this.
+  #
+  # `remember_me_offset` stays at its default of zero, and must: above zero
+  # the stage shows authentik's own "Remember me" box next to ours, and a
+  # login that carries that explicit choice never writes the device cookie
+  # whatever `remember_device` says, so the two settings interact silently.
+  - model: authentik_stages_user_login.userloginstage
+    identifiers:
+      name: default-authentication-login
+    attrs:
+      remember_device: seconds=0
+      remember_me_offset: seconds=0
+  - model: authentik_stages_user_login.userloginstage
+    identifiers:
+      name: default-source-authentication-login
+    attrs:
+      remember_device: seconds=0
+      remember_me_offset: seconds=0
+  - model: authentik_stages_user_login.userloginstage
+    identifiers:
+      name: default-source-enrollment-login
+    attrs:
+      remember_device: seconds=0
+      remember_me_offset: seconds=0
   - model: authentik_flows.flowstagebinding
     id: binding-signin-login
     identifiers:

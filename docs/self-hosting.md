@@ -1093,6 +1093,22 @@ page:
   `authentik-templates`; a stack upgraded from then keeps that volume
   unused (`docker volume rm <project>_authentik-templates` removes it),
   and a template an operator had put in it is no longer mounted.
+- **No authentik device cookie.** authentik's User Login stage writes its
+  own "known device" cookie, `authentik_device`, for 30 days by default. It
+  is a signed token the directory keeps no record of: it cannot be listed,
+  cannot be revoked per browser, and survives a password change, a logout
+  and a rotation of `AUTHENTIK_SECRET_KEY`, because its key derives from the
+  installation's identifier. The blueprint sets `remember_device:
+  seconds=0` on every login stage, the sign-in's, sign-up's and recovery's
+  and authentik's two source stages, so the directory never writes it
+  (agentry#460). The one browser credential is the remembered browser
+  below, which the registry records and a person can clear. Leave each
+  stage's `remember_me_offset` at zero as well: above zero authentik shows
+  its own "Remember me" box beside the remembered-browser one, and a login
+  made with that box's answer never writes the device cookie at all, so
+  the two settings interact without saying so.
+  `TestDirectoryIssuesNoDeviceCookie` fails if a login stage is added or
+  changed without both.
 - Both forms enforce the **same password policy** (12 characters minimum
   plus a zxcvbn strength score), because a password chosen during a reset
   should be held to the same bar as one chosen at sign-up. There is no
