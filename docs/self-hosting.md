@@ -1090,10 +1090,19 @@ page:
 - **The two mails** (the sign-up confirmation and the reset link) are the
   core's own templates in `deploy/compose/authentik/templates/agentry/`,
   mounted read-only at `/templates`, not authentik's stock ones: they say
-  Agentry, use the core's palette and carry no image. A deployment that
-  sets `AGENTRY_BRAND_NAME` to another name mounts its own copies of those
-  files at the same paths (the subjects already follow the variable).
-  `scripts/acceptance/directory-email.sh` renders them in the pinned image.
+  Agentry and use the core's palette. Their header shows the Agentry mark
+  inline (agentry#720): the HTML names `cid:logo`, and authentik attaches
+  the PNG at its logo path, `/web/dist/assets/icons/icon_left_brand.png`,
+  where the compose file mounts the core's
+  `deploy/compose/authentik/brand/mail-logo.png` in the server and the
+  worker. Nothing is a remote image. A deployment that sets
+  `AGENTRY_BRAND_NAME` to another name mounts its own copies of those
+  files, and its own logo, at the same paths (the subjects already follow
+  the variable). An authentik upgrade that moves its logo path would
+  attach authentik's own logo instead, so check the path in the new
+  image's `authentik/stages/email/utils.py` when bumping it.
+  `scripts/acceptance/directory-email.sh` renders the mails in the pinned
+  image and checks that the attached logo is the core's.
   Before agentry#518 `/templates` was an empty named volume,
   `authentik-templates`; a stack upgraded from then keeps that volume
   unused (`docker volume rm <project>_authentik-templates` removes it),

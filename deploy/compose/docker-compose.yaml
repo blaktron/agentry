@@ -187,6 +187,9 @@ services:
       # flows' email stages name agentry/*.html here, not authentik's stock
       # templates.
       - ./authentik/templates:/templates:ro
+      # The mark the mails show inline (agentry#720): authentik attaches the
+      # PNG at this path as cid:logo, so the core's mark replaces authentik's.
+      - ./authentik/brand/mail-logo.png:/web/dist/assets/icons/icon_left_brand.png:ro
       # Declarative configuration, applied on boot and re-applied when the
       # files change (idempotent): the enrollment flow (DEV-062) lives here.
       - ./authentik/blueprints:/blueprints/custom:ro
@@ -213,6 +216,9 @@ services:
       # flows' email stages name agentry/*.html here, not authentik's stock
       # templates.
       - ./authentik/templates:/templates:ro
+      # The mark the mails show inline (agentry#720): authentik attaches the
+      # PNG at this path as cid:logo, so the core's mark replaces authentik's.
+      - ./authentik/brand/mail-logo.png:/web/dist/assets/icons/icon_left_brand.png:ro
       # Declarative configuration, applied on boot and re-applied when the
       # files change (idempotent): the enrollment flow (DEV-062) lives here.
       - ./authentik/blueprints:/blueprints/custom:ro
