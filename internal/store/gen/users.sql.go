@@ -275,8 +275,9 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow
 	return i, err
 }
 
-const getUserDirectorySubject = `-- name: GetUserDirectorySubject :one
-SELECT substring(i.subject from 11)::text AS directory_subject
+const getUserDirectoryLink = `-- name: GetUserDirectoryLink :one
+SELECT substring(i.subject from 11)::text AS directory_subject,
+       COALESCE(i.directory_account_id, 0)::bigint AS directory_account_id
 FROM identities i
 WHERE i.user_id = $1 AND i.provider_kind = 'social'
   AND i.sso_connection_id IS NULL AND i.subject LIKE 'authentik:%'
@@ -284,15 +285,22 @@ ORDER BY i.created_at, i.id
 LIMIT 1
 `
 
-// The directory subject the account is linked to by a directory sign-in,
-// "authentik:" stripped (agentry#706): the uid that picks its directory
-// account, since the directory does not keep addresses unique. The oldest
-// link, so the answer does not move while the account keeps one.
-func (q *Queries) GetUserDirectorySubject(ctx context.Context, userID uuid.UUID) (string, error) {
-	row := q.db.QueryRow(ctx, getUserDirectorySubject, userID)
-	var directory_subject string
-	err := row.Scan(&directory_subject)
-	return directory_subject, err
+type GetUserDirectoryLinkRow struct {
+	DirectorySubject   string `json:"directory_subject"`
+	DirectoryAccountID int64  `json:"directory_account_id"`
+}
+
+// The directory account the account is linked to by a directory sign-in
+// (agentry#706, agentry#727): its subject, "authentik:" stripped (the uid
+// the directory reports for it), and the directory's own id for it, learnt
+// at sign-in (0 until the identity signs in under a directory that sends
+// it). The oldest link, so the answer does not move while the account
+// keeps one.
+func (q *Queries) GetUserDirectoryLink(ctx context.Context, userID uuid.UUID) (GetUserDirectoryLinkRow, error) {
+	row := q.db.QueryRow(ctx, getUserDirectoryLink, userID)
+	var i GetUserDirectoryLinkRow
+	err := row.Scan(&i.DirectorySubject, &i.DirectoryAccountID)
+	return i, err
 }
 
 const listPersonalNamespaceAgents = `-- name: ListPersonalNamespaceAgents :many
@@ -486,6 +494,25 @@ type ReleaseHandleParams struct {
 // keeps the global namespace free of impersonation of a deleted account.
 func (q *Queries) ReleaseHandle(ctx context.Context, arg ReleaseHandleParams) error {
 	_, err := q.db.Exec(ctx, releaseHandle, arg.ID, arg.Handle)
+	return err
+}
+
+const setSocialIdentityDirectoryAccount = `-- name: SetSocialIdentityDirectoryAccount :exec
+UPDATE identities SET directory_account_id = $2
+WHERE sso_connection_id IS NULL AND provider_kind = 'social' AND subject = $1
+  AND directory_account_id IS DISTINCT FROM $2
+`
+
+type SetSocialIdentityDirectoryAccountParams struct {
+	Subject            string `json:"subject"`
+	DirectoryAccountID *int64 `json:"directory_account_id"`
+}
+
+// Records the directory's id for the account a directory identity signs in
+// as (agentry#727), from the directory's signed ID token; moves it when the
+// directory reports another.
+func (q *Queries) SetSocialIdentityDirectoryAccount(ctx context.Context, arg SetSocialIdentityDirectoryAccountParams) error {
+	_, err := q.db.Exec(ctx, setSocialIdentityDirectoryAccount, arg.Subject, arg.DirectoryAccountID)
 	return err
 }
 

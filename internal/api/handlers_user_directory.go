@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"regexp"
@@ -63,7 +64,12 @@ func (s *Server) GetUserDirectory(w http.ResponseWriter, r *http.Request) {
 			problemInternal(w, r)
 			return
 		}
-		devs, err := lister.DevicesByEmail(r.Context(), row.Email)
+		link, err := s.directoryLinkFor(r.Context(), p.UserID, row.Email)
+		if err != nil {
+			problemInternal(w, r)
+			return
+		}
+		devs, err := lister.Devices(r.Context(), link)
 		if err != nil {
 			s.log.WarnContext(r.Context(), "user directory: devices", "err", err)
 			out.DevicesError = str("The directory did not answer, so the authenticator list is missing. The links still work.")
@@ -78,7 +84,7 @@ func (s *Server) GetUserDirectory(w http.ResponseWriter, r *http.Request) {
 			}
 			out.Devices = &list
 		}
-		s.addSignInFacts(r, row.Email, &out)
+		s.addSignInFacts(r, link, &out)
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -87,20 +93,12 @@ func (s *Server) GetUserDirectory(w http.ResponseWriter, r *http.Request) {
 // answer (agentry#706) for the account the caller's directory sign-in is
 // linked to. Anything the directory does not answer is left out: the page
 // shows nothing rather than a guess.
-func (s *Server) addSignInFacts(r *http.Request, email string, out *UserDirectory) {
+func (s *Server) addSignInFacts(r *http.Request, link directoryLink, out *UserDirectory) {
 	facts, ok := s.dirEraser.(directorySignInFacts)
 	if !ok {
 		return
 	}
-	p := principalFrom(r.Context())
-	uid, err := s.q().GetUserDirectorySubject(r.Context(), p.UserID)
-	if err != nil {
-		if !errors.Is(err, pgx.ErrNoRows) {
-			s.log.WarnContext(r.Context(), "user directory: linked subject", "err", err)
-		}
-		return
-	}
-	f, err := facts.SignInFacts(r.Context(), email, uid)
+	f, err := facts.SignInFacts(r.Context(), link)
 	if err != nil {
 		// What was read is still reported: the password answer does not
 		// depend on the connections read.
@@ -113,6 +111,22 @@ func (s *Server) addSignInFacts(r *http.Request, email string, out *UserDirector
 		}{Id: f.FirstSource.Slug, Name: f.FirstSource.Name}
 	}
 	out.HasPassword = f.HasPassword
+}
+
+// directoryLinkFor is how the registry names the caller's directory account
+// (agentry#727): the directory's id and uid from the oldest directory
+// sign-in linked to it, and the registry's address as the last resort.
+func (s *Server) directoryLinkFor(ctx context.Context, userID uuid.UUID, email string) (directoryLink, error) {
+	link := directoryLink{Email: email}
+	row, err := s.q().GetUserDirectoryLink(ctx, userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return link, nil
+	}
+	if err != nil {
+		return link, err
+	}
+	link.UID, link.AccountID = row.DirectorySubject, row.DirectoryAccountID
+	return link, nil
 }
 
 // DeleteUserDirectoryDevice implements DELETE /user/directory/devices/{kind}/{deviceId}
@@ -140,7 +154,12 @@ func (s *Server) DeleteUserDirectoryDevice(w http.ResponseWriter, r *http.Reques
 		problemInternal(w, r)
 		return
 	}
-	deleted, err := lister.DeleteDevice(r.Context(), row.Email, kind, deviceId)
+	link, err := s.directoryLinkFor(r.Context(), p.UserID, row.Email)
+	if err != nil {
+		problemInternal(w, r)
+		return
+	}
+	deleted, err := lister.DeleteDevice(r.Context(), link, kind, deviceId)
 	if err != nil {
 		s.log.WarnContext(r.Context(), "user directory: delete device", "err", err)
 		writeProblem(w, r, http.StatusBadGateway, "directory-unavailable", "Directory unavailable", "The directory did not answer. Try again.")

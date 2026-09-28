@@ -8,6 +8,7 @@ package oidc
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -67,6 +68,12 @@ type Claims struct {
 	// the registry tells a fresh sign-in from a replayed session
 	// (agentry#670).
 	AuthTime time.Time
+	// DirectoryAccountID is the directory's `agentry_directory_id` claim
+	// (agentry#727): the directory's own id for the account signing in, sent
+	// by the same `agentry` scope. It lets the registry read that account
+	// without narrowing by an address the directory does not keep unique.
+	// Zero when absent or not a positive whole number.
+	DirectoryAccountID int64
 }
 
 // New builds the RP. coreoidc.NewProvider performs discovery and pins the
@@ -148,6 +155,7 @@ func (rp *RP) Exchange(ctx context.Context, code, verifier, expectedNonce string
 		Groups        any    `json:"groups"`
 		PreferredUser string `json:"preferred_username"`
 		RememberDev   any    `json:"agentry_remember_device"`
+		DirectoryID   any    `json:"agentry_directory_id"`
 		AuthTime      int64  `json:"auth_time"`
 	}
 	if err := idToken.Claims(&raw); err != nil {
@@ -172,6 +180,7 @@ func (rp *RP) Exchange(ctx context.Context, code, verifier, expectedNonce string
 	if raw.AuthTime > 0 {
 		c.AuthTime = time.Unix(raw.AuthTime, 0)
 	}
+	c.DirectoryAccountID = asAccountID(raw.DirectoryID)
 	if c.Subject == "" {
 		c.Subject = raw.Sub
 	}
@@ -179,6 +188,17 @@ func (rp *RP) Exchange(ctx context.Context, code, verifier, expectedNonce string
 		return nil, fmt.Errorf("oidc: id_token has no subject")
 	}
 	return c, nil
+}
+
+// asAccountID reads a directory account id: a JSON number that is a
+// positive whole number a float64 holds exactly. Anything else is 0, which
+// the registry treats as "not sent".
+func asAccountID(v any) int64 {
+	f, ok := v.(float64)
+	if !ok || f < 1 || f > 1<<53 || f != math.Trunc(f) {
+		return 0
+	}
+	return int64(f)
 }
 
 // asStrings reads amr as the JSON array RFC 8176 specifies, tolerating a

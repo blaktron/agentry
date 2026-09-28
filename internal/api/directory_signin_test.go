@@ -29,6 +29,17 @@ func fakeSignInDirectory(t *testing.T, attr any) *httptest.Server {
 			},
 		})
 	})
+	mux.HandleFunc("GET /api/v3/core/users/{pk}/", func(w http.ResponseWriter, r *http.Request) {
+		if r.PathValue("pk") != "12" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		pat := map[string]any{"pk": 12, "email": "pat@example.test", "uid": "uid-pat", "type": "internal", "is_active": true, "attributes": map[string]any{}}
+		if attr != nil {
+			pat["attributes"] = map[string]any{"agentry_has_password": attr}
+		}
+		_ = json.NewEncoder(w).Encode(pat)
+	})
 	mux.HandleFunc("GET /api/v3/sources/user_connections/oauth/", func(w http.ResponseWriter, r *http.Request) {
 		// The API ignores unknown filters and would answer every account's
 		// connections; the client must ask by user pk.
@@ -67,24 +78,37 @@ func TestDirectorySignInFacts(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			a := newAuthentikEraser(fakeSignInDirectory(t, tc.attr).URL, "tok")
-			f, err := a.SignInFacts(ctx, "pat@example.test", "uid-pat")
-			if err != nil {
-				t.Fatal(err)
-			}
-			if f.FirstSource == nil || f.FirstSource.Slug != "google" || f.FirstSource.Name != "Google" {
-				t.Fatalf("first source = %+v, want google/Google (the uid-linked account's oldest)", f.FirstSource)
-			}
-			if (f.HasPassword == nil) != (tc.want == nil) || (f.HasPassword != nil && *f.HasPassword != *tc.want) {
-				t.Fatalf("hasPassword = %v, want %v", f.HasPassword, tc.want)
+			for _, link := range []directoryLink{
+				// Signed in before the directory sent its id: the uid at the address.
+				{UID: "uid-pat", Email: "pat@example.test"},
+				// The directory's id, the registry's address being another
+				// (agentry#727: the bootstrap admin on dev).
+				{AccountID: 12, UID: "uid-pat", Email: "pat@authentik.social.local"},
+			} {
+				f, err := a.SignInFacts(ctx, link)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if f.FirstSource == nil || f.FirstSource.Slug != "google" || f.FirstSource.Name != "Google" {
+					t.Fatalf("%+v: first source = %+v, want google/Google (the linked account's oldest)", link, f.FirstSource)
+				}
+				if (f.HasPassword == nil) != (tc.want == nil) || (f.HasPassword != nil && *f.HasPassword != *tc.want) {
+					t.Fatalf("%+v: hasPassword = %v, want %v", link, f.HasPassword, tc.want)
+				}
 			}
 		})
 	}
-	t.Run("no account carries the linked uid: nothing is reported", func(t *testing.T) {
+	t.Run("no account the link names: nothing is reported", func(t *testing.T) {
 		a := newAuthentikEraser(fakeSignInDirectory(t, true).URL, "tok")
-		for _, uid := range []string{"", "uid-nobody"} {
-			f, err := a.SignInFacts(ctx, "pat@example.test", uid)
+		for _, link := range []directoryLink{
+			{Email: "pat@example.test"}, // no directory sign-in: an address alone never picks it
+			{UID: "uid-nobody", Email: "pat@example.test"},
+			{AccountID: 12, UID: "uid-other", Email: "pat@example.test"}, // the id holds another account now
+			{AccountID: 99, UID: "uid-pat", Email: "pat@example.test"},   // the account is gone
+		} {
+			f, err := a.SignInFacts(ctx, link)
 			if err != nil || f.FirstSource != nil || f.HasPassword != nil {
-				t.Fatalf("uid %q: facts = %+v (err %v), want none", uid, f, err)
+				t.Fatalf("%+v: facts = %+v (err %v), want none", link, f, err)
 			}
 		}
 	})

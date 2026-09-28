@@ -32,17 +32,28 @@ UPDATE users SET totp_secret_enc = $2, totp_enabled = false, updated_at = now() 
 -- name: EnableUserTOTP :exec
 UPDATE users SET totp_enabled = true, updated_at = now() WHERE id = $1;
 
--- name: GetUserDirectorySubject :one
--- The directory subject the account is linked to by a directory sign-in,
--- "authentik:" stripped (agentry#706): the uid that picks its directory
--- account, since the directory does not keep addresses unique. The oldest
--- link, so the answer does not move while the account keeps one.
-SELECT substring(i.subject from 11)::text AS directory_subject
+-- name: GetUserDirectoryLink :one
+-- The directory account the account is linked to by a directory sign-in
+-- (agentry#706, agentry#727): its subject, "authentik:" stripped (the uid
+-- the directory reports for it), and the directory's own id for it, learnt
+-- at sign-in (0 until the identity signs in under a directory that sends
+-- it). The oldest link, so the answer does not move while the account
+-- keeps one.
+SELECT substring(i.subject from 11)::text AS directory_subject,
+       COALESCE(i.directory_account_id, 0)::bigint AS directory_account_id
 FROM identities i
 WHERE i.user_id = $1 AND i.provider_kind = 'social'
   AND i.sso_connection_id IS NULL AND i.subject LIKE 'authentik:%'
 ORDER BY i.created_at, i.id
 LIMIT 1;
+
+-- name: SetSocialIdentityDirectoryAccount :exec
+-- Records the directory's id for the account a directory identity signs in
+-- as (agentry#727), from the directory's signed ID token; moves it when the
+-- directory reports another.
+UPDATE identities SET directory_account_id = $2
+WHERE sso_connection_id IS NULL AND provider_kind = 'social' AND subject = $1
+  AND directory_account_id IS DISTINCT FROM $2;
 
 -- name: ListStaffMirrorAccounts :many
 -- Every account that is platform staff and active, with its verified
