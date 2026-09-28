@@ -90,7 +90,8 @@ func (s *Server) SamlAcs(w http.ResponseWriter, r *http.Request, org OrgHandle) 
 	// agentry#361 this path creates nobody, and an existing member's name
 	// is their own to set.
 	s.establishSSOSession(w, r, orgRow, connID, "saml", res.Subject, res.Email,
-		&samlSessionLink{NameID: res.NameID, SessionIndex: res.SessionIndex}, next)
+		&samlSessionLink{NameID: res.NameID, SessionIndex: res.SessionIndex}, next,
+		res.MFAAsserted())
 }
 
 // SamlSloRedirect implements GET /orgs/{org}/sso/saml/slo: the HTTP-Redirect
