@@ -91,7 +91,7 @@ func (s *Server) SamlAcs(w http.ResponseWriter, r *http.Request, org OrgHandle) 
 	// is their own to set.
 	s.establishSSOSession(w, r, orgRow, connID, "saml", res.Subject, res.Email,
 		&samlSessionLink{NameID: res.NameID, SessionIndex: res.SessionIndex}, next,
-		res.MFAAsserted()) // the signed assertion names a second factor (agentry#705)
+		res.MFAAsserted())
 }
 
 // SamlSloRedirect implements GET /orgs/{org}/sso/saml/slo: the HTTP-Redirect

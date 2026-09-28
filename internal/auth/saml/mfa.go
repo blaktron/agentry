@@ -1,14 +1,18 @@
 package saml
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
-// MFAAuthnContexts are the AuthnContextClassRef values that say the IdP
+// mfaAuthnContexts are the AuthnContextClassRef values that say the IdP
 // authenticated the person with more than one factor (agentry#705). An
 // assertion naming one is second-factor evidence for the public-publish gate,
 // the organization-SSO counterpart of a directory ID token whose `amr` names
 // a factor (DEV-080). The list is deliberately short: a password class,
-// however it travelled, is one factor. docs/self-hosting.md repeats it.
-var MFAAuthnContexts = []string{
+// however it travelled, is one factor. docs/self-hosting.md lists the same
+// values for operators; change both together.
+var mfaAuthnContexts = []string{
 	"https://refeds.org/profile/mfa",                    // REFEDS MFA profile
 	"http://schemas.microsoft.com/claims/multipleauthn", // AD FS, Entra ID
 	"urn:oasis:names:tc:SAML:2.0:ac:classes:MobileTwoFactorContract",
@@ -18,8 +22,9 @@ var MFAAuthnContexts = []string{
 
 // EntraAuthnMethodsAttribute is the attribute Entra ID puts its
 // authentication methods in; it names multipleauthn after an MFA sign-in even
-// when the context class says only password. It is inside the signed
-// assertion, like the context.
+// when the context class says only password. It counts because
+// ParseAndValidate reads attributes only from the assertion crewjam has
+// verified the signature of, as it does the context class.
 const EntraAuthnMethodsAttribute = "http://schemas.microsoft.com/claims/authnmethodsreferences"
 
 // MFAAsserted reports whether the validated assertion names a second factor.
@@ -39,11 +44,5 @@ func (r *Result) MFAAsserted() bool {
 }
 
 func isMFAContext(v string) bool {
-	v = strings.TrimSpace(v)
-	for _, m := range MFAAuthnContexts {
-		if v == m {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(mfaAuthnContexts, strings.TrimSpace(v))
 }

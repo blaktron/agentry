@@ -181,7 +181,6 @@ func (s *Server) OidcCallback(w http.ResponseWriter, r *http.Request, org OrgHan
 		problemUnauthorized(w, r, msg)
 		return
 	}
-	// The verified ID token's `amr`, by the directory's rule (agentry#705).
 	s.establishSSOSession(w, r, orgRow, connID, "oidc", claims.Subject, claims.Email, nil, st.Next,
 		oidcrp.AMRNamesSecondFactor(claims.AMR))
 }
