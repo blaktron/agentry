@@ -1,9 +1,11 @@
 package api_test
 
 import (
+	"io"
 	"net/http"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -89,6 +91,18 @@ func TestMetaListsTheSignInProvidersStartRedirectsFor(t *testing.T) {
 		cfg.Social.OpenAI = config.SocialProvider{ClientID: "openai-client", ClientSecret: "openai-secret"}
 	}, func(s *api.Server) { s.SetOIDCHTTPClient(idp.srv.Client()) })
 	metaAgreesWithStart(t, env, []string{"github", "authentik"})
+
+	// The core's own sign-in page offers the same providers: no button that
+	// would answer 404.
+	res := env.do(anonymous, http.MethodGet, "/ui/login", nil)
+	body, _ := io.ReadAll(res.Body)
+	_ = res.Body.Close()
+	for _, p := range specSignInProviders(t) {
+		offered := strings.Contains(string(body), "/api/v1/auth/oidc/"+p+"/start")
+		if want := p == "github" || p == "authentik"; offered != want {
+			t.Errorf("/ui/login offers %s: %v, want %v", p, offered, want)
+		}
+	}
 }
 
 // Every provider the spec names can be listed, in the spec's order.
