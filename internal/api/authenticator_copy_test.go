@@ -17,7 +17,10 @@ import (
 // id keep their names, since clients depend on them; only the prose moved.
 // This keeps the prose from drifting back.
 
-var deviceWordRe = regexp.MustCompile(`(?i)\bdevices?\b`)
+var (
+	deviceWordRe       = regexp.MustCompile(`(?i)\bdevices?\b`)
+	rememberedDeviceRe = regexp.MustCompile(`(?i)\bremembered devices?\b`)
+)
 
 // clientIdentifiersRe matches the names clients depend on, which keep "device".
 var clientIdentifiersRe = regexp.MustCompile("`[^`]*`|/user/directory/devices/\\{kind\\}/\\{deviceId\\}")
@@ -45,7 +48,7 @@ func TestEnrolledAuthenticatorProseSaysAuthenticator(t *testing.T) {
 		if n.Kind == 0 {
 			t.Fatalf("the spec has no %s", where)
 		}
-		for _, text := range prose(&n) {
+		for _, text := range specProse(&n) {
 			if deviceWordRe.MatchString(clientIdentifiersRe.ReplaceAllString(text, "")) {
 				t.Errorf("%s says device for an authenticator: %q", where, text)
 			}
@@ -56,16 +59,24 @@ func TestEnrolledAuthenticatorProseSaysAuthenticator(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	visible := regexp.MustCompile(`\{\{.*?\}\}|<[^>]*>`).ReplaceAllString(string(page), " ")
-	for _, line := range strings.Split(visible, "\n") {
-		if deviceWordRe.MatchString(line) {
-			t.Errorf("the account page says device: %q", strings.TrimSpace(line))
+	// What a reader sees or hears: the text between tags, and the labels
+	// inside them. A remembered device is the right word for that
+	// credential, should the page ever list them.
+	html := regexp.MustCompile(`\{\{.*?\}\}`).ReplaceAllString(string(page), " ")
+	var heard []string
+	for _, m := range regexp.MustCompile(`(?:title|aria-label|placeholder)="([^"]*)"`).FindAllStringSubmatch(html, -1) {
+		heard = append(heard, m[1])
+	}
+	text := regexp.MustCompile(`<[^>]*>`).ReplaceAllString(html, "\n")
+	for _, line := range append(strings.Split(text, "\n"), heard...) {
+		if deviceWordRe.MatchString(rememberedDeviceRe.ReplaceAllString(line, "")) {
+			t.Errorf("the account page says device for an authenticator: %q", strings.TrimSpace(line))
 		}
 	}
 }
 
-// prose collects every summary and description under n.
-func prose(n *yaml.Node) []string {
+// specProse collects every summary and description under n.
+func specProse(n *yaml.Node) []string {
 	var out []string
 	if n.Kind == yaml.MappingNode {
 		for i := 0; i+1 < len(n.Content); i += 2 {
@@ -75,7 +86,7 @@ func prose(n *yaml.Node) []string {
 		}
 	}
 	for _, c := range n.Content {
-		out = append(out, prose(c)...)
+		out = append(out, specProse(c)...)
 	}
 	return out
 }
