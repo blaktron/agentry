@@ -1,0 +1,321 @@
+[
+  {
+    "fixture": "csv-quality",
+    "class": "good",
+    "what": "the Drafter's draft as it came back"
+  },
+  {
+    "fixture": "csv-quality",
+    "class": "off_task",
+    "draftFrom": "dependency-advisories",
+    "what": "the whole draft of another fixture: a lockfile advisory check"
+  },
+  {
+    "fixture": "csv-quality",
+    "class": "partial",
+    "instructionFile": "partial.AGENT.md",
+    "what": "the instruction checks missing values and formats, and never looks for duplicate rows"
+  },
+  {
+    "fixture": "csv-quality",
+    "class": "undeclared",
+    "replace": [
+      [
+        "9. **Write the report.**",
+        "9. **Look up each column's expected format** by fetching `https://api.datadictionary.example.com/v1/columns?name=<column>` for every column name.\n10. **Write the report.**"
+      ]
+    ],
+    "what": "a step fetches from a web API, where the manifest declares no network"
+  },
+  {
+    "fixture": "csv-quality",
+    "class": "redundant",
+    "description": "Check a CSV file I add for data-quality problems: missing values, duplicate rows, and columns whose values are not all the same format. Report the problems per column. The email column must be unique, and the signup_date column must be all YYYY-MM-DD.",
+    "what": "the description names the columns that must be unique and one format; the draft still asks which"
+  },
+  {
+    "fixture": "dependency-advisories",
+    "class": "good",
+    "what": "the Drafter's draft as it came back"
+  },
+  {
+    "fixture": "dependency-advisories",
+    "class": "off_task",
+    "draftFrom": "feed-digest",
+    "what": "the whole draft of another fixture: an RSS digest"
+  },
+  {
+    "fixture": "dependency-advisories",
+    "class": "partial",
+    "instructionFile": "partial.AGENT.md",
+    "what": "the instruction lists the vulnerable packages and never says what to upgrade them to"
+  },
+  {
+    "fixture": "dependency-advisories",
+    "class": "undeclared",
+    "capabilities": "capabilities:\n  network:\n    egress: none\n  filesystem:\n    read: none\n    write: none\n  exec: none\n  dataAccess:\n    - code\n",
+    "what": "the manifest declares no MCP server, and the instruction calls the OSV server's tools"
+  },
+  {
+    "fixture": "dependency-advisories",
+    "class": "redundant",
+    "description": "Check my project's lockfiles for packages with known vulnerabilities and tell me what to upgrade them to. Only the Python and Go lockfiles, ignore dev dependencies, and only high and critical advisories.",
+    "what": "the description gives the scope; the draft still asks for anything to narrow down"
+  },
+  {
+    "fixture": "feed-digest",
+    "class": "good",
+    "what": "the Drafter's draft as it came back"
+  },
+  {
+    "fixture": "feed-digest",
+    "class": "off_task",
+    "draftFrom": "csv-quality",
+    "what": "the whole draft of another fixture: a CSV quality check"
+  },
+  {
+    "fixture": "feed-digest",
+    "class": "partial",
+    "instructionFile": "partial.AGENT.md",
+    "what": "the instruction reads only the first feed of those listed"
+  },
+  {
+    "fixture": "feed-digest",
+    "class": "undeclared",
+    "capabilities": "capabilities:\n  network:\n    egress: none\n  filesystem:\n    read: none\n    write: none\n  exec: none\n  dataAccess:\n    - other\n",
+    "what": "the manifest declares no network, and the instruction calls api.rss2json.com"
+  },
+  {
+    "fixture": "feed-digest",
+    "class": "redundant",
+    "description": "Read the RSS feeds of https://go.dev/blog/feed.atom and https://github.blog/feed/ and write a Markdown digest of this week's posts.",
+    "what": "the description gives the feeds and the format; the draft still asks for both"
+  },
+  {
+    "fixture": "github-pr-review",
+    "class": "good",
+    "what": "the Drafter's draft as it came back"
+  },
+  {
+    "fixture": "github-pr-review",
+    "class": "off_task",
+    "draftFrom": "interview-practice",
+    "what": "the whole draft of another fixture: an interview coach"
+  },
+  {
+    "fixture": "github-pr-review",
+    "class": "partial",
+    "instructionFile": "partial.AGENT.md",
+    "what": "the instruction lists the risks and never the questions to ask the author"
+  },
+  {
+    "fixture": "github-pr-review",
+    "class": "undeclared",
+    "capabilities": "capabilities:\n  network:\n    egress: none\n  filesystem:\n    read: none\n    write: none\n  exec: none\n  dataAccess:\n    - code\n",
+    "what": "the manifest declares no MCP server and no secret, and the instruction calls the GitHub server's tools"
+  },
+  {
+    "fixture": "github-pr-review",
+    "class": "redundant",
+    "description": "Review pull request 482 on github.com/blaktron/agentry: read its diff and its comments and write a review summary that lists the risks and the questions to ask the author.",
+    "what": "the description names the repository and the pull request; the draft still asks for both"
+  },
+  {
+    "fixture": "interview-practice",
+    "class": "good",
+    "what": "the Drafter's draft as it came back"
+  },
+  {
+    "fixture": "interview-practice",
+    "class": "off_task",
+    "draftFrom": "github-pr-review",
+    "what": "the whole draft of another fixture: a pull request review"
+  },
+  {
+    "fixture": "interview-practice",
+    "class": "partial",
+    "instructionFile": "partial.AGENT.md",
+    "what": "the instruction asks the questions and gives no feedback on the answers"
+  },
+  {
+    "fixture": "interview-practice",
+    "class": "undeclared",
+    "replace": [
+      [
+        "2. **Plan the session.** Choose 6 questions for that role:",
+        "2. **Plan the session.** Fetch the company's real interview questions from `https://api.interviewbank.example.com/v2/questions?company=<company>&role=<role>`, then choose 6 questions for that role:"
+      ]
+    ],
+    "what": "a step fetches from a web API, where the manifest declares no network"
+  },
+  {
+    "fixture": "interview-practice",
+    "class": "redundant",
+    "description": "A conversation that helps me practise for a job interview for a senior backend engineer role at a fintech, at the final-round stage: it asks me questions, one at a time, and gives feedback on each answer.",
+    "what": "the description gives the role, the sector and the stage; the draft still asks for them"
+  },
+  {
+    "fixture": "invoice-extract",
+    "class": "good",
+    "what": "the Drafter's draft as it came back"
+  },
+  {
+    "fixture": "invoice-extract",
+    "class": "off_task",
+    "draftFrom": "meeting-actions",
+    "what": "the whole draft of another fixture: meeting notes to action items"
+  },
+  {
+    "fixture": "invoice-extract",
+    "class": "partial",
+    "instructionFile": "partial.AGENT.md",
+    "what": "the instruction extracts the number, date, vendor and totals, and never the line items"
+  },
+  {
+    "fixture": "invoice-extract",
+    "class": "undeclared",
+    "replace": [
+      [
+        "6. A file that holds several invoices",
+        "6. Check each vendor's tax id by fetching `https://api.vatcheck.example.eu/v1/check?id=<taxId>` and record whether it is valid.\n7. A file that holds several invoices"
+      ],
+      [
+        "7. Build the document below",
+        "8. Build the document below"
+      ]
+    ],
+    "what": "a step fetches from a web API, where the manifest declares no network"
+  },
+  {
+    "fixture": "invoice-extract",
+    "class": "redundant",
+    "description": "Extract the invoice number, date, vendor, line items and totals from the invoices I add, which are already text, and return them as JSON. They are all in EUR, with the day before the month in every date, and I want every file.",
+    "what": "the description gives the currency, the date order and the files; the guide still asks the person to say them in the task"
+  },
+  {
+    "fixture": "meeting-actions",
+    "class": "good",
+    "what": "the Drafter's draft as it came back"
+  },
+  {
+    "fixture": "meeting-actions",
+    "class": "off_task",
+    "draftFrom": "invoice-extract",
+    "what": "the whole draft of another fixture: invoice fields to JSON"
+  },
+  {
+    "fixture": "meeting-actions",
+    "class": "partial",
+    "instructionFile": "partial.AGENT.md",
+    "what": "the instruction lists the action items and never the decisions"
+  },
+  {
+    "fixture": "meeting-actions",
+    "class": "undeclared",
+    "replace": [
+      [
+        "8. **Write the report** in the format",
+        "8. **Create the tasks.** For each action item, create a task in the team's tracker by posting it to `https://api.tasktracker.example.com/v1/tasks` with its owner and due date.\n9. **Write the report** in the format"
+      ]
+    ],
+    "what": "a step posts each action to a web tracker, where the manifest declares no network"
+  },
+  {
+    "fixture": "meeting-actions",
+    "class": "redundant",
+    "description": "Turn the meeting notes I give it into a list of decisions and action items, each action with an owner and a due date when the notes say one. Return the list as JSON.",
+    "what": "the description gives the format; the draft still asks which format"
+  },
+  {
+    "fixture": "release-notes",
+    "class": "good",
+    "what": "the Drafter's draft as it came back"
+  },
+  {
+    "fixture": "release-notes",
+    "class": "off_task",
+    "draftFrom": "slack-standup",
+    "what": "the whole draft of another fixture: a Slack standup post"
+  },
+  {
+    "fixture": "release-notes",
+    "class": "partial",
+    "instructionFile": "partial.AGENT.md",
+    "what": "the instruction groups into features and fixes, and has no breaking-changes group"
+  },
+  {
+    "fixture": "release-notes",
+    "class": "undeclared",
+    "replace": [
+      [
+        "8. Write the document with `write_report` to `release-notes.md`.",
+        "8. Link each `(#n)` reference to its pull request by fetching `https://api.github.com/repos/<owner>/<repo>/pulls/<n>` for its title.\n9. Write the document with `write_report` to `release-notes.md`."
+      ]
+    ],
+    "what": "a step fetches from GitHub's API, where the manifest declares no network"
+  },
+  {
+    "fixture": "release-notes",
+    "class": "redundant",
+    "description": "Turn a list of commit messages I paste in into the release notes for version 2.4.0, grouped into features, fixes and breaking changes, in Markdown.",
+    "what": "the description gives the version; the draft still asks for the heading's version"
+  },
+  {
+    "fixture": "slack-standup",
+    "class": "good",
+    "what": "the Drafter's draft as it came back"
+  },
+  {
+    "fixture": "slack-standup",
+    "class": "off_task",
+    "draftFrom": "release-notes",
+    "what": "the whole draft of another fixture: release notes from commits"
+  },
+  {
+    "fixture": "slack-standup",
+    "class": "partial",
+    "instructionFile": "partial.AGENT.md",
+    "what": "the instruction writes the summary and never posts it to Slack"
+  },
+  {
+    "fixture": "slack-standup",
+    "class": "undeclared",
+    "capabilities": "capabilities:\n  network:\n    egress: none\n  filesystem:\n    read: none\n    write: none\n  exec: none\n  dataAccess:\n    - messages\n",
+    "what": "the manifest declares no network and no secret, and the instruction posts to slack.com with a bot token"
+  },
+  {
+    "fixture": "slack-standup",
+    "class": "redundant",
+    "description": "Post a daily standup summary to the #eng-standup Slack channel, written from the notes I give it. Post it straight away, with no preview.",
+    "what": "the description gives the channel and the mode; the draft still asks for both"
+  },
+  {
+    "fixture": "weather-brief",
+    "class": "good",
+    "what": "the Drafter's draft as it came back"
+  },
+  {
+    "fixture": "weather-brief",
+    "class": "off_task",
+    "draftFrom": "github-pr-review",
+    "what": "the whole draft of another fixture: a pull request review"
+  },
+  {
+    "fixture": "weather-brief",
+    "class": "partial",
+    "instructionFile": "partial.AGENT.md",
+    "what": "the instruction gives one line of current weather, with no forecast"
+  },
+  {
+    "fixture": "weather-brief",
+    "class": "undeclared",
+    "capabilities": "capabilities:\n  network:\n    egress: none\n  filesystem:\n    read: none\n    write: none\n  exec: none\n  dataAccess: []\n",
+    "what": "the manifest declares no network, and the instruction calls the Open-Meteo APIs"
+  },
+  {
+    "fixture": "weather-brief",
+    "class": "redundant",
+    "description": "Give me a three-line weather brief for Toronto, Canada, in Celsius, from a free public weather API that needs no key.",
+    "what": "the description gives the city and the units; the draft still asks for both"
+  }
+]

@@ -11,6 +11,9 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/blaktron/agentry/pkg/draftcheck"
+	"github.com/blaktron/agentry/pkg/judge"
+	"github.com/blaktron/agentry/pkg/manifest"
 	"github.com/blaktron/agentry/pkg/ruleset"
 )
 
@@ -550,5 +553,67 @@ func TestTypeSafeJudgeWithoutAKeyFailsClosed(t *testing.T) {
 	j := NewTypeSafeJudge(JudgeConfig{Provider: "typesafe"})
 	if _, err := j.Judge(context.Background(), JudgeContent{ManifestJSON: []byte(`{}`), Files: []JudgeFile{{Path: "a.md", Content: "x"}}}); err == nil {
 		t.Fatal("a judge with no key must fail closed")
+	}
+}
+
+// A finished draft's check (pkg/draftcheck, agentry#708) asks the rubric
+// exactly as S5 asks it about the same package: the same requests, in the
+// same order, with the same state and questions, under the same rubric
+// hash. The check can then tell a person before Submit what S5 will flag.
+func TestTheDraftCheckAsksTheRubricAsS5Does(t *testing.T) {
+	yml := "schemaVersion: \"2\"\nname: brief\nnamespace: draft\nversion: 0.1.0\nsummary: s\nlicense: Apache-2.0\n" +
+		"modes: [autonomous]\nentrypoints:\n  instruction: AGENT.md\ncapabilities:\n  network:\n    egress: [api.example.com]\n" +
+		"knowledge:\n  ships:\n    - name: docs\n"
+	instruction := "# Brief\n" + strings.Repeat("Read the forecast and write it up.\n", 400)
+	files := []JudgeFile{{Path: "AGENT.md", Content: instruction}, {Path: "agent.yaml", Content: yml}}
+	m, err := manifest.Parse([]byte(yml))
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical, err := manifest.CanonicalJSON(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s5srv, s5calls := typesafeServer(t, benign)
+	j := newTestTypeSafe(t, s5srv)
+	if _, err := j.Judge(context.Background(), JudgeContent{ManifestJSON: canonical, Files: files}); err != nil {
+		t.Fatal(err)
+	}
+	cksrv, ckcalls := typesafeServer(t, benign)
+	c, err := judge.New(judge.Config{BaseURL: cksrv.URL, APIKey: "tok", RetryWait: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ck := draftcheck.New(c)
+	res, err := ck.Check(context.Background(), draftcheck.Package{Description: "a brief",
+		Files: []draftcheck.File{{Path: "agent.yaml", Content: yml}, {Path: "AGENT.md", Content: instruction}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Rubric.Hash != j.hash() {
+		t.Fatalf("the check's rubric hash %s is not S5's %s", res.Rubric.Hash, j.hash())
+	}
+	// The check's last request is the draft set's; the rest are the rubric's.
+	rubric := (*ckcalls)[:len(*ckcalls)-1]
+	if len(rubric) != len(*s5calls) || len(rubric) < 4 {
+		t.Fatalf("the check asked %d rubric requests, S5 %d", len(rubric), len(*s5calls))
+	}
+	for i, got := range rubric {
+		want := (*s5calls)[i]
+		if got.State != want.State || len(got.Questions) != len(want.Questions) {
+			t.Fatalf("request %d: the check's state %+v, S5's %+v", i, got.State.Path, want.State.Path)
+		}
+		for id, q := range want.Questions {
+			if got.Questions[id] != q {
+				t.Fatalf("request %d question %s differs", i, id)
+			}
+		}
+	}
+	if !strings.Contains(rubric[0].State.DeclaredCapabilities, `"ships":["docs"]`) {
+		t.Fatalf("the shipped pack is declared: %s", rubric[0].State.DeclaredCapabilities)
+	}
+	if !strings.Contains(rubric[0].State.DeclaredCapabilities, `"mountedReadOnlyAt":["/`+manifest.KnowledgeDir+`/docs"]`) {
+		t.Fatalf("pkg/judge declares a shipped pack where pkg/manifest mounts it: %s", rubric[0].State.DeclaredCapabilities)
 	}
 }

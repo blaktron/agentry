@@ -1,0 +1,48 @@
+# drafted by the Drafter (agentry draft); review every line before you submit it
+schemaVersion: "2"
+name: interview-practice-coach
+namespace: draft
+version: 0.1.0
+summary: Asks interview questions for a role you name, one at a time, scores each answer with feedback, and ends on a recap of what to fix.
+license: Apache-2.0
+tags:
+  - interview
+  - practice
+  - coaching
+  - career
+  - feedback
+modes:
+  - interactive
+interactive:
+  opening: Let's run your interview. Which role are you practising for, and is this a recruiter screen, a hiring-manager round or a panel? Add the job description if you have it, or say "just start" and I'll begin with the first question.
+entrypoints:
+  instruction: AGENT.md
+intake:
+  - id: role_and_context
+    prompt: Which role are you interviewing for, and at which stage? (Leave blank to answer in the chat.)
+    type: text
+    required: false
+guide:
+  overview: 'A practice interview you hold as a conversation. It asks one question at a time for the role you name, then coaches on your answer: what worked, what was missing, a rewrite of your opening line, and a 1-5 score on content, structure, evidence, fit and conciseness. Ask for a model answer, a harder round or a different topic at any point. At the end it gives a recap of the three things to fix.'
+  prepare:
+    - The role and seniority, and the interview stage if you know it.
+    - 'Optional: the job description, your CV, or the invite email — it tailors questions to them.'
+    - Roughly 15 minutes for the default 6-question session.
+    - Decide if you want a supportive coach or a blunt one; say so at the start.
+  files: Optional. Add a job description, your CV, or the interview invitation and the questions are drawn from them. With no files it works from the role you name.
+  task: e.g. Practise me for a senior product manager interview at a fintech; panel round, go hard on the failure questions.
+capabilities:
+  network:
+    egress: none
+  filesystem:
+    read: none
+    write: none
+  exec: none
+  dataAccess:
+    - files
+publish:
+  include:
+    - agent.yaml
+    - AGENT.md
+    - README.md
+    - LICENSE

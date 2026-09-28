@@ -1,0 +1,54 @@
+# drafted by the Drafter (agentry draft); review every line before you submit it
+schemaVersion: "2"
+name: rss-weekly-digest
+namespace: draft
+version: 0.1.0
+summary: Reads the RSS feeds you list, keeps the posts from the last 7 days, and writes a digest with a summary and link for each.
+license: Apache-2.0
+tags:
+  - rss
+  - feeds
+  - blogs
+  - digest
+  - news
+  - summarization
+modes:
+  - autonomous
+entrypoints:
+  instruction: AGENT.md
+intake:
+  - id: feed_urls
+    prompt: The RSS/Atom feed URLs of the tech blogs to read, one per line.
+    type: text
+    required: true
+  - id: output_format
+    prompt: Digest format?
+    type: choice
+    choices:
+      - markdown
+      - json
+    required: true
+guide:
+  overview: 'Paste the RSS or Atom feeds of the tech blogs you follow. The BriefAgent reads each one, keeps the posts published in the last 7 days, and gives back one digest: highlights of the week, then every post grouped by blog with its date, a one-or-two-sentence summary and its link. Blogs with no posts this week, and feeds that could not be read, are listed at the end rather than left silent.'
+  prepare:
+    - The feed URLs, one per line; a blog's home page usually will not parse, so use its /feed, /rss or /atom.xml.
+    - 'If your list is long, put the blogs you care about first: only the first 20 are read in a run.'
+    - 'Nothing to install or authorise: no key, no account, and the digest comes back as text.'
+  task: e.g. Digest these feeds and put the stories that more than one blog covered at the top.
+capabilities:
+  network:
+    egress:
+      - api.rss2json.com
+  filesystem:
+    read: none
+    write: none
+  exec: none
+  dataAccess:
+    - other
+  mcpServers: []
+publish:
+  include:
+    - agent.yaml
+    - AGENT.md
+    - README.md
+    - LICENSE

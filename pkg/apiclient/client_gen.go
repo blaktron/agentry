@@ -336,6 +336,93 @@ func (e DependencyAlertSeverity) Valid() bool {
 	}
 }
 
+// Defines values for DraftCheckFailure.
+const (
+	DraftCheckFailureJudgeError DraftCheckFailure = "judge-error"
+	DraftCheckFailureTimeout    DraftCheckFailure = "timeout"
+	DraftCheckFailureTooLarge   DraftCheckFailure = "too-large"
+)
+
+// Valid indicates whether the value is a known member of the DraftCheckFailure enum.
+func (e DraftCheckFailure) Valid() bool {
+	switch e {
+	case DraftCheckFailureJudgeError:
+		return true
+	case DraftCheckFailureTimeout:
+		return true
+	case DraftCheckFailureTooLarge:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DraftCheckVerdict.
+const (
+	DraftCheckVerdictFlagged    DraftCheckVerdict = "flagged"
+	DraftCheckVerdictNotScanned DraftCheckVerdict = "not_scanned"
+	DraftCheckVerdictPass       DraftCheckVerdict = "pass"
+)
+
+// Valid indicates whether the value is a known member of the DraftCheckVerdict enum.
+func (e DraftCheckVerdict) Valid() bool {
+	switch e {
+	case DraftCheckVerdictFlagged:
+		return true
+	case DraftCheckVerdictNotScanned:
+		return true
+	case DraftCheckVerdictPass:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DraftRubricFindingId.
+const (
+	C1Injection            DraftRubricFindingId = "C1_injection"
+	C2Exfiltration         DraftRubricFindingId = "C2_exfiltration"
+	C3UndeclaredCapability DraftRubricFindingId = "C3_undeclared_capability"
+	C4UserDeception        DraftRubricFindingId = "C4_user_deception"
+	C5Obfuscation          DraftRubricFindingId = "C5_obfuscation"
+	C6DestructiveActions   DraftRubricFindingId = "C6_destructive_actions"
+)
+
+// Valid indicates whether the value is a known member of the DraftRubricFindingId enum.
+func (e DraftRubricFindingId) Valid() bool {
+	switch e {
+	case C1Injection:
+		return true
+	case C2Exfiltration:
+		return true
+	case C3UndeclaredCapability:
+		return true
+	case C4UserDeception:
+		return true
+	case C5Obfuscation:
+		return true
+	case C6DestructiveActions:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DraftSetCheckFlagged.
+const (
+	OffTask DraftSetCheckFlagged = "off_task"
+)
+
+// Valid indicates whether the value is a known member of the DraftSetCheckFlagged enum.
+func (e DraftSetCheckFlagged) Valid() bool {
+	switch e {
+	case OffTask:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for KnowledgePackState.
 const (
 	KnowledgePackStateEmpty    KnowledgePackState = "empty"
@@ -518,16 +605,16 @@ func (e MembershipState) Valid() bool {
 
 // Defines values for ModelInputChunkFailure.
 const (
-	JudgeError ModelInputChunkFailure = "judge-error"
-	Timeout    ModelInputChunkFailure = "timeout"
+	ModelInputChunkFailureJudgeError ModelInputChunkFailure = "judge-error"
+	ModelInputChunkFailureTimeout    ModelInputChunkFailure = "timeout"
 )
 
 // Valid indicates whether the value is a known member of the ModelInputChunkFailure enum.
 func (e ModelInputChunkFailure) Valid() bool {
 	switch e {
-	case JudgeError:
+	case ModelInputChunkFailureJudgeError:
 		return true
-	case Timeout:
+	case ModelInputChunkFailureTimeout:
 		return true
 	default:
 		return false
@@ -587,19 +674,19 @@ func (e ModelInputSource) Valid() bool {
 
 // Defines values for ModelInputVerdict.
 const (
-	NotScanned ModelInputVerdict = "not_scanned"
-	Pass       ModelInputVerdict = "pass"
-	Withheld   ModelInputVerdict = "withheld"
+	ModelInputVerdictNotScanned ModelInputVerdict = "not_scanned"
+	ModelInputVerdictPass       ModelInputVerdict = "pass"
+	ModelInputVerdictWithheld   ModelInputVerdict = "withheld"
 )
 
 // Valid indicates whether the value is a known member of the ModelInputVerdict enum.
 func (e ModelInputVerdict) Valid() bool {
 	switch e {
-	case NotScanned:
+	case ModelInputVerdictNotScanned:
 		return true
-	case Pass:
+	case ModelInputVerdictPass:
 		return true
-	case Withheld:
+	case ModelInputVerdictWithheld:
 		return true
 	default:
 		return false
@@ -1911,6 +1998,107 @@ type DomainOrg struct {
 
 	// RequestedToday Whether the caller already asked its administrators for access in the last day.
 	RequestedToday *bool `json:"requestedToday,omitempty"`
+}
+
+// DraftCheck defines model for DraftCheck.
+type DraftCheck struct {
+	Draft DraftSetCheck `json:"draft"`
+
+	// Model The pinned judge model, such as `jev-1.13.0`.
+	Model  string           `json:"model"`
+	Rubric DraftRubricCheck `json:"rubric"`
+
+	// Usage The judge's requests and input tokens, for the record. Never a price: AI Review is charged per operation (DEV-150).
+	Usage ModelInputUsage `json:"usage"`
+}
+
+// DraftCheckFailure Why a half was not scanned: the judge timed out, failed, or (the draft set only) a part of the draft is past its bound.
+type DraftCheckFailure string
+
+// DraftCheckFile defines model for DraftCheckFile.
+type DraftCheckFile struct {
+	// Content The file's text, UTF-8.
+	Content string `json:"content"`
+
+	// Path The file's path in the package, relative and clean.
+	Path string `json:"path"`
+}
+
+// DraftCheckRequest defines model for DraftCheckRequest.
+type DraftCheckRequest struct {
+	// Description The person's description the draft was made from, as the Drafter read it. It is asked about as data, beside the draft.
+	Description string `json:"description"`
+
+	// Files Every text file of the rendered package, `agent.yaml` and the instruction file among them; at most 65,536 bytes in all.
+	Files []DraftCheckFile `json:"files"`
+}
+
+// DraftCheckVerdict `pass`: no question scored 2 or more. `flagged`: one did. `not_scanned`: the judge could not answer for this half.
+type DraftCheckVerdict string
+
+// DraftRubricCheck defines model for DraftRubricCheck.
+type DraftRubricCheck struct {
+	// Failure Why a half was not scanned: the judge timed out, failed, or (the draft set only) a part of the draft is past its bound.
+	Failure *DraftCheckFailure `json:"failure,omitempty"`
+
+	// Findings What S5 would record as findings, and so send to review.
+	Findings []DraftRubricFinding `json:"findings"`
+
+	// RubricHash The rubric hash S5 records under the same model.
+	RubricHash string `json:"rubricHash"`
+
+	// Scores Per rubric question, 0 to 3, as S5 scores it.
+	Scores *DraftRubricScores `json:"scores,omitempty"`
+
+	// Verdict `pass`: no question scored 2 or more. `flagged`: one did. `not_scanned`: the judge could not answer for this half.
+	Verdict DraftCheckVerdict `json:"verdict"`
+}
+
+// DraftRubricFinding defines model for DraftRubricFinding.
+type DraftRubricFinding struct {
+	Id DraftRubricFindingId `json:"id"`
+
+	// Path The file whose part scored highest (`agent.yaml` for the manifest).
+	Path  string `json:"path"`
+	Score int    `json:"score"`
+}
+
+// DraftRubricFindingId defines model for DraftRubricFinding.Id.
+type DraftRubricFindingId string
+
+// DraftRubricScores Per rubric question, 0 to 3, as S5 scores it.
+type DraftRubricScores struct {
+	C1Injection            int `json:"C1_injection"`
+	C2Exfiltration         int `json:"C2_exfiltration"`
+	C3UndeclaredCapability int `json:"C3_undeclared_capability"`
+	C4UserDeception        int `json:"C4_user_deception"`
+	C5Obfuscation          int `json:"C5_obfuscation"`
+	C6DestructiveActions   int `json:"C6_destructive_actions"`
+}
+
+// DraftSetCheck defines model for DraftSetCheck.
+type DraftSetCheck struct {
+	// Failure Why a half was not scanned: the judge timed out, failed, or (the draft set only) a part of the draft is past its bound.
+	Failure *DraftCheckFailure     `json:"failure,omitempty"`
+	Flagged []DraftSetCheckFlagged `json:"flagged"`
+
+	// QuestionSet The hash of the draft question set and everything that changes its verdict.
+	QuestionSet string `json:"questionSet"`
+	Score       int    `json:"score"`
+
+	// Scores Per draft question, 0 to 3. `off_task`: the instruction would not do the task the description asks for (a different task, a part left out, a different kind of result).
+	Scores *DraftSetScores `json:"scores,omitempty"`
+
+	// Verdict `pass`: no question scored 2 or more. `flagged`: one did. `not_scanned`: the judge could not answer for this half.
+	Verdict DraftCheckVerdict `json:"verdict"`
+}
+
+// DraftSetCheckFlagged defines model for DraftSetCheck.Flagged.
+type DraftSetCheckFlagged string
+
+// DraftSetScores Per draft question, 0 to 3. `off_task`: the instruction would not do the task the description asks for (a different task, a part left out, a different kind of result).
+type DraftSetScores struct {
+	OffTask int `json:"off_task"`
 }
 
 // EmailNotificationSettings Which of the registry's mails the person receives.
@@ -3481,6 +3669,9 @@ type WrapKnowledgeKeyJSONRequestBody = KnowledgeDataKey
 // CreateKnowledgePackJSONRequestBody defines body for CreateKnowledgePack for application/json ContentType.
 type CreateKnowledgePackJSONRequestBody = CreateKnowledgePackRequest
 
+// CheckDraftJSONRequestBody defines body for CheckDraft for application/json ContentType.
+type CheckDraftJSONRequestBody = DraftCheckRequest
+
 // ScanModelInputJSONRequestBody defines body for ScanModelInput for application/json ContentType.
 type ScanModelInputJSONRequestBody = ModelInputScanRequest
 
@@ -4144,6 +4335,24 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /meta (the `GetMeta` operationId).
 	GetMeta(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CheckDraftWithBody AI Review of a finished draft before it is submitted (agentry#708).
+	//
+	// Reads a finished BriefAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /model-input/check (the `CheckDraft` operationId).
+	CheckDraftWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CheckDraft AI Review of a finished draft before it is submitted (agentry#708).
+	//
+	// Reads a finished BriefAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /model-input/check (the `CheckDraft` operationId).
+	CheckDraft(ctx context.Context, body CheckDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ScanModelInputWithBody AI Review of text a model is about to read (agentry#608).
 	//
@@ -6284,6 +6493,44 @@ func (c *Client) GetMcpServerScan(ctx context.Context, params *GetMcpServerScanP
 // Corresponds with GET /meta (the `GetMeta` operationId).
 func (c *Client) GetMeta(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetMetaRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CheckDraftWithBody AI Review of a finished draft before it is submitted (agentry#708).
+//
+// Reads a finished BriefAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /model-input/check (the `CheckDraft` operationId).
+func (c *Client) CheckDraftWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCheckDraftRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CheckDraft AI Review of a finished draft before it is submitted (agentry#708).
+//
+// Reads a finished BriefAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /model-input/check (the `CheckDraft` operationId).
+func (c *Client) CheckDraft(ctx context.Context, body CheckDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCheckDraftRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -11092,6 +11339,46 @@ func NewGetMetaRequest(server string) (*http.Request, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewCheckDraftRequest calls the generic CheckDraft builder with application/json body
+func NewCheckDraftRequest(server string, body CheckDraftJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCheckDraftRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCheckDraftRequestWithBody constructs an http.Request for the CheckDraft method, with any body, and a specified content type
+func NewCheckDraftRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/model-input/check")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -16588,6 +16875,24 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /meta (the `GetMeta` operationId).
 	GetMetaWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMetaResponse, error)
 
+	// CheckDraftWithBodyWithResponse AI Review of a finished draft before it is submitted (agentry#708).
+	//
+	// Reads a finished BriefAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /model-input/check (the `CheckDraft` operationId).
+	CheckDraftWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CheckDraftResponse, error)
+
+	// CheckDraftWithResponse AI Review of a finished draft before it is submitted (agentry#708).
+	//
+	// Reads a finished BriefAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /model-input/check (the `CheckDraft` operationId).
+	CheckDraftWithResponse(ctx context.Context, body CheckDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*CheckDraftResponse, error)
+
 	// ScanModelInputWithBodyWithResponse AI Review of text a model is about to read (agentry#608).
 	//
 	// Scans pushed text as model input: the deployment's judge is asked the model-input question set (injection, exfiltration, user deception, obfuscation), in 8 KiB chunks asked in parallel, and answers per chunk with scores. The text's score is the highest over its chunks and questions; 2 or more (the gate's medium) is `withheld`, and a chunk the judge could not answer (an error, a timeout, an answer out of shape) makes the text `not_scanned`, which a caller treats as withheld. Nothing of the text is kept or logged. `usage` counts the judge's requests and tokens for the record; it is never a price (AI Review is charged per operation, not per scan). Open to platform staff by session, and to a hosted job's credential in `X-Agentry-Job-Token` where an extension admits it; a token is refused whatever its scopes. 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
@@ -20120,6 +20425,54 @@ func (r GetMetaResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetMetaResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CheckDraftResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *DraftCheck
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r CheckDraftResponse) GetJSON200() *DraftCheck {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r CheckDraftResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CheckDraftResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CheckDraftResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CheckDraftResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CheckDraftResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -26377,6 +26730,36 @@ func (c *ClientWithResponses) GetMetaWithResponse(ctx context.Context, reqEditor
 	return ParseGetMetaResponse(rsp)
 }
 
+// CheckDraftWithBodyWithResponse AI Review of a finished draft before it is submitted (agentry#708).
+//
+// Reads a finished BriefAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /model-input/check (the `CheckDraft` operationId).
+func (c *ClientWithResponses) CheckDraftWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CheckDraftResponse, error) {
+	rsp, err := c.CheckDraftWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCheckDraftResponse(rsp)
+}
+
+// CheckDraftWithResponse AI Review of a finished draft before it is submitted (agentry#708).
+//
+// Reads a finished BriefAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /model-input/check (the `CheckDraft` operationId).
+func (c *ClientWithResponses) CheckDraftWithResponse(ctx context.Context, body CheckDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*CheckDraftResponse, error) {
+	rsp, err := c.CheckDraft(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCheckDraftResponse(rsp)
+}
+
 // ScanModelInputWithBodyWithResponse AI Review of text a model is about to read (agentry#608).
 //
 // Scans pushed text as model input: the deployment's judge is asked the model-input question set (injection, exfiltration, user deception, obfuscation), in 8 KiB chunks asked in parallel, and answers per chunk with scores. The text's score is the highest over its chunks and questions; 2 or more (the gate's medium) is `withheld`, and a chunk the judge could not answer (an error, a timeout, an answer out of shape) makes the text `not_scanned`, which a caller treats as withheld. Nothing of the text is kept or logged. `usage` counts the judge's requests and tokens for the record; it is never a price (AI Review is charged per operation, not per scan). Open to platform staff by session, and to a hosted job's credential in `X-Agentry-Job-Token` where an extension admits it; a token is refused whatever its scopes. 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
@@ -30065,6 +30448,39 @@ func ParseGetMetaResponse(rsp *http.Response) (*GetMetaResponse, error) {
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest Meta
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCheckDraftResponse parses an HTTP response from a CheckDraftWithResponse call
+func ParseCheckDraftResponse(rsp *http.Response) (*CheckDraftResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CheckDraftResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DraftCheck
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
