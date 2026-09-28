@@ -15,8 +15,14 @@ import (
 // directory service owns them (agentry#113): the directory's flow URLs
 // derived from the OIDC issuer, and the caller's enrolled authenticators
 // through the same admin access account erasure uses.
+//
+// The directory account is read by the id the directory's sign-in sent
+// (agentry#727), so it is found although its address is not the
+// registry's: no address search is made.
 func TestUserDirectoryLinksAndDevices(t *testing.T) {
-	var deleted atomic.Int32
+	var deleted, searches atomic.Int32
+	oidc := newFakeOIDC(t)
+	oidc.extra = map[string]any{"agentry_directory_id": 41}
 	idp := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer idp-admin-token" {
 			http.Error(w, "unauthorized", http.StatusForbidden)
@@ -25,9 +31,15 @@ func TestUserDirectoryLinksAndDevices(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/api/v3/core/users/":
-			_ = json.NewEncoder(w).Encode(map[string]any{"results": []map[string]any{
-				{"pk": 41, "email": r.URL.Query().Get("email"), "type": "internal"},
-			}})
+			searches.Add(1)
+			_ = json.NewEncoder(w).Encode(map[string]any{"results": []map[string]any{}})
+		case "/api/v3/core/users/41/":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"pk": 41, "uid": oidc.sub, "email": "someone-else@dev.local", "type": "internal", "is_active": true,
+				"attributes": map[string]any{"agentry_has_password": true},
+			})
+		case "/api/v3/sources/user_connections/oauth/":
+			_ = json.NewEncoder(w).Encode(map[string]any{"pagination": map[string]any{"next": 0}, "results": []map[string]any{}})
 		case "/api/v3/authenticators/admin/all/":
 			if r.URL.Query().Get("user") != "41" {
 				http.Error(w, "wrong user", http.StatusBadRequest)
@@ -70,7 +82,6 @@ func TestUserDirectoryLinksAndDevices(t *testing.T) {
 	// Managed: the account lives in the directory, so sign in through the
 	// (fake) directory IdP; links derive from its issuer, devices from the
 	// admin API.
-	oidc := newFakeOIDC(t)
 	env2 := newTestEnvCfg(t, func(c *config.Config) {
 		c.Auth.ExternalOnly = true
 		c.Auth.IdPAdminURL = idp.URL
@@ -107,6 +118,7 @@ func TestUserDirectoryLinksAndDevices(t *testing.T) {
 		Managed           bool    `json:"managed"`
 		AccountUrl        *string `json:"accountUrl"`
 		PasswordChangeUrl string  `json:"passwordChangeUrl"`
+		HasPassword       *bool   `json:"hasPassword"`
 		TotpSetupUrl      string  `json:"totpSetupUrl"`
 		WebauthnSetupUrl  string  `json:"webauthnSetupUrl"`
 		Devices           []struct {
@@ -120,6 +132,9 @@ func TestUserDirectoryLinksAndDevices(t *testing.T) {
 	// flows are Agentry's own, which return to /settings when they finish.
 	if !on.Managed || on.AccountUrl != nil || on.PasswordChangeUrl != base+"/if/flow/agentry-password-change/" || on.TotpSetupUrl != base+"/if/flow/agentry-totp-setup/" || on.WebauthnSetupUrl != base+"/if/flow/agentry-webauthn-setup/" {
 		t.Fatalf("links: %+v", on)
+	}
+	if on.HasPassword == nil || !*on.HasPassword {
+		t.Fatalf("hasPassword = %v, want true from the account the id names", on.HasPassword)
 	}
 	if len(on.Devices) != 2 || on.Devices[0].Id != "7" || on.Devices[0].Kind != "totp" || on.Devices[0].Name != "Phone" || on.Devices[0].CreatedAt == nil || on.Devices[1].Id != "9" || on.Devices[1].Kind != "webauthn" || on.Devices[1].Name != "WebAuthn Device" {
 		t.Fatalf("devices: %+v", on.Devices)
@@ -135,6 +150,9 @@ func TestUserDirectoryLinksAndDevices(t *testing.T) {
 	env.doJSON(sess, http.MethodDelete, "/api/v1/user/directory/devices/totp/7", nil, nil, http.StatusNotFound) // unmanaged server: nothing to remove from
 	if deleted.Load() != 1 {
 		t.Fatalf("directory delete calls after misses: %d", deleted.Load())
+	}
+	if searches.Load() != 0 {
+		t.Fatalf("%d address searches, want none: the id names the account", searches.Load())
 	}
 }
 

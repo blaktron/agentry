@@ -166,6 +166,11 @@ func TestDirectoryRememberBlueprint(t *testing.T) {
 	if !strings.Contains(scalar(scope.Attrs["expression"]), `"agentry_remember_device"`) {
 		t.Error("the scope mapping does not emit agentry_remember_device, the claim the registry reads")
 	}
+	// agentry#727: the same scope carries the directory's own id for the
+	// account, which every directory lookup the registry makes reads by.
+	if !strings.Contains(scalar(scope.Attrs["expression"]), `claims["agentry_directory_id"] = account.pk`) {
+		t.Error("the scope mapping does not emit agentry_directory_id from the signed-in account's pk")
+	}
 
 	intentExpr := scalar(entryByID(t, entries, "policy-remember-intent").Attrs["expression"])
 	if !strings.Contains(intentExpr, `"mfa_devices" in args`) {

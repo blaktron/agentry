@@ -339,12 +339,14 @@ func (a *authentikEraser) doJSON(ctx context.Context, method, path string, body 
 func pathOnly(path string) string { return strings.SplitN(path, "?", 2)[0] }
 
 type authentikUser struct {
-	PK         int    `json:"pk"`
-	UID        string `json:"uid"`
-	Email      string `json:"email"`
-	Type       string `json:"type"`
-	IsActive   bool   `json:"is_active"`
-	Attributes struct {
+	PK       int    `json:"pk"`
+	UID      string `json:"uid"`
+	Email    string `json:"email"`
+	Type     string `json:"type"`
+	IsActive bool   `json:"is_active"`
+	// IsSuperuser keeps erasure off an operator's account (EraseAccount).
+	IsSuperuser bool `json:"is_superuser"`
+	Attributes  struct {
 		// Kept by the account-flows blueprint's agentry-record-has-password
 		// policy (agentry#706); absent on an account that has not signed in
 		// or written a password since. Raw, so a value someone edited into
@@ -353,6 +355,10 @@ type authentikUser struct {
 		HasPassword json.RawMessage `json:"agentry_has_password"`
 	} `json:"attributes"`
 }
+
+// isService reports a service account, which is never a person's sign-in
+// account.
+func (u *authentikUser) isService() bool { return strings.Contains(u.Type, "service") }
 
 type authentikPage[T any] struct {
 	Pagination struct {
@@ -400,26 +406,17 @@ func (a *authentikEraser) GroupMembers(ctx context.Context, group string) (strin
 }
 
 func (a *authentikEraser) AccountsByEmail(ctx context.Context, email string) ([]directoryAccount, error) {
-	// authentik 2026.8's email= filter is exact and case-sensitive, so an
-	// address the directory holds with capitals would never be found from
-	// the registry's lower-cased one. search= is case-blind and matches
-	// parts of the username, the name and the address: only exact,
-	// case-blind address matches count here, and never a service account or
-	// an inactive one.
+	// accountsAt matches the address exactly and case-blind (agentry#617);
+	// the mirror also leaves inactive accounts out.
+	users, err := a.accountsAt(ctx, email)
+	if err != nil {
+		return nil, err
+	}
 	var out []directoryAccount
-	for page := 1; page > 0; {
-		var users authentikPage[authentikUser]
-		path := fmt.Sprintf("/api/v3/core/users/?page_size=50&page=%d&search=%s", page, url.QueryEscape(email))
-		if err := a.doJSON(ctx, http.MethodGet, path, nil, &users); err != nil {
-			return nil, err
-		}
-		for _, u := range users.Results {
-			if !strings.EqualFold(u.Email, email) || strings.Contains(u.Type, "service") || !u.IsActive {
-				continue
-			}
+	for _, u := range users {
+		if u.IsActive {
 			out = append(out, directoryAccount{PK: u.PK, Email: u.Email, UID: u.UID, Active: true, HasPassword: jsonBool(u.Attributes.HasPassword)})
 		}
-		page = users.Pagination.Next
 	}
 	return out, nil
 }
