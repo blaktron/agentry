@@ -264,10 +264,12 @@ type (
 	ModelInputOp      = api.ModelInputOp
 )
 
-// The two model-input operations a call can be.
+// The model-input operations a call can be: a scan, a search, and since
+// agentry#708 the check of a finished draft.
 const (
 	ModelInputOpScan   = api.ModelInputOpScan
 	ModelInputOpSearch = api.ModelInputOpSearch
+	ModelInputOpCheck  = api.ModelInputOpCheck
 )
 
 // Unthrottles is the optional interface for an extension whose receiver of

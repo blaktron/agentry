@@ -12,6 +12,10 @@ the registry rather than holding a key of their own (agentry#608; plan
 - `POST /api/v1/model-input/search` searches the web through the
   deployment's provider, with the registry's key, and scans every result
   the same way before returning it.
+- `POST /api/v1/model-input/check` reads a finished draft's package the
+  way AI Review will at publish, and asks whether the draft does the task
+  it was drafted for, so the person knows before Submit (agentry#708; plan
+  `builder-simplify.md` D6). See [the check of a finished draft](#the-check-of-a-finished-draft).
 
 This is not the publication scan. A release is still scanned at
 publication, by the pipeline (S1–S10), whatever these routes said about
@@ -118,6 +122,64 @@ is never followed, since the key rides on every request.
 The query goes to the provider and to nowhere else: it is neither kept nor
 logged. With no judge to scan the results the search is not made at all.
 
+## The check of a finished draft
+
+The request is `{"description": …, "files": [{"path": …, "content": …}]}`:
+the person's description, at most 8,192 bytes, and every text file of the
+rendered package, `agent.yaml` and its instruction file among them, at
+most 32 files and 131,072 bytes in all. Each path must be relative and
+clean and named once, and each file UTF-8. A package with no
+`agent.yaml`, one that does not parse, or one without the instruction file
+it names is `422 draft-unreadable`, and one past the bounds is
+`413 draft-too-large`. Neither is asked anything, and a job's call is not
+counted.
+
+The check has two halves, both asked of the deployment's Jev with its key:
+
+- **The release rubric**, exactly as stage S5 of the pipeline asks it at
+  publish: the manifest as its canonical JSON (read as `agent.yaml`), then
+  every file in path order, in the same 8 KiB chunks, with the manifest's
+  capabilities and the packs it ships beside each chunk, the same six
+  questions and the same band, under the rubric hash S5 records. The
+  rubric's asking code is `pkg/judge`'s `RubricScanner`, which the
+  pipeline's `typesafe` provider asks through too, so the two cannot drift
+  apart. A question that scores 2 or more (the gate's medium) is a finding
+  S5 would record and send to review; the answer names its id, its score
+  and the file whose part scored highest, and the half reads `flagged`.
+- **The draft question set**, asked once over a state of the description,
+  the canonical manifest and the instruction:
+  does the instruction do the task the description asks for (`off_task`:
+  a different task, a part left out, or a different kind of result)? A
+  score of 2 or more is a flag. The question was benched on the Drafter's
+  ten fixture drafts and fifty broken variants of them before anything
+  used it (`pkg/draftcheck` `TestDraftBench`, which needs
+  `AGENTRY_JUDGE_BENCH=1` and a Jev key; the readings are the engineering
+  record's `measurements/draft-check-bench.md`). A draft made for another
+  task scored 0.96 or more and a good draft 0.18 at most. It also flags
+  only three or four in ten drafts that leave out one part of the task, so
+  a pass does not mean the draft does all of it. Two more questions were
+  benched and not kept: one on capabilities the manifest does not grant,
+  which flagged good drafts, and one on asking the person for what the
+  description gave, which missed most.
+
+The rubric half tells the person what S5 will record. On the Drafter's
+fixture drafts it flags nine of ten on the undeclared-capability question
+(C3), because the rubric is not told what the runner grants every run
+(agentry#731). Such a draft will go to review at publish, not be refused.
+
+Each half answers `pass`, `flagged` or `not_scanned` on its own. A half
+the judge could not answer for (an error, a timeout, or for the draft set
+a part past its bound of 8, 16 and 24 KiB) is `not_scanned`, with its
+failure word, never a pass. The texts are constants in `pkg/judge`, and
+nothing of the package is rendered into them.
+
+This is not the publication scan. A submitted version is scanned in full
+by the pipeline, S1 to S10, whatever the check said. `usage` counts both
+halves' requests and tokens for the record; AI Review is still one credit
+for a whole draft (DEV-150). `pkg/draftcheck` is the check as a package,
+so the CLI checks a local draft with the person's own key and asks what
+the registry asks.
+
 ## Configuration
 
 The scan needs the deployment's judge to be TypeSafe's Jev
@@ -165,7 +227,8 @@ either.
 
 ## What is recorded
 
-Nothing of a text, a query or a result's address is kept. Each call
+Nothing of a text, a query, a result's address or a draft's package is
+kept. Each call
 writes one `model_input.call` log line ([logging.md](logging.md)) with its
 operation, caller kind, job, verdict, source and counts, and counts into
 the `ModelInputCalls{op,verdict}` and `ModelInputJudgeTokens{op}` metrics.

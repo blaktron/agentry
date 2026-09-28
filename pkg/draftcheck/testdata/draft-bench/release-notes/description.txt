@@ -1,0 +1,1 @@
+Turn a list of commit messages I paste in into release notes, grouped into features, fixes and breaking changes, in Markdown.

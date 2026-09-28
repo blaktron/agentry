@@ -1,0 +1,1 @@
+Post a daily standup summary to a Slack channel, written from the notes I give it.

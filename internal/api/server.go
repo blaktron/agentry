@@ -205,12 +205,13 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 	// asks the deployment's judge when it is Jev, and the search route
 	// brokers the configured provider. Either off leaves its route 503; a
 	// configuration naming one that cannot be built refuses startup.
-	mis, merr := newModelInputScanner(judgeProviderName(cfg), cfg.Judge.Model, cfg.Judge.BaseURL, cfg.Judge.APIKey)
+	mis, mck, merr := newModelInputScanner(judgeProviderName(cfg), cfg.Judge.Model, cfg.Judge.BaseURL, cfg.Judge.APIKey)
 	if merr != nil {
 		panic(merr) // startup-time config failure, never mid-request
 	}
 	if mis != nil {
 		srv.SetModelInputScanner(mis)
+		srv.SetDraftChecker(mck)
 	}
 	ws, werr := websearch.New(cfg.WebSearch.Provider, cfg.WebSearch.BaseURL, cfg.WebSearch.APIKey)
 	if werr != nil {

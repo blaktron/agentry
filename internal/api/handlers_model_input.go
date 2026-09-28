@@ -15,6 +15,7 @@ import (
 	"github.com/blaktron/agentry/internal/logevent"
 	"github.com/blaktron/agentry/internal/ratelimit"
 	"github.com/blaktron/agentry/internal/registry"
+	"github.com/blaktron/agentry/pkg/draftcheck"
 	"github.com/blaktron/agentry/pkg/judge"
 	"github.com/blaktron/agentry/pkg/websearch"
 )
@@ -71,15 +72,19 @@ type ModelInputOp string
 const (
 	ModelInputOpScan   ModelInputOp = "scan"
 	ModelInputOpSearch ModelInputOp = "search"
+	// ModelInputOpCheck is AI Review of a finished draft (agentry#708):
+	// the release rubric and the draft question set over its package.
+	ModelInputOpCheck ModelInputOp = "check"
 )
 
 // ModelInputCall is what a job credential is asking to do, for the
 // extension to admit or refuse (a job past its searches, say).
 type ModelInputCall struct {
 	Op ModelInputOp
-	// Source is the scan's source; empty for a search.
+	// Source is the scan's source; empty for a search or a check.
 	Source judge.Source
-	// Bytes is the scan's text length; Count the search's result count.
+	// Bytes is the scan's text length, or a check's over every file;
+	// Count the search's result count.
 	Bytes int
 	Count int
 }
@@ -92,8 +97,9 @@ type ModelInputUse struct {
 	// Requests and InputTokens are the judge's.
 	Requests    int
 	InputTokens int
-	// Scanned counts the texts scanned (1 for a scan, one per result for
-	// a search); Withheld those withheld or not scanned.
+	// Scanned counts the texts scanned (1 for a scan or a check, one per
+	// result for a search); Withheld those withheld, flagged or not
+	// scanned.
 	Scanned  int
 	Withheld int
 	// Searches is 1 for a search the provider answered.
@@ -117,8 +123,29 @@ type ModelInputCallers interface {
 type modelInputState struct {
 	mu      sync.RWMutex
 	scanner ModelInputScanner
+	checker DraftChecker
 	search  websearch.Provider
 	callers ModelInputCallers
+}
+
+// DraftChecker reads a finished draft with the release rubric and the
+// draft question set: *draftcheck.Checker.
+type DraftChecker interface {
+	Check(ctx context.Context, p draftcheck.Package) (draftcheck.Result, error)
+}
+
+// SetDraftChecker sets the checker the check route asks; nil turns it off
+// (503). New sets it from the judge configuration when the judge is Jev.
+func (s *Server) SetDraftChecker(c DraftChecker) {
+	s.modelInput.mu.Lock()
+	defer s.modelInput.mu.Unlock()
+	s.modelInput.checker = c
+}
+
+func (s *Server) draftChecker() DraftChecker {
+	s.modelInput.mu.RLock()
+	defer s.modelInput.mu.RUnlock()
+	return s.modelInput.checker
 }
 
 // SetModelInputScanner sets the scanner the routes ask; nil turns them off
@@ -159,18 +186,19 @@ func (s *Server) modelInputWiring() (ModelInputScanner, websearch.Provider, Mode
 // judgeTypeSafe is the judge provider the model-input question set is for.
 const judgeTypeSafe = "typesafe"
 
-// newModelInputScanner builds the deployment's model-input scanner: Jev
-// alone, since the question set is Jev's. Any other judge, or none, leaves
-// the routes off.
-func newModelInputScanner(provider, model, baseURL, apiKey string) (ModelInputScanner, error) {
+// newModelInputScanner builds the deployment's model-input scanner and
+// draft checker over one paced client: Jev alone, since the question sets
+// are Jev's. Any other judge, or none, leaves the routes off.
+func newModelInputScanner(provider, model, baseURL, apiKey string) (ModelInputScanner, DraftChecker, error) {
 	if provider != judgeTypeSafe {
-		return nil, nil
+		return nil, nil, nil
 	}
 	c, err := judge.New(judge.Config{BaseURL: baseURL, APIKey: apiKey, Model: model})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return judge.NewModelInputScanner(&pacedAsker{asker: c, lim: rate.NewLimiter(judgeRequestsPerSecond, judgeBurst)}), nil
+	paced := &pacedAsker{asker: c, lim: rate.NewLimiter(judgeRequestsPerSecond, judgeBurst)}
+	return judge.NewModelInputScanner(paced), draftcheck.New(paced), nil
 }
 
 // pacedAsker holds a replica's model-input requests to the judge under
@@ -202,7 +230,9 @@ func (s *Server) modelInputJobRequest(r *http.Request) bool {
 	if r.Method != http.MethodPost || r.Header.Get(jobTokenHeader) == "" {
 		return false
 	}
-	if r.URL.Path != "/api/v1/model-input/scan" && r.URL.Path != "/api/v1/model-input/search" {
+	switch r.URL.Path {
+	case "/api/v1/model-input/scan", "/api/v1/model-input/search", "/api/v1/model-input/check":
+	default:
 		return false
 	}
 	_, _, callers := s.modelInputWiring()
@@ -454,6 +484,138 @@ func (s *Server) SearchModelInput(w http.ResponseWriter, r *http.Request) {
 	}
 	s.recordModelInput(r.Context(), callers, caller, use, verdict, judge.SourceSearchResult)
 	writeJSON(w, http.StatusOK, body)
+}
+
+// CheckDraft implements POST /model-input/check (agentry#708): AI Review
+// of a finished draft's package, with the release rubric S5 asks and the
+// draft question set, before the person submits it.
+func (s *Server) CheckDraft(w http.ResponseWriter, r *http.Request) {
+	caller, ok := s.gateModelInput(w, r)
+	if !ok {
+		return
+	}
+	var req DraftCheckRequest
+	if !readJSON(w, r, &req) {
+		return
+	}
+	if len(req.Description) > judge.DraftMaxDescription {
+		problemValidation(w, r, fmt.Sprintf("The description must be at most %d bytes.", judge.DraftMaxDescription))
+		return
+	}
+	pkg := draftcheck.Package{Description: req.Description, Files: make([]draftcheck.File, len(req.Files))}
+	total := 0
+	for i, f := range req.Files {
+		pkg.Files[i] = draftcheck.File{Path: f.Path, Content: f.Content}
+		total += len(f.Content)
+	}
+	if len(req.Files) > draftcheck.MaxFiles || total > draftcheck.MaxBytes {
+		writeProblemWith(w, r, http.StatusRequestEntityTooLarge, "draft-too-large", "Draft too large",
+			fmt.Sprintf("A check reads at most %d files and %d bytes of text: a draft's package.", draftcheck.MaxFiles, draftcheck.MaxBytes),
+			map[string]any{"maxFiles": draftcheck.MaxFiles, "maxBytes": draftcheck.MaxBytes})
+		return
+	}
+	// Refuse what the check will not read before the job is charged a
+	// call: Read is the checker's own reading.
+	if _, _, _, _, err := draftcheck.Read(pkg); err != nil {
+		if errors.Is(err, draftcheck.ErrNotADraft) {
+			writeProblem(w, r, http.StatusUnprocessableEntity, "draft-unreadable", "Not a draft",
+				"The files are not a draft's package: it needs an agent.yaml that parses and the instruction file it names.")
+			return
+		}
+		problemValidation(w, r, "Each file needs a relative, clean path named once, and UTF-8 text.")
+		return
+	}
+	if caller, ok = s.admitModelInput(w, r, caller, ModelInputCall{Op: ModelInputOpCheck, Bytes: total}); !ok {
+		return
+	}
+	_, _, callers := s.modelInputWiring()
+	checker := s.draftChecker()
+	if checker == nil {
+		s.problemModelInputOff(w, r)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), modelInputTimeout)
+	defer cancel()
+	res, err := checker.Check(ctx, pkg)
+	if err != nil {
+		// Read accepted the package above, so this is the checker's own
+		// failure: nothing was asked.
+		s.log.WarnContext(r.Context(), "model input: check", "err", err)
+		writeProblem(w, r, http.StatusServiceUnavailable, "model-input-unavailable", "AI Review of the draft failed",
+			"The registry could not read this draft. Nothing was asked; retry shortly.")
+		return
+	}
+	s.logDraftCheckErrors(r.Context(), res)
+	use := ModelInputUse{Op: ModelInputOpCheck, Requests: res.Usage.Requests, InputTokens: res.Usage.InputTokens, Scanned: 1}
+	verdict := judge.VerdictPass
+	switch {
+	case res.Rubric.Verdict == judge.VerdictFlagged || res.Draft.Verdict == judge.VerdictFlagged:
+		verdict = judge.VerdictFlagged
+	case res.Rubric.Verdict == judge.VerdictNotScanned || res.Draft.Verdict == judge.VerdictNotScanned:
+		verdict = judge.VerdictNotScanned
+	}
+	if verdict != judge.VerdictPass {
+		use.Withheld = 1
+	}
+	s.recordModelInput(r.Context(), callers, caller, use, verdict, "")
+	writeJSON(w, http.StatusOK, draftCheckBody(res))
+}
+
+// logDraftCheckErrors logs why a half of a check was not scanned, as
+// logModelInputChunkErrors does: a vendor's answer by its status alone.
+func (s *Server) logDraftCheckErrors(ctx context.Context, res draftcheck.Result) {
+	for half, err := range map[string]error{"rubric": res.Rubric.Err, "draft": res.Draft.Err} {
+		if err == nil {
+			continue
+		}
+		var se *judge.StatusError
+		if errors.As(err, &se) {
+			s.log.WarnContext(ctx, "model input: check not scanned", "half", half, "status", se.Status)
+			continue
+		}
+		s.log.WarnContext(ctx, "model input: check not scanned", "half", half, "err", err)
+	}
+}
+
+func draftCheckBody(res draftcheck.Result) DraftCheck {
+	rb := DraftRubricCheck{Verdict: DraftCheckVerdict(res.Rubric.Verdict), RubricHash: res.Rubric.Hash, Findings: []DraftRubricFinding{}}
+	if res.Rubric.Verdict == judge.VerdictNotScanned {
+		rb.Failure = draftCheckFailure(res.Rubric.Failure)
+	} else {
+		sc := res.Rubric.Scores
+		rb.Scores = &DraftRubricScores{
+			C1Injection: sc[judge.RubricIDInjection], C2Exfiltration: sc[judge.RubricIDExfiltration],
+			C3UndeclaredCapability: sc[judge.RubricIDUndeclaredCapability], C4UserDeception: sc[judge.RubricIDDeception],
+			C5Obfuscation: sc[judge.RubricIDObfuscation], C6DestructiveActions: sc[judge.RubricIDDestructive],
+		}
+		for _, f := range res.Rubric.Findings {
+			rb.Findings = append(rb.Findings, DraftRubricFinding{Id: DraftRubricFindingId(f.ID), Score: f.Score, Path: f.Path})
+		}
+	}
+	ds := DraftSetCheck{Verdict: DraftCheckVerdict(res.Draft.Verdict), Score: res.Draft.Score, QuestionSet: res.Draft.QuestionSet,
+		Flagged: []DraftSetCheckFlagged{}}
+	if res.Draft.Verdict == judge.VerdictNotScanned {
+		ds.Failure = draftCheckFailure(res.Draft.Failure)
+	} else {
+		sc := res.Draft.Scores
+		ds.Scores = &DraftSetScores{OffTask: sc[judge.DraftIDOffTask]}
+		for _, id := range res.Draft.Flagged {
+			ds.Flagged = append(ds.Flagged, DraftSetCheckFlagged(id))
+		}
+	}
+	return DraftCheck{Rubric: rb, Draft: ds, Model: res.Model,
+		Usage: ModelInputUsage{Requests: res.Usage.Requests, InputTokens: res.Usage.InputTokens}}
+}
+
+// draftCheckFailure is the spec's word for a half not scanned; only its
+// three words travel.
+func draftCheckFailure(f string) *DraftCheckFailure {
+	w := DraftCheckFailure(judge.FailureJudgeError)
+	switch f {
+	case judge.FailureTimeout, judge.FailureTooLarge:
+		w = DraftCheckFailure(f)
+	}
+	return &w
 }
 
 // searchResultText is what a search result is scanned as: everything of
