@@ -1176,6 +1176,25 @@ login, email-verify, and TOTP endpoints answer 410 Gone, and the web
 login page offers the directory service only. Turning the flag off (the
 default) restores the native flows — nothing was removed.
 
+**How a person signs in, on the settings page.** With the same admin URL
+and token, `GET /api/v1/user/directory` also reports the social provider
+the caller's directory account was first connected to
+(`firstSocialProvider`) and whether it has a password (`hasPassword`), so a
+front end can say "Signed up with Google" and offer "Add a password". The
+account is the one carrying the caller's linked directory `uid`, never one
+found by address alone, since authentik does not keep addresses unique. The
+provider comes from authentik's source connections, so the token needs to
+view them (`authentik_core.view_usersourceconnection`) as well as users.
+The password answer is the account's `agentry_has_password` attribute,
+which the account-flows blueprint's `agentry-record-has-password` policy
+keeps: set when a flow writes a password, refreshed from the account at
+every sign-in (an account a social provider created holds an empty
+password, which counts as none). authentik's API has no such field, and
+its property-mapping test endpoint, the other way to ask, needs the right
+to create property mappings for any token that is not a superuser. Until an
+account has signed in or written a password under this blueprint the field
+is absent, and so is either field when the directory does not answer.
+
 **Account erasure spans both systems.** `POST /user/delete` pseudonymizes the
 registry account (§12.7); the sign-in account — email, display name,
 password hash — lives in authentik. Set `AGENTRY_IDP_ADMIN_URL` (the API
