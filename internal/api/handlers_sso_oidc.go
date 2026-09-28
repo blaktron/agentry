@@ -10,6 +10,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/blaktron/agentry/internal/auth"
+	oidcrp "github.com/blaktron/agentry/internal/auth/oidc"
 )
 
 const oidcStateCookie = "agentry_oidc_state"
@@ -180,5 +181,6 @@ func (s *Server) OidcCallback(w http.ResponseWriter, r *http.Request, org OrgHan
 		problemUnauthorized(w, r, msg)
 		return
 	}
-	s.establishSSOSession(w, r, orgRow, connID, "oidc", claims.Subject, claims.Email, nil, st.Next)
+	s.establishSSOSession(w, r, orgRow, connID, "oidc", claims.Subject, claims.Email, nil, st.Next,
+		oidcrp.AMRNamesSecondFactor(claims.AMR))
 }
