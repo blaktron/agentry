@@ -963,12 +963,12 @@ paths:
         With auth.externalOnly, credentials live in the directory service
         (Authentik). This answers the settings page's question "where do I
         change my password or add an authenticator?" with the directory's
-        flow URLs, and lists the caller's enrolled authenticator devices
-        when the server has directory admin access (auth.idpAdminURL).
+        flow URLs, and lists the caller's enrolled authenticators when
+        the server has directory admin access (auth.idpAdminURL).
         Without a directory, `managed` is false and the rest is absent.
       responses:
         "200":
-          description: Directory account links and devices.
+          description: Directory account links and enrolled authenticators.
           content:
             application/json:
               schema:
@@ -982,10 +982,10 @@ paths:
       summary: Remove one of the caller's own authenticators from the directory service (agentry#164).
       description: >
         With auth.externalOnly and directory admin access, removes the
-        caller's authenticator device of this kind and id through the
+        caller's authenticator of this kind and id through the
         directory's admin API, so the settings page manages MFA without
-        ever showing the directory's own panel. The device must be on the
-        caller's own account: an id that is somebody else's answers 404
+        ever showing the directory's own panel. The authenticator must be
+        on the caller's own account: an id that is somebody else's answers 404
         exactly like a missing one. 404 when the server has no directory
         admin access; 502 when the directory did not answer.
       parameters:
@@ -4583,7 +4583,7 @@ components:
             required: [kind, name]
             properties:
               id:
-                description: The directory's id for the device; pass it to DELETE /user/directory/devices/{kind}/{deviceId}.
+                description: The directory's id for the authenticator; pass it to DELETE /user/directory/devices/{kind}/{deviceId}.
                 type: string
               kind:
                 description: totp | webauthn | static | duo | sms | email | other
@@ -4594,7 +4594,7 @@ components:
                 type: string
                 format: date-time
         devicesError:
-          description: Set when the device lookup was attempted and failed; the links still work.
+          description: Set when the authenticator lookup was attempted and failed; the links still work.
           type: string
     User:
       type: object
