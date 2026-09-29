@@ -685,7 +685,9 @@ func (s *Service) RegisterHandlers(q queue.Client) {
 		if err != nil && last {
 			// The last attempt never leaves a pack scanning: whatever
 			// stopped it, the pack is failed, with nothing claimed read.
-			s.failPack(ctx, args)
+			// The queue's job timeout (DEV-176) cancels ctx, so the write
+			// must not ride it.
+			s.failPack(context.WithoutCancel(ctx), args)
 		}
 		return err
 	})

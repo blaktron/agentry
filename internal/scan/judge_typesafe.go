@@ -64,7 +64,8 @@ const (
 )
 
 // typesafeQuestions are the six rubric axes as questions the model answers
-// with a probability, over a state of `{path, content, declared_capabilities}`.
+// with a probability, over a state of `{path, content,
+// declared_capabilities, runner_grants}`.
 // The texts are pkg/judge's constants (judge.RubricQuestions), whose ids are
 // the gate's category ids; the wording is part of the rubric, and changing
 // it changes the hash.
@@ -104,8 +105,9 @@ func PinnedJudgeModel(model string) bool { return judge.PinnedModel(model) }
 
 // hash is the rubric hash (§8.4.4) over everything that changes a verdict:
 // the model, the axes and their wording, the request shape, the chunk size,
-// the capability bound, the thresholds, the band and the sample count. It
-// is pkg/judge's (RubricScanner.Hash), which a draft's check records too.
+// the capability bound, the runner's grants, the thresholds, the band and
+// the sample count. It is pkg/judge's (RubricScanner.Hash), which a draft's
+// check records too.
 func (j *TypeSafeJudge) hash() string {
 	return judge.NewRubricScannerShape(modelOnly(j.model), j.batch).Hash()
 }

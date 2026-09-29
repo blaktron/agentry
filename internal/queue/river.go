@@ -73,12 +73,23 @@ type RiverClient struct {
 	maxWorkers   int
 	pollInterval time.Duration
 	reclaimAfter time.Duration
+	jobTimeout   time.Duration
 	stopGrace    time.Duration
 	testOnly     bool
 
 	mx          *metrics.Metrics
 	sampleEvery time.Duration
 }
+
+// riverJobTimeout is how long one attempt of a job may run before River
+// cancels its context and retries it (agentry#750). It exists for the rescue:
+// River's rescuer skips a job with no timeout (JobTimeout -1) however long its
+// worker has been gone, so a job whose worker died mid-run (an evicted pod, a
+// lost node) stayed running, and a scan stayed in scanning, for good. River
+// rescues a job only past both its timeout and RescueStuckJobsAfter, and needs
+// the timeout under the rescue cutoff (defaultReclaimAfter, 30 minutes). The
+// longest job either deployment had run by 2026-09-29 took 20 seconds.
+const riverJobTimeout = 25 * time.Minute
 
 // NewRiverClient builds the River queue client. Register handlers, then
 // Work (worker role) or only Enqueue (API role).
@@ -93,6 +104,7 @@ func NewRiverClient(st *store.Store, log *slog.Logger) *RiverClient {
 		maxWorkers:   1,
 		pollInterval: time.Second,
 		reclaimAfter: defaultReclaimAfter,
+		jobTimeout:   riverJobTimeout,
 		stopGrace:    30 * time.Second,
 		sampleEvery:  defaultSampleEvery,
 	}
@@ -205,9 +217,8 @@ func (c *RiverClient) handler(kind string) Handler {
 }
 
 // riverWorker adapts every registered kind to River's Worker: the same
-// backoff the pg driver used (2^attempt seconds), no per-job timeout (a scan
-// with an LLM judge and an OSV lookup runs as long as it runs; the client
-// cancels it only on shutdown), and the §16.2 outcome metrics.
+// backoff the pg driver used (2^attempt seconds), riverJobTimeout as every
+// job's limit, and the §16.2 outcome metrics.
 type riverWorker struct {
 	river.WorkerDefaults[envelope]
 	c *RiverClient
@@ -287,7 +298,7 @@ func (c *RiverClient) workClient(queues []string, poll time.Duration) (*river.Cl
 		Logger:               c.log,
 		Workers:              c.workers,
 		Queues:               map[string]river.QueueConfig{},
-		JobTimeout:           -1,
+		JobTimeout:           c.jobTimeout,
 		RescueStuckJobsAfter: c.reclaimAfter,
 		ErrorHandler:         &riverErrors{c: c},
 		FetchPollInterval:    poll,
