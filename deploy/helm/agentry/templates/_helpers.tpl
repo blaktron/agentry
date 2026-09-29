@@ -171,6 +171,24 @@ truncation never makes two roles' names one. */ -}}
 {{- end }}
 
 {{/*
+  One role's extra pod annotations: the chart-wide podAnnotations with the
+  role's own over them (agentry#745), less the chart's checksum/config.
+  Empty renders nothing, so the pod template is unchanged when neither is set.
+  Include with: {{- with include "agentry.podAnnotations" (dict "ctx" . "role" "api") }}{{ . | nindent 8 }}{{ end }}
+*/}}
+{{- define "agentry.podAnnotations" -}}
+{{- if not (has .role (list "api" "git" "worker")) -}}
+{{- fail (printf "agentry.podAnnotations has no role %q: the chart's roles are api, worker and git" .role) -}}
+{{- end -}}
+{{- $role := index .ctx.Values .role -}}
+{{- /* checksum/config is the chart's own, which rolls the pods on a config
+change; an operator's copy would render the key twice. */ -}}
+{{- with omit (merge (deepCopy ($role.podAnnotations | default dict)) (.ctx.Values.podAnnotations | default dict)) "checksum/config" -}}
+{{ toYaml . }}
+{{- end -}}
+{{- end }}
+
+{{/*
   Object-store credentials from objectStoreCredentials.existingSecret, in the api
   and worker containers only: the git role never touches the store.
 */}}
