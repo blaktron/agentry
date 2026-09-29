@@ -1696,8 +1696,8 @@ type Agent struct {
 	// AutoPublishTags Present for callers with maintain (§6.3 toggle).
 	AutoPublishTags *bool `json:"autoPublishTags,omitempty"`
 
-	// Builtin Whether this is a built-in agent: one of the packages the Agentry CLI embeds and runs as part of the application, published here for reading (agentry#737). A client labels it Built-in in place of its run modes. Only platform staff set it, on an agent of a first-party namespace. Always present.
-	Builtin       *bool     `json:"builtin,omitempty"`
+	// Builtin Whether this is a built-in agent: one of the packages the Agentry CLI embeds and runs as part of the application, published here for reading (agentry#737). A client labels it Built-in in place of its run modes. Only platform staff set it, on an agent of a first-party namespace. Not the runner's attestation state `builtin`, which only the CLI's embedded copy of a package runs under; an install of this agent from the registry is an ordinary release.
+	Builtin       bool      `json:"builtin"`
 	CreatedAt     time.Time `json:"createdAt"`
 	DefaultBranch string    `json:"defaultBranch"`
 
@@ -2831,9 +2831,9 @@ type ScopeGranted = string
 
 // SearchHit defines model for SearchHit.
 type SearchHit struct {
-	// Builtin Whether this is a built-in agent (see `Agent.builtin`): a client labels it Built-in in place of its run modes. Always present.
-	Builtin     *bool `json:"builtin,omitempty"`
-	Installs30d *int  `json:"installs30d,omitempty"`
+	// Builtin Whether this is a built-in agent (see `Agent.builtin`): a client labels it Built-in in place of its run modes.
+	Builtin     bool `json:"builtin"`
+	Installs30d *int `json:"installs30d,omitempty"`
 
 	// LogoUrl The publishing organization's logo, when the namespace is an organization with one — beside the publisher's name, never in place of the verdict. Absent for a person's namespace and for an organization without one.
 	LogoUrl *string `json:"logoUrl,omitempty"`
