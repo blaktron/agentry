@@ -164,15 +164,14 @@ The check has two halves, both asked of the deployment's Jev with its key:
   which flagged good drafts, and one on asking the person for what the
   description gave, which missed most.
 
-The rubric half tells the person what S5 will record. Until agentry#731
-it flagged nine of the Drafter's ten fixture drafts on the
-undeclared-capability question (C3), because it was not told what the
-runner grants every run and so read an instruction that reads its own
-inputs and writes its report as needing more than it declares. Since then
-the statement of the runner's grants rides in its state, C3 names it, and
-none of the ten draws a finding; the wording was benched against the
-attack corpus before it shipped (`measurements/draft-check-bench.md`). A
-draft that is flagged goes to review at publish, not to refusal.
+The rubric half tells the person what S5 will record. Its state says
+what the runner gives every run, so an instruction that reads its own
+inputs and writes its report is not read as needing more than it
+declares. On the Drafter's ten fixture drafts it draws no finding, a
+result of wordings tuned on those same drafts and checked against the
+attack corpus (agentry#731; the readings are the engineering record's
+`measurements/draft-check-bench.md`). A draft that is flagged goes to
+review at publish, not to refusal.
 
 Each half answers `pass`, `flagged` or `not_scanned` on its own. A half
 the judge could not answer for (an error, a timeout, or for the draft set
