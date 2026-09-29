@@ -47,7 +47,7 @@ guide:
       3. Install to Workspace, then copy the Bot User OAuth Token, which starts with `xoxb-`.
       4. Invite the app to the channel: /invite @<app-name>.
 
-      How this BriefAgent uses it: for one call, `chat.postMessage`, to the channel you name. It sends no other request to Slack.
+      How this QuickAgent uses it: for one call, `chat.postMessage`, to the channel you name. It sends no other request to Slack.
 capabilities:
   network:
     egress:

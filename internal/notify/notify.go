@@ -435,7 +435,7 @@ func (r renderer) verification(token string) message {
 		once = "The code works once."
 	}
 	body += once + " Until this address is confirmed, the account cannot\n" +
-		"create a BriefAgent or publish a version.\n\n" +
+		"create a QuickAgent or publish a version.\n\n" +
 		"If you did not create this account, ignore this message.\n"
 	return message{Subject: r.registry + ": confirm your email address", Body: body + r.footer()}
 }
@@ -453,7 +453,7 @@ func (r renderer) quarantine(n QuarantineNotice) message {
 		// (handlers_version_files.go).
 		"What that means: the version no longer resolves for new installs, not\n" +
 		"even by exact version, and a download of it answers 409. Copies already\n" +
-		// One sweep can quarantine several versions of the same BriefAgent and
+		// One sweep can quarantine several versions of the same QuickAgent and
 		// send one of these for each, so "your other published versions still
 		// resolve" was a promise this mail cannot keep. Name the mechanism
 		// that would have taken the others instead.
@@ -545,7 +545,7 @@ func (r renderer) advisory(n AdvisoryNotice) message {
 	// Say it, then name it (plan §4.3): this mail is where an author meets
 	// the word "advisory" first.
 	body := "The registry published an advisory naming " + n.Agent + ". An advisory is\n" +
-		"the public record of a security problem in a published BriefAgent.\n\n" +
+		"the public record of a security problem in a published QuickAgent.\n\n" +
 		"Severity: " + severityLine(n.Severity) + "\n"
 	if n.AffectedVersions != "" {
 		body += "Affected versions: " + n.AffectedVersions + "\n"
@@ -579,7 +579,7 @@ func (r renderer) mcpAlert(n MCPDependencyAlertNotice) message {
 	if len(n.FixedIn) > 0 {
 		body += "Fixed in: " + strings.Join(n.FixedIn, ", ") + "\n"
 	}
-	body += "\nThe version stays published and installable. The BriefAgent's page\n" +
+	body += "\nThe version stays published and installable. The QuickAgent's page\n" +
 		"and your dashboard list this alert.\n\n" +
 		"To clear it, publish a new version that pins a fixed server version,\n" +
 		"then yank the affected one. The alert closes when the version leaves\n" +

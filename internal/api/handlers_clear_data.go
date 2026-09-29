@@ -20,7 +20,7 @@ const eventUserDataCleared = "user.data_cleared"
 // ClearCurrentUserData implements POST /user/clear-data (agentry#498): the
 // account's credentials, installs and settings go, the account stays. The
 // scope is the operator's ("credentials and history only", 2026-09-23):
-// BriefAgents, memberships, stars, the handle, the email, the sign-in
+// QuickAgents, memberships, stars, the handle, the email, the sign-in
 // account at the directory, the subscription and credits are untouched.
 // The caller's own session survives, so the person sees the result.
 func (s *Server) ClearCurrentUserData(w http.ResponseWriter, r *http.Request) {

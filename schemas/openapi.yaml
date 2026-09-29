@@ -97,7 +97,7 @@ tags:
   - name: installs
     description: >-
       Account installs (agentry#448): a signed-in person's record of a
-      BriefAgent release they accepted for their account and the contract
+      QuickAgent release they accepted for their account and the contract
       they consented to. Not a star, not the desktop's or the CLI's
       per-machine record; no download counter moves.
   - name: knowledge
@@ -541,7 +541,7 @@ paths:
         and the notification settings to their defaults (every switch on; mail
         still goes only to a verified address). The account itself stays: the
         handle, the email, the sign-in account at the directory, organization
-        memberships, BriefAgents with their versions and repositories, stars,
+        memberships, QuickAgents with their versions and repositories, stars,
         the subscription and credits are untouched. Audited as
         `user.data_clear` with the count of each class; after the commit an
         extension event `user.data_cleared` carries the user id, so an
@@ -624,7 +624,7 @@ paths:
       summary: The caller's account installs, composed for a list.
       description: >-
         Every record the caller holds, newest change first. A record whose
-        BriefAgent the caller can no longer read — made private to them,
+        QuickAgent the caller can no longer read — made private to them,
         its organization suspended — is listed as the bare `ref` with
         `readable: false` and nothing else, so the list tells a former
         reader nothing they did not already know. A PAT needs
@@ -645,11 +645,11 @@ paths:
     put:
       operationId: putAccountInstall
       tags: [installs]
-      summary: Record a BriefAgent release as installed to the account, or move the record to another version.
+      summary: Record a QuickAgent release as installed to the account, or move the record to another version.
       description: >-
         The version must be a published release the caller can read: a
         non-reader gets the missing name's 404, an unpublished version `409
-        version-not-published`, a blocked BriefAgent `410 blocked`. The
+        version-not-published`, a blocked QuickAgent `410 blocked`. The
         request carries the acceptances the release needs and is refused
         with `409 install-consent-required`, naming the missing ones in
         `missing`, when it lacks any: `capabilities` on a first install and,
@@ -660,7 +660,7 @@ paths:
         update, to any published version, an older one included: the
         version moves and the snapshot follows it. The action is
         audited as `agent.install`; no download counter moves. A PAT needs
-        `user:profile`, and `agent:read` for a private BriefAgent.
+        `user:profile`, and `agent:read` for a private QuickAgent.
       parameters:
         - $ref: "#/components/parameters/Namespace"
         - $ref: "#/components/parameters/AgentName"
@@ -682,11 +682,11 @@ paths:
     delete:
       operationId: deleteAccountInstall
       tags: [installs]
-      summary: Remove the caller's record for a BriefAgent (idempotent).
+      summary: Remove the caller's record for a QuickAgent (idempotent).
       description: >-
         204 whether or not a record existed, and whether or not the name
-        resolves: the row is the caller's own, so no BriefAgent is read and
-        nothing is learned about one — a record whose BriefAgent the caller
+        resolves: the row is the caller's own, so no QuickAgent is read and
+        nothing is learned about one — a record whose QuickAgent the caller
         can no longer read is removed by the ref the list shows for it.
         Audited as `agent.uninstall` when a record went. A PAT needs
         `user:profile`.
@@ -4065,7 +4065,7 @@ paths:
       tags: [model-input]
       summary: AI Review of a finished draft before it is submitted (agentry#708).
       description: >-
-        Reads a finished BriefAgent draft's rendered package the two ways
+        Reads a finished QuickAgent draft's rendered package the two ways
         AI Review will: with the release rubric that stage S5 of the
         pipeline asks at publish (the manifest as its canonical JSON and
         every text file, in the same chunks, state and request shape, under
@@ -4155,7 +4155,7 @@ paths:
         Without it, the global feed: every published advisory against a
         public agent, newest first, keyset-paged with `cursor`/`limit` and a
         `Link: rel="next"` header (§9.1). Each item carries `agent`
-        (`ns/name`) so a feed reader can find the affected BriefAgent.
+        (`ns/name`) so a feed reader can find the affected QuickAgent.
       security: []
       parameters:
         - name: affecting
@@ -4853,7 +4853,7 @@ components:
       description: |
         PAT scopes (§12.3). A token can do only what its scopes allow; a
         session acts with the account's full authority. `run:write` lets a
-        token start, feed and cancel a hosted run of a BriefAgent and
+        token start, feed and cancel a hosted run of a QuickAgent and
         `run:read` lets it read a run, its log and its artefacts — both are
         consumed only by a registry that mounts the runs extension, and
         unlock nothing on one that does not. `knowledge:read` and
@@ -5757,7 +5757,7 @@ components:
           description: A reviewer decided one of the person's submissions, or the gate held one for review.
         advisories:
           type: boolean
-          description: An advisory naming one of the person's BriefAgents was published.
+          description: An advisory naming one of the person's QuickAgents was published.
         orgInvites:
           type: boolean
           description: The person was added to an organization.
@@ -6712,7 +6712,7 @@ components:
       type: object
       description: >-
         One account install, composed for a list. Only `ref` and `readable`
-        are always present: a record whose BriefAgent the caller can no
+        are always present: a record whose QuickAgent the caller can no
         longer read carries nothing else.
       required: [ref, readable]
       properties:
@@ -6721,7 +6721,7 @@ components:
           description: "`ns/name`."
         readable:
           type: boolean
-          description: Whether the caller can read the BriefAgent today.
+          description: Whether the caller can read the QuickAgent today.
         installedVersion:
           type: string
         capabilities:

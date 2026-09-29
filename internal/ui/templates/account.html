@@ -28,7 +28,7 @@
 {{if .ID}}<form method="post" action="/ui/account/directory/devices" class="inline"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="kind" value="{{.Kind}}"><input type="hidden" name="deviceId" value="{{.ID}}"><button type="submit" class="small danger">Remove</button></form>{{end}}</li>{{end}}</ul>{{end}}
 {{end}}{{else}}
 {{if $.User.TotpEnabled}}<p><span class="badge ok">enabled</span> TOTP is active on this account.</p>
-{{else}}<p class="muted">Two-factor authentication is not enrolled. Enrol it through the API (<code>POST /api/v1/auth/2fa/totp/setup</code>); publishing a public BriefAgent requires it.</p>{{end}}
+{{else}}<p class="muted">Two-factor authentication is not enrolled. Enrol it through the API (<code>POST /api/v1/auth/2fa/totp/setup</code>); publishing a public QuickAgent requires it.</p>{{end}}
 {{end}}
 </section>
 <section class="card">
@@ -42,7 +42,7 @@
   <label class="check"><input type="checkbox" name="email.dependencyAlerts" value="true"{{if .Email.DependencyAlerts}} checked{{end}}> a published version of mine declares an MCP server with a newly known vulnerability</label>
   <label class="check"><input type="checkbox" name="email.quarantine" value="true"{{if .Email.Quarantine}} checked{{end}}> a rescan quarantines a published version of mine</label>
   <label class="check"><input type="checkbox" name="email.reviewDecisions" value="true"{{if .Email.ReviewDecisions}} checked{{end}}> a reviewer decides one of my submissions, or the gate holds one for review</label>
-  <label class="check"><input type="checkbox" name="email.advisories" value="true"{{if .Email.Advisories}} checked{{end}}> we publish an advisory naming one of my BriefAgents</label>
+  <label class="check"><input type="checkbox" name="email.advisories" value="true"{{if .Email.Advisories}} checked{{end}}> we publish an advisory naming one of my QuickAgents</label>
   <label class="check"><input type="checkbox" name="email.orgInvites" value="true"{{if .Email.OrgInvites}} checked{{end}}> I am added to an organization</label>
   <label class="check"><input type="checkbox" name="email.billing" value="true"{{if .Email.Billing}} checked{{end}}> the subscription that pays for my work changes — a payment goes through or fails, seats run out, or we restrict an organization</label>
   <p class="muted">In the app</p>

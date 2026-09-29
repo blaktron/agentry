@@ -21,7 +21,7 @@ var pathHandles = map[string]bool{
 // on a public registry can pass their content off as first-party. Unlike
 // pathHandles they are meant to exist: platform staff may create an
 // organization with one of them — the `agentry` org that publishes the
-// example BriefAgents (agentry#285, DEV-098).
+// example QuickAgents (agentry#285, DEV-098).
 var firstPartyHandles = map[string]bool{
 	"agentry": true, "secureagentry": true,
 }

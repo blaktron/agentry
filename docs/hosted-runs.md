@@ -266,13 +266,13 @@ than from the sandbox host.
 A client showing a run shows the receipt's `capabilities_enforced` as it is —
 item for item, sentence for sentence, never summarised or scored. Those
 sentences name the mechanism behind each contract line, including
-`capabilities_enforced.runtime`, the OCI runtime the BriefAgent's containers
+`capabilities_enforced.runtime`, the OCI runtime the QuickAgent's containers
 were created with ([the `docker.runtime` knob](runner.md#the-oci-runtime-dockerruntime)).
 Summarising them would replace what the run enforced with someone's reading
 of it.
 
 Three surfaces read the same run. The API above is one; the site's run page
-is another, reached from **Run in Agentry** on a BriefAgent's page, with the
+is another, reached from **Run in Agentry** on a QuickAgent's page, with the
 queue, the live log, the credits held and settled, and the outputs to
 download; the desktop app's run panel is the third. The site's
 [Running on Agentry](https://docs.secureagentry.net/agentry/hosted-runs/)
@@ -559,7 +559,7 @@ a package; the pack it makes is scanned before it is final.
 ## A hosted draft
 
 A run of the kind `draft` runs the CLI's built-in Drafter, which turns a
-description of a task into a draft of a BriefAgent (the CLI's `agentry
+description of a task into a draft of a QuickAgent (the CLI's `agentry
 draft`), on a sandbox host against the platform's
 model, for credits. It is created by the same `POST /api/v1/x/runs/` with
 `kind: draft`, a `description` (at most 24 KiB of text) and up to ten

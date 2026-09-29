@@ -3,7 +3,7 @@
 // V1–V10 (§5.3), the closed capability vocabulary (§5.4), and the canonical
 // JSON form stored as agent_versions.manifest (§4.2).
 //
-// Two schema majors are read. Major 2 (DEV-088) classifies a BriefAgent by
+// Two schema majors are read. Major 2 (DEV-088) classifies a QuickAgent by
 // the run modes it supports — autonomous, interactive — and names one
 // instruction entrypoint. Major 1 classified by kind (skill, prompt-agent,
 // mcp-server) and is kept readable for the archives already published under
@@ -168,7 +168,7 @@ type Manifest struct {
 	// Interactive carries hints for interactive sessions (v2, V10).
 	// Everything else about a session is runner policy, not manifest.
 	Interactive *InteractiveHints `yaml:"interactive,omitempty" json:"interactive,omitempty"`
-	// Guide is what a person reads before a run: what the BriefAgent does,
+	// Guide is what a person reads before a run: what the QuickAgent does,
 	// what to gather first, what files to bring, a task placeholder, and
 	// help for each declared secret (v2, V10; plan guided-runs.md §6). It is
 	// shown to people only: it never reaches the agent, the run plan, the
@@ -320,7 +320,7 @@ type IntakeQuestion struct {
 // §6): clients show them before a run and derive the same steps from the
 // rest of the manifest when a release carries none.
 type Guide struct {
-	// Overview says what the BriefAgent does and returns, in markdown.
+	// Overview says what the QuickAgent does and returns, in markdown.
 	Overview string `yaml:"overview,omitempty" json:"overview,omitempty"`
 	// Prepare lists what to gather before starting, one line each.
 	Prepare []string `yaml:"prepare,omitempty" json:"prepare,omitempty"`

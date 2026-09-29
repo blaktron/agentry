@@ -261,7 +261,7 @@ every remembered browser (the ones that skip the second factor), consumes
 every pending desktop sign-in code, ends every session except the caller's,
 removes every account install, clears the display name and resets the
 notification settings to their defaults. The handle, the email, the sign-in
-account at the directory, organization memberships, BriefAgents with their
+account at the directory, organization memberships, QuickAgents with their
 versions and repositories, stars, the subscription and credits stay. It
 answers `204`, and the caller stays signed in.
 
@@ -324,16 +324,16 @@ scopes:
 
 | Scope | What a token with it may do |
 | --- | --- |
-| `agent:read` | read BriefAgents, versions, reports and search |
-| `agent:publish` | create BriefAgents and submit versions |
-| `repo:read` | fetch from a BriefAgent's git repository |
-| `repo:write` | push to a BriefAgent's git repository |
+| `agent:read` | read QuickAgents, versions, reports and search |
+| `agent:publish` | create QuickAgents and submit versions |
+| `repo:read` | fetch from a QuickAgent's git repository |
+| `repo:write` | push to a QuickAgent's git repository |
 | `user:profile` | read and change the account's own settings, tokens, keys, sessions and account installs |
 | `org:admin` | manage an organization's members, teams and settings |
 | `review:act` | work the review queue and record decisions (platform staff or a security reviewer) |
 | `audit:read` | read an organization's audit log |
-| `run:read` | read a hosted run of a BriefAgent, its log and its artefacts |
-| `run:write` | start, feed and cancel a hosted run of a BriefAgent |
+| `run:read` | read a hosted run of a QuickAgent, its log and its artefacts |
+| `run:write` | start, feed and cancel a hosted run of a QuickAgent |
 | `knowledge:read` | list and read the account's knowledge packs, their scan reports and sealed trees, export them, and have a pack's data key unwrapped |
 | `knowledge:write` | create, upload and delete the account's knowledge packs and have a data key wrapped |
 | `secret:write` | set and delete the account's hosted-run secrets; never list or read one |
@@ -393,7 +393,7 @@ installs a declared server.
 ## Account installs
 
 An account install is a signed-in person's record, on the registry, of a
-BriefAgent release they accepted for their account: the version, the
+QuickAgent release they accepted for their account: the version, the
 declared capabilities they consented to as that release declared them,
 and the unsigned or unscanned consents the release needed. It is an
 acceptance, not a laying-down — nothing is written on any machine — and
@@ -402,14 +402,14 @@ per-machine record `agentry install` and the desktop app keep in
 `installed.yaml`, which is never synced with it. An account install bumps
 no download counter: `installsTotal` and `installs30d` on `GET
 /agents/{ns}/{name}/stats` stay download rollups. One record per
-BriefAgent per account.
+QuickAgent per account.
 
 `PUT /user/installs/{ns}/{name}` with `{version, acceptCapabilities,
 acceptUnsigned?, acceptUnscanned?}` records a published release the caller
 can read, or moves an existing record to it. A caller who cannot read the
-BriefAgent gets the missing name's `404`, never a `401` or `403` that
+QuickAgent gets the missing name's `404`, never a `401` or `403` that
 would confirm the name; an unpublished version is `409
-version-not-published` (carrying `status`), a blocked BriefAgent `410
+version-not-published` (carrying `status`), a blocked QuickAgent `410
 blocked`. The request must carry the acceptances the release needs, or
 it is `409 install-consent-required` with `missing` naming them:
 `capabilities` on a first install and on an update whose declared
@@ -421,31 +421,31 @@ whenever it was admitted without a scan. A PUT on an existing record is
 the update, to any published version, an older one included; the
 response is the record composed as the list composes it. `DELETE
 /user/installs/{ns}/{name}` removes the caller's own row and reads no
-BriefAgent, so it answers `204` whether or not a record existed and
-whether or not the name resolves — nothing about a BriefAgent is learned
-there, and a record whose BriefAgent the caller can no longer read is
+QuickAgent, so it answers `204` whether or not a record existed and
+whether or not the name resolves — nothing about a QuickAgent is learned
+there, and a record whose QuickAgent the caller can no longer read is
 removed by the ref the list shows for it. `GET
 /user/installs` lists the caller's records, newest change first: `ref`,
 `installedVersion` with its `capabilities` and the consents recorded
 (`acceptedUnsigned`, `acceptedUnscanned`), `latestVersion` (the newest
 published), the installed version's `verdict` (`scanned` with
 `findingCounts`, or `unscanned`; absent while a scan is pending) and
-`signed`, the BriefAgent's `quarantineState`, `installedAt` and
-`updatedAt`. A record whose BriefAgent the caller can no longer read —
+`signed`, the QuickAgent's `quarantineState`, `installedAt` and
+`updatedAt`. A record whose QuickAgent the caller can no longer read —
 made private to them, its organization suspended — is the bare `ref`
 with `readable: false` and nothing else, and that ref is the name the
-caller installed it under, never where the BriefAgent has gone since, so
+caller installed it under, never where the QuickAgent has gone since, so
 the list tells a former reader nothing they did not already know. A
-blocked BriefAgent stays readable and the row says so in
+blocked QuickAgent stays readable and the row says so in
 `quarantineState`. An organization's erasure removes the records of its
-BriefAgents, as it does their stars.
+QuickAgents, as it does their stars.
 
 The three routes are the caller's own account data, so a token needs
-`user:profile` — and `agent:read` to record a private BriefAgent, since
+`user:profile` — and `agent:read` to record a private QuickAgent, since
 the PUT reads it first. The actions are audited as `agent.install` and
 `agent.uninstall` beside `agent.star`, so `GET /user/activity` shows
-them; the BriefAgent's own activity feed does not, at any role — whose
-account holds a BriefAgent is that person's business, where a star is
+them; the QuickAgent's own activity feed does not, at any role — whose
+account holds a QuickAgent is that person's business, where a star is
 public approval.
 
 ## Enterprise SSO
