@@ -3,9 +3,8 @@ package judge
 // The rubric's six questions, the ones stage S5 asks about a release over a
 // state of `{path, content, declared_capabilities, runner_grants}` (plan
 // judge-jev-provider.md, DEV-113; runner_grants since agentry#731, which C3
-// names). The ids are the gate's category ids. The
-// wording is part of the rubric: change it and the recorded rubric hash
-// changes. The "does not count" clauses came from the first live corpus
+// names). The ids are the gate's category ids. The wording is part of the
+// rubric: change it and the recorded rubric hash changes. The "does not count" clauses came from the first live corpus
 // check (2026-09-20): the model read a skill's own task instructions as an
 // override, a documented `curl | bash` as an injection, and a script posting
 // to a declared host as exfiltration.

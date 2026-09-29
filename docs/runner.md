@@ -289,11 +289,8 @@ The CLI checks every draft in four steps (agentry-cli#417, agentry-cli#418):
    `aiReview.check`, and the notes say what a flag means under "AI
    Review's check".
     - The rubric's C3 (a capability used but not declared) is recorded and
-      never sent to the repair turn, and at publish it sends the version to
-      review, not to refusal. Until agentry#731 it read an instruction that
-      uses its own inputs and writes its report that way, which editing the
-      draft could not clear; the rubric's state now says what the runner
-      grants every run.
+      never sent to the repair turn; at publish it sends the version to
+      review, not to refusal.
     - A description over 8 KiB is not checked, and neither is a draft that
       could not be rendered.
     - A pass does not mean the draft does all of the task. The pipeline

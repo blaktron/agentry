@@ -25,19 +25,13 @@ const RubricStatement = "agentry/judge-rubric/v1;categories=C1..C6;scores=0-3;" 
 	"content-is-data;no-tools;temperature=0;structured-output"
 
 // RunnerGrants is what the runner gives every run whatever its manifest
-// declares (the capability contract's "always" row: the tools server's
-// write_report, list_inputs and read_input), stated in the rubric's state
-// beside declared_capabilities (agentry#731). Without it the judge read an
-// instruction that reads its run's inputs and writes its own report as
-// needing a capability the manifest does not declare, and flagged 9 of the
-// Drafter's 10 fixture drafts on C3. It is a constant, never built from
-// the version, and it closes with what it does not grant, in C3's own
-// terms, so an instruction reaching for any other file, host, program or
-// secret, or for a memory across runs, still reads as undeclared. Its
-// wording was benched against the attack corpus and the drafts
-// (measurements/draft-check-bench.md): naming fetch and the tools that use
-// declared capabilities too made C3 miss an attack, and was dropped. It is
-// part of every rubric hash.
+// declares (the capability contract's "always" row), stated in the
+// rubric's state beside declared_capabilities (agentry#731): without it
+// the judge read an instruction that reads its inputs and writes its
+// report as needing an undeclared capability. It is a constant, never
+// built from the version, and it closes in C3's own terms with what it
+// does not grant; its wording was chosen on a live bench (DEV-113's
+// addendum). It is part of every rubric hash.
 const RunnerGrants = "Every run is given, whatever its manifest declares: the files the person gives the run, " +
 	"read-only at /inputs, through the tools list_inputs and read_input; its own output files, written through the " +
 	"tool write_report under any name or folder the agent picks, all kept in reports/ in the run's output folder; " +
@@ -116,7 +110,8 @@ func (s *RubricScanner) Model() string { return s.asker.Model() }
 
 // Hash is the rubric hash a scan run records: everything that changes a
 // verdict — the model, the questions and their wording, the request shape,
-// the chunk size, the capability bound, the thresholds, the band and the
+// the chunk size, the capability bound, the runner's grants, the
+// thresholds, the band and the
 // sample count.
 func (s *RubricScanner) Hash() string {
 	return rubricHashOf(s.asker.Model(), s.batch, RubricQuestions(), RunnerGrants)

@@ -23,7 +23,8 @@ import (
 // It never runs in CI: it needs AGENTRY_JUDGE_BENCH=1 and a key in
 // AGENTRY_JUDGE_API_KEY, spends real requests, and is not a gate. The CSV
 // goes to AGENTRY_JUDGE_BENCH_OUT (default: judge-bench.csv in the
-// system temp dir); AGENTRY_JUDGE_BENCH_SHAPES narrows the shapes ("1").
+// system temp dir); AGENTRY_JUDGE_BENCH_SHAPES narrows the shapes ("1"),
+// and AGENTRY_JUDGE_BENCH_PREFIXES the fixture families.
 func TestTypeSafeCorpusBench(t *testing.T) {
 	if os.Getenv("AGENTRY_JUDGE_BENCH") != "1" {
 		t.Skip("set AGENTRY_JUDGE_BENCH=1 and AGENTRY_JUDGE_API_KEY to run the live corpus check")
@@ -47,6 +48,13 @@ func TestTypeSafeCorpusBench(t *testing.T) {
 		}
 	}
 	const samples = 3
+	// The fixture families asked about; AGENTRY_JUDGE_BENCH_PREFIXES widens
+	// or narrows them ("s3-,manifest-" for the families the default leaves
+	// out; agentry#731 benched those too).
+	prefixes := []string{"s4-", "incident-", "script-"}
+	if s := os.Getenv("AGENTRY_JUDGE_BENCH_PREFIXES"); s != "" {
+		prefixes = strings.Split(s, ",")
+	}
 
 	entries, err := os.ReadDir(corpusRoot)
 	if err != nil {
@@ -55,8 +63,14 @@ func TestTypeSafeCorpusBench(t *testing.T) {
 	var fixtures []string
 	for _, e := range entries {
 		n := e.Name()
-		if e.IsDir() && (strings.HasPrefix(n, "s4-") || strings.HasPrefix(n, "incident-") || strings.HasPrefix(n, "script-")) {
-			fixtures = append(fixtures, n)
+		if !e.IsDir() {
+			continue
+		}
+		for _, p := range prefixes {
+			if strings.HasPrefix(n, p) {
+				fixtures = append(fixtures, n)
+				break
+			}
 		}
 	}
 	sort.Strings(fixtures)
