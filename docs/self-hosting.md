@@ -209,6 +209,19 @@ reference (added for the Vultr production cluster, DEV-124):
   file system that allows exec.
 - `api.extraEnv`, `git.extraEnv`, `worker.extraEnv` — environment for one
   role; `extraEnv` reaches every role.
+- `podAnnotations` and `api.podAnnotations`, `git.podAnnotations`,
+  `worker.podAnnotations` — annotations on the pods; a role's own win on a
+  clash (agentry#745). A cluster autoscaler will not evict a pod with an
+  `emptyDir` volume (every role has a scratch one), so it cannot drain their
+  nodes unless the pods carry the annotation
+  `cluster-autoscaler.kubernetes.io/safe-to-evict: "true"`. Set it on a role
+  only where losing a pod is acceptable: the git role's repository volume
+  may take minutes to attach on another node.
+- `api.podDisruptionBudget`, `git.podDisruptionBudget`,
+  `worker.podDisruptionBudget` — `{enabled, maxUnavailable}`, off by default:
+  a PodDisruptionBudget for that role's pods alone, so a node drain evicts at
+  most `maxUnavailable` of them at a time. `0` stops every drain of the
+  role's nodes, the autoscaler's included.
 - `serviceAccount` — each role runs under a ServiceAccount of its own,
   `<release>-agentry-api`, `<release>-agentry-worker` and
   `<release>-agentry-git` (agentry#627), so a pod's service-account token

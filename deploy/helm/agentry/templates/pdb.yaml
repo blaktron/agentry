@@ -1,0 +1,23 @@
+{{- /* A PodDisruptionBudget per role that asks for one (agentry#745): it
+selects that role's pods alone, so a node drain or an autoscaler's
+scale-down evicts at most maxUnavailable of them at a time. */ -}}
+{{- range $role := list "api" "git" "worker" }}
+{{- with (index $.Values $role).podDisruptionBudget }}
+{{- if .enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "agentry.fullname" $ }}-{{ $role }}
+  labels:
+    {{- include "agentry.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $role }}
+spec:
+  maxUnavailable: {{ required (printf "%s.podDisruptionBudget.maxUnavailable is required when the budget is enabled" $role) .maxUnavailable }}
+  selector:
+    matchLabels:
+      {{- include "agentry.selectorLabels" $ | nindent 6 }}
+      app.kubernetes.io/component: {{ $role }}
+{{- end }}
+{{- end }}
+{{- end }}

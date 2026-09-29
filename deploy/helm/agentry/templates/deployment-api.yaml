@@ -17,6 +17,9 @@ spec:
     metadata:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with include "agentry.podAnnotations" (dict "ctx" . "role" "api") }}
+        {{- . | nindent 8 }}
+        {{- end }}
       labels:
         {{- include "agentry.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: api
