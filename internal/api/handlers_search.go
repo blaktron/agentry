@@ -86,7 +86,7 @@ func (s *Server) SearchAgents(w http.ResponseWriter, r *http.Request, params Sea
 		qs := SearchHitQuarantineState(row.QuarantineState)
 		hit := SearchHit{
 			Namespace: row.Namespace, Name: row.Name, Modes: apiModes(row.Modes),
-			Summary: row.Summary, Installs30d: &installs, QuarantineState: &qs,
+			Summary: row.Summary, Installs30d: &installs, QuarantineState: &qs, Builtin: row.Builtin,
 		}
 		if u := logoURL(row.Namespace, row.LogoObjectKey); u != "" {
 			hit.LogoUrl = &u
