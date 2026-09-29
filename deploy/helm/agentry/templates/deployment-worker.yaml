@@ -40,7 +40,7 @@ spec:
           securityContext:
             {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           env:
-            {{- include "agentry.agentrydEnv" . | nindent 12 }}
+            {{- include "agentry.agentrydEnv" (dict "ctx" . "role" "worker") | nindent 12 }}
             {{- include "agentry.storageCredentialsEnv" . | nindent 12 }}
             {{- if .Values.worker.proxy.httpsProxy }}
             - name: HTTPS_PROXY
