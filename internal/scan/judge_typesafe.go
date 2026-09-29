@@ -64,7 +64,7 @@ const (
 )
 
 // typesafeQuestions are the six rubric axes as questions the model answers
-// with a probability, over a state of `{path, content, declared_capabilities}`.
+// with a probability, over a state of `{path, content, declared_capabilities, runner_grants}`.
 // The texts are pkg/judge's constants (judge.RubricQuestions), whose ids are
 // the gate's category ids; the wording is part of the rubric, and changing
 // it changes the hash.
