@@ -32,6 +32,7 @@ IMAGE="${AUTHENTIK_IMAGE:-$(awk '/image: ghcr.io\/goauthentik\/server:/{print $2
 PG_IMAGE=$(awk '/image: postgres:/{print $2; exit}' "$COMPOSE")
 REDIS_IMAGE=$(awk '/image: redis:/{print $2; exit}' "$COMPOSE")
 PY_IMAGE="${PY_IMAGE:-python:3.12-slim}"
+[ -n "$IMAGE" ] || { echo "FAIL: no authentik image is pinned in $COMPOSE"; exit 1; }
 
 # A random prefix, so two runs on one daemon never meet (directory-remember.sh).
 P="dp-$(openssl rand -hex 4)"
@@ -71,13 +72,15 @@ worker() {
   docker cp deploy/compose/authentik/blueprints/. "$WORKER:/blueprints/custom" >/dev/null
   docker start "$WORKER" >/dev/null
 }
-docker create --name "$AK" --network "$NET" --network-alias dr-ak-server "${AK_ENV[@]}" -e AGENTRY_DIRECTORY_PROMO_FIELD=true "$IMAGE" server >/dev/null
+# The server serves what the database holds and applies no blueprint, so
+# the flag is the worker's alone here; compose gives both the same value.
+docker create --name "$AK" --network "$NET" --network-alias dp-ak-server "${AK_ENV[@]}" "$IMAGE" server >/dev/null
 docker cp deploy/compose/authentik/templates/. "$AK:/templates" >/dev/null
 docker cp deploy/compose/authentik/blueprints/. "$AK:/blueprints/custom" >/dev/null
 docker start "$AK" >/dev/null
 worker on
 
-docker create --name "$DRIVER" --network "$NET" --network-alias dp-driver -e AK=http://dr-ak-server:9000 "$PY_IMAGE" sleep 3600 >/dev/null
+docker create --name "$DRIVER" --network "$NET" --network-alias dp-driver -e AK=http://dp-ak-server:9000 "$PY_IMAGE" sleep 3600 >/dev/null
 docker cp scripts/acceptance/directory-promo.py "$DRIVER:/driver.py" >/dev/null
 docker start "$DRIVER" >/dev/null
 
@@ -119,12 +122,18 @@ a = json.loads(os.environ["ACCOUNTS"])
 m = ScopeMapping.objects.get(name="agentry-remember-device")
 coded, empty = User.objects.get(username=a["coded"]), User.objects.get(username=a["empty"])
 print("ATTR coded", repr(coded.attributes.get("agentry_promo_code")), "empty", repr(empty.attributes.get("agentry_promo_code")))
+# The field is the first to put a nested attributes value in the prompt data,
+# beside the has-password policy's flat attributes.agentry_has_password: the
+# two must merge, and nothing else may be written (agentry#706).
+print("KEYS coded", sorted(coded.attributes), coded.attributes.get("agentry_has_password"))
 print("CLAIM coded", m.evaluate(user=coded, request=PolicyRequest(coded), token=None).get("agentry_promo_code"))
 print("CLAIM empty", "agentry_promo_code" in m.evaluate(user=empty, request=PolicyRequest(empty), token=None))
 PY
 )
 case "$check" in *"ATTR coded 'launch-2026' empty ''"*) echo "ok   the code is written to the account's attributes as typed; an empty field leaves it empty" ;;
   *) echo "FAIL: the accounts' attributes: $check"; exit 1 ;; esac
+case "$check" in *"KEYS coded ['agentry_has_password', 'agentry_promo_code'] True"*) echo "ok   the code merges beside agentry_has_password, and nothing else is written" ;;
+  *) echo "FAIL: the coded account's attributes: $check"; exit 1 ;; esac
 case "$check" in *"CLAIM coded launch-2026"*) echo "ok   the agentry scope sends agentry_promo_code for the account with a code" ;;
   *) echo "FAIL: the claim for the account with a code: $check"; exit 1 ;; esac
 case "$check" in *"CLAIM empty False"*) echo "ok   and no such claim for the account without one" ;;
@@ -132,6 +141,8 @@ case "$check" in *"CLAIM empty False"*) echo "ok   and no such claim for the acc
 
 echo "recreating the worker without the flag"
 worker off
+# Discovery applies the blueprint when the worker boots, on its own time;
+# applying it now makes the wait below short. Its failure shows there.
 docker exec "$WORKER" ak apply_blueprint custom/agentry-account-flows.yaml >/dev/null 2>&1 || true
 field_type hidden 300
 echo "ok   the blueprint applied again with the field off"

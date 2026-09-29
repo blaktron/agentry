@@ -267,10 +267,11 @@ func (rp *RP) Describe() Description {
 	return Description{Issuer: rp.cfg.Issuer, AuthURL: ep.AuthURL, TokenURL: ep.TokenURL, UserInfoURL: claims.UserInfo, JWKSURL: claims.JWKS}
 }
 
-// promoCodeRE is a promo code's grammar once upper-cased, the billing
-// extension's own (agentry-enterprise internal/billing): a letter or digit,
-// then three to thirty-one letters, digits or hyphens.
-var promoCodeRE = regexp.MustCompile(`^[A-Z0-9][A-Z0-9-]{3,31}$`)
+// promoCodeRE is a promo code's grammar, the billing extension's own
+// (agentry-enterprise internal/billing) in either case: an ASCII letter or
+// digit, then three to thirty-one ASCII letters, digits or hyphens. Read
+// before upper-casing, because strings.ToUpper maps ſ to S and ı to I.
+var promoCodeRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{3,31}$`)
 
 // PromoCodeClaim reads an `agentry_promo_code` claim: a string inside the
 // grammar once trimmed and upper-cased, else "" (agentry#759).
@@ -279,9 +280,9 @@ func PromoCodeClaim(v any) string {
 	if !ok {
 		return ""
 	}
-	code := strings.ToUpper(strings.TrimSpace(s))
+	code := strings.TrimSpace(s)
 	if !promoCodeRE.MatchString(code) {
 		return ""
 	}
-	return code
+	return strings.ToUpper(code)
 }
