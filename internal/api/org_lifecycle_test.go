@@ -615,7 +615,7 @@ func TestOrgDecommissionErasesAfterTheHold(t *testing.T) {
 	memberH := env.register("er-member")
 	env.joinOrg(admin, orgH, memberH)
 	env.publishUnder(t, admin, orgH, "er-agent")
-	// A member's account install of the organization's BriefAgent
+	// A member's account install of the organization's QuickAgent
 	// (agentry#448): erased with the organization, as a star is, rather
 	// than left as a bare ref to a retired name.
 	member := env.login(memberH)

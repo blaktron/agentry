@@ -301,14 +301,14 @@ func (s *Service) CreateAgent(ctx context.Context, p *auth.Principal, in CreateA
 		// on the transition would leave "create it public" as the way
 		// round: the state is what matters, not how it was reached.
 		if in.Visibility == "public" && derived != auth.AgentRoleAdmin {
-			return Agent{}, fmt.Errorf("%w: creating a public BriefAgent in %s is for the organization's administrators; create it private and ask an admin to publish it", ErrDenied, in.Namespace)
+			return Agent{}, fmt.Errorf("%w: creating a public QuickAgent in %s is for the organization's administrators; create it private and ask an admin to publish it", ErrDenied, in.Namespace)
 		}
 		subject = entitlements.ForOrg(ns.ID)
 	}
 	// Publishing requires verified email (§19); creating an agent is the
 	// first step of that path, so gate here where the journey starts.
 	if !p.EmailVerified {
-		return Agent{}, fmt.Errorf("%w: verify this account's email address before creating a BriefAgent", ErrDenied)
+		return Agent{}, fmt.Errorf("%w: verify this account's email address before creating a QuickAgent", ErrDenied)
 	}
 	lim, err := s.Entitlements().Limits(ctx, subject)
 	if err != nil {

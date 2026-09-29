@@ -39,7 +39,7 @@ type DeleteAccountInstallByRefParams struct {
 	RefName      string    `json:"ref_name"`
 }
 
-// The record as the list names it, for a BriefAgent the caller can no
+// The record as the list names it, for a QuickAgent the caller can no
 // longer read or find at that name. Returns the agent ids removed, for
 // the audit row.
 func (q *Queries) DeleteAccountInstallByRef(ctx context.Context, arg DeleteAccountInstallByRefParams) ([]uuid.UUID, error) {
@@ -192,7 +192,7 @@ type UpsertAccountInstallParams struct {
 }
 
 // Account installs (plan web-dashboard-shell §5; agentry#448): the
-// per-account record of a BriefAgent release a person accepted and the
+// per-account record of a QuickAgent release a person accepted and the
 // contract they consented to. Nothing here touches download_stats.
 // A PUT on an existing record is the update: the version moves and the
 // snapshot and consents are the new release's; the ref is the name the

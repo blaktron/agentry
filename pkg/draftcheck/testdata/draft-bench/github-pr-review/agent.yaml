@@ -40,7 +40,7 @@ guide:
       2. Under Repository permissions set Pull requests: Read-only and Contents: Read-only. Metadata: Read-only is added automatically.
       3. Set an Expiration and leave it scoped to that one repository.
 
-      No write permission is requested, so the pull request cannot be commented on, approved or merged with this token. A token that can also read pull requests on other repositories lets the BriefAgent review a pull request you name there.
+      No write permission is requested, so the pull request cannot be commented on, approved or merged with this token. A token that can also read pull requests on other repositories lets the QuickAgent review a pull request you name there.
 capabilities:
   network:
     egress: none

@@ -114,7 +114,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		// Admin: transferring content into an org binds that org to
 		// maintaining it, which is an administrative act, not a membership one.
 		if p.Role(orgRow.ID) != auth.RoleAdmin {
-			problemForbidden(w, r, "Transferring BriefAgents into "+orgRow.Handle+" requires the admin role there.")
+			problemForbidden(w, r, "Transferring QuickAgents into "+orgRow.Handle+" requires the admin role there.")
 			return
 		}
 		// Nothing moves into an organization in its decommission hold.
@@ -146,7 +146,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		if err := s.transferAgents(r, agents, orgRow); err != nil {
 			if isUniqueViolation(err) {
 				problemConflict(w, r,
-					"A BriefAgent of the same name already exists in "+orgRow.Handle+". Rename it and try again.")
+					"A QuickAgent of the same name already exists in "+orgRow.Handle+". Rename it and try again.")
 				return
 			}
 			s.log.ErrorContext(r.Context(), "gdpr transfer", "err", err)
