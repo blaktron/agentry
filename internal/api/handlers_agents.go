@@ -154,7 +154,7 @@ func (s *Server) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, registry.ErrNotFound):
 			problemNotFound(w, r)
 		case errors.Is(err, auth.ErrForbidden):
-			problemForbidden(w, r, "Creating a BriefAgent here needs the namespace's owner, or active membership of the organization.")
+			problemForbidden(w, r, "Creating a QuickAgent here needs the namespace's owner, or active membership of the organization.")
 		case errors.Is(err, auth.ErrUnauthorized):
 			problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
 		case errors.Is(err, registry.ErrPrivateAgentCap):
@@ -163,7 +163,7 @@ func (s *Server) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, registry.ErrDenied):
 			problemValidation(w, r, sentence(err.Error()))
 		case isUniqueViolation(err):
-			problemConflict(w, r, "This namespace already has a BriefAgent with that name.")
+			problemConflict(w, r, "This namespace already has a QuickAgent with that name.")
 		default:
 			s.log.ErrorContext(r.Context(), "create agent", "err", err)
 			problemInternal(w, r)
@@ -280,7 +280,7 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 			auth.ActAgentAdminister) == nil
 	}
 	if req.Visibility != nil && string(*req.Visibility) != a.Visibility && !administers() {
-		problemForbidden(w, r, "Changing this BriefAgent's visibility needs the "+a.Namespace+" namespace's administrators.")
+		problemForbidden(w, r, "Changing this QuickAgent's visibility needs the "+a.Namespace+" namespace's administrators.")
 		return
 	}
 	if req.AllowForcePush != nil && *req.AllowForcePush != a.AllowForcePush && !administers() {
@@ -292,11 +292,11 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	// including it — and whether it may become public are decided below,
 	// under the agent's row lock, beside the write.
 	if req.PipelineSkip != nil && *req.PipelineSkip != a.PipelineSkip && !administers() {
-		problemForbidden(w, r, "Taking this BriefAgent off the pipeline needs the "+a.Namespace+" namespace's administrators.")
+		problemForbidden(w, r, "Taking this QuickAgent off the pipeline needs the "+a.Namespace+" namespace's administrators.")
 		return
 	}
 	if req.PipelineSkip != nil && *req.PipelineSkip && a.NamespaceKind != "org" {
-		writeProblem(w, r, http.StatusConflict, "pipeline-skip-personal", "Only an organization's BriefAgent can skip the pipeline", "pipeline: skip is set by an organization's administrators on the organization's own private BriefAgents; a personal namespace stays on the pipeline.")
+		writeProblem(w, r, http.StatusConflict, "pipeline-skip-personal", "Only an organization's QuickAgent can skip the pipeline", "pipeline: skip is set by an organization's administrators on the organization's own private QuickAgents; a personal namespace stays on the pipeline.")
 		return
 	}
 	if req.PipelineSkip != nil && *req.PipelineSkip && !a.PipelineSkip {
@@ -307,7 +307,7 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 			return
 		}
 		if !f.UnscannedAgents {
-			problemFeatureNotIncluded(w, r, "Unscanned private BriefAgents are not included in this organization's subscription.")
+			problemFeatureNotIncluded(w, r, "Unscanned private QuickAgents are not included in this organization's subscription.")
 			return
 		}
 	}
@@ -379,12 +379,12 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 				// The request sets the flag on an agent that is, or
 				// becomes, public.
 				refuse = func() {
-					writeProblem(w, r, http.StatusConflict, "pipeline-skip-public", "A public BriefAgent is always scanned", "pipeline: skip is for a private BriefAgent of an organization's. Make it private first, or leave it on the pipeline.")
+					writeProblem(w, r, http.StatusConflict, "pipeline-skip-public", "A public QuickAgent is always scanned", "pipeline: skip is for a private QuickAgent of an organization's. Make it private first, or leave it on the pipeline.")
 				}
 			} else {
 				// The request makes public an agent whose flag is set.
 				refuse = func() {
-					writeProblem(w, r, http.StatusConflict, "agent-unscanned", "Unscanned versions cannot be made public", "This BriefAgent is off the pipeline: clear pipeline: skip before making it public.")
+					writeProblem(w, r, http.StatusConflict, "agent-unscanned", "Unscanned versions cannot be made public", "This QuickAgent is off the pipeline: clear pipeline: skip before making it public.")
 				}
 			}
 			return errRefused
@@ -547,7 +547,7 @@ func (s *Server) SetAgentTeamGrant(w http.ResponseWriter, r *http.Request, ns Na
 		return
 	}
 	if a.NamespaceKind != "org" {
-		problemValidation(w, r, "Team grants apply only to BriefAgents in an org namespace.")
+		problemValidation(w, r, "Team grants apply only to QuickAgents in an org namespace.")
 		return
 	}
 	var req SetAgentTeamGrantJSONBody
@@ -593,7 +593,7 @@ func (s *Server) RemoveAgentTeamGrant(w http.ResponseWriter, r *http.Request, ns
 		return
 	}
 	if a.NamespaceKind != "org" {
-		problemValidation(w, r, "Team grants apply only to BriefAgents in an org namespace.")
+		problemValidation(w, r, "Team grants apply only to QuickAgents in an org namespace.")
 		return
 	}
 	teamRow, err := s.q().GetTeam(r.Context(), storegen.GetTeamParams{OrgID: a.NamespaceID, Slug: team})

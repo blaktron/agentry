@@ -158,10 +158,10 @@ and the `advisory.published` / `agent.quarantined` webhooks are the
 notification path, which is why pinning versions in a lockfile you actually
 review is worth the trouble.
 
-The same holds for the MCP servers a BriefAgent declares. Every scanned
+The same holds for the MCP servers a QuickAgent declares. Every scanned
 server version is re-checked daily against the vulnerability database; a
 version that gains a high or critical advisory raises a **dependency
-alert** on each published BriefAgent version declaring it — shown on the
+alert** on each published QuickAgent version declaring it — shown on the
 agent page and the author's dashboard, mailed to the author once their
 address is verified, recorded in the audit trail, and sent to org webhooks as `agent.dependency_alert`. An
 alert is not an advisory: it says the dependency has a known fix to pin,
@@ -170,11 +170,11 @@ withdrawn.
 
 Advisories are shown on the affected agent's page, and the site's
 `/advisories` page is the global feed — every advisory published against a
-public BriefAgent, newest first, each with a permalink — followed by the
+public QuickAgent, newest first, each with a permalink — followed by the
 explainer of the model and the notification paths. The API serves the same
 feed at `GET /api/v1/advisories` (keyset-paged) and one advisory at
 `GET /api/v1/advisories/{id}`; `?affecting=namespace/name` narrows the feed
-to one BriefAgent.
+to one QuickAgent.
 
 ## Everything here is auditable
 

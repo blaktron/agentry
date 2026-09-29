@@ -23,7 +23,7 @@ CREATE TABLE mcp_server_scans (
 CREATE INDEX mcp_server_scans_checked_idx ON mcp_server_scans (last_checked_at);
 
 -- agent_version_mcp_servers says which versions declare which server
--- versions, so a server that turns vulnerable maps to the BriefAgents that
+-- versions, so a server that turns vulnerable maps to the QuickAgents that
 -- use it without re-reading every manifest. Written by the pipeline for
 -- every scanned version; backfilled below from the manifests already here.
 CREATE TABLE agent_version_mcp_servers (

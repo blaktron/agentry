@@ -1,7 +1,7 @@
 # Model input: AI Review before a model reads, and brokered web search
 
 Two registry routes serve work that feeds a model text from outside: the
-Drafter (the built-in package that drafts a BriefAgent from a person's
+Drafter (the built-in package that drafts a QuickAgent from a person's
 description) and, later, a hosted run's input files. Both push text to
 the registry rather than holding a key of their own (agentry#608; plan
 `builder-rework.md` D20–D25):

@@ -1582,7 +1582,7 @@ type AccessRequestResult struct {
 	Org          string `json:"org"`
 }
 
-// AccountInstall One account install, composed for a list. Only `ref` and `readable` are always present: a record whose BriefAgent the caller can no longer read carries nothing else.
+// AccountInstall One account install, composed for a list. Only `ref` and `readable` are always present: a record whose QuickAgent the caller can no longer read carries nothing else.
 type AccountInstall struct {
 	// AcceptedUnscanned The release was admitted without a scan and the caller accepted that.
 	AcceptedUnscanned *bool `json:"acceptedUnscanned,omitempty"`
@@ -1602,7 +1602,7 @@ type AccountInstall struct {
 	LatestVersion   *string                        `json:"latestVersion,omitempty"`
 	QuarantineState *AccountInstallQuarantineState `json:"quarantineState,omitempty"`
 
-	// Readable Whether the caller can read the BriefAgent today.
+	// Readable Whether the caller can read the QuickAgent today.
 	Readable bool `json:"readable"`
 
 	// Ref `ns/name`.
@@ -2103,7 +2103,7 @@ type DraftSetScores struct {
 
 // EmailNotificationSettings Which of the registry's mails the person receives.
 type EmailNotificationSettings struct {
-	// Advisories An advisory naming one of the person's BriefAgents was published.
+	// Advisories An advisory naming one of the person's QuickAgents was published.
 	Advisories bool `json:"advisories"`
 
 	// Billing The subscription that pays for the person's work: a checkout confirmed, a payment failed, an organization restricted, seats reached, "your organization covers you" (the hosted product's billing mail; a registry with no billing sends none). Not required on a write: a client that predates the switch leaves it as it was rather than turning it off by omission.
@@ -2809,7 +2809,7 @@ type ScimTokenCreated struct {
 
 // Scope PAT scopes (§12.3). A token can do only what its scopes allow; a
 // session acts with the account's full authority. `run:write` lets a
-// token start, feed and cancel a hosted run of a BriefAgent and
+// token start, feed and cancel a hosted run of a QuickAgent and
 // `run:read` lets it read a run, its log and its artefacts — both are
 // consumed only by a registry that mounts the runs extension, and
 // unlock nothing on one that does not. `knowledge:read` and
@@ -3847,7 +3847,7 @@ type ClientInterface interface {
 
 	// ListAdvisories Published advisories — for one agent, or the global feed (§8.7).
 	//
-	// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
+	// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected QuickAgent.
 	//
 	// Corresponds with GET /advisories (the `ListAdvisories` operationId).
 	ListAdvisories(ctx context.Context, params *ListAdvisoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4338,7 +4338,7 @@ type ClientInterface interface {
 
 	// CheckDraftWithBody AI Review of a finished draft before it is submitted (agentry#708).
 	//
-	// Reads a finished BriefAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+	// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -4347,7 +4347,7 @@ type ClientInterface interface {
 
 	// CheckDraft AI Review of a finished draft before it is submitted (agentry#708).
 	//
-	// Reads a finished BriefAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+	// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -5109,7 +5109,7 @@ type ClientInterface interface {
 
 	// ClearCurrentUserData Clear the caller's credentials, installs and settings, and keep the account (session only).
 	//
-	// Revokes every personal access token and SSH key, deletes every remembered browser (the ones that skip the second factor), consumes every pending desktop sign-in code, ends every session but the caller's, removes every account install, and resets the display name and the notification settings to their defaults (every switch on; mail still goes only to a verified address). The account itself stays: the handle, the email, the sign-in account at the directory, organization memberships, BriefAgents with their versions and repositories, stars, the subscription and credits are untouched. Audited as `user.data_clear` with the count of each class; after the commit an extension event `user.data_cleared` carries the user id, so an extension clears what it holds for the account (hosted run history). Session only: a token is refused, and so is a request without the session's CSRF token.
+	// Revokes every personal access token and SSH key, deletes every remembered browser (the ones that skip the second factor), consumes every pending desktop sign-in code, ends every session but the caller's, removes every account install, and resets the display name and the notification settings to their defaults (every switch on; mail still goes only to a verified address). The account itself stays: the handle, the email, the sign-in account at the directory, organization memberships, QuickAgents with their versions and repositories, stars, the subscription and credits are untouched. Audited as `user.data_clear` with the count of each class; after the commit an extension event `user.data_cleared` carries the user id, so an extension clears what it holds for the account (hosted run history). Session only: a token is refused, and so is a request without the session's CSRF token.
 	//
 	// Corresponds with POST /user/clear-data (the `ClearCurrentUserData` operationId).
 	ClearCurrentUserData(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5154,30 +5154,30 @@ type ClientInterface interface {
 
 	// ListAccountInstalls The caller's account installs, composed for a list.
 	//
-	// Every record the caller holds, newest change first. A record whose BriefAgent the caller can no longer read — made private to them, its organization suspended — is listed as the bare `ref` with `readable: false` and nothing else, so the list tells a former reader nothing they did not already know. A PAT needs `user:profile`.
+	// Every record the caller holds, newest change first. A record whose QuickAgent the caller can no longer read — made private to them, its organization suspended — is listed as the bare `ref` with `readable: false` and nothing else, so the list tells a former reader nothing they did not already know. A PAT needs `user:profile`.
 	//
 	// Corresponds with GET /user/installs (the `ListAccountInstalls` operationId).
 	ListAccountInstalls(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DeleteAccountInstall Remove the caller's record for a BriefAgent (idempotent).
+	// DeleteAccountInstall Remove the caller's record for a QuickAgent (idempotent).
 	//
-	// 204 whether or not a record existed, and whether or not the name resolves: the row is the caller's own, so no BriefAgent is read and nothing is learned about one — a record whose BriefAgent the caller can no longer read is removed by the ref the list shows for it. Audited as `agent.uninstall` when a record went. A PAT needs `user:profile`.
+	// 204 whether or not a record existed, and whether or not the name resolves: the row is the caller's own, so no QuickAgent is read and nothing is learned about one — a record whose QuickAgent the caller can no longer read is removed by the ref the list shows for it. Audited as `agent.uninstall` when a record went. A PAT needs `user:profile`.
 	//
 	// Corresponds with DELETE /user/installs/{ns}/{name} (the `DeleteAccountInstall` operationId).
 	DeleteAccountInstall(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PutAccountInstallWithBody Record a BriefAgent release as installed to the account, or move the record to another version.
+	// PutAccountInstallWithBody Record a QuickAgent release as installed to the account, or move the record to another version.
 	//
-	// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked BriefAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private BriefAgent.
+	// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked QuickAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private QuickAgent.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PUT /user/installs/{ns}/{name} (the `PutAccountInstall` operationId).
 	PutAccountInstallWithBody(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PutAccountInstall Record a BriefAgent release as installed to the account, or move the record to another version.
+	// PutAccountInstall Record a QuickAgent release as installed to the account, or move the record to another version.
 	//
-	// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked BriefAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private BriefAgent.
+	// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked QuickAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private QuickAgent.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -5324,7 +5324,7 @@ type ClientInterface interface {
 
 // ListAdvisories Published advisories — for one agent, or the global feed (§8.7).
 //
-// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
+// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected QuickAgent.
 //
 // Corresponds with GET /advisories (the `ListAdvisories` operationId).
 func (c *Client) ListAdvisories(ctx context.Context, params *ListAdvisoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -6505,7 +6505,7 @@ func (c *Client) GetMeta(ctx context.Context, reqEditors ...RequestEditorFn) (*h
 
 // CheckDraftWithBody AI Review of a finished draft before it is submitted (agentry#708).
 //
-// Reads a finished BriefAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 //
 // Takes any type of body and a specified content type.
 //
@@ -6524,7 +6524,7 @@ func (c *Client) CheckDraftWithBody(ctx context.Context, contentType string, bod
 
 // CheckDraft AI Review of a finished draft before it is submitted (agentry#708).
 //
-// Reads a finished BriefAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -8426,7 +8426,7 @@ func (c *Client) ListUserActivity(ctx context.Context, params *ListUserActivityP
 
 // ClearCurrentUserData Clear the caller's credentials, installs and settings, and keep the account (session only).
 //
-// Revokes every personal access token and SSH key, deletes every remembered browser (the ones that skip the second factor), consumes every pending desktop sign-in code, ends every session but the caller's, removes every account install, and resets the display name and the notification settings to their defaults (every switch on; mail still goes only to a verified address). The account itself stays: the handle, the email, the sign-in account at the directory, organization memberships, BriefAgents with their versions and repositories, stars, the subscription and credits are untouched. Audited as `user.data_clear` with the count of each class; after the commit an extension event `user.data_cleared` carries the user id, so an extension clears what it holds for the account (hosted run history). Session only: a token is refused, and so is a request without the session's CSRF token.
+// Revokes every personal access token and SSH key, deletes every remembered browser (the ones that skip the second factor), consumes every pending desktop sign-in code, ends every session but the caller's, removes every account install, and resets the display name and the notification settings to their defaults (every switch on; mail still goes only to a verified address). The account itself stays: the handle, the email, the sign-in account at the directory, organization memberships, QuickAgents with their versions and repositories, stars, the subscription and credits are untouched. Audited as `user.data_clear` with the count of each class; after the commit an extension event `user.data_cleared` carries the user id, so an extension clears what it holds for the account (hosted run history). Session only: a token is refused, and so is a request without the session's CSRF token.
 //
 // Corresponds with POST /user/clear-data (the `ClearCurrentUserData` operationId).
 func (c *Client) ClearCurrentUserData(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8541,7 +8541,7 @@ func (c *Client) RequestDomainOrgAccess(ctx context.Context, reqEditors ...Reque
 
 // ListAccountInstalls The caller's account installs, composed for a list.
 //
-// Every record the caller holds, newest change first. A record whose BriefAgent the caller can no longer read — made private to them, its organization suspended — is listed as the bare `ref` with `readable: false` and nothing else, so the list tells a former reader nothing they did not already know. A PAT needs `user:profile`.
+// Every record the caller holds, newest change first. A record whose QuickAgent the caller can no longer read — made private to them, its organization suspended — is listed as the bare `ref` with `readable: false` and nothing else, so the list tells a former reader nothing they did not already know. A PAT needs `user:profile`.
 //
 // Corresponds with GET /user/installs (the `ListAccountInstalls` operationId).
 func (c *Client) ListAccountInstalls(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8556,9 +8556,9 @@ func (c *Client) ListAccountInstalls(ctx context.Context, reqEditors ...RequestE
 	return c.Client.Do(req)
 }
 
-// DeleteAccountInstall Remove the caller's record for a BriefAgent (idempotent).
+// DeleteAccountInstall Remove the caller's record for a QuickAgent (idempotent).
 //
-// 204 whether or not a record existed, and whether or not the name resolves: the row is the caller's own, so no BriefAgent is read and nothing is learned about one — a record whose BriefAgent the caller can no longer read is removed by the ref the list shows for it. Audited as `agent.uninstall` when a record went. A PAT needs `user:profile`.
+// 204 whether or not a record existed, and whether or not the name resolves: the row is the caller's own, so no QuickAgent is read and nothing is learned about one — a record whose QuickAgent the caller can no longer read is removed by the ref the list shows for it. Audited as `agent.uninstall` when a record went. A PAT needs `user:profile`.
 //
 // Corresponds with DELETE /user/installs/{ns}/{name} (the `DeleteAccountInstall` operationId).
 func (c *Client) DeleteAccountInstall(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8573,9 +8573,9 @@ func (c *Client) DeleteAccountInstall(ctx context.Context, ns Namespace, name Ag
 	return c.Client.Do(req)
 }
 
-// PutAccountInstallWithBody Record a BriefAgent release as installed to the account, or move the record to another version.
+// PutAccountInstallWithBody Record a QuickAgent release as installed to the account, or move the record to another version.
 //
-// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked BriefAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private BriefAgent.
+// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked QuickAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private QuickAgent.
 //
 // Takes any type of body and a specified content type.
 //
@@ -8592,9 +8592,9 @@ func (c *Client) PutAccountInstallWithBody(ctx context.Context, ns Namespace, na
 	return c.Client.Do(req)
 }
 
-// PutAccountInstall Record a BriefAgent release as installed to the account, or move the record to another version.
+// PutAccountInstall Record a QuickAgent release as installed to the account, or move the record to another version.
 //
-// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked BriefAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private BriefAgent.
+// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked QuickAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private QuickAgent.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -16318,7 +16318,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListAdvisoriesWithResponse Published advisories — for one agent, or the global feed (§8.7).
 	//
-	// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
+	// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected QuickAgent.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -16877,7 +16877,7 @@ type ClientWithResponsesInterface interface {
 
 	// CheckDraftWithBodyWithResponse AI Review of a finished draft before it is submitted (agentry#708).
 	//
-	// Reads a finished BriefAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+	// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -16886,7 +16886,7 @@ type ClientWithResponsesInterface interface {
 
 	// CheckDraftWithResponse AI Review of a finished draft before it is submitted (agentry#708).
 	//
-	// Reads a finished BriefAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+	// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -17762,7 +17762,7 @@ type ClientWithResponsesInterface interface {
 
 	// ClearCurrentUserDataWithResponse Clear the caller's credentials, installs and settings, and keep the account (session only).
 	//
-	// Revokes every personal access token and SSH key, deletes every remembered browser (the ones that skip the second factor), consumes every pending desktop sign-in code, ends every session but the caller's, removes every account install, and resets the display name and the notification settings to their defaults (every switch on; mail still goes only to a verified address). The account itself stays: the handle, the email, the sign-in account at the directory, organization memberships, BriefAgents with their versions and repositories, stars, the subscription and credits are untouched. Audited as `user.data_clear` with the count of each class; after the commit an extension event `user.data_cleared` carries the user id, so an extension clears what it holds for the account (hosted run history). Session only: a token is refused, and so is a request without the session's CSRF token.
+	// Revokes every personal access token and SSH key, deletes every remembered browser (the ones that skip the second factor), consumes every pending desktop sign-in code, ends every session but the caller's, removes every account install, and resets the display name and the notification settings to their defaults (every switch on; mail still goes only to a verified address). The account itself stays: the handle, the email, the sign-in account at the directory, organization memberships, QuickAgents with their versions and repositories, stars, the subscription and credits are untouched. Audited as `user.data_clear` with the count of each class; after the commit an extension event `user.data_cleared` carries the user id, so an extension clears what it holds for the account (hosted run history). Session only: a token is refused, and so is a request without the session's CSRF token.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -17821,34 +17821,34 @@ type ClientWithResponsesInterface interface {
 
 	// ListAccountInstallsWithResponse The caller's account installs, composed for a list.
 	//
-	// Every record the caller holds, newest change first. A record whose BriefAgent the caller can no longer read — made private to them, its organization suspended — is listed as the bare `ref` with `readable: false` and nothing else, so the list tells a former reader nothing they did not already know. A PAT needs `user:profile`.
+	// Every record the caller holds, newest change first. A record whose QuickAgent the caller can no longer read — made private to them, its organization suspended — is listed as the bare `ref` with `readable: false` and nothing else, so the list tells a former reader nothing they did not already know. A PAT needs `user:profile`.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /user/installs (the `ListAccountInstalls` operationId).
 	ListAccountInstallsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListAccountInstallsResponse, error)
 
-	// DeleteAccountInstallWithResponse Remove the caller's record for a BriefAgent (idempotent).
+	// DeleteAccountInstallWithResponse Remove the caller's record for a QuickAgent (idempotent).
 	//
-	// 204 whether or not a record existed, and whether or not the name resolves: the row is the caller's own, so no BriefAgent is read and nothing is learned about one — a record whose BriefAgent the caller can no longer read is removed by the ref the list shows for it. Audited as `agent.uninstall` when a record went. A PAT needs `user:profile`.
+	// 204 whether or not a record existed, and whether or not the name resolves: the row is the caller's own, so no QuickAgent is read and nothing is learned about one — a record whose QuickAgent the caller can no longer read is removed by the ref the list shows for it. Audited as `agent.uninstall` when a record went. A PAT needs `user:profile`.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with DELETE /user/installs/{ns}/{name} (the `DeleteAccountInstall` operationId).
 	DeleteAccountInstallWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*DeleteAccountInstallResponse, error)
 
-	// PutAccountInstallWithBodyWithResponse Record a BriefAgent release as installed to the account, or move the record to another version.
+	// PutAccountInstallWithBodyWithResponse Record a QuickAgent release as installed to the account, or move the record to another version.
 	//
-	// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked BriefAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private BriefAgent.
+	// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked QuickAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private QuickAgent.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /user/installs/{ns}/{name} (the `PutAccountInstall` operationId).
 	PutAccountInstallWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutAccountInstallResponse, error)
 
-	// PutAccountInstallWithResponse Record a BriefAgent release as installed to the account, or move the record to another version.
+	// PutAccountInstallWithResponse Record a QuickAgent release as installed to the account, or move the record to another version.
 	//
-	// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked BriefAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private BriefAgent.
+	// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked QuickAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private QuickAgent.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -25759,7 +25759,7 @@ func (r GetUserProfileResponse) ContentType() string {
 
 // ListAdvisoriesWithResponse Published advisories — for one agent, or the global feed (§8.7).
 //
-// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected BriefAgent.
+// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected QuickAgent.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -26732,7 +26732,7 @@ func (c *ClientWithResponses) GetMetaWithResponse(ctx context.Context, reqEditor
 
 // CheckDraftWithBodyWithResponse AI Review of a finished draft before it is submitted (agentry#708).
 //
-// Reads a finished BriefAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -26747,7 +26747,7 @@ func (c *ClientWithResponses) CheckDraftWithBodyWithResponse(ctx context.Context
 
 // CheckDraftWithResponse AI Review of a finished draft before it is submitted (agentry#708).
 //
-// Reads a finished BriefAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -28307,7 +28307,7 @@ func (c *ClientWithResponses) ListUserActivityWithResponse(ctx context.Context, 
 
 // ClearCurrentUserDataWithResponse Clear the caller's credentials, installs and settings, and keep the account (session only).
 //
-// Revokes every personal access token and SSH key, deletes every remembered browser (the ones that skip the second factor), consumes every pending desktop sign-in code, ends every session but the caller's, removes every account install, and resets the display name and the notification settings to their defaults (every switch on; mail still goes only to a verified address). The account itself stays: the handle, the email, the sign-in account at the directory, organization memberships, BriefAgents with their versions and repositories, stars, the subscription and credits are untouched. Audited as `user.data_clear` with the count of each class; after the commit an extension event `user.data_cleared` carries the user id, so an extension clears what it holds for the account (hosted run history). Session only: a token is refused, and so is a request without the session's CSRF token.
+// Revokes every personal access token and SSH key, deletes every remembered browser (the ones that skip the second factor), consumes every pending desktop sign-in code, ends every session but the caller's, removes every account install, and resets the display name and the notification settings to their defaults (every switch on; mail still goes only to a verified address). The account itself stays: the handle, the email, the sign-in account at the directory, organization memberships, QuickAgents with their versions and repositories, stars, the subscription and credits are untouched. Audited as `user.data_clear` with the count of each class; after the commit an extension event `user.data_cleared` carries the user id, so an extension clears what it holds for the account (hosted run history). Session only: a token is refused, and so is a request without the session's CSRF token.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -28408,7 +28408,7 @@ func (c *ClientWithResponses) RequestDomainOrgAccessWithResponse(ctx context.Con
 
 // ListAccountInstallsWithResponse The caller's account installs, composed for a list.
 //
-// Every record the caller holds, newest change first. A record whose BriefAgent the caller can no longer read — made private to them, its organization suspended — is listed as the bare `ref` with `readable: false` and nothing else, so the list tells a former reader nothing they did not already know. A PAT needs `user:profile`.
+// Every record the caller holds, newest change first. A record whose QuickAgent the caller can no longer read — made private to them, its organization suspended — is listed as the bare `ref` with `readable: false` and nothing else, so the list tells a former reader nothing they did not already know. A PAT needs `user:profile`.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -28421,9 +28421,9 @@ func (c *ClientWithResponses) ListAccountInstallsWithResponse(ctx context.Contex
 	return ParseListAccountInstallsResponse(rsp)
 }
 
-// DeleteAccountInstallWithResponse Remove the caller's record for a BriefAgent (idempotent).
+// DeleteAccountInstallWithResponse Remove the caller's record for a QuickAgent (idempotent).
 //
-// 204 whether or not a record existed, and whether or not the name resolves: the row is the caller's own, so no BriefAgent is read and nothing is learned about one — a record whose BriefAgent the caller can no longer read is removed by the ref the list shows for it. Audited as `agent.uninstall` when a record went. A PAT needs `user:profile`.
+// 204 whether or not a record existed, and whether or not the name resolves: the row is the caller's own, so no QuickAgent is read and nothing is learned about one — a record whose QuickAgent the caller can no longer read is removed by the ref the list shows for it. Audited as `agent.uninstall` when a record went. A PAT needs `user:profile`.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -28436,9 +28436,9 @@ func (c *ClientWithResponses) DeleteAccountInstallWithResponse(ctx context.Conte
 	return ParseDeleteAccountInstallResponse(rsp)
 }
 
-// PutAccountInstallWithBodyWithResponse Record a BriefAgent release as installed to the account, or move the record to another version.
+// PutAccountInstallWithBodyWithResponse Record a QuickAgent release as installed to the account, or move the record to another version.
 //
-// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked BriefAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private BriefAgent.
+// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked QuickAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private QuickAgent.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -28451,9 +28451,9 @@ func (c *ClientWithResponses) PutAccountInstallWithBodyWithResponse(ctx context.
 	return ParsePutAccountInstallResponse(rsp)
 }
 
-// PutAccountInstallWithResponse Record a BriefAgent release as installed to the account, or move the record to another version.
+// PutAccountInstallWithResponse Record a QuickAgent release as installed to the account, or move the record to another version.
 //
-// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked BriefAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private BriefAgent.
+// The version must be a published release the caller can read: a non-reader gets the missing name's 404, an unpublished version `409 version-not-published`, a blocked QuickAgent `410 blocked`. The request carries the acceptances the release needs and is refused with `409 install-consent-required`, naming the missing ones in `missing`, when it lacks any: `capabilities` on a first install and, on an update, when the new version's declared capabilities widened against the accepted snapshot (`widened` lists what did); `unsigned` whenever the release carries no attestation; `unscanned` whenever it was admitted without a scan. A PUT on an existing record is the update, to any published version, an older one included: the version moves and the snapshot follows it. The action is audited as `agent.install`; no download counter moves. A PAT needs `user:profile`, and `agent:read` for a private QuickAgent.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

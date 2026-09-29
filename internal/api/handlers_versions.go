@@ -147,7 +147,7 @@ func (s *Server) SubmitVersion(w http.ResponseWriter, r *http.Request, ns Namesp
 		return
 	}
 	if a.QuarantineState == "blocked" {
-		problemForbidden(w, r, "Trust & safety blocked this BriefAgent, so it cannot publish.")
+		problemForbidden(w, r, "Trust & safety blocked this QuickAgent, so it cannot publish.")
 		return
 	}
 
@@ -352,8 +352,8 @@ func (s *Server) DownloadVersion(w http.ResponseWriter, r *http.Request, ns Name
 	// return 410). Blocking walks the versions too; this catches the case
 	// where a scan finishes and publishes a version after the block landed.
 	if a.QuarantineState == "blocked" {
-		writeProblem(w, r, http.StatusGone, "blocked", "Blocked BriefAgent",
-			"Trust & safety blocked this BriefAgent. Downloads stay refused until platform staff reinstate it.")
+		writeProblem(w, r, http.StatusGone, "blocked", "Blocked QuickAgent",
+			"Trust & safety blocked this QuickAgent. Downloads stay refused until platform staff reinstate it.")
 		return
 	}
 	switch registry.Status(v.Status) {
@@ -420,8 +420,8 @@ func (s *Server) ResolveRef(w http.ResponseWriter, r *http.Request, params Resol
 	res, err := s.reg.ResolveVersion(r.Context(), a, ref.Range, channel)
 	if err != nil {
 		if errors.Is(err, registry.ErrBlocked) {
-			writeProblem(w, r, http.StatusGone, "blocked", "Blocked BriefAgent",
-				"Trust & safety blocked this BriefAgent. Downloads stay refused until platform staff reinstate it.")
+			writeProblem(w, r, http.StatusGone, "blocked", "Blocked QuickAgent",
+				"Trust & safety blocked this QuickAgent. Downloads stay refused until platform staff reinstate it.")
 			return
 		}
 		if errors.Is(err, registry.ErrNoMatch) {

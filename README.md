@@ -124,7 +124,7 @@ The enterprise build is one such module; the core carries none.
   the same posture on its `/trust` page, and every instance publishes its live
   signing keys at `/.well-known/agentry/signing-keys.json`
 - [Self-hosting](docs/self-hosting.md)
-- [Running BriefAgents](docs/runner.md) — every command, flag, policy key and enforcement mechanism of the runner
+- [Running QuickAgents](docs/runner.md) — every command, flag, policy key and enforcement mechanism of the runner
 - [Hosted runs](docs/hosted-runs.md) — running a release on a deployment's own machine: the caps, the credit hold and its settlement, what is refused, and what the receipt carries (a deployment that mounts the runs extension; this repository's server carries none)
 - [Knowledge packs in the registry](docs/knowledge.md) — an account's packs kept sealed under keys of their own, the key-wrapper seam, what the scan reads, and when they are destroyed
 - [Model input](docs/model-input.md) — AI Review of text a model is about to read, and web search brokered by the registry: who may call, the question set and its bench, the verdicts, what is recorded
@@ -152,7 +152,7 @@ reproducible-build flags; no step yet rebuilds and compares),
 release-please automation, GDPR erasure, abuse intake and the trust & safety
 console, the operational runbooks. Remaining: an external penetration test, a
 status page, and `security@` / `abuse@` addresses live before launch. Seed
-content is decided: PLAN §20 Q10 named the forty worked BriefAgents in
+content is decided: PLAN §20 Q10 named the forty worked QuickAgents in
 `agentry-examples` (DEV-093), and production launches with none published
 (`production-on-vultr.md` D14).
 

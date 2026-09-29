@@ -1,5 +1,5 @@
 -- Account installs (plan web-dashboard-shell §5; agentry#448): the
--- per-account record of a BriefAgent release a person accepted and the
+-- per-account record of a QuickAgent release a person accepted and the
 -- contract they consented to. Nothing here touches download_stats.
 
 -- name: UpsertAccountInstall :one
@@ -25,7 +25,7 @@ SELECT * FROM account_installs WHERE user_id = $1 AND agent_id = $2;
 DELETE FROM account_installs WHERE user_id = $1 AND agent_id = $2;
 
 -- name: DeleteAccountInstallByRef :many
--- The record as the list names it, for a BriefAgent the caller can no
+-- The record as the list names it, for a QuickAgent the caller can no
 -- longer read or find at that name. Returns the agent ids removed, for
 -- the audit row.
 DELETE FROM account_installs WHERE user_id = $1 AND ref_namespace = $2 AND ref_name = $3

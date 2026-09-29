@@ -38,10 +38,10 @@ var publicActivityActions = []string{
 	string(audit.ActionAdvisoryPublish),
 }
 
-// ownActivityActions are the actions that target a BriefAgent but describe
-// a person's own choice rather than the BriefAgent's history: an account
+// ownActivityActions are the actions that target a QuickAgent but describe
+// a person's own choice rather than the QuickAgent's history: an account
 // install and its removal (agentry#448). They stay on the person's own
-// activity (GET /user/activity) and off the BriefAgent's feed at every
+// activity (GET /user/activity) and off the QuickAgent's feed at every
 // role — a star is public approval, an install a private acceptance.
 var ownActivityActions = map[string]bool{
 	string(audit.ActionAgentInstall):   true,
@@ -80,7 +80,7 @@ func (s *Server) DeleteAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	switch {
 	case blockers.VersionsPastSubmitted > 0:
 		problemConflict(w, r,
-			"This BriefAgent has version history, so it cannot be deleted. Yank the versions instead.")
+			"This QuickAgent has version history, so it cannot be deleted. Yank the versions instead.")
 		return
 	case blockers.Versions > 0:
 		problemConflict(w, r,
@@ -88,7 +88,7 @@ func (s *Server) DeleteAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 		return
 	case blockers.Advisories > 0 || blockers.AbuseReports > 0:
 		problemConflict(w, r,
-			"This BriefAgent carries trust & safety records, so it cannot be deleted.")
+			"This QuickAgent carries trust & safety records, so it cannot be deleted.")
 		return
 	}
 

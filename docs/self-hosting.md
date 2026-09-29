@@ -340,7 +340,7 @@ fallback. A tool that fails mid-scan leaves an `S2/tool-error` finding on
 the report, so "gitleaks did not run" is distinguishable from "no
 secrets". The code-analysis stages that once ran opengrep and an OSV
 dependency check were retired with the package kinds they served:
-BriefAgents carry no tool code, and the MCP servers one declares are
+QuickAgents carry no tool code, and the MCP servers one declares are
 resolved and pinned by the runner instead. Both ids are in use again — S6
 is the support-scripts stage that reads a package's shell, Python and
 JavaScript files against the manifest, and S7 the MCP server lookup above.

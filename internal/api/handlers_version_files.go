@@ -28,8 +28,8 @@ func (s *Server) versionArchive(w http.ResponseWriter, r *http.Request, ns Names
 		return nil, false
 	}
 	if a.QuarantineState == "blocked" {
-		writeProblem(w, r, http.StatusGone, "blocked", "Blocked BriefAgent",
-			"Trust & safety blocked this BriefAgent. This archive stays unavailable until platform staff reinstate it.")
+		writeProblem(w, r, http.StatusGone, "blocked", "Blocked QuickAgent",
+			"Trust & safety blocked this QuickAgent. This archive stays unavailable until platform staff reinstate it.")
 		return nil, false
 	}
 	switch registry.Status(v.Status) {
