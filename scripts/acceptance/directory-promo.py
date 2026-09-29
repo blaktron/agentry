@@ -27,7 +27,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-AK = os.environ.get("AK", "http://dr-ak-server:9000")
+AK = os.environ.get("AK", "http://dp-ak-server:9000")
 FIELD = "attributes.agentry_promo_code"
 CAPTCHA_TEST_TOKEN = "XXXX.DUMMY.TOKEN.XXXX"
 

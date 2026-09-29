@@ -271,6 +271,8 @@ func TestPromoCodeClaim(t *testing.T) {
 		"ab_cd":                 "",
 		strings.Repeat("a", 33): "",
 		"Ünicode":               "",
+		"ſale":                  "",
+		"ıdea":                  "",
 		1234:                    "",
 		true:                    "",
 	} {

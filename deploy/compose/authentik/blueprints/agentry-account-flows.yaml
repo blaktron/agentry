@@ -301,7 +301,8 @@ entries:
       # and the field starts filled in: the page's executor calls carry the
       # page's own query as `query`. Only while the field is on: a hidden
       # field keeps its initial value whatever is posted, so off, the value
-      # stays empty and no link can put a code in it.
+      # stays empty and no link can put a code in it. An over-long code is
+      # dropped, never cut into a different one.
       initial_value_expression: !If [!Condition [AND, !Env [AGENTRY_DIRECTORY_PROMO_FIELD, ""]], true, false]
       initial_value: !If
         - !Condition [AND, !Env [AGENTRY_DIRECTORY_PROMO_FIELD, ""]]
@@ -309,7 +310,8 @@ entries:
           from urllib.parse import parse_qs
           http = getattr(request, "http_request", None) or request
           query = parse_qs(http.GET.get("query", "")) if http is not None else {}
-          return (query.get("promo") or [""])[0][:32]
+          code = (query.get("promo") or [""])[0]
+          return code if len(code) <= 32 else ""
         - ""
       sub_text: "If you were given a code, enter it here. It is applied when you first sign in."
       order: 102
