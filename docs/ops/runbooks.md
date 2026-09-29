@@ -436,7 +436,7 @@ log line with a large N.
 
 This is the system working: the daily sweep (`scan.mcp_sweep`) re-checked
 every scanned MCP server version, one of them gained a high or critical
-advisory, and every published BriefAgent version declaring it got a
+advisory, and every published QuickAgent version declaring it got a
 dependency alert — banner and dashboard for the author, one email, an
 `agent.dependency_alert` audit event, and the org webhook. Nothing was
 quarantined: the versions stay installable, and the alert closes on its
@@ -454,10 +454,10 @@ own when the author yanks the version or the advisory is withdrawn.
    where a.resolved_at is null group by 1,2,3,4 order by versions desc;
    ```
 3. **Decide whether it is also a trust-and-safety matter.** A server with a
-   remote-code-execution advisory that a BriefAgent runs against its declared
+   remote-code-execution advisory that a QuickAgent runs against its declared
    secrets may deserve quarantine of the affected versions (runbook 4) and an
    advisory; an alert alone is right for the ordinary case. The runner
-   refuses to *run* a BriefAgent whose declared server the registry marks
+   refuses to *run* a QuickAgent whose declared server the registry marks
    high or critical — the check is `agentry run`'s, before the plan
    executes, and the receipt's vulnerability line says what it found — unless
    the person passes `--allow-vulnerable-mcp` or the operator policy sets

@@ -290,7 +290,7 @@ func validateClassification(s *issues, m *Manifest) {
 		switch m.Kind {
 		case v1KindSkill, v1KindPromptAgent:
 		case v1KindMCPServer:
-			s.errf("V1", "kind", "kind mcp-server is withdrawn: MCP server codebases are no longer BriefAgents; declare the servers an agent uses under capabilities.mcpServers instead")
+			s.errf("V1", "kind", "kind mcp-server is withdrawn: MCP server codebases are no longer QuickAgents; declare the servers an agent uses under capabilities.mcpServers instead")
 		case "":
 			s.errf("V1", "kind", "kind is required (skill | prompt-agent), or move to schemaVersion 2 and declare modes")
 		default:

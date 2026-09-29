@@ -1,18 +1,18 @@
-# BriefAgents
+# QuickAgents
 
 *This page covers the package format. The complete runtime side — every
 command, flag, policy key, MCP profiles, and enforcement mechanism — is
 the [Runner reference](runner.md).*
 
-A **BriefAgent** is a single-purpose AI agent packaged for Agentry:
+A **QuickAgent** is a single-purpose AI agent packaged for Agentry:
 one manifest declaring what it is and what it may touch, plus the instruction
-content itself. Nothing else. BriefAgents carry **no tool code**. At run
+content itself. Nothing else. QuickAgents carry **no tool code**. At run
 time the Agentry runner serves exactly the tools the manifest declares
-through an isolated MCP gateway, and when a BriefAgent is installed into an
+through an isolated MCP gateway, and when a QuickAgent is installed into an
 existing coding agent, the host's built-in tools stand in under the same
 declared contract.
 
-Start from the **[BriefAgent template](https://github.com/blaktron/agentry-template)**
+Start from the **[QuickAgent template](https://github.com/blaktron/agentry-template)**
 (`github.com/blaktron/agentry-template`), a runnable package with every
 option below shown in a commented `agent.yaml`. Or scaffold one with
 `agentry init`.
@@ -21,7 +21,7 @@ option below shown in a commented `agent.yaml`. Or scaffold one with
 scaffolding. From an Agent Skills `SKILL.md` it maps the frontmatter name,
 description, license and `metadata.version`, copies the sibling files and
 lists them in `publish.include`. From an MCP registry `server.json` it
-writes a BriefAgent that declares the published package under
+writes a QuickAgent that declares the published package under
 `capabilities.mcpServers` with its exact pin and the secret-flagged
 environment variable names. The capability contract is never guessed from
 the source: on a terminal the wizard asks for egress, secrets, exec and
@@ -40,7 +40,7 @@ agentry publish                                      # scanned, signed, immutabl
 
 ## Machine setup (`agentry setup`)
 
-One idempotent command prepares a machine for BriefAgent runs before any
+One idempotent command prepares a machine for QuickAgent runs before any
 agent is involved. It writes **your preferred LLM provider** into the
 operator policy (interactively on a terminal; `--provider`, `--model`,
 `--api-key-env`, `--base-url` with `--yes` in scripts), then stands up the
@@ -70,7 +70,7 @@ same configuration from its Settings surface.
 
 ## MCP profiles — keys and identities, once per release
 
-The first run of a BriefAgent that declares secrets starts a **guided
+The first run of a QuickAgent that declares secrets starts a **guided
 setup**: the runner shows the declared contract, collects each key or
 identity (input hidden, values stored only in the profile, `0600`), and
 asks whether to keep the result. The stored **MCP profile** is keyed by
@@ -93,7 +93,7 @@ missing one refuses the run (exit 11) rather than degrading.
 ## Package layout
 
 ```
-my-briefagent/
+my-quickagent/
 ├── agent.yaml                  # the manifest (required)
 ├── AGENT.md                    # the instruction file (entrypoints.instruction)
 ├── README.md                   # rendered on the registry page; required for public publication
@@ -127,7 +127,7 @@ only a v2 manifest can declare `interactive`.
 
 ### Modes and the instruction file
 
-A BriefAgent is an instruction package. What varies is how it runs, and a
+A QuickAgent is an instruction package. What varies is how it runs, and a
 release declares the set of run modes it supports:
 
 | Mode | What a run is | Status |
@@ -141,7 +141,7 @@ The instruction is one file:
 |---|---|
 | `entrypoints.instruction` | the repo-relative instruction file, `AGENT.md` when omitted. A leading YAML frontmatter block (the Agent Skills `SKILL.md` shape) is stripped; the body becomes the harness instruction, so a `SKILL.md` works unchanged as `entrypoints.instruction: SKILL.md`. The file must exist and be matched by `publish.include` |
 
-There are no other package kinds. An MCP server is something a BriefAgent
+There are no other package kinds. An MCP server is something a QuickAgent
 *uses* — declared under `capabilities.mcpServers` and installed with the
 release — not a package of its own; the former `mcp-server` kind was
 withdrawn, and the one such package on the public registry is blocked
@@ -307,7 +307,7 @@ current.
 
 ### `capabilities`: the security contract
 
-Closed vocabulary. Omitted or empty means a **pure-text BriefAgent**
+Closed vocabulary. Omitted or empty means a **pure-text QuickAgent**
 (its run-time tools are `write_report` and the read-only `list_inputs` /
 `read_input`, nothing else). The registry scans releases
 against these declarations, an install prompts on them (egress/exec need
@@ -360,7 +360,7 @@ context; values never appear in plans, receipts, or process listings.
 Operators may catalog extra MCP servers per category in their runner
 policy; undeclared categories are never wired in.
 
-**`mcpServers`** declares the MCP servers the BriefAgent requires at run
+**`mcpServers`** declares the MCP servers the QuickAgent requires at run
 time — explicitly, version-pinned, from the operator's configured
 package registries:
 
@@ -461,7 +461,7 @@ nothing and the consent given here covers it. Inside it, under
 operator policy implies: a Claude skill when the policy names Claude
 Code (`harness.claude`), AGENTS.md when it names Codex, else a Claude
 skill for an Anthropic key and AGENTS.md for any other provider. A newer
-version replaces the older; one record per BriefAgent in the install
+version replaces the older; one record per QuickAgent in the install
 state (`agentry list`; `--check` asks the registry whether a newer
 version exists). `--dir` is for the two exports; the runner home is one
 (`AGENTRY_RUNNER_HOME`). `agentry uninstall ns/name` removes the
@@ -474,7 +474,7 @@ contract they consented to, `GET /user/installs` in the
 [API conventions](api-conventions.md#account-installs) — and the two are
 never synced: installing here records nothing there, and the reverse.
 
-## What a BriefAgent gets at run time
+## What a QuickAgent gets at run time
 
 `agentry run` verifies a release it has not installed exactly like
 `agentry install` (sha256 digest + DSSE attestation against pinned keys;
@@ -524,7 +524,7 @@ tool-call budget and cost ceiling; `--timeout` / `--max-turns` /
 more than the cost ceiling, `0` = unlimited). Exit codes: `0` ok · `1`
 other CLI error · `2` usage · `10` verify failed · `11` refused by policy /
 missing secret · `12` not compilable/runnable · `13` gateway or docker
-environment · `14` the BriefAgent failed · `15` timeout · `16` budget ·
+environment · `14` the QuickAgent failed · `15` timeout · `16` budget ·
 `17` output schema.
 
 **The output folder** (`--out`, default
@@ -568,7 +568,7 @@ prove.
 ## Publishing
 
 Three doors, one pipeline. `agentry publish` submits a workspace from the
-command line; the hosted site's **BriefAgent Builder** (`/build`, on a
+command line; the hosted site's **QuickAgent Builder** (`/build`, on a
 registry with the site in front) authors one in the browser — anyone can
 download the packed archive for local use, and signed-in users can submit
 it; and the **desktop app**'s Build tab does the same from a form. Repos hosted on the registry can also publish by pushing
@@ -579,7 +579,7 @@ demand it, and DSSE signing. A publish to a public namespace needs a
 second factor on the account (a TOTP app, or an identity provider that
 did MFA) when the registry has that on — `/meta` reports it as
 `features.publicPublish2FA`. Published releases are immutable and content-addressed. The
-language rule applies to BriefAgents as it does to everything here: a
+language rule applies to QuickAgents as it does to everything here: a
 release is *scanned, with N findings, signed*, never "safe". Declare the
 least you need and the whole chain stays reviewable.
 

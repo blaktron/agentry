@@ -19,7 +19,7 @@
 # not soften, reorder or drop these. Adding one is a change to the plan's §4.6
 # list and belongs in a PR that says so. Removing one needs the operator.
 #
-# The site's own wordings of the same claims ("cannot prove a BriefAgent
+# The site's own wordings of the same claims ("cannot prove a QuickAgent
 # safe", "No flag, plan, or role skips the gate") live in blaktron/agentry-web
 # and are gated by that repository's prose-check, not here.
 
@@ -31,7 +31,7 @@ README.md :: and the product never claims it does.
 SECURITY.md :: why the product never says "safe"
 docs/trust.md :: **"scanned, N findings, signed"**, never "safe" or "verified secure"
 docs/trust.md :: A sufficiently novel injection technique will pass a scan written before it existed.
-docs/briefagents.md :: release is *scanned, with N findings, signed*, never "safe".
+docs/quickagents.md :: release is *scanned, with N findings, signed*, never "safe".
 docs/api-conventions.md :: means "no known advisories at `lastCheckedAt`", never "safe"
 
 # 2. The gate fails toward review, never through.

@@ -62,7 +62,7 @@ export function setup() {
   return { ns };
 }
 
-// A minimal, deliberately BENIGN autonomous BriefAgent. The harness measures pipeline
+// A minimal, deliberately BENIGN autonomous QuickAgent. The harness measures pipeline
 // throughput, not detection: content that gates to review would park versions
 // in a review queue and make the timing meaningless.
 function payload(name, version) {

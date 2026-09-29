@@ -3,7 +3,7 @@
 A knowledge pack is an LLM wiki: compiled markdown pages with an index,
 together with the documents they were compiled from, at most 10 MB, that a
 run searches through the knowledge tools over a read-only `/knowledge`
-mount. [Running BriefAgents](runner.md#knowledge-packs) covers making one,
+mount. [Running QuickAgents](runner.md#knowledge-packs) covers making one,
 keeping it in the local store and attaching it to a run, and
 [Hosted runs](hosted-runs.md#knowledge-attached-to-a-run) attaching it to
 a run on Agentry's infrastructure. This page is the registry's side: how a
@@ -239,12 +239,12 @@ more: scanned, N findings.
 
 ## A release that ships a pack
 
-A BriefAgent may carry packs of its own in its release archive, under
+A QuickAgent may carry packs of its own in its release archive, under
 `knowledge/<name>/`, declared in its manifest's `knowledge.ships`
-([briefagents.md](briefagents.md#knowledge-packs-the-release-ships)).
+([quickagents.md](quickagents.md#knowledge-packs-the-release-ships)).
 Such a pack is not in this store: it has no owner, no data key and no
 seal, because it is part of a release, which is public or private as the
-BriefAgent is and signed with the rest of its archive.
+QuickAgent is and signed with the rest of its archive.
 
 At submit the registry refuses a release whose packs are not what its
 manifest says (rule V11): a name with no pack, a pack outside the CLI's

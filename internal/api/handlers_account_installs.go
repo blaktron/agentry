@@ -1,7 +1,7 @@
 package api
 
 // Account installs (plan web-dashboard-shell §5, D3/D4; agentry#448): a
-// signed-in person's record, on the registry, of a BriefAgent release they
+// signed-in person's record, on the registry, of a QuickAgent release they
 // accepted for their account — the version, the declared capabilities they
 // consented to, and the unsigned or unscanned consents the release needed.
 // An acceptance, not a laying-down: nothing is written on any machine, the
@@ -33,9 +33,9 @@ const (
 	consentUnscanned    = "unscanned"
 )
 
-// installTarget is what the caller may record: the BriefAgent, resolved
+// installTarget is what the caller may record: the QuickAgent, resolved
 // for read, and the caller — or the problem written and false. The
-// BriefAgent comes first, before the self-scoped authorization: a caller
+// QuickAgent comes first, before the self-scoped authorization: a caller
 // who cannot read it, anonymous or a stranger, gets the missing name's 404
 // before any 401 that would say the name exists (§9, agentry#313); a
 // public name keeps the conventional 401 for an anonymous write.
@@ -78,8 +78,8 @@ func (s *Server) PutAccountInstall(w http.ResponseWriter, r *http.Request, ns Na
 	ctx := r.Context()
 	q := s.q()
 	if a.QuarantineState == "blocked" {
-		writeProblem(w, r, http.StatusGone, "blocked", "Blocked BriefAgent",
-			"Trust & safety has blocked this BriefAgent; nothing of it can be installed.")
+		writeProblem(w, r, http.StatusGone, "blocked", "Blocked QuickAgent",
+			"Trust & safety has blocked this QuickAgent; nothing of it can be installed.")
 		return
 	}
 	v, err := q.GetVersion(ctx, storegen.GetVersionParams{AgentID: a.ID, Version: version})
@@ -187,13 +187,13 @@ func (s *Server) PutAccountInstall(w http.ResponseWriter, r *http.Request, ns Na
 
 // DeleteAccountInstall implements DELETE /user/installs/{ns}/{name}:
 // idempotent, like a star's removal, and audited as agent.uninstall only
-// when a record went. The row is the caller's own, so no BriefAgent is
+// when a record went. The row is the caller's own, so no QuickAgent is
 // resolved for read and the answer is 204 whether the name resolves, is
-// readable, or neither — nothing about a BriefAgent is learned here, and
-// a record whose BriefAgent the caller can no longer read (the bare ref
+// readable, or neither — nothing about a QuickAgent is learned here, and
+// a record whose QuickAgent the caller can no longer read (the bare ref
 // on the list) is removable by that ref. The name is tried as a
-// BriefAgent first, so a record on the BriefAgent that lives at the name
-// today goes before one stored under it by a BriefAgent that has moved.
+// QuickAgent first, so a record on the QuickAgent that lives at the name
+// today goes before one stored under it by a QuickAgent that has moved.
 func (s *Server) DeleteAccountInstall(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName) {
 	if !s.authorize(w, r, auth.ActUserSelfUpdate, uuid.Nil) {
 		return
@@ -276,14 +276,14 @@ func (s *Server) ListAccountInstalls(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// composeAccountInstall builds one list row for a record whose BriefAgent
+// composeAccountInstall builds one list row for a record whose QuickAgent
 // lives at ns/name today. Whether the caller can read it is decided by
 // agentForAction with the read action — the one path every agent route
-// takes — so a record for a BriefAgent made private to them, or one whose
+// takes — so a record for a QuickAgent made private to them, or one whose
 // organization is suspended, is the bare ref with readable: false and
 // nothing else, and that ref is the one stored when they installed it,
-// never where the BriefAgent has gone since: the list tells a former
-// reader nothing they did not already know. A blocked BriefAgent stays
+// never where the QuickAgent has gone since: the list tells a former
+// reader nothing they did not already know. A blocked QuickAgent stays
 // readable and says so in quarantineState.
 func (s *Server) composeAccountInstall(ctx context.Context, p *auth.Principal, row storegen.AccountInstall, ns, name string) (AccountInstall, error) {
 	out := AccountInstall{Ref: row.RefNamespace + "/" + row.RefName}

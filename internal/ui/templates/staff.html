@@ -16,11 +16,11 @@
 <input name="resolution" placeholder="resolution" class="short"><button type="submit" class="small secondary">Update</button></form></li>{{end}}</ul>{{end}}
 </section>
 <section class="card">
-<h2>BriefAgent enforcement</h2>
-<p class="muted">Quarantine moves the latest published version to quarantined. Downloads of it answer 409, and the BriefAgent stays in search with the state on it. Block marks the BriefAgent blocked, moves its live versions with it, and drops it from search. Every download then answers 410 Gone. Reinstate walks both back: blocked to quarantined to published. The reason is recorded in the audit log, and returned with the version as its status reason.</p>
+<h2>QuickAgent enforcement</h2>
+<p class="muted">Quarantine moves the latest published version to quarantined. Downloads of it answer 409, and the QuickAgent stays in search with the state on it. Block marks the QuickAgent blocked, moves its live versions with it, and drops it from search. Every download then answers 410 Gone. Reinstate walks both back: blocked to quarantined to published. The reason is recorded in the audit log, and returned with the version as its status reason.</p>
 <form method="post" action="/ui/staff/agent-action">
   <input type="hidden" name="_csrf" value="{{$.CSRF}}">
-  <label>BriefAgent (namespace/name)<input name="ref" required placeholder="acme/support-bot"></label>
+  <label>QuickAgent (namespace/name)<input name="ref" required placeholder="acme/support-bot"></label>
   <label>Action<select name="action"><option value="quarantine">quarantine</option><option value="block">block</option><option value="reinstate">reinstate</option></select></label>
   <label>Reason<input name="reason" required></label>
   <button type="submit" class="danger">Apply</button>
