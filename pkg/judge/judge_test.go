@@ -265,7 +265,7 @@ func TestEveryQuestionSetHashNamesEachQuestionsWording(t *testing.T) {
 	}{
 		"model input": {ModelInputQuestions, func(qs []Question) string { return modelInputHashOf(DefaultModel, true, qs) }},
 		"draft":       {DraftQuestions, func(qs []Question) string { return draftHashOf(DefaultModel, qs) }},
-		"rubric":      {RubricQuestions, func(qs []Question) string { return rubricHashOf(DefaultModel, RubricBatchOne, qs) }},
+		"rubric":      {RubricQuestions, func(qs []Question) string { return rubricHashOf(DefaultModel, RubricBatchOne, qs, RunnerGrants) }},
 	} {
 		base := c.hash(c.set())
 		for i := range c.set() {
@@ -280,6 +280,10 @@ func TestEveryQuestionSetHashNamesEachQuestionsWording(t *testing.T) {
 				t.Fatalf("%s: question %s's id is not in the hash", name, renamed[i].ID)
 			}
 		}
+	}
+	if rubricHashOf(DefaultModel, RubricBatchOne, RubricQuestions(), RunnerGrants+" Reworded.") ==
+		rubricHashOf(DefaultModel, RubricBatchOne, RubricQuestions(), RunnerGrants) {
+		t.Fatal("rubric: the runner's grants are not in the hash")
 	}
 	if modelInputHash(DefaultModel, true) != modelInputHashOf(DefaultModel, true, ModelInputQuestions()) ||
 		draftHash(DefaultModel) != draftHashOf(DefaultModel, DraftQuestions()) {

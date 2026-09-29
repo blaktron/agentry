@@ -367,8 +367,8 @@ func TestDraftBench(t *testing.T) {
 		// question the drafts' findings came from.
 		var perFile []string
 		for _, f := range append([]judge.RubricFile{{Path: "agent.yaml(canonical)", Content: string(rd.ManifestJSON)}}, rd.Files...) {
-			probs, _, err := c.Ask(ctx, map[string]string{"path": f.Path, "content": f.Content,
-				"declared_capabilities": judge.DeclaredCapabilities(rd.ManifestJSON, rd.Ships)}, []judge.Question{judge.RubricQuestions()[2]})
+			probs, _, err := c.Ask(ctx, judge.RubricState(f.Path, f.Content, judge.DeclaredCapabilities(rd.ManifestJSON, rd.Ships)),
+				[]judge.Question{judge.RubricQuestions()[2]})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -381,6 +381,73 @@ func TestDraftBench(t *testing.T) {
 	if os.Getenv("AGENTRY_JUDGE_BENCH_COMPARE") == "1" {
 		compareWordings(t, c)
 	}
+}
+
+// TestRubricDraftBench asks the release rubric, as S5 asks it, about each
+// of the Drafter's ten good drafts, several times over, and logs every
+// axis's strongest probability per run: the draft half of agentry#731's
+// bench (the attack-corpus half is internal/scan's TestTypeSafeCorpusBench).
+// A good draft should draw no finding. It never runs in CI: it needs
+// AGENTRY_JUDGE_BENCH=1 and AGENTRY_JUDGE_API_KEY; AGENTRY_JUDGE_BENCH_RUNS
+// sets the runs (default 3).
+func TestRubricDraftBench(t *testing.T) {
+	if os.Getenv("AGENTRY_JUDGE_BENCH") != "1" {
+		t.Skip("set AGENTRY_JUDGE_BENCH=1 and AGENTRY_JUDGE_API_KEY to run the live rubric bench")
+	}
+	key := os.Getenv("AGENTRY_JUDGE_API_KEY")
+	if key == "" {
+		t.Skip("AGENTRY_JUDGE_API_KEY not set")
+	}
+	runs := 3
+	if s := os.Getenv("AGENTRY_JUDGE_BENCH_RUNS"); s != "" {
+		if _, err := fmt.Sscanf(s, "%d", &runs); err != nil || runs < 1 {
+			t.Fatalf("AGENTRY_JUDGE_BENCH_RUNS=%q", s)
+		}
+	}
+	c, err := judge.New(judge.Config{APIKey: key, Model: os.Getenv("AGENTRY_JUDGE_MODEL"), BaseURL: os.Getenv("AGENTRY_JUDGE_BASE_URL")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixtures := map[string]bool{}
+	for _, v := range readVariants(t) {
+		fixtures[v.Fixture] = true
+	}
+	names := make([]string, 0, len(fixtures))
+	for n := range fixtures {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	scanner := judge.NewRubricScanner(c)
+	flagged, asked, tokens := 0, 0, 0
+	for _, n := range names {
+		d := readBenchDraft(t, n)
+		rd, err := Read(Package{Description: d.description, Files: d.files})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for r := 1; r <= runs; r++ {
+			axes, u, err := scanner.Scan(context.Background(), rd.ManifestJSON, rd.Ships, rd.Files)
+			if err != nil {
+				t.Fatalf("%s run %d: %v", n, r, err)
+			}
+			tokens += u.InputTokens
+			asked++
+			var parts []string
+			finding := false
+			for _, q := range judge.RubricQuestions() {
+				a := axes[q.ID]
+				parts = append(parts, fmt.Sprintf("%s=%.2f", q.ID[:2], a.Best))
+				if judge.ScoreFromProbability(a.Best) >= judge.WithholdScore {
+					finding = true
+				}
+			}
+			if finding {
+				flagged++
+			}
+			t.Logf("rubric %-22s run %d flagged=%-5v %s C3@%s", n, r, finding, strings.Join(parts, " "), axes[judge.RubricIDUndeclaredCapability].Path)
+		}
+	}
+	t.Logf("rubric: %d of %d draft runs drew a finding; input tokens %d; hash %s", flagged, asked, tokens, scanner.Hash())
 }
 
 // benchAlternatives are wordings the bench compares with the shipped ones,
