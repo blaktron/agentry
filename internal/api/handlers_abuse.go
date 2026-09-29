@@ -60,7 +60,7 @@ func (s *Server) ReportAbuse(w http.ResponseWriter, r *http.Request, ns Namespac
 	if req.Version != nil && *req.Version != "" {
 		v, err := s.q().GetVersion(r.Context(), storegen.GetVersionParams{AgentID: a.ID, Version: *req.Version})
 		if err != nil {
-			problemValidation(w, r, "This BriefAgent has no such version.")
+			problemValidation(w, r, "This QuickAgent has no such version.")
 			return
 		}
 		versionID = &v.ID

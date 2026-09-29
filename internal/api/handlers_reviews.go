@@ -575,7 +575,7 @@ func (s *Server) SetFindingVerdict(w http.ResponseWriter, r *http.Request, id op
 			return
 		}
 		if agent.NamespaceKind == "org" && !s.isOrgReviewer(p, agent.NamespaceID) {
-			problemForbidden(w, r, "On a BriefAgent in an org namespace, only that organization's security reviewers may accept risk.")
+			problemForbidden(w, r, "On a QuickAgent in an org namespace, only that organization's security reviewers may accept risk.")
 			return
 		}
 	}

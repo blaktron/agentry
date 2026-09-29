@@ -16,7 +16,7 @@ const (
 	ScopeAuditRead    Scope = "audit:read"
 	ScopeUserProfile  Scope = "user:profile"
 	// The hosted-run scopes (plans/hosted-runs.md §6, agentry#348): a
-	// token that may start, cancel and feed a hosted run of a BriefAgent
+	// token that may start, cancel and feed a hosted run of a QuickAgent
 	// (run:write) or read a run, its log and its artefacts (run:read).
 	// No core route consumes them; the runs extension of the closed build
 	// requires them through pkg/extension, so a registry without it treats

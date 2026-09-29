@@ -1,7 +1,7 @@
 package api_test
 
 // Account installs (plan web-dashboard-shell §5, D3/D4; agentry#448): the
-// per-account record of a BriefAgent release a person accepted and the
+// per-account record of a QuickAgent release a person accepted and the
 // contract they consented to, behind GET/PUT/DELETE /user/installs.
 
 import (
@@ -39,7 +39,7 @@ type versionFiles struct {
 // publishVersions publishes each release of ns/name through the pipeline as
 // the author, in order. A release the gate sends to review — a widened
 // contract is one, S9 flags it — is approved by a platform reviewer, as it
-// would be; the status is read as the author, so a private BriefAgent's
+// would be; the status is read as the author, so a private QuickAgent's
 // publish is seen too.
 func (env *testEnv) publishVersions(t *testing.T, author caller, ns, name string, releases []versionFiles) {
 	t.Helper()
@@ -247,7 +247,7 @@ func TestAccountInstallNeedsTheReleasesAcceptances(t *testing.T) {
 	}
 
 	// Audited beside agent.star, so the person's activity shows it — and
-	// the BriefAgent's own feed does not, to its author either: whose
+	// the QuickAgent's own feed does not, to its author either: whose
 	// account holds it is the person's business.
 	actions := env.activityActions(t, person)
 	found := false
@@ -265,7 +265,7 @@ func TestAccountInstallNeedsTheReleasesAcceptances(t *testing.T) {
 	env.doJSON(author, http.MethodGet, "/api/v1/agents/"+ref+"/activity", nil, &feed, http.StatusOK)
 	for _, e := range feed.Events {
 		if e.Action == "agent.install" {
-			t.Fatalf("the BriefAgent's feed shows the install to its author: %+v", feed.Events)
+			t.Fatalf("the QuickAgent's feed shows the install to its author: %+v", feed.Events)
 		}
 	}
 }
@@ -412,9 +412,9 @@ func TestAccountInstallUnsignedAndUnscannedConsents(t *testing.T) {
 
 // The private-agent rule (§9, agentry#313) holds for the install routes: a
 // PUT by a non-reader answers exactly what a missing name answers; a
-// record whose BriefAgent the caller can no longer read is listed as the
+// record whose QuickAgent the caller can no longer read is listed as the
 // bare ref with readable: false and nothing else, under the ref stored
-// when they installed it; and DELETE, which reads no BriefAgent, removes
+// when they installed it; and DELETE, which reads no QuickAgent, removes
 // it by that ref and answers 204 whatever the name is.
 func TestAccountInstallInvisibleToNonReaders(t *testing.T) {
 	env := newTestEnv(t)
@@ -465,7 +465,7 @@ func TestAccountInstallInvisibleToNonReaders(t *testing.T) {
 	if st, _ := problem(anonymous, http.MethodPut, "/api/v1/user/installs/"+ownerH+"/no-such-agent", map[string]any{"version": "1.0.0"}); st != http.StatusNotFound {
 		t.Fatalf("anonymous PUT on a missing name: %d, want 404", st)
 	}
-	// DELETE reads no BriefAgent: 401 anonymous whatever the name, 204 for
+	// DELETE reads no QuickAgent: 401 anonymous whatever the name, 204 for
 	// a signed-in caller whether the name is private, public or nobody's.
 	for _, path := range []string{ref, ownerH + "/no-such-agent"} {
 		if st, _ := problem(anonymous, http.MethodDelete, "/api/v1/user/installs/"+path, nil); st != http.StatusUnauthorized {
@@ -496,7 +496,7 @@ func TestAccountInstallInvisibleToNonReaders(t *testing.T) {
 		t.Fatalf("readable again: %+v", list)
 	}
 
-	// A BriefAgent that moved since — an erasure's transfer into an
+	// A QuickAgent that moved since — an erasure's transfer into an
 	// organization, say — is listed under the ref stored at install time
 	// while the caller cannot read it, never under where it went, and is
 	// removed by that ref. Simulated by re-homing the stored ref: the
@@ -507,7 +507,7 @@ func TestAccountInstallInvisibleToNonReaders(t *testing.T) {
 		t.Fatal(err)
 	}
 	if list := env.listInstalls(t, stranger); len(list) != 1 || list[0].Ref != ownerH+"/as-it-was" || list[0].Readable {
-		t.Fatalf("a moved BriefAgent's record: %+v, want the stored ref, unreadable", list)
+		t.Fatalf("a moved QuickAgent's record: %+v, want the stored ref, unreadable", list)
 	}
 	if st, _ := problem(stranger, http.MethodDelete, "/api/v1/user/installs/"+ownerH+"/as-it-was", nil); st != http.StatusNoContent {
 		t.Fatalf("DELETE by the stored ref: %d, want 204", st)
@@ -526,9 +526,9 @@ func TestAccountInstallInvisibleToNonReaders(t *testing.T) {
 	}
 }
 
-// A blocked BriefAgent stays readable and the row says so; nothing of it
+// A blocked QuickAgent stays readable and the row says so; nothing of it
 // can be installed while it is.
-func TestAccountInstallListsABlockedBriefAgentAsBlocked(t *testing.T) {
+func TestAccountInstallListsABlockedQuickAgentAsBlocked(t *testing.T) {
 	env := newTestEnv(t)
 	authorH := env.register("ab-author")
 	env.verifyEmail(authorH)
@@ -553,11 +553,11 @@ func TestAccountInstallListsABlockedBriefAgentAsBlocked(t *testing.T) {
 
 	list := env.listInstalls(t, person)
 	if len(list) != 1 || !list[0].Readable || deref(list[0].QuarantineState) != "blocked" || deref(list[0].InstalledVersion) != "1.0.0" {
-		t.Fatalf("a blocked BriefAgent's row: %+v, want readable and blocked", list)
+		t.Fatalf("a blocked QuickAgent's row: %+v, want readable and blocked", list)
 	}
 	code, _, prob := env.putInstall(t, person, ref, map[string]any{"version": "1.0.0", "acceptCapabilities": true})
 	if code != http.StatusGone || !strings.HasSuffix(prob.Type, "/blocked") {
-		t.Fatalf("PUT on a blocked BriefAgent: %d %+v, want 410 blocked", code, prob)
+		t.Fatalf("PUT on a blocked QuickAgent: %d %+v, want 410 blocked", code, prob)
 	}
 }
 
