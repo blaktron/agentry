@@ -248,14 +248,77 @@ done, and writes a draft. It never submits anything.
   `package/` (`agent.yaml`, the instruction file, `AGENT.md` unless the
   draft names another, a README and a LICENSE placeholder), beside the run's
   `reports/` and `receipts/`.
-  A draft that fails the rules is kept with its problems for you to fix;
-  review every part before you publish it. `--timeout`, `--max-turns` and
-  `--max-cost` bound the run.
+  A draft that still fails the rules after the steps below is kept with its
+  problems for you to fix ([below](#before-a-draft-is-written)); review
+  every part before you publish it.
+  `--timeout`, `--max-turns` and `--max-cost` bound the run.
+- **The Drafter decides rather than asks.** It picks a default for what the
+  description leaves open and names it in its notes. It asks at most three
+  intake questions (most drafts none or one), lists at most five things to
+  prepare, leaves at most two open questions, and keeps its notes to five
+  bullets. The instruction it writes has four parts: Role, Inputs, Steps and
+  Output.
 - **In Agentry.** `agentry draft --hosted --output-format json` is what a
   sandbox host runs for a draft made in Agentry, from the site's or the
-  desktop's Describe it: the scans and the search go through the registry
-  with the job's credential in `$AGENTRY_JOB_TOKEN`, and no Jev or search key
+  desktop's Describe it: the scans, the search and AI Review's check of the
+  finished draft go through the registry with the job's credential in
+  `$AGENTRY_JOB_TOKEN`, and no Jev or search key
   is on the host ([the draft kind](hosted-runs.md#a-hosted-draft)).
+
+#### Before a draft is written
+
+The CLI checks every draft in four steps (agentry-cli#417, agentry-cli#418):
+
+1. **Mechanical slips are corrected without the model.** A mode, a tag or
+   a choice named twice loses the second one. An optional part left empty,
+   or holding a placeholder such as "None", is removed. A list past its
+   limit is cut to the limit, and a text past its limit is shortened at a
+   word, ending with "…". The limits are the rules' own. The notes name
+   each correction under "Corrected after drafting", and nothing is
+   invented.
+2. **The rules check it**, with `agentry validate`'s own code.
+3. **AI Review checks the finished draft.** It reads the rendered package
+   (exactly the files `publish.include` takes, the license among them) two
+   ways: with the release rubric, asked as the pipeline's stage S5 asks it
+   at publish, and with one question on whether the instructions do the
+   task you described (`off_task`). On this machine it uses your own Jev
+   key. With `--hosted` it uses the registry's
+   [`POST /api/v1/model-input/check`](model-input.md#the-check-of-a-finished-draft) with
+   the job's credential, which the registry admits at most twice a draft
+   and the CLI never retries. The verdicts go into `draft.json` under
+   `aiReview.check`, and the notes say what a flag means under "AI
+   Review's check".
+   - The rubric's C3 (a capability used but not declared) is recorded and
+     never sent to the repair turn. It reads an instruction that uses its
+     own inputs and writes its report that way; editing the draft does not
+     clear it, and at publish it sends the version to review, not to
+     refusal.
+   - A description over 8 KiB is not checked, and neither is a draft that
+     could not be rendered.
+   - A pass does not mean the draft does all of the task. The pipeline
+     scans the whole version at publish whatever the check said.
+4. **One repair turn.** If the rules still refuse the draft, or the check
+   flagged something the draft can fix (`off_task`, or a rubric finding
+   other than C3), the Drafter runs once more, without its web tools.
+   - Its task is the rules' report, what the check flagged, and its own
+     manifest and instructions, and nothing else: no notes, no page. With a
+     flag it is also given the task the first turn was given, which AI
+     Review passed before that turn started.
+   - A last message that was not a draft at all (not one JSON object, exit
+     17) gets the same turn, given the error and that message back. The turn
+     returns the manifest again, and the instruction file too if the report
+     names it.
+   - The second answer is corrected and checked like the first, so a draft
+     asks at most two checks. It is kept whether or not it passes, unless
+     it breaks rules the first passed. Its notes say "Repaired once" and
+     what sent it to the turn.
+   - A repair turn that returns no draft leaves the first, with its
+     problems and a note saying why. When the first was not a draft
+     either, the draft ends with exit 17.
+   - The turn's budget is the draft's, capped at 300 seconds and 8 tool
+     calls, and what is left of `--max-cost`. Its receipts are in
+     `DIR/repair/`, and the usage lines it narrates count from the first
+     turn's total.
 
 ## MCP profiles
 
@@ -851,8 +914,8 @@ key variable's **name** only.
 | `setup --json` | `policyPath`, `provider`, `model`, `apiKeyEnv` (a name), `baseUrl`, `images` ready\|skipped |
 | `run ns/name --plan --json` (or `--local DIR`) | the consent-free preview a client shows before a person consents: `ref`, `version`, `digest`, `mode`, `modes`, `plan` (the compiled plan, canonical — what a run would enforce), `planSha256` (the receipt's `runPlanSha256`, over the plan's canonical indented form — match it, do not re-derive it from the compact `plan` bytes), `contract`, `contractDigest`, `attestation` verified\|unsigned\|local\|mismatch\|unverifiable, `keyId`, `signed`, `installed`, `diff`, `needsConfirmation`, `reason`, `refusals[]` (every refusal the attestation and vulnerable-server gates would meet, in the order a run meets them: `kind` attestation\|vulnerable_server, `message`, `lift` — the flag that lifts it, `--allow-unsigned`, `--allow-unscanned` or `--allow-vulnerable-mcp`, absent when none does), `refusal` (deprecated: the first refusal's message). Asks nothing, records nothing, materializes into a temp home; exit 0 whether or not a run would be refused (`--dry-run` is the plan for a person who consented on the terminal) |
 | `run … --output-format json` | the result envelope: `agentry` (`run/v1`), `status`, `exitCode` and `exitClass`, `error`, `runId`, `ref`, `digest`, `attestation`, `capabilities_enforced`, `harness`, `usage`, `result`, `outDir`, `resultFile`, `receipts` (`dir`, `runPlanSha256`), and `policy` (`path` of the operator policy file the run enforced, absolute; `source` default\|flag\|env — the runner home's file, `--policy`, or a home relocated by `AGENTRY_RUNNER_HOME`; `sha256`, the plan's `policySha256` — the digest of that file) |
-| `draft … --json` | the draft itself, `draft.json`: `manifest` (the v2 manifest as JSON), `instructions`, `notes`, `matches[]` (`ref`, `why`), `sources[]` (`url`, `used`, `withheld`), `openQuestions[]`, `drafter` (`ref`, `build`, `model`, `runId`), `aiReview` (the description's verdict, the receipt's web counts as its own fields — `scan`, `pages`, `read`, `passed`, `withheld`, … — and `withheldSources[]` with `tool`, `url` and `reason`), `validation` (the `validate --json` report on the rendered package), `manifestError` |
-| `draft … --output-format json` | the Drafter run's result envelope, as `run … --output-format json` writes one (its `usage`, the attestation `builtin`, the `web` counts), with an empty `result` and the draft's report under `draft`: `file` (where `draft.json` is), `rendered`, `passed`, `manifestError` (a flag), `matches`, `openQuestions` and `withheld` (counts). A draft that stops before the Drafter runs still writes one envelope with its class and stage |
+| `draft … --json` | the draft itself, `draft.json`: `manifest` (the v2 manifest as JSON), `instructions`, `notes`, `matches[]` (`ref`, `why`), `sources[]` (`url`, `used`, `withheld`), `openQuestions[]`, `drafter` (`ref`, `build`, `model`, `runId`), `aiReview` (the description's verdict, the receipt's web counts as its own fields — `scan`, `pages`, `read`, `passed`, `withheld`, … — `withheldSources[]` with `tool`, `url` and `reason`, and `check`, AI Review's check of the finished draft: `rubric` (`verdict` pass, flagged or not_scanned, `scores`, `findings[]` with `id`, `score` and `path`, `rubricHash`, `failure`), `draft` (`verdict`, `score`, `scores`, `flagged[]`, `questionSet`, `failure`), `model`, `requests`, `inputTokens`, `checks` (how many checks were asked, at most 2), or `unanswered`, the reason it has no answer, with no verdicts), `validation` (the `validate --json` report on the rendered package), `manifestError` |
+| `draft … --output-format json` | the Drafter run's result envelope, as `run … --output-format json` writes one (its `usage`, the attestation `builtin`, the `web` counts), with an empty `result` and the draft's report under `draft`: `file` (where `draft.json` is), `rendered`, `passed`, `manifestError` (a flag), `matches`, `openQuestions` and `withheld` (counts), `corrections` (how many slips were corrected), `repaired` (whether the one repair turn ran) and `check` (AI Review's check as one word: `pass`, `flagged`, `not_scanned`, or `unanswered`; absent for a draft that could not be rendered). The envelope's usage is both turns' together. A draft that stops before the Drafter runs still writes one envelope with its class and stage |
 | `knowledge create NAME --json` / `knowledge add DIR --json` | `dir`, `manifest` (the pack's `manifest.json`: `schema`, `name`, `id`, `created`, `updated`, `creator`, `pages`, `bytes`, `sha256`, and `scan`, the string `not scanned` or a registry's record), `documents[]` (what the run was given), `skipped[]` (documents not ingested), `written[]` (the paths the build applied), `dropped[]` (`path`, `reason`, `kept`), `receipts` (the Creator run's receipt directory), `decode` (the decode step's report, when documents were decoded), `stopped` (the budget or error that stopped the run early, when one did) |
 | `--version` | `agentry version <v>` — a release version, or a git describe on a source build |
 
