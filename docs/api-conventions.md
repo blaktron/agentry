@@ -101,7 +101,10 @@ hit says so, and clients label it Built-in in place of its run modes.
 `PATCH /agents/{ns}/{name}` takes `builtin` from platform staff only (`403`
 for anyone else, the namespace's own administrators included), and marks
 an agent only in a first-party namespace (`409 builtin-first-party`
-otherwise). Nothing but the label reads it.
+otherwise). Nothing but the label reads it. It is not the runner's
+attestation state `builtin`, which only the CLI's embedded copy of a
+package runs under: an install of a built-in agent from the registry is an
+ordinary release.
 
 ## Idempotency-Key
 

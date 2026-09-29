@@ -40,6 +40,7 @@ func (s *Server) agentToAPI(a registry.Agent, maintain bool) Agent {
 		DefaultBranch:   a.DefaultBranch,
 		GitHttpUrl:      base + "/" + a.Namespace + "/" + a.Name + ".git",
 		QuarantineState: AgentQuarantineState(a.QuarantineState),
+		Builtin:         a.Builtin,
 		CreatedAt:       a.CreatedAt,
 	}
 	if u := s.gitSSHURL(a.Namespace, a.Name); u != "" {
@@ -53,8 +54,6 @@ func (s *Server) agentToAPI(a registry.Agent, maintain bool) Agent {
 		ps := a.PipelineSkip
 		out.PipelineSkip = &ps
 	}
-	bi := a.Builtin
-	out.Builtin = &bi
 	return out
 }
 
@@ -223,14 +222,13 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, params ListA
 	out := make([]Agent, 0, len(rows))
 	base := strings.TrimSuffix(s.cfg.BaseURL, "/")
 	for _, row := range rows {
-		builtin := row.Builtin
 		out = append(out, Agent{
 			Id: row.ID, Namespace: row.Namespace, Name: row.Name,
 			Modes: apiModes(row.Modes), Visibility: AgentVisibility(row.Visibility),
 			Summary: row.Summary, DefaultBranch: "main",
 			GitHttpUrl:      base + "/" + row.Namespace + "/" + row.Name + ".git",
 			QuarantineState: AgentQuarantineState(row.QuarantineState),
-			Builtin:         &builtin,
+			Builtin:         row.Builtin,
 			CreatedAt:       row.CreatedAt,
 		})
 	}
@@ -299,16 +297,20 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 		problemForbidden(w, r, "Taking this QuickAgent off the pipeline needs the "+a.Namespace+" namespace's administrators.")
 		return
 	}
-	// Built-in (agentry#737) is the platform's to say, not the namespace's:
-	// it labels the agent as part of the application, so no author, and no
-	// administrator of the namespace, may set or clear it — only platform
-	// staff, and marking it only in a first-party namespace, where the
-	// built-ins are published (agentry-cli#470, DR-50).
-	if req.Builtin != nil && *req.Builtin != a.Builtin && !principalFrom(r.Context()).PlatformStaff {
-		problemForbidden(w, r, "Marking a QuickAgent built-in is the platform's to decide.")
+	// Built-in (agentry#737, DEV-174) is the platform's to say, not the
+	// namespace's: it labels the agent as part of the application, so no
+	// author, and no administrator of the namespace, may set or clear it —
+	// only platform staff, and marking it only in a first-party
+	// organization, where the built-ins are published (agentry-cli#470,
+	// DR-50). Anyone else's value is never written, even when it matches
+	// the row as read here: under a staff change landing between this read
+	// and the write it would undo that change.
+	staff := principalFrom(r.Context()).PlatformStaff
+	if req.Builtin != nil && *req.Builtin != a.Builtin && !staff {
+		problemForbidden(w, r, "Marking or unmarking a QuickAgent as built-in is open to platform staff only.")
 		return
 	}
-	if req.Builtin != nil && *req.Builtin && !a.Builtin && !firstPartyOrg(a.Namespace) {
+	if req.Builtin != nil && *req.Builtin && !a.Builtin && (a.NamespaceKind != "org" || !firstPartyOrg(a.Namespace)) {
 		writeProblem(w, r, http.StatusConflict, "builtin-first-party", "Only the platform's own namespace holds built-in QuickAgents", "Built-in QuickAgents are the packages the Agentry CLI embeds, published under the platform's own organization; "+a.Namespace+" is not one of its namespaces.")
 		return
 	}
@@ -360,7 +362,7 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 		params.PipelineSkip = req.PipelineSkip
 		detail["pipelineSkip"] = *req.PipelineSkip
 	}
-	if req.Builtin != nil {
+	if req.Builtin != nil && staff {
 		params.Builtin = req.Builtin
 		detail["builtin"] = *req.Builtin
 	}
