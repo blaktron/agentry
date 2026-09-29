@@ -1,7 +1,6 @@
 package scan
 
 import (
-	"encoding/json"
 	"fmt"
 	"path"
 	"regexp"
@@ -79,23 +78,12 @@ type s6Declared struct {
 
 func s6DeclaredFromManifest(manifestJSON []byte) s6Declared {
 	d := s6Declared{hosts: map[string]bool{}, secrets: map[string]bool{}}
-	var m struct {
-		Capabilities *struct {
-			Network struct {
-				Egress []string `json:"egress"`
-			} `json:"network"`
-			Filesystem struct {
-				Write json.RawMessage `json:"write"`
-			} `json:"filesystem"`
-			Exec    json.RawMessage `json:"exec"`
-			Secrets []string        `json:"secrets"`
-		} `json:"capabilities"`
-	}
-	if err := json.Unmarshal(manifestJSON, &m); err != nil || m.Capabilities == nil {
+	c, ok := readManifestCaps(manifestJSON)
+	if !ok {
 		return d
 	}
 	d.declared = true
-	for _, h := range m.Capabilities.Network.Egress {
+	for _, h := range c.Network.Egress.Hosts {
 		switch h {
 		case "", "none":
 		case "*":
@@ -104,9 +92,9 @@ func s6DeclaredFromManifest(manifestJSON []byte) s6Declared {
 			d.hosts[strings.ToLower(h)] = true
 		}
 	}
-	d.fsWrite = notNone(m.Capabilities.Filesystem.Write)
-	d.exec = notNone(m.Capabilities.Exec)
-	for _, s := range m.Capabilities.Secrets {
+	d.fsWrite = notNone(c.Filesystem.Write)
+	d.exec = notNone(c.Exec)
+	for _, s := range c.Secrets {
 		d.secrets[s] = true
 	}
 	return d
