@@ -3,7 +3,8 @@
 # renders, and the production shape it grew for the Vultr cluster holds
 # (agentry#450, DEV-124): the git role has a Service with its SSH port, the
 # object-store credentials reach the api and worker pods and never the git
-# pods, the signing key Secret is projected read-only where a signer runs,
+# pods, each role holds only the app Secret's keys it uses (agentry#744),
+# the signing key Secret is projected read-only where a signer runs,
 # nothing is mounted under the read-only config directory, pull secrets and
 # the worker's NetworkPolicy and proxy render, and git ×1 with Recreate is a
 # supported shape. The AWS terraform moved to the site's repository with the
@@ -160,6 +161,36 @@ check "worker NetworkPolicy allows the listed address" "$(count "$np" 'cidr: "10
 check "worker NetworkPolicy allows DNS" "$(count "$np" 'kubernetes.io/metadata.name: kube-system')" 1
 np_off=$(helm template acc "$HELM_DIR" "${BASE[@]}" "${KMS[@]}" | grep -c 'kind: NetworkPolicy' || true)
 check "no NetworkPolicy unless enabled" "$np_off" 0
+
+# Each role holds the app Secret's keys it uses and no other (agentry#744):
+# git, which takes untrusted pushes, the database URL and the sealing key; the
+# worker also mail, erasure and knowledge; the api every key. The exact set is
+# asserted, so a key added to agentry.agentrydEnv fails here until it is
+# placed. secretKeys <rendered>: the env names read from the app Secret,
+# whatever the order of a reference's name and key lines.
+secretKeys() {
+  printf '%s\n' "$1" | awk '
+    function flush() { if (n != "" && s == "agentry-app") print n; n = ""; s = "" }
+    /^ *- name: / { flush(); n = $3; ref = 0; next }
+    /secretKeyRef:/ { ref = 1; next }
+    ref && /^ *name: / { s = $2 }
+    END { flush() }' | sort | tr '\n' ' ' | sed 's/ $//'
+}
+APP=(--set secret.existingSecret=agentry-app)
+render api_app deployment-api.yaml "${APP[@]}"
+render worker_app deployment-worker.yaml "${APP[@]}"
+render git_app deployment-git.yaml "${APP[@]}"
+check "api holds every app key" "$(secretKeys "$api_app")" \
+  "AGENTRY_AUTH_SEALING_KEY AGENTRY_DATABASE_URL AGENTRY_IDP_ADMIN_TOKEN AGENTRY_IDP_TRUST_CHECK_TOKEN AGENTRY_KNOWLEDGE_SEALING_KEY AGENTRY_REDIS_URL AGENTRY_SMTP_PASS AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET"
+check "worker holds the database, sealing, knowledge, mail and erasure keys" "$(secretKeys "$worker_app")" \
+  "AGENTRY_AUTH_SEALING_KEY AGENTRY_DATABASE_URL AGENTRY_IDP_ADMIN_TOKEN AGENTRY_KNOWLEDGE_SEALING_KEY AGENTRY_SMTP_PASS"
+check "git holds the database URL and the sealing key alone" "$(secretKeys "$git_app")" \
+  "AGENTRY_AUTH_SEALING_KEY AGENTRY_DATABASE_URL"
+# With the staff mirror on, config validation needs the admin token in every
+# role, git included.
+render git_mirror deployment-git.yaml "${APP[@]}" --set config.auth.idpStaffMirrorGroup=agentry-staff
+check "git holds the admin token while the staff mirror is on" "$(secretKeys "$git_mirror")" \
+  "AGENTRY_AUTH_SEALING_KEY AGENTRY_DATABASE_URL AGENTRY_IDP_ADMIN_TOKEN"
 
 if [ "$fail" -ne 0 ]; then echo "== M7 acceptance FAILED =="; exit 1; fi
 echo "== M7 acceptance PASSED =="
