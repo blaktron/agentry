@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -102,5 +103,16 @@ func TestBlockedCapabilitiesReadAnEgressNoneManifest(t *testing.T) {
 	issues := CheckSubmissionPolicy(pol, registry.PolicySubmission{ManifestJSON: canonicalManifest(t, egressNoneExecWrite)})
 	if len(issues) != 1 || !strings.Contains(issues[0].Error(), `blocks capability "exec"`) {
 		t.Fatalf("issues: %v", issues)
+	}
+}
+
+// A policy that sends a capability to review sends it beside egress
+// "none", as the gate reads the capabilities the orchestrator gives it.
+func TestTheGateReviewsACapabilityBesideEgressNone(t *testing.T) {
+	p := DefaultBaseline()
+	p.RequireHumanReview = json.RawMessage(`{"whenCapabilities":["exec"]}`)
+	got := Evaluate(GateInput{Policy: p, DeclaredCapabilities: declaredCaps(canonicalManifest(t, egressNoneExecWrite))})
+	if got.Outcome != OutcomeNeedsReview {
+		t.Fatalf("a declared exec must go to review under whenCapabilities: %s (%s)", got.Outcome, got.Reason)
 	}
 }

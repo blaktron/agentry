@@ -443,7 +443,7 @@ func isDiffEscalatable(f Finding) bool {
 
 func egressSet(manifestJSON []byte) map[string]bool {
 	out := map[string]bool{}
-	c, _ := readManifestCaps(manifestJSON)
+	c, _ := readManifestCaps(manifestJSON) // unreadable, or egress none: no hosts
 	for _, h := range c.Network.Egress.Hosts {
 		out[strings.ToLower(h)] = true
 	}
