@@ -36,7 +36,7 @@ spec:
           securityContext:
             {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           env:
-            {{- include "agentry.agentrydEnv" . | nindent 12 }}
+            {{- include "agentry.agentrydEnv" (dict "ctx" . "role" "api") | nindent 12 }}
             {{- include "agentry.storageCredentialsEnv" . | nindent 12 }}
             {{- with .Values.api.extraEnv }}
             {{- toYaml . | nindent 12 }}

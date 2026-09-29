@@ -62,7 +62,7 @@ spec:
           securityContext:
             {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           env:
-            {{- include "agentry.agentrydEnv" . | nindent 12 }}
+            {{- include "agentry.agentrydEnv" (dict "ctx" . "role" "git") | nindent 12 }}
             {{- with .Values.git.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
