@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net/url"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -30,6 +31,53 @@ func newRiverTestClient(t *testing.T) (*RiverClient, *store.Store) {
 	st, err := store.Connect(ctx, url)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(st.Close)
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	if os.Getenv("AGENTRY_TEST_QUEUE_DEBUG") != "" {
+		log = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	}
+	c := NewRiverClient(st, log)
+	c.SetTestOnly(true)
+	return c, st
+}
+
+// newIsolatedRiverTestClient is newRiverTestClient on a database of its own,
+// made for the test and dropped after it. River runs its rescuer and its
+// scheduler on the one client elected leader per database, and the other
+// packages' tests start River clients against the shared test database at
+// the same time, so a test that needs those services to run on time cannot
+// share it.
+func newIsolatedRiverTestClient(t *testing.T) (*RiverClient, *store.Store) {
+	t.Helper()
+	shared := os.Getenv("AGENTRY_TEST_DATABASE_URL")
+	if shared == "" {
+		t.Skip("AGENTRY_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	admin, err := store.Connect(ctx, shared)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(admin.Close)
+	name := "agentry_rq_" + strings.ReplaceAll(uuid.NewString(), "-", "")[:12]
+	if _, err := admin.Pool().Exec(ctx, "CREATE DATABASE "+name); err != nil {
+		t.Fatalf("create %s: %v", name, err)
+	}
+	t.Cleanup(func() {
+		_, _ = admin.Pool().Exec(context.Background(), "DROP DATABASE IF EXISTS "+name+" WITH (FORCE)")
+	})
+	u, err := url.Parse(shared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.Path = "/" + name
+	if err := store.Migrate(ctx, u.String()); err != nil {
+		t.Fatalf("migrate %s: %v", name, err)
+	}
+	st, err := store.Connect(ctx, u.String())
+	if err != nil {
+		t.Fatalf("connect %s: %v", name, err)
 	}
 	t.Cleanup(st.Close)
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -205,6 +253,95 @@ func TestRiverDelayedJobWaits(t *testing.T) {
 	}
 	if r := riverJob(t, st, q); r.State != "scheduled" {
 		t.Fatalf("delayed job: %+v", r)
+	}
+}
+
+// TestRiverRescuesAJobItsWorkerLeftRunning pins crash recovery under River,
+// production's driver (agentry#750): a job left running by a worker that died
+// (an evicted pod, a node gone) is rescued once it has been running longer
+// than the reclaim cutoff, and runs again on a live worker, while a job a
+// healthy worker holds right now is left alone. It is the River half of
+// TestQueueReclaimsOrphanedJobs and TestQueueReclaimRespectsCutoff: without
+// it a scan whose worker died stays in scanning.
+func TestRiverRescuesAJobItsWorkerLeftRunning(t *testing.T) {
+	// The cutoff this relies on: a job running for longer is presumed
+	// orphaned. A change to it moves both rows below.
+	if defaultReclaimAfter != 30*time.Minute {
+		t.Fatalf("defaultReclaimAfter = %s: re-check the rows' ages below", defaultReclaimAfter)
+	}
+	// Its own database: the rescue runs only on River's elected leader.
+	c, st := newIsolatedRiverTestClient(t)
+	q := testQueueName(t, st)
+	ctx := context.Background()
+	var orphanRuns, heldRuns atomic.Int32
+	c.Register("river.orphan", func(context.Context, Job) error { orphanRuns.Add(1); return nil })
+	c.Register("river.held", func(context.Context, Job) error { heldRuns.Add(1); return nil })
+	for _, kind := range []string{"river.orphan", "river.held"} {
+		if _, err := c.Enqueue(ctx, kind, q, struct{}{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A worker claimed both and died: the orphan two hours ago, past the
+	// cutoff; the held job a moment ago, well inside it.
+	for kind, age := range map[string]string{"river.orphan": "2 hours", "river.held": "0 seconds"} {
+		if _, err := st.Pool().Exec(ctx, `
+			UPDATE river_job SET state = 'running', attempt = 1,
+			       attempted_at = now() - $3::interval, attempted_by = ARRAY['a-dead-worker']
+			WHERE queue = $1 AND kind = $2`, q, kind, age); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() {
+		_, _ = st.Pool().Exec(context.Background(), `DELETE FROM river_job WHERE queue = $1`, q)
+	})
+
+	workCtx, stop := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() { defer close(done); _ = c.Work(workCtx, q) }()
+	deadline := time.Now().Add(45 * time.Second)
+	for orphanRuns.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(100 * time.Millisecond)
+	}
+	stop()
+	<-done
+
+	if n := orphanRuns.Load(); n != 1 {
+		t.Fatalf("the orphaned job ran %d times, want 1: River never rescued it", n)
+	}
+	var state string
+	var errs int
+	if err := st.Pool().QueryRow(ctx, `
+		SELECT state, coalesce(array_length(errors, 1), 0) FROM river_job
+		WHERE queue = $1 AND kind = 'river.orphan'`, q).Scan(&state, &errs); err != nil {
+		t.Fatal(err)
+	}
+	if state != "completed" || errs != 1 {
+		t.Fatalf("orphaned job: state %s with %d recorded errors, want completed after one rescue", state, errs)
+	}
+	// The held job is inside the cutoff, so the pass that took the orphan
+	// left it alone.
+	if err := st.Pool().QueryRow(ctx, `
+		SELECT state FROM river_job WHERE queue = $1 AND kind = 'river.held'`, q).Scan(&state); err != nil {
+		t.Fatal(err)
+	}
+	if state != "running" || heldRuns.Load() != 0 {
+		t.Fatalf("held job: state %s, ran %d times; a job inside the cutoff must be left to its worker", state, heldRuns.Load())
+	}
+}
+
+// TestRiverJobTimeoutLeavesRoomForTheRescue guards the configuration the
+// rescue depends on (agentry#750). River refuses a timeout past the rescue
+// cutoff but accepts the two that break it: -1, with which no job is ever
+// rescued, and a timeout equal to the cutoff, which would rescue a job its
+// worker still runs. TestRiverRescuesAJobItsWorkerLeftRunning pins that the
+// value reaches River.
+func TestRiverJobTimeoutLeavesRoomForTheRescue(t *testing.T) {
+	c := NewRiverClient(nil, nil)
+	if c.jobTimeout <= 0 {
+		t.Fatalf("jobTimeout = %s: River never rescues a job without a timeout", c.jobTimeout)
+	}
+	if c.jobTimeout >= c.reclaimAfter {
+		t.Fatalf("jobTimeout %s must be under the rescue cutoff %s", c.jobTimeout, c.reclaimAfter)
 	}
 }
 
