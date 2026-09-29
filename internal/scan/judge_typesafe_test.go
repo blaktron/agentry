@@ -25,6 +25,7 @@ type typesafeCall struct {
 		Path                 string `json:"path"`
 		Content              string `json:"content"`
 		DeclaredCapabilities string `json:"declared_capabilities"`
+		RunnerGrants         string `json:"runner_grants"`
 	}
 	Questions map[string]struct {
 		Type         string `json:"type"`
@@ -154,6 +155,9 @@ func TestTypeSafeJudgeScoresAllSixAxesFromEveryTextFile(t *testing.T) {
 		}
 		if !strings.Contains(c.State.DeclaredCapabilities, `"egress":"none"`) {
 			t.Fatalf("the state must carry the declared capabilities: %q", c.State.DeclaredCapabilities)
+		}
+		if c.State.RunnerGrants != judge.RunnerGrants {
+			t.Fatalf("the state must say what the runner grants every run (agentry#731): %q", c.State.RunnerGrants)
 		}
 		for id, q := range c.Questions {
 			if q.Instructions != typesafeQuestions[JudgeCategory(id)] {
@@ -529,20 +533,22 @@ func TestS5ReadsEveryTextFile(t *testing.T) {
 	}
 }
 
-// The rubric's six texts moved into pkg/judge (agentry#608) byte for byte,
-// and the request shapes with them: the hash a run records under each shape
-// is the one recorded before the move, so no run reads as a new rubric.
-func TestTypeSafeRubricHashIsUnchangedByTheMoveToPkgJudge(t *testing.T) {
+// The rubric hash each request shape records. The six texts moved into
+// pkg/judge (agentry#608) byte for byte without moving it; it moved once
+// since, when the state began to say what the runner grants every run and
+// C3 to name it (agentry#731, DEV-113's addendum). A change to anything
+// that moves a verdict shows here as a changed pin.
+func TestTypeSafeRubricHashPerShape(t *testing.T) {
 	want := map[int]string{
-		1: "sha256:6e875adc14dce8c61b17cf7a78baab58d8edf7cb4073985e76305ed5ae35ad05",
-		2: "sha256:3f4b5a087e4cef3ce0ada18a07554da27cf3a02ef9ffe8629d58be14a6a52cbc",
-		6: "sha256:fac5aa066f97b25cc134556ff463bcb5f5502353f52253a3e1838d5c90e43c35",
+		1: "sha256:fe02fa960f6ccbc5cb0da23bedea6988df42cfc8085bd01c0f571a204fe3ce3a",
+		2: "sha256:68e81e5274de12f97fe05f25f80ba8887f401262c85e8e65360b4f99487c339a",
+		6: "sha256:afb9ea217663969867c299199ef07bbdd5c98850d5699b221af5a8de708f4f44",
 	}
-	for batch, h := range want {
+	for _, batch := range []int{1, 2, 6} {
 		j := NewTypeSafeJudge(JudgeConfig{Provider: "typesafe", APIKey: "k"})
 		j.batch = batch
-		if got := j.hash(); got != h {
-			t.Fatalf("batch %d: rubric hash %s, want %s", batch, got, h)
+		if got := j.hash(); got != want[batch] {
+			t.Errorf("batch %d: rubric hash %s, want %s", batch, got, want[batch])
 		}
 	}
 }
