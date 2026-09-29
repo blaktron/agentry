@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net/url"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -30,6 +31,53 @@ func newRiverTestClient(t *testing.T) (*RiverClient, *store.Store) {
 	st, err := store.Connect(ctx, url)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(st.Close)
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	if os.Getenv("AGENTRY_TEST_QUEUE_DEBUG") != "" {
+		log = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	}
+	c := NewRiverClient(st, log)
+	c.SetTestOnly(true)
+	return c, st
+}
+
+// newIsolatedRiverTestClient is newRiverTestClient on a database of its own,
+// made for the test and dropped after it. River runs its rescuer and its
+// scheduler on the one client elected leader per database, and the other
+// packages' tests start River clients against the shared test database at
+// the same time, so a test that needs those services to run on time cannot
+// share it.
+func newIsolatedRiverTestClient(t *testing.T) (*RiverClient, *store.Store) {
+	t.Helper()
+	shared := os.Getenv("AGENTRY_TEST_DATABASE_URL")
+	if shared == "" {
+		t.Skip("AGENTRY_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	admin, err := store.Connect(ctx, shared)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(admin.Close)
+	name := "agentry_rq_" + strings.ReplaceAll(uuid.NewString(), "-", "")[:12]
+	if _, err := admin.Pool().Exec(ctx, "CREATE DATABASE "+name); err != nil {
+		t.Fatalf("create %s: %v", name, err)
+	}
+	t.Cleanup(func() {
+		_, _ = admin.Pool().Exec(context.Background(), "DROP DATABASE IF EXISTS "+name+" WITH (FORCE)")
+	})
+	u, err := url.Parse(shared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.Path = "/" + name
+	if err := store.Migrate(ctx, u.String()); err != nil {
+		t.Fatalf("migrate %s: %v", name, err)
+	}
+	st, err := store.Connect(ctx, u.String())
+	if err != nil {
+		t.Fatalf("connect %s: %v", name, err)
 	}
 	t.Cleanup(st.Close)
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -221,7 +269,8 @@ func TestRiverRescuesAJobItsWorkerLeftRunning(t *testing.T) {
 	if defaultReclaimAfter != 30*time.Minute {
 		t.Fatalf("defaultReclaimAfter = %s: re-check the rows' ages below", defaultReclaimAfter)
 	}
-	c, st := newRiverTestClient(t)
+	// Its own database: the rescue runs only on River's elected leader.
+	c, st := newIsolatedRiverTestClient(t)
 	q := testQueueName(t, st)
 	ctx := context.Background()
 	var orphanRuns, heldRuns atomic.Int32
