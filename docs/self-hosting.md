@@ -166,6 +166,22 @@ reference (added for the Vultr production cluster, DEV-124):
   (`worker.mountGitData`, the default). A tag submission whose archive is
   not stored within two hours is rejected, and the publisher pushes a new
   version tag.
+- `secret.existingSecret` (or the chart's own Secret) — each role gets only
+  the keys it uses (agentry#744). The git role, which takes untrusted
+  pushes, gets `AGENTRY_DATABASE_URL` and `AGENTRY_AUTH_SEALING_KEY`. The
+  worker also gets `AGENTRY_KNOWLEDGE_SEALING_KEY`, `AGENTRY_SMTP_PASS` and
+  `AGENTRY_IDP_ADMIN_TOKEN`: it sends the digest and billing mail, retries
+  account erasure and scans knowledge packs. The api gets every key,
+  including the directory's `AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET` and
+  `AGENTRY_IDP_TRUST_CHECK_TOKEN`. With `config.auth.idpStaffMirrorGroup`
+  set, every role gets the admin token too, because config validation
+  requires it wherever the mirror is named. A key passed through the
+  chart-wide `extraEnv` still reaches every role, so pass a secret through
+  the role's own `extraEnv` instead. Settings that validation ties to a key
+  must go the same way: `AGENTRY_IDP_STAFF_MIRROR_GROUP` in the chart-wide
+  `extraEnv` stops the git role from starting (set
+  `config.auth.idpStaffMirrorGroup` instead), and so does
+  `AGENTRY_IDP_TRUST_CHECK_TOKEN` anywhere but `api.extraEnv`.
 - `databaseCA.existingSecret` and `databaseCA.key` — the database's CA,
   projected to `/etc/agentry-db-ca/ca.crt`, so the DSN can carry
   `sslmode=verify-full&sslrootcert=/etc/agentry-db-ca/ca.crt`.

@@ -214,6 +214,9 @@ databaseCA:
 # external-secrets / sealed-secrets) over inlining here.
 secret:
   create: true
+  # Each role reads only the keys it uses (agentry#744; docs/self-hosting.md):
+  # git the database URL and the sealing key, the worker also knowledge, mail
+  # and the directory admin token, the api all of them.
   existingSecret: "" # if set, must provide keys: AGENTRY_DATABASE_URL, AGENTRY_AUTH_SEALING_KEY, and optionally AGENTRY_KNOWLEDGE_SEALING_KEY / AGENTRY_REDIS_URL / AGENTRY_SMTP_PASS / AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET / AGENTRY_IDP_ADMIN_TOKEN / AGENTRY_IDP_TRUST_CHECK_TOKEN
   authentikClientSecret: "" # OIDC client secret for config.social.authentik
   idpAdminToken: "" # directory API token for account erasure (config.auth.idpAdminURL)
