@@ -1,7 +1,6 @@
 package scan
 
 import (
-	"encoding/json"
 	"fmt"
 	"path"
 	"sort"
@@ -444,17 +443,8 @@ func isDiffEscalatable(f Finding) bool {
 
 func egressSet(manifestJSON []byte) map[string]bool {
 	out := map[string]bool{}
-	var m struct {
-		Capabilities struct {
-			Network struct {
-				Egress []string `json:"egress"`
-			} `json:"network"`
-		} `json:"capabilities"`
-	}
-	if err := json.Unmarshal(manifestJSON, &m); err != nil {
-		return out
-	}
-	for _, h := range m.Capabilities.Network.Egress {
+	c, _ := readManifestCaps(manifestJSON) // unreadable, or egress none: no hosts
+	for _, h := range c.Network.Egress.Hosts {
 		out[strings.ToLower(h)] = true
 	}
 	return out
