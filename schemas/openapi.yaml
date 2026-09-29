@@ -1934,6 +1934,16 @@ paths:
                     already published; the next submission goes through
                     the whole pipeline.
                   type: boolean
+                builtin:
+                  description: >-
+                    Mark or unmark the agent as built-in (agentry#737): a
+                    package the Agentry CLI embeds, published for reading,
+                    which clients label Built-in in place of its run modes.
+                    Platform staff only (403 for anyone else, the
+                    namespace's administrators included), and setting it
+                    only on an agent of a first-party namespace
+                    (`builtin-first-party`). Nothing but the label reads it.
+                  type: boolean
                 modes:
                   description: >
                     Replace the run modes the agent advertises (maintain
@@ -6252,6 +6262,14 @@ components:
             plan organization-subscriptions §4). A version so admitted is
             served with `scanStatus: skipped` and the report's verdict
             `unscanned`.
+        builtin:
+          type: boolean
+          description: >-
+            Whether this is a built-in agent: one of the packages the Agentry
+            CLI embeds and runs as part of the application, published here
+            for reading (agentry#737). A client labels it Built-in in place of
+            its run modes. Only platform staff set it, on an agent of a
+            first-party namespace. Always present.
         createdAt:
           type: string
           format: date-time
@@ -6781,6 +6799,11 @@ components:
             organization with one — beside the publisher's name, never in
             place of the verdict. Absent for a person's namespace and for
             an organization without one.
+        builtin:
+          type: boolean
+          description: >-
+            Whether this is a built-in agent (see `Agent.builtin`): a client
+            labels it Built-in in place of its run modes. Always present.
 
     Problem:
       type: object

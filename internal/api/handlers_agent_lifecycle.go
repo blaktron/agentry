@@ -240,9 +240,10 @@ func (s *Server) ListAgentsByTag(w http.ResponseWriter, r *http.Request, tag str
 	for _, row := range rows {
 		installs := int(row.Installs)
 		qs := SearchHitQuarantineState(row.QuarantineState)
+		builtin := row.Builtin
 		hits = append(hits, SearchHit{
 			Namespace: row.Namespace, Name: row.Name, Modes: apiModes(row.Modes),
-			Summary: row.Summary, Installs30d: &installs, QuarantineState: &qs,
+			Summary: row.Summary, Installs30d: &installs, QuarantineState: &qs, Builtin: &builtin,
 		})
 	}
 	page := TagPage{Tag: normalized, Results: hits}

@@ -66,6 +66,7 @@ type Agent struct {
 	AllowForcePush           bool        `json:"allow_force_push"`
 	Modes                    []string    `json:"modes"`
 	PipelineSkip             bool        `json:"pipeline_skip"`
+	Builtin                  bool        `json:"builtin"`
 }
 
 type AgentTeamGrant struct {
