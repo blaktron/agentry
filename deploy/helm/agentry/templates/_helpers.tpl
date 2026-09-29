@@ -82,71 +82,90 @@ truncation never makes two roles' names one. */ -}}
 {{- end }}
 
 {{/*
-  Shared env for agentryd containers: non-secret AGENTRY_* from config plus
-  secret refs. Include with: {{- include "agentry.agentrydEnv" . | nindent 12 }}
+  The env of one role's agentryd container: non-secret AGENTRY_* from config
+  plus the secret references that role uses, and nothing more (agentry#744).
+  Every role holds the database URL and the auth sealing key (config
+  validation requires the key outside dev, and git keys its tag-push hash from
+  it). The api and the worker also send mail, run account erasure and unwrap
+  the knowledge scan; the api alone exchanges the directory's OIDC code, answers
+  its trust check and reports features.redis. So the git role, which takes
+  untrusted pushes, holds no directory, mail or knowledge credential, and the
+  worker none of the api's OIDC ones. The one tie config validation makes
+  across roles is kept: with auth.idpStaffMirrorGroup set, every role needs
+  the directory admin token to start.
+  Include with: {{- include "agentry.agentrydEnv" (dict "ctx" . "role" "api") | nindent 12 }}
 */}}
 {{- define "agentry.agentrydEnv" -}}
+{{- $ctx := .ctx -}}
+{{- $role := .role -}}
+{{- $secret := include "agentry.secretName" $ctx -}}
+{{- $existing := $ctx.Values.secret.existingSecret -}}
+{{- if not (has $role (list "api" "git" "worker")) -}}
+{{- fail (printf "agentry.agentrydEnv has no role %q: the chart's roles are api, worker and git" $role) -}}
+{{- end -}}
+{{- $api := eq $role "api" -}}
+{{- $apiOrWorker := has $role (list "api" "worker") -}}
 - name: AGENTRY_CONFIG
   value: /etc/agentry/agentry.yaml
 - name: AGENTRY_DATABASE_URL
   valueFrom:
     secretKeyRef:
-      name: {{ include "agentry.secretName" . }}
+      name: {{ $secret }}
       key: AGENTRY_DATABASE_URL
 - name: AGENTRY_AUTH_SEALING_KEY
   valueFrom:
     secretKeyRef:
-      name: {{ include "agentry.secretName" . }}
+      name: {{ $secret }}
       key: AGENTRY_AUTH_SEALING_KEY
-{{- if or .Values.secret.knowledgeSealingKey .Values.secret.existingSecret }}
+{{- if and $apiOrWorker (or $ctx.Values.secret.knowledgeSealingKey $existing) }}
 - name: AGENTRY_KNOWLEDGE_SEALING_KEY
   valueFrom:
     secretKeyRef:
-      name: {{ include "agentry.secretName" . }}
+      name: {{ $secret }}
       key: AGENTRY_KNOWLEDGE_SEALING_KEY
       optional: true
 {{- end }}
-{{- if or .Values.secret.redisUrl .Values.secret.existingSecret }}
+{{- if and $api (or $ctx.Values.secret.redisUrl $existing) }}
 - name: AGENTRY_REDIS_URL
   valueFrom:
     secretKeyRef:
-      name: {{ include "agentry.secretName" . }}
+      name: {{ $secret }}
       key: AGENTRY_REDIS_URL
       optional: true
 {{- end }}
-{{- if or .Values.secret.smtpPassword .Values.secret.existingSecret }}
+{{- if and $apiOrWorker (or $ctx.Values.secret.smtpPassword $existing) }}
 - name: AGENTRY_SMTP_PASS
   valueFrom:
     secretKeyRef:
-      name: {{ include "agentry.secretName" . }}
+      name: {{ $secret }}
       key: AGENTRY_SMTP_PASS
       optional: true
 {{- end }}
-{{- if or .Values.secret.authentikClientSecret .Values.secret.existingSecret }}
+{{- if and $api (or $ctx.Values.secret.authentikClientSecret $existing) }}
 - name: AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET
   valueFrom:
     secretKeyRef:
-      name: {{ include "agentry.secretName" . }}
+      name: {{ $secret }}
       key: AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET
       optional: true
 {{- end }}
-{{- if or .Values.secret.idpAdminToken .Values.secret.existingSecret }}
+{{- if and (or $apiOrWorker $ctx.Values.config.auth.idpStaffMirrorGroup) (or $ctx.Values.secret.idpAdminToken $existing) }}
 - name: AGENTRY_IDP_ADMIN_TOKEN
   valueFrom:
     secretKeyRef:
-      name: {{ include "agentry.secretName" . }}
+      name: {{ $secret }}
       key: AGENTRY_IDP_ADMIN_TOKEN
       optional: true
 {{- end }}
-{{- if or .Values.secret.idpTrustCheckToken .Values.secret.existingSecret }}
+{{- if and $api (or $ctx.Values.secret.idpTrustCheckToken $existing) }}
 - name: AGENTRY_IDP_TRUST_CHECK_TOKEN
   valueFrom:
     secretKeyRef:
-      name: {{ include "agentry.secretName" . }}
+      name: {{ $secret }}
       key: AGENTRY_IDP_TRUST_CHECK_TOKEN
       optional: true
 {{- end }}
-{{- with .Values.extraEnv }}
+{{- with $ctx.Values.extraEnv }}
 {{ toYaml . }}
 {{- end }}
 {{- end }}
