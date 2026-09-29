@@ -304,6 +304,21 @@ jobs:
       - name: directory remembered-browser acceptance (scripts/acceptance/directory-remember.sh)
         run: ./scripts/acceptance/directory-remember.sh
 
+  # The sign-up form's promo code field (agentry#759): a throwaway directory
+  # on the pinned image, with the field on then off — the form, its refusal,
+  # a promo link's prefill, the attribute, the agentry scope's claim, and a
+  # hidden field that stores nothing whatever is posted.
+  directory-promo:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: directory promo code acceptance (scripts/acceptance/directory-promo.sh)
+        run: ./scripts/acceptance/directory-promo.sh
+
   # The headless helm chart: lint, a template render with the required
   # values, and the assertion that nothing web-shaped renders (the site is
   # its own deployment since the cut-over, DEV-091). This lived in

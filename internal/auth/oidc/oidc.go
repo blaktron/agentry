@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 	"time"
 
@@ -74,6 +75,12 @@ type Claims struct {
 	// without narrowing by an address the directory does not keep unique.
 	// Zero when absent or not a positive whole number.
 	DirectoryAccountID int64
+	// PromoCode is the directory's `agentry_promo_code` claim (agentry#759):
+	// the promo code typed on its sign-up form, sent by the same `agentry`
+	// scope on every token of that account. Upper-cased and held to the
+	// code grammar; "" when absent, not a string or outside it. What a code
+	// is worth is an extension's to decide, never the core's.
+	PromoCode string
 }
 
 // New builds the RP. coreoidc.NewProvider performs discovery and pins the
@@ -156,6 +163,7 @@ func (rp *RP) Exchange(ctx context.Context, code, verifier, expectedNonce string
 		PreferredUser string `json:"preferred_username"`
 		RememberDev   any    `json:"agentry_remember_device"`
 		DirectoryID   any    `json:"agentry_directory_id"`
+		PromoCode     any    `json:"agentry_promo_code"`
 		AuthTime      int64  `json:"auth_time"`
 	}
 	if err := idToken.Claims(&raw); err != nil {
@@ -181,6 +189,7 @@ func (rp *RP) Exchange(ctx context.Context, code, verifier, expectedNonce string
 		c.AuthTime = time.Unix(raw.AuthTime, 0)
 	}
 	c.DirectoryAccountID = asAccountID(raw.DirectoryID)
+	c.PromoCode = PromoCodeClaim(raw.PromoCode)
 	if c.Subject == "" {
 		c.Subject = raw.Sub
 	}
@@ -256,4 +265,23 @@ func (rp *RP) Describe() Description {
 	}
 	_ = rp.provider.Claims(&claims)
 	return Description{Issuer: rp.cfg.Issuer, AuthURL: ep.AuthURL, TokenURL: ep.TokenURL, UserInfoURL: claims.UserInfo, JWKSURL: claims.JWKS}
+}
+
+// promoCodeRE is a promo code's grammar once upper-cased, the billing
+// extension's own (agentry-enterprise internal/billing): a letter or digit,
+// then three to thirty-one letters, digits or hyphens.
+var promoCodeRE = regexp.MustCompile(`^[A-Z0-9][A-Z0-9-]{3,31}$`)
+
+// PromoCodeClaim reads an `agentry_promo_code` claim: a string inside the
+// grammar once trimmed and upper-cased, else "" (agentry#759).
+func PromoCodeClaim(v any) string {
+	s, ok := v.(string)
+	if !ok {
+		return ""
+	}
+	code := strings.ToUpper(strings.TrimSpace(s))
+	if !promoCodeRE.MatchString(code) {
+		return ""
+	}
+	return code
 }
