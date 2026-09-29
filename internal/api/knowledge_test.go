@@ -819,6 +819,33 @@ func TestTheLastScanAttemptSettlesThePack(t *testing.T) {
 	}
 }
 
+// TestTheLastScanAttemptSettlesThePackWhenItsTimeRunsOut: the queue cancels
+// an attempt's context at its job timeout (DEV-176, agentry#750). When that
+// was the last attempt, the pack is still failed rather than left scanning
+// for good: the settling write must not ride the cancelled context.
+func TestTheLastScanAttemptSettlesThePackWhenItsTimeRunsOut(t *testing.T) {
+	env := newTestEnv(t)
+	o := newKnowledgeOwner(env, "kn-timeout")
+	p, _, _, _ := putPack(t, env, o, "slow", knowledgeFiles())
+	var object string
+	if err := env.st.Pool().QueryRow(context.Background(), `SELECT object_key FROM knowledge_packs WHERE id = $1`, p.ID).Scan(&object); err != nil {
+		t.Fatal(err)
+	}
+	q := &handlerQueue{h: map[string]queue.Handler{}}
+	env.srvObj.Knowledge().RegisterHandlers(q)
+	args, _ := json.Marshal(knowledge.ScanArgs{Pack: uuid.MustParse(p.ID), Object: object})
+	timedOut, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := q.h[knowledge.JobScan](timedOut, queue.Job{Kind: knowledge.JobScan, Args: args, Attempt: 3}); err == nil {
+		t.Fatal("an attempt whose context was cancelled reported success")
+	}
+	var got knowledgePackBody
+	env.doJSON(o.pat, http.MethodGet, "/api/v1/knowledge/packs/"+p.ID, nil, &got, http.StatusOK)
+	if got.State != knowledge.StateFailed || got.Scan != nil {
+		t.Fatalf("after a last attempt cut off by its timeout the pack is %q with a report %v; want failed, nothing claimed read", got.State, got.Scan != nil)
+	}
+}
+
 // poolResolver is an extension's resolver that pools owners' knowledge
 // under one key and one cap, as a paid organization pools its members'.
 type poolResolver struct {
