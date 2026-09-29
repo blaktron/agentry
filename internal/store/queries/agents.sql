@@ -28,6 +28,7 @@ UPDATE agents SET
   auto_publish_tags = coalesce(sqlc.narg('auto_publish_tags'), auto_publish_tags),
   allow_force_push = coalesce(sqlc.narg('allow_force_push'), allow_force_push),
   pipeline_skip = coalesce(sqlc.narg('pipeline_skip'), pipeline_skip),
+  builtin = coalesce(sqlc.narg('builtin'), builtin),
   modes = coalesce(sqlc.narg('modes')::text[], modes),
   updated_at = now()
 WHERE id = $1;
@@ -136,7 +137,7 @@ WHERE id = $1 AND readme_text IS DISTINCT FROM $2;
 -- someone would actually install today. `sort` picks the primary ordering;
 -- the trailing keys keep every ordering total (stable pages).
 SELECT a.id, a.name, a.modes, a.visibility, a.summary, a.quarantine_state,
-       a.created_at, h.handle AS namespace,
+       a.created_at, a.builtin, h.handle AS namespace,
        -- The publishing organization's logo key, for the badge beside its
        -- name on a hit (agentry#367); NULL for a person's namespace.
        o.logo_object_key,
@@ -314,7 +315,7 @@ GROUP BY 1 ORDER BY n DESC, 1 LIMIT 20;
 -- GET /tags/{tag} (§9.2): public agents whose LATEST PUBLISHED manifest
 -- carries the tag (V8 tags are lowercase [a-z0-9-]). Keyset-paged on
 -- (created_at, id) so the cursor is stable across inserts.
-SELECT a.id, a.name, a.modes, a.summary, a.quarantine_state, a.created_at,
+SELECT a.id, a.name, a.modes, a.summary, a.quarantine_state, a.created_at, a.builtin,
        h.handle AS namespace,
        coalesce(d.installs, 0)::bigint AS installs
 FROM agents a

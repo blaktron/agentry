@@ -1694,9 +1694,12 @@ type Agent struct {
 	AllowForcePush *bool `json:"allowForcePush,omitempty"`
 
 	// AutoPublishTags Present for callers with maintain (§6.3 toggle).
-	AutoPublishTags *bool     `json:"autoPublishTags,omitempty"`
-	CreatedAt       time.Time `json:"createdAt"`
-	DefaultBranch   string    `json:"defaultBranch"`
+	AutoPublishTags *bool `json:"autoPublishTags,omitempty"`
+
+	// Builtin Whether this is a built-in agent: one of the packages the Agentry CLI embeds and runs as part of the application, published here for reading (agentry#737). A client labels it Built-in in place of its run modes. Only platform staff set it, on an agent of a first-party namespace. Not the runner's attestation state `builtin`, which only the CLI's embedded copy of a package runs under; an install of this agent from the registry is an ordinary release.
+	Builtin       bool      `json:"builtin"`
+	CreatedAt     time.Time `json:"createdAt"`
+	DefaultBranch string    `json:"defaultBranch"`
 
 	// DependencyAlerts Open dependency alerts on this agent's published versions (agentry#177). Present on GET /agents/{ns}/{name}.
 	DependencyAlerts *[]DependencyAlert `json:"dependencyAlerts,omitempty"`
@@ -2828,6 +2831,8 @@ type ScopeGranted = string
 
 // SearchHit defines model for SearchHit.
 type SearchHit struct {
+	// Builtin Whether this is a built-in agent (see `Agent.builtin`): a client labels it Built-in in place of its run modes.
+	Builtin     bool `json:"builtin"`
 	Installs30d *int `json:"installs30d,omitempty"`
 
 	// LogoUrl The publishing organization's logo, when the namespace is an organization with one — beside the publisher's name, never in place of the verdict. Absent for a person's namespace and for an organization without one.
@@ -3223,6 +3228,9 @@ type UpdateAgentJSONBody struct {
 	// AllowForcePush Allow non-fast-forward pushes to the default branch (§6.3). Off by default; maintain only.
 	AllowForcePush  *bool `json:"allowForcePush,omitempty"`
 	AutoPublishTags *bool `json:"autoPublishTags,omitempty"`
+
+	// Builtin Mark or unmark the agent as built-in (agentry#737): a package the Agentry CLI embeds, published for reading, which clients label Built-in in place of its run modes. Platform staff only (403 for anyone else, the namespace's administrators included), and setting it only on an agent of a first-party namespace (`builtin-first-party`). Nothing but the label reads it.
+	Builtin *bool `json:"builtin,omitempty"`
 
 	// Modes The run modes a release supports; at least one.
 	Modes *AgentModes `json:"modes,omitempty"`
