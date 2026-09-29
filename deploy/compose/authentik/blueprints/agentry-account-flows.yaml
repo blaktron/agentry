@@ -273,6 +273,73 @@ entries:
             return False
         return True
 
+  # The promo code (plan promo-codes.md §5.1, agentry#759): optional, and
+  # present only where the deployment sells subscriptions and sets
+  # AGENTRY_DIRECTORY_PROMO_FIELD=true in the directory's environment (the
+  # SecureAgentry overlay and chart do). Any non-empty value turns it on and
+  # unset or empty leaves it off: a blueprint cannot compare strings, so
+  # "false" would count as on, and !ParseJSON will not take !Env's value
+  # (agentry#759's probe). Off, the field is a hidden input the form never
+  # shows. Its value is written to the account's attributes at the
+  # enrolment write, so it survives a confirmation link opened on another
+  # device, and it reaches the registry as the `agentry` scope's
+  # agentry_promo_code claim. The registry forwards it to its extensions only
+  # when that sign-in makes the account; whether the code exists is the billing
+  # extension's to decide then, and nothing here asks.
+  - model: authentik_stages_prompt.prompt
+    id: field-promo-code
+    identifiers:
+      name: agentry-enrollment-promo-code
+    attrs:
+      field_key: attributes.agentry_promo_code
+      label: Promo code (optional)
+      type: !If [!Condition [AND, !Env [AGENTRY_DIRECTORY_PROMO_FIELD, ""]], text, hidden]
+      required: false
+      placeholder: ""
+      placeholder_expression: false
+      # A promo link opens this flow as /if/flow/agentry-enrollment/?promo=CODE
+      # and the field starts filled in: the page's executor calls carry the
+      # page's own query as `query`. Only while the field is on: a hidden
+      # field keeps its initial value whatever is posted, so off, the value
+      # stays empty and no link can put a code in it.
+      initial_value_expression: !If [!Condition [AND, !Env [AGENTRY_DIRECTORY_PROMO_FIELD, ""]], true, false]
+      initial_value: !If
+        - !Condition [AND, !Env [AGENTRY_DIRECTORY_PROMO_FIELD, ""]]
+        - |
+          from urllib.parse import parse_qs
+          http = getattr(request, "http_request", None) or request
+          query = parse_qs(http.GET.get("query", "")) if http is not None else {}
+          return (query.get("promo") or [""])[0][:32]
+        - ""
+      sub_text: "If you were given a code, enter it here. It is applied when you first sign in."
+      order: 102
+  # A code is held to the registry's grammar on the form (letters, digits and
+  # hyphens, 4 to 32, starting with a letter or digit), so a typo of shape is
+  # caught before the account exists. Empty passes: the field is optional.
+  - model: authentik_policies_expression.expressionpolicy
+    id: policy-enrollment-promo-code
+    identifiers:
+      name: agentry-enrollment-promo-code-grammar
+    attrs:
+      execution_logging: false
+      expression: |
+        import re
+
+        # The serializer reads the dotted field key as a nested source, so at
+        # validation the value sits under attributes (agentry#759's probe);
+        # the flat key is read too, as the enrolment write names it.
+        data = request.context.get("prompt_data") or {}
+        code = data.get("attributes.agentry_promo_code")
+        if code is None:
+            code = (data.get("attributes") or {}).get("agentry_promo_code")
+        code = str(code or "").strip()
+        if code == "":
+            return True
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]{3,31}", code):
+            ak_message("A promo code is 4 to 32 letters, digits and hyphens. Leave the field empty if you have none.")
+            return False
+        return True
+
   - model: authentik_stages_prompt.promptstage
     id: stage-enrollment-prompt
     identifiers:
@@ -284,9 +351,11 @@ entries:
         - !KeyOf field-email
         - !KeyOf field-password
         - !KeyOf field-password-repeat
+        - !KeyOf field-promo-code
       validation_policies:
         - !KeyOf password-policy
         - !KeyOf policy-enrollment-username
+        - !KeyOf policy-enrollment-promo-code
 
   - model: authentik_stages_user_write.userwritestage
     id: stage-enrollment-user-write
@@ -691,7 +760,7 @@ entries:
       name: agentry-remember-device
     attrs:
       scope_name: agentry
-      description: Whether this sign-in asked to remember the browser, and the account's directory id
+      description: Whether this sign-in asked to remember the browser, the account's directory id, and the promo code given at sign-up
       expression: |
         from authentik.events.signals import get_login_event
         event = get_login_event(token.session) if token is not None and getattr(token, "session", None) else None
@@ -703,6 +772,12 @@ entries:
         account = request.user if request is not None else None
         if account is not None and getattr(account, "pk", None):
             claims["agentry_directory_id"] = account.pk
+            # The promo code typed at sign-up (agentry#759), when there was
+            # one. The registry reads it only on the sign-in that makes the
+            # account, so it is harmless on every later token.
+            code = str((account.attributes or {}).get("agentry_promo_code") or "").strip()
+            if code:
+                claims["agentry_promo_code"] = code
         return claims
   # The shipped sign-in flow's two bindings, restated by their shipped
   # identifiers so this updates them in place. Both policies must run when

@@ -1109,6 +1109,21 @@ page:
   (agentry#590). Users created in the directory some other way are not
   checked; the registry maps such a username to a valid handle and
   records the one asked for (DEV-142).
+- **The promo code field** (agentry#759) — an optional field at the end of
+  the sign-up form, shown only when `AGENTRY_DIRECTORY_PROMO_FIELD` is set
+  to any non-empty value in the directory's environment (the worker reads
+  it when it applies the blueprint; compose passes it through, empty by
+  default). Leave it unset unless an extension redeems codes: the core
+  attaches no meaning to one. Off, the field is a hidden input, and
+  authentik resets a hidden field to its empty default whatever is posted.
+  On, the form holds a code to 4–32 letters, digits and hyphens, writes it
+  to the account's `agentry_promo_code` attribute (so it survives a
+  confirmation link opened on another device), and fills it in from the
+  page's `?promo=` when the flow is opened as
+  `/if/flow/agentry-enrollment/?promo=CODE`. The `agentry` scope sends it
+  as the `agentry_promo_code` claim, and the registry passes it to its
+  extensions as `promoCode` in `user.registered`, upper-cased, only on the
+  sign-in that creates the account and only from the directory's token.
 - **Password recovery** — identification, an emailed reset link, then a
   new password. The identification stage runs with `pretend_user_exists`,
   so an unknown address gets the same answer a real one does and the form
