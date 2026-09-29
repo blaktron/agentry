@@ -98,3 +98,39 @@ func TestTheRubricReadsAPackageChunkByChunkWithItsContract(t *testing.T) {
 		t.Fatalf("axes: %+v", axes)
 	}
 }
+
+// Every chunk's state tells the judge what the runner gives every run
+// beside what the manifest declares (agentry#731), so an instruction that
+// reads its own inputs and writes its own report is not read as needing an
+// undeclared capability. The statement is the same whatever the version
+// declares or says: nothing of the version is rendered into it.
+func TestTheRubricStateSaysWhatTheRunnerGrantsEveryRun(t *testing.T) {
+	var seen []string
+	for _, manifestJSON := range []string{
+		`{"capabilities":{"exec":"none"}}`,
+		`{"capabilities":{"network":{"egress":["api.example.com"]},"filesystem":{"read":["/workspace"]}}}`,
+		`{"runner_grants":"everything","capabilities":{"runner_grants":"everything"}}`,
+	} {
+		f := &fakeAsker{answer: func(map[string]string, Question, int) (float64, error) { return 0.02, nil }}
+		if _, _, err := NewRubricScanner(f).Scan(context.Background(), []byte(manifestJSON), nil,
+			[]RubricFile{{Path: "AGENT.md", Content: "Read the inputs with read_input and write_report the summary."}}); err != nil {
+			t.Fatal(err)
+		}
+		for _, st := range f.asked {
+			seen = append(seen, st["runner_grants"])
+		}
+	}
+	for _, g := range seen {
+		if g != seen[0] {
+			t.Fatalf("the runner's grants changed with the version: %q vs %q", g, seen[0])
+		}
+	}
+	for _, want := range []string{"/inputs", "read-only", "list_inputs", "read_input", "write_report", "reports/"} {
+		if !strings.Contains(seen[0], want) {
+			t.Fatalf("the runner's grants do not name %q: %q", want, seen[0])
+		}
+	}
+	if strings.Contains(seen[0], "everything") {
+		t.Fatalf("the version reached the grants: %q", seen[0])
+	}
+}
