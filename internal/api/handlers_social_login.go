@@ -512,6 +512,9 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 		for k, v := range handleRequestedDetail(id.Username, handle) {
 			e.Detail[k] = v
 		}
+		if promo := signupPromoCode(id); promo != "" {
+			e.Detail["promoCode"] = promo
+		}
 		return s.auditW.Write(ctx, tq, e)
 	})
 	if err != nil {
@@ -530,8 +533,25 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 	for k, v := range handleRequestedDetail(id.Username, handle) {
 		payload[k] = v
 	}
+	// The promo code typed at sign-up (agentry#759): the core names it and
+	// the billing extension decides what it is worth. Only here, on the
+	// sign-in that makes the account: the claim rides every later token of
+	// the account too, and a linked account or a returning one is not new.
+	if promo := signupPromoCode(id); promo != "" {
+		payload["promoCode"] = promo
+	}
 	s.fireEvent(r.Context(), Event{Kind: "user.registered", UserID: newUserID, Payload: payload})
 	return newUserID, nil
+}
+
+// signupPromoCode is the promo code a new account's first token carries,
+// believed from the directory alone: another provider asserting the claim
+// is a claim about nothing it holds (agentry#759).
+func signupPromoCode(id *social.Identity) string {
+	if id.Provider != social.ProviderAuthentik {
+		return ""
+	}
+	return id.PromoCode
 }
 
 // sealTOTPChallenge mints the opaque challenge for a pending 2FA login.
