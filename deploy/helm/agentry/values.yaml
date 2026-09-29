@@ -255,6 +255,13 @@ serviceAccount:
 # worker only; api.extraEnv, git.extraEnv and worker.extraEnv are per role.
 extraEnv: []
 
+# Annotations on every role's pods, beside the config checksum; a role's own
+# podAnnotations win on a clash (agentry#745). For a cluster autoscaler that
+# will not evict a pod with an emptyDir, cluster-autoscaler.kubernetes.io/
+# safe-to-evict: "true" on a role whose scratch holds nothing that must
+# survive the pod lets it drain that role's nodes.
+podAnnotations: {}
+
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 65532
@@ -274,6 +281,14 @@ api:
   replicaCount: 2
   port: 8080
   extraEnv: []
+  # Annotations on this role's pods; they win over the chart-wide
+  # podAnnotations. A PodDisruptionBudget for this role's pods alone, so a
+  # voluntary eviction (a node drain, an autoscaler's scale-down) never takes
+  # more than maxUnavailable of them at once; off by default.
+  podAnnotations: {}
+  podDisruptionBudget:
+    enabled: false
+    maxUnavailable: 1
   resources:
     requests: { cpu: 500m, memory: 512Mi }
     limits: { cpu: "1", memory: 1Gi }
@@ -290,6 +305,14 @@ git:
   replicaCount: 2
   port: 8080
   extraEnv: []
+  # Annotations on this role's pods; they win over the chart-wide
+  # podAnnotations. A PodDisruptionBudget for this role's pods alone, so a
+  # voluntary eviction (a node drain, an autoscaler's scale-down) never takes
+  # more than maxUnavailable of them at once; off by default.
+  podAnnotations: {}
+  podDisruptionBudget:
+    enabled: false
+    maxUnavailable: 1
   # The rollout strategy. A ReadWriteOnce volume (no RWX class available) needs
   # replicaCount 1 and {type: Recreate}; the default RollingUpdate suits RWX.
   updateStrategy: {}
@@ -322,6 +345,14 @@ worker:
   # SaaS split (§13.3) set queues per an additional worker deployment.
   queues: ""
   extraEnv: []
+  # Annotations on this role's pods; they win over the chart-wide
+  # podAnnotations. A PodDisruptionBudget for this role's pods alone, so a
+  # voluntary eviction (a node drain, an autoscaler's scale-down) never takes
+  # more than maxUnavailable of them at once; off by default.
+  podAnnotations: {}
+  podDisruptionBudget:
+    enabled: false
+    maxUnavailable: 1
   # An egress proxy for the worker's outbound calls (the object store, the
   # judge, webhooks): HTTPS_PROXY/HTTP_PROXY and NO_PROXY on the worker pods
   # only, rendered when httpsProxy is set. Pair with networkPolicy so the

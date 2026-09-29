@@ -4,6 +4,7 @@
 # (agentry#450, DEV-124): the git role has a Service with its SSH port, the
 # object-store credentials reach the api and worker pods and never the git
 # pods, each role holds only the app Secret's keys it uses (agentry#744),
+# pod annotations and disruption budgets render only when asked (agentry#745),
 # the signing key Secret is projected read-only where a signer runs,
 # nothing is mounted under the read-only config directory, pull secrets and
 # the worker's NetworkPolicy and proxy render, and git ×1 with Recreate is a
@@ -191,6 +192,23 @@ check "git holds the database URL and the sealing key alone" "$(secretKeys "$git
 render git_mirror deployment-git.yaml "${APP[@]}" --set config.auth.idpStaffMirrorGroup=agentry-staff
 check "git holds the admin token while the staff mirror is on" "$(secretKeys "$git_mirror")" \
   "AGENTRY_AUTH_SEALING_KEY AGENTRY_DATABASE_URL AGENTRY_IDP_ADMIN_TOKEN"
+
+# Pod annotations and disruption budgets (agentry#745): nothing by default;
+# the chart-wide annotations on every role with a role's own winning; a
+# budget only for a role that asks, selecting that role's pods alone.
+check "no PodDisruptionBudget by default" "$(helm template acc "$HELM_DIR" "${PROD[@]}" | grep -c 'kind: PodDisruptionBudget' || true)" 0
+EVICT='cluster-autoscaler\.kubernetes\.io/safe-to-evict'
+ANN=(--set-string "podAnnotations.$EVICT=false" --set-string "api.podAnnotations.$EVICT=true")
+render api_ann deployment-api.yaml "${ANN[@]}"
+render git_ann deployment-git.yaml "${ANN[@]}"
+check "a role's own annotation wins" "$(count "$api_ann" 'safe-to-evict: "true"')" 1
+check "the chart-wide annotation reaches the other roles" "$(count "$git_ann" 'safe-to-evict: "false"')" 1
+check "the config checksum stays beside them" "$(count "$api_ann" 'checksum/config:')" 1
+render pdb pdb.yaml --set api.podDisruptionBudget.enabled=true
+check "a budget renders for the role that asks" "$(count "$pdb" 'name: acc-agentry-api$')" 1
+check "and for no other role" "$(count "$pdb" 'kind: PodDisruptionBudget')" 1
+check "it selects that role's pods alone" "$(count "$pdb" 'app.kubernetes.io/component: api')" 2
+check "it allows one eviction at a time" "$(count "$pdb" 'maxUnavailable: 1')" 1
 
 if [ "$fail" -ne 0 ]; then echo "== M7 acceptance FAILED =="; exit 1; fi
 echo "== M7 acceptance PASSED =="
