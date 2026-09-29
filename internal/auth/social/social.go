@@ -101,6 +101,11 @@ type Identity struct {
 	// directory's own id for the account (agentry#727). The API records it
 	// from the directory alone, on the identity the token signs in.
 	DirectoryAccountID int64
+	// PromoCode is the ID token's `agentry_promo_code` claim (agentry#759):
+	// the promo code typed on the directory's sign-up form, upper-cased and
+	// held to its grammar. The API forwards it from the directory alone, and
+	// only when this sign-in makes the account.
+	PromoCode string
 }
 
 // MFAAsserted reports whether AMR names a second factor, by the rule the
@@ -260,6 +265,7 @@ func (p *oidcProvider) Exchange(ctx context.Context, code, verifier, nonce strin
 		RememberDevice:     claims.RememberDevice,
 		AuthTime:           claims.AuthTime,
 		DirectoryAccountID: claims.DirectoryAccountID,
+		PromoCode:          claims.PromoCode,
 	}, nil
 }
 

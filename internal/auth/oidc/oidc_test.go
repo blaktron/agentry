@@ -254,3 +254,33 @@ func TestOIDC_AuthTimeSurfaced(t *testing.T) {
 		})
 	}
 }
+
+// TestPromoCodeClaim: the directory's agentry_promo_code claim is read as a
+// string inside the billing extension's grammar, upper-cased, and as nothing
+// otherwise (agentry#759).
+func TestPromoCodeClaim(t *testing.T) {
+	for in, want := range map[any]string{
+		"LAUNCH-2026":           "LAUNCH-2026",
+		" launch-2026 ":         "LAUNCH-2026",
+		"a1b2":                  "A1B2",
+		strings.Repeat("a", 32): strings.Repeat("A", 32),
+		"":                      "",
+		"abc":                   "",
+		"-abcd":                 "",
+		"ab cd":                 "",
+		"ab_cd":                 "",
+		strings.Repeat("a", 33): "",
+		"Ünicode":               "",
+		"ſale":                  "",
+		"ıdea":                  "",
+		1234:                    "",
+		true:                    "",
+	} {
+		if got := PromoCodeClaim(in); got != want {
+			t.Errorf("PromoCodeClaim(%#v) = %q, want %q", in, got, want)
+		}
+	}
+	if got := PromoCodeClaim(nil); got != "" {
+		t.Errorf("PromoCodeClaim(nil) = %q", got)
+	}
+}
