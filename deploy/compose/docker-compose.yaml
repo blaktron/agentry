@@ -158,6 +158,13 @@ services:
       # directory's database. Unset, the code is always asked.
       AGENTRY_IDP_TRUST_CHECK_TOKEN: ${AGENTRY_IDP_TRUST_CHECK_TOKEN:-}
       AGENTRY_REGISTRY_INTERNAL_URL: ${AGENTRY_REGISTRY_INTERNAL_URL:-http://server:8080}
+      # The sign-up form's optional promo code field (agentry#759): any
+      # non-empty value shows it; unset or empty leaves it a hidden input the
+      # form never shows. Only a deployment whose billing extension redeems
+      # codes turns it on (the SecureAgentry overlay does); the core alone
+      # forwards a code and attaches no meaning to it. Read by the worker when
+      # it applies the account-flows blueprint.
+      AGENTRY_DIRECTORY_PROMO_FIELD: ${AGENTRY_DIRECTORY_PROMO_FIELD:-}
       # First boot creates akadmin with this password, and an API token
       # (intent api) with this value — what the bootstrap script uses.
       AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD:-}
