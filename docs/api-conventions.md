@@ -95,6 +95,14 @@ only a version that passed the gate is ever public. A version admitted
 without a scan carries `scanStatus: skipped` on the version and on
 resolve, its report `verdict: unscanned`, and has no attestation.
 
+A built-in agent (agentry#737) is one of the packages the Agentry CLI
+embeds, published for reading: `builtin` on the agent and on every search
+hit says so, and clients label it Built-in in place of its run modes.
+`PATCH /agents/{ns}/{name}` takes `builtin` from platform staff only (`403`
+for anyone else, the namespace's own administrators included), and marks
+an agent only in a first-party namespace (`409 builtin-first-party`
+otherwise). Nothing but the label reads it.
+
 ## Idempotency-Key
 
 Send `Idempotency-Key: <opaque string, ≤255 chars>` on a mutating POST and a

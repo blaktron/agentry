@@ -53,6 +53,8 @@ func (s *Server) agentToAPI(a registry.Agent, maintain bool) Agent {
 		ps := a.PipelineSkip
 		out.PipelineSkip = &ps
 	}
+	bi := a.Builtin
+	out.Builtin = &bi
 	return out
 }
 
@@ -221,12 +223,14 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, params ListA
 	out := make([]Agent, 0, len(rows))
 	base := strings.TrimSuffix(s.cfg.BaseURL, "/")
 	for _, row := range rows {
+		builtin := row.Builtin
 		out = append(out, Agent{
 			Id: row.ID, Namespace: row.Namespace, Name: row.Name,
 			Modes: apiModes(row.Modes), Visibility: AgentVisibility(row.Visibility),
 			Summary: row.Summary, DefaultBranch: "main",
 			GitHttpUrl:      base + "/" + row.Namespace + "/" + row.Name + ".git",
 			QuarantineState: AgentQuarantineState(row.QuarantineState),
+			Builtin:         &builtin,
 			CreatedAt:       row.CreatedAt,
 		})
 	}
@@ -295,6 +299,19 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 		problemForbidden(w, r, "Taking this QuickAgent off the pipeline needs the "+a.Namespace+" namespace's administrators.")
 		return
 	}
+	// Built-in (agentry#737) is the platform's to say, not the namespace's:
+	// it labels the agent as part of the application, so no author, and no
+	// administrator of the namespace, may set or clear it — only platform
+	// staff, and marking it only in a first-party namespace, where the
+	// built-ins are published (agentry-cli#470, DR-50).
+	if req.Builtin != nil && *req.Builtin != a.Builtin && !principalFrom(r.Context()).PlatformStaff {
+		problemForbidden(w, r, "Marking a QuickAgent built-in is the platform's to decide.")
+		return
+	}
+	if req.Builtin != nil && *req.Builtin && !a.Builtin && !firstPartyOrg(a.Namespace) {
+		writeProblem(w, r, http.StatusConflict, "builtin-first-party", "Only the platform's own namespace holds built-in QuickAgents", "Built-in QuickAgents are the packages the Agentry CLI embeds, published under the platform's own organization; "+a.Namespace+" is not one of its namespaces.")
+		return
+	}
 	if req.PipelineSkip != nil && *req.PipelineSkip && a.NamespaceKind != "org" {
 		writeProblem(w, r, http.StatusConflict, "pipeline-skip-personal", "Only an organization's QuickAgent can skip the pipeline", "pipeline: skip is set by an organization's administrators on the organization's own private QuickAgents; a personal namespace stays on the pipeline.")
 		return
@@ -342,6 +359,10 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	if req.PipelineSkip != nil {
 		params.PipelineSkip = req.PipelineSkip
 		detail["pipelineSkip"] = *req.PipelineSkip
+	}
+	if req.Builtin != nil {
+		params.Builtin = req.Builtin
+		detail["builtin"] = *req.Builtin
 	}
 	if len(detail) == 0 {
 		problemValidation(w, r, "Send at least one field to update.")
