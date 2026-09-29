@@ -164,7 +164,7 @@ func (q *Queries) CountUnscannedVersionsStanding(ctx context.Context, agentID uu
 const createAgent = `-- name: CreateAgent :one
 INSERT INTO agents (id, namespace_id, name, visibility, repo_id, summary, modes)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, namespace_id, name, visibility, repo_id, summary, latest_published_version_id, quarantine_state, auto_publish_tags, search_tsv, created_at, updated_at, readme_text, allow_force_push, modes, pipeline_skip
+RETURNING id, namespace_id, name, visibility, repo_id, summary, latest_published_version_id, quarantine_state, auto_publish_tags, search_tsv, created_at, updated_at, readme_text, allow_force_push, modes, pipeline_skip, builtin
 `
 
 type CreateAgentParams struct {
@@ -205,6 +205,7 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent
 		&i.AllowForcePush,
 		&i.Modes,
 		&i.PipelineSkip,
+		&i.Builtin,
 	)
 	return i, err
 }
@@ -284,7 +285,7 @@ func (q *Queries) DeleteRepoByID(ctx context.Context, id uuid.UUID) error {
 }
 
 const getAgentByID = `-- name: GetAgentByID :one
-SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, h.handle AS namespace, h.kind AS namespace_kind
+SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, a.builtin, h.handle AS namespace, h.kind AS namespace_kind
 FROM agents a JOIN handles h ON h.id = a.namespace_id
 WHERE a.id = $1
 `
@@ -306,6 +307,7 @@ type GetAgentByIDRow struct {
 	AllowForcePush           bool        `json:"allow_force_push"`
 	Modes                    []string    `json:"modes"`
 	PipelineSkip             bool        `json:"pipeline_skip"`
+	Builtin                  bool        `json:"builtin"`
 	Namespace                string      `json:"namespace"`
 	NamespaceKind            string      `json:"namespace_kind"`
 }
@@ -330,6 +332,7 @@ func (q *Queries) GetAgentByID(ctx context.Context, id uuid.UUID) (GetAgentByIDR
 		&i.AllowForcePush,
 		&i.Modes,
 		&i.PipelineSkip,
+		&i.Builtin,
 		&i.Namespace,
 		&i.NamespaceKind,
 	)
@@ -337,7 +340,7 @@ func (q *Queries) GetAgentByID(ctx context.Context, id uuid.UUID) (GetAgentByIDR
 }
 
 const getAgentByPath = `-- name: GetAgentByPath :one
-SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, h.handle AS namespace, h.kind AS namespace_kind, r.default_branch, r.size_bytes
+SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, a.builtin, h.handle AS namespace, h.kind AS namespace_kind, r.default_branch, r.size_bytes
 FROM agents a
 JOIN handles h ON h.id = a.namespace_id
 JOIN repos r ON r.id = a.repo_id
@@ -366,6 +369,7 @@ type GetAgentByPathRow struct {
 	AllowForcePush           bool        `json:"allow_force_push"`
 	Modes                    []string    `json:"modes"`
 	PipelineSkip             bool        `json:"pipeline_skip"`
+	Builtin                  bool        `json:"builtin"`
 	Namespace                string      `json:"namespace"`
 	NamespaceKind            string      `json:"namespace_kind"`
 	DefaultBranch            string      `json:"default_branch"`
@@ -392,6 +396,7 @@ func (q *Queries) GetAgentByPath(ctx context.Context, arg GetAgentByPathParams) 
 		&i.AllowForcePush,
 		&i.Modes,
 		&i.PipelineSkip,
+		&i.Builtin,
 		&i.Namespace,
 		&i.NamespaceKind,
 		&i.DefaultBranch,
@@ -401,7 +406,7 @@ func (q *Queries) GetAgentByPath(ctx context.Context, arg GetAgentByPathParams) 
 }
 
 const getAgentForUpdate = `-- name: GetAgentForUpdate :one
-SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, h.handle AS namespace, h.kind AS namespace_kind
+SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, a.builtin, h.handle AS namespace, h.kind AS namespace_kind
 FROM agents a JOIN handles h ON h.id = a.namespace_id
 WHERE a.id = $1
 FOR UPDATE OF a
@@ -424,6 +429,7 @@ type GetAgentForUpdateRow struct {
 	AllowForcePush           bool        `json:"allow_force_push"`
 	Modes                    []string    `json:"modes"`
 	PipelineSkip             bool        `json:"pipeline_skip"`
+	Builtin                  bool        `json:"builtin"`
 	Namespace                string      `json:"namespace"`
 	NamespaceKind            string      `json:"namespace_kind"`
 }
@@ -451,6 +457,7 @@ func (q *Queries) GetAgentForUpdate(ctx context.Context, id uuid.UUID) (GetAgent
 		&i.AllowForcePush,
 		&i.Modes,
 		&i.PipelineSkip,
+		&i.Builtin,
 		&i.Namespace,
 		&i.NamespaceKind,
 	)
@@ -560,7 +567,7 @@ func (q *Queries) ListAgentTeamGrantsForUser(ctx context.Context, arg ListAgentT
 }
 
 const listAgentsByNamespace = `-- name: ListAgentsByNamespace :many
-SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, h.handle AS namespace
+SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, a.builtin, h.handle AS namespace
 FROM agents a JOIN handles h ON h.id = a.namespace_id
 LEFT JOIN orgs o ON o.id = a.namespace_id
 WHERE h.handle = $1
@@ -591,6 +598,7 @@ type ListAgentsByNamespaceRow struct {
 	AllowForcePush           bool        `json:"allow_force_push"`
 	Modes                    []string    `json:"modes"`
 	PipelineSkip             bool        `json:"pipeline_skip"`
+	Builtin                  bool        `json:"builtin"`
 	Namespace                string      `json:"namespace"`
 }
 
@@ -623,6 +631,7 @@ func (q *Queries) ListAgentsByNamespace(ctx context.Context, arg ListAgentsByNam
 			&i.AllowForcePush,
 			&i.Modes,
 			&i.PipelineSkip,
+			&i.Builtin,
 			&i.Namespace,
 		); err != nil {
 			return nil, err
@@ -636,7 +645,7 @@ func (q *Queries) ListAgentsByNamespace(ctx context.Context, arg ListAgentsByNam
 }
 
 const listAgentsByTag = `-- name: ListAgentsByTag :many
-SELECT a.id, a.name, a.modes, a.summary, a.quarantine_state, a.created_at,
+SELECT a.id, a.name, a.modes, a.summary, a.quarantine_state, a.created_at, a.builtin,
        h.handle AS namespace,
        coalesce(d.installs, 0)::bigint AS installs
 FROM agents a
@@ -672,6 +681,7 @@ type ListAgentsByTagRow struct {
 	Summary         string    `json:"summary"`
 	QuarantineState string    `json:"quarantine_state"`
 	CreatedAt       time.Time `json:"created_at"`
+	Builtin         bool      `json:"builtin"`
 	Namespace       string    `json:"namespace"`
 	Installs        int64     `json:"installs"`
 }
@@ -700,6 +710,7 @@ func (q *Queries) ListAgentsByTag(ctx context.Context, arg ListAgentsByTagParams
 			&i.Summary,
 			&i.QuarantineState,
 			&i.CreatedAt,
+			&i.Builtin,
 			&i.Namespace,
 			&i.Installs,
 		); err != nil {
@@ -728,7 +739,7 @@ func (q *Queries) LockNamespace(ctx context.Context, id uuid.UUID) error {
 
 const searchAgents = `-- name: SearchAgents :many
 SELECT a.id, a.name, a.modes, a.visibility, a.summary, a.quarantine_state,
-       a.created_at, h.handle AS namespace,
+       a.created_at, a.builtin, h.handle AS namespace,
        -- The publishing organization's logo key, for the badge beside its
        -- name on a hit (agentry#367); NULL for a person's namespace.
        o.logo_object_key,
@@ -843,6 +854,7 @@ type SearchAgentsRow struct {
 	Summary         string    `json:"summary"`
 	QuarantineState string    `json:"quarantine_state"`
 	CreatedAt       time.Time `json:"created_at"`
+	Builtin         bool      `json:"builtin"`
 	Namespace       string    `json:"namespace"`
 	LogoObjectKey   *string   `json:"logo_object_key"`
 	Installs        int64     `json:"installs"`
@@ -882,6 +894,7 @@ func (q *Queries) SearchAgents(ctx context.Context, arg SearchAgentsParams) ([]S
 			&i.Summary,
 			&i.QuarantineState,
 			&i.CreatedAt,
+			&i.Builtin,
 			&i.Namespace,
 			&i.LogoObjectKey,
 			&i.Installs,
@@ -1032,7 +1045,8 @@ UPDATE agents SET
   auto_publish_tags = coalesce($4, auto_publish_tags),
   allow_force_push = coalesce($5, allow_force_push),
   pipeline_skip = coalesce($6, pipeline_skip),
-  modes = coalesce($7::text[], modes),
+  builtin = coalesce($7, builtin),
+  modes = coalesce($8::text[], modes),
   updated_at = now()
 WHERE id = $1
 `
@@ -1044,6 +1058,7 @@ type UpdateAgentSettingsParams struct {
 	AutoPublishTags *bool     `json:"auto_publish_tags"`
 	AllowForcePush  *bool     `json:"allow_force_push"`
 	PipelineSkip    *bool     `json:"pipeline_skip"`
+	Builtin         *bool     `json:"builtin"`
 	Modes           []string  `json:"modes"`
 }
 
@@ -1055,6 +1070,7 @@ func (q *Queries) UpdateAgentSettings(ctx context.Context, arg UpdateAgentSettin
 		arg.AutoPublishTags,
 		arg.AllowForcePush,
 		arg.PipelineSkip,
+		arg.Builtin,
 		arg.Modes,
 	)
 	return err

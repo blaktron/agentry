@@ -70,9 +70,10 @@ var routeAuthz = map[string]RouteDecl{
 	"listAgents":    {Action: auth.ActPublicRead, Anonymous: true},
 	"getAdvisory":   {Action: auth.ActPublicRead, Anonymous: true},
 	// updateAgent stays at maintain: its fields are the agent's settings,
-	// which a publisher may change. The one field that is not — visibility
-	// — is checked against ActAgentAdminister in the handler, the way
-	// ssoRequired is inside updateOrg.
+	// which a publisher may change. The fields that are not are checked in
+	// the handler: visibility, allowForcePush and pipelineSkip against
+	// ActAgentAdminister, the way ssoRequired is inside updateOrg, and
+	// builtin against platform staff (agentry#737, DEV-174).
 	"updateAgent":       {Action: auth.ActAgentMaintain, AgentScoped: true},
 	"deleteAgent":       {Action: auth.ActAgentAdminister, AgentScoped: true},
 	"listAgentActivity": {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
