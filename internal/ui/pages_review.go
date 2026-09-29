@@ -411,12 +411,12 @@ func (h *handler) staffAbuseTriage(w http.ResponseWriter, r *http.Request) {
 // (handlers_versions.go, handlers_version_files.go); block walks every live
 // version to `blocked` and every download answers 410 Gone; search and browse
 // exclude `blocked` and nothing else (internal/store/queries/agents.sql), so a
-// quarantined BriefAgent stays listed with its state on it. Reinstate walks
+// quarantined QuickAgent stays listed with its state on it. Reinstate walks
 // blocked and quarantined versions back to published (internal/scan/worker.go)
 // and never touches a yanked one. The flash used to be built as action + "d.",
 // which said "blockd" and named the action rather than its consequence.
 var agentActionDone = map[string]string{
-	"quarantine": "quarantined. A published version under quarantine answers 409 on download; the BriefAgent stays in search, carrying the state.",
+	"quarantine": "quarantined. A published version under quarantine answers 409 on download; the QuickAgent stays in search, carrying the state.",
 	"block":      "blocked. Every download for it answers 410 Gone.",
 	"reinstate":  "reinstated. Quarantined and blocked versions are published again; yanked ones stay yanked.",
 }
@@ -429,7 +429,7 @@ func (h *handler) staffAgentAction(w http.ResponseWriter, r *http.Request) {
 	ns, name, cut := strings.Cut(ref, "/")
 	done, known := agentActionDone[action]
 	if !cut || ns == "" || name == "" || !known || reason == "" {
-		h.back(w, r, "/ui/staff", "", "Nothing was done: a BriefAgent as namespace/name, an action and a reason are all required.")
+		h.back(w, r, "/ui/staff", "", "Nothing was done: a QuickAgent as namespace/name, an action and a reason are all required.")
 		return
 	}
 	res, err := h.call(r).do(http.MethodPost, "/platform/agents/"+url.PathEscape(ns)+"/"+url.PathEscape(name)+"/"+action, map[string]string{"reason": reason})

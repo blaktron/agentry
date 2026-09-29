@@ -1,7 +1,7 @@
 # Runner reference
 
-The complete operator reference for running BriefAgents: every command,
-flag, file, and enforcement mechanism. The [BriefAgents](briefagents.md)
+The complete operator reference for running QuickAgents: every command,
+flag, file, and enforcement mechanism. The [QuickAgents](quickagents.md)
 page explains the package format; this page is the runtime side, and
 [Hosted runs](hosted-runs.md) is the same runner driven on a deployment's
 own machine, with caps and credits, instead of yours. The
@@ -25,7 +25,7 @@ where a command supports it; the shapes are listed under
 
 ### `agentry setup`
 
-Prepares a machine for BriefAgent runs — re-runnable, idempotent:
+Prepares a machine for QuickAgent runs — re-runnable, idempotent:
 
 1. Configures your **LLM provider** into the operator policy —
    interactively on a terminal, or `--provider` / `--model` /
@@ -35,7 +35,7 @@ Prepares a machine for BriefAgent runs — re-runnable, idempotent:
    For an OpenAI-compatible endpoint use `--provider openai --base-url …`
    and name the key `OPENAI_API_KEY`: the provider name and the variable
    name are passed to the harness as given (see the
-   [provider table](briefagents.md#machine-setup-agentry-setup)).
+   [provider table](quickagents.md#machine-setup-agentry-setup)).
 2. Stands up the **docker-mcp-gateway plane**: verifies the docker
    engine, pulls the pinned gateway and harness images, and builds the
    local runner image from the CLI's embedded, stdlib-only build context
@@ -53,7 +53,7 @@ model, the `apiKeyEnv` variable present in the environment), the secret
 source, the docker engine, the pinned gateway/harness/runner images (and the
 node/python runtime images when the agent declares MCP servers of that
 ecosystem), and the registry's `/healthz`. With a ref or `--local DIR` it
-also checks that BriefAgent: resolution, the verified install (a warning
+also checks that QuickAgent: resolution, the verified install (a warning
 until the first `run --prepare`), the declared MCP servers' store, the
 compiled plan, the MCP profile, the registry's vulnerability verdict on each
 declared MCP server, and that **every declared secret resolves** —
@@ -67,7 +67,7 @@ is the one the adapter was written against, and whether the endpoint
 
 ### `agentry run <ns/name[@range]>`
 
-One BriefAgent, one job, one container tree, then gone.
+One QuickAgent, one job, one container tree, then gone.
 
 | Flag | Meaning |
 |---|---|
@@ -82,7 +82,7 @@ One BriefAgent, one job, one container tree, then gone.
 | `--reconfigure-profile` | re-run guided profile setup over an existing profile |
 | `--timeout N` / `--max-turns N` / `--max-cost USD` | override the policy budgets (exit 15 / 16 on breach; cost is the harness's running total, `0` = unlimited) |
 | `--adapter NAME` / `--list-adapters` | harness adapter (default `docker-agent`; `claude` and `codex` drive your own installation of those CLIs, see below; goose is a planned slot) |
-| `--local DIR` | run an unpublished BriefAgent tree (unsigned by definition: requires `--allow-unsigned`) |
+| `--local DIR` | run an unpublished QuickAgent tree (unsigned by definition: requires `--allow-unsigned`) |
 | `--allow-unsigned` | run a release the registry has no attestation for; a *mismatched* attestation always refuses |
 | `--allow-vulnerable-mcp` | run even though the registry reports a known high or critical vulnerability for a declared MCP server version (the receipt records the override) |
 | `--pin sha256:…` | require the resolved archive digest to equal this value |
@@ -158,13 +158,13 @@ text or recorded. Non-secret answers appear in the receipts.
 
 ### `agentry uninstall <ns/name[@version]>`
 
-Removes this machine's runner state for a BriefAgent: the verified
+Removes this machine's runner state for a QuickAgent: the verified
 install cache (workspace + compiled plans) and — **by default** — its
 MCP profile, stored keys and installed MCP servers included
 (RUNNER-PLAN-3: remove on uninstall is the default). `--keep-mcp`
 retains the profile directory, which stays locked to the exact release
 digest it was created for: a same-digest reinstall reconnects without
-re-prompting; nothing else — no other BriefAgent, no other user, no
+re-prompting; nothing else — no other QuickAgent, no other user, no
 newer version — can ever reference it. Embedded installs (claude-skill /
 mcp / agents-md exports) are separate state and untouched.
 
@@ -193,7 +193,7 @@ version exists.
 
 ### `agentry install <ref> --provider claude|codex|openclaw`
 
-Embedded mode: the BriefAgent installs into a host agent application and
+Embedded mode: the QuickAgent installs into a host agent application and
 runs on **its** MCP servers and built-in tools — no docker gateway
 involved. `--provider` picks the target (`claude`→claude-skill,
 `codex`→agents-md, `openclaw`→claude-skill today); explicit `--target
@@ -203,13 +203,13 @@ it as a Tools note. Plugin-system distribution per provider is planned.
 
 ### `agentry draft "<description>"`
 
-Drafts a BriefAgent from a plain description of what it should do
+Drafts a QuickAgent from a plain description of what it should do
 (`--description-file FILE` reads it from a file; `--hint TEXT`, repeatable,
 adds the services or sites it works with, how it runs, or an example of the
 output wanted). The built-in **Drafter** does the work: the second package
 the CLI embeds, run with the attestation state `builtin` like the Knowledge
 Creator, never fetched from a registry. It searches the registry for a
-published BriefAgent that already does the task, researches how the task is
+published QuickAgent that already does the task, researches how the task is
 done, and writes a draft. It never submits anything.
 
 - **AI Review reads what the Drafter reads, first.** TypeSafe's Jev reads the
@@ -242,7 +242,7 @@ done, and writes a draft. It never submits anything.
   for no credits.
 - **The result**, in `--out DIR` (default
   `./agentry-out/agentry-drafter-<runid>`): `draft.json` (the manifest as
-  JSON, the instructions, the notes, the matching published BriefAgents, the
+  JSON, the instructions, the notes, the matching published QuickAgents, the
   sources, the open questions, AI Review's record, and `validation`, the
   report `agentry validate --json` gives on the rendered package) and
   `package/` (`agent.yaml`, the instruction file, `AGENT.md` unless the
@@ -259,7 +259,7 @@ done, and writes a draft. It never submits anything.
 
 ## MCP profiles
 
-A profile is the persistent, credentialed half of a BriefAgent's gateway
+A profile is the persistent, credentialed half of a QuickAgent's gateway
 configuration, keyed by **signature** (ns/name@version + archive digest)
 under `~/.agentry/runner/profiles/…` (directory `0700`, file `0600`).
 
@@ -298,7 +298,7 @@ code in the builder, so it is refused unless the policy's
 run with `--ignore-scripts`. At run time the per-run gateway loads exactly those
 servers — each with its declared tool filter, its own egress allowlist,
 only its own secret values, and its plain `env` map (manifest v2; see the
-[BriefAgent reference](briefagents.md)) as the environment the server
+[QuickAgent reference](quickagents.md)) as the environment the server
 starts with — alongside the agentry tools server. A server's declared hosts
 are reached through the gateway's per-host TCP relays on its own relay
 network; nothing else resolves from the server. That network has one fixed
@@ -309,7 +309,7 @@ sidecars are on it — another run of `agentry`, or the user's own
 `docker mcp gateway` — and the relays its gateway started are removed at
 teardown by the names the gateway's log gave them. The check is made as
 the run starts: a gateway started during the run is not refused. Two
-BriefAgents with declared egress therefore run one at a time on a host. A
+QuickAgents with declared egress therefore run one at a time on a host. A
 changed `env` value is a
 change to the server: the install-state diff reports it and asks for
 consent again, and the receipt's server line names the `env` keys, never
@@ -331,14 +331,14 @@ against which registry, and why the run went ahead. `agentry doctor`
 reports the same verdict per server, as a failure when a run would refuse.
 
 The isolation rules are the profile rules: server configuration and keys
-belong to one signature (ns/name@version + digest). No other BriefAgent
+belong to one signature (ns/name@version + digest). No other QuickAgent
 can reach them, no other user can read them (0700, per-run containers are
-the only consumers), and a **new version of the same BriefAgent starts
+the only consumers), and a **new version of the same QuickAgent starts
 over** — new digest, fresh resolve, fresh consent, fresh keys. A
 reinstall of the same signature whose registry resolution no longer
 matches the recorded digests refuses (the pin is the trust decision).
 `agentry profiles remove` deletes servers and keys with the profile;
-uninstalling a BriefAgent does the same, because **remove is the default**.
+uninstalling a QuickAgent does the same, because **remove is the default**.
 `agentry uninstall --keep-mcp` retains the signature directory so a
 same-digest reinstall reconnects without re-prompting.
 
@@ -364,12 +364,12 @@ its digest, so a run record says which file a run obeyed.
 | `mcpRegistries.npm` / `mcpRegistries.pypi` | where declared `capabilities.mcpServers` resolve (defaults: registry.npmjs.org, pypi.org; point at private mirrors here) |
 | `mcpRegistries.pypiAllowSourceDists` | allow a PyPI MCP server to install from a source distribution (default false: wheels only, see below) |
 | `mcpServers.allowVulnerable` | let runs proceed when the registry reports a high or critical advisory for a declared server version (default false: refused, exit 11) |
-| `exec.packages` | the exec catalog: command name → apk package (optionally `=version`) the exec image installs for a BriefAgent that declares that command; a declared command with no entry is refused at plan time (exit 11) |
+| `exec.packages` | the exec catalog: command name → apk package (optionally `=version`) the exec image installs for a QuickAgent that declares that command; a declared command with no entry is refused at plan time (exit 11) |
 | `exec.apkMirror` | the Alpine mirror the exec image build installs from (default: the runner image's own repositories) — egress of the image build only, over ordinary docker networking; a run's network posture is unchanged |
 | `harness.<adapter>.path` | the executable a host-run harness adapter uses instead of looking it up on `PATH` |
 | `harness.<adapter>.baseUrl` / `.model` / `.apiKeyEnv` | the model endpoint that adapter is given, in its own vendor's terms — a host-run harness speaks its vendor's API, which is not always the one `model.*` describes. The host must also be in `model.proxyAllow` or the run's proxy denies it (`agentry doctor --adapter <name>` says so before a run finds out). |
 | `images.nodeRuntime` / `images.pythonRuntime` | pinned runtime images that install and run declared npm/PyPI MCP servers |
-| `docker.runtime` | the daemon-registered OCI runtime the containers holding the BriefAgent's code are created with (unset: the daemon's default) — below |
+| `docker.runtime` | the daemon-registered OCI runtime the containers holding the QuickAgent's code are created with (unset: the daemon's default) — below |
 | `docker.gatewayRuntime` | the daemon-registered runtime the gateway alone is created with: a second registration of gVisor with `--host-uds=open` (unset: the daemon's default; needs `docker.runtime`) — below |
 | `docker.resolvers` | at most three IPv4 name servers of the host's that the built-in Drafter's web tools, and under `docker.runtime` the llm-proxy, the MCP server install proxy and the relays, resolve through (unset: docker's DNS) — below |
 
@@ -385,7 +385,7 @@ docker:
 
 `docker.runtime` names a runtime the docker daemon has registered — gVisor's
 `runsc`, or any name `docker run --runtime` takes — and the runner creates the
-containers that hold **the BriefAgent's code** with it: the agent container,
+containers that hold **the QuickAgent's code** with it: the agent container,
 an interactive session's agent and the one-shot that gives it the session
 store, and the MCP server installer that builds a declared server's dependency
 closure. Unset, the shipped default, every container takes the daemon's own
@@ -434,7 +434,7 @@ Four classes need more than that, measured on a live run rather than assumed
 
   The flag opens only the sockets bind-mounted into that container, and the
   gateway's one socket is the filter's. `docker.gatewayRuntime` needs
-  `docker.runtime`: the gateway is never sandboxed while the BriefAgent's
+  `docker.runtime`: the gateway is never sandboxed while the QuickAgent's
   code is not. Unset, the gateway stays on the daemon's default.
 
 gVisor's `--reproduce-nat`, the other flag the measurements tried, starts no
@@ -525,7 +525,7 @@ Hosted runs are why the knob exists: the platform's run worker renders
 | run inputs | `--file` items land in a per-run folder mounted **read-only** at `/inputs` on the tool plane, served by always-granted `list_inputs`/`read_input`; job output and receipts live on the separate `/out` volume |
 | the agent container itself | internal-only network; reachable endpoints: the gateway (Bearer token) and the egress proxy (allowlist = `model.proxyAllow`); `/plan` is its only mount |
 | the gateway on an SELinux host | the gateway is the one container that drives the host's docker daemon, so on a daemon with SELinux enabled it runs with label confinement off (`--security-opt label=disable`) — a confined container cannot open that socket at all. Everything else in the run stays confined, and the run's own directories are relabelled so the tool containers can use them; the socket itself is never relabelled, which would hand daemon access to every container on the machine. |
-| a tool **result** that looks like a secret | the pinned gateway refuses it before the harness sees it, and the agent gets `Error calling tool: … a secret is being returned by the …` instead of the value. This is docker/mcp-gateway's own `--block-secrets`, on by default in the pinned version rather than something the run asks for, so it guards every tool — including `run_command`. Worth knowing when writing a BriefAgent whose job is to *find* credentials: a `git log -p` that would print one is refused, and the work has to be done on patterns that are not themselves secret-shaped. |
+| a tool **result** that looks like a secret | the pinned gateway refuses it before the harness sees it, and the agent gets `Error calling tool: … a secret is being returned by the …` instead of the value. This is docker/mcp-gateway's own `--block-secrets`, on by default in the pinned version rather than something the run asks for, so it guards every tool — including `run_command`. Worth knowing when writing a QuickAgent whose job is to *find* credentials: a `git log -p` that would print one is refused, and the work has to be done on patterns that are not themselves secret-shaped. |
 | a **host-run** harness instead (`--adapter claude`) | no agent container: the gateway's catalog is still the whole tool surface, and the proxy variables are still the route to the model, but they are configuration the harness is asked to honour rather than a network it cannot leave. The receipt says so in `capabilities_enforced["harness.isolation"]`, and `receipts/proxy.log` shows every CONNECT it actually made. Beside it, `capabilities_enforced["harness.env"]` names the variables of your own environment the harness is given unchanged, where they are set: the ones its adapter asks for (`HOME` and `PATH` for `claude` and `codex`), and on Windows also `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `TEMP`, `TMP`, `PATHEXT`, `ComSpec` and `SystemRoot`. Everything else it has is set by the plan and the run. |
 
 Every claim above appears, mechanism named, in the run's
@@ -540,11 +540,11 @@ files still stands after the whole teardown. The file is named in a warning
 on stderr and in `capabilities_enforced.teardown`, the envelope's `status`
 becomes `error` with the same message in `error`, `result.json` is written
 again when the run has an output folder, and the run exits 1 even when the
-BriefAgent itself succeeded. The named files may hold secret values or a
+QuickAgent itself succeeded. The named files may hold secret values or a
 pack's pages in the clear: delete them by hand.
 
-When a BriefAgent declares `exec: {commands: […]}`, its tools server runs in a
-per-BriefAgent **exec image**: the runner image with the packages the
+When a QuickAgent declares `exec: {commands: […]}`, its tools server runs in a
+per-QuickAgent **exec image**: the runner image with the packages the
 operator's exec catalog maps those commands to installed, then every
 executable deleted except the declared commands (and the runner binary that
 serves the tools), built once at install time from a generated Dockerfile
@@ -572,7 +572,7 @@ workspace and inputs mounts — exactly those paths, and the receipt says so.
 
 ## Harness adapters
 
-`--adapter` chooses which agent harness runs the BriefAgent. Every adapter
+`--adapter` chooses which agent harness runs the QuickAgent. Every adapter
 gets the same contract — the gateway's catalog is the only tool surface, the
 model key and the gateway token arrive by variable name, telemetry is off,
 and the result envelope has one shape — and a conformance suite holds them
@@ -594,7 +594,7 @@ gets a generated MCP config naming the run's gateway and nothing else,
 locked in with `--strict-mcp-config`, with the built-in tools switched off
 and anything outside the gateway's catalog refused. It runs in Claude Code's
 bare mode, so none of your hooks, plugins, skills, memory or `CLAUDE.md`
-reaches a BriefAgent run, and `CLAUDE_CONFIG_DIR` points inside the run, so
+reaches a QuickAgent run, and `CLAUDE_CONFIG_DIR` points inside the run, so
 the run leaves nothing in your own configuration.
 
 Bare mode also reads no login credential of yours, which is deliberate: a
@@ -645,7 +645,7 @@ honest about which half is which.
   result.json            the machine-readable envelope (status, exit class,
                          digest, attestation state, capabilities_enforced,
                          usage, run-plan hash)
-  reports/…              whatever the BriefAgent wrote via write_report
+  reports/…              whatever the QuickAgent wrote via write_report
   receipts/
     events.ndjson        the raw harness event stream
     agent-stderr.log     the harness process's stderr
@@ -667,7 +667,7 @@ is not recognised.
 
 Exit codes: `0` ok · `1` other CLI error · `2` usage · `10` verify failed ·
 `11` refused by policy / missing secret · `12` not compilable/runnable ·
-`13` gateway or docker environment · `14` the BriefAgent failed ·
+`13` gateway or docker environment · `14` the QuickAgent failed ·
 `15` timeout · `16` budget · `17` output schema.
 
 ## The desktop app
@@ -685,12 +685,12 @@ the registry's directory service handles the login, one explicit approval
 page hands the app a one-time code on a loopback listener, and the app
 exchanges the code for a scoped token from its own process (the token
 never appears in the browser); a sign-in that stalls can be cancelled
-from Settings. Its Build tab authors and submits BriefAgents through the
+from Settings. Its Build tab authors and submits QuickAgents through the
 same pipeline as `agentry publish`, with a structured editor for
 `capabilities.mcpServers`. Its Describe it drafts one with the built-in
 Drafter, on this computer (the same packages `agentry draft` drives, with
 your own Jev key) or In Agentry (a hosted draft), and reads the draft into
-its form as data; nothing is written into a BriefAgent folder until you save.
+its form as data; nothing is written into a QuickAgent folder until you save.
 
 ## Verifying a runner installation
 
@@ -794,7 +794,7 @@ with exit 11, naming the pack.
 
 **A pack the release ships.** A release can carry packs of its own under
 `knowledge/<name>/`, named in its manifest's `knowledge.ships`
-([briefagents.md](briefagents.md#knowledge-packs-the-release-ships)).
+([quickagents.md](quickagents.md#knowledge-packs-the-release-ships)).
 A run mounts each one read-only at `/knowledge/<name>`, beside any pack
 attached with `--knowledge`, through the same run-time grant. The plan
 names no pack.
@@ -856,11 +856,11 @@ key variable's **name** only.
 | `knowledge create NAME --json` / `knowledge add DIR --json` | `dir`, `manifest` (the pack's `manifest.json`: `schema`, `name`, `id`, `created`, `updated`, `creator`, `pages`, `bytes`, `sha256`, and `scan`, the string `not scanned` or a registry's record), `documents[]` (what the run was given), `skipped[]` (documents not ingested), `written[]` (the paths the build applied), `dropped[]` (`path`, `reason`, `kept`), `receipts` (the Creator run's receipt directory), `decode` (the decode step's report, when documents were decoded), `stopped` (the budget or error that stopped the run early, when one did) |
 | `--version` | `agentry version <v>` — a release version, or a git describe on a source build |
 
-One example, `install --plan --json` on a first install of a BriefAgent
+One example, `install --plan --json` on a first install of a QuickAgent
 that declares egress, against a registry that publishes no attestation:
 
 ```json
-{"ref":"acme/demo@1.0.0","namespace":"acme","name":"demo","version":"1.0.0","digest":"sha256:…","modes":["autonomous"],"contract":{"filesystem":{"read":"workspace"},"network":{"egress":["api.example.com"]}},"contractDigest":"sha256:…","attestation":"unsigned","signed":false,"diff":{},"needsConfirmation":true,"reason":"a first install of a BriefAgent that declares network egress or exec","target":"claude-skill","dir":"/home/me/.claude/skills/demo","managed":true,"refusal":"unsigned — registry offers no attestation for acme/demo@1.0.0 (…); re-run with --allow-unsigned to install it anyway"}
+{"ref":"acme/demo@1.0.0","namespace":"acme","name":"demo","version":"1.0.0","digest":"sha256:…","modes":["autonomous"],"contract":{"filesystem":{"read":"workspace"},"network":{"egress":["api.example.com"]}},"contractDigest":"sha256:…","attestation":"unsigned","signed":false,"diff":{},"needsConfirmation":true,"reason":"a first install of a QuickAgent that declares network egress or exec","target":"claude-skill","dir":"/home/me/.claude/skills/demo","managed":true,"refusal":"unsigned — registry offers no attestation for acme/demo@1.0.0 (…); re-run with --allow-unsigned to install it anyway"}
 ```
 
 `--plan` adds no way past a gate: it reports what `--yes` and
@@ -882,7 +882,7 @@ unsigned or local release, a cached install included.
 
 ## The other commands
 
-The rest of the CLI, one line each; the [package format](briefagents.md)
+The rest of the CLI, one line each; the [package format](quickagents.md)
 page covers authoring and publishing in depth.
 
 | Command | What it does |
@@ -891,7 +891,7 @@ page covers authoring and publishing in depth.
 | `agentry init [--from PATH]` | scaffolds a workspace, or imports a `SKILL.md` or an MCP registry `server.json` |
 | `agentry validate DIR` | the registry's manifest rules and offline scanners (V1–V11, S1/S3/S4) |
 | `agentry list` | every install record in `installed.yaml` — the embedded installs and the runner consents — with whether each directory is still present (`--json`) |
-| `agentry info ns/name` / `agentry search` | a BriefAgent's page and capability contract; full-text search with the mode, capability, license and verified-org facets (`--json` on both) |
+| `agentry info ns/name` / `agentry search` | a QuickAgent's page and capability contract; full-text search with the mode, capability, license and verified-org facets (`--json` on both) |
 | `agentry verify ns/name@version` | digest and DSSE attestation check against the pinned keys — an exit code for CI |
 | `agentry publish` | submits a workspace and follows the pipeline's event stream to the verdict |
 | `agentry yank ns/name@version` | yanks a published version |

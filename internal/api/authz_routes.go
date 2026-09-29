@@ -84,9 +84,9 @@ var routeAuthz = map[string]RouteDecl{
 	"unstarAgent": {Action: auth.ActAgentRead, AgentScoped: true},
 	// Account installs (agentry#448) are the CALLER's own record, so they
 	// carry the self actions — a PAT needs user:profile, as it does for
-	// the notification settings — and the handler resolves the BriefAgent
+	// the notification settings — and the handler resolves the QuickAgent
 	// for read first, so a non-reader gets the missing name's 404 and a
-	// PAT recording a private BriefAgent needs agent:read as well.
+	// PAT recording a private QuickAgent needs agent:read as well.
 	"listAccountInstalls":  {Action: auth.ActUserSelfRead},
 	"putAccountInstall":    {Action: auth.ActUserSelfUpdate},
 	"deleteAccountInstall": {Action: auth.ActUserSelfUpdate},

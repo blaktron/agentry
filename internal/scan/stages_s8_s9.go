@@ -128,7 +128,7 @@ func s8NameSimilarity(name string, popular []string) []Finding {
 			reported[pop] = true
 			findings = append(findings, Finding{
 				Scanner: "S8/name-confusable", Severity: SevMedium, Confidence: ConfMedium,
-				Title:    "Name confusable with a popular BriefAgent: " + pop,
+				Title:    "Name confusable with a popular QuickAgent: " + pop,
 				Detail:   map[string]any{"resembles": pop, "skeleton": skel},
 				Taxonomy: []string{"LLM03"},
 			})
@@ -141,7 +141,7 @@ func s8NameSimilarity(name string, popular []string) []Finding {
 		reported[pop] = true
 		findings = append(findings, Finding{
 			Scanner: "S8/name-similar", Severity: SevMedium, Confidence: ConfLow,
-			Title: "Name is one small edit from a popular BriefAgent: " + pop,
+			Title: "Name is one small edit from a popular QuickAgent: " + pop,
 			Detail: map[string]any{
 				"resembles": pop, "editDistance": d,
 				"normalizedDistance": fmt.Sprintf("%.3f", norm),

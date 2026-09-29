@@ -53,7 +53,7 @@ repository's `docs/` and the site's pages, and the developers site from
 `schemas/openapi.yaml`), [agentry-mcp](https://github.com/blaktron/agentry-mcp)
 (an MCP server that drives the installed `agentry` CLI so Claude Code,
 Codex or any MCP host can search, install, run and hold a session with
-BriefAgents; the earlier registry-API server is parked inside it as
+QuickAgents; the earlier registry-API server is parked inside it as
 `secureagentry-mcp/`), and [agentry-examples](https://github.com/blaktron/agentry-examples).
 Two more are closed: `agentry-web` (the hosted site, a Next.js front end
 that runs in front of this server) and `agentry-enterprise` (a Go module

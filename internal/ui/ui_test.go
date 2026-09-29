@@ -549,7 +549,7 @@ func TestStaffEnforcementFlashesNameTheConsequence(t *testing.T) {
 		return okMsg + errMsg
 	}
 	for _, tc := range []struct{ action, want string }{
-		{"quarantine", "acme/risky quarantined. A published version under quarantine answers 409 on download; the BriefAgent stays in search, carrying the state."},
+		{"quarantine", "acme/risky quarantined. A published version under quarantine answers 409 on download; the QuickAgent stays in search, carrying the state."},
 		{"block", "acme/risky blocked. Every download for it answers 410 Gone."},
 		{"reinstate", "acme/risky reinstated. Quarantined and blocked versions are published again; yanked ones stay yanked."},
 	} {
@@ -567,7 +567,7 @@ func TestStaffEnforcementFlashesNameTheConsequence(t *testing.T) {
 	}
 	// The panel renders with its object and its consequences on it.
 	if w := get(h, "/ui/staff", sessCookie, csrfCookieV); w.Code != http.StatusOK ||
-		!strings.Contains(w.Body.String(), "BriefAgent enforcement") ||
+		!strings.Contains(w.Body.String(), "QuickAgent enforcement") ||
 		!strings.Contains(w.Body.String(), "answers 410 Gone") ||
 		!strings.Contains(w.Body.String(), "Nothing awaits platform review.") {
 		t.Fatalf("staff page: %d %s", w.Code, w.Body.String())

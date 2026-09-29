@@ -2,7 +2,7 @@ package api_test
 
 // POST /user/clear-data (agentry#498): the account's credentials, installs
 // and settings go, the account stays. Seeds one of each class, clears, and
-// checks each is gone while the caller's session, the BriefAgents, the
+// checks each is gone while the caller's session, the QuickAgents, the
 // memberships and the stars survive; the audit row carries the counts and
 // extensions hear user.data_cleared once.
 
@@ -33,7 +33,7 @@ func TestClearCurrentUserData(t *testing.T) {
 	})
 	ctx := context.Background()
 
-	// An author with a published BriefAgent, so there is something to install.
+	// An author with a published QuickAgent, so there is something to install.
 	authorH := env.register("cd-author")
 	env.verifyEmail(authorH)
 	author := env.login(authorH)
@@ -138,7 +138,7 @@ func TestClearCurrentUserData(t *testing.T) {
 
 	// What must survive.
 	if n := count(`SELECT count(*) FROM agents WHERE namespace_id = $1`, uid); n != 1 {
-		t.Errorf("BriefAgents after clearing: %d, want 1", n)
+		t.Errorf("QuickAgents after clearing: %d, want 1", n)
 	}
 	if n := count(`SELECT count(*) FROM stars WHERE user_id = $1`, uid); n != 1 {
 		t.Errorf("stars after clearing: %d, want 1", n)

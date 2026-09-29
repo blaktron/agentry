@@ -1,6 +1,6 @@
 # pr-reviewer
 
-An autonomous BriefAgent (pure instructions, no code, no capabilities) that reviews a
+An autonomous QuickAgent (pure instructions, no code, no capabilities) that reviews a
 diff in priority order: correctness first, then security-relevant changes, then
 unmentioned behaviour changes, then tests. Style comes last.
 
