@@ -288,37 +288,37 @@ The CLI checks every draft in four steps (agentry-cli#417, agentry-cli#418):
    and the CLI never retries. The verdicts go into `draft.json` under
    `aiReview.check`, and the notes say what a flag means under "AI
    Review's check".
-   - The rubric's C3 (a capability used but not declared) is recorded and
-     never sent to the repair turn. It reads an instruction that uses its
-     own inputs and writes its report that way; editing the draft does not
-     clear it, and at publish it sends the version to review, not to
-     refusal.
-   - A description over 8 KiB is not checked, and neither is a draft that
-     could not be rendered.
-   - A pass does not mean the draft does all of the task. The pipeline
-     scans the whole version at publish whatever the check said.
+    - The rubric's C3 (a capability used but not declared) is recorded and
+      never sent to the repair turn. It reads an instruction that uses its
+      own inputs and writes its report that way; editing the draft does not
+      clear it, and at publish it sends the version to review, not to
+      refusal.
+    - A description over 8 KiB is not checked, and neither is a draft that
+      could not be rendered.
+    - A pass does not mean the draft does all of the task. The pipeline
+      scans the whole version at publish whatever the check said.
 4. **One repair turn.** If the rules still refuse the draft, or the check
    flagged something the draft can fix (`off_task`, or a rubric finding
    other than C3), the Drafter runs once more, without its web tools.
-   - Its task is the rules' report, what the check flagged, and its own
-     manifest and instructions, and nothing else: no notes, no page. With a
-     flag it is also given the task the first turn was given, which AI
-     Review passed before that turn started.
-   - A last message that was not a draft at all (not one JSON object, exit
-     17) gets the same turn, given the error and that message back. The turn
-     returns the manifest again, and the instruction file too if the report
-     names it.
-   - The second answer is corrected and checked like the first, so a draft
-     asks at most two checks. It is kept whether or not it passes, unless
-     it breaks rules the first passed. Its notes say "Repaired once" and
-     what sent it to the turn.
-   - A repair turn that returns no draft leaves the first, with its
-     problems and a note saying why. When the first was not a draft
-     either, the draft ends with exit 17.
-   - The turn's budget is the draft's, capped at 300 seconds and 8 tool
-     calls, and what is left of `--max-cost`. Its receipts are in
-     `DIR/repair/`, and the usage lines it narrates count from the first
-     turn's total.
+    - Its task is the rules' report, what the check flagged, and its own
+      manifest and instructions, and nothing else: no notes, no page. With a
+      flag it is also given the task the first turn was given, which AI
+      Review passed before that turn started.
+    - A last message that was not a draft at all (not one JSON object, exit
+      17) gets the same turn, given the error and that message back. The turn
+      returns the manifest again, and the instruction file too if the report
+      names it.
+    - The second answer is corrected and checked like the first, so a draft
+      asks at most two checks. It is kept whether or not it passes, unless
+      it breaks rules the first passed. Its notes say "Repaired once" and
+      what sent it to the turn.
+    - A repair turn that returns no draft leaves the first, with its
+      problems and a note saying why. When the first was not a draft
+      either, the draft ends with exit 17.
+    - The turn's budget is the draft's, capped at 300 seconds and 8 tool
+      calls, and what is left of `--max-cost`. Its receipts are in
+      `DIR/repair/`, and the usage lines it narrates count from the first
+      turn's total.
 
 ## MCP profiles
 
