@@ -208,6 +208,94 @@ func TestRiverDelayedJobWaits(t *testing.T) {
 	}
 }
 
+// TestRiverRescuesAJobItsWorkerLeftRunning pins crash recovery under River,
+// production's driver (agentry#750): a job left running by a worker that died
+// (an evicted pod, a node gone) is rescued once it has been running longer
+// than the reclaim cutoff, and runs again on a live worker, while a job a
+// healthy worker holds right now is left alone. It is the River half of
+// TestQueueReclaimsOrphanedJobs and TestQueueReclaimRespectsCutoff: without
+// it a scan whose worker died stays in scanning.
+func TestRiverRescuesAJobItsWorkerLeftRunning(t *testing.T) {
+	// The cutoff this relies on: a job running for longer is presumed
+	// orphaned. A change to it moves both rows below.
+	if defaultReclaimAfter != 30*time.Minute {
+		t.Fatalf("defaultReclaimAfter = %s: re-check the rows' ages below", defaultReclaimAfter)
+	}
+	c, st := newRiverTestClient(t)
+	q := testQueueName(t, st)
+	ctx := context.Background()
+	var orphanRuns, heldRuns atomic.Int32
+	c.Register("river.orphan", func(context.Context, Job) error { orphanRuns.Add(1); return nil })
+	c.Register("river.held", func(context.Context, Job) error { heldRuns.Add(1); return nil })
+	for _, kind := range []string{"river.orphan", "river.held"} {
+		if _, err := c.Enqueue(ctx, kind, q, struct{}{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A worker claimed both and died: the orphan two hours ago, past the
+	// cutoff; the held job a moment ago, well inside it.
+	for kind, age := range map[string]string{"river.orphan": "2 hours", "river.held": "0 seconds"} {
+		if _, err := st.Pool().Exec(ctx, `
+			UPDATE river_job SET state = 'running', attempt = 1,
+			       attempted_at = now() - $3::interval, attempted_by = ARRAY['a-dead-worker']
+			WHERE queue = $1 AND kind = $2`, q, kind, age); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() {
+		_, _ = st.Pool().Exec(context.Background(), `DELETE FROM river_job WHERE queue = $1`, q)
+	})
+
+	workCtx, stop := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() { defer close(done); _ = c.Work(workCtx, q) }()
+	deadline := time.Now().Add(45 * time.Second)
+	for orphanRuns.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(100 * time.Millisecond)
+	}
+	stop()
+	<-done
+
+	if n := orphanRuns.Load(); n != 1 {
+		t.Fatalf("the orphaned job ran %d times, want 1: River never rescued it", n)
+	}
+	var state string
+	var errs int
+	if err := st.Pool().QueryRow(ctx, `
+		SELECT state, coalesce(array_length(errors, 1), 0) FROM river_job
+		WHERE queue = $1 AND kind = 'river.orphan'`, q).Scan(&state, &errs); err != nil {
+		t.Fatal(err)
+	}
+	if state != "completed" || errs != 1 {
+		t.Fatalf("orphaned job: state %s with %d recorded errors, want completed after one rescue", state, errs)
+	}
+	// The held job is inside the cutoff, so the pass that took the orphan
+	// left it alone.
+	if err := st.Pool().QueryRow(ctx, `
+		SELECT state FROM river_job WHERE queue = $1 AND kind = 'river.held'`, q).Scan(&state); err != nil {
+		t.Fatal(err)
+	}
+	if state != "running" || heldRuns.Load() != 0 {
+		t.Fatalf("held job: state %s, ran %d times; a job inside the cutoff must be left to its worker", state, heldRuns.Load())
+	}
+}
+
+// TestRiverJobTimeoutLeavesRoomForTheRescue guards the configuration the
+// rescue depends on (agentry#750). River refuses a timeout past the rescue
+// cutoff but accepts the two that break it: -1, with which no job is ever
+// rescued, and a timeout equal to the cutoff, which would rescue a job its
+// worker still runs. TestRiverRescuesAJobItsWorkerLeftRunning pins that the
+// value reaches River.
+func TestRiverJobTimeoutLeavesRoomForTheRescue(t *testing.T) {
+	c := NewRiverClient(nil, nil)
+	if c.jobTimeout <= 0 {
+		t.Fatalf("jobTimeout = %s: River never rescues a job without a timeout", c.jobTimeout)
+	}
+	if c.jobTimeout >= c.reclaimAfter {
+		t.Fatalf("jobTimeout %s must be under the rescue cutoff %s", c.jobTimeout, c.reclaimAfter)
+	}
+}
+
 func TestOpenSelectsDriver(t *testing.T) {
 	if _, ok := must(Open("", 3, nil, nil)).(*RiverClient); !ok {
 		t.Error("empty driver should be river")
