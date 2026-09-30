@@ -442,6 +442,12 @@ func TestWebSearchEnvConfig(t *testing.T) {
 	if cfg, err = Load(""); err != nil || cfg.WebSearch.Provider != "brave" {
 		t.Fatalf("brave (agentry#631): %v %+v", err, cfg.WebSearch)
 	}
+	for _, p := range []string{"tavily", "exa", "perplexity"} {
+		t.Setenv("AGENTRY_WEB_SEARCH_PROVIDER", p)
+		if cfg, err = Load(""); err != nil || cfg.WebSearch.Provider != p {
+			t.Fatalf("%s (agentry#783): %v %+v", p, err, cfg.WebSearch)
+		}
+	}
 	t.Setenv("AGENTRY_WEB_SEARCH_PROVIDER", "fake")
 	if _, err := Load(""); err == nil {
 		t.Error("an unknown provider (the tests' fake included) must fail validation")
