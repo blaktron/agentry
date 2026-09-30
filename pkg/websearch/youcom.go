@@ -1,7 +1,6 @@
 package websearch
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -51,18 +50,8 @@ func (*YouCom) Name() string { return YouComName }
 
 // Search implements Provider.
 func (y *YouCom) Search(ctx context.Context, query string, count int) ([]Result, error) {
-	payload, err := json.Marshal(map[string]any{"query": query, "count": ClampCount(count)})
-	if err != nil {
-		return nil, fmt.Errorf("websearch: youcom payload: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, y.c.endpoint, bytes.NewReader(payload))
-	if err != nil {
-		return nil, fmt.Errorf("websearch: youcom request: %w", redactKey(err, y.c.apiKey))
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-API-Key", y.c.apiKey)
-	raw, err := y.c.do(req)
+	raw, err := y.c.postJSON(ctx, map[string]any{"query": query, "count": ClampCount(count)},
+		func(r *http.Request) { r.Header.Set("X-API-Key", y.c.apiKey) })
 	if err != nil {
 		return nil, err
 	}

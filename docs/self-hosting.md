@@ -315,8 +315,9 @@ judge:
 webSearch:
   # The web search the registry brokers for POST /model-input/search
   # (docs/model-input.md): none, youcom (You.com's Web Search API), brave
-  # (Brave's LLM Context API), tavily, exa or perplexity (their search APIs). The key stays in the registry and never
-  # reaches a sandbox host.
+  # (Brave's LLM Context API), or tavily, exa or perplexity (their search
+  # APIs, for a person's own key: DEV-185 on their terms). The key stays
+  # in the registry and never reaches a sandbox host.
   provider: none                      # AGENTRY_WEB_SEARCH_PROVIDER: none | youcom | brave | tavily | exa | perplexity
   # apiKey: ...                       # AGENTRY_WEB_SEARCH_API_KEY (required with a provider)
   # baseUrl: ...                      # AGENTRY_WEB_SEARCH_BASE_URL (empty is the provider's own:

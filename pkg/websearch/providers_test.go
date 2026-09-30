@@ -22,6 +22,7 @@ var personalProviders = []struct {
 	build  func(ClientConfig) (Provider, error)
 	header string // the header the key rides in
 	prefix string // what precedes the key in it
+	count  string // the body's field for the number of results
 	path   string
 	want   map[string]any // the request body, for a count of 3
 	answer string
@@ -30,8 +31,8 @@ var personalProviders = []struct {
 	{
 		name:   TavilyName,
 		build:  func(c ClientConfig) (Provider, error) { return NewTavily(c) },
-		header: "Authorization", prefix: "Bearer ", path: "/search",
-		want: map[string]any{"query": "RFC 4180 CSV", "max_results": 3.0, "search_depth": "basic", "topic": "general",
+		header: "Authorization", prefix: "Bearer ", count: "max_results", path: "/search",
+		want: map[string]any{"query": "RFC 4180 CSV", "max_results": 3.0, "search_depth": "basic", "chunks_per_source": 2.0, "topic": "general",
 			"include_answer": false, "include_raw_content": false, "include_images": false, "auto_parameters": false},
 		answer: `{"query":"RFC 4180 CSV","answer":"not read","images":["https://img.example/1.png"],
 			"results":[{"title":"RFC 4180","url":"https://www.rfc-editor.org/rfc/rfc4180","content":"Common Format and MIME Type for CSV Files.","score":0.9,"raw_content":null},
@@ -41,7 +42,7 @@ var personalProviders = []struct {
 	{
 		name:   ExaName,
 		build:  func(c ClientConfig) (Provider, error) { return NewExa(c) },
-		header: "x-api-key", path: "/search",
+		header: "x-api-key", count: "numResults", path: "/search",
 		want: map[string]any{"query": "RFC 4180 CSV", "type": "auto", "numResults": 3.0,
 			"contents": map[string]any{"highlights": map[string]any{"maxCharacters": 1000.0}}},
 		answer: `{"requestId":"r","resolvedSearchType":"neural","costDollars":{"total":0.007},
@@ -53,7 +54,7 @@ var personalProviders = []struct {
 	{
 		name:   PerplexityName,
 		build:  func(c ClientConfig) (Provider, error) { return NewPerplexity(c) },
-		header: "Authorization", prefix: "Bearer ", path: "/search",
+		header: "Authorization", prefix: "Bearer ", count: "max_results", path: "/search",
 		want: map[string]any{"query": "RFC 4180 CSV", "max_results": 3.0, "search_type": "web", "max_tokens_per_page": 256.0},
 		answer: `{"id":"r","server_time":null,"results":[{"title":"RFC 4180","url":"https://www.rfc-editor.org/rfc/rfc4180",
 			"snippet":"Common Format and MIME Type for CSV Files.","date":"2005-10-01","last_updated":"2024-01-01"}]}`,
@@ -129,12 +130,8 @@ func TestPersonalProvidersNeverAskForMoreThanTheMostResults(t *testing.T) {
 			if _, err := prov.Search(context.Background(), "q", 50); err != nil {
 				t.Fatal(err)
 			}
-			n, _ := sent["max_results"].(float64)
-			if n == 0 {
-				n, _ = sent["numResults"].(float64)
-			}
-			if n != MaxCount {
-				t.Fatalf("asked for %v results", n)
+			if n, _ := sent[p.count].(float64); n != MaxCount {
+				t.Fatalf("asked for %v results", sent[p.count])
 			}
 		})
 	}
@@ -165,16 +162,17 @@ func TestPersonalProvidersRefusalsCarryNoKeyAndNoRedirectIsFollowed(t *testing.T
 				http.Redirect(w, r, elsewhere.URL+p.path, http.StatusTemporaryRedirect)
 			}))
 			defer srv.Close()
-			prov2, _ := p.build(ClientConfig{BaseURL: srv.URL, APIKey: "k", HTTPClient: &http.Client{}})
-			if _, err := prov2.Search(context.Background(), "q", 5); !errors.As(err, &se) || se.Status != http.StatusTemporaryRedirect || hit {
+			prov2, _ := p.build(ClientConfig{BaseURL: srv.URL, APIKey: key, HTTPClient: &http.Client{}})
+			if _, err := prov2.Search(context.Background(), "q", 5); !errors.As(err, &se) || se.Status != http.StatusTemporaryRedirect || hit ||
+				strings.Contains(err.Error(), "provider-se") {
 				t.Fatalf("err %v, followed %v", err, hit)
 			}
 
 			bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`not json`)) }))
 			defer bad.Close()
-			prov3, _ := p.build(ClientConfig{BaseURL: bad.URL, APIKey: "k"})
-			if _, err := prov3.Search(context.Background(), "q", 5); err == nil {
-				t.Fatal("an out-of-shape answer is an error")
+			prov3, _ := p.build(ClientConfig{BaseURL: bad.URL, APIKey: key})
+			if _, err := prov3.Search(context.Background(), "q", 5); err == nil || strings.Contains(err.Error(), "provider-se") {
+				t.Fatalf("an out-of-shape answer is an error, with no key: %v", err)
 			}
 			if _, err := p.build(ClientConfig{APIKey: "  "}); err != ErrNoKey {
 				t.Fatalf("no key: %v", err)

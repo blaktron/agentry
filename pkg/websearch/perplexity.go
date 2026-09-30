@@ -16,7 +16,8 @@ import (
 // own searches.
 //
 // The call is POST /search with the key as a bearer token, one query (an
-// array would be billed as several), the standard web search type, and a
+// array would be billed as several), the standard web search type (not
+// fast, cheaper and shallower: a draft is research), and a
 // small per-page budget of extracted text, since Clean cuts a snippet to a
 // thousand characters anyway. Only results[] is read.
 const (

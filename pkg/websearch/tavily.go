@@ -14,13 +14,16 @@ import (
 // a person who names Tavily chooses those terms for their own searches.
 //
 // The call is POST /search with the key as a bearer token. It asks for the
-// basic depth (one credit a search) and for none of the paid or unscanned
+// basic depth (one credit a search), two chunks of each page, and for none of the paid or unscanned
 // extras: no generated answer, no raw page content, no images, and no
 // automatic parameters, which can raise the depth. Only results[] is read.
 const (
 	TavilyName           = "tavily"
 	TavilyDefaultBaseURL = "https://api.tavily.com"
 	tavilyPath           = "/search"
+	// A basic result's content is its chunks, each up to 500 characters;
+	// two fill the snippet's thousand, the default three would be cut.
+	tavilyChunks = 2
 )
 
 // Tavily is the Tavily Search API client. It is safe for concurrent use.
@@ -44,6 +47,7 @@ func (t *Tavily) Search(ctx context.Context, query string, count int) ([]Result,
 		"query":               query,
 		"max_results":         ClampCount(count),
 		"search_depth":        "basic",
+		"chunks_per_source":   tavilyChunks,
 		"topic":               "general",
 		"include_answer":      false,
 		"include_raw_content": false,
