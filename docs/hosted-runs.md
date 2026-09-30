@@ -35,7 +35,14 @@ run of theirs is held at, `account` (whose row it is held on: their own, or
 the organization whose pool pays for their runs), that tier's caps, the
 credits a run holds, the two rates, the tier's `build` and the `draft` hold —
 so a client can state the cost, and whose credits it is, before any run
-exists.
+exists. `sessions` states a [hosted session](#a-hosted-session)'s
+terms to anyone: whether this deployment runs sessions (`enabled`), the
+free minutes, a paid minute's credits, the balance one needs to start, the
+idle close, and per tier whether its payers may start one (`allowed`). A
+signed-in caller's `caller.session.allowed` says whether their own payer
+may. `hostsOnline` is how many sandbox hosts are taking runs: seen within
+the stale window, neither retired nor draining, with capacity. A session
+starts only when there is one.
 
 ## Who may do what
 
@@ -58,6 +65,8 @@ run is not.
 | `GET /api/v1/x/runs/{id}/events` | session or PAT with `run:read` |
 | `GET /api/v1/x/runs/{id}/outputs/{name}` | session or PAT with `run:read` |
 | `POST /api/v1/x/runs/{id}/cancel` | session or PAT with `run:write` |
+| `GET /api/v1/x/runs/{id}/session` | a hosted session's runner alone: session, or PAT with both `run:read` and `run:write` |
+| `POST /api/v1/x/runs/{id}/session/turns`, `/files`, `/end` | a hosted session's runner alone, as above |
 | `POST /api/v1/x/runs/claim` | worker token |
 | `POST /api/v1/x/runs/{id}/events` | worker token, the run's holder |
 | `POST /api/v1/x/runs/{id}/artefacts/{name}` | worker token, the run's holder |
@@ -106,8 +115,10 @@ whose namespace it is, or a grant on the agent — and, on a personal access
 token, the `agent:read` scope beside `run:write`. The agents of an
 organization that is suspended are absent to everyone, public or not.
 
-The mode is `autonomous`. An interactive session is a conversation with a
-terminal on the other end; the hosted run has none.
+`mode` is `autonomous`, the default, or `interactive`, which makes the run
+a [hosted session](#a-hosted-session): the release's interactive mode, which
+its runner converses with while it runs. Only a run of a release takes a
+mode; a knowledge build or a draft with `interactive` is `422`.
 
 ## Whose credits: the payer
 
@@ -203,7 +214,10 @@ changes nothing.
 
 | What | Answer |
 |---|---|
-| The release does not declare the autonomous mode | `409 mode-not-declared` |
+| The release does not declare the mode asked for | `409 mode-not-declared` |
+| A session where the deployment does not run them (`AGENTRY_RUNS_SESSIONS` off, or no sandbox hosts), or no sandbox host is taking runs (`hostsOnline` 0) | `409 sessions-unavailable` — a person waits on a session as it starts, so it is refused rather than queued |
+| A session whose payer is on Standard | `403 session-tier`, with `account`, `tier` and `requires: pro` |
+| A session whose payer's balance is short of `AGENTRY_RUNS_SESSION_MIN_CREDITS` | `402 credits-exhausted`, as for a hold |
 | The release, or an MCP server it declares, declares a secret the caller has not set | `409 secret-missing`, with `missing` (the names not set) and `secrets` (every declared name); set them, then create the run again ([below](#a-runs-secrets)) |
 | The release declares a secret and the deployment keeps none, or pushes to no sandbox host | `409 secrets-declared`, with `secrets` — such a release runs on your own machine, where its keys are yours |
 | The release declares more than 32 secrets, where the deployment keeps secrets | `422 validation` |
@@ -614,6 +628,146 @@ The Drafter is part of the CLI the host runs, like the Knowledge Creator:
 a draft runs without a registry scan of a package. What it drafts is not
 published by it: a submission of the draft is scanned like any other.
 
+## A hosted session
+
+A **hosted session** is a hosted run of a release's interactive mode: the
+runner talks to the agent while it runs on a sandbox host, as they would in
+a [terminal session](runner.md#run-modes). It is created like a run, with
+`"mode": "interactive"`, and runs exactly as a pushed run does: the same
+release verification, the same compiled plan bar the harness's own
+arguments and the session block, the same sandbox under `runsc`, egress
+proxy and gateway, and a declared secret reaches the tools container alone.
+A message cannot widen what the release declares. The CLI's policy decides
+every permission request, as it does on a person's own machine: a tool the
+gateway serves is granted and anything else denied, and no request reaches
+the person. The host drives the CLI
+through its [session protocol](runner.md#driving-a-session-from-a-program).
+
+On the product a session is started from the site's guided run setup
+(**Talk to it**) and held on the run's page as a chat, or from the desktop
+app's run panel (**Talk to it In Agentry**), whose chat is the one a local
+session uses. A script drives it through the routes below.
+
+**Who may start one.** A payer on Pro, Business or Enterprise; on Standard
+the create is `403 session-tier`. The tier is the payer's, so a Standard
+member of an organization starts one on the organization's tier. A session
+already running is not stopped by a later change of tier. The pull worker
+never takes a session. A session runs only where the deployment pushes
+runs to sandbox hosts, sessions are turned on, and a host is taking runs.
+
+**Following it.** `GET /api/v1/x/runs/{id}/session` is server-sent events:
+
+- `state`: the run's content-free state (`status`, `startedAt`,
+  `finishedAt`, `outcome`, `error`) and its session record, whenever
+  either changes;
+- `frame`: one display event, its `id` the frame's sequence number from 1.
+  The kinds are `user_turn` (the CLI's own notices marked `synthetic`),
+  `assistant_text` (a streamed chunk), `assistant_turn` (the whole reply),
+  `tool_call` and `permission_denied` (by the tool's name), `input_added`
+  (by the file's name), `usage` (the counts), `session_end` (with the
+  reason) and `error`, which carries a fixed `class` and never text the
+  harness wrote;
+- `dropped`: the host's memory guard (16 MiB of frames for one session) let
+  go of frames before `before`; they are in the transcript only;
+- a comment every 20 seconds, which keeps a quiet stream open through
+  proxies;
+- `done` once the session is over; `timeout` after thirty minutes, from
+  which the client reconnects with `Last-Event-ID` or `?after=` and the host
+  replays what it still holds; `error` (`{"class":"key"}` or
+  `{"class":"frame"}`) when the stream cannot show this session's frames,
+  which ends that stream but not the session.
+
+**Talking to it.** `POST …/session/turns` takes `{"text": …}`: one message
+of at most 16 KiB, with no control character but a newline or a tab.
+`POST …/session/files` takes `{"input": …}`, one of the caller's unclaimed
+uploads from `POST /api/v1/x/runs/inputs`, named by one file name; it is held to the
+run's input caps together with the run's other inputs and the files already
+added, handed to the host as a five-minute presigned URL, and deleted from
+the registry once the host has it. The agent finds it under `/inputs`. The
+CLI tells the agent about the file in a notice: a turn of its own when the
+session is idle, or with the next message otherwise. `POST …/session/end`
+takes `{"finish": true}` (ask for the final result, then end) or `false`
+(end now, without one). Each is answered `202` once the host has it, or:
+
+| Answer | Why |
+|---|---|
+| `409 session-starting` | the host has not started the session yet; a stop before then is a cancel |
+| `409 session-busy` | the agent is still answering the last message |
+| `409 file-exists` | a file of that name was already added |
+| `409 session-ended` | the session is over |
+| `413 too-large` | the file would pass the run's input caps |
+| `422 validation` | a text the host would not take, or an input that is not one of the caller's uploads or not one file name |
+| `502 host-unreachable` | the sandbox host did not answer; send it again |
+
+**Its bounds.** There is no turn, token or tool-call cap. A session closes
+after **five minutes** with no message, reply, tool call or streamed text
+(a release's `interactive.idleTimeoutSeconds` may ask for less, never
+more). Its only wall is the life of the presigned URL its output is posted
+through: seven days, less the host's ten minutes for teardown and a minute
+for the hand-off. It ends on
+finish, stop, the idle close, that wall, or a minute its payer cannot pay.
+
+**What it costs.** A session holds nothing. Its **server time** is a second
+price beside its tokens: the first **ten minutes** of running are free, and
+each minute after costs **50 credits**, pulled from the payer's balance as
+the minute starts, once per minute however many registry replicas see it,
+each a `session_time` line in the ledger and a `charge` event on the run.
+A minute the balance cannot cover stops the session without a final
+result, and it closes as `budget` with the error `out of credits`. Its
+**tokens** settle once, when it closes, at the two rates above, taking at
+most what the balance holds and never below zero; any rest is recorded as
+`tokensUnpaid` and is the platform's cost. A session starts only on a
+balance of at least **50 credits**, the price of its first paid minute
+(`402 credits-exhausted` otherwise). An output the platform could not
+deliver keeps the minutes, which paid for a host that ran, and settles no
+tokens. An unmetered organization's minutes are counted at 0, with a
+`charge` event and no ledger line.
+
+The run carries a content-free `session` record: the terms it was created
+on (`freeMinutes`, `creditsPerMinute`, so a change of configuration never
+reprices a running session), `paidThrough` (the last minute settled,
+counting the free ones), `timeCredits`, `tokenCredits`, `tokensUnpaid`,
+`outOfCredits`, `filesAdded`, `bytesAdded` and `idleSeconds`.
+`settledCredits` is the time and the tokens together.
+
+**Who may watch or type into it.** Its runner alone. Everyone else gets
+`404`, as for a run that does not exist: another account, a fellow member
+of the organization that pays for it, platform staff, a token without both
+`run:read` and `run:write`, and anyone on a run that is not a session. A
+session that attached an organization's shared knowledge answers its
+runner only while they are still a member. Once it has finished, the
+run's record and output are read as any run's are.
+
+**What is kept.** The clients show this sentence beside the chat:
+
+> Transport encrypted by the user key, messages not stored; the transcript
+> comes back only in your sealed output.
+
+**Agentry holds each person's key**, sealed, so that it can open their
+output for them. The sentence therefore does not claim that the platform
+cannot read a session. In full, it means:
+
+- Each frame is sealed on the sandbox host to the runner's own encryption
+  certificate, the one a pushed run's `output.tar` is sealed to, with the
+  run, its sequence number and whether it is the last bound in.
+  The registry opens it with the runner's key in memory, inside the
+  runner's own request, and writes it to that response alone. A frame for
+  another run, reordered or replayed, does not open.
+- The host keeps the sealed frames in memory for the session's life and
+  drops them once it has closed, when its last frame is read or at most 25
+  seconds after. The registry writes no turn, reply or frame
+  to a table, a run event, an object or a log line; the run's events are
+  its statuses, its minute charges and its end. The one copy of the
+  conversation kept is `transcript.md` in the receipts of the sealed output.
+- A message is not sealed. It travels to the host over the runner's sign-in
+  and Agentry's mutually authenticated channel, as a run's task and files
+  do, and is stored nowhere but that transcript.
+
+The sealing means a frame opens only inside its runner's own request; that
+nothing is written on the way is how the registry, the site and the edge are
+built, and the registry's tests check it. Neither keeps a session's
+conversation from Agentry, which can open it as it opens an output.
+
 ## The execution plane
 
 The worker is a puller beside a docker daemon on a sandbox host, and reaches
@@ -686,3 +840,7 @@ anything you want to keep before then; nothing is archived elsewhere.
 | `AGENTRY_RUNS_INPUT_MAX_BYTES` | `10485760` | one input file's cap |
 | `AGENTRY_RUNS_OUTPUT_MAX_BYTES` | `52428800` | all of a run's artefacts together |
 | `AGENTRY_RUNS_RETENTION` | `720h` | how long a run and its artefacts are kept |
+| `AGENTRY_RUNS_SESSIONS` | off | whether this deployment runs [hosted sessions](#a-hosted-session); they also need sandbox hosts |
+| `AGENTRY_RUNS_SESSION_FREE_MINUTES` | `10` | a session's free minutes of server time |
+| `AGENTRY_RUNS_SESSION_MINUTE_CREDITS` | `50` | what each minute after the free ones costs; must be positive |
+| `AGENTRY_RUNS_SESSION_MIN_CREDITS` | `50` | the balance a metered payer needs to start a session |

@@ -92,6 +92,8 @@ One QuickAgent, one job, one container tree, then gone.
 | `--policy FILE` | operator policy override (tests, fleets) |
 | `--keep-run-dir` | keep the per-run scratch dir for debugging (secrets are still deleted) |
 | `--events FILE` | append the harness event stream to FILE as JSON lines **while the run is live** — the same redacted lines the receipt's `events.ndjson` gets, for a driver that meters a run as it goes |
+| `--session-protocol` | drive an interactive session from a program, with no terminal: JSON-line commands on stdin, its events on descriptor 3 ([below](#driving-a-session-from-a-program)) |
+| `--session-inputs DIR` | with `--session-protocol`: the directory the driver stages files in; an add must name a regular file directly in it (without it, the session takes no files) |
 
 With `--output-format json` the run also narrates the harness's usage to
 **stderr** as it arrives, one line per report:
@@ -143,7 +145,55 @@ time, user turns) on top of the cost and tool-call budgets, and its
 receipts add `transcript.md` and the intake answers. A release with one
 mode runs in it; one with both is asked on a terminal and runs autonomous
 otherwise (`--yes` or `--dry-run` never ask). The desktop app runs the
-same session in its run panel.
+same session in its run panel, and a hosted session
+([Hosted runs](hosted-runs.md#a-hosted-session)) runs it on a sandbox host
+through the session protocol below.
+
+#### Driving a session from a program
+
+Without a terminal, an interactive run is refused: the chat is its input.
+`--session-protocol` is the other way in, for a program that drives the
+session itself, such as runhost on a sandbox host (DR-51):
+
+```
+agentry run ns/name --mode interactive --session-protocol \
+  --session-inputs DIR --yes --output-format json --input TASK 3>EVENTS
+```
+
+- **Commands** arrive on stdin, one JSON object a line:
+  `{"send":{"text":"…"}}` sends a message, `{"add":{"path":"…"}}` adds a
+  file, and `{"end":{"finish":true}}` asks the agent for its final result
+  and ends (`false` ends without one). End of input is an end without a
+  result. The task comes only from `--input`, since stdin is the command
+  stream.
+- **One turn at a time.** A `send` is refused from a `user_turn` event to
+  the event that closes the turn, the task's own turn included when there
+  is one.
+- **Files.** An `add` must name a regular file directly in
+  `--session-inputs DIR`, where the driver stages it; a relative path is
+  taken there, and a path that resolves into a subdirectory or out of the
+  directory, or a link, is refused. Without the
+  flag the session takes no files. The engine checks the file again when it
+  copies it under `/inputs`.
+- **Events** leave on descriptor 3, one JSON line each: the session's own
+  event, redacted exactly as it reaches the receipt's `events.ndjson`,
+  without `raw`. Descriptor 3 must be a pipe or a socket open for writing;
+  anything else is a usage error before anything runs. It is closed on exec,
+  so no process the CLI starts can write to it.
+- **Refusals.** A command the protocol will not take is answered on
+  descriptor 3 by an `error` event carrying `refused`: `malformed`,
+  `unknown_command`, `busy` or `input_refused`. A refusal never ends the
+  session and is not a session event, so the receipts do not hold it.
+- **stdout and stderr** are what they are for any run: the envelope under
+  `--output-format json`, and the usage narration.
+- **A slow reader** never stops the session: events are queued, and a
+  reader 16 MiB behind, or whose pipe broke, is written nothing more, and
+  stderr says so once. The idle close, the budgets and the teardown run
+  regardless.
+- **What stays refused.** Without the flag, the terminal rule stands.
+  `--events` is refused with it, and an autonomous run refuses the flag.
+  Windows refuses it. The flag changes nothing that is compiled: the plan
+  is the one a terminal session runs.
 
 ### Intake questions
 
