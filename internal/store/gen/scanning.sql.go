@@ -1386,6 +1386,51 @@ func (q *Queries) ListReviewQueue(ctx context.Context, arg ListReviewQueueParams
 	return items, nil
 }
 
+const listReviewedFindingKeys = `-- name: ListReviewedFindingKeys :many
+SELECT DISTINCT f.scanner, coalesce(f.file_path, '')::text AS file_path, coalesce(f.line_start, 0)::int AS line_start
+FROM findings f
+JOIN scan_runs r ON r.id = f.scan_run_id
+WHERE r.version_id = $1
+  AND r.id <> $2
+  AND r.started_at < (SELECT max(ri.decided_at) FROM review_items ri
+                      WHERE ri.version_id = $1 AND ri.state = 'approved')
+`
+
+type ListReviewedFindingKeysParams struct {
+	VersionID    uuid.UUID `json:"version_id"`
+	ExcludeRunID uuid.UUID `json:"exclude_run_id"`
+}
+
+type ListReviewedFindingKeysRow struct {
+	Scanner   string `json:"scanner"`
+	FilePath  string `json:"file_path"`
+	LineStart int32  `json:"line_start"`
+}
+
+// What a person has already decided on for a version: the scanner, file and
+// line of every finding in a run started before the version's latest
+// approved review (a rescan quarantines only on what is not here). None for
+// a version no person approved.
+func (q *Queries) ListReviewedFindingKeys(ctx context.Context, arg ListReviewedFindingKeysParams) ([]ListReviewedFindingKeysRow, error) {
+	rows, err := q.db.Query(ctx, listReviewedFindingKeys, arg.VersionID, arg.ExcludeRunID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListReviewedFindingKeysRow
+	for rows.Next() {
+		var i ListReviewedFindingKeysRow
+		if err := rows.Scan(&i.Scanner, &i.FilePath, &i.LineStart); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRulesetReleases = `-- name: ListRulesetReleases :many
 SELECT id, semver, bundle_digest, notes, published_at FROM ruleset_releases ORDER BY published_at DESC LIMIT 100
 `

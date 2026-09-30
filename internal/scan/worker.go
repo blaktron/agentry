@@ -372,8 +372,26 @@ func (p *Pipeline) rescanOne(ctx context.Context, versionID uuid.UUID) (rescanOu
 	}
 	out := rescanOutcome{cachedStages: len(result.Skipped)}
 
+	// Only a finding no person has decided on quarantines. A version a
+	// reviewer approved with the finding on its report, or a quarantine a
+	// reviewer cleared, is not pulled again by every new ruleset: the sweep
+	// runs on each one, and a re-rating would otherwise turn every approved
+	// medium into a quarantine (agentry#781).
+	reviewed, err := q.ListReviewedFindingKeys(ctx, storegen.ListReviewedFindingKeysParams{
+		VersionID: versionID, ExcludeRunID: runID,
+	})
+	if err != nil {
+		return out, fmt.Errorf("scan: rescan reviewed findings: %w", err)
+	}
+	seen := make(map[reviewedKey]bool, len(reviewed))
+	for _, r := range reviewed {
+		seen[reviewedKey{r.Scanner, r.FilePath, int(r.LineStart)}] = true
+	}
 	worst := SevInfo
 	for _, f := range result.Findings {
+		if seen[reviewedKey{f.Scanner, f.FilePath, f.LineStart}] {
+			continue
+		}
 		if confidenceRank(f.Confidence) >= confidenceRank(ConfMedium) && severityRank(f.Severity) > severityRank(worst) {
 			worst = f.Severity
 		}
@@ -408,6 +426,13 @@ func (p *Pipeline) rescanOne(ctx context.Context, versionID uuid.UUID) (rescanOu
 	}
 	p.notifyAuthorQuarantined(ctx, before, agent, string(worst), reason)
 	return out, nil
+}
+
+// reviewedKey is what makes a rescan's finding the same one a person already
+// saw: the scanner, the file and the line in the same archive.
+type reviewedKey struct {
+	scanner, file string
+	line          int
 }
 
 // notifyAuthorQuarantined tells the submitter their published version was
