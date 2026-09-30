@@ -305,7 +305,9 @@ func (S6Scripts) Run(sc stageContext, in *Input) StageResult {
 	for _, n := range sortedKeysHit(envReads) {
 		hit := envReads[n]
 		findings = append(findings, Finding{
-			Scanner: "S6/undeclared-env", Severity: SevMedium, Confidence: ConfMedium,
+			// High, not medium: an undeclared capability reaches a person
+			// whatever the auto-publish threshold (D16, ruleset 0.2.2).
+			Scanner: "S6/undeclared-env", Severity: SevHigh, Confidence: ConfMedium,
 			Title:    "Script reads an environment variable the manifest does not declare as a secret: " + n,
 			FilePath: hit.file, LineStart: hit.line, LineEnd: hit.line,
 			Detail:   map[string]any{"name": n, "declaredSecrets": sortedSet(decl.secrets)},

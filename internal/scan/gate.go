@@ -87,6 +87,13 @@ func Evaluate(in GateInput) GateDecision {
 		return review(in, maxSev(worst, SevMedium), "No automated judge ran, or a stage failed closed, so the gate sent this version to human review.")
 	}
 
+	// Content a stage could not read forces review whatever the threshold
+	// (§7 fail toward review): the finding is medium, and a threshold at
+	// medium would otherwise publish what no scanner examined.
+	if f := couldNotScan(in.Findings); f != nil {
+		return review(in, maxSev(worst, SevMedium), "Part of this version could not be scanned ("+f.Title+"), so the gate sent it to human review.")
+	}
+
 	// Policy requireHumanReview.
 	if mode, err := parseReviewMode(orNever(in.Policy.RequireHumanReview)); err == nil {
 		if mode.always {
@@ -110,6 +117,30 @@ func Evaluate(in GateInput) GateDecision {
 	default:
 		return review(in, worst, "This version's findings exceed the auto-publish threshold ("+string(worst)+"), so the gate sent it to a reviewer.")
 	}
+}
+
+// couldNotScanScanners are the findings that say a stage could not read
+// part of the package (D5 of plans/scan-and-run-tweaks.md). They keep their
+// medium severity and force review as a stage error does. The advisory
+// lookup's failure, S7/osv-error, is not one of them: the operator decided
+// that a lookup with no answer is reported and publishes (D3).
+var couldNotScanScanners = map[string]bool{
+	"S1/unreadable-file":              true,
+	scannerTextTruncated:              true,
+	"S2/tool-error":                   true,
+	"S2/history-error":                true,
+	KnowledgeStageID + "/unread-text": true,
+}
+
+// couldNotScan is the first open finding that says content went unread, or
+// nil. Confidence does not matter: unread content is a fact, not a guess.
+func couldNotScan(findings []Finding) *Finding {
+	for i := range findings {
+		if couldNotScanScanners[findings[i].Scanner] {
+			return &findings[i]
+		}
+	}
+	return nil
 }
 
 // review routes a needs_review decision to a queue (§8.6): the org queue for

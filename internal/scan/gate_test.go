@@ -120,3 +120,58 @@ func TestPolicyTightenOnly(t *testing.T) {
 		t.Fatal("LoosensBaseline false-flagged a tightening")
 	}
 }
+
+// TestGateHoldsWhatCouldNotBeScanned pins D5 of plan scan-and-run-tweaks
+// (agentry#771): content a stage could not read reaches a person whatever
+// the threshold, so raising the baseline to medium cannot publish it. The
+// advisory lookup's failure is the operator's one exception (D3).
+func TestGateHoldsWhatCouldNotBeScanned(t *testing.T) {
+	atMedium := DefaultBaseline()
+	atMedium.MaxAutoPublishSeverity = "medium"
+	for _, scanner := range []string{
+		"S1/unreadable-file", "S1/text-scan-truncated", "S2/tool-error",
+		"S2/history-error", "SK/unread-text",
+	} {
+		t.Run(scanner, func(t *testing.T) {
+			finding := Finding{Scanner: scanner, Severity: SevMedium, Confidence: ConfHigh, Title: "unread"}
+			got := Evaluate(GateInput{Findings: []Finding{finding}, Policy: atMedium})
+			if got.Outcome != OutcomeNeedsReview {
+				t.Fatalf("got %s (%s), want needs_review", got.Outcome, got.Reason)
+			}
+			// A dismissed finding leaves the gate's input, and with it the force.
+			if got := Evaluate(GateInput{Policy: atMedium}); got.Outcome != OutcomePublish {
+				t.Fatalf("without the finding: got %s", got.Outcome)
+			}
+		})
+	}
+	t.Run("S7/osv-error publishes at medium", func(t *testing.T) {
+		finding := Finding{Scanner: "S7/osv-error", Severity: SevMedium, Confidence: ConfHigh, Title: "lookup failed"}
+		if got := Evaluate(GateInput{Findings: []Finding{finding}, Policy: atMedium}); got.Outcome != OutcomePublish {
+			t.Fatalf("got %s (%s), want published", got.Outcome, got.Reason)
+		}
+	})
+}
+
+// TestVerdictFindingsRateInjectionAndUndeclaredCapabilityHighFromLikely
+// pins D16 (agentry#771): the two classes the operator keeps in front of a
+// person are high at score 2; the other four axes stay medium there.
+func TestVerdictFindingsRateInjectionAndUndeclaredCapabilityHighFromLikely(t *testing.T) {
+	scores := map[JudgeCategory]int{}
+	for _, c := range AllJudgeCategories() {
+		scores[c] = 2
+	}
+	got := map[string]Severity{}
+	for _, f := range verdictFindings(JudgeVerdict{Scores: scores}) {
+		got[f.Scanner] = f.Severity
+	}
+	want := map[string]Severity{
+		"S5/" + string(CatInjection): SevHigh, "S5/" + string(CatUndeclaredCap): SevHigh,
+		"S5/" + string(CatExfiltration): SevMedium, "S5/" + string(CatDeception): SevMedium,
+		"S5/" + string(CatObfuscation): SevMedium, "S5/" + string(CatDestructive): SevMedium,
+	}
+	for id, sev := range want {
+		if got[id] != sev {
+			t.Errorf("%s at score 2 = %q, want %q", id, got[id], sev)
+		}
+	}
+}

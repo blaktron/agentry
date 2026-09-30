@@ -14,8 +14,9 @@ import (
 
 // The §17.3 pipeline golden-corpus gate, run through the ORCHESTRATOR (not
 // just pkg/rules): every attack fixture must surface its expected finding
-// (100% recall) and never auto-publish; every benign lookalike must be clean
-// of the forbidden family (precision) and must not be rejected. This is the
+// (100% recall) and gate unless it is named with the reason it publishes;
+// every benign lookalike must be clean of the forbidden family (precision)
+// and must not be rejected. This is the
 // crown-jewel gate — a precision regression fails the build.
 //
 // Fixtures may carry pipeline context beyond their files: an agent kind, a
@@ -93,21 +94,24 @@ func TestAttackCorpusGate(t *testing.T) {
 		} else {
 			attackCount++
 		}
-		result := orch.Run(context.Background(), RunParams{
-			Input:             in,
-			Policy:            DefaultBaseline(),
-			Public:            true,
-			AgentName:         exp.AgentName,
-			PopularAgentNames: exp.PopularAgents,
-		})
+		run := func(threshold string) RunResult {
+			pol := DefaultBaseline()
+			if threshold != "" {
+				pol.MaxAutoPublishSeverity = threshold
+			}
+			return orch.Run(context.Background(), RunParams{
+				Input:             in,
+				Policy:            pol,
+				Public:            true,
+				AgentName:         exp.AgentName,
+				PopularAgentNames: exp.PopularAgents,
+			})
+		}
+		result := run("")
 
 		got := map[string]bool{}
-		worst := SevInfo
 		for _, f := range result.Findings {
 			got[f.Scanner] = true
-			if confidenceRank(f.Confidence) >= confidenceRank(ConfMedium) && severityRank(f.Severity) > severityRank(worst) {
-				worst = f.Severity
-			}
 		}
 
 		t.Run(e.Name(), func(t *testing.T) {
@@ -123,20 +127,34 @@ func TestAttackCorpusGate(t *testing.T) {
 					t.Errorf("%s: FALSE POSITIVE %q on benign lookalike", e.Name(), forbid)
 				}
 			}
-			// Attack fixtures must never auto-publish; benign must never be
-			// rejected (a security doc discussing injection must be publishable).
+			// Benign must never be rejected (a security doc discussing
+			// injection must be publishable).
 			if exp.ExpectClean {
 				if result.Decision.Outcome == OutcomeRejected {
 					t.Errorf("%s: benign lookalike was REJECTED (%s)", e.Name(), result.Decision.Reason)
 				}
-			} else {
-				// A medium+ attack must gate (needs_review or rejected).
-				// Low/info-by-design techniques (trailing whitespace, NFC
-				// deltas, bare HTML comments) legitimately auto-publish with
-				// findings visible on the page (§8.5) — recall above is what
-				// the corpus enforces for those.
-				if severityRank(worst) >= severityRank(SevMedium) && result.Decision.Outcome == OutcomePublish {
-					t.Errorf("%s: medium+ attack fixture AUTO-PUBLISHED (should gate): worst=%s", e.Name(), worst)
+				return
+			}
+			// An attack fixture must gate (needs_review or rejected), by
+			// outcome, at the baseline and at threshold medium, unless it is
+			// named below with the reason it publishes with its findings on
+			// the page. The lists are exact both ways, so a fixture that
+			// changes outcome changes this file.
+			for _, th := range []struct {
+				name      string
+				result    RunResult
+				publishes map[string]string
+			}{
+				{"the baseline", result, corpusPublishesAtLow},
+				{"threshold medium", run("medium"), corpusPublishesAtMedium},
+			} {
+				published := th.result.Decision.Outcome == OutcomePublish
+				why, listed := th.publishes[e.Name()]
+				switch {
+				case published && !listed:
+					t.Errorf("%s: attack fixture AUTO-PUBLISHED at %s (should gate): %s", e.Name(), th.name, th.result.Decision.Reason)
+				case !published && listed:
+					t.Errorf("%s: listed as publishing at %s (%s) but the gate said %s: take it off the list", e.Name(), th.name, why, th.result.Decision.Outcome)
 				}
 			}
 		})
@@ -150,6 +168,35 @@ func TestAttackCorpusGate(t *testing.T) {
 	t.Logf("attack-corpus gate: %d attack + %d benign fixtures (%d release-diff pairs) through the orchestrator",
 		attackCount, benignCount, pairCount)
 }
+
+// corpusPublishesAtLow are the attack fixtures the baseline (threshold low)
+// publishes, each with its findings on the page (§8.5).
+var corpusPublishesAtLow = map[string]string{
+	"s3-html-comment":        "a bare HTML comment is low by design",
+	"s3-nfc-delta":           "an NFC normalization delta is info",
+	"s3-trailing-whitespace": "trailing whitespace is low, at low confidence",
+}
+
+// corpusPublishesAtMedium adds what threshold medium publishes: the medium
+// findings outside undeclared capabilities and attempted injections, which
+// the operator chose to publish with their findings shown "for now" (D6 of
+// plan scan-and-run-tweaks, agentry#771).
+var corpusPublishesAtMedium = func() map[string]string {
+	m := map[string]string{
+		"incident-clawhavoc":           "S8's publisher velocity is a medium campaign signal",
+		"manifest-env-token-plain-key": "S2's token-shaped value in a declared server's env is medium",
+		"manifest-env-token-unquoted":  "S2's secret-named env key and token-shaped value are medium",
+		"s3-css-hidden":                "S3's CSS-hidden heuristic is medium",
+		"s3-data-uri":                  "S3's data URI heuristic is medium",
+		"s3-encoded-blob":              "S3's encoded blob heuristic is medium",
+		"s3-mixed-script":              "S3's mixed-script heuristic is medium",
+		"s3-private-use":               "S3's private-use-area heuristic is medium",
+	}
+	for k, v := range corpusPublishesAtLow {
+		m[k] = v
+	}
+	return m
+}()
 
 // readCorpusExpectation loads a fixture's expected.yaml; ok is false for a
 // directory that has none (not a fixture).
