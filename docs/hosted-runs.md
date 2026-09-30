@@ -641,7 +641,7 @@ A message cannot widen what the release declares. The CLI's policy decides
 every permission request, as it does on a person's own machine: a tool the
 gateway serves is granted and anything else denied, and no request reaches
 the person. The host drives the CLI
-through its [session protocol](runner.md#driving-a-session-from-a-program---session-protocol).
+through its [session protocol](runner.md#driving-a-session-from-a-program).
 
 On the product a session is started from the site's guided run setup
 (**Talk to it**) and held on the run's page as a chat, or from the desktop
