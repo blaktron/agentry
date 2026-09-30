@@ -372,8 +372,32 @@ func (p *Pipeline) rescanOne(ctx context.Context, versionID uuid.UUID) (rescanOu
 	}
 	out := rescanOutcome{cachedStages: len(result.Skipped)}
 
+	// Only a finding no person has decided on quarantines. A version a
+	// reviewer approved with the finding on its report, or a quarantine a
+	// reviewer cleared, is not pulled again by every new ruleset, and a
+	// re-rating does not pull what a person already approved at the lower
+	// rating (agentry#781; the operator's decision of 2026-09-30, whichever
+	// queue approved it). A finding is matched by scanner, file and line in
+	// the same archive, so a finding with no file (S5's, per category) matches
+	// any earlier one of its scanner: the bytes are the same, only the
+	// reading is new. If the lookup fails, nothing counts as decided and the
+	// rescan quarantines as before (fail toward review).
+	seen := map[reviewedKey]bool{}
+	decided, err := q.ListDecidedFindings(ctx, storegen.ListDecidedFindingsParams{
+		VersionID: versionID, ExcludeRunID: runID,
+	})
+	if err != nil {
+		p.log.ErrorContext(ctx, "rescan: decided findings unreadable; judging every finding as new",
+			"version", versionID, "err", err)
+	}
+	for _, r := range decided {
+		seen[reviewedKey{r.Scanner, r.FilePath, int(r.LineStart)}] = true
+	}
 	worst := SevInfo
 	for _, f := range result.Findings {
+		if seen[reviewedKey{f.Scanner, f.FilePath, f.LineStart}] {
+			continue
+		}
 		if confidenceRank(f.Confidence) >= confidenceRank(ConfMedium) && severityRank(f.Severity) > severityRank(worst) {
 			worst = f.Severity
 		}
@@ -408,6 +432,13 @@ func (p *Pipeline) rescanOne(ctx context.Context, versionID uuid.UUID) (rescanOu
 	}
 	p.notifyAuthorQuarantined(ctx, before, agent, string(worst), reason)
 	return out, nil
+}
+
+// reviewedKey matches a rescan's finding to one a person decided on: the
+// scanner, the file and the line in the same archive.
+type reviewedKey struct {
+	scanner, file string
+	line          int
 }
 
 // notifyAuthorQuarantined tells the submitter their published version was
