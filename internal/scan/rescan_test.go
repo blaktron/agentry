@@ -270,3 +270,31 @@ func TestRescanSweepLeavesAnOrgApprovedRerating(t *testing.T) {
 		t.Fatalf("status after the sweep = %s, want published", got)
 	}
 }
+
+// TestRescanSweepDoesNotPullForAReratedReading reproduces what the 0.2.2
+// sweep did on dev (agentry#771): a version published clean, whose rescan
+// reads AI Review's undeclared capability at score 2, stays published. The
+// same reading at score 3 still quarantines.
+func TestRescanSweepDoesNotPullForAReratedReading(t *testing.T) {
+	for _, tc := range []struct {
+		score int
+		want  registry.Status
+	}{{2, registry.StatusPublished}, {3, registry.StatusQuarantined}} {
+		e := newPipeEnv(t)
+		u, _ := e.st.Queries().GetUserByID(context.Background(), e.owner)
+		scores := map[scan.JudgeCategory]int{}
+		e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, scoredProvider{scores: &scores}, nil))
+		name := "reread" + suffix()
+		v := e.publish(name, "public", benignFiles(u.Handle, name, "1.0.0"))
+		if v.Status != "published" {
+			t.Fatalf("setup: status %s", v.Status)
+		}
+		scores = map[scan.JudgeCategory]int{scan.CatUndeclaredCap: tc.score}
+		if err := e.pipe.RescanSweep(context.Background()); err != nil {
+			t.Fatalf("rescan sweep: %v", err)
+		}
+		if got := statusOf(t, e, v.ID); got != string(tc.want) {
+			t.Fatalf("score %d: status after the sweep = %s, want %s", tc.score, got, tc.want)
+		}
+	}
+}

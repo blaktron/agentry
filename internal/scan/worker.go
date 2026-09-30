@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -333,9 +334,10 @@ type rescanOutcome struct {
 }
 
 // rescanOne re-scans a single published version. A new high/critical finding
-// quarantines it, persists the run that found it, files a platform review item
-// so the quarantine has a way OUT, drafts an advisory and notifies the author
-// (§8.7).
+// (new: no person decided on it; high: at rescanSeverity, which weighs 0.2.2's
+// re-ratings at medium) quarantines it, persists the run that found it, files
+// a platform review item so the quarantine has a way OUT, drafts an advisory
+// and notifies the author (§8.7).
 func (p *Pipeline) rescanOne(ctx context.Context, versionID uuid.UUID) (rescanOutcome, error) {
 	q := p.st.Queries()
 	before, err := q.GetVersionByID(ctx, versionID)
@@ -398,8 +400,9 @@ func (p *Pipeline) rescanOne(ctx context.Context, versionID uuid.UUID) (rescanOu
 		if seen[reviewedKey{f.Scanner, f.FilePath, f.LineStart}] {
 			continue
 		}
-		if confidenceRank(f.Confidence) >= confidenceRank(ConfMedium) && severityRank(f.Severity) > severityRank(worst) {
-			worst = f.Severity
+		sev := rescanSeverity(f)
+		if confidenceRank(f.Confidence) >= confidenceRank(ConfMedium) && severityRank(sev) > severityRank(worst) {
+			worst = sev
 		}
 	}
 	if severityRank(worst) < severityRank(SevHigh) {
@@ -432,6 +435,43 @@ func (p *Pipeline) rescanOne(ctx context.Context, versionID uuid.UUID) (rescanOu
 	}
 	p.notifyAuthorQuarantined(ctx, before, agent, string(worst), reason)
 	return out, nil
+}
+
+// rescanSeverity is what a finding weighs when a rescan decides whether to
+// pull a published version. The findings ruleset 0.2.2 re-rated from medium
+// to high count at their old rating here: they hold a submission for a
+// person, but a new reading of one on a version already published does not
+// quarantine it (the operator's decision of 2026-09-30, agentry#771). AI
+// Review reads the same bytes differently from run to run, and on dev the
+// 0.2.2 sweep pulled seven published versions for a probable undeclared
+// capability no earlier run had read.
+func rescanSeverity(f Finding) Severity {
+	if f.Severity == SevHigh && reratedToHigh(f) {
+		return SevMedium
+	}
+	return f.Severity
+}
+
+// reratedToHigh reports a finding that is high only by ruleset 0.2.2's
+// re-rating (D16): S6's undeclared environment read, and AI Review's
+// injection and undeclared-capability axes at score 2, in a release's own
+// scan or a shipped pack's.
+func reratedToHigh(f Finding) bool {
+	if f.Scanner == scannerUndeclaredEnv {
+		return true
+	}
+	cat := JudgeCategory(f.Scanner[strings.LastIndex(f.Scanner, "/")+1:])
+	judged := strings.HasPrefix(f.Scanner, "S5/") || strings.HasPrefix(f.Scanner, KnowledgeStageID+"/S5/")
+	if !judged || !highFromProbable[cat] {
+		return false
+	}
+	switch s := f.Detail["score"].(type) {
+	case int:
+		return s < 3
+	case float64: // a finding read back from its stored JSON
+		return s < 3
+	}
+	return false
 }
 
 // reviewedKey matches a rescan's finding to one a person decided on: the
