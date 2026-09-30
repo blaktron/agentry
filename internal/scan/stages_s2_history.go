@@ -69,9 +69,13 @@ func s2History(ctx context.Context, in *Input) (findings []Finding, ran bool) {
 	return out, true
 }
 
+// scannerHistoryError is S2's finding when a tag's history could not be
+// scanned; the gate forces review on it.
+const scannerHistoryError = "S2/history-error"
+
 func historyError(err error) Finding {
 	return Finding{
-		Scanner: "S2/history-error", Severity: SevMedium, Confidence: ConfHigh,
+		Scanner: scannerHistoryError, Severity: SevMedium, Confidence: ConfHigh,
 		Title:    "Git history scan failed",
 		Detail:   map[string]any{"error": err.Error(), "reason": "an unscanned history cannot be cleared automatically"},
 		Taxonomy: []string{"LLM03"},

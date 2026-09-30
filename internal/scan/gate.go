@@ -125,15 +125,15 @@ func Evaluate(in GateInput) GateDecision {
 // lookup's failure, S7/osv-error, is not one of them: the operator decided
 // that a lookup with no answer is reported and publishes (D3).
 var couldNotScanScanners = map[string]bool{
-	"S1/unreadable-file":              true,
-	scannerTextTruncated:              true,
-	"S2/tool-error":                   true,
-	"S2/history-error":                true,
-	KnowledgeStageID + "/unread-text": true,
+	scannerUnreadableFile:                   true,
+	scannerTextTruncated:                    true,
+	scannerToolError:                        true,
+	scannerHistoryError:                     true,
+	KnowledgeStageID + "/" + packUnreadText: true,
 }
 
-// couldNotScan is the first open finding that says content went unread, or
-// nil. Confidence does not matter: unread content is a fact, not a guess.
+// couldNotScan is the first finding that says content went unread, or nil.
+// Confidence does not matter: unread content is a fact, not a guess.
 func couldNotScan(findings []Finding) *Finding {
 	for i := range findings {
 		if couldNotScanScanners[findings[i].Scanner] {

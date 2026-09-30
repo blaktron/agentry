@@ -381,7 +381,9 @@ func (o *Orchestrator) runStage(sc stageContext, st Stage, in *Input) (res Stage
 				path, ev = metrics.FailOpenOSVNotChecked, logevent.FailOpenOSVNotChecked
 			case "S7/osv-error":
 				path, ev = metrics.FailOpenOSVError, logevent.FailOpenOSVError
-			case "S2/history-not-scanned", "S2/history-error", "S2/history-truncated":
+			// S2/history-error is not one: it holds the version (the gate
+			// forces review on it, agentry#771).
+			case "S2/history-not-scanned", "S2/history-truncated":
 				path, ev = metrics.FailOpenHistoryNotScanned, logevent.FailOpenHistoryNotScanned
 			default:
 				continue

@@ -29,6 +29,10 @@ import (
 // KnowledgeStageID is the stage's id and its findings' scanner prefix.
 const KnowledgeStageID = "SK"
 
+// packUnreadText is a shipped pack's text the pack scan could not read; as
+// SK/unread-text the gate forces review on it.
+const packUnreadText = "unread-text"
+
 // knowledgeRecordKey is where SK's record sits in its stage row's detail.
 const knowledgeRecordKey = "knowledge"
 
@@ -96,7 +100,7 @@ func (s SKKnowledge) Run(sc stageContext, in *Input) StageResult {
 		for _, p := range report.Read.NotRead {
 			// S1 took it for text; the pack scan cannot read it as such.
 			hits = append(hits, packHit{part: partOf(p), finding: Finding{
-				Scanner: "unread-text", Severity: SevMedium, Confidence: ConfHigh,
+				Scanner: packUnreadText, Severity: SevMedium, Confidence: ConfHigh,
 				Title:    "A text file in a shipped knowledge pack is not UTF-8 and was not read",
 				FilePath: p,
 				Detail:   map[string]any{"reason": "content no stage read cannot be cleared automatically"},
