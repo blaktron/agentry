@@ -241,3 +241,32 @@ func TestRescanSweepDoesNotRequarantineAClearedVersion(t *testing.T) {
 		t.Fatalf("second sweep left %s, want published", got)
 	}
 }
+
+// TestRescanSweepLeavesAnOrgApprovedRerating pins the operator's decision of
+// 2026-09-30 (agentry#781): a public agent an organization's reviewer
+// approved with a medium finding stays published when a new ruleset rates
+// that finding high, although a high on a public agent would go to the
+// platform queue at submission. A re-rating never pulls an approved version.
+func TestRescanSweepLeavesAnOrgApprovedRerating(t *testing.T) {
+	e := newPipeEnv(t)
+	org := e.seedOrg("rerate" + suffix())
+	scores := map[scan.JudgeCategory]int{scan.CatUndeclaredCap: 2}
+	e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, scoredProvider{scores: &scores}, nil))
+	v := e.publishOrg(org, "rerated", "public", benignFiles(org.handle, "rerated", "1.0.0"))
+	if v.Status != "needs_review" {
+		t.Fatalf("setup: status %s, want needs_review", v.Status)
+	}
+	item, err := e.st.Queries().GetPendingReviewItemForVersion(context.Background(), v.ID)
+	if err != nil || item.Queue != "org" {
+		t.Fatalf("setup: review item %+v (%v), want the org queue", item, err)
+	}
+	approve(t, e, v.ID)
+
+	scores = map[scan.JudgeCategory]int{scan.CatUndeclaredCap: 3}
+	if err := e.pipe.RescanSweep(context.Background()); err != nil {
+		t.Fatalf("rescan sweep: %v", err)
+	}
+	if got := statusOf(t, e, v.ID); got != string(registry.StatusPublished) {
+		t.Fatalf("status after the sweep = %s, want published", got)
+	}
+}
