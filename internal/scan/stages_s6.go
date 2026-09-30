@@ -8,6 +8,10 @@ import (
 	"strings"
 )
 
+// scannerUndeclaredEnv is S6's finding for an environment read the manifest
+// does not declare; high since ruleset 0.2.2 (reratedToHigh).
+const scannerUndeclaredEnv = "S6/undeclared-env"
+
 // S6 — Support scripts (§8.3; agentry#239, DEV-094). An instruction package
 // may ship scripts its instructions tell the host to run. This stage reads
 // the shell, Python and JavaScript/TypeScript files in the package and
@@ -307,7 +311,7 @@ func (S6Scripts) Run(sc stageContext, in *Input) StageResult {
 		findings = append(findings, Finding{
 			// High, not medium: an undeclared capability reaches a person
 			// whatever the auto-publish threshold (D16, ruleset 0.2.2).
-			Scanner: "S6/undeclared-env", Severity: SevHigh, Confidence: ConfMedium,
+			Scanner: scannerUndeclaredEnv, Severity: SevHigh, Confidence: ConfMedium,
 			Title:    "Script reads an environment variable the manifest does not declare as a secret: " + n,
 			FilePath: hit.file, LineStart: hit.line, LineEnd: hit.line,
 			Detail:   map[string]any{"name": n, "declaredSecrets": sortedSet(decl.secrets)},
