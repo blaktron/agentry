@@ -9,6 +9,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/uuid"
+
+	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/registry"
 	"github.com/blaktron/agentry/internal/scan"
 )
@@ -121,5 +124,120 @@ func TestRescanSweepLeavesCleanVersionsAlone(t *testing.T) {
 	}
 	if after.Status != "published" {
 		t.Fatalf("clean version was disturbed by the sweep: %s", after.Status)
+	}
+}
+
+// scoredProvider is a judge whose scores the test sets between passes.
+type scoredProvider struct {
+	scores *map[scan.JudgeCategory]int
+}
+
+func (scoredProvider) Name() string              { return "scored" }
+func (scoredProvider) RequiresHumanReview() bool { return false }
+func (scoredProvider) ModelID() string           { return "" }
+func (scoredProvider) InputLimit() int           { return 0 }
+func (p scoredProvider) Judge(_ context.Context, _ scan.JudgeContent) (scan.JudgeVerdict, error) {
+	v := scan.JudgeVerdict{Scores: map[scan.JudgeCategory]int{}, Excerpts: map[scan.JudgeCategory]string{}, Model: "scored"}
+	for c, s := range *p.scores {
+		v.Scores[c] = s
+	}
+	return v, nil
+}
+
+// approve decides the version's pending review item as a person would.
+func approve(t *testing.T, e *pipeEnv, versionID uuid.UUID) {
+	t.Helper()
+	ctx := context.Background()
+	item, err := e.st.Queries().GetPendingReviewItemForVersion(ctx, versionID)
+	if err != nil {
+		t.Fatalf("no pending review item: %v", err)
+	}
+	reviewer := e.seedUser("rev" + suffix())
+	if _, err := e.pipe.DecideReview(ctx, scan.ReviewDecision{
+		ItemID: item.ID, VersionID: versionID, Target: registry.StatusPublished,
+		State: "approved", Rationale: "read the finding, fine to ship",
+		DecidedBy: reviewer, Audit: audit.Event{Actor: reviewer, ActorKind: audit.ActorUser},
+	}); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+}
+
+func statusOf(t *testing.T, e *pipeEnv, versionID uuid.UUID) string {
+	t.Helper()
+	v, err := e.st.Queries().GetVersionByID(context.Background(), versionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v.Status
+}
+
+// TestRescanSweepLeavesWhatAReviewerApproved pins agentry#781: the sweep
+// runs on every new ruleset, and a finding a person already decided on must
+// not quarantine the version again, whether it was high when they saw it or
+// a new ruleset re-rated it to high since. A finding the person never saw
+// still quarantines.
+func TestRescanSweepLeavesWhatAReviewerApproved(t *testing.T) {
+	cases := []struct {
+		name          string
+		before, after map[scan.JudgeCategory]int
+		want          registry.Status
+	}{
+		{"approved with a high finding", map[scan.JudgeCategory]int{scan.CatInjection: 3},
+			map[scan.JudgeCategory]int{scan.CatInjection: 3}, registry.StatusPublished},
+		{"approved with a medium a new ruleset rates high", map[scan.JudgeCategory]int{scan.CatDeception: 2},
+			map[scan.JudgeCategory]int{scan.CatDeception: 3}, registry.StatusPublished},
+		{"approved with one finding, rescanned with a new high", map[scan.JudgeCategory]int{scan.CatDeception: 2},
+			map[scan.JudgeCategory]int{scan.CatDeception: 2, scan.CatInjection: 3}, registry.StatusQuarantined},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newPipeEnv(t)
+			u, _ := e.st.Queries().GetUserByID(context.Background(), e.owner)
+			scores := tc.before
+			e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, scoredProvider{scores: &scores}, nil))
+			name := "reviewed" + suffix()
+			v := e.publish(name, "public", benignFiles(u.Handle, name, "1.0.0"))
+			if v.Status != "needs_review" {
+				t.Fatalf("setup: status %s, want needs_review", v.Status)
+			}
+			approve(t, e, v.ID)
+
+			scores = tc.after
+			if err := e.pipe.RescanSweep(context.Background()); err != nil {
+				t.Fatalf("rescan sweep: %v", err)
+			}
+			if got := statusOf(t, e, v.ID); got != string(tc.want) {
+				t.Fatalf("status after the sweep = %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRescanSweepDoesNotRequarantineAClearedVersion: a reviewer who clears
+// a quarantine has decided on its finding; the next ruleset's sweep leaves
+// the version published (agentry#781).
+func TestRescanSweepDoesNotRequarantineAClearedVersion(t *testing.T) {
+	e := newPipeEnv(t)
+	ctx := context.Background()
+	u, _ := e.st.Queries().GetUserByID(ctx, e.owner)
+	armed := false
+	e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, laterRulesetProvider{armed: &armed}, nil))
+	v := e.publish("cleared", "public", benignFiles(u.Handle, "cleared", "1.0.0"))
+	if v.Status != "published" {
+		t.Fatalf("setup: status %s", v.Status)
+	}
+	armed = true
+	if err := e.pipe.RescanSweep(ctx); err != nil {
+		t.Fatalf("first sweep: %v", err)
+	}
+	if got := statusOf(t, e, v.ID); got != string(registry.StatusQuarantined) {
+		t.Fatalf("first sweep left %s, want quarantined", got)
+	}
+	approve(t, e, v.ID)
+	if err := e.pipe.RescanSweep(ctx); err != nil {
+		t.Fatalf("second sweep: %v", err)
+	}
+	if got := statusOf(t, e, v.ID); got != string(registry.StatusPublished) {
+		t.Fatalf("second sweep left %s, want published", got)
 	}
 }

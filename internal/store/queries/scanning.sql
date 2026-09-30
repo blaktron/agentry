@@ -82,6 +82,19 @@ WHERE scan_run_id = $1 AND (scanner = $2 OR scanner LIKE $2 || '/%');
 -- name: ListFindings :many
 SELECT * FROM findings WHERE scan_run_id = $1 ORDER BY scanner, file_path, line_start;
 
+-- name: ListReviewedFindingKeys :many
+-- What a person has already decided on for a version: the scanner, file and
+-- line of every finding in a run started before the version's latest
+-- approved review (a rescan quarantines only on what is not here). None for
+-- a version no person approved.
+SELECT DISTINCT f.scanner, coalesce(f.file_path, '')::text AS file_path, coalesce(f.line_start, 0)::int AS line_start
+FROM findings f
+JOIN scan_runs r ON r.id = f.scan_run_id
+WHERE r.version_id = sqlc.arg(version_id)
+  AND r.id <> sqlc.arg(exclude_run_id)
+  AND r.started_at < (SELECT max(ri.decided_at) FROM review_items ri
+                      WHERE ri.version_id = sqlc.arg(version_id) AND ri.state = 'approved');
+
 -- name: ListOpenFindings :many
 SELECT * FROM findings WHERE scan_run_id = $1 AND verdict = 'open' ORDER BY scanner;
 
