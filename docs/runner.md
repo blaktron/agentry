@@ -92,7 +92,7 @@ One QuickAgent, one job, one container tree, then gone.
 | `--policy FILE` | operator policy override (tests, fleets) |
 | `--keep-run-dir` | keep the per-run scratch dir for debugging (secrets are still deleted) |
 | `--events FILE` | append the harness event stream to FILE as JSON lines **while the run is live** — the same redacted lines the receipt's `events.ndjson` gets, for a driver that meters a run as it goes |
-| `--session-protocol` | drive an interactive session from a program, with no terminal: JSON-line commands on stdin, its events on descriptor 3 ([below](#driving-a-session-from-a-program---session-protocol)) |
+| `--session-protocol` | drive an interactive session from a program, with no terminal: JSON-line commands on stdin, its events on descriptor 3 ([below](#driving-a-session-from-a-program)) |
 | `--session-inputs DIR` | with `--session-protocol`: the directory the driver stages files in; an add must name a regular file directly in it (without it, the session takes no files) |
 
 With `--output-format json` the run also narrates the harness's usage to
@@ -149,7 +149,7 @@ same session in its run panel, and a hosted session
 ([Hosted runs](hosted-runs.md#a-hosted-session)) runs it on a sandbox host
 through the session protocol below.
 
-#### Driving a session from a program (`--session-protocol`)
+#### Driving a session from a program
 
 Without a terminal, an interactive run is refused: the chat is its input.
 `--session-protocol` is the other way in, for a program that drives the
