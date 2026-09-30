@@ -1112,6 +1112,51 @@ func (q *Queries) ListApprovedReviewsAwaitingPublish(ctx context.Context, grace 
 	return items, nil
 }
 
+const listDecidedFindings = `-- name: ListDecidedFindings :many
+SELECT DISTINCT f.scanner, coalesce(f.file_path, '')::text AS file_path, coalesce(f.line_start, 0)::int AS line_start
+FROM findings f
+JOIN scan_runs r ON r.id = f.scan_run_id
+WHERE r.version_id = $1
+  AND r.id <> $2
+  AND r.status <> 'running'
+  AND r.finished_at < (SELECT max(ri.decided_at) FROM review_items ri
+                       WHERE ri.version_id = $1 AND ri.state = 'approved')
+`
+
+type ListDecidedFindingsParams struct {
+	VersionID    uuid.UUID `json:"version_id"`
+	ExcludeRunID uuid.UUID `json:"exclude_run_id"`
+}
+
+type ListDecidedFindingsRow struct {
+	Scanner   string `json:"scanner"`
+	FilePath  string `json:"file_path"`
+	LineStart int32  `json:"line_start"`
+}
+
+// The findings a person has decided on for a version, by scanner, file and
+// line: every finding of a run that finished before the version's latest
+// approved review. None for a version no person approved (agentry#781).
+func (q *Queries) ListDecidedFindings(ctx context.Context, arg ListDecidedFindingsParams) ([]ListDecidedFindingsRow, error) {
+	rows, err := q.db.Query(ctx, listDecidedFindings, arg.VersionID, arg.ExcludeRunID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDecidedFindingsRow
+	for rows.Next() {
+		var i ListDecidedFindingsRow
+		if err := rows.Scan(&i.Scanner, &i.FilePath, &i.LineStart); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFindings = `-- name: ListFindings :many
 SELECT id, scan_run_id, scanner, severity, confidence, title, file_path, line_start, line_end, excerpt, detail, verdict, verdict_by, verdict_reason, verdict_at, created_at FROM findings WHERE scan_run_id = $1 ORDER BY scanner, file_path, line_start
 `

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -333,9 +334,10 @@ type rescanOutcome struct {
 }
 
 // rescanOne re-scans a single published version. A new high/critical finding
-// quarantines it, persists the run that found it, files a platform review item
-// so the quarantine has a way OUT, drafts an advisory and notifies the author
-// (§8.7).
+// (new: no person decided on it; high: at rescanSeverity, which weighs 0.2.2's
+// re-ratings at medium) quarantines it, persists the run that found it, files
+// a platform review item so the quarantine has a way OUT, drafts an advisory
+// and notifies the author (§8.7).
 func (p *Pipeline) rescanOne(ctx context.Context, versionID uuid.UUID) (rescanOutcome, error) {
 	q := p.st.Queries()
 	before, err := q.GetVersionByID(ctx, versionID)
@@ -372,10 +374,35 @@ func (p *Pipeline) rescanOne(ctx context.Context, versionID uuid.UUID) (rescanOu
 	}
 	out := rescanOutcome{cachedStages: len(result.Skipped)}
 
+	// Only a finding no person has decided on quarantines. A version a
+	// reviewer approved with the finding on its report, or a quarantine a
+	// reviewer cleared, is not pulled again by every new ruleset, and a
+	// re-rating does not pull what a person already approved at the lower
+	// rating (agentry#781; the operator's decision of 2026-09-30, whichever
+	// queue approved it). A finding is matched by scanner, file and line in
+	// the same archive, so a finding with no file (S5's, per category) matches
+	// any earlier one of its scanner: the bytes are the same, only the
+	// reading is new. If the lookup fails, nothing counts as decided and the
+	// rescan quarantines as before (fail toward review).
+	seen := map[reviewedKey]bool{}
+	decided, err := q.ListDecidedFindings(ctx, storegen.ListDecidedFindingsParams{
+		VersionID: versionID, ExcludeRunID: runID,
+	})
+	if err != nil {
+		p.log.ErrorContext(ctx, "rescan: decided findings unreadable; judging every finding as new",
+			"version", versionID, "err", err)
+	}
+	for _, r := range decided {
+		seen[reviewedKey{r.Scanner, r.FilePath, int(r.LineStart)}] = true
+	}
 	worst := SevInfo
 	for _, f := range result.Findings {
-		if confidenceRank(f.Confidence) >= confidenceRank(ConfMedium) && severityRank(f.Severity) > severityRank(worst) {
-			worst = f.Severity
+		if seen[reviewedKey{f.Scanner, f.FilePath, f.LineStart}] {
+			continue
+		}
+		sev := rescanSeverity(f)
+		if confidenceRank(f.Confidence) >= confidenceRank(ConfMedium) && severityRank(sev) > severityRank(worst) {
+			worst = sev
 		}
 	}
 	if severityRank(worst) < severityRank(SevHigh) {
@@ -408,6 +435,50 @@ func (p *Pipeline) rescanOne(ctx context.Context, versionID uuid.UUID) (rescanOu
 	}
 	p.notifyAuthorQuarantined(ctx, before, agent, string(worst), reason)
 	return out, nil
+}
+
+// rescanSeverity is what a finding weighs when a rescan decides whether to
+// pull a published version. The findings ruleset 0.2.2 re-rated from medium
+// to high count at their old rating here: they hold a submission for a
+// person, but a new reading of one on a version already published does not
+// quarantine it (the operator's decision of 2026-09-30, agentry#771). AI
+// Review reads the same bytes differently from run to run, and on dev the
+// 0.2.2 sweep pulled seven published versions for a probable undeclared
+// capability no earlier run had read.
+func rescanSeverity(f Finding) Severity {
+	if f.Severity == SevHigh && reratedToHigh(f) {
+		return SevMedium
+	}
+	return f.Severity
+}
+
+// reratedToHigh reports a finding that is high only by ruleset 0.2.2's
+// re-rating (D16): S6's undeclared environment read, and AI Review's
+// injection and undeclared-capability axes at score 2, in a release's own
+// scan or a shipped pack's.
+func reratedToHigh(f Finding) bool {
+	if f.Scanner == scannerUndeclaredEnv {
+		return true
+	}
+	cat := JudgeCategory(f.Scanner[strings.LastIndex(f.Scanner, "/")+1:])
+	judged := strings.HasPrefix(f.Scanner, "S5/") || strings.HasPrefix(f.Scanner, KnowledgeStageID+"/S5/")
+	if !judged || !highFromProbable[cat] {
+		return false
+	}
+	switch s := f.Detail["score"].(type) {
+	case int:
+		return s < 3
+	case float64: // a finding read back from its stored JSON
+		return s < 3
+	}
+	return false
+}
+
+// reviewedKey matches a rescan's finding to one a person decided on: the
+// scanner, the file and the line in the same archive.
+type reviewedKey struct {
+	scanner, file string
+	line          int
 }
 
 // notifyAuthorQuarantined tells the submitter their published version was
