@@ -374,17 +374,23 @@ func (p *Pipeline) rescanOne(ctx context.Context, versionID uuid.UUID) (rescanOu
 
 	// Only a finding no person has decided on quarantines. A version a
 	// reviewer approved with the finding on its report, or a quarantine a
-	// reviewer cleared, is not pulled again by every new ruleset: the sweep
-	// runs on each one, and a re-rating would otherwise turn every approved
-	// medium into a quarantine (agentry#781).
-	reviewed, err := q.ListReviewedFindingKeys(ctx, storegen.ListReviewedFindingKeysParams{
+	// reviewer cleared, is not pulled again by every new ruleset, and a
+	// re-rating does not pull what a person already approved at the lower
+	// rating (agentry#781; the operator's decision of 2026-09-30, whichever
+	// queue approved it). A finding is matched by scanner, file and line in
+	// the same archive, so a finding with no file (S5's, per category) matches
+	// any earlier one of its scanner: the bytes are the same, only the
+	// reading is new. If the lookup fails, nothing counts as decided and the
+	// rescan quarantines as before (fail toward review).
+	seen := map[reviewedKey]bool{}
+	decided, err := q.ListDecidedFindings(ctx, storegen.ListDecidedFindingsParams{
 		VersionID: versionID, ExcludeRunID: runID,
 	})
 	if err != nil {
-		return out, fmt.Errorf("scan: rescan reviewed findings: %w", err)
+		p.log.ErrorContext(ctx, "rescan: decided findings unreadable; judging every finding as new",
+			"version", versionID, "err", err)
 	}
-	seen := make(map[reviewedKey]bool, len(reviewed))
-	for _, r := range reviewed {
+	for _, r := range decided {
 		seen[reviewedKey{r.Scanner, r.FilePath, int(r.LineStart)}] = true
 	}
 	worst := SevInfo
@@ -428,8 +434,8 @@ func (p *Pipeline) rescanOne(ctx context.Context, versionID uuid.UUID) (rescanOu
 	return out, nil
 }
 
-// reviewedKey is what makes a rescan's finding the same one a person already
-// saw: the scanner, the file and the line in the same archive.
+// reviewedKey matches a rescan's finding to one a person decided on: the
+// scanner, the file and the line in the same archive.
 type reviewedKey struct {
 	scanner, file string
 	line          int
