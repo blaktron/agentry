@@ -1,7 +1,7 @@
 # Agentry S4 injection-signature rule bundle (PLAN §8.3, shipped as
 # ruleset_releases). This manifest gives the bundle its semantic version,
 # which is recorded on every scan_run and pinned in the CLI release (D-12).
-version: "0.2.1"
+version: "0.2.2"
 notes: >
   v1 signature set: the six S4 injection families (instruction-override,
   exfiltration, tool-coercion, credential-harvest, persistence,
@@ -9,7 +9,12 @@ notes: >
   shape — a natural-language order to destroy data, which none of the
   original six matches. Every rule ships with match and non-match fixtures,
   and benign lookalikes (security docs that merely discuss an attack) must
-  not match.
+  not match. 0.2.2 changes no signature: it records three re-ratings by the
+  pipeline's own stages, from medium to high, so that an undeclared
+  capability or an attempted injection reaches a person whatever the
+  auto-publish threshold — S6/undeclared-env, and AI Review's
+  C1_injection and C3_undeclared_capability at score 2 — and that content
+  a stage could not read forces review (agentry#771).
 
 # Bundle-level suppressions, applied to every rule in addition to its own
 # (§17.3 precision requirement). These capture DESCRIPTIVE FRAMING: prose that
