@@ -250,7 +250,7 @@ func TestRescanSweepDoesNotRequarantineAClearedVersion(t *testing.T) {
 func TestRescanSweepLeavesAnOrgApprovedRerating(t *testing.T) {
 	e := newPipeEnv(t)
 	org := e.seedOrg("rerate" + suffix())
-	scores := map[scan.JudgeCategory]int{scan.CatUndeclaredCap: 2}
+	scores := map[scan.JudgeCategory]int{scan.CatDeception: 2}
 	e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, scoredProvider{scores: &scores}, nil))
 	v := e.publishOrg(org, "rerated", "public", benignFiles(org.handle, "rerated", "1.0.0"))
 	if v.Status != "needs_review" {
@@ -262,7 +262,7 @@ func TestRescanSweepLeavesAnOrgApprovedRerating(t *testing.T) {
 	}
 	approve(t, e, v.ID)
 
-	scores = map[scan.JudgeCategory]int{scan.CatUndeclaredCap: 3}
+	scores = map[scan.JudgeCategory]int{scan.CatDeception: 3}
 	if err := e.pipe.RescanSweep(context.Background()); err != nil {
 		t.Fatalf("rescan sweep: %v", err)
 	}

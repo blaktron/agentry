@@ -148,12 +148,16 @@ func (l *limitedWriter) Write(p []byte) (int, error) {
 	return l.w.Write(p)
 }
 
+// scannerToolError is S2's finding when gitleaks did not complete; the gate
+// forces review on it.
+const scannerToolError = "S2/tool-error"
+
 // gitleaksErrorFinding records that the one external tool left, gitleaks
 // (S2), did not complete; the native detectors still ran.
 func gitleaksErrorFinding(err error) Finding {
-	const stage, tool = "S2", "gitleaks"
+	const tool = "gitleaks"
 	return Finding{
-		Scanner: stage + "/tool-error", Severity: SevMedium, Confidence: ConfHigh,
+		Scanner: scannerToolError, Severity: SevMedium, Confidence: ConfHigh,
 		Title: "Secret scan incomplete",
 		Detail: map[string]any{"tool": tool, "error": err.Error(),
 			"note": "The built-in secret rules still ran."},
