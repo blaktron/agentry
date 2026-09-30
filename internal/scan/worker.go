@@ -461,7 +461,8 @@ func reratedToHigh(f Finding) bool {
 		return true
 	}
 	cat := JudgeCategory(f.Scanner[strings.LastIndex(f.Scanner, "/")+1:])
-	if !highFromProbable[cat] || !(strings.HasPrefix(f.Scanner, "S5/") || strings.HasPrefix(f.Scanner, KnowledgeStageID+"/S5/")) {
+	judged := strings.HasPrefix(f.Scanner, "S5/") || strings.HasPrefix(f.Scanner, KnowledgeStageID+"/S5/")
+	if !judged || !highFromProbable[cat] {
 		return false
 	}
 	switch s := f.Detail["score"].(type) {
