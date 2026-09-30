@@ -18,6 +18,8 @@ func TestRescanSeverityKeepsTheOldBarForTheReratedFindings(t *testing.T) {
 		{"a shipped pack's C3 at 2", Finding{Scanner: "SK/S5/C3_undeclared_capability", Severity: SevHigh, Detail: map[string]any{"score": 2}}, SevMedium},
 		{"C3 at 3", Finding{Scanner: "S5/C3_undeclared_capability", Severity: SevHigh, Detail: map[string]any{"score": 3}}, SevHigh},
 		{"C3 with no score", Finding{Scanner: "S5/C3_undeclared_capability", Severity: SevHigh}, SevHigh},
+		{"a manipulated judge", Finding{Scanner: "S5/manipulated-judge", Severity: SevHigh}, SevHigh},
+		{"a pack's C1 at 3", Finding{Scanner: "SK/S5/C1_injection", Severity: SevHigh, Detail: map[string]any{"score": 3}}, SevHigh},
 		{"C6 at 3", Finding{Scanner: "S5/C6_destructive_actions", Severity: SevHigh, Detail: map[string]any{"score": 3}}, SevHigh},
 		{"another S6 high", Finding{Scanner: "S6/undeclared-exec", Severity: SevHigh}, SevHigh},
 		{"a critical", Finding{Scanner: "S1/binary-executable", Severity: SevCritical}, SevCritical},

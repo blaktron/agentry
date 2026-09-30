@@ -334,9 +334,10 @@ type rescanOutcome struct {
 }
 
 // rescanOne re-scans a single published version. A new high/critical finding
-// quarantines it, persists the run that found it, files a platform review item
-// so the quarantine has a way OUT, drafts an advisory and notifies the author
-// (§8.7).
+// (new: no person decided on it; high: at rescanSeverity, which weighs 0.2.2's
+// re-ratings at medium) quarantines it, persists the run that found it, files
+// a platform review item so the quarantine has a way OUT, drafts an advisory
+// and notifies the author (§8.7).
 func (p *Pipeline) rescanOne(ctx context.Context, versionID uuid.UUID) (rescanOutcome, error) {
 	q := p.st.Queries()
 	before, err := q.GetVersionByID(ctx, versionID)
@@ -460,7 +461,7 @@ func reratedToHigh(f Finding) bool {
 		return true
 	}
 	cat := JudgeCategory(f.Scanner[strings.LastIndex(f.Scanner, "/")+1:])
-	if !highFromProbable[cat] || !strings.Contains(f.Scanner, "S5/") {
+	if !highFromProbable[cat] || !(strings.HasPrefix(f.Scanner, "S5/") || strings.HasPrefix(f.Scanner, KnowledgeStageID+"/S5/")) {
 		return false
 	}
 	switch s := f.Detail["score"].(type) {
