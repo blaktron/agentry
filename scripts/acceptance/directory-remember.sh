@@ -116,24 +116,28 @@ docker start "$DRIVER" >/dev/null
 akshell() { docker exec -i "$@" "$AK" ak shell 2>&1 | grep -vE '^(###|[0-9]+ objects imported|\{")'; }
 
 # Ready means the account-flows blueprint has applied, including the binding
-# it restates in mode all (the default sign-in flow has to exist first).
+# it restates in mode all (the default sign-in flow has to exist first), and
+# the two default provider flows the client below is made with exist too:
+# authentik's worker applies its own default blueprints independently of
+# ours and in no set order, so ours can land first (agentry#763).
 echo "waiting for the directory to boot and apply the blueprints (a few minutes)"
 ready=""
 deadline=$(( $(date +%s) + 600 ))
 while [ "$(date +%s)" -lt "$deadline" ]; do
   ready=$(akshell <<'PY' || true
-from authentik.flows.models import FlowStageBinding
+from authentik.flows.models import Flow, FlowStageBinding
 from authentik.providers.oauth2.models import ScopeMapping
 ok = ScopeMapping.objects.filter(name="agentry-remember-device").exists()
 b = FlowStageBinding.objects.filter(target__slug="default-authentication-flow", order=30).first()
-print("READY" if ok and b is not None and b.policy_engine_mode == "all" else "WAIT")
+flows = Flow.objects.filter(slug__in=["default-provider-authorization-implicit-consent", "default-provider-invalidation-flow"]).count() == 2
+print("READY" if ok and flows and b is not None and b.policy_engine_mode == "all" else "WAIT")
 PY
 )
   case "$ready" in *READY*) break ;; esac
   sleep 10
 done
-case "$ready" in *READY*) echo "ok   the blueprint applied: the agentry scope mapping exists and the MFA binding is in mode all" ;;
-  *) echo "FAIL: the account-flows blueprint did not apply within ten minutes"; docker logs --tail 40 "$P-ak-worker" 2>&1 | tail -20; exit 1 ;; esac
+case "$ready" in *READY*) echo "ok   the blueprint applied: the agentry scope mapping exists, the MFA binding is in mode all, and the default provider flows exist" ;;
+  *) echo "FAIL: the account-flows blueprint, or authentik's default provider flows, did not apply within ten minutes"; docker logs --tail 40 "$P-ak-worker" 2>&1 | tail -20; exit 1 ;; esac
 
 setup=$(akshell -e CLIENT_SECRET="$CLIENT_SECRET" -e USER_PASSWORD="$USER_PASSWORD" <<'PY' || true
 import os
