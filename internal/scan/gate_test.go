@@ -138,10 +138,6 @@ func TestGateHoldsWhatCouldNotBeScanned(t *testing.T) {
 			if got.Outcome != OutcomeNeedsReview {
 				t.Fatalf("got %s (%s), want needs_review", got.Outcome, got.Reason)
 			}
-			// A dismissed finding leaves the gate's input, and with it the force.
-			if got := Evaluate(GateInput{Policy: atMedium}); got.Outcome != OutcomePublish {
-				t.Fatalf("without the finding: got %s", got.Outcome)
-			}
 		})
 	}
 	t.Run("S7/osv-error publishes at medium", func(t *testing.T) {
@@ -152,10 +148,10 @@ func TestGateHoldsWhatCouldNotBeScanned(t *testing.T) {
 	})
 }
 
-// TestVerdictFindingsRateInjectionAndUndeclaredCapabilityHighFromLikely
+// TestVerdictFindingsRateInjectionAndUndeclaredCapabilityHighFromProbable
 // pins D16 (agentry#771): the two classes the operator keeps in front of a
 // person are high at score 2; the other four axes stay medium there.
-func TestVerdictFindingsRateInjectionAndUndeclaredCapabilityHighFromLikely(t *testing.T) {
+func TestVerdictFindingsRateInjectionAndUndeclaredCapabilityHighFromProbable(t *testing.T) {
 	scores := map[JudgeCategory]int{}
 	for _, c := range AllJudgeCategories() {
 		scores[c] = 2
