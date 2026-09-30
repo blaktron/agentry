@@ -46,8 +46,8 @@ review, never through.** Any stage error becomes an `S0/pipeline-error`
 finding that forces a human look, and so does a finding that says content
 went unread: a file that could not be read, text past the 1 MiB scan cap,
 a secrets tool or a git history scan that failed, or a shipped knowledge
-pack's text that was not read. "No path to `published` skips the gate" is
-a property test, not a promise.
+pack's text that was not read. And "no path to `published` skips the gate"
+is a property test, not a promise.
 
 ## What a signature proves
 
