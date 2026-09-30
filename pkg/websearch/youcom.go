@@ -28,7 +28,6 @@ const (
 	YouComName           = "youcom"
 	YouComDefaultBaseURL = "https://ydc-index.io"
 	youComPath           = "/v1/search"
-	youComMaxResponse    = 2 << 20
 )
 
 // YouCom is the You.com Web Search API client. It is safe for concurrent
@@ -40,7 +39,7 @@ type YouComConfig = ClientConfig
 
 // NewYouCom builds the client, refusing a missing key.
 func NewYouCom(cfg YouComConfig) (*YouCom, error) {
-	c, err := newClient(YouComName, cfg, YouComDefaultBaseURL, youComPath, youComMaxResponse)
+	c, err := newClient(YouComName, cfg, YouComDefaultBaseURL, youComPath)
 	if err != nil {
 		return nil, err
 	}

@@ -140,7 +140,15 @@ func TestNewNamesTheProviders(t *testing.T) {
 	if p, err := New("brave", "", "k"); err != nil || p.Name() != BraveName {
 		t.Fatalf("brave: %v %v", p, err)
 	}
-	for _, unknown := range []string{"fake", "google", "Brave"} {
+	for name, want := range map[string]string{"tavily": TavilyName, "exa": ExaName, "perplexity": PerplexityName} {
+		if _, err := New(name, "", ""); err != ErrNoKey {
+			t.Fatalf("%s, no key: %v", name, err)
+		}
+		if p, err := New(name, "", "k"); err != nil || p.Name() != want {
+			t.Fatalf("%s: %v %v", name, p, err)
+		}
+	}
+	for _, unknown := range []string{"fake", "google", "Brave", "kagi", "Tavily"} {
 		if _, err := New(unknown, "", "k"); err == nil {
 			t.Fatalf("%q must be refused: no configuration names the fake or an unbuilt provider", unknown)
 		}
@@ -181,12 +189,12 @@ func TestOriginAndTheProviderList(t *testing.T) {
 	if Origin("not a url") != "" {
 		t.Fatal("no host, no origin")
 	}
-	for _, ok := range []string{"", "none", "youcom", " youcom ", "brave"} {
+	for _, ok := range []string{"", "none", "youcom", " youcom ", "brave", "tavily", "exa", "perplexity"} {
 		if !Known(ok) {
 			t.Fatalf("%q must be known", ok)
 		}
 	}
-	for _, bad := range []string{"fake", "Brave", "YouCom"} {
+	for _, bad := range []string{"fake", "Brave", "YouCom", "Exa", "kagi"} {
 		if Known(bad) {
 			t.Fatalf("%q must not be known", bad)
 		}

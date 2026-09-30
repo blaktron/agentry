@@ -200,16 +200,17 @@ The search needs a provider:
 
 | Variable | Meaning |
 |---|---|
-| `AGENTRY_WEB_SEARCH_PROVIDER` | `none` (the default: `503 web-search-unavailable`), `youcom` (You.com's Web Search API) or `brave` (Brave's LLM Context API: page chunks extracted for a model, read from its `grounding.generic` results; a query past Brave's 75 words or 600 bytes is searched on its opening words) |
+| `AGENTRY_WEB_SEARCH_PROVIDER` | `none` (the default: `503 web-search-unavailable`), `youcom` (You.com's Web Search API), `brave` (Brave's LLM Context API: page chunks extracted for a model, read from its `grounding.generic` results; a query past Brave's 75 words or 600 bytes is searched on its opening words), `tavily` (Tavily's Search API at its basic depth), `exa` (Exa's search, each result's highlights as its snippet) or `perplexity` (Perplexity's Search API, not its chat completions). Tavily's, Exa's and Perplexity's terms keep a right to use queries, which the research behind the registry's own choice ruled out; they are there for a person's own key (agentry#783) |
 | `AGENTRY_WEB_SEARCH_API_KEY` | the provider's key; required with a provider, never logged |
 | `AGENTRY_WEB_SEARCH_BASE_URL` | the provider's API root, for a test double; empty is the provider's own |
 
 A provider named without its key, or a name the registry does not know,
 refuses startup. The provider's host (`api.search.brave.com:443` for Brave,
-`ydc-index.io:443` for You.com) must be reachable from the registry's API
+`ydc-index.io:443` for You.com, `api.tavily.com:443`, `api.exa.ai:443` or
+`api.perplexity.ai:443`) must be reachable from the registry's API
 role, and so must the judge's (`api.typesafe.ai:443`, or its region's host
 when `AGENTRY_JUDGE_REGION` is set), since every result is
-scanned before it is returned; no sandbox host needs either. Neither client
+scanned before it is returned; no sandbox host needs either. No client
 follows a redirect, since each sends its key in a header that Go would carry
 to another host.
 

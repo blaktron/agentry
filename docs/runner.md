@@ -281,8 +281,9 @@ done, and writes a draft. It never submits anything.
   public addresses only, checked at every connection and redirect hop, sends
   no cookie or credential, and returns at most 32 KiB of a page's text.
   `web_search` needs a search provider of your own in the policy's
-  `webSearch` block (`brave` with `$BRAVE_API_KEY`, or `youcom` with
-  `$YDC_API_KEY`, or the keychain); without one the Drafter reads the
+  `webSearch` block (`brave` with `$BRAVE_API_KEY`, `youcom` with
+  `$YDC_API_KEY`, another provider the CLI's generated policy names, or the
+  keychain); without one the Drafter reads the
   registry and the pages it already knows. Under a sandboxed runtime the
   Drafter does not run without
   [`docker.resolvers`](#the-hosts-name-servers-dockerresolvers).
