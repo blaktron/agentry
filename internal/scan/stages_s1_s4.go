@@ -20,8 +20,12 @@ import (
 // text. It populates Input.Files for the downstream stages.
 type S1Inventory struct{}
 
-// scannerTextTruncated is S1's finding on a text file past textScanCap.
-const scannerTextTruncated = "S1/text-scan-truncated"
+// S1's findings for content it could not read: a file past textScanCap,
+// and a file the walk could not open. The gate forces review on both.
+const (
+	scannerTextTruncated  = "S1/text-scan-truncated"
+	scannerUnreadableFile = "S1/unreadable-file"
+)
 
 func (S1Inventory) ID() string { return "S1" }
 
@@ -51,7 +55,7 @@ func (S1Inventory) Run(sc stageContext, in *Input) StageResult {
 			// that will still ship — so it becomes a finding and the version
 			// routes to a human instead (§7 fail toward review).
 			findings = append(findings, Finding{
-				Scanner: "S1/unreadable-file", Severity: SevMedium, Confidence: ConfHigh,
+				Scanner: scannerUnreadableFile, Severity: SevMedium, Confidence: ConfHigh,
 				Title: "File in package could not be read for scanning", FilePath: rel,
 				Detail: map[string]any{
 					"error":  readErr.Error(),

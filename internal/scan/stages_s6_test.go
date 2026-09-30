@@ -42,8 +42,10 @@ func TestS6UndeclaredEverything(t *testing.T) {
 	if f := got["S6/remote-exec"]; f.Severity != SevLow {
 		t.Errorf("a commented curl|sh should be low, got %s", f.Severity)
 	}
-	if f := got["S6/undeclared-env"]; f.Detail["name"] != "API_TOKEN" {
-		t.Errorf("undeclared-env = %+v", f.Detail)
+	// High since ruleset 0.2.2: an undeclared capability reaches a person
+	// whatever the threshold (D16, agentry#771).
+	if f := got["S6/undeclared-env"]; f.Detail["name"] != "API_TOKEN" || f.Severity != SevHigh {
+		t.Errorf("undeclared-env = %s %+v, want high", f.Severity, f.Detail)
 	}
 	if f := got["S6/script-without-exec"]; f.Severity != SevHigh {
 		t.Errorf("script-without-exec = %s, want high", f.Severity)

@@ -109,3 +109,28 @@ func TestS9BaselineTruncatesWithoutFindings(t *testing.T) {
 		t.Fatalf("baseline inventory unexpected: %d entries", len(inv))
 	}
 }
+
+// TestOversizedTextFileIsHeldAtThresholdMedium runs the whole orchestrator
+// over a real oversized file with the threshold at medium: the finding S1
+// emits is the one the gate forces review on, so the two cannot drift
+// apart by a rename (agentry#771).
+func TestOversizedTextFileIsHeldAtThresholdMedium(t *testing.T) {
+	dir := t.TempDir()
+	big := strings.Repeat("The quick brown fox jumps over the lazy dog.\n", (textScanCap/45)+10)
+	for name, content := range map[string]string{"SKILL.md": big, "README.md": "# fox\nA long story.\n"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pol := DefaultBaseline()
+	pol.MaxAutoPublishSeverity = "medium"
+	res := NewOrchestrator(nil, StaticProvider{}, nil).Run(context.Background(), RunParams{
+		Input: Input{Dir: dir, ManifestJSON: []byte(`{"capabilities":{}}`), AccountAgeDays: -1}, Policy: pol,
+	})
+	if res.Decision.Outcome != OutcomeNeedsReview {
+		t.Fatalf("outcome %s (%s), want needs_review; findings %+v", res.Decision.Outcome, res.Decision.Reason, res.Findings)
+	}
+	if !strings.Contains(res.Decision.Reason, "could not be scanned") {
+		t.Fatalf("reason %q does not name the unscanned content", res.Decision.Reason)
+	}
+}
