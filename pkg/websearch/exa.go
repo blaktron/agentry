@@ -15,7 +15,8 @@ import (
 // a person who names Exa chooses those terms for their own searches.
 //
 // The call is POST /search with the key in x-api-key. It asks for Exa's
-// default search type and each result's highlights, the passages most
+// default search type, auto (not instant, cheaper and shallower: a draft is
+// research), and each result's highlights, the passages most
 // relevant to the query, cut by Exa to the snippet's own bound. Never a
 // summary (billed per page), a deep search, full text or subpages, and
 // never more than ten results, past which Exa bills extra. Only

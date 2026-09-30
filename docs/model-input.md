@@ -200,7 +200,7 @@ The search needs a provider:
 
 | Variable | Meaning |
 |---|---|
-| `AGENTRY_WEB_SEARCH_PROVIDER` | `none` (the default: `503 web-search-unavailable`), `youcom` (You.com's Web Search API), `brave` (Brave's LLM Context API: page chunks extracted for a model, read from its `grounding.generic` results; a query past Brave's 75 words or 600 bytes is searched on its opening words), `tavily` (Tavily's Search API at its basic depth), `exa` (Exa's search, each result's highlights as its snippet) or `perplexity` (Perplexity's Search API, not its chat completions). Tavily's, Exa's and Perplexity's terms keep a right to use queries, which the research behind the registry's own choice ruled out; they are there for a person's own key (agentry#783) |
+| `AGENTRY_WEB_SEARCH_PROVIDER` | `none` (the default: `503 web-search-unavailable`), `youcom` (You.com's Web Search API), `brave` (Brave's LLM Context API: page chunks extracted for a model, read from its `grounding.generic` results; a query past Brave's 75 words or 600 bytes is searched on its opening words), `tavily` (Tavily's Search API at its basic depth), `exa` (Exa's search, each result's highlights as its snippet) or `perplexity` (Perplexity's Search API, not its chat completions). These three are there for a person's own key (agentry#783): Tavily's and Exa's terms keep a right to use queries, and Perplexity's published no-training statement covers its chat completions, not this endpoint, so none meets the terms the registry's own choice was held to (DEV-185) |
 | `AGENTRY_WEB_SEARCH_API_KEY` | the provider's key; required with a provider, never logged |
 | `AGENTRY_WEB_SEARCH_BASE_URL` | the provider's API root, for a test double; empty is the provider's own |
 
