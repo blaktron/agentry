@@ -588,7 +588,8 @@ func draftCheckBody(res draftcheck.Result) DraftCheck {
 			C5Obfuscation: sc[judge.RubricIDObfuscation], C6DestructiveActions: sc[judge.RubricIDDestructive],
 		}
 		for _, f := range res.Rubric.Findings {
-			rb.Findings = append(rb.Findings, DraftRubricFinding{Id: DraftRubricFindingId(f.ID), Score: f.Score, Path: f.Path})
+			rb.Findings = append(rb.Findings, DraftRubricFinding{Id: DraftRubricFindingId(f.ID), Score: f.Score, Path: f.Path,
+				Severity: DraftRubricFindingSeverity(f.Severity)})
 		}
 	}
 	ds := DraftSetCheck{Verdict: DraftCheckVerdict(res.Draft.Verdict), Score: res.Draft.Score, QuestionSet: res.Draft.QuestionSet,

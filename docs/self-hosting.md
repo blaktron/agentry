@@ -340,8 +340,10 @@ scan:
 
 The scanning role needs egress to that database (one host); a worker that
 cannot reach it leaves an `S7/osv-error` finding naming every declared
-server version the registry holds no answer for, which routes the version to review
-rather than through, on every submission until a lookup succeeds. A server
+server version the registry holds no answer for, on every submission until
+a lookup succeeds. The finding is medium, so at the baseline the version
+publishes with it on its report (an organization at threshold `low` holds
+it), and the daily sweep looks the server up again. A server
 version with an earlier answer is judged on that answer, however old. The
 answers are kept per package version in
 the `mcp_server_scans` table, so a server version is looked up live the
@@ -1619,9 +1621,13 @@ when one is in front) once so the mount exists. Versions come from
 ## Choosing your publication policy
 
 The platform baseline lives in the `policies` table (`org_id IS NULL`) and is
-readable at `/api/v1/platform/policy`. Defaults: findings up to `low`
-auto-publish, `medium`/`high` go to review, `critical` is rejected, wildcard
-network egress goes to review.
+readable at `/api/v1/platform/policy`. With no row, the defaults are the
+ruleset's: findings up to `medium` auto-publish with the findings shown,
+`high` goes to review, `critical` is rejected, wildcard network egress goes
+to review, and content a stage could not read goes to review whatever the
+threshold. The threshold is released with the rule bundle's version (`medium`
+since ruleset 0.3.0, `low` before it), so upgrading the server can move it;
+a stored row keeps whatever it says.
 
 A stricter starting point for an internal registry, where everything gets a
 human look:

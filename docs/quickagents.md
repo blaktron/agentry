@@ -318,7 +318,7 @@ package, and reports as high a script under `exec: none`, a network call
 to a host outside `network.egress`, a file write under
 `filesystem.write: none`, an undeclared subprocess or `eval`, and any
 `curl … | sh` remote execution; an environment variable read outside
-`secrets` is a medium finding. It matches text without running anything,
+`secrets` is high as well. It matches text without running anything,
 and a host only counts inside a network call, so a documentation URL in a
 comment is not a finding (see [trust](trust.md), stage S6).
 
@@ -408,8 +408,10 @@ file, and the secret scanner also reads the `env` values themselves, out
 of the manifest the registry stores, whatever the YAML's spelling: a key
 named like a credential (`…_TOKEN`, `…_SECRET`, `…_PASSWORD`,
 `…_API_KEY`) carrying a value of eight or more characters, or a
-token-shaped value under any key, is a medium finding, which the default
-gate sends to review. Both are a backstop, not a place to keep one. In
+token-shaped value under any key, is a medium finding: the default gate
+publishes the version with it on the report, and an organization at
+threshold `low` sends it to review. Both are a backstop, not a place to
+keep one. In
 the example above,
 `GITHUB_PERMISSION` comes from the manifest and `GITHUB_TOKEN` from the
 operator's profile. The runner compiles `env` into the server's gateway

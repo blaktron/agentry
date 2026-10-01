@@ -38,7 +38,9 @@ docs/api-conventions.md :: means "no known advisories at `lastCheckedAt`", never
 README.md :: fails **toward** review — never through.
 docs/trust.md :: A scanner that errors or times out fails toward review, never through.
 docs/self-hosting.md :: fail toward review, never toward skip
-docs/self-hosting.md :: routes the version to review rather than through
+# A failed advisory lookup no longer holds the version (D3 of plan
+# scan-and-run-tweaks, ruleset 0.3.0, agentry#773); unread content still does.
+docs/self-hosting.md :: content a stage could not read goes to review whatever the threshold
 
 # 3. Nothing skips the gate, and the claim is a test rather than a promise.
 docs/trust.md :: There is no flag, plan, or role that lets a public version skip the pipeline
