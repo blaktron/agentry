@@ -198,8 +198,12 @@ to one QuickAgent.
 The scanners, the rulesets, the gate and the review queue are open source.
 The attack corpus that gates CI (attack fixtures and their benign
 lookalikes, including a security-documentation agent that must stay
-publishable) is in `testdata/attack-corpus/`. The claims on this page are
-checkable against the code that makes them.
+publishable) is in `testdata/attack-corpus/`. The gate's cases (sets of
+findings, flags and policies, each with the outcome the gate reaches) are
+published as data in `pkg/gatecases`, which the gate's own test runs case by
+case, so a client can test what it says about the gate against the same
+table. The claims on this page are checkable against the code that makes
+them.
 
 Known departures from the plan, including the ones that weaken a claim, are
 recorded in [DEVIATIONS.md](https://github.com/blaktron/agentry-notes/blob/main/agentry/DEVIATIONS.md) rather than left implicit.

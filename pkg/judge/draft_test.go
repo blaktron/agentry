@@ -69,6 +69,32 @@ func TestADraftPastItsBoundsOrAFailedJudgeIsNotScanned(t *testing.T) {
 	}
 }
 
+// The instruction bound is 32 KiB, the cap the Drafter holds its own to
+// (agentry#789, agentry-cli#521): a drafted instruction of 20–30 KB, and
+// one at the bound, is asked off_task whole. The state as a whole is held
+// to 48 KiB, so a long instruction beside a manifest and description at
+// their bounds is not scanned and never cut.
+func TestALongDraftedInstructionIsAskedWholeUpToTheBound(t *testing.T) {
+	if DraftMaxInstruction != 32<<10 || DraftMaxState != 48<<10 {
+		t.Fatalf("bounds %d and %d, want 32 KiB (the Drafter's cap) and 48 KiB", DraftMaxInstruction, DraftMaxState)
+	}
+	for _, n := range []int{30_000, DraftMaxInstruction} {
+		f := &fakeAsker{answer: quiet}
+		long := strings.Repeat("i", n)
+		res := NewDraftScanner(f).Scan(context.Background(), DraftInput{Description: strings.Repeat("d", 8000), ManifestJSON: make([]byte, 4096), Instruction: long})
+		if res.Verdict != VerdictPass || res.Failure != "" || len(f.asked) != 1 || f.asked[0]["instruction"] != long {
+			t.Fatalf("a %d-byte instruction: %+v, asked %d", n, res, len(f.asked))
+		}
+	}
+	f := &fakeAsker{answer: quiet}
+	res := NewDraftScanner(f).Scan(context.Background(), DraftInput{
+		Description: strings.Repeat("d", DraftMaxDescription), ManifestJSON: make([]byte, DraftMaxManifest), Instruction: strings.Repeat("i", DraftMaxInstruction),
+	})
+	if res.Verdict != VerdictNotScanned || res.Failure != FailureTooLarge || len(f.asked) != 0 {
+		t.Fatalf("every part at its bound, past the state's: %+v, asked %d", res, len(f.asked))
+	}
+}
+
 // The rubric over a package asks the manifest first, then each file in
 // the rubric's own chunks, with the declared capabilities and the shipped
 // packs beside every chunk, and keeps each question's strongest chunk.
