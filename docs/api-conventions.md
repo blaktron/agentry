@@ -62,7 +62,10 @@ organization's seats, carrying `used`, `invited`, `pending` and `max`; a
 registry with no billing extension has no seat cap and never answers it.
 `403 feature-not-included` refuses an act the organization's subscription
 does not include at all, which is not the same as its allowance being
-reached. `409 already-a-member` refuses an invitation, an approval or
+reached; since agentry#820 it also refuses `POST /user/ssh-keys` where the
+person's own subscription does not include adding SSH keys (a key already
+held keeps working, listed and removable; a registry with no billing
+extension includes it). `409 already-a-member` refuses an invitation, an approval or
 `POST /orgs` for someone who is an active member of another
 organization: a person belongs to one at a time, and leaves it (`DELETE
 /orgs/{org}/members/{own handle}`) before joining or founding another.

@@ -241,8 +241,9 @@ func problemAgentUnscanned(w http.ResponseWriter, r *http.Request, standing int6
 	writeProblemWith(w, r, http.StatusConflict, "agent-unscanned", "Unscanned versions cannot be made public", detail, map[string]any{"unscanned": standing})
 }
 
-// problemFeatureNotIncluded refuses an act the organization's subscription
-// does not include at all — distinct from its allowance being reached.
+// problemFeatureNotIncluded refuses an act the subscription — the
+// organization's, or a person's own (agentry#820) — does not include at
+// all, distinct from its allowance being reached. detail names whose.
 func problemFeatureNotIncluded(w http.ResponseWriter, r *http.Request, detail string) {
 	writeProblem(w, r, http.StatusForbidden, "feature-not-included", "Not included in this subscription", detail)
 }
