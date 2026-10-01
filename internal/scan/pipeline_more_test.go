@@ -47,11 +47,13 @@ func TestPrivateAgentsAreScannedToo(t *testing.T) {
 // TestReleaseDiffFlagsCapabilityWidening pins the S9 rug-pull defence
 // (§8.3 S9, the postmark-mcp pattern): a clean agent whose next release
 // newly declares network egress is flagged on its report, whatever its
-// history. S9/new-egress and S9/capability-widened are medium: since ruleset
-// 0.3.0 a newly *declared* capability publishes with the findings shown, as
-// the operator chose for every medium outside undeclared capabilities and
-// attempted injections (D6 of plan scan-and-run-tweaks, agentry#773). An
-// organization at threshold low still holds it.
+// history. S9/capability-widened is medium, and since ruleset 0.3.2 the newly
+// declared host itself is low, in the manifest (S9/new-egress) and in the
+// content (S9/new-egress-content; agentry#775): since ruleset 0.3.0 a newly
+// *declared* capability publishes with the findings shown, as the operator
+// chose for every medium outside undeclared capabilities and attempted
+// injections (D6 of plan scan-and-run-tweaks, agentry#773). An organization
+// at threshold low still holds it.
 func TestReleaseDiffFlagsCapabilityWidening(t *testing.T) {
 	e := newPipeEnv(t)
 	ctx := context.Background()

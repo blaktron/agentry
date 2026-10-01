@@ -1,0 +1,10 @@
+# Fixture expectation (see README.md).
+technique: "Release-diff pair, v2: a patch release adds CSS-hidden text, a medium hidden-content class the previous release did not have (still held after agentry#775)"
+version: "1.0.1"
+prev: s9-patch-comment-v1
+expect:
+  - S3/css-hidden
+  - S9/new-obfuscation
+  - S9/escalated
+forbid: []
+expectClean: false
