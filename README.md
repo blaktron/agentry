@@ -171,7 +171,9 @@ Decided since the plan was written: the product name (**Agentry**, PLAN
 §20 Q1 — this module keeps the `agentry` technical name) and the license
 (**MIT**, Q2), and the hosted registry's judge (Q3: TypeSafe AI's Jev as the
 `typesafe` provider, DEV-113, 2026-09-20). The launch baseline policy (Q4)
-is decided: the built defaults stand (DEV-093, 2026-09-07).
+was decided as the built defaults (DEV-093, 2026-09-07) and reversed by
+ruleset 0.3.0, which publishes medium findings and holds high ones
+(DEV-186, 2026-10-01).
 
 ## License
 
