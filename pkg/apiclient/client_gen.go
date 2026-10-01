@@ -5243,12 +5243,16 @@ type ClientInterface interface {
 
 	// AddSshKeyWithBody Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
 	//
+	// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys (agentry#820); a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
+	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /user/ssh-keys (the `AddSshKey` operationId).
 	AddSshKeyWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AddSshKey Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
+	//
+	// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys (agentry#820); a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -8740,6 +8744,8 @@ func (c *Client) ListSshKeys(ctx context.Context, reqEditors ...RequestEditorFn)
 
 // AddSshKeyWithBody Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
 //
+// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys (agentry#820); a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
+//
 // Takes any type of body and a specified content type.
 //
 // Corresponds with POST /user/ssh-keys (the `AddSshKey` operationId).
@@ -8756,6 +8762,8 @@ func (c *Client) AddSshKeyWithBody(ctx context.Context, contentType string, body
 }
 
 // AddSshKey Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
+//
+// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys (agentry#820); a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -17924,12 +17932,16 @@ type ClientWithResponsesInterface interface {
 
 	// AddSshKeyWithBodyWithResponse Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
 	//
+	// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys (agentry#820); a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
+	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /user/ssh-keys (the `AddSshKey` operationId).
 	AddSshKeyWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddSshKeyResponse, error)
 
 	// AddSshKeyWithResponse Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
+	//
+	// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys (agentry#820); a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -28577,6 +28589,8 @@ func (c *ClientWithResponses) ListSshKeysWithResponse(ctx context.Context, reqEd
 
 // AddSshKeyWithBodyWithResponse Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
 //
+// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys (agentry#820); a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
+//
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /user/ssh-keys (the `AddSshKey` operationId).
@@ -28589,6 +28603,8 @@ func (c *ClientWithResponses) AddSshKeyWithBodyWithResponse(ctx context.Context,
 }
 
 // AddSshKeyWithResponse Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
+//
+// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys (agentry#820); a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

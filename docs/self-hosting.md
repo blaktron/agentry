@@ -1764,7 +1764,10 @@ same authorization, hooks and quotas as HTTPS.
 
 - **Credential:** a user's SSH public key, registered on the settings page (or
   `POST /user/ssh-keys`). A key is worth repository read/write and the release tag the
-  user's role allows; it never reaches the API. There is no anonymous mode over SSH.
+  user's role allows; it never reaches the API. There is no anonymous mode over SSH. Adding
+  a key reads the entitlements switch `SSHKeys` (agentry#820): the core always includes it;
+  a closed build's resolver may refuse it by subscription (`403 feature-not-included`), and a
+  key already held keeps working.
 - **Host key:** generated under the git data directory on first start
   (`ssh_host_ed25519_key`; `AGENTRY_GIT_SSH_HOST_KEY` points elsewhere). The SHA256
   fingerprint is logged at startup (`git ssh listening … hostkey_fingerprint=…`) — publish it so users
