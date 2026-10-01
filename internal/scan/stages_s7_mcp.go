@@ -18,8 +18,10 @@ import (
 // package version. S7 asks the vulnerability database about each one — live
 // the first time a package version is seen, from the mcp_server_scans
 // registry when it was checked within mcpScanTTL — and reports every
-// advisory as a finding at the advisory's own severity, so a high or
-// critical CVE gates like any other high or critical finding.
+// advisory as a finding at the gate's rating of it (AdvisoryGateSeverity:
+// a Critical rejects, a High holds from CVSS 8.5 and is medium below it;
+// agentry#774). A server it has no data for is one medium finding,
+// S7/osv-no-data, which publishes (the tweaks plan's D3).
 //
 // The stage depends on the database, not the archive, so its result is
 // never served from the archive-keyed stage cache (NoCache).
@@ -103,39 +105,102 @@ type declaredServer struct {
 	Version   string
 }
 
+// scannerOSVNoData is the finding for declared servers the scan has no
+// vulnerability data for: the lookup failed with no earlier answer, the
+// ecosystem is not one S7 covers, or the server has no pinned version. It
+// is medium and does not force review, so the version publishes with it on
+// its report (the tweaks plan's D3); the daily sweep asks again about every
+// registry row, a failed one included. A package the database knows
+// nothing about is not "no data" (the operator,
+// 2026-09-30: no reported issues yet is not a risk) and is recorded with
+// no advisories.
+const scannerOSVNoData = "S7/osv-no-data"
+
+// The reasons S7/osv-no-data names per server.
+const (
+	noDataLookupFailed = "lookup failed"
+	noDataEcosystem    = "ecosystem not covered"
+	noDataNoVersion    = "no pinned version"
+)
+
+// scored reports whether every advisory on the row was read since CVSS
+// vectors were scored. A row written before that is asked about again, so
+// a High below 8.5 is not judged high for want of a score (agentry#774).
+func (r *MCPScanRecord) scored() bool {
+	for _, a := range r.Advisories {
+		if !a.Scored {
+			return false
+		}
+	}
+	return true
+}
+
+// scoredAdvisories marks advisories as read since scores were (see
+// OSVVulnerability.Scored), for a registry row about to be written from a
+// lookup's answer.
+func scoredAdvisories(advs []OSVVulnerability) []OSVVulnerability {
+	out := make([]OSVVulnerability, len(advs))
+	for i, a := range advs {
+		a.Scored = true
+		out[i] = a
+	}
+	return out
+}
+
 // DeclaredMCPServers lists a manifest's declared servers (ecosystem "npm" or
 // "pypi"). The pipeline uses it to record the version ↔ server join.
 func DeclaredMCPServers(manifestJSON []byte) []declaredServer {
+	out, _, _ := mcpServerEntries(manifestJSON)
+	return out
+}
+
+// mcpServerEntries splits a manifest's declared servers into those S7 can
+// look up, sorted, and, in manifest order with a reason each, those it
+// cannot: neither npm nor PyPI, or no pinned version. Manifest validation
+// (V5) refuses the latter, so they only reach S7 in a manifest that came
+// some other way; S7 still names them rather than drop them.
+func mcpServerEntries(manifestJSON []byte) (declared []declaredServer, uncovered []string, reasons map[string]string) {
 	var m manifest.Manifest
 	if len(manifestJSON) == 0 || json.Unmarshal(manifestJSON, &m) != nil {
-		return nil
+		return nil, nil, nil
 	}
-	var out []declaredServer
-	for _, s := range m.Capabilities.MCPServers {
+	reasons = map[string]string{}
+	for i, s := range m.Capabilities.MCPServers {
+		var ref, why string
 		switch {
 		case s.NPM != "" && s.Version != "":
-			out = append(out, declaredServer{Ecosystem: "npm", Package: s.NPM, Version: s.Version})
+			declared = append(declared, declaredServer{Ecosystem: "npm", Package: s.NPM, Version: s.Version})
+			continue
 		case s.PyPI != "" && s.Version != "":
-			out = append(out, declaredServer{Ecosystem: "pypi", Package: s.PyPI, Version: s.Version})
+			declared = append(declared, declaredServer{Ecosystem: "pypi", Package: s.PyPI, Version: s.Version})
+			continue
+		case s.NPM != "":
+			ref, why = "npm:"+s.NPM, noDataNoVersion
+		case s.PyPI != "":
+			ref, why = "pypi:"+s.PyPI, noDataNoVersion
+		default:
+			ref, why = fmt.Sprintf("capabilities.mcpServers[%d]", i), noDataEcosystem
 		}
+		uncovered = append(uncovered, ref)
+		reasons[ref] = why
 	}
-	sort.Slice(out, func(a, b int) bool {
-		if out[a].Ecosystem != out[b].Ecosystem {
-			return out[a].Ecosystem < out[b].Ecosystem
+	sort.Slice(declared, func(a, b int) bool {
+		if declared[a].Ecosystem != declared[b].Ecosystem {
+			return declared[a].Ecosystem < declared[b].Ecosystem
 		}
-		if out[a].Package != out[b].Package {
-			return out[a].Package < out[b].Package
+		if declared[a].Package != declared[b].Package {
+			return declared[a].Package < declared[b].Package
 		}
-		return out[a].Version < out[b].Version
+		return declared[a].Version < declared[b].Version
 	})
-	return out
+	return declared, uncovered, reasons
 }
 
 // Run implements Stage.
 func (s S7MCPServers) Run(sc stageContext, in *Input) StageResult {
 	res := StageResult{Scanner: "S7", NoCache: true}
-	servers := DeclaredMCPServers(in.ManifestJSON)
-	if len(servers) == 0 {
+	servers, noData, reasons := mcpServerEntries(in.ManifestJSON)
+	if len(servers) == 0 && len(noData) == 0 {
 		return res
 	}
 	now := time.Now
@@ -145,9 +210,9 @@ func (s S7MCPServers) Run(sc stageContext, in *Input) StageResult {
 	if !osvEnabled(sc.osv) {
 		res.Findings = append(res.Findings, Finding{
 			Scanner: "S7/osv-not-checked", Severity: SevInfo, Confidence: ConfLow,
-			Title: fmt.Sprintf("%d declared MCP server(s); no vulnerability database consulted", len(servers)),
+			Title: fmt.Sprintf("%d declared MCP server(s); no vulnerability database consulted", len(servers)+len(noData)),
 			Detail: map[string]any{
-				"servers": len(servers),
+				"servers": len(servers) + len(noData),
 				"reason":  "no OSV API configured (AGENTRY_SCAN_OSV_URL=none), so the pipeline did not check these servers for known vulnerabilities",
 			},
 			Taxonomy: []string{"LLM03", "ASI04"},
@@ -168,49 +233,44 @@ func (s S7MCPServers) Run(sc stageContext, in *Input) StageResult {
 			}
 			rec = r
 		}
-		if rec != nil && rec.Status != "error" && now().Sub(rec.LastChecked) < mcpScanTTL {
+		if rec != nil && rec.Status != "error" && now().Sub(rec.LastChecked) < mcpScanTTL && rec.scored() {
 			records[i] = rec
 			continue
 		}
-		records[i] = rec // stale or errored: kept as the fallback
+		records[i] = rec // stale, errored or unscored: kept as the fallback
 		p := OSVPackage{Ecosystem: osvEcosystem(d.Ecosystem), Name: d.Package, Version: d.Version}
 		lookupIdx[p.Key()] = i
 		lookup = append(lookup, p)
 	}
+	var lookupErr error
 	if len(lookup) > 0 {
 		vulns, err := sc.osv.Query(ctx, lookup)
 		if err != nil {
 			// Registry rows, stale or not, are better evidence than nothing;
-			// a server with no row at all is reported as unchecked, and so is
-			// one whose only row is the error row an earlier failed lookup
-			// wrote: that row holds no answer, and counting it as one let the
-			// second submission during an outage publish unchecked
-			// (agentry#480; plan mcp-vuln-scanning D9, fail toward review).
-			var unchecked []string
+			// a server with no row at all has no data, and neither has one
+			// whose only row is the error row an earlier failed lookup wrote:
+			// that row holds no answer, and counting it as one let the second
+			// submission during an outage pass with no finding at all
+			// (agentry#480).
+			lookupErr = err
 			for _, p := range lookup {
 				i := lookupIdx[p.Key()]
 				d := servers[i]
 				if records[i] == nil || records[i].Status == "error" {
-					unchecked = append(unchecked, d.Ecosystem+":"+d.Package+"@"+d.Version)
+					ref := d.Ecosystem + ":" + d.Package + "@" + d.Version
+					noData = append(noData, ref)
+					reasons[ref] = noDataLookupFailed
 					if sc.mcpCache != nil {
 						_ = sc.mcpCache.Put(ctx, MCPScanRecord{Ecosystem: d.Ecosystem, Package: d.Package, Version: d.Version,
 							Status: "error", LastChecked: now(), LastError: err.Error()})
 					}
 				}
 			}
-			if len(unchecked) > 0 {
-				res.Findings = append(res.Findings, Finding{
-					Scanner: "S7/osv-error", Severity: SevMedium, Confidence: ConfHigh,
-					Title:    "Vulnerability lookup failed for declared MCP server(s)",
-					Detail:   map[string]any{"error": err.Error(), "servers": unchecked},
-					Taxonomy: []string{"LLM03", "ASI04"},
-				})
-			}
 		} else {
 			for _, p := range lookup {
 				i := lookupIdx[p.Key()]
 				d := servers[i]
-				advs := vulns[p.Key()]
+				advs := scoredAdvisories(vulns[p.Key()])
 				rec := MCPScanRecord{Ecosystem: d.Ecosystem, Package: d.Package, Version: d.Version,
 					Status: "safe", Advisories: advs, LastChecked: now()}
 				if len(advs) > 0 {
@@ -228,6 +288,18 @@ func (s S7MCPServers) Run(sc stageContext, in *Input) StageResult {
 				records[i] = &rec
 			}
 		}
+	}
+	if len(noData) > 0 {
+		detail := map[string]any{"servers": noData, "reasons": reasons}
+		if lookupErr != nil {
+			detail["error"] = lookupErr.Error()
+		}
+		res.Findings = append(res.Findings, Finding{
+			Scanner: scannerOSVNoData, Severity: SevMedium, Confidence: ConfHigh,
+			Title:    "No vulnerability data for declared MCP server(s)",
+			Detail:   detail,
+			Taxonomy: []string{"LLM03", "ASI04"},
+		})
 	}
 	for i, d := range servers {
 		rec := records[i]
@@ -248,8 +320,14 @@ func (s S7MCPServers) Run(sc stageContext, in *Input) StageResult {
 			if len(v.FixedIn) > 0 {
 				detail["fixedIn"] = v.FixedIn
 			}
+			// The finding carries the gate's rating; the detail keeps the
+			// advisory's own severity and its score, which the report shows.
+			detail["advisorySeverity"] = v.Severity
+			if v.CVSSScore != nil {
+				detail["cvssScore"] = *v.CVSSScore
+			}
 			res.Findings = append(res.Findings, Finding{
-				Scanner: "S7/mcp-vuln-" + findingIDSuffix(v.ID), Severity: Severity(v.Severity), Confidence: ConfHigh,
+				Scanner: "S7/mcp-vuln-" + findingIDSuffix(v.ID), Severity: AdvisoryGateSeverity(v), Confidence: ConfHigh,
 				Title: title, Detail: detail, Taxonomy: []string{"LLM03", "ASI04"},
 			})
 		}

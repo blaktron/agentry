@@ -127,7 +127,8 @@ func mcpServerScanToAPI(row storegen.McpServerScan) McpServerScan {
 	var advs []scan.OSVVulnerability
 	_ = json.Unmarshal(row.Advisories, &advs)
 	for _, v := range advs {
-		a := McpAdvisory{Id: v.ID, Severity: McpAdvisorySeverity(v.Severity), Summary: v.Summary}
+		a := McpAdvisory{Id: v.ID, Severity: McpAdvisorySeverity(v.Severity),
+			GateSeverity: McpAdvisoryGateSeverity(scan.AdvisoryGateSeverity(v)), CvssScore: v.CVSSScore, Summary: v.Summary}
 		if len(v.Aliases) > 0 {
 			al := v.Aliases
 			a.Aliases = &al

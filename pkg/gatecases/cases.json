@@ -969,11 +969,11 @@
       }
     },
     {
-      "name": "a failed advisory lookup publishes under threshold medium",
+      "name": "no advisory data publishes under threshold medium",
       "branch": "within-threshold",
       "findings": [
         {
-          "scanner": "S7/osv-error",
+          "scanner": "S7/osv-no-data",
           "severity": "medium",
           "confidence": "high"
         }
@@ -988,11 +988,11 @@
       }
     },
     {
-      "name": "baseline: a failed advisory lookup publishes",
+      "name": "baseline: no advisory data publishes",
       "branch": "within-threshold",
       "findings": [
         {
-          "scanner": "S7/osv-error",
+          "scanner": "S7/osv-no-data",
           "severity": "medium",
           "confidence": "high"
         }

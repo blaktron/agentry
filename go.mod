@@ -21,6 +21,7 @@ require (
 	github.com/mattermost/xml-roundtrip-validator v0.1.0
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/oapi-codegen/runtime v1.7.0
+	github.com/pandatix/go-cvss v0.6.4
 	github.com/pquerna/otp v1.5.0
 	github.com/pressly/goose/v3 v3.27.3
 	github.com/riverqueue/river v0.47.0
