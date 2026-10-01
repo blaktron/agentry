@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/google/uuid"
 
 	"github.com/blaktron/agentry/internal/audit"
@@ -61,6 +62,66 @@ type ReattestSweepArgs struct {
 	Pending int64  `json:"pending,omitempty"`
 }
 
+// rulesetJobAction is what a worker does with a job a ruleset's first
+// registration enqueued (the sweep and the queue's redo).
+type rulesetJobAction int
+
+const (
+	// rulesetJobRun: the job is for this worker's ruleset, or names none.
+	rulesetJobRun rulesetJobAction = iota
+	// rulesetJobDefer: the job is for a newer ruleset than this worker's
+	// bundle. A rolling deploy runs a worker of the outgoing build beside the
+	// api of the incoming one, which registered the ruleset; the job goes
+	// back to the queue for a worker of the incoming build (agentry#805).
+	rulesetJobDefer
+	// rulesetJobSkip: the job is for an older ruleset. Its work would be
+	// done under a ruleset it was not enqueued for, and the newer ruleset's
+	// first registration enqueued its own.
+	rulesetJobSkip
+)
+
+// rulesetJobActionFor compares a job's ruleset with the worker's. A semver
+// that does not parse runs the job, as every job did before jobs were
+// compared.
+func rulesetJobActionFor(worker, job string) rulesetJobAction {
+	if job == "" || job == worker {
+		return rulesetJobRun
+	}
+	wv, werr := semver.NewVersion(worker)
+	jv, jerr := semver.NewVersion(job)
+	if werr != nil || jerr != nil {
+		return rulesetJobRun
+	}
+	switch jv.Compare(wv) {
+	case 1:
+		return rulesetJobDefer
+	case -1:
+		return rulesetJobSkip
+	}
+	return rulesetJobRun
+}
+
+// ownRulesetJob reports whether this worker should run a ruleset job, and
+// the error to hand back when it should not: non-nil retries the job.
+func (p *Pipeline) ownRulesetJob(ctx context.Context, job queue.Job) (bool, error) {
+	var args RescanSweepArgs
+	_ = json.Unmarshal(job.Args, &args) // a job with no ruleset runs
+	switch rulesetJobActionFor(p.rulesetVer, args.RulesetSemver) {
+	case rulesetJobDefer:
+		p.log.InfoContext(ctx, "scan: ruleset job is for a newer ruleset than this worker's; handed back for retry",
+			"kind", job.Kind, "job_ruleset", args.RulesetSemver, "worker_ruleset", p.rulesetVer, "attempt", job.Attempt)
+		return false, fmt.Errorf("scan: %s is for ruleset %s and this worker scans with %s", job.Kind, args.RulesetSemver, p.rulesetVer)
+	case rulesetJobSkip:
+		p.log.InfoContext(ctx, "scan: ruleset job is for an older ruleset; nothing to do",
+			"kind", job.Kind, "job_ruleset", args.RulesetSemver, "worker_ruleset", p.rulesetVer)
+		return false, nil
+	}
+	if args.RulesetSemver != "" {
+		p.log.InfoContext(ctx, "scan: ruleset job starting", "kind", job.Kind, "ruleset", args.RulesetSemver)
+	}
+	return true, nil
+}
+
 // RegisterHandlers wires the pipeline's job handlers onto a queue client
 // (§8.2). The worker role calls this then Work(); dev/tests can Drain().
 func (p *Pipeline) RegisterHandlers(q queue.Client) {
@@ -78,14 +139,15 @@ func (p *Pipeline) RegisterHandlers(q queue.Client) {
 		return p.Scan(ctx, args.VersionID, args.Trigger)
 	})
 	q.Register(JobRescanSweep, func(ctx context.Context, job queue.Job) error {
-		var args RescanSweepArgs
-		_ = json.Unmarshal(job.Args, &args) // args are advisory
-		if args.RulesetSemver != "" {
-			p.log.Info("scan: rescan sweep starting", "ruleset", args.RulesetSemver)
+		if run, err := p.ownRulesetJob(ctx, job); !run {
+			return err
 		}
 		return p.RescanSweep(ctx)
 	})
-	q.Register(JobRedoReviewQueue, func(ctx context.Context, _ queue.Job) error {
+	q.Register(JobRedoReviewQueue, func(ctx context.Context, job queue.Job) error {
+		if run, err := p.ownRulesetJob(ctx, job); !run {
+			return err
+		}
 		return p.RedoReviewQueue(ctx)
 	})
 	q.Register(JobAttestSweep, func(ctx context.Context, _ queue.Job) error {

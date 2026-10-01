@@ -25,7 +25,10 @@ as its snapshot. So "which ruleset published this" always has an answer.
   which scans every published version again, and the redo of the review queue,
   which judges every version waiting for a person again and publishes the ones
   the gate now passes (agentry#772). A restart on the same semver enqueues
-  neither.
+  neither. Both jobs name their ruleset, and a worker runs one only under
+  that ruleset: during a rolling deploy a worker of the outgoing build hands
+  the new ruleset's jobs back for retry until a worker of the new build takes
+  them, and a job for an older ruleset is done by nothing (agentry#805).
 
 ## Tags: reading an old ruleset back
 

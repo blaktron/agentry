@@ -56,6 +56,9 @@ func RegisterRuleset(ctx context.Context, st *store.Store, bundle *rules.Bundle)
 	return RulesetRegistration{ID: row.ID, Semver: row.Semver, New: row.Inserted}, nil
 }
 
+// rulesetJobAttempts is the retry budget of the jobs a new ruleset enqueues.
+const rulesetJobAttempts = 12
+
 // EnqueueNewRulesetWork kicks off the §8.7 catalogue sweep when a
 // ruleset semver is recorded for the first time, and the redo of the review
 // queue beside it (agentry#772): the sweep judges published versions again,
@@ -72,7 +75,11 @@ func EnqueueNewRulesetWork(ctx context.Context, q queue.Client, log *slog.Logger
 		log = slog.Default()
 	}
 	args := RescanSweepArgs{RulesetSemver: reg.Semver}
-	if _, err := q.Enqueue(ctx, JobRescanSweep, "sandbox", args); err != nil {
+	// A worker of the outgoing build hands either job back until a worker
+	// of this build takes it (agentry#805). Twelve attempts at 2^n seconds
+	// keep a job alive for about an hour of a rollout.
+	budget := queue.WithMaxAttempts(rulesetJobAttempts)
+	if _, err := q.Enqueue(ctx, JobRescanSweep, "sandbox", args, budget); err != nil {
 		// Not fatal: the sweep is catch-up work, and an operator can re-run it.
 		// But it must be loud — a missed sweep means the catalogue is still
 		// judged by the previous ruleset.
@@ -81,7 +88,7 @@ func EnqueueNewRulesetWork(ctx context.Context, q queue.Client, log *slog.Logger
 	} else {
 		log.Info("scan: new ruleset registered; rescan sweep enqueued", "ruleset", reg.Semver)
 	}
-	if _, err := q.Enqueue(ctx, JobRedoReviewQueue, "sandbox", args); err != nil {
+	if _, err := q.Enqueue(ctx, JobRedoReviewQueue, "sandbox", args, budget); err != nil {
 		// As loud: until it runs, the queue holds what this ruleset publishes.
 		log.Error("scan: could not enqueue the review queue redo for new ruleset",
 			"ruleset", reg.Semver, "err", err)
