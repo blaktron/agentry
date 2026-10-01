@@ -281,6 +281,26 @@ func (s *Server) AgentReadable(ctx context.Context, p *auth.Principal, ns, name 
 	return registry.Agent{}, false, err
 }
 
+// AgentMaintainable is the core's own maintain decision for an extension
+// (agentry#833): agentForAction with the maintain action, the organization
+// gate for a write included. Not found, not readable, readable but not
+// maintainable and held by the gate are all false with no error, as a
+// read's are in AgentReadable; anything else is a fault.
+func (s *Server) AgentMaintainable(ctx context.Context, p *auth.Principal, ns, name string) (registry.Agent, bool, error) {
+	if s.reg == nil {
+		return registry.Agent{}, false, errors.New("api: no registry to read agents from")
+	}
+	a, _, err := s.agentForAction(ctx, p, ns, name, auth.ActAgentMaintain)
+	var gate *registry.OrgGateError
+	switch {
+	case err == nil:
+		return a, true, nil
+	case errors.Is(err, registry.ErrNotFound), errors.Is(err, auth.ErrForbidden), errors.Is(err, auth.ErrUnauthorized), errors.As(err, &gate):
+		return registry.Agent{}, false, nil
+	}
+	return registry.Agent{}, false, err
+}
+
 // ExtensionNames lists the mounted extensions in registration order.
 func (s *Server) ExtensionNames() []string {
 	out := make([]string, 0, len(s.extensions))
