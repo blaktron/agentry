@@ -233,7 +233,7 @@ func (p *Pipeline) Scan(ctx context.Context, versionID uuid.UUID, trigger string
 func (p *Pipeline) resumeOrCreateRun(ctx context.Context, v storegen.AgentVersion, trigger string, pol Policy) (uuid.UUID, Resume, error) {
 	q := p.st.Queries()
 	prior, err := q.RunningScanRunForVersion(ctx, storegen.RunningScanRunForVersionParams{
-		VersionID: v.ID, Trigger: trigger,
+		VersionID: v.ID, Trigger: trigger, RulesetReleaseID: p.rulesetID,
 	})
 	if err == nil {
 		resume, rerr := p.resumeFromRun(ctx, prior.ID)
@@ -729,45 +729,7 @@ func (p *Pipeline) applyDecision(ctx context.Context, agent storegen.GetAgentByI
 	switch result.Decision.Outcome {
 	case OutcomePublish:
 		p.mx.RecordVerdict(ctx, metrics.VerdictClean)
-		// The attestation and the transition to `published` are one
-		// transaction under the version's row lock. When the transition
-		// came first and the signature last, a signing failure (a KMS
-		// outage, the empty-digest refusal) left a published, unattested
-		// version, and the retry's fresh run found the row moved and
-		// swallowed the verdict — "scanned, N findings, signed" false for
-		// it forever (security review 2026-09-20 §5.4). Signing before
-		// the transition, outside a transaction, would sign a version the
-		// watchdog had meanwhile held for review. So: lock the row, refuse
-		// a version no longer in `scanning`, sign, transition, commit — a
-		// failure anywhere leaves the version in `scanning` with no
-		// attestation, and the queue's retry finishes the job. The attest
-		// sweep backfills anything that still slips through.
-		var res registry.TransitionResult
-		err := p.st.WithTx(ctx, func(q *storegen.Queries) error {
-			row, err := q.GetVersionForUpdate(ctx, v.ID)
-			if err != nil {
-				return fmt.Errorf("scan: lock version: %w", err)
-			}
-			if registry.Status(row.Status) != registry.StatusScanning {
-				return fmt.Errorf("%w: %s is %s, the decision was made from scanning", registry.ErrVersionMoved, row.Version, row.Status)
-			}
-			if err := p.sign(ctx, q, agent, v, runID, result.ReportDigest, result.JudgeModel, policyVer); err != nil {
-				return err
-			}
-			r, err := p.reg.TransitionInTx(ctx, q, v.ID, registry.StatusPublished, result.Decision.Reason, sysEvent)
-			if err != nil {
-				return err
-			}
-			res = r
-			return nil
-		})
-		if err != nil {
-			return moved(err)
-		}
-		res.Cause = registry.TransitionCause{}
-		p.reg.EmitTransition(ctx, res)
-		p.indexReadme(ctx, agent.ID, v)
-		return nil
+		return moved(p.publishUnderLock(ctx, agent, v, registry.StatusScanning, runID, result, policyVer, result.Decision.Reason, nil))
 
 	case OutcomeRejected:
 		p.mx.RecordVerdict(ctx, metrics.VerdictBlocked)
@@ -790,6 +752,58 @@ func (p *Pipeline) applyDecision(ctx context.Context, agent storegen.GetAgentByI
 		p.notifyHeldForReview(ctx, agent, v, result.Decision.Reason)
 		return nil
 	}
+	return nil
+}
+
+// publishUnderLock publishes a version the gate passed, from the run that
+// judged it. The attestation and the transition to `published` are one
+// transaction under the version's row lock. When the transition came first
+// and the signature last, a signing failure (a KMS outage, the empty-digest
+// refusal) left a published, unattested version, and the retry's fresh run
+// found the row moved and swallowed the verdict — "scanned, N findings,
+// signed" false for it forever (security review 2026-09-20 §5.4). Signing
+// before the transition, outside a transaction, would sign a version the
+// watchdog had meanwhile held for review. So: lock the row, refuse a version
+// no longer in `from` (registry.ErrVersionMoved), run the route's own step
+// (inTx, nil for a submission), sign, transition, commit — a failure
+// anywhere leaves the version where it was with no attestation, and the
+// queue's retry finishes the job. The attest sweep backfills anything that
+// still slips through. A submission publishes from `scanning`; a new
+// ruleset's redo of the review queue from `needs_review` (agentry#772).
+func (p *Pipeline) publishUnderLock(ctx context.Context, agent storegen.GetAgentByIDRow, v storegen.AgentVersion,
+	from registry.Status, runID uuid.UUID, result RunResult, policyVer int, reason string,
+	inTx func(q *storegen.Queries) error,
+) error {
+	var res registry.TransitionResult
+	err := p.st.WithTx(ctx, func(q *storegen.Queries) error {
+		row, err := q.GetVersionForUpdate(ctx, v.ID)
+		if err != nil {
+			return fmt.Errorf("scan: lock version: %w", err)
+		}
+		if registry.Status(row.Status) != from {
+			return fmt.Errorf("%w: %s is %s, the decision was made from %s", registry.ErrVersionMoved, row.Version, row.Status, from)
+		}
+		if inTx != nil {
+			if err := inTx(q); err != nil {
+				return err
+			}
+		}
+		if err := p.sign(ctx, q, agent, v, runID, result.ReportDigest, result.JudgeModel, policyVer); err != nil {
+			return err
+		}
+		r, err := p.reg.TransitionInTx(ctx, q, v.ID, registry.StatusPublished, reason, audit.Event{ActorKind: audit.ActorSystem})
+		if err != nil {
+			return err
+		}
+		res = r
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	res.Cause = registry.TransitionCause{}
+	p.reg.EmitTransition(ctx, res)
+	p.indexReadme(ctx, agent.ID, v)
 	return nil
 }
 
@@ -1144,7 +1158,7 @@ func (p *Pipeline) DecideReview(ctx context.Context, in ReviewDecision) (handedO
 				// Refuse now what the worker could not sign later, so the
 				// verdict is not committed with nothing able to act on it
 				// and the reviewer can retry, as before the hand-off.
-				if run, rerr := q.LatestScanRunForVersion(ctx, v.ID); rerr != nil {
+				if run, rerr := q.LatestFinishedScanRunForVersion(ctx, v.ID); rerr != nil {
 					return fmt.Errorf("scan: latest run for review decision: %w", rerr)
 				} else if run.ReportDigest == nil || *run.ReportDigest == "" {
 					return fmt.Errorf("scan: version %s has no finished scan report to sign", v.ID)
@@ -1211,10 +1225,12 @@ func (p *Pipeline) DecideReview(ctx context.Context, in ReviewDecision) (handedO
 	return false, nil
 }
 
-// signReviewed signs a version a reviewer published, from its latest scan
-// run, inside the caller's transaction.
+// signReviewed signs a version a reviewer published, from its latest
+// finished scan run (the one the review bundle showed), inside the caller's
+// transaction. A run still going, a new ruleset's redo of the queue
+// (agentry#772), has no report to sign and is not what the reviewer read.
 func (p *Pipeline) signReviewed(ctx context.Context, q *storegen.Queries, agent storegen.GetAgentByIDRow, v storegen.AgentVersion) error {
-	run, err := q.LatestScanRunForVersion(ctx, v.ID)
+	run, err := q.LatestFinishedScanRunForVersion(ctx, v.ID)
 	if err != nil {
 		return fmt.Errorf("scan: latest run for review decision: %w", err)
 	}

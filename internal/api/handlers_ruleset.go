@@ -134,7 +134,7 @@ func (s *Server) CreateRulesetRelease(w http.ResponseWriter, r *http.Request) {
 	// A genuinely new semver is the §8.7 trigger for re-checking the published
 	// catalogue — same rule as boot-time registration in New().
 	if inserted {
-		scan.EnqueueRescanSweepOnNewRuleset(r.Context(), s.jobs, s.log, scan.RulesetRegistration{
+		scan.EnqueueNewRulesetWork(r.Context(), s.jobs, s.log, scan.RulesetRegistration{
 			ID: created.ID, Semver: created.Semver, New: true,
 		})
 	}

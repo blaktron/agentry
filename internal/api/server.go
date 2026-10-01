@@ -359,7 +359,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 		srv.reg.SetLogger(log)
 		// A ruleset semver we have never seen means the catalogue was judged
 		// by older rules (§8.7).
-		scan.EnqueueRescanSweepOnNewRuleset(context.Background(), srv.jobs, log, rulesetReg)
+		scan.EnqueueNewRulesetWork(context.Background(), srv.jobs, log, rulesetReg)
 		if signer != nil {
 			scan.EnqueueReattestSweepIfBehind(context.Background(), st, srv.jobs, log, signer, keyReg)
 			scan.EnqueueAttestSweepIfBehind(context.Background(), st, srv.jobs, log, signer)
