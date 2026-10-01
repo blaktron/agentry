@@ -1136,7 +1136,8 @@ page:
   HTML fragment with your terms, its root element carrying
   `data-terms-version="<version>"`, for example
   `<article data-terms-version="2026-09-30">…</article>`; mount it into the
-  server and the worker and point the variable at it. The step follows the
+  server and the worker, readable by the directory's user (authentik runs
+  as uid 1000), and point the variable at it. The step follows the
   form: the terms in a scrolling box, and an "I have read and agree" box
   that the page enables, with Continue, only once the box has been scrolled
   to the end. The directory refuses a submission without the agreement
