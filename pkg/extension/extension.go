@@ -555,6 +555,15 @@ type Agents interface {
 	// seam gives no way to tell a private agent's existence that the
 	// core's routes would not give.
 	Readable(ctx context.Context, p *Principal, namespace, name string) (AgentRef, bool, error)
+	// Maintainable reports whether p may maintain the agent at
+	// namespace/name as the core's own routes decide it: the maintain
+	// role over the namespace or a grant, a personal access token's
+	// org:admin, and the owning organization's gate for a write (an
+	// organization in its decommission hold reads and is not maintained).
+	// An agent that does not exist, one p may not read, one p reads and
+	// may not maintain, and one the gate holds are the same false with no
+	// error (agentry#833).
+	Maintainable(ctx context.Context, p *Principal, namespace, name string) (AgentRef, bool, error)
 }
 
 // AgentRef is what the core says of an agent a principal may read: its
