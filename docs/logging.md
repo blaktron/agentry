@@ -81,7 +81,7 @@ is a name missing from this table.
 | `auth.social_rejected` | WARN | a social or directory sign-in was rejected at the token exchange | `provider`, `err` |
 | `saml.state_unavailable` | ERROR | a SAML login refused because the shared state behind it could not be read or written; the fail-closed opposite of `failopen.*` | `set` (`assertions`, `requests`), `err` |
 | `ssrf.refused` | WARN | the private-range guard refused a webhook target | `org`, `delivery`, `endpoint`, `host` |
-| `gate.verdict` | INFO | the gate decided a version | `outcome` (`published`, `rejected`, `needs_review`), `version`, `agent`, `run`, `worst_severity`, `findings`, `reason` |
+| `gate.verdict` | INFO | the gate decided a version | `outcome` (`published`, `rejected`, `needs_review`), `version`, `agent`, `run`, `worst_severity`, `findings`, `reason`; and `ruleset` when a new ruleset's redo of the review queue published a held version |
 | `gate.error` | WARN | the platform's own failure sent a version to review: stage errors, an unusable policy, the watchdog | `version`, `run`, and `stage_errors` or `kind` + `err` |
 | `scan.stage` | INFO | a scanner stage finished | `stage`, `outcome` (`ok`, `error`), `dur_ms`, `findings`, `err` |
 | `failopen.audit_stream_drop` | ERROR | an audit archive record was dropped on a full buffer | `action`, `id` |

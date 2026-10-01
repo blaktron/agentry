@@ -57,10 +57,13 @@ func RegisterRuleset(ctx context.Context, st *store.Store, bundle *rules.Bundle)
 }
 
 // EnqueueRescanSweepOnNewRuleset kicks off the §8.7 catalogue sweep when a
-// ruleset semver is recorded for the first time. Nothing enqueued this job
-// before, so the registered scan.rescan_sweep handler was unreachable and
-// already-published versions were never re-checked against improved rules —
-// the entire point of versioning the bundle.
+// ruleset semver is recorded for the first time, and the redo of the review
+// queue beside it (agentry#772): the sweep judges published versions again,
+// the redo the versions waiting for a person, and publishes those the gate
+// now passes. Before the sweep was enqueued here, its handler was
+// unreachable and already-published versions were never re-checked against
+// improved rules — the entire point of versioning the bundle. A restart on
+// the same semver enqueues neither.
 func EnqueueRescanSweepOnNewRuleset(ctx context.Context, q queue.Client, log *slog.Logger, reg RulesetRegistration) {
 	if q == nil || !reg.New {
 		return
@@ -68,15 +71,23 @@ func EnqueueRescanSweepOnNewRuleset(ctx context.Context, q queue.Client, log *sl
 	if log == nil {
 		log = slog.Default()
 	}
-	if _, err := q.Enqueue(ctx, JobRescanSweep, "sandbox", RescanSweepArgs{RulesetSemver: reg.Semver}); err != nil {
+	args := RescanSweepArgs{RulesetSemver: reg.Semver}
+	if _, err := q.Enqueue(ctx, JobRescanSweep, "sandbox", args); err != nil {
 		// Not fatal: the sweep is catch-up work, and an operator can re-run it.
 		// But it must be loud — a missed sweep means the catalogue is still
 		// judged by the previous ruleset.
 		log.Error("scan: could not enqueue rescan sweep for new ruleset",
 			"ruleset", reg.Semver, "err", err)
+	} else {
+		log.Info("scan: new ruleset registered; rescan sweep enqueued", "ruleset", reg.Semver)
+	}
+	if _, err := q.Enqueue(ctx, JobRedoReviewQueue, "sandbox", args); err != nil {
+		// As loud: until it runs, the queue holds what this ruleset publishes.
+		log.Error("scan: could not enqueue the review queue redo for new ruleset",
+			"ruleset", reg.Semver, "err", err)
 		return
 	}
-	log.Info("scan: new ruleset registered; rescan sweep enqueued", "ruleset", reg.Semver)
+	log.Info("scan: new ruleset registered; review queue redo enqueued", "ruleset", reg.Semver)
 }
 
 // SigningKeyRegistration is the outcome of recording the signer's public key.

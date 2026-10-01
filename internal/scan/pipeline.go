@@ -1399,6 +1399,13 @@ func strptrOrNil(s string) *string {
 // (§8.7) without shipping two rule bundles. Not for production use.
 func (p *Pipeline) SetOrchestratorForTest(o *Orchestrator) { p.orch = o }
 
+// SetRulesetForTest points the pipeline at another ruleset release, so a
+// test can register "the next ruleset" without shipping a second bundle
+// (agentry#772). Not for production use.
+func (p *Pipeline) SetRulesetForTest(id uuid.UUID, semver string) {
+	p.rulesetID, p.rulesetVer = id, semver
+}
+
 // SetRescanBatchForTest shrinks the sweep page size so paging behaviour is
 // exercisable without publishing hundreds of versions. Not for production use.
 func (p *Pipeline) SetRescanBatchForTest(n int32) { p.rescanBatch = n }

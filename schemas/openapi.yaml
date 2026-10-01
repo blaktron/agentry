@@ -6561,8 +6561,12 @@ components:
           type: string
           enum: [platform, org]
         state:
+          description: >-
+            `superseded`: no person decided; the version was published by the
+            gate when a new ruleset judged the review queue again and it
+            passed (agentry#772).
           type: string
-          enum: [pending, approved, rejected]
+          enum: [pending, approved, rejected, superseded]
         version:
           type: string
         # The version's own status when the item was read (§7), so a client
