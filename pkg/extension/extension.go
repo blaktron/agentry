@@ -31,6 +31,7 @@ import (
 	"github.com/blaktron/agentry/internal/queue"
 	"github.com/blaktron/agentry/internal/registry"
 	"github.com/blaktron/agentry/internal/scan"
+	"github.com/blaktron/agentry/internal/voice"
 	"github.com/blaktron/agentry/internal/webhook"
 )
 
@@ -272,6 +273,72 @@ const (
 	ModelInputOpCheck  = api.ModelInputOpCheck
 )
 
+// AdmitsVoice is the optional interface for an extension that admits, and
+// may charge for, the review of a Writing Voice a route asks for (plan
+// writing-voice.md D8, agentry#809): an edit saved on the web, a client's
+// upload, a Restore of a version reviewed under another question set. AI
+// Review is 1 credit an operation (DEV-150); the core charges nothing. A
+// refusal is answered in its own status and words before anything is
+// stored, and a ticket is voided when nothing was. A Voice Writer run In
+// Agentry puts its output through Voice.Propose, whose review is inside
+// the build's price and is not admitted here.
+type AdmitsVoice interface {
+	VoiceAdmitter() VoiceAdmitter
+}
+
+// VoiceAdmitter and VoiceAdmission are the voice routes' admission types.
+type (
+	VoiceAdmitter  = api.VoiceAdmitter
+	VoiceAdmission = api.VoiceAdmission
+)
+
+// Voice is the core's store of Writing Voices as an extension may act on
+// it (agentry#809; plan writing-voice.md §4, §6): SecureAgentry's hosted
+// Voice Writer reads the live voice it improves or edits and puts back
+// the voice it wrote, and a hosted run reads the live voice it attaches.
+// The data key stays in the core: an extension reads and hands over text.
+// Every call answers ErrVoiceUnconfigured while the store is off.
+// Deps.Voice is nil without a database.
+type Voice interface {
+	// Live is a person's live version, the one a run attaches, its text
+	// opened; ErrVoiceNotFound when they have none. A pending or flagged
+	// version is never answered here (plan §3, invariant 4).
+	Live(ctx context.Context, user uuid.UUID) (*VoiceVersion, error)
+	// State is a person's voice: the always-attach flag and every
+	// version, texts opened, a pending or flagged one included, for a
+	// Voice Writer run to improve or edit; ErrVoiceNotFound when they
+	// have none. A run attaches what Live answers, never this.
+	State(ctx context.Context, user uuid.UUID) (VoiceState, error)
+	// Propose makes text a person's pending version from a Voice Writer
+	// run In Agentry (source VoiceSourceBuild or VoiceSourceAIEdit) and
+	// queues its review; it is live only once the review passes it. Text
+	// that is not a voice is a *VoiceInvalidError or ErrVoiceTooLarge.
+	Propose(ctx context.Context, user uuid.UUID, text []byte, source VoiceSource) (VoiceState, error)
+}
+
+// VoiceVersion, VoiceState and VoiceSource are the voice store's types as
+// the seam speaks them; VoiceInvalidError is Propose's answer for text that
+// is not a voice, with the reason.
+type (
+	VoiceVersion      = voice.Version
+	VoiceState        = voice.State
+	VoiceSource       = voice.Source
+	VoiceInvalidError = voice.InvalidError
+)
+
+// The sources a Voice Writer run In Agentry proposes with.
+const (
+	VoiceSourceBuild  = voice.SourceBuild
+	VoiceSourceAIEdit = voice.SourceAIEdit
+)
+
+// The voice seam's refusals.
+var (
+	ErrVoiceUnconfigured = voice.ErrUnconfigured
+	ErrVoiceNotFound     = voice.ErrNotFound
+	ErrVoiceTooLarge     = voice.ErrTooLarge
+)
+
 // Unthrottles is the optional interface for an extension whose receiver of
 // signed callbacks must never be refused by the anonymous rate class (a
 // payment provider's webhook, plan subscription-tiers §5.5). The routes are
@@ -393,6 +460,10 @@ type Deps struct {
 	// server runs without a database, as DB is; while the store is off
 	// (no key wrapper yet) its calls answer ErrKnowledgeUnconfigured.
 	Knowledge Knowledge
+	// Voice is the core's store of Writing Voices (agentry#809). nil when
+	// the server runs without a database; while the store is off its
+	// calls answer ErrVoiceUnconfigured.
+	Voice Voice
 }
 
 // Notifier lets an extension tell a person something by mail without

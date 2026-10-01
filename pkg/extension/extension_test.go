@@ -18,6 +18,9 @@ import (
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/knowledge"
 	"github.com/blaktron/agentry/internal/queue"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/internal/voice"
+	"github.com/blaktron/agentry/pkg/judge"
 )
 
 // A minimal extension compiles against the interface using only the
@@ -431,5 +434,82 @@ func TestApplyExtensionsRegistersTheAccountEraser(t *testing.T) {
 	applyExtensions(srv, []Extension{vaultLike{}})
 	if got := srv.AccountErasers(); len(got) != 1 || got[0] != "vault" {
 		t.Fatalf("erasers = %v, want [vault]", got)
+	}
+}
+
+// voiceWriter is the shape SecureAgentry's hosted Voice Writer takes
+// (agentry#809): it is handed the core's voice store, and admits the
+// reviews the routes ask for.
+type voiceWriter struct {
+	noop
+	store Voice
+}
+
+func (v *voiceWriter) Bind(d Deps)                  { v.store = d.Voice }
+func (v *voiceWriter) VoiceAdmitter() VoiceAdmitter { return nil }
+
+// stubVoiceJudge passes every voice.
+type stubVoiceJudge struct{}
+
+func (stubVoiceJudge) Scan(context.Context, string) judge.VoiceResult {
+	sc := map[string]int{}
+	for _, q := range judge.VoiceQuestions() {
+		sc[q.ID] = 0
+	}
+	return judge.VoiceResult{Verdict: judge.VerdictPass, Model: judge.DefaultModel, QuestionSet: "sha256:stub", Scores: sc}
+}
+func (stubVoiceJudge) QuestionSet() string { return "sha256:stub" }
+
+// TestBindHandsTheVoiceStore: a bound extension gets the core's voice
+// store, proposes a Voice Writer run's output only as a build or an AI
+// Edit, and reads a live voice only once it passed its review.
+func TestBindHandsTheVoiceStore(t *testing.T) {
+	st := migratedStore(t)
+	cfg := config.Default()
+	cfg.DevMode = true
+	cfg.Scan.OSVURL = "none"
+	srv := api.New(cfg, st, slog.New(slog.DiscardHandler))
+	srv.SetVoiceJudge(stubVoiceJudge{})
+	v := &voiceWriter{}
+	applyExtensions(srv, []Extension{v})
+	if v.store == nil {
+		t.Fatal("a server with a database handed out no voice store")
+	}
+	ctx := context.Background()
+	user := uuid.New()
+	if err := st.Queries().CreateHandle(ctx, storegen.CreateHandleParams{ID: user, Handle: "vw-" + user.String()[:8], Kind: "user"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Queries().CreateUser(ctx, storegen.CreateUserParams{ID: user, Email: user.String() + "@example.test"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := v.store.Live(ctx, user); !errors.Is(err, ErrVoiceNotFound) {
+		t.Fatalf("no voice yet: %v", err)
+	}
+	if _, err := v.store.Propose(ctx, user, []byte("# Voice\n"), voice.SourceEdit); err == nil {
+		t.Fatal("a Voice Writer run proposed an edit")
+	}
+	var invalid *VoiceInvalidError
+	if _, err := v.store.Propose(ctx, user, []byte(" "), VoiceSourceBuild); !errors.As(err, &invalid) {
+		t.Fatalf("an empty voice: %v", err)
+	}
+	s, err := v.store.Propose(ctx, user, []byte("# Voice\n\nShort sentences.\n"), VoiceSourceBuild)
+	if err != nil || s.Pending == nil || s.Pending.Source != VoiceSourceBuild || s.Live != nil {
+		t.Fatalf("propose: %+v %v", s, err)
+	}
+	// Pending is never what a run attaches (plan §3, invariant 4).
+	if _, err := v.store.Live(ctx, user); !errors.Is(err, ErrVoiceNotFound) {
+		t.Fatalf("a pending voice read as live: %v", err)
+	}
+	w := queue.NewRiverClient(st, nil)
+	w.SetTestOnly(true)
+	srv.Voice().RegisterHandlers(w)
+	w.Drain(ctx, "sandbox")
+	live, err := v.store.Live(ctx, user)
+	if err != nil || string(live.Text) != "# Voice\n\nShort sentences.\n" || live.ReviewState != "passed" {
+		t.Fatalf("live: %+v %v", live, err)
+	}
+	if _, err := v.store.State(ctx, uuid.New()); !errors.Is(err, ErrVoiceNotFound) {
+		t.Fatalf("another person's voice: %v", err)
 	}
 }
