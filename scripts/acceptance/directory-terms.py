@@ -28,7 +28,6 @@ import os
 import secrets
 import sys
 import urllib.error
-import urllib.parse
 import urllib.request
 
 AK = os.environ.get("AK", "http://dt-ak-server:9000")
@@ -112,7 +111,7 @@ def on():
     made = {}
     user, c = flow.submit_form("")
     text, agree = terms_step(c, "a blank display name")
-    shown = text.get("initial_value") or "" if text else ""
+    shown = (text.get("initial_value") or "") if text else ""
     if f'data-terms-version="{VERSION}"' not in shown or "Fixture clause 40" not in shown:
         fail(f"the terms step does not show the deployment's file: {shown[:300]!r}")
     if 'class="agentry-terms"' not in shown or "onload=" not in shown:
@@ -153,8 +152,9 @@ def missing():
     flow.to_form()
     _, c = flow.submit_form("")
     text, _ = terms_step(c, "the missing file")
-    if "could not be loaded" not in (text.get("initial_value") or ""):
-        fail(f"with the file gone the step shows {(text.get('initial_value') or '')[:200]!r}")
+    shown = (text.get("initial_value") or "") if text else ""
+    if "could not be loaded" not in shown:
+        fail(f"with the file gone the step shows {shown[:200]!r}")
     c = flow.step({"component": "ak-stage-prompt", AGREE: True})
     if c.get("component") != "ak-stage-prompt" or "could not be loaded" not in errors(c):
         fail(f"with the file gone a ticked agreement got through: {c.get('component')} {errors(c)[:300]}")

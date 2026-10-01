@@ -15,8 +15,10 @@
 #      accounts record agreement, version and time, a blank name became the
 #      username, a typed name and a promo code were kept, and the text shown
 #      was not stored.
-#   2. Missing (the file removed): the step says the terms could not be
-#      loaded and refuses the sign-up.
+#   2. Unreadable (the file not UTF-8, then removed): the step says the
+#      terms could not be loaded and refuses the sign-up. Not UTF-8 is the
+#      case that once fell through: the expression raised, authentik showed
+#      its source, and the source matched a loose version pattern.
 #   3. Off (the server recreated without the variable): the form leads
 #      straight to the confirmation mail.
 #
@@ -148,6 +150,7 @@ for label in ("blank", "named"):
     print("TERMS", label, u.attributes.get("agentry_terms_accepted"), u.attributes.get("agentry_terms_version") == os.environ["VERSION"], fresh)
     print("NAME", label, u.name == u.username, repr(u.name))
     print("KEYS", label, sorted(u.attributes))
+    print("ACTIVE", label, u.is_active)
 PY
 )
 for label in blank named; do
@@ -162,9 +165,15 @@ case "$check" in *"KEYS named ['agentry_has_password', 'agentry_promo_code', 'ag
     echo "ok   the promo code survives beside the terms record, and the text shown is not stored" ;;
   *) echo "FAIL: the named account's attributes: $check"; exit 1 ;; esac
 
+case "$check" in *"ACTIVE blank False"*"ACTIVE named False"*) echo "ok   both accounts are written inactive, for the confirmation mail to activate" ;;
+  *) echo "FAIL: an account is active before its address is confirmed: $check"; exit 1 ;; esac
+
+printf '\xff\xfe<article data-terms-version="not-utf8">' | docker exec -i -u 0 "$AK" sh -c "cat > $TERMS_PATH"
+out=$(docker exec "$DRIVER" python /driver.py missing) || { echo "FAIL (a terms file that is not UTF-8)"; echo "$out"; exit 1; }
+echo "$out (a file that is not UTF-8)"
 docker exec -u 0 "$AK" rm -f "$TERMS_PATH"
-out=$(docker exec "$DRIVER" python /driver.py missing) || { echo "$out"; exit 1; }
-echo "$out"
+out=$(docker exec "$DRIVER" python /driver.py missing) || { echo "FAIL (no terms file)"; echo "$out"; exit 1; }
+echo "$out (no file at all)"
 
 echo "recreating the server without the terms setting"
 server off
