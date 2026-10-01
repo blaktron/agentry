@@ -34,20 +34,27 @@ Ten stages run against those bytes:
 | <span id="s4">**S4**</span> | Prompt-injection signatures: instruction override, exfiltration, tool coercion, credential harvesting, persistence, obfuscation |
 | <span id="s5">**S5**</span> | AI Review. A model reads the manifest and every text file of the release, scripts included, against a fixed six-axis rubric — override of the consuming agent, exfiltration, undeclared capability, user deception, obfuscation, destructive actions — with no tools, and returns a score per axis. Agentry's hosted registry uses TypeSafe AI's Jev, pinned to one version (`jev-1.13.0`), which answers each axis with a probability. The run records the model id and a hash of the questions, the thresholds and the request shape, so a verdict can be traced to what produced it. An axis scored 2 (probable) is a medium finding and one scored 3 (clear presence) a high one, except the override and undeclared-capability axes, which are high from 2. Its findings carry medium confidence, so this stage alone never rejects a release; the vendor publishes no accuracy figures for these questions and two identical requests may not answer identically, which is why the version is pinned, a borderline answer is asked three times, and S3, S4 and S6 gate deterministically underneath. A review that fails or answers out of shape routes the release to human review rather than through. A self-hosted registry may use Jev with its own key, an Anthropic-, OpenAI-compatible or Bedrock model (whose output is text, so a judge that shows signs of having been manipulated is itself a finding), a PromptGuard-class classifier that scores only the injection axis and therefore always routes to human review, or no model at all, in which case every release goes to a reviewer |
 | <span id="s6">**S6**</span> | Support scripts against the manifest: every shell, Python or JavaScript file in the package (by extension or shebang) is read for network calls, file writes, subprocesses, `eval`, environment reads and download-and-run remote execution (a fetched script piped into a shell), and each is compared with `capabilities`. A script in a package whose `exec` is `none`, a call to a host outside `network.egress`, a write under `filesystem.write: none`, an undeclared subprocess and any remote execution are high; an environment variable outside `secrets` is high too, since it is an undeclared capability. The stage matches text and never runs the script; a host counts only inside a network call, so a URL in a comment is not a finding |
-| <span id="s7">**S7**</span> | Declared MCP servers: every `capabilities.mcpServers` package version is checked against the OSV vulnerability database — live the first time a version is seen, from the registry of scanned server versions afterwards — and each advisory is a finding at the advisory's own severity, CVE ids included. A lookup that fails routes to review; a database that is switched off says "not checked", never "no advisories" |
+| <span id="s7">**S7**</span> | Declared MCP servers: every `capabilities.mcpServers` package version is checked against the OSV vulnerability database — live the first time a version is seen, from the registry of scanned server versions afterwards — and each advisory is a finding at the advisory's own severity, CVE ids included. A lookup that fails is reported as the finding `S7/osv-error` (medium, so the version still publishes) and the daily sweep looks the server up again; a database that is switched off says "not checked", never "no advisories" |
 | <span id="s8">**S8**</span> | Metadata, namespace and publisher-behaviour abuse: names that imitate popular agents, suspicious links, keyword stuffing, and two publisher signals, a young account publishing fast and several accounts publishing from one address in a day. The publisher signals are skipped for platform staff, the account set the registry's operator controls; S8's other checks and every other stage still run for them |
 | <span id="s9">**S9**</span> | Release-diff risk: the rug-pull check, comparing a version against its predecessor |
 | <span id="s10">**S10**</span> | Report assembly into a canonical, digest-addressed document |
 
-The gate then decides: clean and low-severity versions publish
-automatically, medium and high findings go to human review, critical
-findings are rejected. **A scanner that errors or times out fails toward
-review, never through.** Any stage error becomes an `S0/pipeline-error`
-finding that forces a human look, and so does a finding that says content
-went unread: a file that could not be read, text past the 1 MiB scan cap,
-a secrets tool or a git history scan that failed, or a shipped knowledge
-pack's text that was not read. And "no path to `published` skips the gate"
-is a property test, not a promise.
+The gate then decides: a version whose findings are low or medium
+publishes automatically, with every finding on its report; a high finding
+goes to human review; a critical one is rejected. Attempted injections and
+undeclared capabilities are rated high, so they always reach a person.
+This is the baseline of ruleset 0.3.0, which moved it from holding medium
+too; the threshold is released with the ruleset that judges the findings,
+and an organization that wants medium held sets its policy's
+`maxAutoPublishSeverity` to `low`. **A scanner that errors or times out
+fails toward review, never through.** Any stage error becomes an
+`S0/pipeline-error` finding that forces a human look, and so does a finding
+that says content went unread: a file that could not be read, text past
+the 1 MiB scan cap, a secrets tool or a git history scan that failed, or a
+shipped knowledge pack's text that was not read. The one lookup that can
+fail without holding the version is S7's: a failed advisory lookup is
+reported as a finding and looked up again by the daily sweep. And "no path
+to `published` skips the gate" is a property test, not a promise.
 
 ## What a signature proves
 

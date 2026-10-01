@@ -1,7 +1,7 @@
 # Agentry S4 injection-signature rule bundle (PLAN §8.3, shipped as
 # ruleset_releases). This manifest gives the bundle its semantic version,
 # which is recorded on every scan_run and pinned in the CLI release (D-12).
-version: "0.2.3"
+version: "0.3.0"
 notes: >
   v1 signature set: the six S4 injection families (instruction-override,
   exfiltration, tool-coercion, credential-harvest, persistence,
@@ -17,7 +17,13 @@ notes: >
   a stage could not read forces review (agentry#771). 0.2.3 changes no
   signature and no rating: it is the first ruleset whose registration also
   judges the review queue again and publishes what now passes the gate
-  (agentry#772), released so that redo runs.
+  (agentry#772), released so that redo runs. 0.3.0 changes no signature
+  and no rating: it moves the platform baseline's auto-publish threshold
+  from low to medium (agentry#773). A version whose worst finding is
+  medium publishes with the finding on its report; a high finding, or
+  content a stage could not read, goes to a person; a critical one is
+  rejected. The threshold is released with this version and kept beside
+  it in pkg/ruleset, not in this manifest.
 
 # Bundle-level suppressions, applied to every rule in addition to its own
 # (§17.3 precision requirement). These capture DESCRIPTIVE FRAMING: prose that

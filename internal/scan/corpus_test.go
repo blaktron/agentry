@@ -136,17 +136,18 @@ func TestAttackCorpusGate(t *testing.T) {
 				return
 			}
 			// An attack fixture must gate (needs_review or rejected), by
-			// outcome, at the baseline and at threshold medium, unless it is
-			// named below with the reason it publishes with its findings on
-			// the page. The lists are exact both ways, so a fixture that
-			// changes outcome changes this file.
+			// outcome, at the baseline (threshold medium since ruleset
+			// 0.3.0) and at threshold low (an organization that holds
+			// medium), unless it is named below with the reason it
+			// publishes with its findings on the page. The lists are exact
+			// both ways, so a fixture that changes outcome changes this file.
 			for _, th := range []struct {
 				name      string
 				result    RunResult
 				publishes map[string]string
 			}{
-				{"the baseline", result, corpusPublishesAtLow},
-				{"threshold medium", run("medium"), corpusPublishesAtMedium},
+				{"the baseline", result, corpusPublishesAtMedium},
+				{"threshold low", run("low"), corpusPublishesAtLow},
 			} {
 				published := th.result.Decision.Outcome == OutcomePublish
 				why, listed := th.publishes[e.Name()]
@@ -169,15 +170,17 @@ func TestAttackCorpusGate(t *testing.T) {
 		attackCount, benignCount, pairCount)
 }
 
-// corpusPublishesAtLow are the attack fixtures the baseline (threshold low)
-// publishes, each with its findings on the page (§8.5).
+// corpusPublishesAtLow are the attack fixtures threshold low publishes (an
+// organization that holds medium; the baseline before ruleset 0.3.0), each
+// with its findings on the page (§8.5).
 var corpusPublishesAtLow = map[string]string{
 	"s3-html-comment":        "a bare HTML comment is low by design",
 	"s3-nfc-delta":           "an NFC normalization delta is info",
 	"s3-trailing-whitespace": "trailing whitespace is low, at low confidence",
 }
 
-// corpusPublishesAtMedium adds what threshold medium publishes: the medium
+// corpusPublishesAtMedium adds what threshold medium, the baseline since
+// ruleset 0.3.0 (agentry#773), publishes: the medium
 // findings outside undeclared capabilities and attempted injections, which
 // the operator chose to publish with their findings shown "for now" (D6 of
 // plan scan-and-run-tweaks, agentry#771).
