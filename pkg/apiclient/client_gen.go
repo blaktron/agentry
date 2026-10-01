@@ -408,6 +408,24 @@ func (e DraftRubricFindingId) Valid() bool {
 	}
 }
 
+// Defines values for DraftRubricFindingSeverity.
+const (
+	DraftRubricFindingSeverityHigh   DraftRubricFindingSeverity = "high"
+	DraftRubricFindingSeverityMedium DraftRubricFindingSeverity = "medium"
+)
+
+// Valid indicates whether the value is a known member of the DraftRubricFindingSeverity enum.
+func (e DraftRubricFindingSeverity) Valid() bool {
+	switch e {
+	case DraftRubricFindingSeverityHigh:
+		return true
+	case DraftRubricFindingSeverityMedium:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DraftSetCheckFlagged.
 const (
 	OffTask DraftSetCheckFlagged = "off_task"
@@ -2015,7 +2033,7 @@ type DraftCheckRequest struct {
 	Files []DraftCheckFile `json:"files"`
 }
 
-// DraftCheckVerdict `pass`: no question scored 2 or more. `flagged`: one did. `not_scanned`: the judge could not answer for this half.
+// DraftCheckVerdict `flagged`: in the rubric half, a high finding (one the gate sends to a person); in the draft half, a question scored 2 or more. `pass`: neither, though the rubric half may list medium findings as notes. `not_scanned`: the judge could not answer for this half.
 type DraftCheckVerdict string
 
 // DraftRubricCheck defines model for DraftRubricCheck.
@@ -2023,7 +2041,7 @@ type DraftRubricCheck struct {
 	// Failure Why a half was not scanned: the judge timed out, failed, or (the draft set only) a part of the draft is past its bound.
 	Failure *DraftCheckFailure `json:"failure,omitempty"`
 
-	// Findings What S5 would record as findings, and so send to review.
+	// Findings What S5 would record as findings. A high one sends the version to a person and makes the verdict `flagged`; a medium one is a note and leaves the verdict `pass`.
 	Findings []DraftRubricFinding `json:"findings"`
 
 	// RubricHash The rubric hash S5 records under the same model.
@@ -2032,7 +2050,7 @@ type DraftRubricCheck struct {
 	// Scores Per rubric question, 0 to 3, as S5 scores it.
 	Scores *DraftRubricScores `json:"scores,omitempty"`
 
-	// Verdict `pass`: no question scored 2 or more. `flagged`: one did. `not_scanned`: the judge could not answer for this half.
+	// Verdict `flagged`: in the rubric half, a high finding (one the gate sends to a person); in the draft half, a question scored 2 or more. `pass`: neither, though the rubric half may list medium findings as notes. `not_scanned`: the judge could not answer for this half.
 	Verdict DraftCheckVerdict `json:"verdict"`
 }
 
@@ -2043,10 +2061,16 @@ type DraftRubricFinding struct {
 	// Path The file whose part scored highest (`agent.yaml` for the manifest).
 	Path  string `json:"path"`
 	Score int    `json:"score"`
+
+	// Severity The severity S5 would record. `high` (a score of 3, or 2 for `C1_injection` and `C3_undeclared_capability`) sends the version to a person; `medium` is shown on the report of a version that publishes (ruleset 0.3.0).
+	Severity DraftRubricFindingSeverity `json:"severity"`
 }
 
 // DraftRubricFindingId defines model for DraftRubricFinding.Id.
 type DraftRubricFindingId string
+
+// DraftRubricFindingSeverity The severity S5 would record. `high` (a score of 3, or 2 for `C1_injection` and `C3_undeclared_capability`) sends the version to a person; `medium` is shown on the report of a version that publishes (ruleset 0.3.0).
+type DraftRubricFindingSeverity string
 
 // DraftRubricScores Per rubric question, 0 to 3, as S5 scores it.
 type DraftRubricScores struct {
@@ -2071,7 +2095,7 @@ type DraftSetCheck struct {
 	// Scores Per draft question, 0 to 3. `off_task`: the instruction would not do the task the description asks for (a different task, a part left out, a different kind of result).
 	Scores *DraftSetScores `json:"scores,omitempty"`
 
-	// Verdict `pass`: no question scored 2 or more. `flagged`: one did. `not_scanned`: the judge could not answer for this half.
+	// Verdict `flagged`: in the rubric half, a high finding (one the gate sends to a person); in the draft half, a question scored 2 or more. `pass`: neither, though the rubric half may list medium findings as notes. `not_scanned`: the judge could not answer for this half.
 	Verdict DraftCheckVerdict `json:"verdict"`
 }
 

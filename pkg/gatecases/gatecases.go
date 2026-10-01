@@ -58,7 +58,8 @@ type Policy struct {
 	// absent means "never".
 	RequireHumanReview json.RawMessage `json:"requireHumanReview,omitempty"`
 	// MaxAutoPublishSeverity is the worst severity that publishes; absent
-	// means the gate's fallback.
+	// means the gate's fallback, the registry's baseline (medium since
+	// ruleset 0.3.0, agentry#773).
 	MaxAutoPublishSeverity string `json:"maxAutoPublishSeverity,omitempty"`
 	// WildcardEgress is "review" or "reject"; absent means "review".
 	WildcardEgress string `json:"wildcardEgress,omitempty"`

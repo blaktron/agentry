@@ -19,7 +19,7 @@ func TestGateSeverityTable(t *testing.T) {
 		{"clean", GateInput{Policy: base}, OutcomePublish},
 		{"info", GateInput{Findings: []Finding{f(SevInfo, ConfHigh)}, Policy: base}, OutcomePublish},
 		{"low auto", GateInput{Findings: []Finding{f(SevLow, ConfHigh)}, Policy: base}, OutcomePublish},
-		{"medium review", GateInput{Findings: []Finding{f(SevMedium, ConfHigh)}, Policy: base}, OutcomeNeedsReview},
+		{"medium auto", GateInput{Findings: []Finding{f(SevMedium, ConfHigh)}, Policy: base}, OutcomePublish},
 		{"high review", GateInput{Findings: []Finding{f(SevHigh, ConfHigh)}, Policy: base}, OutcomeNeedsReview},
 		{"critical reject", GateInput{Findings: []Finding{f(SevCritical, ConfHigh)}, Policy: base}, OutcomeRejected},
 		{"low-confidence high does not gate alone",
@@ -78,6 +78,52 @@ func TestGatePolicyRequireReviewWhenCapabilities(t *testing.T) {
 	got = Evaluate(GateInput{Policy: p, DeclaredCapabilities: map[string]bool{}})
 	if got.Outcome != OutcomePublish {
 		t.Fatalf("no capability, clean scan should publish: %s", got.Reason)
+	}
+}
+
+// TestBaselinePublishesOnMedium pins ruleset 0.3.0 (agentry#773, D8 of plan
+// scan-and-run-tweaks): the baseline's threshold is medium and comes from the
+// ruleset, and every reader of an empty threshold uses it.
+func TestBaselinePublishesOnMedium(t *testing.T) {
+	if got := DefaultBaseline().MaxAutoPublishSeverity; got != "medium" {
+		t.Fatalf("DefaultBaseline threshold = %q, want medium", got)
+	}
+	medium := []Finding{f(SevMedium, ConfHigh)}
+	// A policy that names no threshold gets the baseline's.
+	if got := Evaluate(GateInput{Findings: medium, Policy: Policy{}}); got.Outcome != OutcomePublish {
+		t.Fatalf("a policy with no threshold held a medium: %s (%s)", got.Outcome, got.Reason)
+	}
+	// A baseline that names none merges as medium, so an org at medium is
+	// not a loosening and an org at high is.
+	if LoosensBaseline(Policy{}, Policy{MaxAutoPublishSeverity: "medium"}) {
+		t.Fatal("an org at medium was called a loosening of the baseline")
+	}
+	if !LoosensBaseline(Policy{}, Policy{MaxAutoPublishSeverity: "high"}) {
+		t.Fatal("an org at high was not called a loosening of the baseline")
+	}
+	if got := Merge(Policy{}, Policy{MaxAutoPublishSeverity: "high"}).MaxAutoPublishSeverity; got == "high" {
+		t.Fatal("merge let an org publish on high")
+	}
+}
+
+// TestAnOrgAtLowStillHoldsMedium pins invariant 3 of plan scan-and-run-tweaks:
+// an organization that wants medium held writes maxAutoPublishSeverity low,
+// and the gate holds medium for it while the platform publishes it.
+func TestAnOrgAtLowStillHoldsMedium(t *testing.T) {
+	merged := Merge(DefaultBaseline(), Policy{MaxAutoPublishSeverity: "low"})
+	if merged.MaxAutoPublishSeverity != "low" {
+		t.Fatalf("merged threshold = %q, want the org's low", merged.MaxAutoPublishSeverity)
+	}
+	if LoosensBaseline(DefaultBaseline(), Policy{MaxAutoPublishSeverity: "low"}) {
+		t.Fatal("an org at low was called a loosening")
+	}
+	medium := []Finding{f(SevMedium, ConfHigh)}
+	if got := Evaluate(GateInput{Findings: medium, Policy: merged}); got.Outcome != OutcomeNeedsReview {
+		t.Fatalf("the org at low published a medium: %s (%s)", got.Outcome, got.Reason)
+	}
+	low := []Finding{f(SevLow, ConfHigh)}
+	if got := Evaluate(GateInput{Findings: low, Policy: merged}); got.Outcome != OutcomePublish {
+		t.Fatalf("the org at low held a low: %s (%s)", got.Outcome, got.Reason)
 	}
 }
 

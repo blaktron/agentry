@@ -123,8 +123,11 @@ func Evaluate(in GateInput) GateDecision {
 		}
 	}
 
-	// Severity table (§8.5), tightened by maxAutoPublishSeverity.
-	maxAuto := SevLow
+	// Severity table (§8.5), tightened by maxAutoPublishSeverity. A policy
+	// that names no threshold gets the ruleset's baseline (medium since
+	// 0.3.0): low and medium publish with their findings shown, high goes
+	// to a person.
+	maxAuto, _ := severityByName(baselineMaxAuto())
 	if s, ok := severityByName(in.Policy.MaxAutoPublishSeverity); ok {
 		maxAuto = s
 	}
