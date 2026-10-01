@@ -260,20 +260,29 @@ func (s S9ReleaseDiff) Run(sc stageContext, in *Input) StageResult {
 	prevFiles := withoutShippedTrees(inventoryDir(in.PrevArchiveDir), shippedPacks(in.PrevManifestJSON))
 
 	findings = append(findings, s9ManifestDiff(in)...)
-	findings = append(findings, s9ContentDiff(in, prevFiles, bump)...)
+	findings = append(findings, s9ContentDiff(sc.bundle, in, prevFiles, bump)...)
 	findings = append(findings, s9Escalate(sc, in, prevFiles, s.CurrentFindings, bump)...)
 	return StageResult{Scanner: "S9", Findings: findings}
 }
 
 // s9ManifestDiff covers the declared surface: egress hosts and capabilities
-// the previous manifest did not have.
+// the previous manifest did not have. A newly declared host is low (ruleset
+// 0.3.2, agentry#775): reaching the internet is what a QuickAgent is for, the
+// host is shown to whoever installs it and the runner holds the run to it,
+// so declaring one is not suspicious (the operator, 2026-10-01). A suspicious
+// link is S8's url-reputation finding. Wildcard egress names no host and
+// stays medium.
 func s9ManifestDiff(in *Input) []Finding {
 	var findings []Finding
 	prevEgress := egressSet(in.PrevManifestJSON)
 	for _, host := range sortedSet(egressSet(in.ManifestJSON)) {
 		if !prevEgress[host] && host != "none" {
+			sev := SevLow
+			if host == "*" {
+				sev = SevMedium
+			}
 			findings = append(findings, Finding{
-				Scanner: "S9/new-egress", Severity: SevMedium, Confidence: ConfHigh,
+				Scanner: "S9/new-egress", Severity: sev, Confidence: ConfHigh,
 				Title:    "New network egress host in this release: " + host,
 				Detail:   map[string]any{"host": host, "pattern": "new destination after clean releases (postmark-mcp)"},
 				Taxonomy: []string{"LLM03", "ASI04"},
@@ -298,7 +307,7 @@ func s9ManifestDiff(in *Input) []Finding {
 // stage changed no manifest field: it added one line of code that BCC'd every
 // message to an address the previous fifteen releases had never mentioned.
 // Only a diff of the CONTENT sees that.
-func s9ContentDiff(in *Input, prevFiles []FileEntry, bump string) []Finding {
+func s9ContentDiff(bundle *rules.Bundle, in *Input, prevFiles []FileEntry, bump string) []Finding {
 	if len(prevFiles) == 0 {
 		return nil // no baseline archive to compare against
 	}
@@ -315,10 +324,21 @@ func s9ContentDiff(in *Input, prevFiles []FileEntry, bump string) []Finding {
 		}
 		t := curTargets[target]
 		// A patch release that introduces a destination is the exact documented
-		// rug-pull shape; a major rewrite that adds one is ordinary.
-		sev := SevMedium
-		if bump == "patch" {
+		// rug-pull shape; a major rewrite that adds one is ordinary. A host
+		// this release's manifest names in network.egress, whether declared
+		// before or in this release, is low at any bump (ruleset 0.3.2,
+		// agentry#775): the author declared it, the installer is shown it and
+		// the runner holds the run to it. An email recipient is never
+		// declared that way, whatever its domain (postmark-mcp's BCC line),
+		// and "*" names no host.
+		var sev Severity
+		switch {
+		case t.Kind != egressKindEmail && declared[target]:
+			sev = SevLow
+		case bump == "patch":
 			sev = SevHigh
+		default:
+			sev = SevMedium
 		}
 		findings = append(findings, Finding{
 			Scanner: "S9/new-egress-content", Severity: sev, Confidence: ConfHigh,
@@ -336,35 +356,49 @@ func s9ContentDiff(in *Input, prevFiles []FileEntry, bump string) []Finding {
 	}
 
 	// (b) Obfuscation markers appearing for the first time. An S3 class the
-	// previous release did not contain is a change in kind, not degree.
+	// previous release did not contain is a change in kind, not degree. Only
+	// a class rated medium or above counts (ruleset 0.3.2, agentry#775): a
+	// patch that adds an HTML comment or trailing whitespace is ordinary
+	// editing, and its own finding is on the report. The class is rated at
+	// its worst in this release, with the bundle, so a comment that hides an
+	// injection signature counts at medium.
 	prevClasses := map[string]bool{}
 	for _, rf := range rules.Scan(nil, toRuleFiles(prevFiles)) {
 		prevClasses[rf.RuleID] = true
 	}
-	curClasses := map[string]struct {
+	// Each class at its worst rating, and its first hit at that rating.
+	type classHit struct {
+		sev  Severity
 		file string
 		line int
-	}{}
-	for _, rf := range rules.Scan(nil, toRuleFiles(in.Files)) {
-		if _, ok := curClasses[rf.RuleID]; !ok {
-			curClasses[rf.RuleID] = struct {
-				file string
-				line int
-			}{rf.FilePath, rf.LineStart}
+	}
+	curClasses := map[string]classHit{}
+	for _, rf := range rules.Scan(bundle, toRuleFiles(in.Files)) {
+		if !strings.HasPrefix(rf.RuleID, "S3/") {
+			continue // the bundle adds S4's signatures, which S4 reports
+		}
+		sev := Severity(rf.Severity)
+		if severityRank(sev) > severityRank(curClasses[rf.RuleID].sev) {
+			curClasses[rf.RuleID] = classHit{sev, rf.FilePath, rf.LineStart}
 		}
 	}
-	for _, class := range sortedSetFromStructMap(curClasses) {
-		if prevClasses[class] {
+	classes := make([]string, 0, len(curClasses))
+	for class := range curClasses {
+		classes = append(classes, class)
+	}
+	sort.Strings(classes)
+	for _, class := range classes {
+		loc := curClasses[class]
+		if prevClasses[class] || severityRank(loc.sev) < severityRank(SevMedium) {
 			continue
 		}
-		loc := curClasses[class]
 		findings = append(findings, Finding{
 			Scanner: "S9/new-obfuscation", Severity: SevHigh, Confidence: ConfHigh,
 			Title:     "Obfuscation marker appears for the first time in this release: " + class,
 			FilePath:  loc.file,
 			LineStart: loc.line, LineEnd: loc.line,
 			Detail: map[string]any{
-				"class": class, "bump": bump,
+				"class": class, "classSeverity": loc.sev, "bump": bump,
 				"reason": "hidden-content techniques absent from every previous release arrived with this one",
 			},
 			Taxonomy: []string{"LLM01", "ASI06"},
@@ -470,18 +504,6 @@ func sortedSet(m map[string]bool) []string {
 }
 
 func sortedTargets(m map[string]egressTarget) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func sortedSetFromStructMap(m map[string]struct {
-	file string
-	line int
-}) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)
