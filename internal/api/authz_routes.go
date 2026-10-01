@@ -214,6 +214,13 @@ var routeAuthz = map[string]RouteDecl{
 	"wrapKnowledgeKey":      {Action: auth.ActKnowledgeWrite},
 	"unwrapKnowledgeKey":    {Action: auth.ActKnowledgeRead},
 	"getKnowledgeUsage":     {Action: auth.ActKnowledgeRead},
+	// The Writing Voice (agentry#809) is the CALLER's own: self-scoped.
+	"getVoice":            {Action: auth.ActVoiceRead},
+	"putVoice":            {Action: auth.ActVoiceWrite},
+	"deleteVoice":         {Action: auth.ActVoiceWrite},
+	"discardVoicePending": {Action: auth.ActVoiceWrite},
+	"restoreVoice":        {Action: auth.ActVoiceWrite},
+	"updateVoiceSettings": {Action: auth.ActVoiceWrite},
 	// An organization's shared knowledge (agentry#646): members read and
 	// unwrap, admins write; outsiders are 404. The export is a read that a
 	// member makes only of a pack marked exportable, which the handler

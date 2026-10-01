@@ -35,6 +35,7 @@ import (
 	"github.com/blaktron/agentry/internal/scan"
 	"github.com/blaktron/agentry/internal/store"
 	"github.com/blaktron/agentry/internal/version"
+	"github.com/blaktron/agentry/internal/voice"
 )
 
 // Main runs agentryd with the given extensions: the `api | git | worker |
@@ -320,6 +321,10 @@ func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st 
 	// Remembered browsers past their expiry (agentry#464): hourly, and once
 	// at start; the handler deletes only what has expired.
 	go periodicTicker(ctx, q, api.JobTrustedDeviceSweep, "core", time.Hour, log)
+	// Writing Voice reviews left in review since their last try
+	// (agentry#809): hourly, and once at start; a judge that could not
+	// answer is asked again, never skipped.
+	go periodicTicker(ctx, q, voice.JobSweep, "core", time.Hour, log)
 	return q, nil
 }
 
@@ -422,6 +427,33 @@ func (k serverKnowledge) Replace(ctx context.Context, owner KeyOwner, id uuid.UU
 
 func (k serverKnowledge) Usage(ctx context.Context, owner KeyOwner) (KnowledgeUsage, error) {
 	return k.svc.Usage(ctx, owner)
+}
+
+// voiceOf adapts the server's voice store to Voice: nil without a
+// database, the way Deps.DB is. Set whether or not the store is on yet,
+// as knowledgeOf is: a key wrapper an extension adds later turns it on.
+func voiceOf(srv *api.Server, pool *pgxpool.Pool) Voice {
+	if pool == nil || srv.Voice() == nil {
+		return nil
+	}
+	return serverVoice{srv.Voice()}
+}
+
+type serverVoice struct{ svc *voice.Service }
+
+func (v serverVoice) Live(ctx context.Context, user uuid.UUID) (*VoiceVersion, error) {
+	return v.svc.Live(ctx, user)
+}
+
+func (v serverVoice) State(ctx context.Context, user uuid.UUID) (VoiceState, error) {
+	return v.svc.Get(ctx, user)
+}
+
+func (v serverVoice) Propose(ctx context.Context, user uuid.UUID, text []byte, source VoiceSource) (VoiceState, error) {
+	if source != VoiceSourceBuild && source != VoiceSourceAIEdit {
+		return VoiceState{}, fmt.Errorf("extension: a Voice Writer run proposes a voice as build or ai-edit, not %q", source)
+	}
+	return v.svc.Put(ctx, user, text, source)
 }
 
 // webhooksOf adapts the server's webhook transport to Webhooks: nil
@@ -698,7 +730,8 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 			pool, log, write, writeIn := srv.ExtensionDeps()
 			b.Bind(Deps{DB: pool, Log: log.With("extension", e.Name()), Audit: auditWriter{write: write, writeIn: writeIn},
 				Entitlements: srv.CoreEntitlements(), Blobs: srv.Blobs(), Orgs: orgsOf(srv, pool), Agents: agentsOf(srv, pool),
-				Notifier: notifierOf(srv, pool), Webhooks: webhooksOf(srv, pool), Knowledge: knowledgeOf(srv, pool)})
+				Notifier: notifierOf(srv, pool), Webhooks: webhooksOf(srv, pool), Knowledge: knowledgeOf(srv, pool),
+				Voice: voiceOf(srv, pool)})
 		}
 		srv.RegisterExtension(e.Name(), e.Routes)
 		if u, ok := e.(Unthrottles); ok {
@@ -719,6 +752,11 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 		}
 		if x, ok := e.(ErasesAccounts); ok {
 			srv.AddAccountEraser(e.Name(), x.EraseAccount)
+		}
+		if v, ok := e.(AdmitsVoice); ok {
+			if a := v.VoiceAdmitter(); a != nil {
+				srv.SetVoiceAdmitter(a)
+			}
 		}
 		if m, ok := e.(AdmitsModelInput); ok {
 			if c := m.ModelInputCallers(); c != nil {
