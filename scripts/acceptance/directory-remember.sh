@@ -47,7 +47,7 @@ TMP=$(mktemp -d)
 AK="$P-ak-server"
 DRIVER="$P-driver"
 cleanup() {
-  docker rm -f "$P-pg" "$P-redis" "$AK" "$P-ak-worker" "$DRIVER" "$P-probe" >/dev/null 2>&1 || true
+  docker rm -fv "$P-pg" "$P-redis" "$AK" "$P-ak-worker" "$DRIVER" "$P-probe" >/dev/null 2>&1 || true
   docker network rm "$NET" >/dev/null 2>&1 || true
   rm -rf "$TMP"
 }
@@ -60,7 +60,7 @@ trap cleanup EXIT
 probe=$(docker create --name "$P-probe" "$IMAGE")
 docker cp "$probe:/authentik/flows/templates/if/flow.html" "$TMP/flow.orig.html"
 docker cp "$probe:/web/dist" "$TMP/dist" >/dev/null
-docker rm -f "$probe" >/dev/null
+docker rm -fv "$probe" >/dev/null
 sed '/^{# agentry:begin remembered-browser/,$d' "$TEMPLATE" > "$TMP/flow.ours.html"
 if cmp -s "$TMP/flow.orig.html" "$TMP/flow.ours.html"; then
   echo "ok   the template is the pinned image's flow.html plus one marked block"
