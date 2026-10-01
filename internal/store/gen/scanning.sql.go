@@ -1198,6 +1198,52 @@ func (q *Queries) ListFindings(ctx context.Context, scanRunID uuid.UUID) ([]Find
 	return items, nil
 }
 
+const listHeldVersionsForRedo = `-- name: ListHeldVersionsForRedo :many
+SELECT av.id
+FROM agent_versions av JOIN agents a ON a.id = av.agent_id
+WHERE av.status = 'needs_review'
+  AND av.scan_status <> 'skipped' AND NOT a.pipeline_skip
+  AND EXISTS (SELECT 1 FROM review_items ri WHERE ri.version_id = av.id AND ri.state = 'pending')
+  AND NOT EXISTS (SELECT 1 FROM scan_runs r
+                  WHERE r.version_id = av.id AND r.ruleset_release_id = $1
+                    AND r.status <> 'running')
+  AND ($2::uuid IS NULL OR av.id < $2)
+ORDER BY av.id DESC
+LIMIT $3
+`
+
+type ListHeldVersionsForRedoParams struct {
+	RulesetReleaseID uuid.UUID  `json:"ruleset_release_id"`
+	After            *uuid.UUID `json:"after"`
+	RowLimit         int32      `json:"row_limit"`
+}
+
+// The review queue a new ruleset redoes (agentry#772): versions in
+// needs_review whose item is still pending (no person has decided), that
+// no finished run of this ruleset has judged yet. The last condition makes
+// the redo idempotent: a redelivered job, or a second start on the same
+// ruleset, finds nothing. Unscanned versions and pipeline_skip agents are
+// left out, as from the catalogue sweep.
+func (q *Queries) ListHeldVersionsForRedo(ctx context.Context, arg ListHeldVersionsForRedoParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listHeldVersionsForRedo, arg.RulesetReleaseID, arg.After, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOpenFindings = `-- name: ListOpenFindings :many
 SELECT id, scan_run_id, scanner, severity, confidence, title, file_path, line_start, line_end, excerpt, detail, verdict, verdict_by, verdict_reason, verdict_at, created_at FROM findings WHERE scan_run_id = $1 AND verdict = 'open' ORDER BY scanner
 `
@@ -1609,16 +1655,22 @@ func (q *Queries) ListStuckSubmittedVersions(ctx context.Context, arg ListStuckS
 const runningScanRunForVersion = `-- name: RunningScanRunForVersion :one
 SELECT id, version_id, trigger, ruleset_release_id, policy_snapshot, judge_model, judge_prompt_hash, status, started_at, finished_at, report_digest, judge_prompt_tokens, judge_completion_tokens FROM scan_runs
 WHERE version_id = $1 AND trigger = $2 AND status = 'running'
+  AND ruleset_release_id = $3
 ORDER BY started_at DESC LIMIT 1
 `
 
 type RunningScanRunForVersionParams struct {
-	VersionID uuid.UUID `json:"version_id"`
-	Trigger   string    `json:"trigger"`
+	VersionID        uuid.UUID `json:"version_id"`
+	Trigger          string    `json:"trigger"`
+	RulesetReleaseID uuid.UUID `json:"ruleset_release_id"`
 }
 
+// An interrupted run is resumed only under the ruleset it was started with:
+// a run of an older ruleset carries that ruleset's findings and policy
+// snapshot, and a new ruleset's scan resuming it would judge a mix of two
+// (agentry#772). Such a run is left as it is; the new scan starts afresh.
 func (q *Queries) RunningScanRunForVersion(ctx context.Context, arg RunningScanRunForVersionParams) (ScanRun, error) {
-	row := q.db.QueryRow(ctx, runningScanRunForVersion, arg.VersionID, arg.Trigger)
+	row := q.db.QueryRow(ctx, runningScanRunForVersion, arg.VersionID, arg.Trigger, arg.RulesetReleaseID)
 	var i ScanRun
 	err := row.Scan(
 		&i.ID,
@@ -1671,6 +1723,27 @@ type SetReviewPublishPendingParams struct {
 func (q *Queries) SetReviewPublishPending(ctx context.Context, arg SetReviewPublishPendingParams) error {
 	_, err := q.db.Exec(ctx, setReviewPublishPending, arg.ID, arg.PublishPending)
 	return err
+}
+
+const supersedePendingReviewItem = `-- name: SupersedePendingReviewItem :one
+UPDATE review_items SET state = 'superseded', decided_at = now(), rationale = $1
+WHERE version_id = $2 AND state = 'pending'
+RETURNING id
+`
+
+type SupersedePendingReviewItemParams struct {
+	Rationale *string   `json:"rationale"`
+	VersionID uuid.UUID `json:"version_id"`
+}
+
+// The gate takes back a pending item whose version a new ruleset published
+// (agentry#772): no person decided, so the item is superseded, not approved.
+// No row when a reviewer decided first.
+func (q *Queries) SupersedePendingReviewItem(ctx context.Context, arg SupersedePendingReviewItemParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, supersedePendingReviewItem, arg.Rationale, arg.VersionID)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const triageAbuseReport = `-- name: TriageAbuseReport :exec
