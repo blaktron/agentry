@@ -65,7 +65,7 @@ cid=$(docker create -i --entrypoint python \
   -e DJANGO_SETTINGS_MODULE=authentik.root.settings \
   -e LOGO_SHA="$LOGO_SHA" \
   "$IMAGE" - "${NAMES[@]}")
-trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+trap 'docker rm -fv "$cid" >/dev/null 2>&1 || true' EXIT
 docker cp "$TEMPLATES/." "$cid:/templates" >/dev/null
 docker cp "$LOGO" "$cid:$LOGO_PATH" >/dev/null
 set +e
