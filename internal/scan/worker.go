@@ -85,6 +85,23 @@ func (p *Pipeline) RegisterHandlers(q queue.Client) {
 		}
 		return p.RescanSweep(ctx)
 	})
+	q.Register(JobRedoReviewQueue, func(ctx context.Context, job queue.Job) error {
+		var args RescanSweepArgs
+		_ = json.Unmarshal(job.Args, &args) // args are advisory
+		sum, err := p.RedoReviewQueue(ctx)
+		if err != nil {
+			return err
+		}
+		if sum.Failed > 0 {
+			p.log.Error("review queue redo completed with versions it could not judge again",
+				"ruleset", args.RulesetSemver, "rescanned", sum.Rescanned, "published", sum.Published,
+				"held", sum.Held, "failed", sum.Failed)
+		} else {
+			p.log.Info("review queue redo complete",
+				"ruleset", args.RulesetSemver, "rescanned", sum.Rescanned, "published", sum.Published, "held", sum.Held)
+		}
+		return nil
+	})
 	q.Register(JobAttestSweep, func(ctx context.Context, _ queue.Job) error {
 		sum, err := p.AttestSweep(ctx)
 		if err != nil {

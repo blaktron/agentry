@@ -156,6 +156,16 @@ page carries the warning, and an advisory is raised against it. A version
 or agent that trust & safety has confirmed malicious is **blocked**, and
 downloads then return `410 Gone`.
 
+A new ruleset also judges the review queue again. Every version still
+waiting for a person is scanned under the new rules and run through the
+same gate as a fresh submission, under the policy then in force. One that
+now passes is published and signed like any other, and its review item is
+closed as superseded rather than approved, since no person decided it. One
+that is still held, or that the new rules would reject, stays with the
+person already asked, with the new scan as its report. A forced review (no
+AI Review ran, a stage failed, content went unread, a policy that requires
+a person) holds it as it did at submission.
+
 What that cannot do is reach a copy already on someone's disk. Advisories
 and the `advisory.published` / `agent.quarantined` webhooks are the
 notification path, which is why pinning versions in a lockfile you actually

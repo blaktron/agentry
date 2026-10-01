@@ -131,6 +131,14 @@ SELECT * FROM review_items WHERE version_id = $1 AND state = 'pending';
 -- name: DecideReviewItem :execrows
 UPDATE review_items SET state = $2, decided_by = $3, decided_at = now(), rationale = $4 WHERE id = $1 AND state = 'pending';
 
+-- The gate takes back a pending item whose version a new ruleset published
+-- (agentry#772): no person decided, so the item is superseded, not approved.
+-- No row when a reviewer decided first.
+-- name: SupersedePendingReviewItem :one
+UPDATE review_items SET state = 'superseded', decided_at = now(), rationale = sqlc.arg(rationale)
+WHERE version_id = sqlc.arg(version_id) AND state = 'pending'
+RETURNING id;
+
 -- name: SetReviewPublishPending :exec
 UPDATE review_items SET publish_pending = $2 WHERE id = $1;
 
@@ -220,6 +228,25 @@ WHERE av.status = 'published'
   AND (sqlc.narg('after')::uuid IS NULL OR av.id < sqlc.narg('after'))
 ORDER BY av.id DESC
 LIMIT $1;
+
+-- name: ListHeldVersionsForRedo :many
+-- The review queue a new ruleset redoes (agentry#772): versions in
+-- needs_review whose item is still pending (no person has decided), that
+-- no finished run of this ruleset has judged yet. The last condition makes
+-- the redo idempotent: a redelivered job, or a second start on the same
+-- ruleset, finds nothing. Unscanned versions and pipeline_skip agents are
+-- left out, as from the catalogue sweep.
+SELECT av.id
+FROM agent_versions av JOIN agents a ON a.id = av.agent_id
+WHERE av.status = 'needs_review'
+  AND av.scan_status <> 'skipped' AND NOT a.pipeline_skip
+  AND EXISTS (SELECT 1 FROM review_items ri WHERE ri.version_id = av.id AND ri.state = 'pending')
+  AND NOT EXISTS (SELECT 1 FROM scan_runs r
+                  WHERE r.version_id = av.id AND r.ruleset_release_id = sqlc.arg(ruleset_release_id)
+                    AND r.status <> 'running')
+  AND (sqlc.narg('after')::uuid IS NULL OR av.id < sqlc.narg('after'))
+ORDER BY av.id DESC
+LIMIT sqlc.arg(row_limit);
 
 -- Versions stuck mid-scan past the §7 30-minute cap. The watchdog routes
 -- these to review: a scan job that died terminally must never leave a version
