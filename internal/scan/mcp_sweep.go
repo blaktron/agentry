@@ -90,7 +90,7 @@ func (p *Pipeline) MCPSweep(ctx context.Context) (sum MCPSweepSummary, err error
 				continue
 			}
 			cur := MCPScanRecord{Ecosystem: r.Ecosystem, Package: r.Package, Version: r.Version,
-				Status: "safe", Advisories: vulns[pkgs[i].Key()], FirstSeen: prev.FirstSeen, LastChecked: time.Now()}
+				Status: "safe", Advisories: scoredAdvisories(vulns[pkgs[i].Key()]), FirstSeen: prev.FirstSeen, LastChecked: time.Now()}
 			if len(cur.Advisories) > 0 {
 				cur.Status = "vulnerable"
 				cur.MaxSeverity = worstSeverity(cur.Advisories)
