@@ -5969,7 +5969,9 @@ components:
     DraftCheckVerdict:
       type: string
       description: >-
-        `pass`: no question scored 2 or more. `flagged`: one did.
+        `flagged`: in the rubric half, a high finding (one the gate sends to
+        a person); in the draft half, a question scored 2 or more. `pass`:
+        neither, though the rubric half may list medium findings as notes.
         `not_scanned`: the judge could not answer for this half.
       enum: [pass, flagged, not_scanned]
     DraftCheckFailure:
@@ -6042,7 +6044,7 @@ components:
           maximum: 3
     DraftRubricFinding:
       type: object
-      required: [id, score, path]
+      required: [id, score, path, severity]
       properties:
         id:
           type: string
@@ -6054,6 +6056,14 @@ components:
         path:
           type: string
           description: The file whose part scored highest (`agent.yaml` for the manifest).
+        severity:
+          type: string
+          enum: [medium, high]
+          description: >-
+            The severity S5 would record. `high` (a score of 3, or 2 for
+            `C1_injection` and `C3_undeclared_capability`) sends the version
+            to a person; `medium` is shown on the report of a version that
+            publishes (ruleset 0.3.0).
     DraftRubricCheck:
       type: object
       required: [verdict, findings, rubricHash]
@@ -6064,7 +6074,10 @@ components:
           $ref: "#/components/schemas/DraftRubricScores"
         findings:
           type: array
-          description: What S5 would record as findings, and so send to review.
+          description: >-
+            What S5 would record as findings. A high one sends the version to
+            a person and makes the verdict `flagged`; a medium one is a note
+            and leaves the verdict `pass`.
           items:
             $ref: "#/components/schemas/DraftRubricFinding"
         rubricHash:

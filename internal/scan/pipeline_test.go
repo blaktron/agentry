@@ -215,7 +215,8 @@ func TestPipelineBenignPublishesAndSigns(t *testing.T) {
 
 // The pipeline hands the submitter's platform-staff flag to S8
 // (agentry#563): a new account's fifth version in a week trips
-// S8/publisher-velocity, and the same account as staff publishes its sixth.
+// S8/publisher-velocity, and the same account as staff does not. The finding
+// is medium, so since ruleset 0.3.0 both publish (agentry#773).
 func TestPipelineStaffSubmitterSkipsPublisherVelocity(t *testing.T) {
 	e := newPipeEnv(t)
 	ctx := context.Background()
@@ -251,8 +252,8 @@ func TestPipelineStaffSubmitterSkipsPublisherVelocity(t *testing.T) {
 	for _, name := range []string{"burst-a", "burst-b", "burst-c", "burst-d", "burst-e"} {
 		v = e.publish(name, "public", clean(name))
 	}
-	if !velocity(v) || v.Status != "needs_review" {
-		t.Fatalf("non-staff fifth version in a week: status %s, velocity finding %v; want needs_review on S8/publisher-velocity", v.Status, velocity(v))
+	if !velocity(v) || v.Status != "published" {
+		t.Fatalf("non-staff fifth version in a week: status %s, velocity finding %v; want published with S8/publisher-velocity on its report", v.Status, velocity(v))
 	}
 
 	if err := q.SetUserPlatformStaff(ctx, storegen.SetUserPlatformStaffParams{ID: e.owner, PlatformStaff: true}); err != nil {

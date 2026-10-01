@@ -14,6 +14,7 @@ import (
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/registry"
 	"github.com/blaktron/agentry/internal/scan"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 // laterRulesetProvider is a judge that scores nothing on the first pass and
@@ -162,6 +163,18 @@ func approve(t *testing.T, e *pipeEnv, versionID uuid.UUID) {
 	}
 }
 
+// holdMedium gives an organization the policy that holds medium findings
+// for a person, threshold low: tighter than the baseline's medium since
+// ruleset 0.3.0 (agentry#773).
+func holdMedium(t *testing.T, e *pipeEnv, org testOrg) {
+	t.Helper()
+	if err := e.st.Queries().UpsertOrgPolicy(context.Background(), storegen.UpsertOrgPolicyParams{
+		ID: mustV7(t), OrgID: &org.id, Document: []byte(`{"maxAutoPublishSeverity":"low"}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func statusOf(t *testing.T, e *pipeEnv, versionID uuid.UUID) string {
 	t.Helper()
 	v, err := e.st.Queries().GetVersionByID(context.Background(), versionID)
@@ -192,11 +205,15 @@ func TestRescanSweepLeavesWhatAReviewerApproved(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			e := newPipeEnv(t)
-			u, _ := e.st.Queries().GetUserByID(context.Background(), e.owner)
+			// Since ruleset 0.3.0 a medium publishes at the baseline, so a
+			// person approves one only where a policy holds medium: an
+			// organization at threshold low (agentry#773).
+			org := e.seedOrg("reviewed" + suffix())
+			holdMedium(t, e, org)
 			scores := tc.before
 			e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, scoredProvider{scores: &scores}, nil))
 			name := "reviewed" + suffix()
-			v := e.publish(name, "public", benignFiles(u.Handle, name, "1.0.0"))
+			v := e.publishOrg(org, name, "public", benignFiles(org.handle, name, "1.0.0"))
 			if v.Status != "needs_review" {
 				t.Fatalf("setup: status %s, want needs_review", v.Status)
 			}
@@ -250,6 +267,7 @@ func TestRescanSweepDoesNotRequarantineAClearedVersion(t *testing.T) {
 func TestRescanSweepLeavesAnOrgApprovedRerating(t *testing.T) {
 	e := newPipeEnv(t)
 	org := e.seedOrg("rerate" + suffix())
+	holdMedium(t, e, org)
 	scores := map[scan.JudgeCategory]int{scan.CatDeception: 2}
 	e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, scoredProvider{scores: &scores}, nil))
 	v := e.publishOrg(org, "rerated", "public", benignFiles(org.handle, "rerated", "1.0.0"))
