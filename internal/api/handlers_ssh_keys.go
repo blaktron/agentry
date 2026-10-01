@@ -3,7 +3,9 @@ package api
 // SSH keys for the git transport (§6.1 Q7, agentry#70): registered here,
 // looked up by fingerprint by the git SSH server. Session-only to add or
 // remove — a PAT must not be able to mint a longer-lived credential than
-// itself (the D-22 rule that governs tokens).
+// itself (the D-22 rule that governs tokens). Adding one is a feature the
+// subscription may not include (Features.SSHKeys, agentry#820); listing,
+// removing and using a key already held are not gated.
 
 import (
 	"errors"
@@ -16,6 +18,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/entitlements"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
@@ -77,6 +80,19 @@ func (s *Server) AddSshKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
+	// The subscription decides whether this person may add a key at all.
+	// Unknown refuses: an entitlement outage must not be a way to mint a
+	// git credential.
+	f, err := s.entitlements().Features(r.Context(), entitlements.ForUser(p.UserID))
+	if err != nil {
+		s.log.ErrorContext(r.Context(), "ssh key entitlements", "err", err)
+		problemInternal(w, r)
+		return
+	}
+	if !f.SSHKeys {
+		problemFeatureNotIncluded(w, r, "Adding an SSH key is not included in your subscription. Clone and push over HTTPS with a personal access token instead; keys you already hold keep working.")
+		return
+	}
 	id := newUUID()
 	var row storegen.UserSshKey
 	err = s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
