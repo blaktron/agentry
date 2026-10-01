@@ -798,6 +798,24 @@ func (e PendingOrgVia) Valid() bool {
 	}
 }
 
+// Defines values for PutVoiceRequestSource.
+const (
+	PutVoiceRequestSourceEdit   PutVoiceRequestSource = "edit"
+	PutVoiceRequestSourceUpload PutVoiceRequestSource = "upload"
+)
+
+// Valid indicates whether the value is a known member of the PutVoiceRequestSource enum.
+func (e PutVoiceRequestSource) Valid() bool {
+	switch e {
+	case PutVoiceRequestSourceEdit:
+		return true
+	case PutVoiceRequestSourceUpload:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ReportVerdict.
 const (
 	Scanned   ReportVerdict = "scanned"
@@ -939,6 +957,8 @@ const (
 	RunWrite       Scope = "run:write"
 	SecretWrite    Scope = "secret:write"
 	UserProfile    Scope = "user:profile"
+	VoiceRead      Scope = "voice:read"
+	VoiceWrite     Scope = "voice:write"
 )
 
 // Valid indicates whether the value is a known member of the Scope enum.
@@ -969,6 +989,10 @@ func (e Scope) Valid() bool {
 	case SecretWrite:
 		return true
 	case UserProfile:
+		return true
+	case VoiceRead:
+		return true
+	case VoiceWrite:
 		return true
 	default:
 		return false
@@ -1086,6 +1110,96 @@ func (e VersionStatus) Valid() bool {
 	case VersionStatusSubmitted:
 		return true
 	case VersionStatusYanked:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for VoiceReviewReportVerdict.
+const (
+	VoiceReviewReportVerdictFlagged    VoiceReviewReportVerdict = "flagged"
+	VoiceReviewReportVerdictIncomplete VoiceReviewReportVerdict = "incomplete"
+	VoiceReviewReportVerdictPass       VoiceReviewReportVerdict = "pass"
+)
+
+// Valid indicates whether the value is a known member of the VoiceReviewReportVerdict enum.
+func (e VoiceReviewReportVerdict) Valid() bool {
+	switch e {
+	case VoiceReviewReportVerdictFlagged:
+		return true
+	case VoiceReviewReportVerdictIncomplete:
+		return true
+	case VoiceReviewReportVerdictPass:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for VoiceVersionReview.
+const (
+	VoiceVersionReviewFlagged   VoiceVersionReview = "flagged"
+	VoiceVersionReviewPassed    VoiceVersionReview = "passed"
+	VoiceVersionReviewReviewing VoiceVersionReview = "reviewing"
+)
+
+// Valid indicates whether the value is a known member of the VoiceVersionReview enum.
+func (e VoiceVersionReview) Valid() bool {
+	switch e {
+	case VoiceVersionReviewFlagged:
+		return true
+	case VoiceVersionReviewPassed:
+		return true
+	case VoiceVersionReviewReviewing:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for VoiceVersionSlot.
+const (
+	VoiceVersionSlotLive     VoiceVersionSlot = "live"
+	VoiceVersionSlotPending  VoiceVersionSlot = "pending"
+	VoiceVersionSlotPrevious VoiceVersionSlot = "previous"
+)
+
+// Valid indicates whether the value is a known member of the VoiceVersionSlot enum.
+func (e VoiceVersionSlot) Valid() bool {
+	switch e {
+	case VoiceVersionSlotLive:
+		return true
+	case VoiceVersionSlotPending:
+		return true
+	case VoiceVersionSlotPrevious:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for VoiceVersionSource.
+const (
+	VoiceVersionSourceAiEdit  VoiceVersionSource = "ai-edit"
+	VoiceVersionSourceBuild   VoiceVersionSource = "build"
+	VoiceVersionSourceEdit    VoiceVersionSource = "edit"
+	VoiceVersionSourceRestore VoiceVersionSource = "restore"
+	VoiceVersionSourceUpload  VoiceVersionSource = "upload"
+)
+
+// Valid indicates whether the value is a known member of the VoiceVersionSource enum.
+func (e VoiceVersionSource) Valid() bool {
+	switch e {
+	case VoiceVersionSourceAiEdit:
+		return true
+	case VoiceVersionSourceBuild:
+		return true
+	case VoiceVersionSourceEdit:
+		return true
+	case VoiceVersionSourceRestore:
+		return true
+	case VoiceVersionSourceUpload:
 		return true
 	default:
 		return false
@@ -2614,6 +2728,17 @@ type PublicUser struct {
 	Handle      string `json:"handle"`
 }
 
+// PutVoiceRequest defines model for PutVoiceRequest.
+type PutVoiceRequest struct {
+	Source PutVoiceRequestSource `json:"source"`
+
+	// Text The VOICE.md, UTF-8, at most 32 KiB.
+	Text string `json:"text"`
+}
+
+// PutVoiceRequestSource defines model for PutVoiceRequest.Source.
+type PutVoiceRequestSource string
+
 // RedTeamReport One run of the §17.5 red-team job (agentry#67).
 type RedTeamReport struct {
 	BundleDigest string `json:"bundleDigest"`
@@ -2821,7 +2946,8 @@ type ScimTokenCreated struct {
 // `knowledge:write` read and write the account's knowledge packs.
 // `secret:write` sets and deletes the account's hosted-run secrets and
 // never lists or reads one; it is consumed only by a registry that
-// mounts the vault extension.
+// mounts the vault extension. `voice:read` reads the account's Writing
+// Voice and `voice:write` puts, restores, sets and deletes it.
 type Scope string
 
 // ScopeGranted A scope as it appears on a token the registry reports back (the
@@ -3075,6 +3201,98 @@ type UserDirectory struct {
 
 // VersionStatus Publication state machine states (§7). `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change (DEV-046).
 type VersionStatus string
+
+// Voice The caller's Writing Voice (plan writing-voice.md §4, D13): at most a live version (the one runs attach), a pending one (in review, or flagged with its findings) and the previous one, for Restore.
+type Voice struct {
+	// AlwaysAttach Runs In Agentry attach the live voice by default (D11); on when a voice first goes live.
+	AlwaysAttach bool          `json:"alwaysAttach"`
+	Live         *VoiceVersion `json:"live,omitempty"`
+	Pending      *VoiceVersion `json:"pending,omitempty"`
+	Previous     *VoiceVersion `json:"previous,omitempty"`
+
+	// QuestionSet The hash of the voice question set a review asks now; a Restore of a version reviewed under another is reviewed again.
+	QuestionSet string    `json:"questionSet"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+// VoiceFinding defines model for VoiceFinding.
+type VoiceFinding struct {
+	// Flags This finding keeps the version from going live.
+	Flags bool `json:"flags"`
+	Line  *int `json:"line,omitempty"`
+
+	// Question The voice question that scored, for an AI Review finding.
+	Question *string `json:"question,omitempty"`
+	Scanner  string  `json:"scanner"`
+	Score    *int    `json:"score,omitempty"`
+	Severity string  `json:"severity"`
+	Title    string  `json:"title"`
+}
+
+// VoiceReviewReport What a version's review read and found: the pack scan's rule stages (S2, S3, S4, S8) over the text and Jev's voice question set. `incomplete` is a review that did not finish; the version stays in review and is tried again. The report keeps no excerpt.
+type VoiceReviewReport struct {
+	AiReview struct {
+		// Failure Why AI Review did not answer (`timeout`, `judge-error`).
+		Failure     *string `json:"failure,omitempty"`
+		InputTokens int     `json:"inputTokens"`
+		Model       *string `json:"model,omitempty"`
+		QuestionSet *string `json:"questionSet,omitempty"`
+		Requests    int     `json:"requests"`
+
+		// Scores Each question's score, 0 to 3; 2 or more flags the version.
+		Scores *map[string]int `json:"scores,omitempty"`
+	} `json:"aiReview"`
+	Findings []VoiceFinding `json:"findings"`
+	Schema   string         `json:"schema"`
+	Stages   []struct {
+		Failed *bool  `json:"failed,omitempty"`
+		Id     string `json:"id"`
+		Name   string `json:"name"`
+	} `json:"stages"`
+	Verdict VoiceReviewReportVerdict `json:"verdict"`
+}
+
+// VoiceReviewReportVerdict defines model for VoiceReviewReport.Verdict.
+type VoiceReviewReportVerdict string
+
+// VoiceSettingsRequest defines model for VoiceSettingsRequest.
+type VoiceSettingsRequest struct {
+	AlwaysAttach *bool `json:"alwaysAttach,omitempty"`
+}
+
+// VoiceVersion defines model for VoiceVersion.
+type VoiceVersion struct {
+	Bytes     int       `json:"bytes"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Digest The SHA-256 of the text, `sha256:<hex>`.
+	Digest string             `json:"digest"`
+	Id     openapi_types.UUID `json:"id"`
+
+	// QuestionSet The hash of the question set the version was reviewed under; empty until its review is decided.
+	QuestionSet string `json:"questionSet"`
+
+	// Report What a version's review read and found: the pack scan's rule stages (S2, S3, S4, S8) over the text and Jev's voice question set. `incomplete` is a review that did not finish; the version stays in review and is tried again. The report keeps no excerpt.
+	Report *VoiceReviewReport `json:"report,omitempty"`
+
+	// Review A pending version is `reviewing` or `flagged`; a live or previous one `passed`.
+	Review     VoiceVersionReview `json:"review"`
+	ReviewedAt *time.Time         `json:"reviewedAt,omitempty"`
+	Slot       VoiceVersionSlot   `json:"slot"`
+	Source     VoiceVersionSource `json:"source"`
+
+	// Text The VOICE.md, at most 32 KiB.
+	Text string `json:"text"`
+}
+
+// VoiceVersionReview A pending version is `reviewing` or `flagged`; a live or previous one `passed`.
+type VoiceVersionReview string
+
+// VoiceVersionSlot defines model for VoiceVersion.Slot.
+type VoiceVersionSlot string
+
+// VoiceVersionSource defines model for VoiceVersion.Source.
+type VoiceVersionSource string
 
 // WebNotificationSettings In-app alerts.
 type WebNotificationSettings struct {
@@ -3780,6 +3998,12 @@ type CreateTokenJSONRequestBody = CreateTokenRequest
 
 // CreateDesktopGrantJSONRequestBody defines body for CreateDesktopGrant for application/json ContentType.
 type CreateDesktopGrantJSONRequestBody = DesktopGrantRequest
+
+// PutVoiceJSONRequestBody defines body for PutVoice for application/json ContentType.
+type PutVoiceJSONRequestBody = PutVoiceRequest
+
+// UpdateVoiceSettingsJSONRequestBody defines body for UpdateVoiceSettings for application/json ContentType.
+type UpdateVoiceSettingsJSONRequestBody = VoiceSettingsRequest
 
 // RequestEditorFn is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -5334,6 +5558,64 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /users/{handle} (the `GetUserProfile` operationId).
 	GetUserProfile(ctx context.Context, handle Handle, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteVoice Delete the caller's voice, every version of it and its data key.
+	//
+	// Corresponds with DELETE /voice (the `DeleteVoice` operationId).
+	DeleteVoice(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetVoice The caller's Writing Voice, every version's text with its review.
+	//
+	// Corresponds with GET /voice (the `GetVoice` operationId).
+	GetVoice(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutVoiceWithBody Put a new version of the caller's voice, to be reviewed before it is live.
+	//
+	// The text becomes the pending version, replacing any pending one, and its review is queued; the live version stays live until this one passes. `source` is `edit` for text saved on the web and `upload` for a voice sent from a client. A deployment whose extension charges for the review may refuse the call in its own status and words (a balance, say) before anything is stored.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /voice (the `PutVoice` operationId).
+	PutVoiceWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutVoice Put a new version of the caller's voice, to be reviewed before it is live.
+	//
+	// The text becomes the pending version, replacing any pending one, and its review is queued; the live version stays live until this one passes. `source` is `edit` for text saved on the web and `upload` for a voice sent from a client. A deployment whose extension charges for the review may refuse the call in its own status and words (a balance, say) before anything is stored.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /voice (the `PutVoice` operationId).
+	PutVoice(ctx context.Context, body PutVoiceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DiscardVoicePending Drop the caller's pending version, in review or flagged.
+	//
+	// Corresponds with DELETE /voice/pending (the `DiscardVoicePending` operationId).
+	DiscardVoicePending(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RestoreVoice Put the previous version back.
+	//
+	// A previous version reviewed under the question set in use now trades places with the live one at once (200). One reviewed under another set becomes the pending version, source `restore`, and is reviewed like any other (202); a deployment that charges for a review may refuse that call first.
+	//
+	// Corresponds with POST /voice/restore (the `RestoreVoice` operationId).
+	RestoreVoice(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateVoiceSettingsWithBody Set whether runs In Agentry attach the caller's live voice by default.
+	//
+	// The flag comes on when a voice first goes live; a field not sent keeps its value.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /voice/settings (the `UpdateVoiceSettings` operationId).
+	UpdateVoiceSettingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateVoiceSettings Set whether runs In Agentry attach the caller's live voice by default.
+	//
+	// The flag comes on when a voice first goes live; a field not sent keeps its value.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /voice/settings (the `UpdateVoiceSettings` operationId).
+	UpdateVoiceSettings(ctx context.Context, body UpdateVoiceSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 // ListAdvisories Published advisories — for one agent, or the global feed (§8.7).
@@ -8966,6 +9248,144 @@ func (c *Client) CountTrustedDevices(ctx context.Context, reqEditors ...RequestE
 // Corresponds with GET /users/{handle} (the `GetUserProfile` operationId).
 func (c *Client) GetUserProfile(ctx context.Context, handle Handle, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetUserProfileRequest(c.Server, handle)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteVoice Delete the caller's voice, every version of it and its data key.
+//
+// Corresponds with DELETE /voice (the `DeleteVoice` operationId).
+func (c *Client) DeleteVoice(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteVoiceRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetVoice The caller's Writing Voice, every version's text with its review.
+//
+// Corresponds with GET /voice (the `GetVoice` operationId).
+func (c *Client) GetVoice(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetVoiceRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutVoiceWithBody Put a new version of the caller's voice, to be reviewed before it is live.
+//
+// The text becomes the pending version, replacing any pending one, and its review is queued; the live version stays live until this one passes. `source` is `edit` for text saved on the web and `upload` for a voice sent from a client. A deployment whose extension charges for the review may refuse the call in its own status and words (a balance, say) before anything is stored.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /voice (the `PutVoice` operationId).
+func (c *Client) PutVoiceWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutVoiceRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutVoice Put a new version of the caller's voice, to be reviewed before it is live.
+//
+// The text becomes the pending version, replacing any pending one, and its review is queued; the live version stays live until this one passes. `source` is `edit` for text saved on the web and `upload` for a voice sent from a client. A deployment whose extension charges for the review may refuse the call in its own status and words (a balance, say) before anything is stored.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /voice (the `PutVoice` operationId).
+func (c *Client) PutVoice(ctx context.Context, body PutVoiceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutVoiceRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DiscardVoicePending Drop the caller's pending version, in review or flagged.
+//
+// Corresponds with DELETE /voice/pending (the `DiscardVoicePending` operationId).
+func (c *Client) DiscardVoicePending(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDiscardVoicePendingRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RestoreVoice Put the previous version back.
+//
+// A previous version reviewed under the question set in use now trades places with the live one at once (200). One reviewed under another set becomes the pending version, source `restore`, and is reviewed like any other (202); a deployment that charges for a review may refuse that call first.
+//
+// Corresponds with POST /voice/restore (the `RestoreVoice` operationId).
+func (c *Client) RestoreVoice(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRestoreVoiceRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateVoiceSettingsWithBody Set whether runs In Agentry attach the caller's live voice by default.
+//
+// The flag comes on when a voice first goes live; a field not sent keeps its value.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /voice/settings (the `UpdateVoiceSettings` operationId).
+func (c *Client) UpdateVoiceSettingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateVoiceSettingsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateVoiceSettings Set whether runs In Agentry attach the caller's live voice by default.
+//
+// The flag comes on when a voice first goes live; a field not sent keeps its value.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /voice/settings (the `UpdateVoiceSettings` operationId).
+func (c *Client) UpdateVoiceSettings(ctx context.Context, body UpdateVoiceSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateVoiceSettingsRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -16290,6 +16710,194 @@ func NewGetUserProfileRequest(server string, handle Handle) (*http.Request, erro
 	return req, nil
 }
 
+// NewDeleteVoiceRequest constructs an http.Request for the DeleteVoice method
+func NewDeleteVoiceRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/voice")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetVoiceRequest constructs an http.Request for the GetVoice method
+func NewGetVoiceRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/voice")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutVoiceRequest calls the generic PutVoice builder with application/json body
+func NewPutVoiceRequest(server string, body PutVoiceJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutVoiceRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPutVoiceRequestWithBody constructs an http.Request for the PutVoice method, with any body, and a specified content type
+func NewPutVoiceRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/voice")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDiscardVoicePendingRequest constructs an http.Request for the DiscardVoicePending method
+func NewDiscardVoicePendingRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/voice/pending")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRestoreVoiceRequest constructs an http.Request for the RestoreVoice method
+func NewRestoreVoiceRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/voice/restore")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateVoiceSettingsRequest calls the generic UpdateVoiceSettings builder with application/json body
+func NewUpdateVoiceSettingsRequest(server string, body UpdateVoiceSettingsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateVoiceSettingsRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewUpdateVoiceSettingsRequestWithBody constructs an http.Request for the UpdateVoiceSettings method, with any body, and a specified content type
+func NewUpdateVoiceSettingsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/voice/settings")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -18039,6 +18647,72 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /users/{handle} (the `GetUserProfile` operationId).
 	GetUserProfileWithResponse(ctx context.Context, handle Handle, reqEditors ...RequestEditorFn) (*GetUserProfileResponse, error)
+
+	// DeleteVoiceWithResponse Delete the caller's voice, every version of it and its data key.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /voice (the `DeleteVoice` operationId).
+	DeleteVoiceWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*DeleteVoiceResponse, error)
+
+	// GetVoiceWithResponse The caller's Writing Voice, every version's text with its review.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /voice (the `GetVoice` operationId).
+	GetVoiceWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetVoiceResponse, error)
+
+	// PutVoiceWithBodyWithResponse Put a new version of the caller's voice, to be reviewed before it is live.
+	//
+	// The text becomes the pending version, replacing any pending one, and its review is queued; the live version stays live until this one passes. `source` is `edit` for text saved on the web and `upload` for a voice sent from a client. A deployment whose extension charges for the review may refuse the call in its own status and words (a balance, say) before anything is stored.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /voice (the `PutVoice` operationId).
+	PutVoiceWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutVoiceResponse, error)
+
+	// PutVoiceWithResponse Put a new version of the caller's voice, to be reviewed before it is live.
+	//
+	// The text becomes the pending version, replacing any pending one, and its review is queued; the live version stays live until this one passes. `source` is `edit` for text saved on the web and `upload` for a voice sent from a client. A deployment whose extension charges for the review may refuse the call in its own status and words (a balance, say) before anything is stored.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /voice (the `PutVoice` operationId).
+	PutVoiceWithResponse(ctx context.Context, body PutVoiceJSONRequestBody, reqEditors ...RequestEditorFn) (*PutVoiceResponse, error)
+
+	// DiscardVoicePendingWithResponse Drop the caller's pending version, in review or flagged.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /voice/pending (the `DiscardVoicePending` operationId).
+	DiscardVoicePendingWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*DiscardVoicePendingResponse, error)
+
+	// RestoreVoiceWithResponse Put the previous version back.
+	//
+	// A previous version reviewed under the question set in use now trades places with the live one at once (200). One reviewed under another set becomes the pending version, source `restore`, and is reviewed like any other (202); a deployment that charges for a review may refuse that call first.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /voice/restore (the `RestoreVoice` operationId).
+	RestoreVoiceWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*RestoreVoiceResponse, error)
+
+	// UpdateVoiceSettingsWithBodyWithResponse Set whether runs In Agentry attach the caller's live voice by default.
+	//
+	// The flag comes on when a voice first goes live; a field not sent keeps its value.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /voice/settings (the `UpdateVoiceSettings` operationId).
+	UpdateVoiceSettingsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateVoiceSettingsResponse, error)
+
+	// UpdateVoiceSettingsWithResponse Set whether runs In Agentry attach the caller's live voice by default.
+	//
+	// The flag comes on when a voice first goes live; a field not sent keeps its value.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /voice/settings (the `UpdateVoiceSettings` operationId).
+	UpdateVoiceSettingsWithResponse(ctx context.Context, body UpdateVoiceSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateVoiceSettingsResponse, error)
 }
 
 type ListAdvisoriesResponse struct {
@@ -25779,6 +26453,294 @@ func (r GetUserProfileResponse) ContentType() string {
 	return ""
 }
 
+type DeleteVoiceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DeleteVoiceResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteVoiceResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteVoiceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteVoiceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteVoiceResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetVoiceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Voice
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetVoiceResponse) GetJSON200() *Voice {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetVoiceResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetVoiceResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetVoiceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetVoiceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetVoiceResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PutVoiceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *Voice
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r PutVoiceResponse) GetJSON202() *Voice {
+	return r.JSON202
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r PutVoiceResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PutVoiceResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutVoiceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutVoiceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutVoiceResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DiscardVoicePendingResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Voice
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DiscardVoicePendingResponse) GetJSON200() *Voice {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DiscardVoicePendingResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DiscardVoicePendingResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DiscardVoicePendingResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DiscardVoicePendingResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DiscardVoicePendingResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RestoreVoiceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Voice
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *Voice
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r RestoreVoiceResponse) GetJSON200() *Voice {
+	return r.JSON200
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r RestoreVoiceResponse) GetJSON202() *Voice {
+	return r.JSON202
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r RestoreVoiceResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r RestoreVoiceResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RestoreVoiceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RestoreVoiceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RestoreVoiceResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UpdateVoiceSettingsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Voice
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UpdateVoiceSettingsResponse) GetJSON200() *Voice {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r UpdateVoiceSettingsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r UpdateVoiceSettingsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateVoiceSettingsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateVoiceSettingsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdateVoiceSettingsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // ListAdvisoriesWithResponse Published advisories — for one agent, or the global feed (§8.7).
 //
 // With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected QuickAgent.
@@ -28779,6 +29741,120 @@ func (c *ClientWithResponses) GetUserProfileWithResponse(ctx context.Context, ha
 		return nil, err
 	}
 	return ParseGetUserProfileResponse(rsp)
+}
+
+// DeleteVoiceWithResponse Delete the caller's voice, every version of it and its data key.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /voice (the `DeleteVoice` operationId).
+func (c *ClientWithResponses) DeleteVoiceWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*DeleteVoiceResponse, error) {
+	rsp, err := c.DeleteVoice(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteVoiceResponse(rsp)
+}
+
+// GetVoiceWithResponse The caller's Writing Voice, every version's text with its review.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /voice (the `GetVoice` operationId).
+func (c *ClientWithResponses) GetVoiceWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetVoiceResponse, error) {
+	rsp, err := c.GetVoice(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetVoiceResponse(rsp)
+}
+
+// PutVoiceWithBodyWithResponse Put a new version of the caller's voice, to be reviewed before it is live.
+//
+// The text becomes the pending version, replacing any pending one, and its review is queued; the live version stays live until this one passes. `source` is `edit` for text saved on the web and `upload` for a voice sent from a client. A deployment whose extension charges for the review may refuse the call in its own status and words (a balance, say) before anything is stored.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /voice (the `PutVoice` operationId).
+func (c *ClientWithResponses) PutVoiceWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutVoiceResponse, error) {
+	rsp, err := c.PutVoiceWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutVoiceResponse(rsp)
+}
+
+// PutVoiceWithResponse Put a new version of the caller's voice, to be reviewed before it is live.
+//
+// The text becomes the pending version, replacing any pending one, and its review is queued; the live version stays live until this one passes. `source` is `edit` for text saved on the web and `upload` for a voice sent from a client. A deployment whose extension charges for the review may refuse the call in its own status and words (a balance, say) before anything is stored.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /voice (the `PutVoice` operationId).
+func (c *ClientWithResponses) PutVoiceWithResponse(ctx context.Context, body PutVoiceJSONRequestBody, reqEditors ...RequestEditorFn) (*PutVoiceResponse, error) {
+	rsp, err := c.PutVoice(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutVoiceResponse(rsp)
+}
+
+// DiscardVoicePendingWithResponse Drop the caller's pending version, in review or flagged.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /voice/pending (the `DiscardVoicePending` operationId).
+func (c *ClientWithResponses) DiscardVoicePendingWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*DiscardVoicePendingResponse, error) {
+	rsp, err := c.DiscardVoicePending(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDiscardVoicePendingResponse(rsp)
+}
+
+// RestoreVoiceWithResponse Put the previous version back.
+//
+// A previous version reviewed under the question set in use now trades places with the live one at once (200). One reviewed under another set becomes the pending version, source `restore`, and is reviewed like any other (202); a deployment that charges for a review may refuse that call first.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /voice/restore (the `RestoreVoice` operationId).
+func (c *ClientWithResponses) RestoreVoiceWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*RestoreVoiceResponse, error) {
+	rsp, err := c.RestoreVoice(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRestoreVoiceResponse(rsp)
+}
+
+// UpdateVoiceSettingsWithBodyWithResponse Set whether runs In Agentry attach the caller's live voice by default.
+//
+// The flag comes on when a voice first goes live; a field not sent keeps its value.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /voice/settings (the `UpdateVoiceSettings` operationId).
+func (c *ClientWithResponses) UpdateVoiceSettingsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateVoiceSettingsResponse, error) {
+	rsp, err := c.UpdateVoiceSettingsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateVoiceSettingsResponse(rsp)
+}
+
+// UpdateVoiceSettingsWithResponse Set whether runs In Agentry attach the caller's live voice by default.
+//
+// The flag comes on when a voice first goes live; a field not sent keeps its value.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /voice/settings (the `UpdateVoiceSettings` operationId).
+func (c *ClientWithResponses) UpdateVoiceSettingsWithResponse(ctx context.Context, body UpdateVoiceSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateVoiceSettingsResponse, error) {
+	rsp, err := c.UpdateVoiceSettings(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateVoiceSettingsResponse(rsp)
 }
 
 // ParseListAdvisoriesResponse parses an HTTP response from a ListAdvisoriesWithResponse call
@@ -34220,6 +35296,228 @@ func ParseGetUserProfileResponse(rsp *http.Response) (*GetUserProfileResponse, e
 			return nil, err
 		}
 		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteVoiceResponse parses an HTTP response from a DeleteVoiceWithResponse call
+func ParseDeleteVoiceResponse(rsp *http.Response) (*DeleteVoiceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteVoiceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetVoiceResponse parses an HTTP response from a GetVoiceWithResponse call
+func ParseGetVoiceResponse(rsp *http.Response) (*GetVoiceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetVoiceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Voice
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 404:
+		break // No content-type
+
+	case rsp.StatusCode == 503:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutVoiceResponse parses an HTTP response from a PutVoiceWithResponse call
+func ParsePutVoiceResponse(rsp *http.Response) (*PutVoiceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutVoiceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest Voice
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case rsp.StatusCode == 413:
+		break // No content-type
+
+	case rsp.StatusCode == 422:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDiscardVoicePendingResponse parses an HTTP response from a DiscardVoicePendingWithResponse call
+func ParseDiscardVoicePendingResponse(rsp *http.Response) (*DiscardVoicePendingResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DiscardVoicePendingResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Voice
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 404:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRestoreVoiceResponse parses an HTTP response from a RestoreVoiceWithResponse call
+func ParseRestoreVoiceResponse(rsp *http.Response) (*RestoreVoiceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RestoreVoiceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Voice
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest Voice
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case rsp.StatusCode == 409:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateVoiceSettingsResponse parses an HTTP response from a UpdateVoiceSettingsWithResponse call
+func ParseUpdateVoiceSettingsResponse(rsp *http.Response) (*UpdateVoiceSettingsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateVoiceSettingsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Voice
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 404:
+		break // No content-type
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

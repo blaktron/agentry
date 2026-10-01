@@ -605,6 +605,34 @@ type UserSshKey struct {
 	RevokedAt   *time.Time `json:"revoked_at"`
 }
 
+type Voice struct {
+	UserID           uuid.UUID `json:"user_id"`
+	WrapperKind      string    `json:"wrapper_kind"`
+	WrapperRecipient string    `json:"wrapper_recipient"`
+	WrappedKey       []byte    `json:"wrapped_key"`
+	AlwaysAttach     bool      `json:"always_attach"`
+	WentLive         bool      `json:"went_live"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+type VoiceVersion struct {
+	ID             uuid.UUID  `json:"id"`
+	UserID         uuid.UUID  `json:"user_id"`
+	Slot           string     `json:"slot"`
+	ReviewState    string     `json:"review_state"`
+	Source         string     `json:"source"`
+	Sealed         []byte     `json:"sealed"`
+	Digest         string     `json:"digest"`
+	Bytes          int32      `json:"bytes"`
+	Review         []byte     `json:"review"`
+	QuestionSet    string     `json:"question_set"`
+	ReviewAttempts int32      `json:"review_attempts"`
+	ReviewedAt     *time.Time `json:"reviewed_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+}
+
 type WebhookDelivery struct {
 	ID          uuid.UUID  `json:"id"`
 	EndpointID  uuid.UUID  `json:"endpoint_id"`

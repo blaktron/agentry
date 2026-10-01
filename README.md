@@ -128,6 +128,7 @@ The enterprise build is one such module; the core carries none.
 - [Running QuickAgents](docs/runner.md) — every command, flag, policy key and enforcement mechanism of the runner
 - [Hosted runs](docs/hosted-runs.md) — running a release on a deployment's own machine: the caps, the credit hold and its settlement, what is refused, and what the receipt carries (a deployment that mounts the runs extension; this repository's server carries none)
 - [Knowledge packs in the registry](docs/knowledge.md) — an account's packs kept sealed under keys of their own, the key-wrapper seam, what the scan reads, and when they are destroyed
+- [The Writing Voice in the registry](docs/voice.md) — the one VOICE.md an account keeps: its live, pending and previous versions, the review by AI Review's `voice` question set before a version is live, the seal, and the extension's doors
 - [Model input](docs/model-input.md) — AI Review of text a model is about to read, and web search brokered by the registry: who may call, the question set and its bench, the verdicts, what is recorded
 - [The log contract](docs/logging.md) — what a line carries, what is never in one, the `event` names a dashboard keys on
 - [Operational runbooks](docs/ops/runbooks.md)
