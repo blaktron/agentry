@@ -121,6 +121,10 @@ type Features struct {
 	// UnscannedAgents says whether the organization's admins may mark a
 	// private agent as skipping the pipeline.
 	UnscannedAgents bool
+	// SSHKeys says whether a person may register an SSH key for the git
+	// transport (user subjects; agentry#820). It gates only the adding: a
+	// key already held keeps working, stays listed and can be removed.
+	SSHKeys bool
 	// KnowledgeBytes caps the bytes of knowledge packs a subject keeps in
 	// the registry (plan knowledge.md §4.4, D5): only what is stored here
 	// counts, and over the cap no pack is added or grown, none deleted.
@@ -188,7 +192,7 @@ func (r *ConfigResolver) Features(context.Context, Subject) (Features, error) {
 	on := Cap{Enabled: true, Max: 0}
 	return Features{
 		PrivateAgents: on, Seats: on,
-		SSO: true, SCIM: true, Branding: true, AlertRouting: true, UnscannedAgents: true,
+		SSO: true, SCIM: true, Branding: true, AlertRouting: true, UnscannedAgents: true, SSHKeys: true,
 		KnowledgeBytes: Cap{Enabled: true, Max: r.limits.KnowledgeBytesPerAccount},
 	}, nil
 }
