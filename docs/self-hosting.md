@@ -1099,8 +1099,9 @@ boot. It defines both self-service routes and the controls on them, and
 adds the "Sign up" and "Forgot username or password?" links to the login
 page:
 
-- **Sign-up** — CAPTCHA, then a form (username, display name, email,
-  password), then the account written **inactive**, then an emailed
+- **Sign-up** — CAPTCHA, then a form (username, an optional display name,
+  email, password), then the deployment's Terms of Service where it has
+  them (below), then the account written **inactive**, then an emailed
   confirmation link that activates it, then sign-in. Writing the account
   inactive is what makes the directory-verified `email` assertion above
   honest for self-enrolled users: no account is active, and so none
@@ -1126,6 +1127,28 @@ page:
   as the `agentry_promo_code` claim, and the registry passes it to its
   extensions as `promoCode` in `user.registered`, upper-cased, only on the
   sign-in that creates the account and only from the directory's token.
+- **The display name** (agentry#788) is optional. Left blank, the account
+  is written with its username as its name, which is what the registry
+  shows until the person changes it.
+- **The Terms of Service step** (agentry#788) — shown only when
+  `AGENTRY_DIRECTORY_TERMS_FILE` names a file in the directory server's
+  environment (compose passes it through, empty by default). The file is an
+  HTML fragment with your terms, its root element carrying
+  `data-terms-version="<version>"`, for example
+  `<article data-terms-version="2026-09-30">…</article>`; mount it into the
+  server and the worker, readable by the directory's user (authentik runs
+  as uid 1000), and point the variable at it. The step follows the
+  form: the terms in a scrolling box, and an "I have read and agree" box
+  that the page enables, with Continue, only once the box has been scrolled
+  to the end. The directory refuses a submission without the agreement
+  whatever the page does, and refuses every sign-up while the file cannot be
+  read or has no version. The account records `agentry_terms_accepted`,
+  `agentry_terms_version` (from the text it was shown) and
+  `agentry_terms_accepted_at` in its attributes. The scroll gate is inline
+  script in authentik's page, so a Content-Security-Policy on the
+  directory's pages that forbids inline handlers turns it off (the box and
+  Continue then stay enabled; the agreement is still required). Accounts
+  that existed before you set the variable are not asked.
 - **Password recovery** — identification, an emailed reset link, then a
   new password. The identification stage runs with `pretend_user_exists`,
   so an unknown address gets the same answer a real one does and the form

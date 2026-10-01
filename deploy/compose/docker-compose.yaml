@@ -165,6 +165,14 @@ services:
       # forwards a code and attaches no meaning to it. Read by the worker when
       # it applies the account-flows blueprint.
       AGENTRY_DIRECTORY_PROMO_FIELD: ${AGENTRY_DIRECTORY_PROMO_FIELD:-}
+      # The sign-up's Terms of Service step (agentry#788): the path, inside
+      # the server and the worker, of an HTML fragment holding the
+      # deployment's terms, its root carrying data-terms-version="…". Set,
+      # every sign-up shows it after the form and must agree to it; unset,
+      # there is no terms step. The core ships no terms: a deployment mounts
+      # its own (the SecureAgentry overlay mounts the site's). Read by the
+      # server when the step is reached.
+      AGENTRY_DIRECTORY_TERMS_FILE: ${AGENTRY_DIRECTORY_TERMS_FILE:-}
       # First boot creates akadmin with this password, and an API token
       # (intent api) with this value — what the bootstrap script uses.
       AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD:-}
