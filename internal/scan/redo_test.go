@@ -565,3 +565,115 @@ func TestANewRulesetEnqueuesTheSweepAndTheRedo(t *testing.T) {
 		t.Fatalf("a restart on a known ruleset enqueued %v", again.kinds)
 	}
 }
+
+// handlerQueue keeps the handlers RegisterHandlers wires, so a test can hand
+// one a job as the worker would.
+type handlerQueue struct {
+	recordingQueue
+	handlers map[string]queue.Handler
+}
+
+func (h *handlerQueue) Register(kind string, fn queue.Handler) {
+	if h.handlers == nil {
+		h.handlers = map[string]queue.Handler{}
+	}
+	h.handlers[kind] = fn
+}
+
+func rulesetJob(t *testing.T, semver string) queue.Job {
+	t.Helper()
+	raw, err := json.Marshal(scan.RescanSweepArgs{RulesetSemver: semver})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return queue.Job{Kind: scan.JobRedoReviewQueue, Args: raw, Attempt: 1}
+}
+
+// A rolling deploy runs a worker of the outgoing build beside the api of the
+// incoming one, which registers the new ruleset and enqueues its jobs
+// (agentry#805: production's 0.2.3 sweep ran under 0.2.2). A worker never does
+// a newer ruleset's job under its own: it hands the job back for retry, so a
+// worker of the new build takes it. An older ruleset's job is done by nothing:
+// the newer registration enqueued its own.
+func TestARulesetJobRunsOnlyUnderItsOwnRuleset(t *testing.T) {
+	e := newPipeEnv(t)
+	ctx := context.Background()
+	u, _ := e.st.Queries().GetUserByID(ctx, e.owner)
+	scores := map[scan.JudgeCategory]int{scan.CatDeception: 2}
+	e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, scoredProvider{scores: &scores}, nil))
+	name := "ownruleset" + suffix()
+	v := e.publish(name, "public", benignFiles(u.Handle, name, "1.0.0"))
+	if v.Status != "needs_review" {
+		t.Fatalf("setup: status %s, want needs_review", v.Status)
+	}
+	scores = map[scan.JudgeCategory]int{}
+
+	// This worker runs 9.99.1-redo…; the jobs below name other rulesets.
+	release, err := e.st.Queries().GetRulesetByID(ctx, nextRuleset(t, e))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hq := &handlerQueue{}
+	e.pipe.RegisterHandlers(hq)
+	stillHeld := func(when string) {
+		t.Helper()
+		after, err := e.st.Queries().GetVersionByID(ctx, v.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if after.Status != "needs_review" {
+			t.Fatalf("%s: status %s, want needs_review (the job ran under this worker's ruleset)", when, after.Status)
+		}
+	}
+	for _, kind := range []string{scan.JobRedoReviewQueue, scan.JobRescanSweep} {
+		newer := rulesetJob(t, "99.0.0")
+		newer.Kind = kind
+		if err := hq.handlers[kind](ctx, newer); err == nil {
+			t.Fatalf("%s for a newer ruleset returned nil; it must be handed back for retry", kind)
+		}
+		stillHeld(kind + " for a newer ruleset")
+		older := rulesetJob(t, "0.0.1")
+		older.Kind = kind
+		if err := hq.handlers[kind](ctx, older); err != nil {
+			t.Fatalf("%s for an older ruleset: %v; it is complete with nothing to do", kind, err)
+		}
+		stillHeld(kind + " for an older ruleset")
+	}
+
+	// The job for this worker's own ruleset runs.
+	own := rulesetJob(t, release.Semver)
+	if err := hq.handlers[scan.JobRedoReviewQueue](ctx, own); err != nil {
+		t.Fatal(err)
+	}
+	after, err := e.st.Queries().GetVersionByID(ctx, v.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Status != string(registry.StatusPublished) {
+		t.Fatalf("the redo for this worker's ruleset left the version %s, want published", after.Status)
+	}
+}
+
+func TestANewRulesetsJobsOutlastARollingDeploy(t *testing.T) {
+	q := &optionQueue{}
+	scan.EnqueueNewRulesetWork(context.Background(), q, nil, scan.RulesetRegistration{Semver: "9.99.4", New: true})
+	if len(q.opts) != 2 {
+		t.Fatalf("enqueued %d jobs, want the sweep and the redo", len(q.opts))
+	}
+	for i, n := range q.opts {
+		if n == 0 {
+			t.Fatalf("job %d keeps the default retry budget: a worker of the outgoing build can exhaust it", i)
+		}
+	}
+}
+
+// optionQueue records how many options each enqueue carried.
+type optionQueue struct {
+	recordingQueue
+	opts []int
+}
+
+func (o *optionQueue) Enqueue(ctx context.Context, kind, queueName string, args any, opts ...queue.EnqueueOption) (uuid.UUID, error) {
+	o.opts = append(o.opts, len(opts))
+	return o.recordingQueue.Enqueue(ctx, kind, queueName, args, opts...)
+}
