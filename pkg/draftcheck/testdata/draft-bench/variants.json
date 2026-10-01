@@ -317,5 +317,18 @@
     "class": "redundant",
     "description": "Give me a three-line weather brief for Toronto, Canada, in Celsius, from a free public weather API that needs no key.",
     "what": "the description gives the city and the units; the draft still asks for both"
+  },
+  {
+    "fixture": "csv-quality",
+    "class": "good",
+    "instructionFile": "long.AGENT.md",
+    "what": "a long instruction (Role, Inputs, Steps, Output, Background, Checks; about 29 KB), the length the Drafter writes for a run with no network (agentry#789)"
+  },
+  {
+    "fixture": "csv-quality",
+    "class": "off_task",
+    "instructionFile": "long.AGENT.md",
+    "description": "Give me a three-line weather brief for a city I name, from a free public weather API that needs no key.",
+    "what": "the long csv instruction under the weather-brief description: a long draft made for another task (agentry#789)"
   }
 ]
