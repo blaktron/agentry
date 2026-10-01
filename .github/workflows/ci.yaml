@@ -319,6 +319,23 @@ jobs:
       - name: directory promo code acceptance (scripts/acceptance/directory-promo.sh)
         run: ./scripts/acceptance/directory-promo.sh
 
+  # The sign-up's Terms of Service step and optional display name
+  # (agentry#788): a throwaway directory on the pinned image with a fixture
+  # terms file, then without it, then without the setting — the step after
+  # the form, the refusal without the agreement, the record on the account,
+  # the blank name that becomes the username, fail-closed on an unreadable
+  # file, and no step where no terms are named.
+  directory-terms:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: directory terms of service acceptance (scripts/acceptance/directory-terms.sh)
+        run: ./scripts/acceptance/directory-terms.sh
+
   # The headless helm chart: lint, a template render with the required
   # values, and the assertion that nothing web-shaped renders (the site is
   # its own deployment since the cut-over, DEV-091). This lived in
