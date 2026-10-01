@@ -188,6 +188,11 @@ func TestTheDraftBenchCorpusReads(t *testing.T) {
 		}
 	}
 	classes := map[string]int{}
+	// preRaise is the draft set's instruction bound before agentry#789: the
+	// corpus keeps a long instruction past it, the length the Drafter writes
+	// for a run with no network.
+	const preRaise = 24 << 10
+	long := 0
 	for _, v := range readVariants(t) {
 		if _, ok := benchTargets[v.Class]; !ok || v.What == "" {
 			t.Fatalf("%s: class %q, what %q", v.Fixture, v.Class, v.What)
@@ -205,9 +210,18 @@ func TestTheDraftBenchCorpusReads(t *testing.T) {
 			}
 		}
 		classes[v.Class]++
+		if len(rd.Instruction) > preRaise {
+			if len(rd.Instruction) > judge.DraftMaxInstruction {
+				t.Fatalf("%s/%s: a %d-byte instruction is past the draft set's bound", v.Fixture, v.Class, len(rd.Instruction))
+			}
+			long++
+		}
 	}
 	if fixtures < 10 {
 		t.Fatalf("%d fixtures", fixtures)
+	}
+	if long == 0 {
+		t.Fatalf("no variant has an instruction past %d bytes", preRaise)
 	}
 	for c := range benchTargets {
 		if classes[c] == 0 {
