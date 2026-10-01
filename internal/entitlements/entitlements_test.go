@@ -109,8 +109,8 @@ func TestOSSResolverCapsNothing(t *testing.T) {
 				t.Fatalf("Features.%s has a kind this test does not know: %T", name, field)
 			}
 		}
-		if v.NumField() != 8 {
-			t.Fatalf("Features has %d fields, want 8 — add the new one to this test's expectations", v.NumField())
+		if v.NumField() != 9 {
+			t.Fatalf("Features has %d fields, want 9 — add the new one to this test's expectations", v.NumField())
 		}
 	}
 }

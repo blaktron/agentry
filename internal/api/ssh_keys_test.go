@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"net/http"
@@ -10,6 +11,8 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/blaktron/agentry/internal/api"
+	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/entitlements"
 )
 
 func testPublicKeyLine(t *testing.T) string {
@@ -82,4 +85,58 @@ func TestSSHKeysLifecycle(t *testing.T) {
 	}
 	// The same key can be registered again after removal.
 	env.doJSON(sess, http.MethodPost, "/api/v1/user/ssh-keys", map[string]any{"title": "laptop again", "publicKey": line}, &created, http.StatusCreated)
+}
+
+// noSSHKeys is a person's subscription without SSH keys (tierResolver lays
+// its tier over organization subjects only).
+type noSSHKeys struct{ entitlements.Resolver }
+
+func (r noSSHKeys) Features(ctx context.Context, s entitlements.Subject) (entitlements.Features, error) {
+	f, err := r.Resolver.Features(ctx, s)
+	if s.Kind != entitlements.NamespaceOrg {
+		f.SSHKeys = false
+	}
+	return f, err
+}
+
+// Adding a key is a feature the subscription may not include
+// (agentry#820): off, the add is 403 feature-not-included and writes
+// nothing; a key already held stays listed, removable and in force; an
+// entitlement that cannot be resolved refuses rather than admits.
+func TestSSHKeyAddIsGatedOnTheSubscription(t *testing.T) {
+	env := newTestEnv(t)
+	u := env.register("sshtier")
+	env.verifyEmail(u)
+	sess := env.login(u)
+
+	var held api.SshKey
+	env.doJSON(sess, http.MethodPost, "/api/v1/user/ssh-keys", map[string]any{"title": "held", "publicKey": testPublicKeyLine(t)}, &held, http.StatusCreated)
+
+	env.setEntitlements(noSSHKeys{entitlements.NewConfigResolver(config.Default().Limits)})
+	code, slug, _ := problemOf(t, env.do(sess, http.MethodPost, "/api/v1/user/ssh-keys", map[string]any{"title": "new", "publicKey": testPublicKeyLine(t)}))
+	if code != http.StatusForbidden || slug != "feature-not-included" {
+		t.Fatalf("add without the feature: %d %s, want 403 feature-not-included", code, slug)
+	}
+	var list []api.SshKey
+	env.doJSON(sess, http.MethodGet, "/api/v1/user/ssh-keys", nil, &list, http.StatusOK)
+	if len(list) != 1 || list[0].Id != held.Id {
+		t.Fatalf("list without the feature = %+v, want only the held key", list)
+	}
+	var adds int
+	if err := env.st.Pool().QueryRow(context.Background(), `SELECT count(*) FROM audit_events a JOIN handles h ON h.id = a.actor_id WHERE a.action = 'ssh_key.add' AND h.handle = $1`, u).Scan(&adds); err != nil {
+		t.Fatalf("count audit: %v", err)
+	}
+	if adds != 1 {
+		t.Fatalf("ssh_key.add events = %d, want 1 (the refused add writes none)", adds)
+	}
+
+	env.setEntitlements(brokenTierResolver())
+	if r := env.do(sess, http.MethodPost, "/api/v1/user/ssh-keys", map[string]any{"title": "outage", "publicKey": testPublicKeyLine(t)}); r.StatusCode == http.StatusCreated {
+		t.Fatalf("add during an entitlement outage: got 201, want a refusal")
+	}
+
+	env.setEntitlements(noSSHKeys{entitlements.NewConfigResolver(config.Default().Limits)})
+	if r := env.do(sess, http.MethodDelete, "/api/v1/user/ssh-keys/"+held.Id.String(), nil); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("remove without the feature: got %d want 204", r.StatusCode)
+	}
 }
