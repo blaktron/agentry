@@ -58,6 +58,10 @@ VERSION="2026-09-30-fixture-$(openssl rand -hex 2)"
   for i in $(seq 1 40); do echo "<h2 id=\"c$i\">Fixture clause $i</h2><p>The fixture's clause $i says one thing.</p>"; done
   echo "</article>"
 } >"$FIXTURE"
+# mktemp makes it 0600, docker cp keeps the mode and the owner, and the
+# directory runs as uid 1000: a fixture only its writer can read would fail
+# closed for the wrong reason (it did, on a runner whose user is root).
+chmod 0644 "$FIXTURE"
 TERMS_PATH=/templates/agentry-terms-fixture.html
 
 PG_PW=$(openssl rand -hex 16)
