@@ -787,6 +787,11 @@ paths:
       operationId: addSshKey
       tags: [users]
       summary: Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
+      description: >-
+        Refused with `403 feature-not-included` where the caller's subscription
+        does not include adding SSH keys (agentry#820); a self-hosted registry
+        includes it. Keys already held keep working and can be listed and
+        removed on every subscription.
       requestBody:
         required: true
         content:
