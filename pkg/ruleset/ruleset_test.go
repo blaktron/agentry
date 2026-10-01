@@ -16,6 +16,7 @@ var releasedDigests = map[string]string{
 	"0.2.2": "ba992698f2aac91d6a4ebdc570e1b26c5e73e62888a78dbce74882dde9f486d8",
 	"0.2.3": "ac5f7cb4035e8c31e576ed311b6b33ffc4397f3cb461380cd3befdb59d63ccbd",
 	"0.3.0": "727f7cf4ed91e09e127a1826cdd80c27da89c1431657fa4af01058434416d320",
+	"0.3.1": "781d4e9788989bff4a2c5507a988c84bc9737898fb5254896d9caef8900b0c7a",
 }
 
 func TestEmbeddedBundleDigestIsPinnedForItsVersion(t *testing.T) {
@@ -54,7 +55,7 @@ func TestEveryReleasedVersionNamesItsThreshold(t *testing.T) {
 // The thresholds of released versions are history: 0.3.0 is the first
 // version that publishes on medium (agentry#773).
 func TestReleasedThresholdsAreHistory(t *testing.T) {
-	for v, want := range map[string]string{"0.2.3": "low", "0.3.0": "medium", "0.0.0-unknown": "low"} {
+	for v, want := range map[string]string{"0.2.3": "low", "0.3.0": "medium", "0.3.1": "medium", "0.0.0-unknown": "low"} {
 		if got := BaselineMaxAutoPublishSeverityFor(v); got != want {
 			t.Errorf("BaselineMaxAutoPublishSeverityFor(%q) = %q, want %q", v, got, want)
 		}

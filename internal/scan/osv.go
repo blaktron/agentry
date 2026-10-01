@@ -34,8 +34,20 @@ type OSVVulnerability struct {
 	// Summary is the advisory's one-line summary.
 	Summary string `json:"summary"`
 	// Severity is the advisory's own severity mapped onto the finding
-	// vocabulary ("low".."critical"); a finding carries it unchanged (D2).
+	// vocabulary ("low".."critical"): the database's word, else the CVSS
+	// base score's band. The registry stores it and the dependency alerts
+	// read it; the finding carries AdvisoryGateSeverity (agentry#774).
 	Severity string `json:"severity"`
+	// CVSSScore is the highest CVSS base score among the advisory's
+	// severity entries (v3.x or v4.0 vectors, or plain numbers); nil when
+	// it carries none.
+	CVSSScore *float64 `json:"cvssScore,omitempty"`
+	// Scored is set on every advisory of a registry row written since CVSS
+	// vectors were scored (agentry#774; scoredAdvisories, by the row's two
+	// writers, S7 and the daily sweep). A row with an advisory that lacks
+	// it predates the score, so S7 asks the database again rather than
+	// judge a High with no score as high.
+	Scored bool `json:"scored,omitempty"`
 	// FixedIn lists the versions the advisory names as fixed for the
 	// package, when it names any.
 	FixedIn []string `json:"fixedIn,omitempty"`

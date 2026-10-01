@@ -339,7 +339,7 @@ scan:
 ```
 
 The scanning role needs egress to that database (one host); a worker that
-cannot reach it leaves an `S7/osv-error` finding naming every declared
+cannot reach it leaves an `S7/osv-no-data` finding naming every declared
 server version the registry holds no answer for, on every submission until
 a lookup succeeds. The finding is medium, so at the baseline the version
 publishes with it on its report (an organization at threshold `low` holds
