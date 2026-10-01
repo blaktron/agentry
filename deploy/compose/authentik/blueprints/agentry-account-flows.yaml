@@ -381,6 +381,15 @@ entries:
   # agreement, or when the terms could not be read (fail closed, so no
   # account is written having agreed to nothing).
   #
+  # Failing closed rests on one detail of authentik's: when an initial-value
+  # expression raises, the field falls back to the expression's own source
+  # text. A version is therefore only ever matched with the strict
+  # data-terms-version="[A-Za-z0-9._-]+", which that source cannot satisfy
+  # (it holds the pattern, brackets and all), so a broken expression shows
+  # no terms and admits no one. The pattern is written three times (the
+  # field, the step's policy, the write's policy; expressions cannot share
+  # code): change them together.
+  #
   # Keys. The agreement is attributes_agentry_terms_accepted, flat: a second
   # prompt stage's data is merged into the first's with dict.update, so a
   # dotted key, which validation nests under `attributes`, would replace the
@@ -411,9 +420,9 @@ entries:
             try:
                 with open(path, encoding="utf-8") as fh:
                     terms = fh.read()
-            except OSError:
+            except Exception:  # unreadable, or not UTF-8: the step refuses
                 terms = ""
-        if not re.search(r'data-terms-version="[^"]+"', terms):
+        if not re.search(r'data-terms-version="[A-Za-z0-9._-]+"', terms):
             return '<p class="agentry-terms-missing">The Terms of Service could not be loaded, so an account cannot be created right now. Please try again later.</p>'
 
         style = """<style>
@@ -433,14 +442,15 @@ entries:
         # on every scroll and resize after. Once the end has been reached it
         # stays reached.
         gate = (
-            "var r=this.getRootNode(),b=r.querySelector('.agentry-terms'),"
-            "c=r.getElementById('attributes_agentry_terms_accepted'),"
-            "k=r.querySelector('button[name=continue]'),h=r.querySelector('.agentry-terms-hint');"
-            "if(!b||!c)return;"
-            "var s=function(){if(b.scrollTop+b.clientHeight>=b.scrollHeight-8)b.dataset.read='1';"
-            "var d=b.dataset.read!=='1';c.disabled=d;if(k)k.disabled=d;"
-            "if(h)h.textContent=d?'Scroll to the end of the terms to continue.':'You have reached the end of the terms.';};"
-            "b.addEventListener('scroll',s,{passive:true});window.addEventListener('resize',s);s();"
+            "var root=this.getRootNode(),box=root.querySelector('.agentry-terms'),"
+            "agree=root.getElementById('attributes_agentry_terms_accepted'),"
+            "next=root.querySelector('button[name=continue]'),hint=root.querySelector('.agentry-terms-hint');"
+            "if(!box||!agree)return;"
+            "var sync=function(){"
+            "if(box.scrollTop+box.clientHeight>=box.scrollHeight-8)box.dataset.read='1';"
+            "var unread=box.dataset.read!=='1';agree.disabled=unread;if(next)next.disabled=unread;"
+            "if(hint)hint.textContent=unread?'Scroll to the end of the terms to continue.':'You have reached the end of the terms.';};"
+            "box.addEventListener('scroll',sync,{passive:true});window.addEventListener('resize',sync);sync();"
         )
         pixel = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
         return (
@@ -474,7 +484,7 @@ entries:
         import re
 
         data = request.context.get("prompt_data") or {}
-        if not re.search(r'data-terms-version="[^"]+"', str(data.get("agentry_terms_text") or "")):
+        if not re.search(r'data-terms-version="[A-Za-z0-9._-]+"', str(data.get("agentry_terms_text") or "")):
             ak_message("The Terms of Service could not be loaded, so an account cannot be created right now. Please try again later.")
             return False
         if data.get("attributes_agentry_terms_accepted") is not True:
@@ -528,7 +538,7 @@ entries:
             prompt["name"] = str(prompt.get("username") or "")
         terms = prompt.pop("agentry_terms_text", None)
         if terms is not None and prompt.get("attributes_agentry_terms_accepted") is True:
-            m = re.search(r'data-terms-version="([^"]+)"', str(terms))
+            m = re.search(r'data-terms-version="([A-Za-z0-9._-]+)"', str(terms))
             prompt["attributes.agentry_terms_version"] = m.group(1) if m else ""
             prompt["attributes.agentry_terms_accepted_at"] = now().isoformat()
         plan.context["prompt_data"] = prompt
@@ -594,12 +604,22 @@ entries:
       target: !KeyOf flow-enrollment
       stage: !KeyOf stage-enrollment-terms
       order: 15
+    attrs:
+      evaluate_on_plan: false
+      re_evaluate_policies: true
   - model: authentik_flows.flowstagebinding
     id: binding-enrollment-write
     identifiers:
       target: !KeyOf flow-enrollment
       stage: !KeyOf stage-enrollment-user-write
       order: 20
+    attrs:
+      # Every policy on the write must pass (agentry#788): the terms record
+      # is not optional, so an error in agentry-enrollment-write-defaults
+      # skips the write, and the flow then stops with no account, rather
+      # than writing one without the version it agreed to. The has-password
+      # policy always passes.
+      policy_engine_mode: all
   - model: authentik_flows.flowstagebinding
     identifiers:
       target: !KeyOf flow-enrollment
@@ -616,6 +636,29 @@ entries:
       stage: !KeyOf stage-enrollment-login
       order: 100
 
+  # The terms step runs only where the deployment names its terms; an error
+  # in that check shows the step (which then refuses, having no terms)
+  # rather than skipping it. The write's defaults (agentry#788) are above.
+  - model: authentik_policies.policybinding
+    identifiers:
+      policy: !KeyOf policy-enrollment-terms-configured
+      target: !KeyOf binding-enrollment-terms
+      order: 0
+    attrs:
+      enabled: true
+      negate: false
+      failure_result: true
+      timeout: 5
+  - model: authentik_policies.policybinding
+    identifiers:
+      policy: !KeyOf policy-enrollment-write-defaults
+      target: !KeyOf binding-enrollment-write
+      order: 40
+    attrs:
+      enabled: true
+      negate: false
+      failure_result: false
+      timeout: 5
   - model: authentik_policies.policybinding
     identifiers:
       policy: !KeyOf policy-rate-limit
@@ -1356,25 +1399,6 @@ entries:
             fresh.save(update_fields=["attributes"])
             user.attributes["agentry_has_password"] = has
         return True
-  - model: authentik_policies.policybinding
-    identifiers:
-      policy: !KeyOf policy-enrollment-terms-configured
-      target: !KeyOf binding-enrollment-terms
-      order: 0
-    attrs:
-      enabled: true
-      negate: false
-      timeout: 5
-  - model: authentik_policies.policybinding
-    identifiers:
-      policy: !KeyOf policy-enrollment-write-defaults
-      target: !KeyOf binding-enrollment-write
-      order: 40
-    attrs:
-      enabled: true
-      negate: false
-      failure_result: true
-      timeout: 5
   - model: authentik_policies.policybinding
     identifiers:
       policy: !KeyOf policy-record-has-password
