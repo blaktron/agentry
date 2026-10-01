@@ -41,6 +41,9 @@ func TestATableThatCannotBeReadIsRefused(t *testing.T) {
 		"review, no queue": `{` + base + `,"cases":[{"name":"a","branch":"b","want":{"outcome":"needs_review"}}]}`,
 		"queue on publish": `{` + base + `,"cases":[{"name":"a","branch":"b","want":{"outcome":"published","queue":"org"}}]}`,
 		"bad threshold":    `{"baseline":{"maxAutoPublishSeverity":"severe"},"cases":[{"name":"a","branch":"b","want":{"outcome":"published"}}]}`,
+		"bad review mode":  `{` + base + `,"cases":[{"name":"a","branch":"b","policy":{"requireHumanReview":"sometimes"},"want":{"outcome":"published"}}]}`,
+		"empty capability": `{` + base + `,"cases":[{"name":"a","branch":"b","policy":{"requireHumanReview":{"whenCapabilities":[]}},"want":{"outcome":"published"}}]}`,
+		"bad review field": `{` + base + `,"cases":[{"name":"a","branch":"b","policy":{"requireHumanReview":{"whenCaps":["network"]}},"want":{"outcome":"published"}}]}`,
 		"bad egress":       `{` + base + `,"cases":[{"name":"a","branch":"b","policy":{"wildcardEgress":"allow"},"want":{"outcome":"published"}}]}`,
 	} {
 		t.Run(name, func(t *testing.T) {
