@@ -1,0 +1,6 @@
+# Fixture expectation (see README.md).
+technique: "S3 zero-width characters beside emoji: a joiner before a letter, a zero-width space between emoji, a joiner between letters, a byte-order mark mid-file (still held after agentry#775)"
+expect:
+  - S3/zero-width
+forbid: []
+expectClean: false

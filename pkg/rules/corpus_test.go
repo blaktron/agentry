@@ -37,6 +37,7 @@ type expectation struct {
 	// internal/scan's corpus gate. They are declared here because the YAML is
 	// decoded with KnownFields(true) in both places.
 	Incident      string   `yaml:"incident"`
+	ExpectOutcome string   `yaml:"expectOutcome"`
 	Kind          string   `yaml:"kind"`
 	Manifest      string   `yaml:"manifest"`
 	Version       string   `yaml:"version"`
