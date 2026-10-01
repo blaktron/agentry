@@ -186,19 +186,20 @@ func (s *Server) modelInputWiring() (ModelInputScanner, websearch.Provider, Mode
 // judgeTypeSafe is the judge provider the model-input question set is for.
 const judgeTypeSafe = "typesafe"
 
-// newModelInputScanner builds the deployment's model-input scanner and
-// draft checker over one paced client: Jev alone, since the question sets
-// are Jev's. Any other judge, or none, leaves the routes off.
-func newModelInputScanner(provider, model, baseURL, apiKey string) (ModelInputScanner, DraftChecker, error) {
+// newModelInputScanner builds the deployment's model-input scanner, draft
+// checker and Writing Voice scanner over one paced client: Jev alone, since
+// the question sets are Jev's. Any other judge, or none, leaves the routes
+// off and the voice store with no judge (off).
+func newModelInputScanner(provider, model, baseURL, apiKey string) (ModelInputScanner, DraftChecker, *judge.VoiceScanner, error) {
 	if provider != judgeTypeSafe {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	c, err := judge.New(judge.Config{BaseURL: baseURL, APIKey: apiKey, Model: model})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	paced := &pacedAsker{asker: c, lim: rate.NewLimiter(judgeRequestsPerSecond, judgeBurst)}
-	return judge.NewModelInputScanner(paced), draftcheck.New(paced), nil
+	return judge.NewModelInputScanner(paced), draftcheck.New(paced), judge.NewVoiceScanner(paced), nil
 }
 
 // pacedAsker holds a replica's model-input requests to the judge under

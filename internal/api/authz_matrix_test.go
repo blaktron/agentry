@@ -508,6 +508,15 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			},
 		},
 		"getKnowledgeUsage": {method: "GET", path: sPath("/api/v1/knowledge/usage")},
+		// The Writing Voice (agentry#809): the caller's own. The matrix's
+		// server has no voice judge, so an authorized call meets the store
+		// off (503) or a refused body (422) past the gate; nothing is stored.
+		"getVoice":            {method: "GET", path: sPath("/api/v1/voice")},
+		"putVoice":            {method: "PUT", path: sPath("/api/v1/voice"), body: func(*matrixSeed, string) any { return map[string]any{"text": "x", "source": "build"} }},
+		"deleteVoice":         {method: "DELETE", path: sPath("/api/v1/voice")},
+		"discardVoicePending": {method: "DELETE", path: sPath("/api/v1/voice/pending")},
+		"restoreVoice":        {method: "POST", path: sPath("/api/v1/voice/restore")},
+		"updateVoiceSettings": {method: "PUT", path: sPath("/api/v1/voice/settings"), body: func(*matrixSeed, string) any { return map[string]any{} }},
 		// An organization's shared knowledge (agentry#646): the same shapes
 		// under the fixture organization, every pack id a stranger's and
 		// every key short or foreign, so an authorized caller meets a 404 or

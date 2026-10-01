@@ -19,6 +19,7 @@ import (
 	"github.com/blaktron/agentry/internal/knowledge"
 	"github.com/blaktron/agentry/internal/registry"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/internal/voice"
 )
 
 // Account deletion (§12.7). PII is purged and the account row is
@@ -249,6 +250,11 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		// The account's knowledge packs go with it (agentry#593), and the
 		// key that opens them once this commits.
 		if knowledgeKeys, err = knowledge.EraseOwner(r.Context(), tq, knowledge.User(p.UserID)); err != nil {
+			return err
+		}
+		// And the Writing Voice (agentry#809), whose key went with the
+		// knowledge store's erasure of the same person.
+		if _, err = voice.Erase(r.Context(), tq, p.UserID); err != nil {
 			return err
 		}
 		// Every PAT dies with the account.

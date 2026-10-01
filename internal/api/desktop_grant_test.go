@@ -54,8 +54,8 @@ func TestDesktopGrantExchange(t *testing.T) {
 		t.Fatal("exchange returned no token")
 	}
 	scopes, _ := pat["scopes"].([]any)
-	if len(scopes) != 10 {
-		t.Fatalf("desktop PAT scopes = %v, want the ten desktop scopes", scopes)
+	if len(scopes) != 12 {
+		t.Fatalf("desktop PAT scopes = %v, want the twelve desktop scopes", scopes)
 	}
 	has := map[string]bool{}
 	for _, sc := range scopes {
@@ -81,6 +81,11 @@ func TestDesktopGrantExchange(t *testing.T) {
 	// refused.
 	if !has["secret:write"] {
 		t.Fatalf("desktop PAT lacks secret:write: %v", scopes)
+	}
+	// And the voice scopes (agentry#809): the desktop's Voice panel submits
+	// this computer's voice and downloads the account's (writing-voice D6).
+	if !has["voice:read"] || !has["voice:write"] {
+		t.Fatalf("desktop PAT lacks the voice scopes: %v", scopes)
 	}
 	// The PAT authenticates.
 	var me struct {
