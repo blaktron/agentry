@@ -32,7 +32,7 @@ Two runners read this tree:
 | Runner | Scope | Asserts |
 |---|---|---|
 | `pkg/rules/corpus_test.go` | S3 + S4 only, no pipeline | the `S3/…` and `S4/…` entries of `expect`/`forbid`; `expectClean` ⇒ zero findings |
-| `internal/scan/corpus_test.go` | the whole orchestrator | every `expect`/`forbid` id including S8–S9; attack fixtures must not auto-publish; benign fixtures must not be rejected |
+| `internal/scan/corpus_test.go` | the whole orchestrator | every `expect`/`forbid` id including S8–S9; attack fixtures must not auto-publish; benign fixtures must not be rejected; a fixture with `expectOutcome` gets exactly that outcome at the baseline |
 
 ## expected.yaml schema
 
@@ -44,6 +44,8 @@ expect:            # finding ids that MUST be found (empty for benign twins)
 forbid:            # finding ids that MUST NOT be found
   - S4/exfiltration-001
 expectClean: true  # when true, the fixture must yield ZERO rule-level findings
+expectOutcome: published  # optional: the gate's exact outcome at the baseline
+                          # (published, needs_review, rejected); marks a loosening
 
 # --- optional pipeline context (read by internal/scan's runner only) ---
 manifest: |                      # default {"kind":"<kind>","capabilities":{}}
@@ -108,6 +110,17 @@ URL, a path, a timezone, a model name, a timestamp, a digest, a number, a
 mode, an id — under plain keys). The two token fixtures cannot carry a
 self-evident placeholder, since the shape is what the rule reads; their
 values were generated for the corpus.
+
+Loosenings (ruleset 0.3.2, agentry#775): each rule a ruleset stops holding
+for something that is not a major risk gets a fixture that was held before
+and now publishes (`expectOutcome: published`), and an attack fixture of the
+shape the rule must still hold.
+
+| Loosening | Publishes now | Still held |
+|---|---|---|
+| `S3/zero-width` leaves a joiner inside an emoji sequence and a leading byte-order mark | `s3-zero-width-emoji-benign` | `s3-zero-width-beside-emoji` (a joiner before a letter, a zero-width space between emoji, a byte-order mark mid-file), and `s3-zero-width` |
+| `S9/new-obfuscation` only for a new S3 class rated medium or above | `s9-patch-comment-v2` (a patch adds a plain HTML comment; baseline `s9-patch-comment-v1`) | `s9-patch-hidden-v2` (a patch adds CSS-hidden text) |
+| a host the manifest declares is low (`S9/new-egress`, `S9/new-egress-content`), even when this patch declares it | `s9-declared-host-v2` (a patch declares a host and starts using it; baseline `s9-declared-host-v1`, no egress) | `s9-undeclared-host-v2` (the same, plus a host it does not declare), and `incident-postmark-v2` |
 
 ## Rules for extending the corpus
 

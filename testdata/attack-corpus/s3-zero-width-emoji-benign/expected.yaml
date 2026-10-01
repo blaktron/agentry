@@ -1,0 +1,7 @@
+# Fixture expectation (see README.md).
+technique: "S3 zero-width joiners inside emoji sequences, and a leading byte-order mark (benign; publishes since ruleset 0.3.2, agentry#775)"
+expect: []
+forbid:
+  - S3/zero-width
+expectClean: true
+expectOutcome: published

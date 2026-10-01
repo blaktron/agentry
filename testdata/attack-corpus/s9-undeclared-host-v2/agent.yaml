@@ -1,0 +1,5 @@
+name: forecast-helper
+version: 1.0.1
+capabilities:
+  network:
+    egress: [api.forecast.invalid.example]
