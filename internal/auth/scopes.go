@@ -35,6 +35,12 @@ const (
 	// build's vault requires it through pkg/extension, and keeps its list
 	// for a session alone.
 	ScopeSecretWrite Scope = "secret:write"
+	// The voice scopes (plan writing-voice.md §4, agentry#809): a token
+	// that may read the caller's Writing Voice, every version's text and
+	// review (voice:read), or put, restore, set and delete it
+	// (voice:write).
+	ScopeVoiceRead  Scope = "voice:read"
+	ScopeVoiceWrite Scope = "voice:write"
 )
 
 // AllScopes enumerates every valid scope (validation, docs, UI).
@@ -43,7 +49,7 @@ func AllScopes() []Scope {
 		ScopeRepoRead, ScopeRepoWrite, ScopeAgentPublish, ScopeAgentRead,
 		ScopeOrgAdmin, ScopeReviewAct, ScopeAuditRead, ScopeUserProfile,
 		ScopeRunRead, ScopeRunWrite, ScopeKnowledgeRead, ScopeKnowledgeWrite,
-		ScopeSecretWrite,
+		ScopeSecretWrite, ScopeVoiceRead, ScopeVoiceWrite,
 	}
 }
 
@@ -54,7 +60,9 @@ func AllScopes() []Scope {
 // §4.7), the Knowledge panel's packs and their keys (knowledge:read,
 // knowledge:write; plan knowledge.md §4.3), and the hosted-run start's
 // secrets, set and deleted, never read (secret:write; plan
-// hosted-credentials-vault.md D13, agentry#676). Deliberately no review:act
+// hosted-credentials-vault.md D13, agentry#676), and the account's Writing
+// Voice, read, uploaded and downloaded (voice:read, voice:write; plan
+// writing-voice.md V3, V6). Deliberately no review:act
 // and no org scopes. Fixed server-side so a caller of the grant endpoint
 // cannot widen it, and shown verbatim on the approval page.
 func SignInGrantScopes() []string {
@@ -62,6 +70,7 @@ func SignInGrantScopes() []string {
 		string(ScopeAgentRead), string(ScopeAgentPublish), string(ScopeRepoRead), string(ScopeRepoWrite),
 		string(ScopeUserProfile), string(ScopeRunRead), string(ScopeRunWrite),
 		string(ScopeKnowledgeRead), string(ScopeKnowledgeWrite), string(ScopeSecretWrite),
+		string(ScopeVoiceRead), string(ScopeVoiceWrite),
 	}
 }
 

@@ -98,6 +98,11 @@ const (
 	// marked exportable, which the handler decides with the pack in hand.
 	ActOrgKnowledgeRead  Action = "org.knowledge.read"
 	ActOrgKnowledgeWrite Action = "org.knowledge.write" // admin
+	// The caller's own Writing Voice (plan writing-voice.md §4,
+	// agentry#809): self-scoped, since a voice is found only by its owner.
+	// Read covers every version's text and review; write covers the rest.
+	ActVoiceRead  Action = "voice.read"
+	ActVoiceWrite Action = "voice.write"
 	// ActReviewAct is the review surface (§12.3 review:act). Check only
 	// enforces the PAT scope gate for it: WHO may review — platform staff or
 	// an org security_reviewer who is not the version's author (§12.2) — is a
@@ -200,6 +205,8 @@ var scopeFor = map[Action]Scope{
 	ActKnowledgeWrite:       ScopeKnowledgeWrite,
 	ActOrgKnowledgeRead:     ScopeKnowledgeRead,
 	ActOrgKnowledgeWrite:    ScopeKnowledgeWrite,
+	ActVoiceRead:            ScopeVoiceRead,
+	ActVoiceWrite:           ScopeVoiceWrite,
 }
 
 // minRole is the role threshold per org-scoped action.
@@ -269,7 +276,7 @@ func Check(p *Principal, res Resource, act Action) error {
 	switch act {
 	case ActUserSelfRead, ActUserSelfUpdate, ActUserTokensRead,
 		ActUserTokensManage, ActUserSecurityManage, ActUserOrgRequest, ActOrgCreate,
-		ActAgentCreate, ActReviewAct, ActKnowledgeRead, ActKnowledgeWrite:
+		ActAgentCreate, ActReviewAct, ActKnowledgeRead, ActKnowledgeWrite, ActVoiceRead, ActVoiceWrite:
 		// ActAgentCreate: namespace-level authorization (self vs org
 		// admin+) happens in registry.CreateAgent with the target ns.
 		// ActReviewAct: the scope gate above is the whole contribution here;

@@ -10,6 +10,7 @@ import (
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/knowledge"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/internal/voice"
 )
 
 // eventUserDataCleared tells extensions that a user cleared their data
@@ -81,6 +82,12 @@ func (s *Server) ClearCurrentUserData(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		counts["knowledgeObjects"] = len(knowledgeKeys)
+		// The account's Writing Voice (agentry#809): every version; the key
+		// that opened it went with the knowledge store's erasure above.
+		if n, err = voice.Erase(r.Context(), tq, p.UserID); err != nil {
+			return err
+		}
+		counts["voice"] = n > 0
 		// An extension's credentials and history go too (agentry#638), in
 		// this transaction.
 		extRows, err := s.eraseInExtensions(r.Context(), tx, p.UserID, AccountDataCleared)

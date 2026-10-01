@@ -153,10 +153,31 @@ func (h packHit) packFinding() PackFinding {
 	}
 }
 
+// ScanProse reads text files with the rule stages a pack's scan runs (S2,
+// S3, S4, S8) and no AI Review: a Writing Voice's review asks a question
+// set of its own (agentry#809), since the release rubric reads a voice's
+// instructions about writing as instructions to the reader. Its findings
+// carry no excerpt, as a pack's do.
+func (o *Orchestrator) ScanProse(ctx context.Context, files []PackFile) PackReport {
+	r, hits, _, _ := o.scanPackRules(ctx, files)
+	for _, h := range hits {
+		r.Findings = append(r.Findings, h.packFinding())
+	}
+	return r
+}
+
 // scanPack is ScanPack's reading: the report without its findings, and
 // the findings whole — excerpts included — for a caller that keeps them
 // where excerpts belong (a release's own report, ScanShipped).
 func (o *Orchestrator) scanPack(ctx context.Context, files []PackFile) (PackReport, []packHit) {
+	r, hits, read, part := o.scanPackRules(ctx, files)
+	return r, append(hits, o.reviewPack(ctx, &r, read, part)...)
+}
+
+// scanPackRules runs the rule stages over the text files: the report
+// without findings or review, the findings, the files read and the half
+// each is in.
+func (o *Orchestrator) scanPackRules(ctx context.Context, files []PackFile) (PackReport, []packHit, []FileEntry, map[string]PackPart) {
 	r := PackReport{Schema: PackReportSchema, Stages: append([]PackStage(nil), packRuleStages...), Findings: []PackFinding{}}
 	r.Read.NotRead = []string{}
 	in := &Input{}
@@ -207,7 +228,7 @@ func (o *Orchestrator) scanPack(ctx context.Context, files []PackFile) (PackRepo
 		hits = append(hits, packHit{finding: f, part: part[f.FilePath]})
 	}
 
-	return r, append(hits, o.reviewPack(ctx, &r, in.Files, part)...)
+	return r, hits, in.Files, part
 }
 
 // reviewPack runs AI Review over the sources, then over the wiki.

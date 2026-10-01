@@ -265,6 +265,7 @@ func TestEveryQuestionSetHashNamesEachQuestionsWording(t *testing.T) {
 	}{
 		"model input": {ModelInputQuestions, func(qs []Question) string { return modelInputHashOf(DefaultModel, true, qs) }},
 		"draft":       {DraftQuestions, func(qs []Question) string { return draftHashOf(DefaultModel, qs) }},
+		"voice":       {VoiceQuestions, func(qs []Question) string { return voiceHashOf(DefaultModel, qs) }},
 		"rubric":      {RubricQuestions, func(qs []Question) string { return rubricHashOf(DefaultModel, RubricBatchOne, qs, RunnerGrants) }},
 	} {
 		base := c.hash(c.set())
@@ -286,7 +287,8 @@ func TestEveryQuestionSetHashNamesEachQuestionsWording(t *testing.T) {
 		t.Fatal("rubric: the runner's grants are not in the hash")
 	}
 	if modelInputHash(DefaultModel, true) != modelInputHashOf(DefaultModel, true, ModelInputQuestions()) ||
-		draftHash(DefaultModel) != draftHashOf(DefaultModel, DraftQuestions()) {
+		draftHash(DefaultModel) != draftHashOf(DefaultModel, DraftQuestions()) ||
+		voiceHash(DefaultModel) != voiceHashOf(DefaultModel, VoiceQuestions()) {
 		t.Fatal("a scanner's hash is the hash of the set it asks")
 	}
 }

@@ -37,6 +37,7 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 	"github.com/blaktron/agentry/internal/ui"
 	"github.com/blaktron/agentry/internal/version"
+	"github.com/blaktron/agentry/internal/voice"
 	"github.com/blaktron/agentry/internal/webhook"
 	"github.com/blaktron/agentry/pkg/ruleset"
 	"github.com/blaktron/agentry/pkg/websearch"
@@ -74,6 +75,12 @@ type Server struct {
 	// knowledge is the store of accounts' knowledge packs (agentry#593);
 	// nil without a database, and off (every route 503) with no wrapper.
 	knowledge *knowledge.Service
+	// voice is the store of people's Writing Voices (agentry#809); nil
+	// without a database, and off (every route 503) with no key wrapper or
+	// no Jev judge to review with. voiceAdmit is the extension that admits
+	// a review a route asks for.
+	voice      *voice.Service
+	voiceAdmit voiceAdmission
 	// modelInput is the model-input routes' scanner, search provider and
 	// the extension that admits hosted jobs (agentry#608).
 	modelInput modelInputState
@@ -205,7 +212,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 	// asks the deployment's judge when it is Jev, and the search route
 	// brokers the configured provider. Either off leaves its route 503; a
 	// configuration naming one that cannot be built refuses startup.
-	mis, mck, merr := newModelInputScanner(judgeProviderName(cfg), cfg.Judge.Model, cfg.Judge.BaseURL, cfg.Judge.APIKey)
+	mis, mck, vj, merr := newModelInputScanner(judgeProviderName(cfg), cfg.Judge.Model, cfg.Judge.BaseURL, cfg.Judge.APIKey)
 	if merr != nil {
 		panic(merr) // startup-time config failure, never mid-request
 	}
@@ -337,6 +344,15 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 			Store: st, Blobs: srv.blobs, Wrapper: knowledgeWrapper(cfg, st, log), Scanner: orch, Jobs: srv.jobs,
 			Entitlements: func() entitlements.Resolver { return srv.ents }, Log: log,
 		})
+		// The Writing Voice (agentry#809) seals with the knowledge store's
+		// key wrapper, an extension's once one is set, and reviews with the
+		// rule stages and Jev's voice set.
+		vd := voice.Deps{Store: st, Rules: orch, Jobs: srv.jobs, Log: log,
+			Wrapper: func() knowledge.KeyWrapper { return srv.knowledge.Wrapper() }}
+		if vj != nil { // a nil scanner kept out of the interface, so the store reads it as no judge
+			vd.Judge = vj
+		}
+		srv.voice = voice.NewService(vd)
 		// §8.6 knobs that reject at submission time, and the §12.1/§19
 		// 2FA-before-public-publish gate. Both sit on the registry so the
 		// git-tag auto-publish path is covered as well as the API.
@@ -598,6 +614,9 @@ func (s *Server) RegisterQueueHandlers(q queue.Client) {
 	if s.knowledge != nil {
 		s.knowledge.RegisterHandlers(q) // the knowledge pack scan (internal/knowledge, agentry#593)
 	}
+	if s.voice != nil {
+		s.voice.RegisterHandlers(q) // the Writing Voice's review and its sweep (internal/voice, agentry#809)
+	}
 }
 
 // emitAgentEvent is the registry event sink (§9.3): it resolves the agent's
@@ -661,6 +680,9 @@ func (s *Server) GetMeta(w http.ResponseWriter, r *http.Request) {
 		// knowledge says the store of knowledge packs is on (agentry#593):
 		// a key to wrap with, from the deployment or an extension.
 		"knowledge": s.knowledge.Configured(),
+		// voice says the store of Writing Voices is on (agentry#809): a key
+		// to seal with and a Jev judge to review with.
+		"voice": s.voice.Configured(),
 	}
 	meta := Meta{
 		Version:    version.Version,
