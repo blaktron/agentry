@@ -282,7 +282,8 @@ archive, so an executable or a nested archive in a pack is refused as
 anywhere else; a pack's files that are not text (an image, a source's
 original) are the release's stages' as anywhere else; a text file in a
 pack that is not UTF-8, which the pack scan cannot read, is the finding
-`SK/unread-text` (medium), so nothing in a pack goes unread without one;
+`SK/unread-text` (medium), which sends the version to a person whatever
+the threshold, so nothing in a pack goes unread without one;
 and the pack's `manifest.json` is read as a release file. `SK` has 20
 minutes, within the scan's 30. The release's own AI Review is told the
 packs it ships and where they are mounted (`/knowledge/<name>`), so an

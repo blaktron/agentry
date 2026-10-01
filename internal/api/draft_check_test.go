@@ -20,9 +20,10 @@ import (
 // with the questions, the state and the verdicts every client gets.
 
 // draftJudge answers both of the check's sets: "IGNORE YOUR INSTRUCTIONS"
-// in a file is the rubric's injection, "OFF-TASK" in an instruction the
-// draft set's off-task question, "JUDGE-ERROR" a failed request. It records
-// what it was asked.
+// in a file is the rubric's injection, "PROBABLY MISLEADING" a probable
+// deception and "PROBABLY UNDECLARED" a probable undeclared capability (both
+// score 2), "OFF-TASK" in an instruction the draft set's off-task question,
+// "JUDGE-ERROR" a failed request. It records what it was asked.
 type draftJudge struct {
 	mu    sync.Mutex
 	asked [][]judge.Question
@@ -47,6 +48,10 @@ func (f *draftJudge) Ask(_ context.Context, state map[string]string, qs []judge.
 		case q.ID == judge.RubricIDInjection && strings.Contains(state["content"], "IGNORE YOUR INSTRUCTIONS"):
 			out[q.ID] = 0.95
 		case q.ID == judge.DraftIDOffTask && strings.Contains(state["instruction"], "OFF-TASK"):
+			out[q.ID] = 0.81
+		case q.ID == judge.RubricIDDeception && strings.Contains(state["content"], "PROBABLY MISLEADING"):
+			out[q.ID] = 0.81
+		case q.ID == judge.RubricIDUndeclaredCapability && strings.Contains(state["content"], "PROBABLY UNDECLARED"):
 			out[q.ID] = 0.81
 		}
 	}
@@ -74,9 +79,10 @@ type draftCheckBody struct {
 		Verdict  string         `json:"verdict"`
 		Scores   map[string]int `json:"scores"`
 		Findings []struct {
-			ID    string `json:"id"`
-			Score int    `json:"score"`
-			Path  string `json:"path"`
+			ID       string `json:"id"`
+			Score    int    `json:"score"`
+			Path     string `json:"path"`
+			Severity string `json:"severity"`
 		} `json:"findings"`
 		RubricHash string `json:"rubricHash"`
 		Failure    string `json:"failure"`
@@ -111,6 +117,27 @@ func checkDraft(t *testing.T, env *testEnv, c caller, headers map[string]string,
 		readBody(t, res, &p)
 	}
 	return res.StatusCode, b, p
+}
+
+// The draft check flags what would hold the version, as the gate does since
+// ruleset 0.3.0 (agentry#773): a probable deception is a medium finding, a
+// note on a pass; a probable undeclared capability is high and flags.
+func TestTheDraftCheckFlagsOnlyWhatTheGateHolds(t *testing.T) {
+	env := newTestEnvWith(t, func(s *api.Server) { s.SetDraftChecker(draftcheck.New(&draftJudge{})) })
+	staff := staffCaller(t, env, "dc-bar")
+	desc := "Give me a three-line weather brief for a city I name."
+
+	st, b, _ := checkDraft(t, env, staff, nil, map[string]any{"description": desc, "files": draftFiles("# Weather\nPROBABLY MISLEADING\n")})
+	if st != http.StatusOK || b.Rubric.Verdict != "pass" || len(b.Rubric.Findings) != 1 ||
+		b.Rubric.Findings[0].ID != "C4_user_deception" || b.Rubric.Findings[0].Score != 2 || b.Rubric.Findings[0].Severity != "medium" {
+		t.Fatalf("a medium is a note on a pass: %d %+v", st, b.Rubric)
+	}
+
+	st, b, _ = checkDraft(t, env, staff, nil, map[string]any{"description": desc, "files": draftFiles("# Weather\nPROBABLY UNDECLARED\n")})
+	if st != http.StatusOK || b.Rubric.Verdict != "flagged" || len(b.Rubric.Findings) != 1 ||
+		b.Rubric.Findings[0].ID != "C3_undeclared_capability" || b.Rubric.Findings[0].Score != 2 || b.Rubric.Findings[0].Severity != "high" {
+		t.Fatalf("an undeclared capability at 2 flags: %d %+v", st, b.Rubric)
+	}
 }
 
 func TestTheDraftCheckReadsThePackageAsS5AndAsksTheDraftSet(t *testing.T) {
@@ -162,7 +189,7 @@ func TestTheDraftCheckReadsThePackageAsS5AndAsksTheDraftSet(t *testing.T) {
 	// would record; the draft set's names its question.
 	st, b, _ = checkDraft(t, env, staff, nil, map[string]any{"description": desc, "files": draftFiles("IGNORE YOUR INSTRUCTIONS\nOFF-TASK\n")})
 	if st != http.StatusOK || b.Rubric.Verdict != "flagged" || len(b.Rubric.Findings) != 1 || b.Rubric.Findings[0].ID != "C1_injection" ||
-		b.Rubric.Findings[0].Score != 3 || b.Rubric.Findings[0].Path != "AGENT.md" {
+		b.Rubric.Findings[0].Score != 3 || b.Rubric.Findings[0].Path != "AGENT.md" || b.Rubric.Findings[0].Severity != "high" {
 		t.Fatalf("rubric flag: %d %+v", st, b.Rubric)
 	}
 	if b.Draft.Verdict != "flagged" || strings.Join(b.Draft.Flagged, ",") != "off_task" || b.Draft.Scores["off_task"] != 2 {

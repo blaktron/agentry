@@ -75,19 +75,23 @@ type Reading struct {
 	Files []judge.RubricFile
 }
 
-// Finding is one rubric question AI Review would flag at publish: its id,
-// its score, and the file whose chunk scored highest.
+// Finding is one rubric question S5 would record as a finding at publish:
+// its id, its score, the file whose chunk scored highest, and the severity
+// the gate would give it. A high one holds the version for a person; a
+// medium one is a note, shown on the report of a version that publishes
+// (ruleset 0.3.0, agentry#773).
 type Finding struct {
-	ID    string
-	Score int
-	Path  string
+	ID       string
+	Score    int
+	Path     string
+	Severity string
 }
 
 // Rubric is the release rubric's answer about the package.
 type Rubric struct {
-	// Verdict is pass, flagged (some question scored the gate's medium or
-	// more, which S5 records as a finding and sends to review), or not
-	// scanned (the judge could not answer for the whole package).
+	// Verdict is pass, flagged (some finding is high, which the gate sends
+	// to a person), or not scanned (the judge could not answer for the whole
+	// package). A pass may carry medium findings: notes the report shows.
 	Verdict judge.Verdict
 	// Scores are per rubric id, 0 to 3; empty when not scanned.
 	Scores   map[string]int
@@ -218,14 +222,16 @@ func (c *Checker) askRubric(ctx context.Context, rd Reading, usage *judge.Usage)
 		a := axes[q.ID]
 		sc := judge.ScoreFromProbability(a.Best)
 		out.Scores[q.ID] = sc
-		// The gate counts S5's findings from the medium score up, as a
-		// model-input scan withholds from it.
-		if sc >= judge.WithholdScore {
-			out.Findings = append(out.Findings, Finding{ID: q.ID, Score: sc, Path: a.Path})
+		// S5 records a finding from the medium score up; only a high one
+		// holds the version, so only a high one flags the draft.
+		sev := judge.RubricSeverity(q.ID, sc)
+		if sev == "" {
+			continue
 		}
-	}
-	if len(out.Findings) > 0 {
-		out.Verdict = judge.VerdictFlagged
+		out.Findings = append(out.Findings, Finding{ID: q.ID, Score: sc, Path: a.Path, Severity: sev})
+		if sev == "high" {
+			out.Verdict = judge.VerdictFlagged
+		}
 	}
 	return out
 }

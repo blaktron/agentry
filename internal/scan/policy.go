@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"path"
 	"strings"
+
+	"github.com/blaktron/agentry/pkg/ruleset"
 )
 
 // Policy is the §8.6 policy document. The platform baseline is the floor;
@@ -24,7 +26,8 @@ type Policy struct {
 	// toward strict like blockedCapabilities.
 	BlockedMcpServers []string `json:"blockedMcpServers,omitempty"`
 	// MaxAutoPublishSeverity tightens the §8.5 table: worst auto-publishable
-	// severity. "" means the baseline default (low).
+	// severity. "" means the baseline default, which the ruleset carries
+	// (medium since ruleset 0.3.0, agentry#773).
 	MaxAutoPublishSeverity string `json:"maxAutoPublishSeverity,omitempty"`
 	// RequireEvals: evals/ dir must exist and be non-empty.
 	RequireEvals bool `json:"requireEvals,omitempty"`
@@ -32,14 +35,20 @@ type Policy struct {
 	WildcardEgress string `json:"wildcardEgress,omitempty"`
 }
 
-// DefaultBaseline is the platform baseline policy (§8.5 defaults).
+// DefaultBaseline is the platform baseline policy (§8.5 defaults). Its
+// threshold is the embedded ruleset's: released with the bundle version, so
+// "which ruleset published this" names the threshold too (agentry#773).
 func DefaultBaseline() Policy {
 	return Policy{
 		RequireHumanReview:     json.RawMessage(`"never"`),
-		MaxAutoPublishSeverity: "low",
+		MaxAutoPublishSeverity: baselineMaxAuto(),
 		WildcardEgress:         "review",
 	}
 }
+
+// baselineMaxAuto is the default auto-publish threshold: what a baseline
+// that names none, or a policy that names none, publishes up to.
+func baselineMaxAuto() string { return ruleset.BaselineMaxAutoPublishSeverity() }
 
 // ParsePolicy decodes and validates a policy document.
 func ParsePolicy(doc []byte) (Policy, error) {
@@ -123,7 +132,7 @@ func Merge(baseline, org Policy) Policy {
 	}
 
 	// maxAutoPublishSeverity: the LOWER threshold (stricter) wins.
-	bSev, _ := severityByName(orDefault(baseline.MaxAutoPublishSeverity, "low"))
+	bSev, _ := severityByName(orDefault(baseline.MaxAutoPublishSeverity, baselineMaxAuto()))
 	if org.MaxAutoPublishSeverity != "" {
 		if oSev, ok := severityByName(org.MaxAutoPublishSeverity); ok && severityRank(oSev) < severityRank(bSev) {
 			out.MaxAutoPublishSeverity = org.MaxAutoPublishSeverity
@@ -223,7 +232,7 @@ func intersect(a, b []string) []string {
 // maxAutoPublishSeverity or downgrading wildcardEgress from reject.
 func LoosensBaseline(baseline, org Policy) bool {
 	if org.MaxAutoPublishSeverity != "" {
-		bSev, _ := severityByName(orDefault(baseline.MaxAutoPublishSeverity, "low"))
+		bSev, _ := severityByName(orDefault(baseline.MaxAutoPublishSeverity, baselineMaxAuto()))
 		if oSev, ok := severityByName(org.MaxAutoPublishSeverity); ok && severityRank(oSev) > severityRank(bSev) {
 			return true
 		}
