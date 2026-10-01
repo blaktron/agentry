@@ -168,9 +168,17 @@ func (c *HTTPOSV) Query(ctx context.Context, pkgs []OSVPackage) (map[string][]OS
 
 // osvToFinding maps an OSV advisory onto the finding vocabulary. Severity
 // prefers the database's own word (GHSA: CRITICAL/HIGH/MODERATE/LOW), then
-// a CVSS base score if the record carries a plain number, else medium — an
-// advisory with no severity is still an advisory (D2).
+// the band of the highest CVSS base score the record carries (a vector or a
+// plain number), else medium: an advisory with no severity is still an
+// advisory (the advisory plan's D2). The score is kept beside it, for the
+// gate's rating of a High (AdvisoryGateSeverity).
 func osvToFinding(v osvVuln, pkg OSVPackage) OSVVulnerability {
+	var score *float64
+	for _, s := range v.Severity {
+		if f := cvssBaseScore(s.Score); f >= 0 && (score == nil || f > *score) {
+			score = &f
+		}
+	}
 	sev := ""
 	if s, ok := v.DatabaseSpecific["severity"].(string); ok {
 		switch strings.ToUpper(s) {
@@ -184,21 +192,16 @@ func osvToFinding(v osvVuln, pkg OSVPackage) OSVVulnerability {
 			sev = string(SevLow)
 		}
 	}
-	if sev == "" {
-		for _, s := range v.Severity {
-			if score := cvssBaseScore(s.Score); score >= 0 {
-				switch {
-				case score >= 9:
-					sev = string(SevCritical)
-				case score >= 7:
-					sev = string(SevHigh)
-				case score >= 4:
-					sev = string(SevMedium)
-				default:
-					sev = string(SevLow)
-				}
-				break
-			}
+	if sev == "" && score != nil {
+		switch {
+		case *score >= 9:
+			sev = string(SevCritical)
+		case *score >= 7:
+			sev = string(SevHigh)
+		case *score >= 4:
+			sev = string(SevMedium)
+		default:
+			sev = string(SevLow)
 		}
 	}
 	if sev == "" {
@@ -230,21 +233,7 @@ func osvToFinding(v osvVuln, pkg OSVPackage) OSVVulnerability {
 	sort.Strings(fixed)
 	aliases := append([]string(nil), v.Aliases...)
 	sort.Strings(aliases)
-	return OSVVulnerability{ID: v.ID, Aliases: aliases, Summary: summary, Severity: sev, FixedIn: fixed, References: refs}
-}
-
-// cvssBaseScore extracts a numeric base score when the OSV severity "score"
-// field is a plain number (some databases put the score there instead of a
-// vector). A vector string yields -1.
-func cvssBaseScore(score string) float64 {
-	var f float64
-	if _, err := fmt.Sscanf(strings.TrimSpace(score), "%g", &f); err != nil || strings.Contains(score, ":") {
-		return -1
-	}
-	if f < 0 || f > 10 {
-		return -1
-	}
-	return f
+	return OSVVulnerability{ID: v.ID, Aliases: aliases, Summary: summary, Severity: sev, CVSSScore: score, FixedIn: fixed, References: refs}
 }
 
 func (c *HTTPOSV) postJSON(ctx context.Context, url string, body any, out any) error {

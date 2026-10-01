@@ -53,6 +53,50 @@ func TestDependencyAlertSurfaces(t *testing.T) {
 	}
 	env.doJSON(anonymous, http.MethodGet, "/api/v1/mcp-servers/scan?ecosystem=npm&package=alerts-fixture&version=9.9.9", nil, nil, http.StatusNotFound)
 
+	// Each advisory is served with its own severity and the gate's rating
+	// of it beside it (agentry#774): a High below 8.5 is medium for the
+	// gate, a High with no score and a Critical keep their own.
+	if _, err := env.st.Pool().Exec(context.Background(), `
+		INSERT INTO mcp_server_scans (ecosystem, package, version, status, max_severity, advisories)
+		VALUES ('npm', 'rated-fixture', '1.0.0', 'vulnerable', 'critical', $1)`,
+		[]byte(`[{"id":"GHSA-high-84","severity":"high","cvssScore":8.4,"scored":true,"summary":"a"},
+		         {"id":"GHSA-high-none","severity":"high","scored":true,"summary":"b"},
+		         {"id":"GHSA-crit","severity":"critical","cvssScore":8.6,"scored":true,"summary":"c"}]`)); err != nil {
+		t.Fatal(err)
+	}
+	var rated struct {
+		MaxSeverity string `json:"maxSeverity"`
+		Advisories  []struct {
+			ID           string   `json:"id"`
+			Severity     string   `json:"severity"`
+			GateSeverity string   `json:"gateSeverity"`
+			CVSSScore    *float64 `json:"cvssScore"`
+		} `json:"advisories"`
+	}
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/mcp-servers/scan?ecosystem=npm&package=rated-fixture&version=1.0.0", nil, &rated, http.StatusOK)
+	type want struct {
+		severity, gate string
+		score          float64 // 0: none served
+	}
+	wants := map[string]want{
+		"GHSA-high-84":   {"high", "medium", 8.4},
+		"GHSA-high-none": {"high", "high", 0},
+		"GHSA-crit":      {"critical", "critical", 8.6},
+	}
+	if rated.MaxSeverity != "critical" || len(rated.Advisories) != len(wants) {
+		t.Fatalf("rated record: %+v", rated)
+	}
+	for _, a := range rated.Advisories {
+		w := wants[a.ID]
+		var score float64
+		if a.CVSSScore != nil {
+			score = *a.CVSSScore
+		}
+		if a.Severity != w.severity || a.GateSeverity != w.gate || score != w.score {
+			t.Errorf("%s: severity %s, gateSeverity %s, cvssScore %v; want %+v", a.ID, a.Severity, a.GateSeverity, score, w)
+		}
+	}
+
 	// No alerts yet: an empty list, and none on the page.
 	var alerts []map[string]any
 	env.doJSON(sess, http.MethodGet, "/api/v1/user/dependency-alerts", nil, &alerts, http.StatusOK)

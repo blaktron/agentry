@@ -1,7 +1,7 @@
 # Agentry S4 injection-signature rule bundle (PLAN §8.3, shipped as
 # ruleset_releases). This manifest gives the bundle its semantic version,
 # which is recorded on every scan_run and pinned in the CLI release (D-12).
-version: "0.3.0"
+version: "0.3.1"
 notes: >
   v1 signature set: the six S4 injection families (instruction-override,
   exfiltration, tool-coercion, credential-harvest, persistence,
@@ -23,7 +23,15 @@ notes: >
   medium publishes with the finding on its report; a high finding, or
   content a stage could not read, goes to a person; a critical one is
   rejected. The threshold is released with this version and kept beside
-  it in pkg/ruleset, not in this manifest.
+  it in pkg/ruleset, not in this manifest. 0.3.1 changes no signature: it
+  re-rates S7's advisory findings (agentry#774). An advisory's CVSS v3.x
+  and v4.0 vectors are scored; a Critical advisory is a critical finding;
+  a High one is high from a base score of 8.5 and medium below it, and
+  high with no usable score; an advisory with no word of its database's
+  own takes its score's band, where it was medium. A declared server the
+  scan has no data for (the lookup failed with no earlier answer, an
+  ecosystem it does not cover, no pinned version) is one medium finding,
+  S7/osv-no-data, in place of S7/osv-error. The threshold stays medium.
 
 # Bundle-level suppressions, applied to every rule in addition to its own
 # (§17.3 precision requirement). These capture DESCRIPTIVE FRAMING: prose that

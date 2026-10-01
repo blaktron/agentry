@@ -186,8 +186,8 @@ func TestGateHoldsWhatCouldNotBeScanned(t *testing.T) {
 			}
 		})
 	}
-	t.Run("S7/osv-error publishes at medium", func(t *testing.T) {
-		finding := Finding{Scanner: "S7/osv-error", Severity: SevMedium, Confidence: ConfHigh, Title: "lookup failed"}
+	t.Run("S7/osv-no-data publishes at medium", func(t *testing.T) {
+		finding := Finding{Scanner: scannerOSVNoData, Severity: SevMedium, Confidence: ConfHigh, Title: "lookup failed"}
 		if got := Evaluate(GateInput{Findings: []Finding{finding}, Policy: atMedium}); got.Outcome != OutcomePublish {
 			t.Fatalf("got %s (%s), want published", got.Outcome, got.Reason)
 		}
