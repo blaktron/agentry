@@ -834,30 +834,6 @@ func (e ReviewItemQueue) Valid() bool {
 	}
 }
 
-// Defines values for ReviewItemState.
-const (
-	ReviewItemStateApproved   ReviewItemState = "approved"
-	ReviewItemStatePending    ReviewItemState = "pending"
-	ReviewItemStateRejected   ReviewItemState = "rejected"
-	ReviewItemStateSuperseded ReviewItemState = "superseded"
-)
-
-// Valid indicates whether the value is a known member of the ReviewItemState enum.
-func (e ReviewItemState) Valid() bool {
-	switch e {
-	case ReviewItemStateApproved:
-		return true
-	case ReviewItemStatePending:
-		return true
-	case ReviewItemStateRejected:
-		return true
-	case ReviewItemStateSuperseded:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for ScanFindingConfidence.
 const (
 	ScanFindingConfidenceHigh   ScanFindingConfidence = "high"
@@ -2716,9 +2692,9 @@ type ReviewItem struct {
 	Namespace string             `json:"namespace"`
 	Queue     ReviewItemQueue    `json:"queue"`
 
-	// State `superseded`: no person decided; the version was published by the gate when a new ruleset judged the review queue again and it passed (agentry#772).
-	State   ReviewItemState `json:"state"`
-	Version string          `json:"version"`
+	// State Where the item stands. `superseded`: no person decided; the version was published by the gate when a new ruleset judged the review queue again and it passed (agentry#772). The set grows by addition, so it is declared extensible: a client keeps a state it does not know as the string it is rather than failing on it.
+	State   string `json:"state"`
+	Version string `json:"version"`
 
 	// VersionStatus Publication state machine states (§7). `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change (DEV-046).
 	VersionStatus *VersionStatus `json:"versionStatus,omitempty"`
@@ -2726,9 +2702,6 @@ type ReviewItem struct {
 
 // ReviewItemQueue defines model for ReviewItem.Queue.
 type ReviewItemQueue string
-
-// ReviewItemState `superseded`: no person decided; the version was published by the gate when a new ruleset judged the review queue again and it passed (agentry#772).
-type ReviewItemState string
 
 // RulesetRelease defines model for RulesetRelease.
 type RulesetRelease struct {
