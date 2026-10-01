@@ -175,7 +175,7 @@ func checkCase(c Case) error {
 	switch c.Want.Outcome {
 	case OutcomeNeedsReview:
 		if c.Want.Queue != QueuePlatform && c.Want.Queue != QueueOrg {
-			return fmt.Errorf("needs_review with queue %q, not %s or %s", c.Want.Queue, QueuePlatform, QueueOrg)
+			return fmt.Errorf("needs_review on queue %q: want %s or %s", c.Want.Queue, QueuePlatform, QueueOrg)
 		}
 	case OutcomePublished, OutcomeRejected:
 		if c.Want.Queue != "" {
@@ -199,17 +199,20 @@ func checkPolicy(p Policy) error {
 	return checkReviewMode(p.RequireHumanReview)
 }
 
-// checkReviewMode accepts requireHumanReview only in the policy document's
-// three forms, a capability list naming at least one, so a malformed entry
-// fails here instead of reading as "never" in a client's restatement.
+// checkReviewMode accepts requireHumanReview as "never", "always" or a
+// whenCapabilities list naming at least one capability. That is stricter
+// than the registry, which reads an empty list or an unknown key as "never";
+// the table writes "never" for those, so a client's restatement has one form
+// to read for each meaning.
 func checkReviewMode(raw json.RawMessage) error {
+	const forms = `"never", "always" or {"whenCapabilities": [...]}`
 	if len(raw) == 0 {
 		return nil
 	}
 	var s string
 	if err := json.Unmarshal(raw, &s); err == nil {
 		if s != "never" && s != "always" {
-			return fmt.Errorf("bad requireHumanReview %q", s)
+			return fmt.Errorf("bad requireHumanReview %q: want %s", s, forms)
 		}
 		return nil
 	}
@@ -218,8 +221,11 @@ func checkReviewMode(raw json.RawMessage) error {
 	var obj struct {
 		WhenCapabilities []string `json:"whenCapabilities"`
 	}
-	if err := dec.Decode(&obj); err != nil || len(obj.WhenCapabilities) == 0 {
-		return fmt.Errorf("bad requireHumanReview %s: want \"never\", \"always\" or {\"whenCapabilities\": [...]}", raw)
+	if err := dec.Decode(&obj); err != nil {
+		return fmt.Errorf("bad requireHumanReview %s: want %s: %w", raw, forms, err)
+	}
+	if len(obj.WhenCapabilities) == 0 {
+		return fmt.Errorf("bad requireHumanReview %s: whenCapabilities names no capability", raw)
 	}
 	return nil
 }
