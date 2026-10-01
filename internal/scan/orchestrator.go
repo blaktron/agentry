@@ -379,7 +379,12 @@ func (o *Orchestrator) runStage(sc stageContext, st Stage, in *Input) (res Stage
 			switch f.Scanner {
 			case "S7/osv-not-checked":
 				path, ev = metrics.FailOpenOSVNotChecked, logevent.FailOpenOSVNotChecked
-			case "S7/osv-error":
+			case scannerOSVNoData:
+				// Counted as the lookup's failure only when it failed; a
+				// server S7 does not cover was never looked up.
+				if _, failed := f.Detail["error"]; !failed {
+					continue
+				}
 				path, ev = metrics.FailOpenOSVError, logevent.FailOpenOSVError
 			// S2/history-error is not one: it holds the version (the gate
 			// forces review on it, agentry#771).
