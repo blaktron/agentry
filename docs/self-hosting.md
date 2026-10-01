@@ -1728,7 +1728,7 @@ Env: `AGENTRY_ORGS_DECOMMISSION_HOLD`, `AGENTRY_ORGS_PENDING_DIGEST_EVERY`.
   now passes; their items close as `superseded`. Both log a summary when they
   finish. Every release is kept in `ruleset_releases`, and each version is
   tagged `ruleset/v<semver>` in the core repository
-  ([pkg/ruleset/README.md](../pkg/ruleset/README.md)).
+  ([pkg/ruleset/README.md](https://github.com/blaktron/agentry/blob/main/pkg/ruleset/README.md)).
 - Runbooks for the failure modes above: [docs/ops/runbooks.md](ops/runbooks.md).
 
 ## What you are responsible for
