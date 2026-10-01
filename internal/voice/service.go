@@ -262,7 +262,10 @@ func (s *Service) Put(ctx context.Context, user uuid.UUID, text []byte, source S
 	if err := Check(text); err != nil {
 		return State{}, err
 	}
-	var st State
+	var (
+		st     State
+		queued uuid.UUID
+	)
 	err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
 		v, err := s.lockOrCreate(ctx, q, user)
 		if err != nil {
@@ -276,12 +279,15 @@ func (s *Service) Put(ctx context.Context, user uuid.UUID, text []byte, source S
 		if err != nil {
 			return err
 		}
-		if err := s.queuePending(ctx, q, user, source, sealed, Digest(text), len(text)); err != nil {
+		if queued, err = s.queuePending(ctx, q, user, source, sealed, Digest(text), len(text)); err != nil {
 			return err
 		}
 		st, err = s.get(ctx, q, user)
 		return err
 	})
+	if err == nil {
+		s.queueAfter(ctx, queued)
+	}
 	return st, err
 }
 
@@ -314,22 +320,37 @@ func (s *Service) lockOrCreate(ctx context.Context, q *storegen.Queries, user uu
 	return v, nil
 }
 
-// queuePending replaces the pending version with a new one and queues its
-// review, on q, the caller's transaction.
-func (s *Service) queuePending(ctx context.Context, q *storegen.Queries, user uuid.UUID, source Source, sealed []byte, digest string, size int) error {
+// queuePending replaces the pending version with a new one on q, the
+// caller's transaction, and answers its id. The caller queues its review
+// once the transaction has committed (queueAfter): a worker can take a job
+// at once, on another connection, and a review queued inside the
+// transaction would find no version and end with nothing reviewed.
+func (s *Service) queuePending(ctx context.Context, q *storegen.Queries, user uuid.UUID, source Source, sealed []byte, digest string, size int) (uuid.UUID, error) {
 	if _, err := q.DeleteVoiceVersionInSlot(ctx, storegen.DeleteVoiceVersionInSlotParams{UserID: user, Slot: string(SlotPending)}); err != nil {
-		return fmt.Errorf("voice: drop the pending version: %w", err)
+		return uuid.Nil, fmt.Errorf("voice: drop the pending version: %w", err)
 	}
 	ver, err := q.InsertPendingVoiceVersion(ctx, storegen.InsertPendingVoiceVersionParams{
 		UserID: user, Source: string(source), Sealed: sealed, Digest: digest, Bytes: int32(size), //nolint:gosec // bounded by MaxBytes
 	})
 	if err != nil {
-		return fmt.Errorf("voice: store the version: %w", err)
+		return uuid.Nil, fmt.Errorf("voice: store the version: %w", err)
 	}
 	if err := q.TouchVoice(ctx, user); err != nil {
-		return fmt.Errorf("voice: touch: %w", err)
+		return uuid.Nil, fmt.Errorf("voice: touch: %w", err)
 	}
-	return s.enqueueReview(ctx, ver.ID)
+	return ver.ID, nil
+}
+
+// queueAfter queues the review of a version its caller committed. The
+// version is stored either way: a review that could not be queued is
+// logged, and the sweep queues it once it has waited StallAfter.
+func (s *Service) queueAfter(ctx context.Context, id uuid.UUID) {
+	if id == uuid.Nil {
+		return
+	}
+	if err := s.enqueueReview(ctx, id); err != nil {
+		s.log.ErrorContext(ctx, "voice: queue a review; the sweep will", "version", id, "err", err)
+	}
 }
 
 func (s *Service) enqueueReview(ctx context.Context, id uuid.UUID) error {
@@ -371,7 +392,10 @@ func (s *Service) Restore(ctx context.Context, user uuid.UUID, review bool) (Sta
 	if err := s.ready(); err != nil {
 		return State{}, err
 	}
-	var st State
+	var (
+		st     State
+		queued uuid.UUID
+	)
 	err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
 		v, err := q.GetVoiceForUpdate(ctx, user)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -408,13 +432,16 @@ func (s *Service) Restore(ctx context.Context, user uuid.UUID, review bool) (Sta
 			if _, err := open(key, prev); err != nil {
 				return err
 			}
-			if err := s.queuePending(ctx, q, user, SourceRestore, prev.Sealed, prev.Digest, int(prev.Bytes)); err != nil {
+			if queued, err = s.queuePending(ctx, q, user, SourceRestore, prev.Sealed, prev.Digest, int(prev.Bytes)); err != nil {
 				return err
 			}
 		}
 		st, err = s.get(ctx, q, user)
 		return err
 	})
+	if err == nil {
+		s.queueAfter(ctx, queued)
+	}
 	return st, err
 }
 

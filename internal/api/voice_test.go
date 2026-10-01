@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -14,10 +15,13 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/blaktron/agentry/internal/api"
+	"github.com/blaktron/agentry/internal/knowledge"
 	"github.com/blaktron/agentry/internal/queue"
 	"github.com/blaktron/agentry/internal/registry"
+	"github.com/blaktron/agentry/internal/scan"
 	"github.com/blaktron/agentry/internal/voice"
 	"github.com/blaktron/agentry/pkg/judge"
+	"github.com/blaktron/agentry/pkg/ruleset"
 )
 
 // The Writing Voice (agentry#809) through its routes: a version is put,
@@ -458,4 +462,51 @@ func userID(t *testing.T, env *testEnv, handle string) uuid.UUID {
 		t.Fatal(err)
 	}
 	return u.ID
+}
+
+// eagerQueue runs a job the moment it is enqueued, on another connection,
+// as a worker idle on the queue does: the race dev showed on 2026-10-01,
+// where a review that ran before the put committed found no version and
+// left it in review.
+type eagerQueue struct {
+	handlers map[string]queue.Handler
+	ran      int
+}
+
+func (q *eagerQueue) Register(kind string, h queue.Handler) { q.handlers[kind] = h }
+func (q *eagerQueue) Work(context.Context, ...string) error { return nil }
+func (q *eagerQueue) Enqueue(ctx context.Context, kind, _ string, args any, _ ...queue.EnqueueOption) (uuid.UUID, error) {
+	raw, err := json.Marshal(args)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	q.ran++
+	return uuid.New(), q.handlers[kind](ctx, queue.Job{Kind: kind, Args: raw, Attempt: 1})
+}
+
+// A review is queued only once the version it reads has committed, so a
+// worker that takes it at once finds it.
+func TestAReviewTakenAtOnceFindsItsVersion(t *testing.T) {
+	env, j := newVoiceEnv(t)
+	o := newVoiceOwner(env, "voice-eager")
+	bundle, err := ruleset.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := &eagerQueue{handlers: map[string]queue.Handler{}}
+	svc := voice.NewService(voice.Deps{Store: env.st, Jobs: q, Judge: j,
+		Rules:   scan.NewOrchestrator(bundle, scan.StaticProvider{}, nil),
+		Wrapper: func() knowledge.KeyWrapper { return env.srvObj.Knowledge().Wrapper() }})
+	svc.RegisterHandlers(q)
+	st, err := svc.Put(context.Background(), userID(t, env, o.handle), []byte(voiceText(1)), voice.SourceUpload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q.ran != 1 {
+		t.Fatalf("the review ran %d times", q.ran)
+	}
+	v := getVoice(t, env, o)
+	if v.Live == nil || v.Live.Text != voiceText(1) || v.Pending != nil {
+		t.Fatalf("a review taken at once did not find its version: put answered %+v, now %+v %+v", st.Pending, v.Live, v.Pending)
+	}
 }
