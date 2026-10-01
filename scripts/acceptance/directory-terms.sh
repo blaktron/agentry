@@ -44,7 +44,7 @@ WORKER="$P-ak-worker"
 DRIVER="$P-driver"
 FIXTURE=$(mktemp)
 cleanup() {
-  docker rm -f "$P-pg" "$P-redis" "$AK" "$WORKER" "$DRIVER" >/dev/null 2>&1 || true
+  docker rm -fv "$P-pg" "$P-redis" "$AK" "$WORKER" "$DRIVER" >/dev/null 2>&1 || true
   docker network rm "$NET" >/dev/null 2>&1 || true
   rm -f "$FIXTURE"
 }
@@ -86,7 +86,7 @@ AK_ENV=(
 server() {
   local flag=()
   [ "$1" = on ] && flag=(-e AGENTRY_DIRECTORY_TERMS_FILE="$TERMS_PATH")
-  docker rm -f "$AK" >/dev/null 2>&1 || true
+  docker rm -fv "$AK" >/dev/null 2>&1 || true
   docker create --name "$AK" --network "$NET" --network-alias dt-ak-server "${AK_ENV[@]}" "${flag[@]}" "$IMAGE" server >/dev/null
   docker cp deploy/compose/authentik/templates/. "$AK:/templates" >/dev/null
   docker cp deploy/compose/authentik/blueprints/. "$AK:/blueprints/custom" >/dev/null
