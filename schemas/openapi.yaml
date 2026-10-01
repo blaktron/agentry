@@ -4267,8 +4267,10 @@ paths:
         What S7 recorded for the exact package version: `safe` means no
         known advisories at `lastCheckedAt`, `vulnerable` lists them,
         `error` means the last lookup failed and the advisories are the last
-        known. 404 when no manifest has ever declared this version. The
-        runner asks here before installing a declared server.
+        known. Each advisory carries its own `severity` and the gate's
+        rating of it, `gateSeverity`. 404 when no manifest has ever declared
+        this version. The runner asks here before installing a declared
+        server.
       parameters:
         - name: ecosystem
           in: query
@@ -6134,7 +6136,7 @@ components:
           format: date-time
     McpAdvisory:
       type: object
-      required: [id, severity, summary]
+      required: [id, severity, gateSeverity, summary]
       properties:
         id:
           type: string
@@ -6145,6 +6147,28 @@ components:
         severity:
           type: string
           enum: [info, low, medium, high, critical]
+          description: >-
+            The advisory's own severity: the database's word, else the band
+            of its CVSS base score. Dependency alerts are opened on it.
+        gateSeverity:
+          type: string
+          enum: [info, low, medium, high, critical]
+          description: >-
+            The severity the gate gives the finding this advisory makes
+            (agentry#774): a Critical advisory is critical and rejects the
+            version; a High one is high from a CVSS base score of 8.5 and
+            medium below it, and high when it carries no usable score; any
+            other is its own severity. Served so the runner can apply the
+            same rule (agentry-cli#501).
+        cvssScore:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 10
+          description: >-
+            The highest CVSS base score among the advisory's CVSS v3.x and
+            v4.0 vectors (or plain scores). Absent when it carries none, and
+            on a record last checked before scores were read.
         summary:
           type: string
         fixedIn:

@@ -141,9 +141,10 @@ func Evaluate(in GateInput) GateDecision {
 
 // couldNotScanScanners are the findings that say a stage could not read
 // part of the package (D5 of plans/scan-and-run-tweaks.md). They keep their
-// medium severity and force review as a stage error does. The advisory
-// lookup's failure, S7/osv-error, is not one of them: the operator decided
-// that a lookup with no answer is reported and publishes (D3).
+// medium severity and force review as a stage error does. S7/osv-no-data,
+// a declared server the advisory scan has no data for, is not one of them:
+// the operator decided that a lookup with no answer is reported and
+// publishes (D3).
 var couldNotScanScanners = map[string]bool{
 	scannerUnreadableFile:                   true,
 	scannerTextTruncated:                    true,

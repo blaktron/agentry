@@ -510,6 +510,33 @@ func (e KnowledgeScanReportFindingsSeverity) Valid() bool {
 	}
 }
 
+// Defines values for McpAdvisoryGateSeverity.
+const (
+	McpAdvisoryGateSeverityCritical McpAdvisoryGateSeverity = "critical"
+	McpAdvisoryGateSeverityHigh     McpAdvisoryGateSeverity = "high"
+	McpAdvisoryGateSeverityInfo     McpAdvisoryGateSeverity = "info"
+	McpAdvisoryGateSeverityLow      McpAdvisoryGateSeverity = "low"
+	McpAdvisoryGateSeverityMedium   McpAdvisoryGateSeverity = "medium"
+)
+
+// Valid indicates whether the value is a known member of the McpAdvisoryGateSeverity enum.
+func (e McpAdvisoryGateSeverity) Valid() bool {
+	switch e {
+	case McpAdvisoryGateSeverityCritical:
+		return true
+	case McpAdvisoryGateSeverityHigh:
+		return true
+	case McpAdvisoryGateSeverityInfo:
+		return true
+	case McpAdvisoryGateSeverityLow:
+		return true
+	case McpAdvisoryGateSeverityMedium:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for McpAdvisorySeverity.
 const (
 	McpAdvisorySeverityCritical McpAdvisorySeverity = "critical"
@@ -2449,15 +2476,26 @@ type LogoutResult struct {
 
 // McpAdvisory defines model for McpAdvisory.
 type McpAdvisory struct {
-	Aliases    *[]string           `json:"aliases,omitempty"`
-	FixedIn    *[]string           `json:"fixedIn,omitempty"`
-	Id         string              `json:"id"`
-	References *[]string           `json:"references,omitempty"`
-	Severity   McpAdvisorySeverity `json:"severity"`
-	Summary    string              `json:"summary"`
+	Aliases *[]string `json:"aliases,omitempty"`
+
+	// CvssScore The highest CVSS base score among the advisory's CVSS v3.x and v4.0 vectors (or plain scores). Absent when it carries none, and on a record last checked before scores were read.
+	CvssScore *float64  `json:"cvssScore,omitempty"`
+	FixedIn   *[]string `json:"fixedIn,omitempty"`
+
+	// GateSeverity The severity the gate gives the finding this advisory makes (agentry#774): a Critical advisory is critical and rejects the version; a High one is high from a CVSS base score of 8.5 and medium below it, and high when it carries no usable score; any other is its own severity. Served so the runner can apply the same rule (agentry-cli#501).
+	GateSeverity McpAdvisoryGateSeverity `json:"gateSeverity"`
+	Id           string                  `json:"id"`
+	References   *[]string               `json:"references,omitempty"`
+
+	// Severity The advisory's own severity: the database's word, else the band of its CVSS base score. Dependency alerts are opened on it.
+	Severity McpAdvisorySeverity `json:"severity"`
+	Summary  string              `json:"summary"`
 }
 
-// McpAdvisorySeverity defines model for McpAdvisory.Severity.
+// McpAdvisoryGateSeverity The severity the gate gives the finding this advisory makes (agentry#774): a Critical advisory is critical and rejects the version; a High one is high from a CVSS base score of 8.5 and medium below it, and high when it carries no usable score; any other is its own severity. Served so the runner can apply the same rule (agentry-cli#501).
+type McpAdvisoryGateSeverity string
+
+// McpAdvisorySeverity The advisory's own severity: the database's word, else the band of its CVSS base score. Dependency alerts are opened on it.
 type McpAdvisorySeverity string
 
 // McpServerScan defines model for McpServerScan.
@@ -4560,7 +4598,7 @@ type ClientInterface interface {
 
 	// GetMcpServerScan The registry's last vulnerability check of one MCP server package version (agentry#177).
 	//
-	// What S7 recorded for the exact package version: `safe` means no known advisories at `lastCheckedAt`, `vulnerable` lists them, `error` means the last lookup failed and the advisories are the last known. 404 when no manifest has ever declared this version. The runner asks here before installing a declared server.
+	// What S7 recorded for the exact package version: `safe` means no known advisories at `lastCheckedAt`, `vulnerable` lists them, `error` means the last lookup failed and the advisories are the last known. Each advisory carries its own `severity` and the gate's rating of it, `gateSeverity`. 404 when no manifest has ever declared this version. The runner asks here before installing a declared server.
 	//
 	// Corresponds with GET /mcp-servers/scan (the `GetMcpServerScan` operationId).
 	GetMcpServerScan(ctx context.Context, params *GetMcpServerScanParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6769,7 +6807,7 @@ func (c *Client) GetKnowledgeUsage(ctx context.Context, reqEditors ...RequestEdi
 
 // GetMcpServerScan The registry's last vulnerability check of one MCP server package version (agentry#177).
 //
-// What S7 recorded for the exact package version: `safe` means no known advisories at `lastCheckedAt`, `vulnerable` lists them, `error` means the last lookup failed and the advisories are the last known. 404 when no manifest has ever declared this version. The runner asks here before installing a declared server.
+// What S7 recorded for the exact package version: `safe` means no known advisories at `lastCheckedAt`, `vulnerable` lists them, `error` means the last lookup failed and the advisories are the last known. Each advisory carries its own `severity` and the gate's rating of it, `gateSeverity`. 404 when no manifest has ever declared this version. The runner asks here before installing a declared server.
 //
 // Corresponds with GET /mcp-servers/scan (the `GetMcpServerScan` operationId).
 func (c *Client) GetMcpServerScan(ctx context.Context, params *GetMcpServerScanParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -17487,7 +17525,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetMcpServerScanWithResponse The registry's last vulnerability check of one MCP server package version (agentry#177).
 	//
-	// What S7 recorded for the exact package version: `safe` means no known advisories at `lastCheckedAt`, `vulnerable` lists them, `error` means the last lookup failed and the advisories are the last known. 404 when no manifest has ever declared this version. The runner asks here before installing a declared server.
+	// What S7 recorded for the exact package version: `safe` means no known advisories at `lastCheckedAt`, `vulnerable` lists them, `error` means the last lookup failed and the advisories are the last known. Each advisory carries its own `severity` and the gate's rating of it, `gateSeverity`. 404 when no manifest has ever declared this version. The runner asks here before installing a declared server.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -27688,7 +27726,7 @@ func (c *ClientWithResponses) GetKnowledgeUsageWithResponse(ctx context.Context,
 
 // GetMcpServerScanWithResponse The registry's last vulnerability check of one MCP server package version (agentry#177).
 //
-// What S7 recorded for the exact package version: `safe` means no known advisories at `lastCheckedAt`, `vulnerable` lists them, `error` means the last lookup failed and the advisories are the last known. 404 when no manifest has ever declared this version. The runner asks here before installing a declared server.
+// What S7 recorded for the exact package version: `safe` means no known advisories at `lastCheckedAt`, `vulnerable` lists them, `error` means the last lookup failed and the advisories are the last known. Each advisory carries its own `severity` and the gate's rating of it, `gateSeverity`. 404 when no manifest has ever declared this version. The runner asks here before installing a declared server.
 //
 // Returns a wrapper object for the known response body format(s).
 //

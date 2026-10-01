@@ -114,6 +114,11 @@ func TestMCPSweepOpensAndResolvesAlerts(t *testing.T) {
 	if n.ToEmail != u.Email || n.Server != "npm:mcp-sweep-fixture@0.1.0" || n.Severity != "high" || len(n.Advisories) != 1 || n.FixedIn[0] != "1.2.6" || n.Version != "1.0.0" {
 		t.Fatalf("notice: %+v", n)
 	}
+	// The sweep writes the row as read since scores were (agentry#774), so
+	// S7 answers from it rather than asking again.
+	if rec, _ := scan.NewStoreMCPScanCache(e.st).Get(ctx, "npm", "mcp-sweep-fixture", "0.1.0"); rec == nil || len(rec.Advisories) != 1 || !rec.Advisories[0].Scored {
+		t.Fatalf("swept row: %+v", rec)
+	}
 	open1, _ := e.st.Queries().ListOpenMCPDependencyAlertsForVersion(ctx, v1.ID)
 	if len(open1) != 1 || open1[0].Severity != "high" || open1[0].NotifiedAt == nil || open1[0].AdvisoryIds[0] != "GHSA-xvch-5gv4-984h" {
 		t.Fatalf("alert on v1: %+v", open1)
