@@ -15,6 +15,7 @@ var releasedDigests = map[string]string{
 	"0.2.1": "24def4274e46f12a7dddd6b10d018b166ce6a0414cc62c28e05f1718ece3c030",
 	"0.2.2": "ba992698f2aac91d6a4ebdc570e1b26c5e73e62888a78dbce74882dde9f486d8",
 	"0.2.3": "ac5f7cb4035e8c31e576ed311b6b33ffc4397f3cb461380cd3befdb59d63ccbd",
+	"0.3.0": "727f7cf4ed91e09e127a1826cdd80c27da89c1431657fa4af01058434416d320",
 }
 
 func TestEmbeddedBundleDigestIsPinnedForItsVersion(t *testing.T) {
@@ -29,5 +30,33 @@ func TestEmbeddedBundleDigestIsPinnedForItsVersion(t *testing.T) {
 	if b.Digest() != want {
 		t.Fatalf("bundle %s changed content under a released version (digest %s, pinned %s): bump the version in rules/bundle.yaml and pin the new one",
 			b.Version(), b.Digest(), want)
+	}
+}
+
+func TestEveryReleasedVersionNamesItsThreshold(t *testing.T) {
+	b, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for v := range releasedDigests {
+		if _, ok := baselineThresholds[v]; !ok {
+			t.Errorf("released bundle %s has no baseline threshold: add it to baselineThresholds", v)
+		}
+	}
+	if _, ok := baselineThresholds[b.Version()]; !ok {
+		t.Fatalf("the embedded bundle %s has no baseline threshold", b.Version())
+	}
+	if got := BaselineMaxAutoPublishSeverity(); got != baselineThresholds[b.Version()] {
+		t.Fatalf("BaselineMaxAutoPublishSeverity() = %q, want %q for bundle %s", got, baselineThresholds[b.Version()], b.Version())
+	}
+}
+
+// The thresholds of released versions are history: 0.3.0 is the first
+// version that publishes on medium (agentry#773).
+func TestReleasedThresholdsAreHistory(t *testing.T) {
+	for v, want := range map[string]string{"0.2.3": "low", "0.3.0": "medium", "0.0.0-unknown": "low"} {
+		if got := BaselineMaxAutoPublishSeverityFor(v); got != want {
+			t.Errorf("BaselineMaxAutoPublishSeverityFor(%q) = %q, want %q", v, got, want)
+		}
 	}
 }

@@ -1,7 +1,7 @@
 {
   "baseline": {
     "requireHumanReview": "never",
-    "maxAutoPublishSeverity": "low",
+    "maxAutoPublishSeverity": "medium",
     "wildcardEgress": "review"
   },
   "cases": [
@@ -41,8 +41,8 @@
       }
     },
     {
-      "name": "baseline: a medium finding is held for review",
-      "branch": "over-threshold",
+      "name": "baseline: a medium finding publishes",
+      "branch": "within-threshold",
       "findings": [
         {
           "scanner": "S4/example",
@@ -51,8 +51,7 @@
         }
       ],
       "want": {
-        "outcome": "needs_review",
-        "queue": "platform"
+        "outcome": "published"
       }
     },
     {
@@ -608,8 +607,8 @@
       }
     },
     {
-      "name": "an unset threshold falls back to low: medium is held",
-      "branch": "over-threshold",
+      "name": "an unset threshold falls back to the baseline's medium: medium publishes",
+      "branch": "within-threshold",
       "findings": [
         {
           "scanner": "S4/example",
@@ -621,8 +620,7 @@
         "requireHumanReview": "never"
       },
       "want": {
-        "outcome": "needs_review",
-        "queue": "platform"
+        "outcome": "published"
       }
     },
     {
@@ -990,8 +988,8 @@
       }
     },
     {
-      "name": "baseline: a failed advisory lookup is held for review",
-      "branch": "over-threshold",
+      "name": "baseline: a failed advisory lookup publishes",
+      "branch": "within-threshold",
       "findings": [
         {
           "scanner": "S7/osv-error",
@@ -1000,8 +998,7 @@
         }
       ],
       "want": {
-        "outcome": "needs_review",
-        "queue": "platform"
+        "outcome": "published"
       }
     },
     {
@@ -1124,7 +1121,7 @@
       }
     },
     {
-      "name": "a medium finding in an organization's public agent goes to the org queue",
+      "name": "a medium finding an organization's policy holds, in its public agent, goes to the org queue",
       "branch": "over-threshold",
       "findings": [
         {
@@ -1133,6 +1130,11 @@
           "confidence": "high"
         }
       ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "low",
+        "wildcardEgress": "review"
+      },
       "public": true,
       "namespaceIsOrg": true,
       "want": {

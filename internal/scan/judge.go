@@ -665,14 +665,15 @@ func verdictPromptHash(judge JudgeProvider, verdict JudgeVerdict) string {
 	return RubricHash(rubricStatement, "provider="+judge.Name(), "unversioned")
 }
 
-// highFromProbable are the categories rated high from a score of 2
+// highFromProbable reports a category S5 rates high from a score of 2
 // (probable), not 3: an attempted injection and an undeclared capability
-// reach a person whatever the auto-publish threshold (D16, ruleset 0.2.2).
-var highFromProbable = map[JudgeCategory]bool{CatInjection: true, CatUndeclaredCap: true}
+// (D16, ruleset 0.2.2).
+func highFromProbable(cat JudgeCategory) bool { return judge.RubricSeverity(string(cat), 2) == "high" }
 
-// verdictFindings are a verdict's findings: a category scored 2 is medium,
-// 3 high (2 for highFromProbable), and a verdict showing manipulation is one
-// more.
+// verdictFindings are a verdict's findings, rated by judge.RubricSeverity: a
+// category scored 2 is medium, 3 high, and an attempted injection or an
+// undeclared capability high from 2 (D16, ruleset 0.2.2); a verdict showing
+// manipulation is one more.
 func verdictFindings(verdict JudgeVerdict) []Finding {
 	var findings []Finding
 	catTitle := map[JudgeCategory]string{
@@ -685,10 +686,7 @@ func verdictFindings(verdict JudgeVerdict) []Finding {
 		if s < 2 {
 			continue
 		}
-		sev := SevMedium
-		if s >= 3 || highFromProbable[cat] {
-			sev = SevHigh
-		}
+		sev := Severity(judge.RubricSeverity(string(cat), s))
 		detail := map[string]any{"category": string(cat), "score": s, "model": verdict.Model}
 		if samples := verdict.Samples[cat]; len(samples) > 1 {
 			detail["samples"] = samples

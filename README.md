@@ -27,9 +27,10 @@ gate decides.
   permission, so releasing is a distinct right from editing.
 - **Gates publication.** Ten scanner stages look for prompt injection, hidden
   and obfuscated content, secrets, undeclared capabilities, dependency and
-  install-script risk, publisher anomalies, and rug-pull release diffs. Clean
-  versions publish; medium and high findings go to human review; critical
-  findings are rejected. A scanner that errors or times out fails **toward**
+  install-script risk, publisher anomalies, and rug-pull release diffs. A
+  version with low and medium findings publishes with them shown; a high
+  finding goes to human review; a critical one is rejected. A scanner that
+  errors or times out, or content it could not read, fails **toward**
   review — never through.
 - **Makes capabilities explicit.** The manifest declares network egress,
   filesystem access, subprocess execution, and expected secrets. Consumers see

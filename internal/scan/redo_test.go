@@ -71,7 +71,7 @@ func TestRedoReviewQueuePublishesWhatNowPasses(t *testing.T) {
 	e := newPipeEnv(t)
 	ctx := context.Background()
 	u, _ := e.st.Queries().GetUserByID(ctx, e.owner)
-	scores := map[scan.JudgeCategory]int{scan.CatDeception: 2}
+	scores := map[scan.JudgeCategory]int{scan.CatDeception: 3}
 	e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, scoredProvider{scores: &scores}, nil))
 	name := "redone" + suffix()
 	v := e.publish(name, "public", benignFiles(u.Handle, name, "1.0.0"))
@@ -124,14 +124,14 @@ func TestRedoReviewQueueRefreshesWhatIsStillHeld(t *testing.T) {
 		name   string
 		scores map[scan.JudgeCategory]int
 	}{
-		{"the same medium", map[scan.JudgeCategory]int{scan.CatDeception: 2}},
+		{"the same high", map[scan.JudgeCategory]int{scan.CatDeception: 3}},
 		{"a new high", map[scan.JudgeCategory]int{scan.CatInjection: 3}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e := newPipeEnv(t)
 			ctx := context.Background()
 			u, _ := e.st.Queries().GetUserByID(ctx, e.owner)
-			scores := map[scan.JudgeCategory]int{scan.CatDeception: 2}
+			scores := map[scan.JudgeCategory]int{scan.CatDeception: 3}
 			e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, scoredProvider{scores: &scores}, nil))
 			name := "stillheld" + suffix()
 			v := e.publish(name, "public", benignFiles(u.Handle, name, "1.0.0"))
@@ -219,7 +219,7 @@ func TestRedoReviewQueueLeavesWhatAPersonDecided(t *testing.T) {
 	ctx := context.Background()
 	q := e.st.Queries()
 	u, _ := q.GetUserByID(ctx, e.owner)
-	scores := map[scan.JudgeCategory]int{scan.CatDeception: 2}
+	scores := map[scan.JudgeCategory]int{scan.CatDeception: 3}
 	e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, scoredProvider{scores: &scores}, nil))
 
 	handedName := "handed" + suffix()
@@ -283,7 +283,7 @@ func TestRedoReviewQueueTwiceDoesNothing(t *testing.T) {
 	e := newPipeEnv(t)
 	ctx := context.Background()
 	u, _ := e.st.Queries().GetUserByID(ctx, e.owner)
-	scores := map[scan.JudgeCategory]int{scan.CatDeception: 2}
+	scores := map[scan.JudgeCategory]int{scan.CatDeception: 3}
 	e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, scoredProvider{scores: &scores}, nil))
 	name := "twice" + suffix()
 	v := e.publish(name, "public", benignFiles(u.Handle, name, "1.0.0"))
@@ -395,7 +395,7 @@ func (failingJudge) Judge(_ context.Context, _ scan.JudgeContent) (scan.JudgeVer
 func TestRedoReviewQueueHoldsWhenAStageFails(t *testing.T) {
 	e := newPipeEnv(t)
 	u, _ := e.st.Queries().GetUserByID(context.Background(), e.owner)
-	scores := map[scan.JudgeCategory]int{scan.CatDeception: 2}
+	scores := map[scan.JudgeCategory]int{scan.CatDeception: 3}
 	e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, scoredProvider{scores: &scores}, nil))
 	name := "stagefail" + suffix()
 	v := e.publish(name, "public", benignFiles(u.Handle, name, "1.0.0"))
@@ -419,7 +419,7 @@ func TestRedoReviewQueueNeverResumesAnOlderRulesetsRun(t *testing.T) {
 	ctx := context.Background()
 	q := e.st.Queries()
 	u, _ := q.GetUserByID(ctx, e.owner)
-	scores := map[scan.JudgeCategory]int{scan.CatDeception: 2}
+	scores := map[scan.JudgeCategory]int{scan.CatDeception: 3}
 	e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, scoredProvider{scores: &scores}, nil))
 	name := "stale" + suffix()
 	v := e.publish(name, "public", benignFiles(u.Handle, name, "1.0.0"))
@@ -488,7 +488,7 @@ func TestRedoReviewQueueYieldsToAReviewerWhoDecidesMeanwhile(t *testing.T) {
 	ctx := context.Background()
 	q := e.st.Queries()
 	u, _ := q.GetUserByID(ctx, e.owner)
-	scores := map[scan.JudgeCategory]int{scan.CatDeception: 2}
+	scores := map[scan.JudgeCategory]int{scan.CatDeception: 3}
 	e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, scoredProvider{scores: &scores}, nil))
 	name := "meanwhile" + suffix()
 	v := e.publish(name, "public", benignFiles(u.Handle, name, "1.0.0"))
@@ -599,7 +599,7 @@ func TestARulesetJobRunsOnlyUnderItsOwnRuleset(t *testing.T) {
 	e := newPipeEnv(t)
 	ctx := context.Background()
 	u, _ := e.st.Queries().GetUserByID(ctx, e.owner)
-	scores := map[scan.JudgeCategory]int{scan.CatDeception: 2}
+	scores := map[scan.JudgeCategory]int{scan.CatDeception: 3}
 	e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, scoredProvider{scores: &scores}, nil))
 	name := "ownruleset" + suffix()
 	v := e.publish(name, "public", benignFiles(u.Handle, name, "1.0.0"))

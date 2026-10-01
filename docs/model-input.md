@@ -145,9 +145,12 @@ The check has two halves, both asked of the deployment's Jev with its key:
   questions and the same band, under the rubric hash S5 records. The
   rubric's asking code is `pkg/judge`'s `RubricScanner`, which the
   pipeline's `typesafe` provider asks through too, so the two cannot drift
-  apart. A question that scores 2 or more (the gate's medium) is a finding
-  S5 would record and send to review; the answer names its id, its score
-  and the file whose part scored highest, and the half reads `flagged`.
+  apart. A question that scores 2 or more is a finding S5 would record;
+  the answer names its id, its score, the file whose part scored highest,
+  and the severity the gate would give it. A high one (a score of 3, or 2
+  for `C1_injection` and `C3_undeclared_capability`) sends the version to a
+  person, and the half reads `flagged`; a medium one publishes with the
+  finding shown, so it is a note and the half reads `pass`.
 - **The draft question set**, asked once over a state of the description,
   the canonical manifest and the instruction:
   does the instruction do the task the description asks for (`off_task`:
