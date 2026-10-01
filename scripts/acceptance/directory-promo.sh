@@ -41,7 +41,7 @@ AK="$P-ak-server"
 WORKER="$P-ak-worker"
 DRIVER="$P-driver"
 cleanup() {
-  docker rm -f "$P-pg" "$P-redis" "$AK" "$WORKER" "$DRIVER" >/dev/null 2>&1 || true
+  docker rm -fv "$P-pg" "$P-redis" "$AK" "$WORKER" "$DRIVER" >/dev/null 2>&1 || true
   docker network rm "$NET" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -66,7 +66,7 @@ AK_ENV=(
 worker() {
   local flag=()
   [ "$1" = on ] && flag=(-e AGENTRY_DIRECTORY_PROMO_FIELD=true)
-  docker rm -f "$WORKER" >/dev/null 2>&1 || true
+  docker rm -fv "$WORKER" >/dev/null 2>&1 || true
   docker create --name "$WORKER" --network "$NET" "${AK_ENV[@]}" "${flag[@]}" "$IMAGE" worker >/dev/null
   docker cp deploy/compose/authentik/templates/. "$WORKER:/templates" >/dev/null
   docker cp deploy/compose/authentik/blueprints/. "$WORKER:/blueprints/custom" >/dev/null
