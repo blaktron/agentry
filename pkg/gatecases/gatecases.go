@@ -20,6 +20,7 @@ import (
 	"bytes"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
@@ -31,6 +32,12 @@ const (
 	OutcomePublished   = "published"
 	OutcomeNeedsReview = "needs_review"
 	OutcomeRejected    = "rejected"
+)
+
+// The review queues a needs_review outcome lands on.
+const (
+	QueuePlatform = "platform"
+	QueueOrg      = "org"
 )
 
 // Table is the published table of the gate's cases.
@@ -61,8 +68,11 @@ type Policy struct {
 type Finding struct {
 	// Scanner is the finding's scanner id ("S4/inj-override-001"). The gate
 	// reads it only to know a finding that says content went unread.
-	Scanner    string `json:"scanner"`
-	Severity   string `json:"severity"`
+	Scanner string `json:"scanner"`
+	// Severity is info, low, medium, high or critical.
+	Severity string `json:"severity"`
+	// Confidence is low, medium or high; a low-confidence finding never
+	// gates alone.
 	Confidence string `json:"confidence"`
 }
 
@@ -94,7 +104,7 @@ type Case struct {
 type Want struct {
 	// Outcome is published, needs_review or rejected.
 	Outcome string `json:"outcome"`
-	// Queue is "platform" or "org" when the outcome is needs_review, and
+	// Queue is QueuePlatform or QueueOrg when the outcome is needs_review, and
 	// empty otherwise.
 	Queue string `json:"queue,omitempty"`
 }
@@ -128,7 +138,7 @@ func parse(doc []byte) (Table, error) {
 		return Table{}, fmt.Errorf("gatecases: baseline: %w", err)
 	}
 	if len(t.Cases) == 0 {
-		return Table{}, fmt.Errorf("gatecases: the table has no cases")
+		return Table{}, errors.New("gatecases: the table has no cases")
 	}
 	seen := map[string]bool{}
 	for i, c := range t.Cases {
@@ -145,22 +155,27 @@ func parse(doc []byte) (Table, error) {
 
 func checkCase(c Case) error {
 	if c.Branch == "" {
-		return fmt.Errorf("no branch")
+		return errors.New("the case names no branch")
 	}
 	if c.Policy != nil {
 		if err := checkPolicy(*c.Policy); err != nil {
 			return err
 		}
 	}
-	for _, f := range c.Findings {
-		if f.Scanner == "" || !severities[f.Severity] || !confidences[f.Confidence] {
-			return fmt.Errorf("bad finding %+v", f)
+	for i, f := range c.Findings {
+		switch {
+		case f.Scanner == "":
+			return fmt.Errorf("finding %d names no scanner", i)
+		case !severities[f.Severity]:
+			return fmt.Errorf("finding %d: bad severity %q", i, f.Severity)
+		case !confidences[f.Confidence]:
+			return fmt.Errorf("finding %d: bad confidence %q", i, f.Confidence)
 		}
 	}
 	switch c.Want.Outcome {
 	case OutcomeNeedsReview:
-		if c.Want.Queue != "platform" && c.Want.Queue != "org" {
-			return fmt.Errorf("needs_review without a queue (platform or org)")
+		if c.Want.Queue != QueuePlatform && c.Want.Queue != QueueOrg {
+			return fmt.Errorf("needs_review without a queue (%s or %s)", QueuePlatform, QueueOrg)
 		}
 	case OutcomePublished, OutcomeRejected:
 		if c.Want.Queue != "" {

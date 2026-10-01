@@ -107,7 +107,7 @@ func TestGateCasesCoverTheGrid(t *testing.T) {
 	if !lowConfidenceAlone {
 		t.Error("no case shows a low-confidence finding above the threshold that does not gate alone")
 	}
-	for _, q := range []string{"platform", "org"} {
+	for _, q := range []string{gatecases.QueuePlatform, gatecases.QueueOrg} {
 		if !queues[q] {
 			t.Errorf("no case sends a version to the %s queue", q)
 		}
@@ -121,7 +121,11 @@ func TestGateCasesCoverTheGrid(t *testing.T) {
 
 // plain is a case with no flag and no requireHumanReview beyond "never".
 func plain(c gatecases.Case) bool {
-	never := c.Policy == nil || len(c.Policy.RequireHumanReview) == 0 || string(c.Policy.RequireHumanReview) == `"never"`
+	never := true
+	if c.Policy != nil {
+		mode, err := parseReviewMode(orNever(c.Policy.RequireHumanReview))
+		never = err == nil && mode.never
+	}
 	return never && !c.WildcardEgress && !c.JudgeForcesReview && len(c.DeclaredCapabilities) == 0 && !c.Public && !c.NamespaceIsOrg
 }
 
@@ -159,8 +163,8 @@ func gateInputOf(t *testing.T, table gatecases.Table, c gatecases.Case) GateInpu
 		Public:               c.Public,
 		NamespaceIsOrg:       c.NamespaceIsOrg,
 	}
-	for _, cap := range c.DeclaredCapabilities {
-		in.DeclaredCapabilities[cap] = true
+	for _, capability := range c.DeclaredCapabilities {
+		in.DeclaredCapabilities[capability] = true
 	}
 	for _, f := range c.Findings {
 		in.Findings = append(in.Findings, Finding{
@@ -194,7 +198,10 @@ func evaluateBranches(t *testing.T) []string {
 					continue
 				}
 				for i, name := range vs.Names {
-					if lit, ok := vs.Values[i].(*ast.BasicLit); ok && strings.HasPrefix(name.Name, "branch") {
+					if i >= len(vs.Values) || !strings.HasPrefix(name.Name, "branch") {
+						continue
+					}
+					if lit, ok := vs.Values[i].(*ast.BasicLit); ok && lit.Kind == token.STRING {
 						consts[name.Name], _ = strconv.Unquote(lit.Value)
 					}
 				}
