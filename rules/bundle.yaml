@@ -1,7 +1,7 @@
 # Agentry S4 injection-signature rule bundle (PLAN §8.3, shipped as
 # ruleset_releases). This manifest gives the bundle its semantic version,
 # which is recorded on every scan_run and pinned in the CLI release (D-12).
-version: "0.3.1"
+version: "0.3.2"
 notes: >
   v1 signature set: the six S4 injection families (instruction-override,
   exfiltration, tool-coercion, credential-harvest, persistence,
@@ -32,6 +32,19 @@ notes: >
   scan has no data for (the lookup failed with no earlier answer, an
   ecosystem it does not cover, no pinned version) is one medium finding,
   S7/osv-no-data, in place of S7/osv-error. The threshold stays medium.
+  0.3.2 changes no signature: it loosens three hidden-content and
+  release-diff ratings that held what is not a major risk (agentry#775).
+  S3/zero-width no longer fires for a zero-width joiner inside an emoji
+  ZWJ sequence or for a byte-order mark at the start of a file; it still
+  fires for the same code points anywhere else. S9/new-obfuscation fires
+  only for a newly appearing S3 class rated medium or above, so a patch
+  that adds an HTML comment or trailing whitespace is not held for it.
+  A host the manifest declares in network.egress is low, whether declared
+  before or in this release: S9/new-egress (newly declared egress) is low
+  for a named host and stays medium for wildcard egress, and
+  S9/new-egress-content is low for a declared host at any bump, and stays
+  high on a patch release for any other host or an email recipient.
+  S9/escalated is unchanged. The threshold stays medium.
 
 # Bundle-level suppressions, applied to every rule in addition to its own
 # (§17.3 precision requirement). These capture DESCRIPTIVE FRAMING: prose that

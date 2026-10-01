@@ -47,9 +47,17 @@ var emailRe = regexp.MustCompile(`[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2
 // a client constructor or a config string.
 var bareHostRe = regexp.MustCompile(`\b(?:[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?\.){1,}(?:com|net|org|io|dev|ai|co|app|cloud|xyz|ru|cn|invalid|example|test|local)\b`)
 
+// How a destination was written in package content.
+const (
+	egressKindURL   = "url"
+	egressKindEmail = "email"
+	egressKindHost  = "host"
+)
+
 // egressTarget is one destination referenced by package content.
 type egressTarget struct {
-	// Kind is how the target was written ("url", "email", "host").
+	// Kind is how the target was written: egressKindURL, egressKindEmail or
+	// egressKindHost.
 	Kind string
 	// File and Line locate the first occurrence.
 	File string
@@ -83,13 +91,13 @@ func extractEgressTargets(files []FileEntry) map[string]egressTarget {
 				continue
 			}
 			for _, u := range urlRe.FindAllString(line, -1) {
-				record(urlHost(u), "url", f.Path, i+1, line)
+				record(urlHost(u), egressKindURL, f.Path, i+1, line)
 			}
 			for _, a := range emailRe.FindAllString(line, -1) {
-				record(a, "email", f.Path, i+1, line)
+				record(a, egressKindEmail, f.Path, i+1, line)
 			}
 			for _, h := range bareHostRe.FindAllString(strings.ToLower(line), -1) {
-				record(h, "host", f.Path, i+1, line)
+				record(h, egressKindHost, f.Path, i+1, line)
 			}
 		}
 	}
@@ -117,14 +125,22 @@ func isCommentLine(path, line string) bool {
 	return false
 }
 
-// urlHost returns the host component of a URL string.
+// urlHost returns the host component of a URL string: the authority up to
+// the path, query or fragment, after any userinfo (up to its last "@"), before
+// any port. The userinfo goes before the port is cut, so a URL that dresses
+// one host up as another (https://declared.example:@elsewhere.example/) is
+// keyed by the host it reaches; since a declared host's finding is low, that
+// order is what keeps the disguise from passing as declared.
 func urlHost(u string) string {
 	rest := strings.TrimPrefix(strings.TrimPrefix(u, "https://"), "http://")
-	if i := strings.IndexAny(rest, "/:?#"); i >= 0 {
+	if i := strings.IndexAny(rest, "/?#"); i >= 0 {
 		rest = rest[:i]
 	}
-	if i := strings.Index(rest, "@"); i >= 0 { // userinfo
+	if i := strings.LastIndex(rest, "@"); i >= 0 { // userinfo
 		rest = rest[i+1:]
+	}
+	if i := strings.Index(rest, ":"); i >= 0 { // port
+		rest = rest[:i]
 	}
 	return strings.ToLower(rest)
 }

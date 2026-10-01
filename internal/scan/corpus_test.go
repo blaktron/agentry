@@ -31,6 +31,12 @@ type corpusExpectation struct {
 	Expect      []string `yaml:"expect"`
 	Forbid      []string `yaml:"forbid"`
 	ExpectClean bool     `yaml:"expectClean"`
+	// ExpectOutcome, when set, is the gate's exact outcome at the baseline.
+	// It pins a loosening: a fixture a ruleset used to hold that now
+	// publishes (agentry#775), with any findings on the page. Such a fixture
+	// is counted and judged as a loosening, not as an attack or a benign
+	// twin, even when it is also expectClean.
+	ExpectOutcome Outcome `yaml:"expectOutcome"`
 
 	// Incident names the Appendix A entry this fixture reproduces, when it
 	// reproduces one. Documentation only; the corpus README carries the table.
@@ -71,7 +77,7 @@ func TestAttackCorpusGate(t *testing.T) {
 		t.Fatalf("read corpus: %v", err)
 	}
 
-	var attackCount, benignCount, pairCount int
+	var attackCount, benignCount, loosenedCount, pairCount int
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
@@ -89,9 +95,12 @@ func TestAttackCorpusGate(t *testing.T) {
 		if exp.Prev != "" {
 			pairCount++
 		}
-		if exp.ExpectClean {
+		switch {
+		case exp.ExpectOutcome != "":
+			loosenedCount++
+		case exp.ExpectClean:
 			benignCount++
-		} else {
+		default:
 			attackCount++
 		}
 		run := func(threshold string) RunResult {
@@ -126,6 +135,13 @@ func TestAttackCorpusGate(t *testing.T) {
 				if got[forbid] {
 					t.Errorf("%s: FALSE POSITIVE %q on benign lookalike", e.Name(), forbid)
 				}
+			}
+			// A loosening's outcome is exact, at the baseline.
+			if exp.ExpectOutcome != "" {
+				if got := result.Decision.Outcome; got != exp.ExpectOutcome {
+					t.Errorf("%s: the gate said %s (%s), want %s", e.Name(), got, result.Decision.Reason, exp.ExpectOutcome)
+				}
+				return
 			}
 			// Benign must never be rejected (a security doc discussing
 			// injection must be publishable).
@@ -166,8 +182,11 @@ func TestAttackCorpusGate(t *testing.T) {
 	if pairCount == 0 {
 		t.Fatal("corpus has no release-diff pair: the postmark-mcp shape is unexercised (§17.3)")
 	}
-	t.Logf("attack-corpus gate: %d attack + %d benign fixtures (%d release-diff pairs) through the orchestrator",
-		attackCount, benignCount, pairCount)
+	if loosenedCount == 0 {
+		t.Fatal("corpus has no loosening fixture: what a loosened rule now publishes is unpinned (agentry#775)")
+	}
+	t.Logf("attack-corpus gate: %d attack + %d benign + %d loosened fixtures (%d release-diff pairs) through the orchestrator",
+		attackCount, benignCount, loosenedCount, pairCount)
 }
 
 // corpusPublishesAtLow are the attack fixtures threshold low publishes (an

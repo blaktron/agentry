@@ -59,17 +59,12 @@ func ScanS3(path string, content []byte) []Finding {
 // line number, preserving encounter order within a line.
 func runeSetsByLine(content []byte, lm *lineMap, pred func(rune) bool) map[int][]rune {
 	hits := map[int][]rune{}
-	for i := 0; i < len(content); {
-		r, size := utf8.DecodeRune(content[i:])
-		if r == utf8.RuneError && size == 1 {
-			i++
-			continue
-		}
+	runes, offsets := decodeRunes(content)
+	for i, r := range runes {
 		if pred(r) {
-			line := lm.lineOf(i)
+			line := lm.lineOf(offsets[i])
 			hits[line] = append(hits[line], r)
 		}
-		i += size
 	}
 	return hits
 }
@@ -164,15 +159,117 @@ func isZeroWidth(r rune) bool {
 }
 
 // detectZeroWidth flags zero-width code points (§8.3 S3.a). High/high: these
-// are invisible and have no legitimate place in agent prose.
+// are invisible and have no legitimate place in agent prose, with two
+// exceptions that are how ordinary text is written (ruleset 0.3.2,
+// agentry#775): a zero-width joiner inside an emoji ZWJ sequence (the joiner
+// that makes woman and laptop one glyph, U+1F469 U+200D U+1F4BB) and a
+// byte-order mark at the very start of the file. Anywhere else the same code
+// points still fire: a joiner between letters, beside only one emoji, or
+// doubled; a U+FEFF after the first byte.
 func detectZeroWidth(path string, content []byte, lm *lineMap) []Finding {
-	hits := runeSetsByLine(content, lm, isZeroWidth)
+	hits := map[int][]rune{}
+	runes, offsets := decodeRunes(content)
+	for i, r := range runes {
+		if !isZeroWidth(r) {
+			continue
+		}
+		if r == '\ufeff' && offsets[i] == 0 {
+			continue // a leading byte-order mark
+		}
+		if r == '\u200d' && joinsEmoji(runes, i) {
+			continue
+		}
+		line := lm.lineOf(offsets[i])
+		hits[line] = append(hits[line], r)
+	}
 	var out []Finding
 	for _, line := range sortedLines(hits) {
 		out = append(out, lineRuneFinding(path, "S3/zero-width",
 			"Zero-width characters", SeverityHigh, ConfidenceHigh, line, lm, hits[line]))
 	}
 	return out
+}
+
+// decodeRunes decodes content into its runes and their byte offsets, skipping
+// invalid bytes.
+func decodeRunes(content []byte) (runes []rune, offsets []int) {
+	for i := 0; i < len(content); {
+		r, size := utf8.DecodeRune(content[i:])
+		if r == utf8.RuneError && size == 1 {
+			i++
+			continue
+		}
+		runes = append(runes, r)
+		offsets = append(offsets, i)
+		i += size
+	}
+	return runes, offsets
+}
+
+// joinsEmoji reports whether the zero-width joiner at runes[i] sits inside an
+// emoji ZWJ sequence (UTS #51 ED-16): the element before it is an emoji,
+// optionally followed by one variation selector-16 or one skin-tone modifier
+// (the rainbow flag, U+1F3F3 U+FE0F U+200D U+1F308; a technologist with a
+// skin tone, U+1F469 U+1F3FD U+200D U+1F4BB), and the character after it is
+// an emoji.
+func joinsEmoji(runes []rune, i int) bool {
+	j := i - 1
+	if j >= 0 && (runes[j] == '\ufe0f' || isEmojiModifier(runes[j])) {
+		j--
+	}
+	if j < 0 || !isZWJElement(runes[j]) || i+1 >= len(runes) {
+		return false
+	}
+	next := runes[i+1]
+	return isZWJElement(next) || next == 0x2194 || next == 0x2195
+}
+
+// isZWJElement reports whether r can be an element of an emoji ZWJ sequence:
+// an Extended_Pictographic character from U+2600 up. Every recommended ZWJ
+// sequence is built from these (the gender signs, the heart, the airplane, the
+// flags and the U+1Fxxx pictographs), except that the two head-shaking
+// sequences end in an arrow (U+1F642 U+200D U+2194 or U+2195), which
+// joinsEmoji allows after the joiner only. The other pictographic symbols
+// below U+2600 (the copyright and trademark signs, the arrows, the double
+// exclamation) are left out: they are ordinary text characters, and a joiner
+// beside them is invisible content between letters by another name.
+func isZWJElement(r rune) bool { return r >= 0x2600 && isExtendedPictographic(r) }
+
+// isEmojiModifier reports whether r is a Fitzpatrick skin-tone modifier.
+func isEmojiModifier(r rune) bool { return r >= 0x1F3FB && r <= 0x1F3FF }
+
+func isExtendedPictographic(r rune) bool { return unicode.Is(extendedPictographic, r) }
+
+// extendedPictographic is the Extended_Pictographic property of Unicode 16.0's
+// emoji-data.txt, ranges merged. It includes code points not yet assigned, so
+// emoji added in later versions are covered. Go's unicode package does not
+// carry the property. Read-only, like the unicode package's own tables.
+var extendedPictographic = &unicode.RangeTable{
+	R16: []unicode.Range16{
+		{0x00A9, 0x00A9, 1}, {0x00AE, 0x00AE, 1}, {0x203C, 0x203C, 1}, {0x2049, 0x2049, 1},
+		{0x2122, 0x2122, 1}, {0x2139, 0x2139, 1}, {0x2194, 0x2199, 1}, {0x21A9, 0x21AA, 1},
+		{0x231A, 0x231B, 1}, {0x2328, 0x2328, 1}, {0x2388, 0x2388, 1}, {0x23CF, 0x23CF, 1},
+		{0x23E9, 0x23F3, 1}, {0x23F8, 0x23FA, 1}, {0x24C2, 0x24C2, 1}, {0x25AA, 0x25AB, 1},
+		{0x25B6, 0x25B6, 1}, {0x25C0, 0x25C0, 1}, {0x25FB, 0x25FE, 1}, {0x2600, 0x2605, 1},
+		{0x2607, 0x2612, 1}, {0x2614, 0x2685, 1}, {0x2690, 0x2705, 1}, {0x2708, 0x2712, 1},
+		{0x2714, 0x2714, 1}, {0x2716, 0x2716, 1}, {0x271D, 0x271D, 1}, {0x2721, 0x2721, 1},
+		{0x2728, 0x2728, 1}, {0x2733, 0x2734, 1}, {0x2744, 0x2744, 1}, {0x2747, 0x2747, 1},
+		{0x274C, 0x274C, 1}, {0x274E, 0x274E, 1}, {0x2753, 0x2755, 1}, {0x2757, 0x2757, 1},
+		{0x2763, 0x2767, 1}, {0x2795, 0x2797, 1}, {0x27A1, 0x27A1, 1}, {0x27B0, 0x27B0, 1},
+		{0x27BF, 0x27BF, 1}, {0x2934, 0x2935, 1}, {0x2B05, 0x2B07, 1}, {0x2B1B, 0x2B1C, 1},
+		{0x2B50, 0x2B50, 1}, {0x2B55, 0x2B55, 1}, {0x3030, 0x3030, 1}, {0x303D, 0x303D, 1},
+		{0x3297, 0x3297, 1}, {0x3299, 0x3299, 1},
+	},
+	R32: []unicode.Range32{
+		{0x1F000, 0x1F0FF, 1}, {0x1F10D, 0x1F10F, 1}, {0x1F12F, 0x1F12F, 1}, {0x1F16C, 0x1F171, 1},
+		{0x1F17E, 0x1F17F, 1}, {0x1F18E, 0x1F18E, 1}, {0x1F191, 0x1F19A, 1}, {0x1F1AD, 0x1F1E5, 1},
+		{0x1F201, 0x1F20F, 1}, {0x1F21A, 0x1F21A, 1}, {0x1F22F, 0x1F22F, 1}, {0x1F232, 0x1F23A, 1},
+		{0x1F23C, 0x1F23F, 1}, {0x1F249, 0x1F3FA, 1}, {0x1F400, 0x1F53D, 1}, {0x1F546, 0x1F64F, 1},
+		{0x1F680, 0x1F6FF, 1}, {0x1F774, 0x1F77F, 1}, {0x1F7D5, 0x1F7FF, 1}, {0x1F80C, 0x1F80F, 1},
+		{0x1F848, 0x1F84F, 1}, {0x1F85A, 0x1F85F, 1}, {0x1F888, 0x1F88F, 1}, {0x1F8AE, 0x1F8FF, 1},
+		{0x1F90C, 0x1F93A, 1}, {0x1F93C, 0x1F945, 1}, {0x1F947, 0x1FAFF, 1}, {0x1FC00, 0x1FFFD, 1},
+	},
+	LatinOffset: 2,
 }
 
 // --- (b) bidi controls (Trojan Source) -----------------------------------
