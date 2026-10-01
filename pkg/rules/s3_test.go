@@ -46,6 +46,66 @@ func TestDetectZeroWidth(t *testing.T) {
 	}
 }
 
+// A zero-width joiner inside an emoji ZWJ sequence and a leading byte-order
+// mark are how ordinary text is written, and do not fire (ruleset 0.3.2,
+// agentry#775). The same code points anywhere else still do.
+func TestZeroWidthLeavesEmojiJoinersAndALeadingBOM(t *testing.T) {
+	for name, text := range map[string]string{
+		"woman technologist":                "\U0001F469\u200d\U0001F4BB",
+		"with a skin tone":                  "\U0001F469\U0001F3FD\u200d\U0001F4BB",
+		"rainbow flag (VS16 before joiner)": "\U0001F3F3\ufe0f\u200d\U0001F308",
+		"family of three":                   "\U0001F468\u200d\U0001F469\u200d\U0001F467",
+		"heart on fire (BMP pictograph)":    "\u2764\ufe0f\u200d\U0001F525",
+		"head shaking (arrow after joiner)": "\U0001F642\u200d\u2194\ufe0f",
+		"leading byte-order mark":           "\ufeff# Title\n\nBody.",
+		"both":                              "\ufeffTeam: \U0001F9D1\u200d\U0001F527 and \U0001F9D1\u200d\U0001F692.",
+	} {
+		if fs := ScanS3("a.md", []byte(text)); hasRule(fs, "S3/zero-width") {
+			t.Errorf("%s: S3/zero-width fired on %q", name, text)
+		}
+	}
+	for name, text := range map[string]string{
+		"joiner between letters":          "Keep\u200dthis",
+		"joiner after an emoji, a letter": "Hello \U0001F44B\u200dthere",
+		"joiner before an emoji only":     "a\u200d\U0001F4BB",
+		"joiner at the start":             "\u200d\U0001F4BB",
+		"joiner at the end":               "\U0001F469\u200d",
+		"doubled joiner":                  "\U0001F469\u200d\u200d\U0001F4BB",
+		"zero-width space between emoji":  "\U0001F469\u200b\U0001F4BB",
+		"non-joiner between emoji":        "\U0001F469\u200c\U0001F4BB",
+		"two modifiers before the joiner": "\U0001F469\U0001F3FD\U0001F3FD\u200d\U0001F4BB",
+		"byte-order mark mid-file":        "# Title\ufeff\n",
+		"second byte-order mark":          "\ufeff\ufeffTitle",
+		"word joiner beside an emoji":     "\U0001F469\u2060\U0001F4BB",
+		"joiner between text pictographs": "\u00a9\u200d\u00a9 \u2122\u200d\u00ae",
+		"joiner after an arrow":           "\u2194\u200d\U0001F4BB",
+	} {
+		if fs := ScanS3("a.md", []byte(text)); !hasRule(fs, "S3/zero-width") {
+			t.Errorf("%s: S3/zero-width did not fire on %q", name, text)
+		}
+	}
+	// The exempt joiner is not counted beside one that fires on the same line.
+	fs := ScanS3("a.md", []byte("\U0001F469\u200d\U0001F4BB and a\u200db"))
+	if f, ok := findRule(fs, "S3/zero-width"); !ok || f.Detail["count"] != "1" {
+		t.Errorf("want one zero-width counted on the line, got %+v", f.Detail)
+	}
+}
+
+// The Extended_Pictographic table was transcribed from Unicode 16.0's
+// emoji-data.txt; these points pin its edges and a few that are not emoji.
+func TestExtendedPictographic(t *testing.T) {
+	for _, r := range []rune{0x00A9, 0x00AE, 0x2764, 0x1F308, 0x1F469, 0x1F4BB, 0x1F9D1, 0x1FAFF, 0x1FC00, 0x1FFFD} {
+		if !isExtendedPictographic(r) {
+			t.Errorf("U+%04X should be Extended_Pictographic", r)
+		}
+	}
+	for _, r := range []rune{'a', '#', 0x00AA, 0x200D, 0xFE0F, 0x1F1E6, 0x1F3FB, 0x1F3FF, 0x1FFFE, 0xE0067} {
+		if isExtendedPictographic(r) {
+			t.Errorf("U+%04X should not be Extended_Pictographic", r)
+		}
+	}
+}
+
 func TestDetectBidiControls(t *testing.T) {
 	pos := ScanS3("a.md", []byte("filename: report\u202egnp.exe"))
 	if !hasRule(pos, "S3/bidi-control") {
