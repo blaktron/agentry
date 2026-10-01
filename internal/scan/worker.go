@@ -85,6 +85,9 @@ func (p *Pipeline) RegisterHandlers(q queue.Client) {
 		}
 		return p.RescanSweep(ctx)
 	})
+	q.Register(JobRedoReviewQueue, func(ctx context.Context, _ queue.Job) error {
+		return p.RedoReviewQueue(ctx)
+	})
 	q.Register(JobAttestSweep, func(ctx context.Context, _ queue.Job) error {
 		sum, err := p.AttestSweep(ctx)
 		if err != nil {
@@ -228,10 +231,7 @@ func (p *Pipeline) AttestSweep(ctx context.Context) (AttestSummary, error) {
 		return sum, nil
 	}
 	q := p.st.Queries()
-	batch := p.rescanBatch
-	if batch <= 0 {
-		batch = 100
-	}
+	batch := p.sweepBatch()
 	for {
 		rows, err := q.ListPublishedVersionsWithoutAttestation(ctx, batch)
 		if err != nil {
@@ -288,10 +288,7 @@ func (p *Pipeline) attestOne(ctx context.Context, q *storegen.Queries, v storege
 // shifted an unscanned one into the gap — the sweep skipped exactly the
 // neighbours of the versions it had just found problems with.
 func (p *Pipeline) RescanSweepWithSummary(ctx context.Context) (RescanSummary, error) {
-	batch := p.rescanBatch
-	if batch <= 0 {
-		batch = 100
-	}
+	batch := p.sweepBatch()
 	var sum RescanSummary
 	var after *uuid.UUID
 	seen := map[uuid.UUID]bool{}
@@ -347,31 +344,11 @@ func (p *Pipeline) rescanOne(ctx context.Context, versionID uuid.UUID) (rescanOu
 	if before.Status != string(registry.StatusPublished) {
 		return rescanOutcome{}, nil
 	}
-	agent, err := q.GetAgentByID(ctx, before.AgentID)
-	if err != nil {
-		return rescanOutcome{}, fmt.Errorf("scan: rescan load agent: %w", err)
-	}
-	pol, _, err := p.effectivePolicy(ctx, agent)
+	rj, err := p.rejudge(ctx, before)
 	if err != nil {
 		return rescanOutcome{}, err
 	}
-
-	// A rescan persists its run like any other (§8.7 quarantines must be
-	// explainable): the reviewer who has to clear this needs the findings.
-	runID, resume, err := p.resumeOrCreateRun(ctx, before, "rescan", pol)
-	if err != nil {
-		return rescanOutcome{}, err
-	}
-	result, err := p.runOrchestrator(ctx, before, agent, pol, resume, runID, true)
-	if err != nil {
-		return rescanOutcome{}, err
-	}
-	if result.Fatal != nil {
-		return rescanOutcome{}, result.Fatal
-	}
-	if err := p.finishRun(ctx, runID, result); err != nil {
-		return rescanOutcome{}, err
-	}
+	agent, runID, result := rj.agent, rj.runID, rj.result
 	out := rescanOutcome{cachedStages: len(result.Skipped)}
 
 	// Only a finding no person has decided on quarantines. A version a
@@ -435,6 +412,53 @@ func (p *Pipeline) rescanOne(ctx context.Context, versionID uuid.UUID) (rescanOu
 	}
 	p.notifyAuthorQuarantined(ctx, before, agent, string(worst), reason)
 	return out, nil
+}
+
+// rejudged is a version scanned again under this process's ruleset and the
+// policy now in force, its run finished.
+type rejudged struct {
+	agent     storegen.GetAgentByIDRow
+	runID     uuid.UUID
+	result    RunResult
+	policyVer int
+}
+
+// rejudge scans a version again as a rescan and performs no transition: the
+// catalogue sweep and the redo of the review queue layer theirs on it. The
+// run is persisted like any other (§8.7 quarantines must be explainable): the
+// reviewer who has to act on it needs the findings.
+func (p *Pipeline) rejudge(ctx context.Context, v storegen.AgentVersion) (rejudged, error) {
+	agent, err := p.st.Queries().GetAgentByID(ctx, v.AgentID)
+	if err != nil {
+		return rejudged{}, fmt.Errorf("scan: rescan load agent: %w", err)
+	}
+	pol, policyVer, err := p.effectivePolicy(ctx, agent)
+	if err != nil {
+		return rejudged{}, err
+	}
+	runID, resume, err := p.resumeOrCreateRun(ctx, v, "rescan", pol)
+	if err != nil {
+		return rejudged{}, err
+	}
+	result, err := p.runOrchestrator(ctx, v, agent, pol, resume, runID, true)
+	if err != nil {
+		return rejudged{}, err
+	}
+	if result.Fatal != nil {
+		return rejudged{}, result.Fatal
+	}
+	if err := p.finishRun(ctx, runID, result); err != nil {
+		return rejudged{}, err
+	}
+	return rejudged{agent: agent, runID: runID, result: result, policyVer: policyVer}, nil
+}
+
+// sweepBatch is the page size of the sweeps (tests shrink it to force paging).
+func (p *Pipeline) sweepBatch() int32 {
+	if p.rescanBatch <= 0 {
+		return 100
+	}
+	return p.rescanBatch
 }
 
 // rescanSeverity is what a finding weighs when a rescan decides whether to

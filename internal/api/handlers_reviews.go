@@ -282,7 +282,7 @@ func (s *Server) ListReviewQueue(w http.ResponseWriter, r *http.Request, params 
 	for _, ri := range rows {
 		vs := VersionStatus(ri.VersionStatus)
 		out = append(out, ReviewItem{
-			Id: ri.ID, Queue: ReviewItemQueue(ri.Queue), State: ReviewItemState(ri.State),
+			Id: ri.ID, Queue: ReviewItemQueue(ri.Queue), State: ri.State,
 			Version: ri.Version, VersionStatus: &vs, Agent: ri.AgentName, Namespace: ri.Namespace,
 			CreatedAt: &ri.CreatedAt,
 		})
@@ -344,7 +344,7 @@ func (s *Server) GetReviewItem(w http.ResponseWriter, r *http.Request, id openap
 	vs := VersionStatus(ri.VersionStatus)
 	bundle := ReviewBundle{
 		Item: ReviewItem{
-			Id: ri.ID, Queue: ReviewItemQueue(ri.Queue), State: ReviewItemState(ri.State),
+			Id: ri.ID, Queue: ReviewItemQueue(ri.Queue), State: ri.State,
 			Namespace: ri.Namespace, Agent: ri.AgentName, Version: ri.Version, VersionStatus: &vs,
 			CreatedAt: &ri.CreatedAt,
 		},
@@ -371,7 +371,10 @@ func (s *Server) GetReviewItem(w http.ResponseWriter, r *http.Request, id openap
 		bundle.Previous = &pd
 	}
 
-	run, err := q.LatestScanRunForVersion(r.Context(), ri.VersionID)
+	// The report the reviewer decides on is the latest finished run, as on
+	// the version's own report: a new ruleset's redo of the queue rescans a
+	// held version (agentry#772), and its run in progress is a partial list.
+	run, inFlight, err := reportRun(r.Context(), q, ri.VersionID)
 	switch {
 	case err == nil:
 		// A reviewer deciding on a partial finding list would be deciding on
@@ -382,6 +385,9 @@ func (s *Server) GetReviewItem(w http.ResponseWriter, r *http.Request, id openap
 			s.log.ErrorContext(r.Context(), "review bundle: findings", "run", run.ID, "err", rerr)
 			problemInternal(w, r)
 			return
+		}
+		if inFlight != nil {
+			rep.RescanInFlight = &RescanInFlight{ScanRunId: inFlight.ID, StartedAt: inFlight.StartedAt}
 		}
 		bundle.Findings = rep.Findings
 		bundle.Report = &rep

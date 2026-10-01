@@ -1719,9 +1719,16 @@ Env: `AGENTRY_ORGS_DECOMMISSION_HOLD`, `AGENTRY_ORGS_PENDING_DIGEST_EVERY`.
 - **The worker matters.** With no worker running, versions sit in `scanning`
   and never publish. That is the fail-closed design working, but it looks like
   a hang. Check the worker first when publishes stall.
-- **A new ruleset rescans the catalogue.** Registering a ruleset semver for the
-  first time enqueues the §8.7 sweep automatically; the rescan sweep quarantines
-  versions that newly trip a high or critical finding.
+- **A new ruleset rescans the catalogue and redoes the review queue.**
+  Registering a ruleset semver for the first time enqueues the §8.7 sweep
+  automatically; the rescan sweep quarantines published versions that newly
+  trip a high or critical finding no person has decided on. Beside it,
+  `scan.redo_review_queue` judges every version in `needs_review` with a
+  pending item again under the new ruleset and publishes the ones the gate
+  now passes; their items close as `superseded`. Both log a summary when they
+  finish. Every release is kept in `ruleset_releases`, and each version is
+  tagged `ruleset/v<semver>` in the core repository
+  ([pkg/ruleset/README.md](../pkg/ruleset/README.md)).
 - Runbooks for the failure modes above: [docs/ops/runbooks.md](ops/runbooks.md).
 
 ## What you are responsible for
