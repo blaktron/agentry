@@ -707,6 +707,7 @@ After the System Prompt comes a `----` line, then the heading
 (frontmatter stripped). An output schema, when the package ships one, is
 appended after that. Each adapter takes the whole text as its system
 prompt and adds none of its own:
+
 - `docker-agent` puts it in the agent's `instruction`;
 - `claude` runs Claude Code with `--system-prompt-file` and `--bare`;
 - `codex` sets `model_instructions_file`.
