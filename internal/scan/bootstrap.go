@@ -56,7 +56,7 @@ func RegisterRuleset(ctx context.Context, st *store.Store, bundle *rules.Bundle)
 	return RulesetRegistration{ID: row.ID, Semver: row.Semver, New: row.Inserted}, nil
 }
 
-// EnqueueRescanSweepOnNewRuleset kicks off the §8.7 catalogue sweep when a
+// EnqueueNewRulesetWork kicks off the §8.7 catalogue sweep when a
 // ruleset semver is recorded for the first time, and the redo of the review
 // queue beside it (agentry#772): the sweep judges published versions again,
 // the redo the versions waiting for a person, and publishes those the gate
@@ -64,7 +64,7 @@ func RegisterRuleset(ctx context.Context, st *store.Store, bundle *rules.Bundle)
 // unreachable and already-published versions were never re-checked against
 // improved rules — the entire point of versioning the bundle. A restart on
 // the same semver enqueues neither.
-func EnqueueRescanSweepOnNewRuleset(ctx context.Context, q queue.Client, log *slog.Logger, reg RulesetRegistration) {
+func EnqueueNewRulesetWork(ctx context.Context, q queue.Client, log *slog.Logger, reg RulesetRegistration) {
 	if q == nil || !reg.New {
 		return
 	}

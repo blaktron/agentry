@@ -15,14 +15,17 @@ on:
     paths: [rules/bundle.yaml]
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 concurrency:
   group: ruleset-tag
   cancel-in-progress: false
 jobs:
   tag:
-    if: github.ref == 'refs/heads/main'
+    if: github.repository == 'blaktron/agentry' && github.ref == 'refs/heads/main'
     runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 5
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -43,6 +46,7 @@ jobs:
             404) ;;
             *) echo "::error::looking up $tag: HTTP $code"; exit 1 ;;
           esac
-          curl -sf -o /dev/null -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
-            "$api/refs" -d "{\"ref\":\"refs/tags/$tag\",\"sha\":\"$GITHUB_SHA\"}"
+          body=$(jq -n --arg ref "refs/tags/$tag" --arg sha "$GITHUB_SHA" '{ref: $ref, sha: $sha}')
+          curl -fsS -o /dev/null -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$api/refs" -d "$body"
           echo "tagged $tag at $GITHUB_SHA"

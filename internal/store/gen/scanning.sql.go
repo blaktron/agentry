@@ -1655,16 +1655,22 @@ func (q *Queries) ListStuckSubmittedVersions(ctx context.Context, arg ListStuckS
 const runningScanRunForVersion = `-- name: RunningScanRunForVersion :one
 SELECT id, version_id, trigger, ruleset_release_id, policy_snapshot, judge_model, judge_prompt_hash, status, started_at, finished_at, report_digest, judge_prompt_tokens, judge_completion_tokens FROM scan_runs
 WHERE version_id = $1 AND trigger = $2 AND status = 'running'
+  AND ruleset_release_id = $3
 ORDER BY started_at DESC LIMIT 1
 `
 
 type RunningScanRunForVersionParams struct {
-	VersionID uuid.UUID `json:"version_id"`
-	Trigger   string    `json:"trigger"`
+	VersionID        uuid.UUID `json:"version_id"`
+	Trigger          string    `json:"trigger"`
+	RulesetReleaseID uuid.UUID `json:"ruleset_release_id"`
 }
 
+// An interrupted run is resumed only under the ruleset it was started with:
+// a run of an older ruleset carries that ruleset's findings and policy
+// snapshot, and a new ruleset's scan resuming it would judge a mix of two
+// (agentry#772). Such a run is left as it is; the new scan starts afresh.
 func (q *Queries) RunningScanRunForVersion(ctx context.Context, arg RunningScanRunForVersionParams) (ScanRun, error) {
-	row := q.db.QueryRow(ctx, runningScanRunForVersion, arg.VersionID, arg.Trigger)
+	row := q.db.QueryRow(ctx, runningScanRunForVersion, arg.VersionID, arg.Trigger, arg.RulesetReleaseID)
 	var i ScanRun
 	err := row.Scan(
 		&i.ID,

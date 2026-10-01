@@ -269,9 +269,14 @@ LIMIT $2;
 -- name: ListStageResults :many
 SELECT * FROM scan_stage_results WHERE scan_run_id = $1;
 
+-- An interrupted run is resumed only under the ruleset it was started with:
+-- a run of an older ruleset carries that ruleset's findings and policy
+-- snapshot, and a new ruleset's scan resuming it would judge a mix of two
+-- (agentry#772). Such a run is left as it is; the new scan starts afresh.
 -- name: RunningScanRunForVersion :one
 SELECT * FROM scan_runs
 WHERE version_id = $1 AND trigger = $2 AND status = 'running'
+  AND ruleset_release_id = sqlc.arg(ruleset_release_id)
 ORDER BY started_at DESC LIMIT 1;
 
 -- name: GetScanResultCache :one

@@ -7,6 +7,9 @@ package scan_test
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"io/fs"
 	"os"
 	"strings"
@@ -15,6 +18,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/blaktron/agentry/internal/queue"
 	"github.com/blaktron/agentry/internal/registry"
 	"github.com/blaktron/agentry/internal/scan"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
@@ -38,7 +42,7 @@ func nextRuleset(t *testing.T, e *pipeEnv) uuid.UUID {
 
 func redo(t *testing.T, e *pipeEnv) scan.RedoSummary {
 	t.Helper()
-	sum, err := e.pipe.RedoReviewQueue(context.Background())
+	sum, err := e.pipe.RedoReviewQueueWithSummary(context.Background())
 	if err != nil {
 		t.Fatalf("redo review queue: %v", err)
 	}
@@ -373,4 +377,191 @@ func nextBundle(t *testing.T, version string) *rules.Bundle {
 		t.Fatal(err)
 	}
 	return b
+}
+
+// failingJudge fails every call, as an unreachable AI Review endpoint does.
+type failingJudge struct{}
+
+func (failingJudge) Name() string              { return "failing" }
+func (failingJudge) RequiresHumanReview() bool { return false }
+func (failingJudge) ModelID() string           { return "" }
+func (failingJudge) InputLimit() int           { return 0 }
+func (failingJudge) Judge(_ context.Context, _ scan.JudgeContent) (scan.JudgeVerdict, error) {
+	return scan.JudgeVerdict{}, errors.New("judge unreachable")
+}
+
+// TestRedoReviewQueueHoldsWhenAStageFails: a stage that fails in the redo's
+// own run forces review, whatever held the version before.
+func TestRedoReviewQueueHoldsWhenAStageFails(t *testing.T) {
+	e := newPipeEnv(t)
+	u, _ := e.st.Queries().GetUserByID(context.Background(), e.owner)
+	scores := map[scan.JudgeCategory]int{scan.CatDeception: 2}
+	e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, scoredProvider{scores: &scores}, nil))
+	name := "stagefail" + suffix()
+	v := e.publish(name, "public", benignFiles(u.Handle, name, "1.0.0"))
+	if v.Status != "needs_review" {
+		t.Fatalf("setup: status %s, want needs_review", v.Status)
+	}
+	e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, failingJudge{}, nil))
+	nextRuleset(t, e)
+	redo(t, e)
+	if got := statusOf(t, e, v.ID); got != "needs_review" {
+		t.Fatalf("status after a redo whose AI Review failed = %s, want needs_review", got)
+	}
+}
+
+// TestRedoReviewQueueNeverResumesAnOlderRulesetsRun: a run of the previous
+// ruleset left running (a worker killed mid-scan) is not resumed by the new
+// ruleset's redo, whose verdict would otherwise mix the old run's findings
+// with its own and sign under a ruleset the run does not name.
+func TestRedoReviewQueueNeverResumesAnOlderRulesetsRun(t *testing.T) {
+	e := newPipeEnv(t)
+	ctx := context.Background()
+	q := e.st.Queries()
+	u, _ := q.GetUserByID(ctx, e.owner)
+	scores := map[scan.JudgeCategory]int{scan.CatDeception: 2}
+	e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, scoredProvider{scores: &scores}, nil))
+	name := "stale" + suffix()
+	v := e.publish(name, "public", benignFiles(u.Handle, name, "1.0.0"))
+	if v.Status != "needs_review" {
+		t.Fatalf("setup: status %s, want needs_review", v.Status)
+	}
+	held, err := q.LatestScanRunForVersion(ctx, v.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// An interrupted rescan under the old ruleset whose finished AI Review
+	// stage read an injection.
+	stale := mustV7(t)
+	if _, err := q.CreateScanRun(ctx, storegen.CreateScanRunParams{
+		ID: stale, VersionID: v.ID, Trigger: "rescan", RulesetReleaseID: held.RulesetReleaseID, PolicySnapshot: []byte(`{}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.InsertFinding(ctx, storegen.InsertFindingParams{
+		ID: mustV7(t), ScanRunID: stale, Scanner: "S5/" + string(scan.CatInjection),
+		Severity: "high", Confidence: "high", Title: "read by the old ruleset", Detail: []byte(`{"score":3}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.UpsertStageResult(ctx, storegen.UpsertStageResultParams{
+		ScanRunID: stale, Scanner: "S5", Status: "ok", Detail: []byte(`{"findings":1}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	scores = map[scan.JudgeCategory]int{}
+	rid := nextRuleset(t, e)
+	redo(t, e)
+
+	if got := statusOf(t, e, v.ID); got != string(registry.StatusPublished) {
+		t.Fatalf("status after the redo = %s, want published: the new ruleset's clean run was mixed with the old run's finding", got)
+	}
+	run, err := q.LatestFinishedScanRunForVersion(ctx, v.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.ID == stale || run.RulesetReleaseID != rid {
+		t.Fatalf("the publishing run is %s under %s, want a fresh run under %s", run.ID, run.RulesetReleaseID, rid)
+	}
+}
+
+// decidingJudge approves the version's review item, as a person would,
+// while the redo's AI Review is running, then finds nothing.
+type decidingJudge struct{ decide func() }
+
+func (decidingJudge) Name() string              { return "deciding" }
+func (decidingJudge) RequiresHumanReview() bool { return false }
+func (decidingJudge) ModelID() string           { return "" }
+func (decidingJudge) InputLimit() int           { return 0 }
+func (j decidingJudge) Judge(_ context.Context, _ scan.JudgeContent) (scan.JudgeVerdict, error) {
+	j.decide()
+	return scan.JudgeVerdict{Scores: map[scan.JudgeCategory]int{}, Excerpts: map[scan.JudgeCategory]string{}, Model: "deciding"}, nil
+}
+
+// TestRedoReviewQueueYieldsToAReviewerWhoDecidesMeanwhile: a reviewer who
+// approves while the redo scans the version publishes it from the report
+// they read (the latest finished run, not the redo's run in progress), and
+// the redo then finds the version moved and does nothing over it.
+func TestRedoReviewQueueYieldsToAReviewerWhoDecidesMeanwhile(t *testing.T) {
+	e := newPipeEnv(t)
+	ctx := context.Background()
+	q := e.st.Queries()
+	u, _ := q.GetUserByID(ctx, e.owner)
+	scores := map[scan.JudgeCategory]int{scan.CatDeception: 2}
+	e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, scoredProvider{scores: &scores}, nil))
+	name := "meanwhile" + suffix()
+	v := e.publish(name, "public", benignFiles(u.Handle, name, "1.0.0"))
+	if v.Status != "needs_review" {
+		t.Fatalf("setup: status %s, want needs_review", v.Status)
+	}
+	item := pendingItem(t, e, v.ID)
+	read, err := q.LatestScanRunForVersion(ctx, v.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decided := false
+	e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, decidingJudge{decide: func() {
+		if decided {
+			return
+		}
+		decided = true
+		approve(t, e, v.ID)
+	}}, nil))
+	nextRuleset(t, e)
+	sum := redo(t, e)
+
+	if !decided {
+		t.Fatal("setup: the reviewer never decided during the redo")
+	}
+	if sum.Moved < 1 {
+		t.Fatalf("redo summary %+v: the version the reviewer decided was not counted as moved", sum)
+	}
+	if got := statusOf(t, e, v.ID); got != string(registry.StatusPublished) {
+		t.Fatalf("status = %s, want published by the reviewer", got)
+	}
+	if got := reviewItem(t, e, item.ID); got.State != "approved" || got.DecidedBy == nil {
+		t.Fatalf("review item = %s by %v, want approved by the reviewer", got.State, got.DecidedBy)
+	}
+	att, err := q.GetAttestation(ctx, v.ID)
+	if err != nil {
+		t.Fatalf("the reviewer's publish has no attestation: %v", err)
+	}
+	var env struct {
+		Payload string `json:"payload"`
+	}
+	if err := json.Unmarshal(att.DsseEnvelope, &env); err != nil {
+		t.Fatal(err)
+	}
+	stmt, err := base64.StdEncoding.DecodeString(env.Payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(stmt), read.ID.String()) {
+		t.Fatalf("the reviewer's attestation does not name the run they read (%s): %s", read.ID, stmt)
+	}
+}
+
+// recordingQueue records what is enqueued.
+type recordingQueue struct{ kinds []string }
+
+func (r *recordingQueue) Enqueue(_ context.Context, kind, queueName string, _ any, _ ...queue.EnqueueOption) (uuid.UUID, error) {
+	r.kinds = append(r.kinds, kind+"@"+queueName)
+	return uuid.New(), nil
+}
+func (*recordingQueue) Register(string, queue.Handler)        {}
+func (*recordingQueue) Work(context.Context, ...string) error { return nil }
+
+func TestANewRulesetEnqueuesTheSweepAndTheRedo(t *testing.T) {
+	q := &recordingQueue{}
+	scan.EnqueueNewRulesetWork(context.Background(), q, nil, scan.RulesetRegistration{Semver: "9.99.3", New: true})
+	want := []string{scan.JobRescanSweep + "@sandbox", scan.JobRedoReviewQueue + "@sandbox"}
+	if strings.Join(q.kinds, ",") != strings.Join(want, ",") {
+		t.Fatalf("enqueued %v, want %v", q.kinds, want)
+	}
+	again := &recordingQueue{}
+	scan.EnqueueNewRulesetWork(context.Background(), again, nil, scan.RulesetRegistration{Semver: "9.99.3", New: false})
+	if len(again.kinds) != 0 {
+		t.Fatalf("a restart on a known ruleset enqueued %v", again.kinds)
+	}
 }
