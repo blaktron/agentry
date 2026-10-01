@@ -43,7 +43,24 @@ type GateDecision struct {
 	Queue string
 	// WorstSeverity is the worst gating severity considered.
 	WorstSeverity Severity
+	// branch names the rule that decided, for the gate's published cases
+	// (pkg/gatecases): every return in Evaluate names one, and the test
+	// fails on a branch no case reaches.
+	branch string
 }
+
+// The rules of Evaluate, as pkg/gatecases names them.
+const (
+	branchCritical             = "critical"
+	branchWildcardEgressReject = "wildcard-egress-reject"
+	branchWildcardEgressReview = "wildcard-egress-review"
+	branchForcedReview         = "forced-review"
+	branchCouldNotScan         = "could-not-scan"
+	branchReviewAlways         = "review-always"
+	branchReviewCapability     = "review-capability"
+	branchWithinThreshold      = "within-threshold"
+	branchOverThreshold        = "over-threshold"
+)
 
 // Evaluate applies the §8.5 gate under the effective policy (§8.6). Pure
 // function: findings + policy → decision. This is the fail-closed heart of
@@ -67,7 +84,7 @@ func Evaluate(in GateInput) GateDecision {
 
 	// Critical (or S1 structural) ⇒ auto-reject (§8.5).
 	if worst == SevCritical {
-		return GateDecision{Outcome: OutcomeRejected, WorstSeverity: worst,
+		return GateDecision{Outcome: OutcomeRejected, WorstSeverity: worst, branch: branchCritical,
 			Reason: "The gate rejected this version for a critical finding (" + titleOf(worstFinding) + ")."}
 	}
 
@@ -75,33 +92,33 @@ func Evaluate(in GateInput) GateDecision {
 	if in.WildcardEgress {
 		switch in.Policy.WildcardEgress {
 		case "reject":
-			return GateDecision{Outcome: OutcomeRejected, WorstSeverity: worst,
+			return GateDecision{Outcome: OutcomeRejected, WorstSeverity: worst, branch: branchWildcardEgressReject,
 				Reason: "Policy refuses wildcard network egress, so the gate rejected this version."}
 		case "review", "":
-			return review(in, worst, "This version declares wildcard network egress, so the gate sent it to human review.")
+			return review(in, worst, branchWildcardEgressReview, "This version declares wildcard network egress, so the gate sent it to human review.")
 		}
 	}
 
 	// Judge/stage forced review (§8.4.6, fail-closed).
 	if in.JudgeForcesReview {
-		return review(in, maxSev(worst, SevMedium), "No automated judge ran, or a stage failed closed, so the gate sent this version to human review.")
+		return review(in, maxSev(worst, SevMedium), branchForcedReview, "No automated judge ran, or a stage failed closed, so the gate sent this version to human review.")
 	}
 
 	// Content a stage could not read forces review whatever the threshold
 	// (§7 fail toward review): the finding is medium, and a threshold at
 	// medium would otherwise publish what no scanner examined.
 	if f := couldNotScan(in.Findings); f != nil {
-		return review(in, maxSev(worst, SevMedium), "Part of this version could not be scanned ("+f.Title+"), so the gate sent it to human review.")
+		return review(in, maxSev(worst, SevMedium), branchCouldNotScan, "Part of this version could not be scanned ("+f.Title+"), so the gate sent it to human review.")
 	}
 
 	// Policy requireHumanReview.
 	if mode, err := parseReviewMode(orNever(in.Policy.RequireHumanReview)); err == nil {
 		if mode.always {
-			return review(in, worst, "Policy requires human review of every version, so the gate sent this one to a reviewer.")
+			return review(in, worst, branchReviewAlways, "Policy requires human review of every version, so the gate sent this one to a reviewer.")
 		}
 		for _, c := range mode.whenCapabilities {
 			if in.DeclaredCapabilities[c] {
-				return review(in, worst, "Policy requires review of the capability "+c+", so the gate sent this version to a reviewer.")
+				return review(in, worst, branchReviewCapability, "Policy requires review of the capability "+c+", so the gate sent this version to a reviewer.")
 			}
 		}
 	}
@@ -113,9 +130,9 @@ func Evaluate(in GateInput) GateDecision {
 	}
 	switch {
 	case severityRank(worst) <= severityRank(maxAuto):
-		return GateDecision{Outcome: OutcomePublish, WorstSeverity: worst, Reason: "This version's findings are within the auto-publish threshold, so the gate published it."}
+		return GateDecision{Outcome: OutcomePublish, WorstSeverity: worst, branch: branchWithinThreshold, Reason: "This version's findings are within the auto-publish threshold, so the gate published it."}
 	default:
-		return review(in, worst, "This version's findings exceed the auto-publish threshold ("+string(worst)+"), so the gate sent it to a reviewer.")
+		return review(in, worst, branchOverThreshold, "This version's findings exceed the auto-publish threshold ("+string(worst)+"), so the gate sent it to a reviewer.")
 	}
 }
 
@@ -147,13 +164,13 @@ func couldNotScan(findings []Finding) *Finding {
 // org-namespace agents, the platform queue for everything else — public
 // agents with high findings, all T&S matters, and every personal-namespace
 // agent, which has no org reviewer to hand it to.
-func review(in GateInput, worst Severity, reason string) GateDecision {
+func review(in GateInput, worst Severity, branch, reason string) GateDecision {
 	queue := "platform"
 	publicHigh := in.Public && severityRank(worst) >= severityRank(SevHigh)
 	if in.NamespaceIsOrg && !publicHigh {
 		queue = "org"
 	}
-	return GateDecision{Outcome: OutcomeNeedsReview, WorstSeverity: worst, Reason: reason, Queue: queue}
+	return GateDecision{Outcome: OutcomeNeedsReview, WorstSeverity: worst, Reason: reason, Queue: queue, branch: branch}
 }
 
 func confidenceRank(c Confidence) int {
