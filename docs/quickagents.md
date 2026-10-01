@@ -498,10 +498,17 @@ model API. A per-run Docker MCP Gateway fronts the companion tools server.
 | `network.egress` hosts | `fetch` (with optional declared-secret auth) |
 | `exec.commands` | `run_command` |
 
-The runner suffixes every instruction with the **runner contract**: tools
-come only from the gateway; the workspace is rooted at `/workspace` as
-seen by tools; provided input files are under `/inputs`; report files go
-through `write_report`; the final message is the run's result.
+The runner puts the **System Prompt** before every instruction. Its fixed
+head says the run is in a locked sandbox, puts attached knowledge first, and
+keeps the model on the instruction's task. Its body is composed from what
+the manifest grants, and never states a grant the manifest does not make.
+It covers the tools (only from the gateway), the network, the workspace at
+`/workspace`, the commands, the secrets by name, and the inputs under
+`/inputs`. It explains how to read an attached knowledge pack, that reports
+go through `write_report`, and that the final message is the run's result.
+So an instruction need not repeat any of this. The text is in the plan's
+hash, and [the runner reference](runner.md#the-system-prompt) shows it word
+for word for a sample QuickAgent.
 
 **Input files.** Files and artifacts from outside the container reach a
 run through `agentry run --file PATH` (repeatable; files or directories).
