@@ -175,8 +175,8 @@ review at publish, not to refusal.
 
 Each half answers `pass`, `flagged` or `not_scanned` on its own. A half
 the judge could not answer for (an error, a timeout, or for the draft set
-a part past its bound of 8, 16 and 24 KiB) is `not_scanned`, with its
-failure word, never a pass. The texts are constants in `pkg/judge`, and
+a part past its bound of 8, 16 and 32 KiB, or a state past 48 KiB in
+all) is `not_scanned`, with its failure word, never a pass. The texts are constants in `pkg/judge`, and
 nothing of the package is rendered into them.
 
 This is not the publication scan. A submitted version is scanned in full

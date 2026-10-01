@@ -1,0 +1,1160 @@
+{
+  "baseline": {
+    "requireHumanReview": "never",
+    "maxAutoPublishSeverity": "low",
+    "wildcardEgress": "review"
+  },
+  "cases": [
+    {
+      "name": "baseline: no findings publish",
+      "branch": "within-threshold",
+      "want": {
+        "outcome": "published"
+      }
+    },
+    {
+      "name": "baseline: a info finding publishes",
+      "branch": "within-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "info",
+          "confidence": "high"
+        }
+      ],
+      "want": {
+        "outcome": "published"
+      }
+    },
+    {
+      "name": "baseline: a low finding publishes",
+      "branch": "within-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "low",
+          "confidence": "high"
+        }
+      ],
+      "want": {
+        "outcome": "published"
+      }
+    },
+    {
+      "name": "baseline: a medium finding is held for review",
+      "branch": "over-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "medium",
+          "confidence": "high"
+        }
+      ],
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "baseline: a high finding is held for review",
+      "branch": "over-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "high",
+          "confidence": "high"
+        }
+      ],
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "baseline: a critical finding is rejected",
+      "branch": "critical",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "critical",
+          "confidence": "high"
+        }
+      ],
+      "want": {
+        "outcome": "rejected"
+      }
+    },
+    {
+      "name": "baseline: the worst finding decides",
+      "branch": "over-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "low",
+          "confidence": "high"
+        },
+        {
+          "scanner": "S4/example",
+          "severity": "high",
+          "confidence": "high"
+        },
+        {
+          "scanner": "S4/example",
+          "severity": "info",
+          "confidence": "high"
+        }
+      ],
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "threshold info: a info finding publishes",
+      "branch": "within-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "info",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "info",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "published"
+      }
+    },
+    {
+      "name": "threshold info: a low finding is held for review",
+      "branch": "over-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "low",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "info",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "threshold info: a medium finding is held for review",
+      "branch": "over-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "medium",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "info",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "threshold info: a high finding is held for review",
+      "branch": "over-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "high",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "info",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "threshold info: a critical finding is rejected",
+      "branch": "critical",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "critical",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "info",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "rejected"
+      }
+    },
+    {
+      "name": "threshold low: a info finding publishes",
+      "branch": "within-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "info",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "low",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "published"
+      }
+    },
+    {
+      "name": "threshold low: a low finding publishes",
+      "branch": "within-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "low",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "low",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "published"
+      }
+    },
+    {
+      "name": "threshold low: a medium finding is held for review",
+      "branch": "over-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "medium",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "low",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "threshold low: a high finding is held for review",
+      "branch": "over-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "high",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "low",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "threshold low: a critical finding is rejected",
+      "branch": "critical",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "critical",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "low",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "rejected"
+      }
+    },
+    {
+      "name": "threshold medium: a info finding publishes",
+      "branch": "within-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "info",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "medium",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "published"
+      }
+    },
+    {
+      "name": "threshold medium: a low finding publishes",
+      "branch": "within-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "low",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "medium",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "published"
+      }
+    },
+    {
+      "name": "threshold medium: a medium finding publishes",
+      "branch": "within-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "medium",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "medium",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "published"
+      }
+    },
+    {
+      "name": "threshold medium: a high finding is held for review",
+      "branch": "over-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "high",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "medium",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "threshold medium: a critical finding is rejected",
+      "branch": "critical",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "critical",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "medium",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "rejected"
+      }
+    },
+    {
+      "name": "threshold high: a info finding publishes",
+      "branch": "within-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "info",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "high",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "published"
+      }
+    },
+    {
+      "name": "threshold high: a low finding publishes",
+      "branch": "within-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "low",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "high",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "published"
+      }
+    },
+    {
+      "name": "threshold high: a medium finding publishes",
+      "branch": "within-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "medium",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "high",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "published"
+      }
+    },
+    {
+      "name": "threshold high: a high finding publishes",
+      "branch": "within-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "high",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "high",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "published"
+      }
+    },
+    {
+      "name": "threshold high: a critical finding is rejected",
+      "branch": "critical",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "critical",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "high",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "rejected"
+      }
+    },
+    {
+      "name": "threshold critical: a info finding publishes",
+      "branch": "within-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "info",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "critical",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "published"
+      }
+    },
+    {
+      "name": "threshold critical: a low finding publishes",
+      "branch": "within-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "low",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "critical",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "published"
+      }
+    },
+    {
+      "name": "threshold critical: a medium finding publishes",
+      "branch": "within-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "medium",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "critical",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "published"
+      }
+    },
+    {
+      "name": "threshold critical: a high finding publishes",
+      "branch": "within-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "high",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "critical",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "published"
+      }
+    },
+    {
+      "name": "threshold critical: a critical finding is rejected",
+      "branch": "critical",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "critical",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "critical",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "rejected"
+      }
+    },
+    {
+      "name": "an unset threshold falls back to low: low publishes",
+      "branch": "within-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "low",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never"
+      },
+      "want": {
+        "outcome": "published"
+      }
+    },
+    {
+      "name": "an unset threshold falls back to low: medium is held",
+      "branch": "over-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "medium",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never"
+      },
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "a low-confidence high finding does not gate alone",
+      "branch": "within-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "high",
+          "confidence": "low"
+        }
+      ],
+      "want": {
+        "outcome": "published"
+      }
+    },
+    {
+      "name": "a low-confidence critical finding does not gate alone",
+      "branch": "within-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "critical",
+          "confidence": "low"
+        }
+      ],
+      "want": {
+        "outcome": "published"
+      }
+    },
+    {
+      "name": "a medium-confidence high finding gates",
+      "branch": "over-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "high",
+          "confidence": "medium"
+        }
+      ],
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "a low-confidence high finding beside a medium one under threshold medium publishes",
+      "branch": "within-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "medium",
+          "confidence": "medium"
+        },
+        {
+          "scanner": "S4/example",
+          "severity": "high",
+          "confidence": "low"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "medium",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "published"
+      }
+    },
+    {
+      "name": "wildcard egress under policy reject is rejected",
+      "branch": "wildcard-egress-reject",
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "low",
+        "wildcardEgress": "reject"
+      },
+      "wildcardEgress": true,
+      "want": {
+        "outcome": "rejected"
+      }
+    },
+    {
+      "name": "wildcard egress under policy review is held for review",
+      "branch": "wildcard-egress-review",
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "low",
+        "wildcardEgress": "review"
+      },
+      "wildcardEgress": true,
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "wildcard egress with the policy's answer unset is held for review",
+      "branch": "wildcard-egress-review",
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "low"
+      },
+      "wildcardEgress": true,
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "wildcard egress in an organization's namespace goes to the org queue",
+      "branch": "wildcard-egress-review",
+      "wildcardEgress": true,
+      "namespaceIsOrg": true,
+      "want": {
+        "outcome": "needs_review",
+        "queue": "org"
+      }
+    },
+    {
+      "name": "a critical finding is rejected before wildcard egress is weighed",
+      "branch": "critical",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "critical",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "low",
+        "wildcardEgress": "review"
+      },
+      "wildcardEgress": true,
+      "want": {
+        "outcome": "rejected"
+      }
+    },
+    {
+      "name": "wildcard egress under policy reject is rejected before a forced review",
+      "branch": "wildcard-egress-reject",
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "low",
+        "wildcardEgress": "reject"
+      },
+      "wildcardEgress": true,
+      "judgeForcesReview": true,
+      "want": {
+        "outcome": "rejected"
+      }
+    },
+    {
+      "name": "a forced review holds a clean version",
+      "branch": "forced-review",
+      "judgeForcesReview": true,
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "a forced review holds a version even under threshold high",
+      "branch": "forced-review",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "medium",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "high",
+        "wildcardEgress": "review"
+      },
+      "judgeForcesReview": true,
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "a forced review in an organization's public agent goes to the org queue",
+      "branch": "forced-review",
+      "judgeForcesReview": true,
+      "public": true,
+      "namespaceIsOrg": true,
+      "want": {
+        "outcome": "needs_review",
+        "queue": "org"
+      }
+    },
+    {
+      "name": "a forced review of a public agent with a high finding goes to the platform queue",
+      "branch": "forced-review",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "high",
+          "confidence": "high"
+        }
+      ],
+      "judgeForcesReview": true,
+      "public": true,
+      "namespaceIsOrg": true,
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "a critical finding is rejected before a forced review",
+      "branch": "critical",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "critical",
+          "confidence": "high"
+        }
+      ],
+      "judgeForcesReview": true,
+      "want": {
+        "outcome": "rejected"
+      }
+    },
+    {
+      "name": "S1/unreadable-file is held for review under threshold medium",
+      "branch": "could-not-scan",
+      "findings": [
+        {
+          "scanner": "S1/unreadable-file",
+          "severity": "medium",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "medium",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "S1/text-scan-truncated is held for review under threshold medium",
+      "branch": "could-not-scan",
+      "findings": [
+        {
+          "scanner": "S1/text-scan-truncated",
+          "severity": "medium",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "medium",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "S2/tool-error is held for review under threshold medium",
+      "branch": "could-not-scan",
+      "findings": [
+        {
+          "scanner": "S2/tool-error",
+          "severity": "medium",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "medium",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "S2/history-error is held for review under threshold medium",
+      "branch": "could-not-scan",
+      "findings": [
+        {
+          "scanner": "S2/history-error",
+          "severity": "medium",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "medium",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "SK/unread-text is held for review under threshold medium",
+      "branch": "could-not-scan",
+      "findings": [
+        {
+          "scanner": "SK/unread-text",
+          "severity": "medium",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "medium",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "content that could not be scanned is held whatever its confidence",
+      "branch": "could-not-scan",
+      "findings": [
+        {
+          "scanner": "S1/unreadable-file",
+          "severity": "medium",
+          "confidence": "low"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "high",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "a failed advisory lookup publishes under threshold medium",
+      "branch": "within-threshold",
+      "findings": [
+        {
+          "scanner": "S7/osv-error",
+          "severity": "medium",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "medium",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "published"
+      }
+    },
+    {
+      "name": "baseline: a failed advisory lookup is held for review",
+      "branch": "over-threshold",
+      "findings": [
+        {
+          "scanner": "S7/osv-error",
+          "severity": "medium",
+          "confidence": "high"
+        }
+      ],
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "policy always holds a clean version",
+      "branch": "review-always",
+      "policy": {
+        "requireHumanReview": "always",
+        "maxAutoPublishSeverity": "low",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "policy always in an organization's namespace goes to the org queue",
+      "branch": "review-always",
+      "policy": {
+        "requireHumanReview": "always",
+        "maxAutoPublishSeverity": "low",
+        "wildcardEgress": "review"
+      },
+      "namespaceIsOrg": true,
+      "want": {
+        "outcome": "needs_review",
+        "queue": "org"
+      }
+    },
+    {
+      "name": "policy whenCapabilities holds a version declaring the capability",
+      "branch": "review-capability",
+      "policy": {
+        "requireHumanReview": {
+          "whenCapabilities": [
+            "network"
+          ]
+        },
+        "maxAutoPublishSeverity": "low",
+        "wildcardEgress": "review"
+      },
+      "declaredCapabilities": [
+        "network",
+        "exec"
+      ],
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "policy whenCapabilities publishes a clean version not declaring it",
+      "branch": "within-threshold",
+      "policy": {
+        "requireHumanReview": {
+          "whenCapabilities": [
+            "network"
+          ]
+        },
+        "maxAutoPublishSeverity": "low",
+        "wildcardEgress": "review"
+      },
+      "declaredCapabilities": [
+        "exec"
+      ],
+      "want": {
+        "outcome": "published"
+      }
+    },
+    {
+      "name": "policy always does not save a critical finding from rejection",
+      "branch": "critical",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "critical",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "always",
+        "maxAutoPublishSeverity": "low",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "rejected"
+      }
+    },
+    {
+      "name": "a high finding in an organization's private agent goes to the org queue",
+      "branch": "over-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "high",
+          "confidence": "high"
+        }
+      ],
+      "namespaceIsOrg": true,
+      "want": {
+        "outcome": "needs_review",
+        "queue": "org"
+      }
+    },
+    {
+      "name": "a high finding in an organization's public agent goes to the platform queue",
+      "branch": "over-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "high",
+          "confidence": "high"
+        }
+      ],
+      "public": true,
+      "namespaceIsOrg": true,
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
+      "name": "a medium finding in an organization's public agent goes to the org queue",
+      "branch": "over-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "medium",
+          "confidence": "high"
+        }
+      ],
+      "public": true,
+      "namespaceIsOrg": true,
+      "want": {
+        "outcome": "needs_review",
+        "queue": "org"
+      }
+    },
+    {
+      "name": "a high finding in a personal public agent goes to the platform queue",
+      "branch": "over-threshold",
+      "findings": [
+        {
+          "scanner": "S4/example",
+          "severity": "high",
+          "confidence": "high"
+        }
+      ],
+      "public": true,
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    }
+  ]
+}
