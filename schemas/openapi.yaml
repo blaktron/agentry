@@ -100,6 +100,10 @@ tags:
       QuickAgent release they accepted for their account and the contract
       they consented to. Not a star, not the desktop's or the CLI's
       per-machine record; no download counter moves.
+  - name: voice
+    description: >-
+      The Writing Voice (agentry#809): the one VOICE.md an account keeps,
+      reviewed by AI Review before it is live.
   - name: knowledge
     description: >-
       Knowledge packs (agentry#593): an account's packs kept in the
@@ -2866,6 +2870,142 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  # The Writing Voice (plan writing-voice.md §4, §7; agentry#809): the one
+  # VOICE.md the caller keeps in Agentry, the instructions a run follows
+  # for how it writes and nothing else. Every route is the caller's own.
+  # A version goes live only once AI Review passed it (the pack scan's rule
+  # stages and Jev's voice question set); a flagged one stays pending with
+  # its findings and the live one stays live.
+  /voice:
+    get:
+      operationId: getVoice
+      tags: [voice]
+      summary: The caller's Writing Voice, every version's text with its review.
+      responses:
+        "200":
+          description: The voice.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Voice"
+        "404":
+          description: The caller keeps no voice here (`voice-not-found`).
+        "503":
+          description: The store is off (`voice-unconfigured`) — no key wrapper, or no Jev judge to review voices with.
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      operationId: putVoice
+      tags: [voice]
+      summary: Put a new version of the caller's voice, to be reviewed before it is live.
+      description: >-
+        The text becomes the pending version, replacing any pending one,
+        and its review is queued; the live version stays live until this
+        one passes. `source` is `edit` for text saved on the web and
+        `upload` for a voice sent from a client. A deployment whose
+        extension charges for the review may refuse the call in its own
+        status and words (a balance, say) before anything is stored.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PutVoiceRequest"
+      responses:
+        "202":
+          description: The voice, its new version pending and `reviewing`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Voice"
+        "413":
+          description: The text is past 32 KiB (`voice-too-large`).
+        "422":
+          description: The text is not a voice (`voice-invalid`) — empty, not UTF-8, or holding a NUL.
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteVoice
+      tags: [voice]
+      summary: Delete the caller's voice, every version of it and its data key.
+      responses:
+        "204":
+          description: Deleted.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /voice/pending:
+    delete:
+      operationId: discardVoicePending
+      tags: [voice]
+      summary: Drop the caller's pending version, in review or flagged.
+      responses:
+        "200":
+          description: The voice without a pending version.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Voice"
+        "404":
+          description: There is no pending version (`voice-not-found`).
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /voice/restore:
+    post:
+      operationId: restoreVoice
+      tags: [voice]
+      summary: Put the previous version back.
+      description: >-
+        A previous version reviewed under the question set in use now
+        trades places with the live one at once (200). One reviewed under
+        another set becomes the pending version, source `restore`, and is
+        reviewed like any other (202); a deployment that charges for a
+        review may refuse that call first.
+      responses:
+        "200":
+          description: The previous version is live, and the live one is previous.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Voice"
+        "202":
+          description: The previous version is pending, in review.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Voice"
+        "409":
+          description: There is no previous version (`voice-no-previous`).
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /voice/settings:
+    put:
+      operationId: updateVoiceSettings
+      tags: [voice]
+      summary: Set whether runs In Agentry attach the caller's live voice by default.
+      description: >-
+        The flag comes on when a voice first goes live; a field not sent
+        keeps its value.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VoiceSettingsRequest"
+      responses:
+        "200":
+          description: The voice.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Voice"
+        "404":
+          description: The caller keeps no voice here (`voice-not-found`).
+        default:
+          $ref: "#/components/responses/Problem"
+
   # An organization's shared knowledge (plan knowledge.md §4.7, D13, D26;
   # agentry#646): packs the organization owns, wrapped to its key, written
   # by its admins and read by its active members, membership checked at
@@ -4875,7 +5015,8 @@ components:
         `knowledge:write` read and write the account's knowledge packs.
         `secret:write` sets and deletes the account's hosted-run secrets and
         never lists or reads one; it is consumed only by a registry that
-        mounts the vault extension.
+        mounts the vault extension. `voice:read` reads the account's Writing
+        Voice and `voice:write` puts, restores, sets and deletes it.
       enum:
         - repo:read
         - repo:write
@@ -4890,6 +5031,158 @@ components:
         - knowledge:read
         - knowledge:write
         - secret:write
+        - voice:read
+        - voice:write
+
+    Voice:
+      type: object
+      description: >-
+        The caller's Writing Voice (plan writing-voice.md §4, D13): at most
+        a live version (the one runs attach), a pending one (in review, or
+        flagged with its findings) and the previous one, for Restore.
+      required: [alwaysAttach, questionSet, updatedAt]
+      properties:
+        alwaysAttach:
+          type: boolean
+          description: Runs In Agentry attach the live voice by default (D11); on when a voice first goes live.
+        live:
+          $ref: "#/components/schemas/VoiceVersion"
+        pending:
+          $ref: "#/components/schemas/VoiceVersion"
+        previous:
+          $ref: "#/components/schemas/VoiceVersion"
+        questionSet:
+          type: string
+          description: The hash of the voice question set a review asks now; a Restore of a version reviewed under another is reviewed again.
+        updatedAt:
+          type: string
+          format: date-time
+
+    VoiceVersion:
+      type: object
+      required: [id, slot, review, source, digest, bytes, text, questionSet, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        slot:
+          type: string
+          enum: [live, pending, previous]
+        review:
+          type: string
+          enum: [reviewing, flagged, passed]
+          description: A pending version is `reviewing` or `flagged`; a live or previous one `passed`.
+        source:
+          type: string
+          enum: [build, ai-edit, edit, upload, restore]
+        digest:
+          type: string
+          description: The SHA-256 of the text, `sha256:<hex>`.
+        bytes:
+          type: integer
+        text:
+          type: string
+          description: The VOICE.md, at most 32 KiB.
+        report:
+          $ref: "#/components/schemas/VoiceReviewReport"
+        questionSet:
+          type: string
+          description: The hash of the question set the version was reviewed under; empty until its review is decided.
+        createdAt:
+          type: string
+          format: date-time
+        reviewedAt:
+          type: string
+          format: date-time
+
+    VoiceReviewReport:
+      type: object
+      description: >-
+        What a version's review read and found: the pack scan's rule
+        stages (S2, S3, S4, S8) over the text and Jev's voice question set.
+        `incomplete` is a review that did not finish; the version stays in
+        review and is tried again. The report keeps no excerpt.
+      required: [schema, verdict, stages, findings, aiReview]
+      properties:
+        schema:
+          type: string
+        verdict:
+          type: string
+          enum: [pass, flagged, incomplete]
+        stages:
+          type: array
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              failed:
+                type: boolean
+        findings:
+          type: array
+          items:
+            $ref: "#/components/schemas/VoiceFinding"
+        aiReview:
+          type: object
+          required: [requests, inputTokens]
+          properties:
+            model:
+              type: string
+            questionSet:
+              type: string
+            scores:
+              type: object
+              additionalProperties:
+                type: integer
+              description: Each question's score, 0 to 3; 2 or more flags the version.
+            failure:
+              type: string
+              description: Why AI Review did not answer (`timeout`, `judge-error`).
+            requests:
+              type: integer
+            inputTokens:
+              type: integer
+
+    VoiceFinding:
+      type: object
+      required: [scanner, severity, title, flags]
+      properties:
+        scanner:
+          type: string
+        severity:
+          type: string
+        title:
+          type: string
+        line:
+          type: integer
+        question:
+          type: string
+          description: The voice question that scored, for an AI Review finding.
+        score:
+          type: integer
+        flags:
+          type: boolean
+          description: This finding keeps the version from going live.
+
+    PutVoiceRequest:
+      type: object
+      required: [text, source]
+      properties:
+        text:
+          type: string
+          description: The VOICE.md, UTF-8, at most 32 KiB.
+        source:
+          type: string
+          enum: [edit, upload]
+
+    VoiceSettingsRequest:
+      type: object
+      properties:
+        alwaysAttach:
+          type: boolean
 
     KnowledgePack:
       type: object

@@ -351,6 +351,8 @@ scopes:
 | `knowledge:read` | list and read the account's knowledge packs, their scan reports and sealed trees, export them, and have a pack's data key unwrapped |
 | `knowledge:write` | create, upload and delete the account's knowledge packs and have a data key wrapped |
 | `secret:write` | set and delete the account's hosted-run secrets; never list or read one |
+| `voice:read` | read the account's Writing Voice: every version's text and its AI Review report |
+| `voice:write` | put a new version of the account's Writing Voice for review, restore the previous one, drop the pending one, set always-attach and delete the voice |
 
 `run:read` and `run:write` are consumed only by a registry that mounts the
 runs extension (`GET /meta` lists it); on a registry without it a token
@@ -362,7 +364,7 @@ secret (agentry-enterprise#251) and keeps the list of them for a
 signed-in session. The desktop app's sign-in grant
 asks for a fixed set (`agent:read`, `agent:publish`, `repo:read`,
 `repo:write`, `user:profile`, `run:read`, `run:write`, `knowledge:read`,
-`knowledge:write`, `secret:write`).
+`knowledge:write`, `secret:write`, `voice:read`, `voice:write`).
 
 ## Native credentials vs an external directory
 
