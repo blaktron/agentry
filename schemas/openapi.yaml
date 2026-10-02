@@ -2181,6 +2181,20 @@ paths:
                 digest:
                   type: string
                   description: Client-computed sha256 digest to cross-check.
+                draftRun:
+                  type: string
+                  format: uuid
+                  description: >-
+                    The hosted draft this package was published from (Edit
+                    with AI's Publish this version; plan drafter-revisions
+                    §6). A claim only: the scan asks the deployment's
+                    DraftProvenance whether the submitter ran that draft
+                    against the agent's current release and whether its
+                    recorded proof matches these files. When it does, the
+                    version's source becomes `drafter-revision` and S9
+                    scans its manifest and instruction file as a first
+                    release's. Otherwise nothing changes. A core registry
+                    has no DraftProvenance and never grants it.
       responses:
         "202":
           description: Version accepted into the pipeline.
@@ -6652,7 +6666,15 @@ components:
           enum: [stable, beta]
         source:
           type: string
-          enum: [git-tag, cli-upload]
+          x-extensible-enum: [git-tag, cli-upload, drafter-revision]
+          description: >-
+            Where the version came from: a repository tag, an uploaded
+            package, or an uploaded package the scan proved was a hosted
+            Drafter revision of the agent's current release
+            (`drafter-revision`, plan drafter-revisions §6), which S9
+            scans with the benefit of the doubt. The set grows by
+            addition, so it is declared extensible: a client keeps a source
+            it does not know as the string it is rather than failing on it.
         scanStatus:
           type: string
           enum: [pipeline, skipped]
