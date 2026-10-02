@@ -34,7 +34,7 @@ const (
 	// activationsPerDay caps the links one account can be sent in a day,
 	// on top of D6's interval: anyone can sign up with another person's
 	// address, and without a cap the resend would let them mail that
-	// person every five minutes for ever (DEV-196).
+	// person every five minutes for ever (DEV-197).
 	activationsPerDay = 10
 )
 
