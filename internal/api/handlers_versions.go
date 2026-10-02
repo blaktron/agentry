@@ -37,7 +37,7 @@ func versionToAPI(v registry.Version) AgentVersion {
 		Version:   v.Version,
 		Status:    VersionStatus(v.Status),
 		Channel:   AgentVersionChannel(v.Channel),
-		Source:    AgentVersionSource(v.Source),
+		Source:    v.Source,
 		CreatedAt: v.CreatedAt,
 	}
 	if v.StatusReason != nil {

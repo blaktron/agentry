@@ -216,27 +216,6 @@ func (e AgentVersionScanStatus) Valid() bool {
 	}
 }
 
-// Defines values for AgentVersionSource.
-const (
-	CliUpload       AgentVersionSource = "cli-upload"
-	DrafterRevision AgentVersionSource = "drafter-revision"
-	GitTag          AgentVersionSource = "git-tag"
-)
-
-// Valid indicates whether the value is a known member of the AgentVersionSource enum.
-func (e AgentVersionSource) Valid() bool {
-	switch e {
-	case CliUpload:
-		return true
-	case DrafterRevision:
-		return true
-	case GitTag:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for AuditEventActorKind.
 const (
 	AuditEventActorKindPat    AuditEventActorKind = "pat"
@@ -1922,8 +1901,8 @@ type AgentVersion struct {
 	// ScanStatus How the version was admitted: through the pipeline, or skipped — no scan run, no findings, no attestation, the report's verdict `unscanned` (plan organization-subscriptions §4). A skipped version is a private organization agent's; a client that installs or runs one asks for consent first.
 	ScanStatus *AgentVersionScanStatus `json:"scanStatus,omitempty"`
 
-	// Source Where the version came from: a repository tag, an uploaded package, or an uploaded package the scan proved was a hosted Drafter revision of the agent's current release (`drafter-revision`, plan drafter-revisions §6), which S9 scans with the benefit of the doubt.
-	Source AgentVersionSource `json:"source"`
+	// Source Where the version came from: a repository tag, an uploaded package, or an uploaded package the scan proved was a hosted Drafter revision of the agent's current release (`drafter-revision`, plan drafter-revisions §6), which S9 scans with the benefit of the doubt. The set grows by addition, so it is declared extensible: a client keeps a source it does not know as the string it is rather than failing on it.
+	Source string `json:"source"`
 
 	// Status Publication state machine states (§7). `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change (DEV-046).
 	Status       VersionStatus `json:"status"`
@@ -1941,9 +1920,6 @@ type AgentVersionManifestSchemaVersion int
 
 // AgentVersionScanStatus How the version was admitted: through the pipeline, or skipped — no scan run, no findings, no attestation, the report's verdict `unscanned` (plan organization-subscriptions §4). A skipped version is a private organization agent's; a client that installs or runs one asks for consent first.
 type AgentVersionScanStatus string
-
-// AgentVersionSource Where the version came from: a repository tag, an uploaded package, or an uploaded package the scan proved was a hosted Drafter revision of the agent's current release (`drafter-revision`, plan drafter-revisions §6), which S9 scans with the benefit of the doubt.
-type AgentVersionSource string
 
 // AuditEvent defines model for AuditEvent.
 type AuditEvent struct {
