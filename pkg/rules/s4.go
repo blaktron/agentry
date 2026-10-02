@@ -3,7 +3,11 @@ package rules
 // s4.go is the S4 signature-engine evaluator: it applies a compiled Bundle to
 // prose text and emits findings. Loading/compilation lives in bundle.go.
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+	"unicode/utf8"
+)
 
 // Scan evaluates every rule in the bundle over one prose file and returns the
 // S4 findings, sorted deterministically. Content is treated as data: patterns
@@ -144,9 +148,13 @@ func inParagraph(line string) bool {
 	return strings.TrimSpace(line) != "" && !isATXHeading(line)
 }
 
-// isATXHeading reports whether line is a CommonMark ATX heading: up to three
-// spaces of indentation, one to six '#', then a space, a tab or the end of the
+// isATXHeading reports whether line reads as an ATX heading: up to three
+// spaces of indentation, one to six '#', then whitespace or the end of the
 // line. ("#hashtag" is not a heading; four spaces of indentation is code.)
+// CommonMark asks for an ASCII space or tab after the hashes, but any Unicode
+// space counts here: a model reads "##\u00a0Findings" as a heading whatever a
+// renderer does, and the red team's whitespace-noise mutant used exactly that
+// to keep "Findings" in the directive's paragraph (agentry#851, ruleset 0.3.4).
 func isATXHeading(line string) bool {
 	i := 0
 	for i < 3 && i < len(line) && line[i] == ' ' {
@@ -159,8 +167,8 @@ func isATXHeading(line string) bool {
 	if n == 0 || n > 6 {
 		return false
 	}
-	rest := line[i+n:]
-	return rest == "" || rest[0] == ' ' || rest[0] == '\t' || rest[0] == '\r'
+	r, _ := utf8.DecodeRuneInString(line[i+n:])
+	return i+n == len(line) || unicode.IsSpace(r)
 }
 
 // lineSpanText joins the text of lines [start, end] with newlines.

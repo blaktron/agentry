@@ -103,6 +103,9 @@ ruleset 0.3.3 a Markdown heading ends the paragraph those suppressions read,
 so it fires (agentry#845, DEV-010). Its twin `s4-heading-framed-benign` is
 review prose under the same headings whose marker wraps onto the line before
 the match, which the paragraph scope must still suppress.
+`s4-heading-framed-nbsp` is the same attack with a no-break space after the
+hashes, the red team's whitespace-noise mutant that 0.3.3 missed; since 0.3.4
+any Unicode space after the hashes makes a heading (agentry#851).
 
 S2 over the manifest (a declared MCP server's plain `env`, DEV-098;
 agentry#286, agentry#288): `manifest-env-secret` (a prefixed token under a
