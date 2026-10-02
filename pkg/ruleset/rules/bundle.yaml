@@ -1,7 +1,7 @@
 # Agentry S4 injection-signature rule bundle (PLAN §8.3, shipped as
 # ruleset_releases). This manifest gives the bundle its semantic version,
 # which is recorded on every scan_run and pinned in the CLI release (D-12).
-version: "0.3.3"
+version: "0.3.4"
 notes: >
   v1 signature set: the six S4 injection families (instruction-override,
   exfiltration, tool-coercion, credential-harvest, persistence,
@@ -51,6 +51,12 @@ notes: >
   paragraph, so a heading such as "# Findings" or "## Review" over a live
   directive no longer suppresses it; a hit on a heading line is judged by
   that line alone. The threshold stays medium.
+  0.3.4 changes no signature and no rating: a heading is one to six
+  hashes followed by any Unicode space, not only an ASCII space or tab
+  (agentry#851). Production's red team found that a no-break space after
+  the hashes ("##\u00a0Findings"), which reads as a heading but is not one
+  to CommonMark, kept the line in the directive's paragraph and let its
+  word suppress the directive. The threshold stays medium.
 
 # Bundle-level suppressions, applied to every rule in addition to its own
 # (§17.3 precision requirement). These capture DESCRIPTIVE FRAMING: prose that
