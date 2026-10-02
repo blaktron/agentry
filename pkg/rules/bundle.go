@@ -33,8 +33,13 @@ type Manifest struct {
 	// *about* prompt-injection defense remain publishable, and repeating the
 	// same alternation in every rule file guarantees it drifts.
 	//
-	// Like per-rule notPatterns these are scoped to the matched line, so a
-	// single descriptive phrase cannot whitelist a whole file.
+	// Unlike per-rule notPatterns, which see only the matched line(s), these
+	// are scoped to the containing paragraph (contiguous non-blank lines, a
+	// Markdown heading being a paragraph of its own), because descriptive
+	// prose wraps and its marker can sit on the line before the match. A blank
+	// line or a heading ends the paragraph, so a single descriptive phrase
+	// cannot whitelist a whole file (pkg/rules/s4.go suppressed; DEV-010,
+	// agentry#845).
 	NotPatterns []string `yaml:"notPatterns"`
 }
 
