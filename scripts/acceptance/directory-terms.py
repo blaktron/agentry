@@ -13,7 +13,8 @@ test token, which the blueprint's default test keys accept.
            one account with a blank display name and a mixed-case username,
            and one with a name and a promo code. A username differing from
            an existing one only by case, and a reserved name in capitals,
-           are refused (agentry#856). Prints them as JSON.
+           are refused (agentry#856). The form fills in ?username= and
+           ?email= from its page's query (agentry#860). Prints them as JSON.
   missing  the file is gone: the step says the terms could not be loaded,
            and a ticked submission is still refused.
   off      the server names no terms file: the form leads straight to the
@@ -30,6 +31,7 @@ import os
 import secrets
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 
 AK = os.environ.get("AK", "http://dt-ak-server:9000")
@@ -51,9 +53,9 @@ def ok(msg):
 class Flow:
     """One browser in the enrolment flow."""
 
-    def __init__(self):
+    def __init__(self, query=""):
         self.op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
-        self.url = AK + "/api/v3/flows/executor/agentry-enrollment/?query="
+        self.url = AK + "/api/v3/flows/executor/agentry-enrollment/?" + urllib.parse.urlencode({"query": query})
 
     def step(self, payload=None):
         data = None if payload is None else json.dumps(payload).encode()
@@ -109,6 +111,18 @@ def on():
     if "different than your username" not in (name.get("sub_text") or ""):
         fail(f"the display name's help text is {name.get('sub_text')!r}")
     ok(f"the display name is optional, labelled {name.get('label')!r}, with the help text")
+
+    # The sign-in's "Sign up." links carry what was typed (agentry#860): the
+    # page's ?username= and ?email= fill the form; anything that could not
+    # be one is dropped.
+    for query, want in (("next=%2Fapplication%2Fo%2Fauthorize%2F&username=ChrisY", ("ChrisY", "")),
+                        ("email=ada%40example.test", ("", "ada@example.test")),
+                        ("username=no+spaces%21&email=not-an-address", ("", ""))):
+        c = Flow(query).to_form()
+        got = ((field(c, "username") or {}).get("initial_value") or "", (field(c, "email") or {}).get("initial_value") or "")
+        if got != want:
+            fail(f"the form opened from ?{query} starts with username, email = {got}, want {want}")
+    ok("the form fills in a username or an address from the page's query, and drops one that could not be either")
 
     made = {}
     # A mixed-case username (agentry#856): accepted, written lower-cased.

@@ -71,8 +71,9 @@
     Everything above is authentik's own flows/templates/if/flow.html at the
     image deploy/compose/docker-compose.yaml pins, byte for byte, and
     scripts/acceptance/directory-remember.sh fails when it is not. This block
-    is the only addition: "Remember this device for 30 days", unticked, on
-    the sign-in flow's code page. authentik's code stage takes no extra
+    is the only addition. It holds two scripts: "Remember this device for 30
+    days", unticked, on the sign-in flow's code page, and (agentry#860,
+    marked signup-link below) the sign-up link on its password page. authentik's code stage takes no extra
     field, so a ticked box travels as a short-lived cookie on this host,
     which the account-flows blueprint's agentry-remember-intent policy reads
     once a factor has been validated. On https the cookie is __Host-
@@ -128,6 +129,88 @@
     setInterval(() => codeStages(document, []).forEach(offer), 250);
 })();
 </script>
+{% endif %}
+{% if flow.slug == "default-authentication-flow" %}
+{# agentry:begin signup-link (agentry#860) #}
+{% comment %}
+    A "Sign up." link on the sign-in's password page, beside "Forgot
+    password?", that opens the enrolment form with what the person typed on
+    the page before already filled in: a name as the username, an address
+    as the email (the account-flows blueprint's agentry-enrollment-username
+    and agentry-enrollment-email read username= and email= from the page's
+    query). authentik's password stage renders no sign-up link of its own.
+    The link is there whether or not the name exists, as the password page
+    itself is (the identification stage pretends every user exists), so it
+    says nothing about which accounts there are. The first page's own
+    "Sign up." link carries the typed name too. The page's query (the
+    authorize request's next=) travels with it, as authentik's own
+    enrolment link carries it, so a new account returns to the sign-in that
+    sent it. Nothing here decides anything: the form validates what it is
+    given like anything typed.
+{% endcomment %}
+<script data-id="agentry-signup-link">
+"use strict";
+(() => {
+    const ID = "agentry-signup-link";
+    const ENROLL = "/if/flow/agentry-enrollment/";
+    const signupUrl = (typed) => {
+        const q = new URLSearchParams(location.search);
+        q.delete("username");
+        q.delete("email");
+        const v = (typed || "").trim();
+        if (v) q.set(v.includes("@") ? "email" : "username", v);
+        const s = q.toString();
+        return ENROLL + (s ? "?" + s : "");
+    };
+    const find = (root, name, out) => {
+        for (const el of root.querySelectorAll("*")) {
+            if (el.localName === name) out.push(el);
+            if (el.shadowRoot) find(el.shadowRoot, name, out);
+        }
+        return out;
+    };
+    // The password page: a footer item beside "Forgot password?", made once
+    // per render of the stage.
+    const offer = (stage) => {
+        const root = stage.shadowRoot;
+        const card = root && root.querySelector("ak-flow-card");
+        if (!card || root.querySelector("#" + ID)) return;
+        const user = root.querySelector('input[name="username"]');
+        let band = root.querySelector('fieldset[slot="footer-band"]');
+        if (!band) {
+            band = document.createElement("fieldset");
+            band.slot = "footer-band";
+            band.className = "ak-c-fieldset pf-c-login__main-footer-band";
+            card.append(band);
+        }
+        const item = document.createElement("div");
+        item.id = ID;
+        item.className = "pf-c-login__main-footer-band-item";
+        const a = document.createElement("a");
+        a.href = signupUrl(user ? user.value : "");
+        a.textContent = "Sign up.";
+        item.append(document.createTextNode("Need an account? "), a);
+        band.insertBefore(item, band.querySelector(".pf-c-login__main-footer-band-item"));
+    };
+    // The first page: its own "Sign up." link takes what is in the field
+    // when it is followed.
+    const carry = (stage) => {
+        const root = stage.shadowRoot;
+        const link = root && root.querySelector('a[data-ouia-component-id="enroll"]');
+        if (!link || link.dataset.agentryCarry) return;
+        link.dataset.agentryCarry = "1";
+        link.addEventListener("click", () => {
+            const field = root.querySelector('input[name="uidField"]');
+            if (field && field.value.trim()) link.href = signupUrl(field.value);
+        });
+    };
+    setInterval(() => {
+        find(document, "ak-stage-password", []).forEach(offer);
+        find(document, "ak-stage-identification", []).forEach(carry);
+    }, 250);
+})();
+</script>
+{# agentry:end signup-link #}
 {% endif %}
 {% endblock %}
 {# agentry:end remembered-browser #}
