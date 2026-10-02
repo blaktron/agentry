@@ -173,6 +173,17 @@ services:
       # its own (the SecureAgentry overlay mounts the site's). Read by the
       # server when the step is reached.
       AGENTRY_DIRECTORY_TERMS_FILE: ${AGENTRY_DIRECTORY_TERMS_FILE:-}
+      # Registry activation (agentry#861, DEV-197): a self-enrolled account
+      # reaches the site at once, unactivated and read-only until the
+      # registry's mailed link confirms its address, instead of waiting at
+      # the directory's confirmation mail. On by default here, where
+      # scripts/dev/authentik-bootstrap.sh gives the registry's provider the
+      # blueprint's agentry-verified-email mapping; empty turns it off. Set
+      # it only together with that mapping: a provider whose mapping says
+      # every address is verified would vouch for unconfirmed accounts.
+      # Read by the worker when it applies the account-flows blueprint and
+      # by the server when an account is written.
+      AGENTRY_DIRECTORY_REGISTRY_ACTIVATION: ${AGENTRY_DIRECTORY_REGISTRY_ACTIVATION-true}
       # First boot creates akadmin with this password, and an API token
       # (intent api) with this value — what the bootstrap script uses.
       AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD:-}
