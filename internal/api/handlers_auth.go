@@ -180,7 +180,7 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.notifier.EmailVerification(r.Context(), email, verifyToken); err != nil {
+	if err := s.notifier.EmailVerification(r.Context(), email, req.Handle, verifyToken); err != nil {
 		s.log.WarnContext(r.Context(), "register: verification email", "err", err)
 	}
 
@@ -198,10 +198,13 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 // link's target for every account (agentry#861), so unlike the rest of the
 // native credential endpoints it stays open under externalOnly: a directory
 // account follows the link the registry mailed it. Where the account signed
-// in through the directory, the confirmation is written there too, in the
-// same transaction: a directory that cannot be reached leaves the link
-// unused, to be followed again, rather than an account confirmed here and
-// still unconfirmed in the token the directory issues.
+// in through the directory, the confirmation is written there too, before
+// the registry's transaction commits: a directory that cannot be reached
+// rolls the registry back and leaves the link unused, to be followed again,
+// rather than an account confirmed here and still unconfirmed in the token
+// the directory issues. (The other way round, a commit that fails after the
+// directory write, leaves the link unused too, and following it again
+// finishes the registry's half; the directory write is idempotent.)
 func (s *Server) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	if !s.allowLogin(w, r) {
 		return
@@ -225,6 +228,10 @@ func (s *Server) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		u, err := q.GetUserByID(r.Context(), userID)
 		if err != nil {
 			return err
+		}
+		if u.State != "active" {
+			// An erased or deactivated account's link activates nothing.
+			return pgx.ErrNoRows
 		}
 		if err := q.MarkEmailVerified(r.Context(), userID); err != nil {
 			return err

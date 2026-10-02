@@ -573,7 +573,10 @@ entries:
 
         plan = context.get("flow_plan")
         if plan is None:
-            return True
+            # Nothing to write into: skip the write (failure_result false)
+            # rather than let an account be written without the attribute
+            # that keeps it unactivated, which would read as confirmed.
+            return False
         prompt = plan.context.get("prompt_data") or {}
         # Unactivated until the registry's mailed link is followed
         # (agentry#861): the agentry-verified-email mapping reads this.
@@ -678,9 +681,15 @@ entries:
       policy_engine_mode: all
   # The confirmation mail left sign-up (agentry#861): the registry sends
   # the activation mail at the first sign-in. Absent, so an applied
-  # directory loses the binding too, not just this file.
+  # directory loses the binding too, not just this file; and only where the
+  # binding exists, because authentik 2026.8 cannot remove a binding that is
+  # not there (it deletes an unsaved one, the FlowStageBinding has no
+  # policybindingmodel_ptr, and the whole blueprint rolls back), which is
+  # every fresh install.
   - model: authentik_flows.flowstagebinding
     state: absent
+    conditions:
+      - !Find [authentik_flows.flowstagebinding, [target, !KeyOf flow-enrollment], [stage, !KeyOf stage-enrollment-email], [order, 30]]
     identifiers:
       target: !KeyOf flow-enrollment
       stage: !KeyOf stage-enrollment-email

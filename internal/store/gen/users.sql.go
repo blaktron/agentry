@@ -26,6 +26,31 @@ func (q *Queries) ConsumeEmailVerification(ctx context.Context, tokenSha256 []by
 	return user_id, err
 }
 
+const countEmailVerificationsSince = `-- name: CountEmailVerificationsSince :one
+SELECT count(*)::bigint AS sent,
+       COALESCE(min(created_at), now())::timestamptz AS oldest
+FROM email_verifications WHERE user_id = $1 AND created_at > $2
+`
+
+type CountEmailVerificationsSinceParams struct {
+	UserID    uuid.UUID `json:"user_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type CountEmailVerificationsSinceRow struct {
+	Sent   int64     `json:"sent"`
+	Oldest time.Time `json:"oldest"`
+}
+
+// How many links the account was sent since a moment, and the oldest of
+// them (agentry#861's daily cap).
+func (q *Queries) CountEmailVerificationsSince(ctx context.Context, arg CountEmailVerificationsSinceParams) (CountEmailVerificationsSinceRow, error) {
+	row := q.db.QueryRow(ctx, countEmailVerificationsSince, arg.UserID, arg.CreatedAt)
+	var i CountEmailVerificationsSinceRow
+	err := row.Scan(&i.Sent, &i.Oldest)
+	return i, err
+}
+
 const countPublishedVersionsByUser = `-- name: CountPublishedVersionsByUser :one
 SELECT count(*) FROM agent_versions av
 JOIN agents a ON a.id = av.agent_id
@@ -112,6 +137,17 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.IdpMfaAt,
 	)
 	return i, err
+}
+
+const deleteEmailVerificationsForUser = `-- name: DeleteEmailVerificationsForUser :exec
+DELETE FROM email_verifications WHERE user_id = $1
+`
+
+// An erased account's links go with it: one followed afterwards would
+// confirm an address nobody holds any more (agentry#861).
+func (q *Queries) DeleteEmailVerificationsForUser(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteEmailVerificationsForUser, userID)
+	return err
 }
 
 const enableUserTOTP = `-- name: EnableUserTOTP :exec

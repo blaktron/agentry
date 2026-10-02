@@ -30,7 +30,7 @@ type activationMails struct {
 	tokens map[string][]string // address → tokens, oldest first
 }
 
-func (n *activationMails) EmailVerification(_ context.Context, to, token string) error {
+func (n *activationMails) EmailVerification(_ context.Context, to, _, token string) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	if n.tokens == nil {
@@ -262,8 +262,20 @@ func TestUnactivatedAccountUntilActivated(t *testing.T) {
 	}
 	_ = res.Body.Close()
 
-	// A directory that cannot be reached leaves the link unused (I5).
+	// An expired link activates nothing (I5).
 	links := mails.sent(email)
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`UPDATE email_verifications SET expires_at = now() - interval '1 minute'
+		 WHERE user_id = $1::uuid AND created_at = (SELECT max(created_at) FROM email_verifications WHERE user_id = $1::uuid)`, userID); err != nil {
+		t.Fatal(err)
+	}
+	res = env.do(anonymous, http.MethodPost, "/api/v1/auth/verify-email", map[string]any{"token": links[1]})
+	if res.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("an expired link: %d", res.StatusCode)
+	}
+	_ = res.Body.Close()
+
+	// A directory that cannot be reached leaves the link unused (I5).
 	dir.failing = true
 	res = env.do(anonymous, http.MethodPost, "/api/v1/auth/verify-email", map[string]any{"token": links[0]})
 	if res.StatusCode != http.StatusServiceUnavailable {
@@ -365,5 +377,32 @@ func TestUnactivatedSupersededByVerifiedSignIn(t *testing.T) {
 	if err := env.st.Pool().QueryRow(context.Background(),
 		`SELECT email_verified_at IS NOT NULL FROM users WHERE id = $1::uuid AND email = $2`, owner, email).Scan(&verified); err != nil || !verified {
 		t.Fatalf("the owner's account at the address: verified %v, %v", verified, err)
+	}
+}
+
+// TestActivationDailyCap: past ten links in a day an account is sent no
+// more, whatever the interval (DEV-196: anyone can sign up with another
+// person's address, and the cap bounds what they can make it receive).
+func TestActivationDailyCap(t *testing.T) {
+	mails := &activationMails{Notifier: notify.LogNotifier{}}
+	env := newTestEnvWith(t, func(s *api.Server) { s.SetNotifier(mails) })
+	h := env.register("capped")
+	c := env.login(h)
+	ctx := context.Background()
+	if _, err := env.st.Pool().Exec(ctx,
+		`UPDATE email_verifications SET created_at = now() - interval '6 minutes'
+		 WHERE user_id = (SELECT id FROM handles WHERE handle = $1)`, h); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.st.Pool().Exec(ctx,
+		`INSERT INTO email_verifications (token_sha256, user_id, expires_at, created_at)
+		 SELECT sha256(convert_to(gen_random_uuid()::text, 'UTF8')), id, now() + interval '1 day', now() - interval '6 minutes'
+		 FROM handles, generate_series(1, 9) WHERE handle = $1`, h); err != nil {
+		t.Fatal(err)
+	}
+	res := env.do(c, http.MethodPost, "/api/v1/user/email-verification", nil)
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != http.StatusTooManyRequests || len(mails.sent(h+"@example.test")) != 1 {
+		t.Fatalf("an eleventh link in a day: %d, %d mails", res.StatusCode, len(mails.sent(h+"@example.test")))
 	}
 }

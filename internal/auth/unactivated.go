@@ -5,10 +5,10 @@ import (
 	"time"
 )
 
-// syntheticAddressSuffix ends the address a social sign-in with no email
+// SyntheticAddressSuffix ends the address a social sign-in with no email
 // is given (handlers_social_login.go): a placeholder that keeps the users
 // table's NOT NULL/UNIQUE contract and was never anybody's mailbox.
-const syntheticAddressSuffix = ".social.local"
+const SyntheticAddressSuffix = ".social.local"
 
 // Unactivated reports whether an account is unactivated (plan
 // unactivated-accounts.md D2, agentry#861): its address is unconfirmed and
@@ -23,5 +23,5 @@ func Unactivated(emailVerifiedAt *time.Time, email string) bool {
 // SyntheticAddress reports the placeholder address of an account that
 // signed in without one.
 func SyntheticAddress(email string) bool {
-	return strings.HasSuffix(strings.ToLower(email), syntheticAddressSuffix)
+	return strings.HasSuffix(strings.ToLower(email), SyntheticAddressSuffix)
 }

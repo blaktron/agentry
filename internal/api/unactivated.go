@@ -16,8 +16,11 @@ import (
 // unactivatedWrites is what it may still do (D8): sign itself in and out,
 // ask for another activation mail and follow one, set its display name and
 // cookie choice, delete or clear itself, end its sessions and remove its
-// remembered browsers, authenticators, tokens and SSH keys, and accept an
-// invitation (which confirms an address at the organization's domain).
+// remembered browsers, authenticators, tokens and SSH keys, sign the
+// desktop app or the CLI in (the grant mints a token, and the token is
+// read-only too), and accept an invitation (which confirms an address at
+// the organization's domain). A removal is housekeeping, not a write D8
+// refuses: "tokens refused" is minting one.
 // Patterns are "METHOD /path" under /api/v1, a {} segment matching one
 // path segment; a trailing /* matches the rest.
 var unactivatedWrites = []string{
@@ -32,6 +35,7 @@ var unactivatedWrites = []string{
 	"DELETE /user/directory/devices/{}/{}",
 	"DELETE /user/tokens/{}",
 	"DELETE /user/ssh-keys/{}",
+	"POST /user/tokens/desktop-grant",
 	"POST /invitations/{}",
 	"POST /orgs/{}/sso/saml/acs",
 	"POST /orgs/{}/sso/saml/slo",
