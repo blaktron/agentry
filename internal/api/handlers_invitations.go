@@ -456,6 +456,18 @@ func (s *Server) AcceptInvitation(w http.ResponseWriter, r *http.Request, token 
 	}
 
 	u, _ := s.q().GetUserByID(r.Context(), p.UserID)
+	// An invitation at the organization's domain confirmed the address
+	// above: the directory and the extensions hear it as an activation
+	// would tell them (agentry#861). The directory half is best-effort
+	// here, since the membership has committed; a failure leaves the
+	// directory's token saying unconfirmed, which the registry, already
+	// confirmed, never acts on.
+	if spent && invitationAtOrgDomain(row) && !p.EmailVerified {
+		if err := s.confirmInDirectory(r.Context(), p.UserID, u.Email); err != nil {
+			s.log.WarnContext(r.Context(), "accept invitation: directory confirmation", "err", err)
+		}
+		s.fireEvent(r.Context(), Event{Kind: "user.email_verified", UserID: p.UserID})
+	}
 	state := MembershipState("active")
 	via := false
 	writeJSON(w, http.StatusOK, Membership{

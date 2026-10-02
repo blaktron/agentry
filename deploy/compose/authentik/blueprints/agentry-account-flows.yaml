@@ -10,9 +10,8 @@
 # success depends on the order authentik happens to discover files in.
 #
 # Enrollment:  captcha (5) → prompt (10) → terms, where the deployment has
-#              them (15) → user write, inactive (20)
-#              → email confirmation, activates (30) → authenticator setup (40)
-#              → login (100)
+#              them (15) → user write, active but unactivated (20)
+#              → authenticator setup (40) → login (100)
 # Recovery:    identification (10) → email link (20) → authenticator (25)
 #              → new password (30) → user write (40) → login (100)
 #
@@ -20,16 +19,27 @@
 # /templates from deploy/compose/authentik/templates: authentik's stock ones
 # embed its logo and end "Powered by authentik".
 #
-# The registry links an IdP identity to an account by VERIFIED email (T-12)
-# and the provider asserts `email_verified: true` (DEV-061). That assertion
-# is only honest because a self-enrolled account is written INACTIVE and
-# nothing but the emailed confirmation link activates it.
+# The registry links an IdP identity to an account by VERIFIED email (T-12),
+# and the agentry-verified-email mapping below is what tells it (DEV-061).
+# Since agentry#861 (plan unactivated-accounts.md, DEV-197), where the
+# deployment sets AGENTRY_DIRECTORY_REGISTRY_ACTIVATION (any non-empty
+# value, in the server's and the worker's environment), a self-enrolled
+# account is written ACTIVE with the attribute agentry_email_verified:
+# false, so it reaches the site at once, read-only in the registry; the
+# mapping asserts the attribute, and nothing but the registry's emailed
+# activation link sets it true. Unset, sign-up is what it was (DEV-062):
+# the account written inactive and this flow's own mail activating it. An
+# account without the attribute counts as confirmed, as every active one
+# was. It is a switch because the claim's honesty depends on two halves
+# moving together: a deployment whose registry provider still uses a
+# mapping that asserts true for everyone (the SecureAgentry chart until
+# agentry-web#972) must not write unconfirmed accounts active.
 version: 1
 metadata:
   name: Agentry - Account flows (enrollment, recovery)
   labels:
     blueprints.goauthentik.io/description: >
-      Self-service sign-up with email confirmation, password recovery, and
+      Self-service sign-up (activated later by the registry's mail), password recovery, and
       the CAPTCHA + per-IP rate limit that protect both.
 entries:
   # ==========================================================================
@@ -564,13 +574,24 @@ entries:
     attrs:
       execution_logging: false
       expression: |
+        import os
         import re
         from django.utils.timezone import now
 
         plan = context.get("flow_plan")
         if plan is None:
-            return True
+            # Nothing to write into: skip the write (failure_result false)
+            # rather than let an account be written without the attribute
+            # that keeps it unactivated, which would read as confirmed.
+            return False
         prompt = plan.context.get("prompt_data") or {}
+        # Unactivated until the registry's mailed link is followed, where
+        # the deployment turns registry activation on (agentry#861): the
+        # agentry-verified-email mapping reads this. Off, the flow's own
+        # mail confirms the address before the account is active, and the
+        # attribute is left absent, which reads as confirmed.
+        if os.environ.get("AGENTRY_DIRECTORY_REGISTRY_ACTIVATION", "").strip():
+            prompt["attributes.agentry_email_verified"] = False
         typed = str(prompt.get("username") or "").strip()
         # The username in lower case (agentry#856); a blank display name
         # keeps the case it was typed in.
@@ -590,11 +611,20 @@ entries:
     identifiers:
       name: agentry-enrollment-user-write
     attrs:
-      create_users_as_inactive: true
+      # Active, and unactivated by its attribute, where the deployment
+      # turns registry activation on (agentry#861): see the header and
+      # agentry-enrollment-write-defaults. Inactive otherwise, for the mail.
+      create_users_as_inactive: !If [!Condition [AND, !Env [AGENTRY_DIRECTORY_REGISTRY_ACTIVATION, ""]], false, true]
       user_creation_mode: always_create
       user_type: internal
       user_path_template: users/self-enrolled
 
+  # No longer bound into sign-up (agentry#861, below). Kept because the
+  # site's social blueprint (agentry-web, agentry-social.yaml) finds it by
+  # name for its untrusted providers' enrolment, which still writes inactive
+  # and mails this link until those providers adopt the registry's
+  # activation (plan unactivated-accounts.md D12); a missing !Find target
+  # would roll that whole blueprint back.
   - model: authentik_stages_email.emailstage
     id: stage-enrollment-email
     identifiers:
@@ -661,7 +691,26 @@ entries:
       # than writing one without the version it agreed to. The has-password
       # policy always passes.
       policy_engine_mode: all
+  # The confirmation mail: bound where registry activation is off, and
+  # removed where it is on (agentry#861), since the registry then sends the
+  # activation mail at the first sign-in. Absent, so an applied directory
+  # loses the binding too, not just this file; and only where the binding
+  # exists, because authentik 2026.8 cannot remove a binding that is not
+  # there (it deletes an unsaved one, the FlowStageBinding has no
+  # policybindingmodel_ptr, and the whole blueprint rolls back), which is
+  # every fresh install.
   - model: authentik_flows.flowstagebinding
+    conditions:
+      - !Condition [NAND, !Env [AGENTRY_DIRECTORY_REGISTRY_ACTIVATION, ""]]
+    identifiers:
+      target: !KeyOf flow-enrollment
+      stage: !KeyOf stage-enrollment-email
+      order: 30
+  - model: authentik_flows.flowstagebinding
+    state: absent
+    conditions:
+      - !Condition [AND, !Env [AGENTRY_DIRECTORY_REGISTRY_ACTIVATION, ""]]
+      - !Find [authentik_flows.flowstagebinding, [target, !KeyOf flow-enrollment], [stage, !KeyOf stage-enrollment-email], [order, 30]]
     identifiers:
       target: !KeyOf flow-enrollment
       stage: !KeyOf stage-enrollment-email
@@ -1046,6 +1095,26 @@ entries:
             if code:
                 claims["agentry_promo_code"] = code
         return claims
+  # The `email` scope (DEV-061, agentry#861). authentik's managed mapping
+  # hard-codes email_verified false (2026.8), which the registry's T-12 rule
+  # treats as unlinkable, so the registry's provider uses this one instead
+  # (scripts/dev/authentik-bootstrap.sh on compose; the site's chart in
+  # production). It asserts what the directory recorded: false for a
+  # self-enrolled account until the registry's activation link writes
+  # agentry_email_verified true; an account without the attribute predates
+  # agentry#861 and was confirmed (or came from a trusted provider), so it
+  # stays true. Only a literal false withholds it: a value someone edited
+  # into another type does not lock an account out.
+  - model: authentik_providers_oauth2.scopemapping
+    id: scope-verified-email
+    identifiers:
+      name: agentry-verified-email
+    attrs:
+      scope_name: email
+      description: Email address, verified as the directory recorded it
+      expression: |
+        verified = (request.user.attributes or {}).get("agentry_email_verified", True) is not False
+        return {"email": request.user.email, "email_verified": verified}
   # The shipped sign-in flow's two bindings, restated by their shipped
   # identifiers so this updates them in place. Both policies must run when
   # the stage is reached, not when the plan is made: the cookie arrives with

@@ -26,6 +26,31 @@ func (q *Queries) ConsumeEmailVerification(ctx context.Context, tokenSha256 []by
 	return user_id, err
 }
 
+const countEmailVerificationsSince = `-- name: CountEmailVerificationsSince :one
+SELECT count(*)::bigint AS sent,
+       COALESCE(min(created_at), now())::timestamptz AS oldest
+FROM email_verifications WHERE user_id = $1 AND created_at > $2
+`
+
+type CountEmailVerificationsSinceParams struct {
+	UserID    uuid.UUID `json:"user_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type CountEmailVerificationsSinceRow struct {
+	Sent   int64     `json:"sent"`
+	Oldest time.Time `json:"oldest"`
+}
+
+// How many links the account was sent since a moment, and the oldest of
+// them (agentry#861's daily cap).
+func (q *Queries) CountEmailVerificationsSince(ctx context.Context, arg CountEmailVerificationsSinceParams) (CountEmailVerificationsSinceRow, error) {
+	row := q.db.QueryRow(ctx, countEmailVerificationsSince, arg.UserID, arg.CreatedAt)
+	var i CountEmailVerificationsSinceRow
+	err := row.Scan(&i.Sent, &i.Oldest)
+	return i, err
+}
+
 const countPublishedVersionsByUser = `-- name: CountPublishedVersionsByUser :one
 SELECT count(*) FROM agent_versions av
 JOIN agents a ON a.id = av.agent_id
@@ -112,6 +137,17 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.IdpMfaAt,
 	)
 	return i, err
+}
+
+const deleteEmailVerificationsForUser = `-- name: DeleteEmailVerificationsForUser :exec
+DELETE FROM email_verifications WHERE user_id = $1
+`
+
+// An erased account's links go with it: one followed afterwards would
+// confirm an address nobody holds any more (agentry#861).
+func (q *Queries) DeleteEmailVerificationsForUser(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteEmailVerificationsForUser, userID)
+	return err
 }
 
 const enableUserTOTP = `-- name: EnableUserTOTP :exec
@@ -273,6 +309,20 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow
 		&i.Handle,
 	)
 	return i, err
+}
+
+const latestEmailVerificationAt = `-- name: LatestEmailVerificationAt :one
+SELECT COALESCE(max(created_at), 'epoch'::timestamptz)::timestamptz AS sent_at
+FROM email_verifications WHERE user_id = $1
+`
+
+// When the account's newest verification link was made, or the epoch when
+// it has none (agentry#861's five-minute limit).
+func (q *Queries) LatestEmailVerificationAt(ctx context.Context, userID uuid.UUID) (time.Time, error) {
+	row := q.db.QueryRow(ctx, latestEmailVerificationAt, userID)
+	var sent_at time.Time
+	err := row.Scan(&sent_at)
+	return sent_at, err
 }
 
 const listPersonalNamespaceAgents = `-- name: ListPersonalNamespaceAgents :many
@@ -453,6 +503,20 @@ func (q *Queries) ListUserDirectoryLinks(ctx context.Context, userID uuid.UUID) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockUserRow = `-- name: LockUserRow :one
+SELECT id FROM users WHERE id = $1 FOR UPDATE
+`
+
+// Serializes the activation mail per account (agentry#861): the five-minute
+// limit is read and the new link written under this lock, so two replicas
+// answering at once send one mail, not two.
+func (q *Queries) LockUserRow(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, lockUserRow, id)
+	var id_2 uuid.UUID
+	err := row.Scan(&id_2)
+	return id_2, err
 }
 
 const markEmailVerified = `-- name: MarkEmailVerified :exec

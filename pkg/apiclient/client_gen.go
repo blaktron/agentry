@@ -2250,6 +2250,15 @@ type EmailNotificationSettings struct {
 	ReviewDecisions bool `json:"reviewDecisions"`
 }
 
+// EmailVerificationSent defines model for EmailVerificationSent.
+type EmailVerificationSent struct {
+	// ResendAfter The earliest moment another link may be sent.
+	ResendAfter time.Time `json:"resendAfter"`
+
+	// SentTo The address the link went to.
+	SentTo string `json:"sentTo"`
+}
+
 // Invitation defines model for Invitation.
 type Invitation struct {
 	CreatedAt time.Time `json:"createdAt"`
@@ -3155,13 +3164,16 @@ type UpdateKnowledgePackRequest struct {
 // User defines model for User.
 type User struct {
 	// CookieAckAt When this account acknowledged the cookie notice.
-	CookieAckAt   *time.Time         `json:"cookieAckAt,omitempty"`
-	CreatedAt     time.Time          `json:"createdAt"`
-	DisplayName   string             `json:"displayName"`
-	Email         string             `json:"email"`
-	EmailVerified bool               `json:"emailVerified"`
-	Handle        string             `json:"handle"`
-	Id            openapi_types.UUID `json:"id"`
+	CookieAckAt *time.Time `json:"cookieAckAt,omitempty"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	DisplayName string     `json:"displayName"`
+	Email       string     `json:"email"`
+
+	// EmailVerificationResendAfter GET /user only, while the address is unconfirmed: the earliest moment `POST /user/email-verification` will send another activation link (agentry#861). Absent when one may be sent now.
+	EmailVerificationResendAfter *time.Time         `json:"emailVerificationResendAfter,omitempty"`
+	EmailVerified                bool               `json:"emailVerified"`
+	Handle                       string             `json:"handle"`
+	Id                           openapi_types.UUID `json:"id"`
 
 	// Orgs The caller's org memberships (present on GET /user only).
 	Orgs *[]struct {
@@ -5407,6 +5419,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /user/domain-org/request-access (the `RequestDomainOrgAccess` operationId).
 	RequestDomainOrgAccess(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SendEmailVerification Send the caller a new activation link (agentry#861).
+	//
+	// Mails a new link that confirms the account's address and so activates it (plan unactivated-accounts.md). An unactivated account (an address not yet confirmed) can read but not write; this is one of the few writes it may make. At most one mail per account every five minutes, counted from the last one sent, the one sent at the first sign-in included: sooner is a 429 with `Retry-After` and `resendAfter`. A link works once and for 24 hours, and an earlier unexpired link keeps working. An account whose address is already confirmed, or that has no address a link can reach, is a 409.
+	//
+	// Corresponds with POST /user/email-verification (the `SendEmailVerification` operationId).
+	SendEmailVerification(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListAccountInstalls The caller's account installs, composed for a list.
 	//
@@ -8847,6 +8866,23 @@ func (c *Client) GetDomainOrg(ctx context.Context, reqEditors ...RequestEditorFn
 // Corresponds with POST /user/domain-org/request-access (the `RequestDomainOrgAccess` operationId).
 func (c *Client) RequestDomainOrgAccess(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRequestDomainOrgAccessRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SendEmailVerification Send the caller a new activation link (agentry#861).
+//
+// Mails a new link that confirms the account's address and so activates it (plan unactivated-accounts.md). An unactivated account (an address not yet confirmed) can read but not write; this is one of the few writes it may make. At most one mail per account every five minutes, counted from the last one sent, the one sent at the first sign-in included: sooner is a 429 with `Retry-After` and `resendAfter`. A link works once and for 24 hours, and an earlier unexpired link keeps working. An account whose address is already confirmed, or that has no address a link can reach, is a 409.
+//
+// Corresponds with POST /user/email-verification (the `SendEmailVerification` operationId).
+func (c *Client) SendEmailVerification(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSendEmailVerificationRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -16043,6 +16079,33 @@ func NewRequestDomainOrgAccessRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewSendEmailVerificationRequest constructs an http.Request for the SendEmailVerification method
+func NewSendEmailVerificationRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/email-verification")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListAccountInstallsRequest constructs an http.Request for the ListAccountInstalls method
 func NewListAccountInstallsRequest(server string) (*http.Request, error) {
 	var err error
@@ -18466,6 +18529,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /user/domain-org/request-access (the `RequestDomainOrgAccess` operationId).
 	RequestDomainOrgAccessWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*RequestDomainOrgAccessResponse, error)
+
+	// SendEmailVerificationWithResponse Send the caller a new activation link (agentry#861).
+	//
+	// Mails a new link that confirms the account's address and so activates it (plan unactivated-accounts.md). An unactivated account (an address not yet confirmed) can read but not write; this is one of the few writes it may make. At most one mail per account every five minutes, counted from the last one sent, the one sent at the first sign-in included: sooner is a 429 with `Retry-After` and `resendAfter`. A link works once and for 24 hours, and an earlier unexpired link keeps working. An account whose address is already confirmed, or that has no address a link can reach, is a 409.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /user/email-verification (the `SendEmailVerification` operationId).
+	SendEmailVerificationWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*SendEmailVerificationResponse, error)
 
 	// ListAccountInstallsWithResponse The caller's account installs, composed for a list.
 	//
@@ -25550,6 +25622,54 @@ func (r RequestDomainOrgAccessResponse) ContentType() string {
 	return ""
 }
 
+type SendEmailVerificationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *EmailVerificationSent
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SendEmailVerificationResponse) GetJSON200() *EmailVerificationSent {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r SendEmailVerificationResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SendEmailVerificationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SendEmailVerificationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SendEmailVerificationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SendEmailVerificationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListAccountInstallsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -29410,6 +29530,21 @@ func (c *ClientWithResponses) RequestDomainOrgAccessWithResponse(ctx context.Con
 		return nil, err
 	}
 	return ParseRequestDomainOrgAccessResponse(rsp)
+}
+
+// SendEmailVerificationWithResponse Send the caller a new activation link (agentry#861).
+//
+// Mails a new link that confirms the account's address and so activates it (plan unactivated-accounts.md). An unactivated account (an address not yet confirmed) can read but not write; this is one of the few writes it may make. At most one mail per account every five minutes, counted from the last one sent, the one sent at the first sign-in included: sooner is a 429 with `Retry-After` and `resendAfter`. A link works once and for 24 hours, and an earlier unexpired link keeps working. An account whose address is already confirmed, or that has no address a link can reach, is a 409.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /user/email-verification (the `SendEmailVerification` operationId).
+func (c *ClientWithResponses) SendEmailVerificationWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*SendEmailVerificationResponse, error) {
+	rsp, err := c.SendEmailVerification(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSendEmailVerificationResponse(rsp)
 }
 
 // ListAccountInstallsWithResponse The caller's account installs, composed for a list.
@@ -34672,6 +34807,39 @@ func ParseRequestDomainOrgAccessResponse(rsp *http.Response) (*RequestDomainOrgA
 			return nil, err
 		}
 		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSendEmailVerificationResponse parses an HTTP response from a SendEmailVerificationWithResponse call
+func ParseSendEmailVerificationResponse(rsp *http.Response) (*SendEmailVerificationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SendEmailVerificationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest EmailVerificationSent
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

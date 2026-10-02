@@ -20,6 +20,9 @@ type fakeDirectoryUser struct {
 	Type        string `json:"type"`
 	IsActive    bool   `json:"is_active"`
 	IsSuperuser bool   `json:"is_superuser"`
+	// Attributes is the account's attributes object; a PATCH replaces it
+	// whole, as authentik's does (agentry#861).
+	Attributes map[string]any `json:"attributes,omitempty"`
 }
 
 // fakeDirectory is authentik 2026.8's users and authenticators admin API as
@@ -30,6 +33,7 @@ type fakeDirectory struct {
 	mu       sync.Mutex
 	users    []fakeDirectoryUser
 	deleted  []string // "user/<pk>" or "<kind>/<id>"
+	patched  []string // "user/<pk>"
 	byEmail  int      // lookups that used email=
 	byID     int      // reads of one account by its id
 	searched int      // lookups that used search=
@@ -76,6 +80,26 @@ func (d *fakeDirectory) handler() http.Handler {
 			}
 		}
 		http.Error(w, `{"detail":"No User matches the given query."}`, http.StatusNotFound)
+	})
+	mux.HandleFunc("PATCH /api/v3/core/users/{pk}/", func(w http.ResponseWriter, r *http.Request) {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		var body struct {
+			Attributes map[string]any `json:"attributes"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "bad body", http.StatusBadRequest)
+			return
+		}
+		for i, u := range d.users {
+			if strconv.Itoa(u.PK) == r.PathValue("pk") {
+				d.users[i].Attributes = body.Attributes
+				d.patched = append(d.patched, "user/"+r.PathValue("pk"))
+				_ = json.NewEncoder(w).Encode(d.users[i])
+				return
+			}
+		}
+		http.Error(w, "not found", http.StatusNotFound)
 	})
 	mux.HandleFunc("DELETE /api/v3/core/users/{pk}/", func(w http.ResponseWriter, r *http.Request) {
 		d.mu.Lock()

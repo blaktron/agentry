@@ -137,6 +137,11 @@ func (s *Server) principalMiddlewareOpts(next http.Handler, opts principalOpts) 
 			return
 		}
 
+		// An unactivated account reads but does not write (agentry#861).
+		if s.unactivatedReadOnly && refuseUnactivated(w, r, p) {
+			return
+		}
+
 		// The access log names the actor (§16.2 allows ids, never secrets);
 		// the log line is emitted by the outer middleware, which sees only
 		// the pre-auth request, so hand the identity back through the holder.
@@ -180,6 +185,7 @@ func (s *Server) resolveSession(r *http.Request, token string) (*auth.Principal,
 		Via:           "session",
 		OrgRoles:      roles,
 		EmailVerified: u.EmailVerifiedAt != nil,
+		Unactivated:   auth.Unactivated(u.EmailVerifiedAt, u.Email),
 		PlatformStaff: u.PlatformStaff,
 		SessionID:     sess.ID,
 		SSOFresh:      parseSSOTags(sess.SsoTags),
