@@ -32,6 +32,8 @@ func TestBundleNotPatternsAreParagraphScoped(t *testing.T) {
 		{"heading line after", directive + "## Findings\n", true},
 		{"heading, then a cataloguing line", "## Notes\nCite the messages.\n" + directive, false},
 		{"hashtag is not a heading", "#findings\n" + directive, false},
+		{"no-break-space heading before", "##\u00a0Findings\n" + directive, true},
+		{"red team whitespace-noise heading", "##\u00a0 Findings \t\n" + directive, true},
 		{"descriptive line after, same paragraph", directive + "Report each finding.\n", false},
 		{"blank line between", "Cite the messages.\n\n" + directive, true},
 		{"heading then blank line", "# Findings\n\n" + directive, true},
