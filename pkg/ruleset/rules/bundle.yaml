@@ -1,7 +1,7 @@
 # Agentry S4 injection-signature rule bundle (PLAN §8.3, shipped as
 # ruleset_releases). This manifest gives the bundle its semantic version,
 # which is recorded on every scan_run and pinned in the CLI release (D-12).
-version: "0.3.2"
+version: "0.3.3"
 notes: >
   v1 signature set: the six S4 injection families (instruction-override,
   exfiltration, tool-coercion, credential-harvest, persistence,
@@ -45,6 +45,12 @@ notes: >
   S9/new-egress-content is low for a declared host at any bump, and stays
   high on a patch release for any other host or an email recipient.
   S9/escalated is unchanged. The threshold stays medium.
+  0.3.3 changes no signature and no rating: it narrows where the
+  bundle-level suppressions below look (agentry#845). They are read over
+  the paragraph that holds a hit, and a Markdown heading now ends that
+  paragraph, so a heading such as "# Findings" or "## Review" over a live
+  directive no longer suppresses it; a hit on a heading line is judged by
+  that line alone. The threshold stays medium.
 
 # Bundle-level suppressions, applied to every rule in addition to its own
 # (§17.3 precision requirement). These capture DESCRIPTIVE FRAMING: prose that
@@ -53,11 +59,16 @@ notes: >
 # contain the same verbs and nouns as the attacks they describe — and an agent
 # *about* prompt-injection defense has to remain publishable.
 #
-# Scoped to the matched line, like per-rule notPatterns, so one descriptive
-# phrase cannot whitelist a whole file. The residual risk is stated plainly in
-# the deviations register (DEV-010, agentry-notes): an attacker who wraps a live directive in
-# cataloguing language evades the S4 line hit, and is then left to S3, S5, S6,
-# and S9 — which is why the pipeline is layered rather than a single gate.
+# Scoped to the PARAGRAPH that holds the hit (contiguous non-blank lines),
+# unlike per-rule notPatterns, which see only the matched line: descriptive
+# prose wraps, and its marker can sit on the line before the match. A blank
+# line or a Markdown heading ends the paragraph (a heading is judged alone,
+# since 0.3.3), so one descriptive phrase cannot whitelist a whole file. The
+# residual risk is stated plainly in the deviations register (DEV-010,
+# agentry-notes): an attacker who wraps a live directive in cataloguing
+# language, or sets a descriptive sentence beside it in the same paragraph,
+# evades the S4 hit, and is then left to S3, S5, S6, and S9 — which is why the
+# pipeline is layered rather than a single gate.
 notPatterns:
   # Cataloguing / enumerating language.
   - 'prompts?\s+(to|that|which)\b'
