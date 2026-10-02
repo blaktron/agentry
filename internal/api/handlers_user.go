@@ -34,6 +34,7 @@ func (s *Server) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 		PlatformStaff: &row.PlatformStaff,
 		CookieAckAt:   row.CookieAckAt,
 	}
+	u.EmailVerificationResendAfter = s.resendAfter(r.Context(), row)
 	if ms, err := s.q().ListUserMembershipsWithHandles(r.Context(), p.UserID); err == nil {
 		type orgRow = struct {
 			Handle string           `json:"handle"`

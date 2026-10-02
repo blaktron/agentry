@@ -132,7 +132,7 @@ PY
 )
 case "$check" in *"ATTR coded 'launch-2026' empty ''"*) echo "ok   the code is written to the account's attributes as typed; an empty field leaves it empty" ;;
   *) echo "FAIL: the accounts' attributes: $check"; exit 1 ;; esac
-case "$check" in *"KEYS coded ['agentry_has_password', 'agentry_promo_code'] True"*) echo "ok   the code merges beside agentry_has_password, and nothing else is written" ;;
+case "$check" in *"KEYS coded ['agentry_email_verified', 'agentry_has_password', 'agentry_promo_code'] True"*) echo "ok   the code merges beside agentry_has_password and agentry_email_verified (agentry#861), and nothing else is written" ;;
   *) echo "FAIL: the coded account's attributes: $check"; exit 1 ;; esac
 case "$check" in *"CLAIM coded launch-2026"*) echo "ok   the agentry scope sends agentry_promo_code for the account with a code" ;;
   *) echo "FAIL: the claim for the account with a code: $check"; exit 1 ;; esac

@@ -61,25 +61,17 @@ pks = [m["pk"] for m in json.load(sys.stdin)["results"] if m.get("managed") in w
 if len(pks) != 3: sys.exit("expected 3 managed scope mappings, found %d" % len(pks))
 print(json.dumps(pks))')
 EMAIL_MANAGED_PK=$(curlx "$API/propertymappings/provider/scope/?managed=goauthentik.io/providers/oauth2/scope-email" | jget "d['results'][0]['pk']")
-export SCOPE_MAPPINGS EMAIL_MANAGED_PK VERIFIED_NAME VERIFIED_PK
+export SCOPE_MAPPINGS EMAIL_MANAGED_PK
 # authentik's managed `email` mapping hard-codes email_verified=False
-# (2026.8). This deployment's directory of record IS authentik — accounts
-# are operator-created or enrolled through a flow with an email stage — so
-# the registry's T-12 auto-link rule (verified IdP email ↔ verified account
-# email) needs the assertion to be true. A custom mapping replaces the
-# managed one for the `email` scope; idempotent by name.
-VERIFIED_NAME="Agentry: OpenID 'email' (directory-verified)"; export VERIFIED_NAME
-VERIFIED_PK=$(curlx -G --data-urlencode "name=$VERIFIED_NAME" "$API/propertymappings/provider/scope/" | jget "(d['results'][0]['pk'] if d['results'] else '')")
-if [ -z "$VERIFIED_PK" ]; then
-  VERIFIED_PK=$(curlx -X POST "$API/propertymappings/provider/scope/" -d "$(python3 -c '
-import json, os
-print(json.dumps({
-  "name": os.environ["VERIFIED_NAME"], "scope_name": "email",
-  "description": "Email address (directory-verified)",
-  "expression": "# authentik is this deployment\x27s directory of record; the address is\n# asserted verified. The managed mapping hard-codes False (2026.8).\nreturn {\"email\": request.user.email, \"email_verified\": True}",
-}))')" | jget "d['pk']")
-  echo "created directory-verified email mapping $VERIFIED_PK"
-fi
+# (2026.8), which the registry's T-12 auto-link rule (verified IdP email ↔
+# verified account email) treats as unlinkable. The account-flows blueprint
+# carries the replacement, agentry-verified-email, which asserts what the
+# directory recorded: false for a self-enrolled account until the registry's
+# activation link confirms it (agentry#861). Until agentry#861 this script
+# made its own mapping that said true for everyone; a re-run replaces it on
+# the provider (the old mapping is left in place, unused).
+VERIFIED_PK=$(curlx -G --data-urlencode "name=agentry-verified-email" "$API/propertymappings/provider/scope/" | jget "(d['results'][0]['pk'] if d['results'] else '')")
+[ -n "$VERIFIED_PK" ] || { echo "error: the blueprint's agentry-verified-email scope mapping is not there yet; re-run once authentik has applied agentry-account-flows.yaml" >&2; exit 1; }
 export VERIFIED_PK
 # The account-flows blueprint's `agentry` scope mapping carries whether the
 # sign-in asked to remember the browser (agentry#671, DEV-163). The registry

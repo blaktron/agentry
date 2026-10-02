@@ -9,7 +9,8 @@ test token, which the blueprint's default test keys accept.
   on       the server names a terms file: the display name is optional;
            after the form comes the terms step, the file's text and an
            unticked agreement; an unticked submission is refused in the
-           policy's words; a ticked one reaches the confirmation mail. Makes
+           policy's words; a ticked one reaches the authenticator setup, with
+           no mail step (agentry#861). Makes
            one account with a blank display name and a mixed-case username,
            and one with a name and a promo code. A username differing from
            an existing one only by case, and a reserved name in capitals,
@@ -18,10 +19,10 @@ test token, which the blueprint's default test keys accept.
   missing  the file is gone: the step says the terms could not be loaded,
            and a ticked submission is still refused.
   off      the server names no terms file: the form leads straight to the
-           confirmation mail, as before agentry#788.
+           authenticator setup.
 
-The accounts are made inactive and are left there: the flow stops at the
-confirmation mail, which this directory cannot send. directory-terms.sh
+The accounts are written active but unactivated (agentry#861) and are left
+there: the flow stops at the authenticator setup. directory-terms.sh
 reads what was written with ak shell.
 """
 
@@ -39,6 +40,9 @@ VERSION = os.environ.get("TERMS_VERSION", "")
 TEXT = "agentry_terms_text"
 AGREE = "attributes_agentry_terms_accepted"
 CAPTCHA_TEST_TOKEN = "XXXX.DUMMY.TOKEN.XXXX"
+# Where sign-up goes after the write since agentry#861: the authenticator
+# setup, the confirmation mail having left the flow.
+TOTP = "ak-stage-authenticator-totp"
 
 
 def fail(msg):
@@ -148,11 +152,11 @@ def on():
     ok("an unticked or absent agreement is refused, in the policy's words")
 
     c = flow.step({"component": "ak-stage-prompt", AGREE: True, TEXT: "<p>smuggled</p>"})
-    if c.get("component") != "ak-stage-email":
+    if c.get("component") != TOTP:
         fail(f"a ticked agreement stopped at {c.get('component')}: {errors(c)[:300]}")
     made["blank"] = user.lower()
     made["blankTyped"] = user
-    ok("a ticked agreement reaches the confirmation mail")
+    ok("a ticked agreement reaches the authenticator setup, with no mail step to wait at")
 
     # The account above exists now; the same name in another case is taken,
     # and a reserved name is reserved in capitals too (agentry#856).
@@ -169,7 +173,7 @@ def on():
     user, c = flow.submit_form("Ada Lovelace", promo="launch-2026")
     terms_step(c, "a named sign-up")
     c = flow.step({"component": "ak-stage-prompt", AGREE: "on"})
-    if c.get("component") != "ak-stage-email":
+    if c.get("component") != TOTP:
         fail(f"the named sign-up stopped at {c.get('component')}: {errors(c)[:300]}")
     made["named"] = user
     ok("a sign-up with a display name and a promo code goes through the terms too")
@@ -194,9 +198,9 @@ def off():
     flow = Flow()
     flow.to_form()
     _, c = flow.submit_form("")
-    if c.get("component") != "ak-stage-email":
+    if c.get("component") != TOTP:
         fail(f"with no terms file the form led to {c.get('component')} {[f.get('field_key') for f in c.get('fields', [])]}")
-    ok("with no terms file named, the form leads straight to the confirmation mail")
+    ok("with no terms file named, the form leads straight to the authenticator setup")
 
 
 if __name__ == "__main__":

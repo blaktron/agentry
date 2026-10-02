@@ -412,8 +412,12 @@ func PrincipalFromContext(ctx context.Context) *Principal { return api.Principal
 
 // Event is one committed event the core fans out (api.Event): the webhook
 // kinds (version.published, agent.quarantined, org.member_added, …) with
-// the owning org, plus user.registered, user.data_cleared (agentry#498:
-// clear what the extension holds for that user) and org.created.
+// the owning org, plus user.registered, user.email_verified (agentry#861:
+// the account's address was confirmed, once, by its activation link or an
+// invitation at an organization's domain; an account created verified
+// hears only user.registered, with emailVerified true), user.data_cleared
+// (agentry#498: clear what the extension holds for that user) and
+// org.created.
 type Event = api.Event
 
 // Hooks are called after the core has committed the change; they are

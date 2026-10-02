@@ -13,8 +13,8 @@ token, which the blueprint's default test keys accept.
        fills nothing in, and a code posted into the hidden field anyway is
        dropped. Prints the account it made as JSON.
 
-The accounts are made inactive and are left there: the flow stops at the
-confirmation mail, which this directory cannot send. directory-promo.sh
+The accounts are written active but unactivated (agentry#861) and are left
+there: the flow stops at the authenticator setup. directory-promo.sh
 reads their attributes and the agentry scope's claim with ak shell.
 """
 
@@ -102,10 +102,10 @@ def on():
         flow = Flow()  # a fresh browser per account
         flow.to_prompt()
         user, c = flow.submit(code)
-        if c.get("component") != "ak-stage-email":
+        if c.get("component") != "ak-stage-authenticator-totp":
             fail(f"the {label} sign-up stopped at {c.get('component')}: {json.dumps(c.get('response_errors') or {})[:300]}")
         made[label] = user
-    ok("a code and an empty field each get past the form to the confirmation mail")
+    ok("a code and an empty field each get past the form to the authenticator setup")
     print("ACCOUNTS " + json.dumps(made))
 
 
@@ -118,7 +118,7 @@ def off():
         fail(f"with the field off a promo link filled it in: {f.get('initial_value')!r}")
     ok("the field is off: served hidden, and a promo link fills nothing in")
     user, c = flow.submit("SMUGGLED-1")
-    if c.get("component") != "ak-stage-email":
+    if c.get("component") != "ak-stage-authenticator-totp":
         fail(f"the sign-up with the field off stopped at {c.get('component')}")
     print("ACCOUNTS " + json.dumps({"smuggled": user}))
 

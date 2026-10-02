@@ -1184,3 +1184,44 @@ func TestTokenFormOffersEveryScope(t *testing.T) {
 		}
 	}
 }
+
+// TestAccountActivationResend: an account that is not activated is told so
+// on its account page and can ask for a new link there (agentry#861); the
+// registry's refusal inside five minutes reaches the person in its words.
+func TestAccountActivationResend(t *testing.T) {
+	tooSoon := false
+	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Method + " " + r.URL.Path {
+		case "GET /api/v1/user":
+			_, _ = io.WriteString(w, `{"id":"u1","handle":"chris","email":"c@example.test","displayName":"Chris","emailVerified":false}`)
+		case "POST /api/v1/user/email-verification":
+			if r.Header.Get("X-Agentry-CSRF") != fakeCSRF {
+				http.Error(w, `{"detail":"csrf"}`, http.StatusForbidden)
+				return
+			}
+			if tooSoon {
+				w.WriteHeader(http.StatusTooManyRequests)
+				_, _ = io.WriteString(w, `{"type":"https://agentry.dev/problems/activation-too-soon","detail":"An activation link went to this address less than 5 minutes ago."}`)
+				return
+			}
+			_, _ = io.WriteString(w, `{"sentTo":"c@example.test","resendAfter":"2026-10-02T12:05:00Z"}`)
+		default:
+			http.Error(w, `{"detail":"no such fake route"}`, http.StatusNotFound)
+		}
+	})
+	h := newUI(t, Options{API: api})
+	body := get(h, "/ui/account", sessCookie, csrfCookieV).Body.String()
+	if !strings.Contains(body, "not activated yet") || !strings.Contains(body, `action="/ui/account/activation"`) {
+		t.Fatalf("the account page offers no activation link: %s", body)
+	}
+	w := post(h, "/ui/account/activation", url.Values{"_csrf": {"csrf1"}}, nil, sessCookie, csrfCookieV)
+	if okMsg, _, _ := flashOf(t, w); w.Code != http.StatusSeeOther || !strings.Contains(okMsg, "new activation link") {
+		t.Fatalf("resend: %d %q", w.Code, okMsg)
+	}
+	tooSoon = true
+	w = post(h, "/ui/account/activation", url.Values{"_csrf": {"csrf1"}}, nil, sessCookie, csrfCookieV)
+	if _, errMsg, _ := flashOf(t, w); !strings.Contains(errMsg, "less than 5 minutes") {
+		t.Fatalf("resend too soon: %q", errMsg)
+	}
+}

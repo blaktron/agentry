@@ -149,7 +149,7 @@ func (h *handler) verifyEmail(w http.ResponseWriter, r *http.Request) {
 		p.Error = notSent
 		h.render(w, r, http.StatusBadGateway, "message", p)
 	case res.OK():
-		p.Flash = "Your email address is verified. You can sign in."
+		p.Flash = "Your email address is confirmed and your account is activated. You can sign in."
 		p.Data = map[string]string{"Link": h.loginURL(""), "LinkText": "Sign in"}
 		h.render(w, r, http.StatusOK, "message", p)
 	default:

@@ -40,6 +40,13 @@ loc=$(curl -sS -o /dev/null -w '%{redirect_url}' -c "$JAR" -b "$JAR" -H 'Sec-Fet
 [ -n "$(csrf)" ] || { echo "sign-in: no csrf cookie"; exit 1; }
 echo "sign-in form: OK"
 curl -fsS -b "$JAR" "$BASE/ui/account" | grep "$HANDLE" >/dev/null && echo "account page: OK"
+# Activation (agentry#861): an unconfirmed account is told so and offered a
+# new link; one asked for straight after sign-up is refused (the first went
+# out moments ago) and the page says so, back on the account page.
+curl -fsS -b "$JAR" "$BASE/ui/account" | grep 'action="/ui/account/activation"' >/dev/null && echo "activation offered: OK"
+loc=$(curl -sS -o /dev/null -w '%{redirect_url}' -b "$JAR" -c "$JAR" -H 'Sec-Fetch-Site: same-origin' --data-urlencode "_csrf=$(csrf)" "$BASE/ui/account/activation")
+[ "$loc" = "$BASE/ui/account" ] || { echo "activation resend: redirect $loc"; exit 1; }
+curl -fsS -b "$JAR" -c "$JAR" "$BASE/ui/account" | grep "recently" >/dev/null && echo "activation resend refused inside five minutes: OK"
 # Organizations (agentry#363): the create form, then the decommission form.
 # Creating one needs a verified address, and the verification token never
 # leaves the server, so the address is marked verified directly, as
