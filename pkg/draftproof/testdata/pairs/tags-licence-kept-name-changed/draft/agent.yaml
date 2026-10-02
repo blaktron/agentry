@@ -1,0 +1,22 @@
+# drafted by the Drafter (agentry draft); review every line before you submit it
+schemaVersion: "2"
+name: probe-agent-v2
+namespace: draft
+version: 0.1.0
+summary: '   Probes how the Builder reads a revision.   '
+license: Apache-2.0
+modes:
+  - autonomous
+entrypoints:
+  instruction: AGENT.md
+tags:
+  - github
+  - two words
+  - ok-tag
+capabilities:
+  network:
+    egress: none
+  filesystem:
+    read: none
+    write: none
+  exec: none

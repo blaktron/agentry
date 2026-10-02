@@ -1,0 +1,43 @@
+# drafted by the Drafter (agentry draft); review every line before you submit it
+schemaVersion: "2"
+name: probe-agent
+namespace: draft
+version: 0.1.0
+summary: Probes how the Builder reads a revision.
+license: MIT
+modes:
+  - autonomous
+entrypoints:
+  instruction: AGENT.md
+intake:
+  - id: topic
+    prompt: '  What should I look at?  '
+    type: text
+    required: true
+  - id: api_key
+    prompt: Your API key
+    type: secret
+    required: true
+  - id: region
+    prompt: Which region?
+    choices:
+      - emea
+      - north america
+      - apac
+    type: choice
+  - id: report
+    prompt: The report to read
+    type: file
+  - id: count
+    prompt: How many?
+    type: number
+    required: false
+capabilities:
+  network:
+    egress: none
+  filesystem:
+    read: workspace
+    write: none
+  exec: none
+  secrets:
+    - API_KEY

@@ -1,0 +1,56 @@
+# drafted by the Drafter (agentry draft); review every line before you submit it
+schemaVersion: "2"
+name: dev-server-runbook-answers
+namespace: draft
+version: 0.1.0
+summary: Answers on-call questions about the Agentry dev server - deploy, rebuild, restart, edge-cache purge - with the runbook's commands.
+license: Apache-2.0
+tags:
+  - on-call
+  - runbook
+  - operations
+  - deploy
+  - devops
+  - internal-docs
+  - support
+modes:
+  - autonomous
+  - interactive
+entrypoints:
+  instruction: AGENT.md
+intake:
+  - id: question
+    prompt: What do you need to do on the Agentry dev server? (e.g. deploy a change, restart a service, purge the edge cache, or what not to touch)
+    type: text
+    required: true
+guide:
+  overview: 'Answers an on-call engineer''s operational questions about the Agentry dev server from your team''s runbook: what to do first, numbered steps with the runbook''s exact commands, how to verify, how to undo, and the prohibitions that touch that operation. It reads your attached runbook knowledge pack and quotes it — it never invents a command, flag or hostname, and it stops and says so when the runbook does not cover something. It advises only: it has no shell and no network, so nothing it tells you is run by the agent.'
+  prepare:
+    - 'Attach your runbook as a knowledge pack: deploy, rebuild/restart, edge-cache purge, and the guardrails page.'
+    - One question per run is enough; follow-ups work in an interactive session.
+    - Say which service, branch or path is involved — the answer narrows to the right procedure.
+    - 'Mention if the question is about staging or production: this runbook covers the dev server only.'
+  task: e.g. I deployed a CSS fix to dev an hour ago and I'm still getting the old file — what do I run?
+interactive:
+  opening: Ask me anything about running the Agentry dev server — deploying a change, rebuilding or restarting a service, purging the edge cache, or what not to touch. I answer from the attached runbook with its exact commands, and I tell you when it doesn't cover something.
+capabilities:
+  network:
+    egress: none
+  filesystem:
+    read: none
+    write: none
+  exec: none
+  secrets: []
+  dataAccess:
+    - other
+  mcpServers: []
+knowledge:
+  accepts:
+    prompt: 'Attach your Agentry dev server runbook as a knowledge pack: deploy, rebuild and restart, edge-cache purge, and the guardrails or never-do page.'
+    required: true
+publish:
+  include:
+    - agent.yaml
+    - AGENT.md
+    - README.md
+    - LICENSE

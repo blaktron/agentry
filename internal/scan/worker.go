@@ -502,7 +502,7 @@ func (p *Pipeline) rejudge(ctx context.Context, v storegen.AgentVersion) (rejudg
 	if err != nil {
 		return rejudged{}, err
 	}
-	result, err := p.runOrchestrator(ctx, v, agent, pol, resume, runID, true)
+	result, err := p.runOrchestrator(ctx, &v, agent, pol, resume, runID, true)
 	if err != nil {
 		return rejudged{}, err
 	}

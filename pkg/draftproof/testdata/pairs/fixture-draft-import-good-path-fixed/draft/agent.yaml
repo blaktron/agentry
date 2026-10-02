@@ -1,0 +1,62 @@
+# drafted by the Drafter (agentry draft); review every line before you submit it
+schemaVersion: "2"
+name: weekly-issues
+namespace: drafter-guess
+version: 0.2.0
+summary: Summarises the week's closed GitHub issues.
+license: Apache-2.0
+tags:
+  - github
+  - reports
+modes:
+  - autonomous
+entrypoints:
+  instruction: AGENT.md
+intake:
+  - id: repo
+    prompt: Which repository?
+    type: text
+    required: true
+  - id: since
+    prompt: From which day?
+    type: choice
+    choices:
+      - monday
+      - sunday
+guide:
+  overview: Reads closed issues.
+  prepare:
+    - A repository name
+  connect:
+    GITHUB_TOKEN: A read-only token
+capabilities:
+  network:
+    egress:
+      - api.github.com
+  filesystem:
+    read: workspace
+    write:
+      paths:
+        - out
+  exec: none
+  secrets:
+    - GITHUB_TOKEN
+  dataAccess:
+    - tickets
+    - code
+  mcpServers:
+    - npm: '@acme/issues-mcp'
+      version: 1.2.3
+      tools:
+        - list_issues
+      secrets:
+        - GITHUB_TOKEN
+      egress:
+        - api.github.com
+        - telemetry.example.net
+      env:
+        LOG_LEVEL: warn
+publish:
+  include:
+    - agent.yaml
+    - AGENT.md

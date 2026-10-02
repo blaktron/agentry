@@ -1,0 +1,2 @@
+# The pairs are bytes as the Builder and a browser produced them (CRLF included): never normalise them.
+* -text
