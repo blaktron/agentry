@@ -170,7 +170,7 @@ case "$check" in *"NAME blank True"*) echo "ok   the mixed-case username was wri
   *) echo "FAIL: the blank-name account: $check"; exit 1 ;; esac
 case "$check" in *"NAME named False 'Ada Lovelace'"*) echo "ok   a typed display name is kept" ;;
   *) echo "FAIL: the named account: $check"; exit 1 ;; esac
-case "$check" in *"KEYS named ['agentry_has_password', 'agentry_promo_code', 'agentry_terms_accepted', 'agentry_terms_accepted_at', 'agentry_terms_version']"*)
+case "$check" in *"KEYS named ['agentry_email_verified', 'agentry_has_password', 'agentry_promo_code', 'agentry_terms_accepted', 'agentry_terms_accepted_at', 'agentry_terms_version']"*)
     echo "ok   the promo code survives beside the terms record, and the text shown is not stored" ;;
   *) echo "FAIL: the named account's attributes: $check"; exit 1 ;; esac
 
