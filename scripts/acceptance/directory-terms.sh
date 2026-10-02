@@ -223,8 +223,11 @@ echo "recreating the server and the worker without the terms setting and with re
 server off
 worker off
 up 300
-# The worker re-applies the blueprint on boot: wait for the mail's binding
-# to come back at 30.
+# Discovery applies an unchanged file on its own time; applying it now, in
+# the new worker with its own environment, makes the wait below short (as
+# directory-promo.sh does). Its failure shows in the wait.
+docker exec "$WORKER" ak apply_blueprint custom/agentry-account-flows.yaml >/dev/null 2>&1 || true
+# Wait for the mail's binding to come back at 30.
 deadline=$(( $(date +%s) + 600 )); bound=""
 while [ "$(date +%s)" -lt "$deadline" ]; do
   bound=$(akshell <<'PY' || true
