@@ -30,10 +30,12 @@ configuration and not a secret: `inputTokensPerCredit` and
 the `build` caps and hold of a [knowledge build](#a-knowledge-build)), and
 `knowledgeBuild` — whether a build can run here, what it holds, and the
 pack scan's credit — and `draft`, the terms of a [hosted
-draft](#a-hosted-draft). A signed-in caller also gets `caller` — the tier a
+draft](#a-hosted-draft), and `voiceBuild`, the terms of a [hosted Voice
+Writer run](#a-hosted-voice-writer-run). A signed-in caller also gets `caller` — the tier a
 run of theirs is held at, `account` (whose row it is held on: their own, or
 the organization whose pool pays for their runs), that tier's caps, the
-credits a run holds, the two rates, the tier's `build` and the `draft` hold —
+credits a run holds, the two rates, the tier's `build` and the `draft` hold,
+and `voice`, whether their payer may start a Voice Writer run now —
 so a client can state the cost, and whose credits it is, before any run
 exists. `sessions` states a [hosted session](#a-hosted-session)'s
 terms to anyone: whether this deployment runs sessions (`enabled`), the
@@ -104,7 +106,9 @@ release's `intake` answers as a JSON object, and up to twenty `inputs` — ids
 from `POST /api/v1/x/runs/inputs?name=<relative name>`, which stores one file
 each and sweeps unclaimed uploads after a day. It may also name up to five
 knowledge packs by id in `knowledge`, for the run to search
-([below](#knowledge-attached-to-a-run)). The response is the run:
+([below](#knowledge-attached-to-a-run)), and ask with `voice: true` to
+write in the runner's [Writing Voice](#a-run-in-the-writing-voice). The
+response is the run:
 its resolved ref and archive digest, its caps, the credits held and `payer`
 — the handle whose row holds them — its queue position, and `expiresAt`.
 
@@ -118,7 +122,8 @@ organization that is suspended are absent to everyone, public or not.
 `mode` is `autonomous`, the default, or `interactive`, which makes the run
 a [hosted session](#a-hosted-session): the release's interactive mode, which
 its runner converses with while it runs. Only a run of a release takes a
-mode; a knowledge build or a draft with `interactive` is `422`.
+mode; a knowledge build, a draft or a Voice Writer run with `interactive` is
+`422`.
 
 ## Whose credits: the payer
 
@@ -357,6 +362,33 @@ read three times:
 3. **At the output download.** A run that attached a shared pack, like a
    build of one, serves its sealed output to its runner only while they are
    still the organization's member; to anyone else it is a `404`.
+
+## A run in the Writing Voice
+
+A run or a session can write in its runner's [Writing Voice](voice.md),
+as a local `agentry run` writes in the voice kept on that computer. The
+create asks with `voice: true`. The token needs `voice:read` beside
+`run:write`, and the runner needs a live voice now: one AI Review has
+passed. Without it the create is `409 voice-not-live`; a deployment that
+cannot attach a voice answers `503 voice-build-unavailable`. A built-in
+never writes in the voice: `voice` on a knowledge build, a draft or a Voice
+Writer run is `422`. `GET /api/v1/x/runs/status` says whether a deployment
+attaches voices, as `voiceBuild.attach`.
+
+A run in the voice runs only on sandbox hosts Agentry pushes to; the pull worker
+never claims it. At the hand-off the dispatcher reads the runner's live
+version as it stands then, through the core's store (`Deps.Voice.Live`,
+never a pending or flagged version), and stages it for the host with its
+digest. The host holds the file to that digest and passes it to the CLI as
+`--voice-file`, so the run reads it through `voice_read`
+([A Writing Voice](runner.md#a-writing-voice)). The run's `voice.digest`
+and its receipt's `voice` line name the version it was given. A runner
+with no live voice by the hand-off (deleted since the create) has the run
+closed and refunded before it starts. Downloading its output
+needs `voice:read` beside `run:read`.
+
+The voice is the runner's own, also when an organization's pool pays for
+the run.
 
 ## A run's secrets
 
@@ -628,6 +660,72 @@ The Drafter is part of the CLI the host runs, like the Knowledge Creator:
 a draft runs without a registry scan of a package. What it drafts is not
 published by it: a submission of the draft is scanned like any other.
 
+## A hosted Voice Writer run
+
+A run of the kind `voice_build` runs the CLI's built-in Voice Writer
+(`agentry/voice-writer`) on a sandbox host against the platform's model,
+to write the caller's [Writing Voice](voice.md). It is created by the same
+`POST /api/v1/x/runs/` with `kind: voice_build` and an `op`:
+
+- `create`: samples of the person's writing as `inputs` (up to twenty
+  files from the input route) and an optional `brief`, how they want to
+  sound;
+- `improve`: more samples and an optional `brief`, over the current voice;
+- `edit`, an AI Edit: a `note` saying what should change, and no samples.
+
+A brief or a note is text of at most 4 KiB. The run takes no `ref`,
+`task`, `intake`, `description`, `hints`, `name`, `pack`, `continue`,
+`org`, `knowledge` or `voice`: each is `422`. A token needs `voice:read`
+and `voice:write` beside `run:write`, and downloading the run's output
+needs `voice:read` beside `run:read`. An Improve or an AI Edit of a person
+with no voice is `409 voice-not-found`.
+
+**Price.** Each of the three costs **20 credits flat**
+(`AGENTRY_RUNS_VOICE_CREDITS`), AI Review of what it writes included. The
+whole price is held under `voice_build_hold`, then settled whole under
+`voice_build` when the run's `VOICE.md` became the person's pending
+version, or refunded in full under `voice_build_refund` when no voice came
+out, the store refused it, the voice it worked on was deleted before it
+started, or the store was off. It is not metered: the host stops it at the
+tokens its credits buy at the input rate. It pays under the same payer
+rule as a run and counts against one active run per account.
+
+**Standard runs it once a billing cycle.** A payer on Standard starts one
+Voice Writer run in each of their anchored billing cycles, whichever of
+the three it is; Pro, Promo Pro, Business and Enterprise start any number.
+The count is of the cycle's holds that no refund closed, so a run in
+flight counts and a refunded one frees the cycle. A second is
+`403 voice-build-limit`, with `used`, `max`, `nextAt` (when the cycle
+turns) and `requires`, before any input or credit is touched. A signed-in
+caller's `caller.voice` (`allowed`, `limited`, `used`, `max`, `nextAt`,
+`holdCredits`) says so before a run exists.
+
+**How it runs.** At the hand-off an Improve or an AI Edit is handed the
+person's pending version if there is one, else the live one, so an AI Edit
+can repair a flagged version; the run's `voiceBuild.from` names its
+digest. The host runs `agentry voice create|improve|edit --write …
+--current … --max-text-bytes …` over the staged samples, with their decoded
+text capped at `AGENTRY_RUNS_VOICE_TEXT_BYTES` (1 MB: past it the Voice
+Writer reads the first 1 MB and is told so), and keeps no voice on the
+host. On collect the registry opens the sealed output with the runner's
+key and proposes the `VOICE.md` to the core's store as the pending version
+(source `build`, or `ai-edit` for an AI Edit), where only AI Review makes
+it live ([The review](voice.md#the-review)). The run's `voiceBuild` record
+says what happened: `op`, `maxTextBytes`, `from`, and `applied` with the
+voice's `digest` and `bytes`, or a `note`: `nothing` (no voice came out),
+`invalid` (the output held no voice the store takes), `gone` (the voice
+it worked on was deleted) or `unavailable` (the store was off).
+
+Its caps are `AGENTRY_RUNS_VOICE_SECONDS` (1,800 s) and
+`AGENTRY_RUNS_VOICE_MAX_TURNS` (300). `voiceBuild` in `GET
+/api/v1/x/runs/status` states its terms to anyone: `enabled`, `credits`,
+`caps`, `maxInputs`, `maxTextBytes`, `maxBriefBytes`, `standardPerCycle`,
+`aiReviewCredits` (what the review of a voice saved by hand costs, 1) and
+`attach`. A deployment with no sandbox hosts or no voice store answers
+`503 voice-build-unavailable`. The Voice Writer is part of the CLI the host
+runs, so the run needs no registry scan of a package; what it writes is
+reviewed before it is live.
+
 ## A hosted session
 
 A **hosted session** is a hosted run of a release's interactive mode: the
@@ -833,6 +931,10 @@ anything you want to keep before then; nothing is archived elsewhere.
 | `AGENTRY_RUNS_DRAFT_PAGES` | `60` | the pages AI Review reads for one draft |
 | `AGENTRY_RUNS_DRAFT_SECONDS` | `900` | a draft's wall time, on every tier |
 | `AGENTRY_RUNS_DRAFT_MAX_TURNS` | `100` | a draft's turn cap |
+| `AGENTRY_RUNS_VOICE_CREDITS` | `20` | what a Voice Writer run costs, flat, AI Review included |
+| `AGENTRY_RUNS_VOICE_TEXT_BYTES` | `1048576` | the cap on a Voice Writer run's samples' decoded text |
+| `AGENTRY_RUNS_VOICE_SECONDS` | `1800` | a Voice Writer run's wall time, on every tier |
+| `AGENTRY_RUNS_VOICE_MAX_TURNS` | `300` | a Voice Writer run's turn cap |
 | `AGENTRY_RUNS_QUEUE_MAX` | `1h` | how long a run may wait for a worker before it is cancelled and refunded; at most `12h`, half the day a secret held for one run waits for it |
 | `AGENTRY_RUNS_STALE` | `10m` | how long a claimed run's worker may be silent before the run is closed as `error` and refunded |
 | `AGENTRY_RUNS_TASK_MAX_BYTES` | `65536` | the task text's cap |

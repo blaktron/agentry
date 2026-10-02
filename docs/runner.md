@@ -76,6 +76,8 @@ One QuickAgent, one job, one container tree, then gone.
 | `--intake id=value` | answer an intake question non-interactively (repeatable; unanswered questions are asked on a terminal, and a `secret` answer is never recorded) |
 | `--file PATH` | provide a file or directory to the run, read-only under `/inputs` (repeatable; basename-rooted; duplicate basenames refused) |
 | `--knowledge DIR` | attach a knowledge pack read-only at `/knowledge/<name>`, searched with the knowledge tools (repeatable; [below](#knowledge-packs)) |
+| `--voice` / `--no-voice` | attach the [Writing Voice](#a-writing-voice) kept on this computer to this run, or leave it off; with neither, the voice's own flag decides (`agentry voice attach on\|off`) |
+| `--voice-file FILE` | attach the `VOICE.md` in FILE instead of the one kept here: a regular file, never through a link, at most 32 KiB (for a driver such as a sandbox host) |
 | `--out DIR` | output folder (default `./agentry-out/<ns>-<name>-<runid>/`) |
 | `--output-format text\|json` | stdout carries the result text, or the full envelope |
 | `--keep-profile true\|false` | this run's MCP-profile completion choice (default: the profile's own setting, else policy) |
@@ -985,6 +987,12 @@ same pipeline as `agentry publish`, with a structured editor for
 Drafter, on this computer (the same packages `agentry draft` drives, with
 your own Jev key) or In Agentry (a hosted draft), and reads the draft into
 its form as data; nothing is written into a QuickAgent folder until you save.
+Its Voice panel keeps the two [Writing Voices](#a-writing-voice) a person
+can have: this computer's, through the same local store as `agentry voice`,
+and the account's, through the same client as `voice upload` and
+`download`. It runs the Voice Writer on this computer for no credits or In
+Agentry, and every run setup's Review has **Write in my voice**, ticked from
+the voice's own flag.
 
 ## Verifying a runner installation
 
@@ -1119,6 +1127,90 @@ names no pack.
   past 16 MiB compressed, the most the registry's upload takes; publish a
   larger release from its tag.
 
+## A Writing Voice
+
+A Writing Voice is one file, `VOICE.md`, of instructions an LLM follows to
+write the way you do: UTF-8 Markdown, at most 32 KiB, no NUL. A run that
+attaches it writes its prose in that voice. It is not a knowledge pack:
+there is one, it has no name, wiki or sources, and it is the one attached
+text a run follows as instructions, bounded by
+[the System Prompt](#the-system-prompt) to how the run writes.
+
+**Making one.** `agentry voice create --file PATH…` runs the built-in
+**Voice Writer** (`agentry/voice-writer`) over samples of your writing and
+keeps the voice it writes on this computer. The samples are decoded as the
+Knowledge Creator's documents are, 10 MB in all, and read where they are;
+nothing keeps them. `improve --file PATH…` runs it again over the voice as
+it stands and more samples, and `edit --note TEXT` changes the voice by a
+note (an AI Edit). `--brief TEXT` says how you want to sound. `set FILE|-`
+keeps your own text instead. The Voice Writer is a package this binary
+embeds and runs with the attestation state `builtin`, against the model
+your policy names: it costs no credits, and nothing it reads or writes is
+reviewed. `--timeout` (by default the policy's or 1,800 s, whichever is
+longer), `--max-turns` and `--max-cost`
+bound its run.
+
+**Keeping it.** This computer keeps at most one voice, in
+`~/.agentry/runner/voice/`: `voice.sealed` (the text under a data key of
+its own, the format of the core's `pkg/packseal`), `key.json` (that key,
+wrapped as a kept pack's is: by the registry you are signed in to, else by
+this computer's key) and `voice.json`, its record in the clear (`id`,
+`sha256`, `bytes`, `source` create, improve, ai-edit, edit or download,
+`created`, `updated`, `alwaysAttach`, and the `creator` that wrote it). It
+is opened into memory only, never onto disk in the clear.
+
+**Attaching it.** The first voice kept here is set to attach to every run,
+and the command says so. `voice attach off` turns that off, `run
+--no-voice` skips it for one run, and `run --voice` attaches it for one run
+when it is off. At run time the engine writes the text into the run's own
+knowledge directory at `.voice/VOICE.md`, mounted read-only on the tools
+container, checks it against the digest it was verified at, and grants one
+tool, `voice_read`, which returns the whole file and exists only in that
+run. The plan and its hash do not change. The receipt's
+`capabilities_enforced.voice` line names it:
+
+```
+Writing Voice mounted read-only at /knowledge/.voice/VOICE.md (sha256:…, N bytes; kept on this computer, made by the Voice Writer, not reviewed); tool voice_read, on the tools container only
+```
+
+When the QuickAgent declares exec, the line adds that the declared commands
+run in that container and can read the voice too, as they can read
+`/inputs`. A voice downloaded from the account says "downloaded from your
+account (reviewed there, not checked again here)" instead of "not
+reviewed", because the record beside it is not authenticated. A run of a
+built-in (the Knowledge Creator, the Drafter, the Voice Writer, the
+Examiner) never takes a voice. `--voice` with no voice kept is a usage
+error (exit 2); a kept voice that will not open is exit 11; one that
+changed after it was verified is exit 10.
+
+**Your account's voice.** An Agentry account keeps a voice of its own, for
+runs In Agentry, which AI Review passes before it is used
+([The Writing Voice in the registry](voice.md)). The two are never synced
+on their own:
+
+| Command | What it does |
+|---|---|
+| `voice show` | print the voice kept here (`--json`: its record) |
+| `voice attach on\|off` | attach it to every run here, or only with `--voice`; with `--account`, set your account's flag for runs In Agentry |
+| `voice delete` | delete it and its cached key |
+| `voice upload` | submit this computer's voice to your account, where it replaces the account's voice once AI Review passes it; this computer's voice does not change. `--wait` waits for the verdict (`--timeout`, 3 minutes), and a flag exits 1 with its findings |
+| `voice download` | keep your account's live voice here (source `download`), asking before it replaces a different one (`--yes` for scripts) |
+| `voice status` | this computer's voice and your account's: the live one, a pending one in review or flagged with its findings, the previous one (`--json`) |
+
+The text travels to the registry in the clear over TLS and is sealed
+there, because the registry reads it to review it. A downloaded voice is
+held to the format, to the digest the registry names and to plain text (no
+control characters) before it is kept.
+
+**For a driver.** `create`, `improve` and `edit` take `--current FILE` (the
+voice as it stands, instead of the one kept here), `--write FILE` (write
+the result there and keep nothing), `--max-text-bytes N` (cap the samples'
+decoded text: the sample that crosses it is cut at a rune boundary, every
+later one is left out, and the task says so) and `--output-format json`.
+`run --voice-file FILE` attaches a `VOICE.md` it names. A sandbox host runs
+the [hosted Voice Writer](hosted-runs.md#a-hosted-voice-writer-run) and a
+[run in the voice](hosted-runs.md#a-run-in-the-writing-voice) with these.
+
 ## Machine-readable output
 
 A client that drives the CLI — the desktop app, the `agentry-mcp` server
@@ -1148,6 +1240,10 @@ key variable's **name** only.
 | `draft … --json` | the draft itself, `draft.json`: `manifest` (the v2 manifest as JSON), `instructions`, `notes`, `matches[]` (`ref`, `why`), `sources[]` (`url`, `used`, `withheld`), `openQuestions[]`, `drafter` (`ref`, `build`, `model`, `runId`), `aiReview` (the description's verdict, the receipt's web counts as its own fields — `scan`, `pages`, `read`, `passed`, `withheld`, … — `withheldSources[]` with `tool`, `url` and `reason`, and `check`, AI Review's check of the finished draft: `rubric` (`verdict` pass, flagged or not_scanned, `scores`, `findings[]` with `id`, `score` and `path`, `rubricHash`, `failure`), `draft` (`verdict`, `score`, `scores`, `flagged[]`, `questionSet`, `failure`), `model`, `requests`, `inputTokens`, `checks` (how many checks were asked, at most 2), or `unanswered`, the reason it has no answer, with no verdicts), `validation` (the `validate --json` report on the rendered package), `manifestError` |
 | `draft … --output-format json` | the Drafter run's result envelope, as `run … --output-format json` writes one (its `usage`, the attestation `builtin`, the `web` counts), with an empty `result` and the draft's report under `draft`: `file` (where `draft.json` is), `rendered`, `passed`, `manifestError` (a flag), `matches`, `openQuestions` and `withheld` (counts), `corrections` (how many slips were corrected), `repaired` (whether the one repair turn ran) and `check` (AI Review's check as one word: `pass`, `flagged`, `not_scanned`, or `unanswered`; absent for a draft that could not be rendered). The envelope's usage is both turns' together. A draft that stops before the Drafter runs still writes one envelope with its class and stage |
 | `knowledge create NAME --json` / `knowledge add DIR --json` | `dir`, `manifest` (the pack's `manifest.json`: `schema`, `name`, `id`, `created`, `updated`, `creator`, `pages`, `bytes`, `sha256`, and `scan`, the string `not scanned` or a registry's record), `documents[]` (what the run was given), `skipped[]` (documents not ingested), `written[]` (the paths the build applied), `dropped[]` (`path`, `reason`, `kept`), `receipts` (the Creator run's receipt directory), `decode` (the decode step's report, when documents were decoded), `stopped` (the budget or error that stopped the run early, when one did) |
+| `voice create\|improve\|edit … --output-format json` | the Voice Writer run's result envelope, as `run … --output-format json` writes one, with the build's report under `voice`: `job` (create, improve or edit), `sha256`, `bytes`, `kept` (kept on this computer) or `written` (the `--write` file), `samples[]`, `skipped[]`, `cut[]` (samples cut short or left out by `--max-text-bytes`), `receipts` |
+| `voice show --json` | the record kept beside the voice: `schema`, `id`, `sha256`, `bytes`, `source`, `created`, `updated`, `alwaysAttach`, `creator` (`cli`, `model`) |
+| `voice status --json` | `local` (that record, or null), `registry`, `signedIn`, `account` (the account's voice as the registry answers `GET /voice`), `error` (why the account could not be read) |
+| `voice upload --json` | the account's voice as the registry answers it after the upload (with `--wait`, after the verdict) |
 | `--version` | `agentry version <v>` — a release version, or a git describe on a source build |
 
 One example, `install --plan --json` on a first install of a QuickAgent
