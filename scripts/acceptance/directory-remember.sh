@@ -9,8 +9,9 @@
 # against the image the compose file pins:
 #
 #   1. The template is authentik's own flows/templates/if/flow.html, byte for
-#      byte, plus one marked block; and the web component and form the block
-#      writes into still exist in the image's bundle. An authentik upgrade
+#      byte, plus one marked block; and the web components and forms the
+#      block's scripts write into (the code page's, and since agentry#860 the
+#      password page's and the first page's) still exist in the image's bundle. An authentik upgrade
 #      that moves either fails here, not silently on the sign-in page.
 #   2. A throwaway directory, on a private network, with the blueprints and
 #      templates copied in, signs two users in through the real flow executor
@@ -77,6 +78,17 @@ for needle in 'name="code"' 'pf-m-action' 'ak-stage-authenticator-validate-code'
   grep -q -- "$needle" "$chunk" || { echo "FAIL: the code stage's bundle no longer contains $needle, which the template's script relies on"; exit 1; }
 done
 echo "ok   the code stage's component, its code field and its action fieldset are in the pinned bundle"
+# The sign-up link's script (agentry#860) reads the password stage's hidden
+# username input and writes into its footer band, and follows the first
+# page's enrolment link and uid field.
+chunk=$(grep -rl '"ak-stage-password"' "$TMP/dist/chunks" --include='*.js' | xargs grep -l 'pf-c-login__main-footer-band' | head -1)
+[ -n "$chunk" ] || { echo "FAIL: the image's bundle has no ak-stage-password with a footer band"; exit 1; }
+for needle in 'name="username"' 'slot="footer-band"' 'pf-c-login__main-footer-band-item'; do
+  grep -q -- "$needle" "$chunk" || { echo "FAIL: the password stage's bundle no longer contains $needle, which the sign-up link relies on"; exit 1; }
+done
+chunk=$(grep -rl 'data-ouia-component-id="enroll"' "$TMP/dist" --include='*.js' | head -1)
+{ [ -n "$chunk" ] && grep -q 'name="uidField"' "$chunk"; } || { echo "FAIL: the identification stage's bundle no longer has its enrol link and uidField, which the sign-up link relies on"; exit 1; }
+echo "ok   the password stage's username input and footer band, and the first page's enrol link and field, are in the pinned bundle"
 
 # ---------------------------------------------------------------- 2. a directory
 PG_PW=$(openssl rand -hex 16)

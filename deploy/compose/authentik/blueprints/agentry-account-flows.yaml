@@ -217,6 +217,19 @@ entries:
       required: true
       placeholder: "your registry handle: letters, digits, hyphens"
       placeholder_expression: false
+      # Filled in from the page's ?username= (agentry#860): the sign-in's
+      # "Sign up." links (templates/if/flow.html, signup-link) carry the name
+      # the person typed there. Only a starting value: the form validates it
+      # like anything typed. A value that could never be a username is
+      # dropped, never cut.
+      initial_value_expression: true
+      initial_value: |
+        import re
+        from urllib.parse import parse_qs
+        http = getattr(request, "http_request", None) or request
+        query = parse_qs(http.GET.get("query", "")) if http is not None else {}
+        name = (query.get("username") or [""])[0].strip()
+        return name if re.fullmatch(r"[A-Za-z0-9-]{1,39}", name) else ""
       order: 0
   - model: authentik_stages_prompt.prompt
     id: field-name
@@ -245,6 +258,16 @@ entries:
       required: true
       placeholder: "where the confirmation link goes"
       placeholder_expression: false
+      # Filled in from the page's ?email= (agentry#860), when the sign-in's
+      # field held an address rather than a name. A starting value only.
+      initial_value_expression: true
+      initial_value: |
+        import re
+        from urllib.parse import parse_qs
+        http = getattr(request, "http_request", None) or request
+        query = parse_qs(http.GET.get("query", "")) if http is not None else {}
+        email = (query.get("email") or [""])[0].strip()
+        return email if len(email) <= 254 and re.fullmatch(r"[^@\s]+@[^@\s]+", email) else ""
       order: 2
 
   # The username becomes the registry handle (DEV-142, agentry#517): the
