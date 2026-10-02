@@ -292,8 +292,11 @@ var routeAuthz = map[string]RouteDecl{
 	"totpSetup":         {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	"totpVerify":        {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	"updateCurrentUser": {Action: auth.ActUserSelfUpdate},
-	"updateOrg":         {Action: auth.ActOrgUpdate, OrgScoped: true},
-	"verifyEmail":       {NoAuthz: true, Anonymous: true},
+	// A new activation link (agentry#861): the site's Dashboard asks for it
+	// with the session; one of the writes an unactivated account may make.
+	"sendEmailVerification": {Action: auth.ActUserSelfUpdate, SessionOnly: true},
+	"updateOrg":             {Action: auth.ActOrgUpdate, OrgScoped: true},
+	"verifyEmail":           {NoAuthz: true, Anonymous: true},
 }
 
 // MountGate is what stands between a caller and a root mount. A route on the

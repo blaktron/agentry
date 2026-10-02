@@ -255,7 +255,11 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			method: "PATCH", path: sPath("/api/v1/user"),
 			body: func(*matrixSeed, string) any { return map[string]any{"displayName": "Matrix Caller"} },
 		},
-		"listTokens": {method: "GET", path: sPath("/api/v1/user/tokens")},
+		// A new activation link (agentry#861): the matrix's callers are
+		// confirmed, so past the gate it is a 409, which is a PASS here;
+		// activation_db_test.go covers the mail, the limit and the link.
+		"sendEmailVerification": {method: "POST", path: sPath("/api/v1/user/email-verification")},
+		"listTokens":            {method: "GET", path: sPath("/api/v1/user/tokens")},
 		"createToken": {
 			method: "POST", path: sPath("/api/v1/user/tokens"),
 			body: func(*matrixSeed, string) any {

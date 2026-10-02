@@ -31,9 +31,12 @@ import (
 // only for a delivery failure the caller could act on; callers treat
 // notification failure as non-fatal to the state change that triggered it.
 type Notifier interface {
-	// EmailVerification sends the address-confirmation message. token is the
-	// one-time secret the user posts back to /auth/verify-email.
-	EmailVerification(ctx context.Context, toEmail, token string) error
+	// EmailVerification sends the address-confirmation (activation) message
+	// for the account named handle. token is the one-time secret the user
+	// posts back to /auth/verify-email. The mail names the account so that
+	// someone who did not choose that name has a reason not to follow the
+	// link: anyone can sign up with another person's address (agentry#861).
+	EmailVerification(ctx context.Context, toEmail, handle, token string) error
 	// AgentQuarantined tells an author that a version they published has been
 	// pulled by a rescan (§8.7: author notification is one of the three
 	// notification paths, alongside the org webhook and the advisory).
@@ -288,7 +291,7 @@ func (n LogNotifier) logger() *slog.Logger {
 }
 
 // EmailVerification implements Notifier.
-func (n LogNotifier) EmailVerification(_ context.Context, toEmail, token string) error {
+func (n LogNotifier) EmailVerification(_ context.Context, toEmail, _, token string) error {
 	_ = token // never logged (docs/logging.md)
 	n.logger().Info("notify: email verification not sent (no sender configured)", "to", logx.MaskEmail(toEmail))
 	return nil
@@ -416,17 +419,19 @@ func (r renderer) footer() string {
 	return f
 }
 
-func (r renderer) verification(token string) message {
+func (r renderer) verification(handle, token string) message {
 	url := r.link("/auth/verify-email?token=" + token)
 	if r.verifyEmail != nil {
 		url = r.verifyEmail(token)
 	}
-	body := "Confirm this address to finish setting up your " + r.registry + " account.\n\n"
+	body := "Follow this link to confirm this address and activate the " + r.registry + " account " + handle + ".\n\n"
 	// The old close promised "the address will not be used", which nothing in
 	// the server keeps: no job deletes an unconfirmed account, the row keeps
 	// the address, and a later membership grant mails it. What IS true is the
-	// gate — registry.CreateAgent refuses an unverified principal (§19) — so
-	// say that instead, and say it once rather than reassure.
+	// gate: an unconfirmed account cannot publish or create a QuickAgent on
+	// any deployment (§19), and where a directory holds credentials it is
+	// read-only until it activates (agentry#861). "Browse but not publish"
+	// is the sentence true of both.
 	once := "The link works once."
 	if url != "" {
 		body += url + "\n\n"
@@ -434,10 +439,11 @@ func (r renderer) verification(token string) message {
 		body += "Verification code: " + token + "\n\n"
 		once = "The code works once."
 	}
-	body += once + " Until this address is confirmed, the account cannot\n" +
-		"create a QuickAgent or publish a version.\n\n" +
-		"If you did not create this account, ignore this message.\n"
-	return message{Subject: r.registry + ": confirm your email address", Body: body + r.footer()}
+	body += once + " Until this address is confirmed, the account can\n" +
+		"browse but not publish.\n\n" +
+		"If you did not create an account named " + handle + ", do not follow the\n" +
+		"link: someone may have signed up with your address. Ignore this message.\n"
+	return message{Subject: r.registry + ": activate your account", Body: body + r.footer()}
 }
 
 func (r renderer) quarantine(n QuarantineNotice) message {

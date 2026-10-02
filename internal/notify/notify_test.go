@@ -73,7 +73,7 @@ func TestNoMessageOverclaimsSafety(t *testing.T) {
 	n, sent := capture(t)
 	ctx := t.Context()
 
-	if err := n.EmailVerification(ctx, "user@example.test", "tok"); err != nil {
+	if err := n.EmailVerification(ctx, "user@example.test", "chris", "tok"); err != nil {
 		t.Fatal(err)
 	}
 	if err := n.AgentQuarantined(ctx, QuarantineNotice{
@@ -235,7 +235,7 @@ func TestReportCardLinkComesFromLinks(t *testing.T) {
 
 func TestVerificationLinkUsesBaseURL(t *testing.T) {
 	n, sent := capture(t)
-	if err := n.EmailVerification(t.Context(), "u@example.test", "secret-token"); err != nil {
+	if err := n.EmailVerification(t.Context(), "u@example.test", "chris", "secret-token"); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains((*sent)[0], "https://registry.example/auth/verify-email?token=secret-token") {
@@ -258,7 +258,7 @@ func TestComposeRejectsHeaderInjection(t *testing.T) {
 
 func TestDeliverRejectsMalformedRecipient(t *testing.T) {
 	n, sent := capture(t)
-	if err := n.EmailVerification(t.Context(), "not an address", "tok"); err == nil {
+	if err := n.EmailVerification(t.Context(), "not an address", "chris", "tok"); err == nil {
 		t.Error("delivery to a malformed address was attempted")
 	}
 	if len(*sent) != 0 {
@@ -330,7 +330,7 @@ func TestLogNotifierNeverFails(t *testing.T) {
 	n := LogNotifier{}
 	ctx := t.Context()
 	for _, err := range []error{
-		n.EmailVerification(ctx, "u@example.test", "t"),
+		n.EmailVerification(ctx, "u@example.test", "chris", "t"),
 		n.AgentQuarantined(ctx, QuarantineNotice{}),
 		n.ReviewDecided(ctx, ReviewNotice{}),
 		n.AdvisoryPublished(ctx, AdvisoryNotice{}),
@@ -346,7 +346,7 @@ func TestLogNotifierNeverFails(t *testing.T) {
 // must describe what the recipient has: a code, not a link.
 func TestVerificationFallsBackToACodeWithoutABaseURL(t *testing.T) {
 	r := renderer{registry: "Agentry"}
-	m := r.verification("tok123")
+	m := r.verification("chris", "tok123")
 	if !strings.Contains(m.Body, "Verification code: tok123") {
 		t.Errorf("no usable token without a base URL:\n%s", m.Body)
 	}

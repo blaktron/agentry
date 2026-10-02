@@ -59,6 +59,9 @@ AK_ENV=(
   -e AUTHENTIK_LOG_LEVEL=warning
   -e AGENTRY_ACCOUNT_URL=http://registry.test/settings -e AGENTRY_PUBLIC_WEB_URL=http://registry.test
   -e AGENTRY_IDP_TRUST_CHECK_TOKEN="$(openssl rand -hex 32)" -e AGENTRY_REGISTRY_INTERNAL_URL=http://dp-driver:8080
+  # Registry activation on (agentry#861), as compose sets it: sign-up ends
+  # at the authenticator setup, the account active and unactivated.
+  -e AGENTRY_DIRECTORY_REGISTRY_ACTIVATION=true
 )
 # worker <on|off>: the blueprint is applied by the worker, with the worker's
 # environment; its watcher re-applies it with that environment too, so the
@@ -132,7 +135,7 @@ PY
 )
 case "$check" in *"ATTR coded 'launch-2026' empty ''"*) echo "ok   the code is written to the account's attributes as typed; an empty field leaves it empty" ;;
   *) echo "FAIL: the accounts' attributes: $check"; exit 1 ;; esac
-case "$check" in *"KEYS coded ['agentry_has_password', 'agentry_promo_code'] True"*) echo "ok   the code merges beside agentry_has_password, and nothing else is written" ;;
+case "$check" in *"KEYS coded ['agentry_email_verified', 'agentry_has_password', 'agentry_promo_code'] True"*) echo "ok   the code merges beside agentry_has_password and agentry_email_verified (agentry#861), and nothing else is written" ;;
   *) echo "FAIL: the coded account's attributes: $check"; exit 1 ;; esac
 case "$check" in *"CLAIM coded launch-2026"*) echo "ok   the agentry scope sends agentry_promo_code for the account with a code" ;;
   *) echo "FAIL: the claim for the account with a code: $check"; exit 1 ;; esac

@@ -3,6 +3,13 @@
 <section class="card">
 <h2>Profile</h2>
 <p class="muted">{{.User.Handle}} · {{.User.Email}} {{if .User.EmailVerified}}(verified){{else}}(unverified){{end}}</p>
+{{if not .User.EmailVerified}}
+<p>This account is not activated yet: follow the link we emailed to {{.User.Email}}. Until then it can browse but not change anything.</p>
+<form method="post" action="/ui/account/activation" class="inline">
+  <input type="hidden" name="_csrf" value="{{.CSRF}}">
+  <button type="submit" class="secondary">Send a new activation link</button>
+</form>
+{{end}}
 <form method="post" action="/ui/account">
   <input type="hidden" name="_csrf" value="{{.CSRF}}">
   <label>Display name<input name="displayName" value="{{.User.DisplayName}}" maxlength="100"></label>

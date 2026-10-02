@@ -105,6 +105,30 @@ UPDATE users SET email_verified_at = now(), updated_at = now() WHERE id = $1;
 -- name: CreateEmailVerification :exec
 INSERT INTO email_verifications (token_sha256, user_id, expires_at) VALUES ($1, $2, $3);
 
+-- name: LockUserRow :one
+-- Serializes the activation mail per account (agentry#861): the five-minute
+-- limit is read and the new link written under this lock, so two replicas
+-- answering at once send one mail, not two.
+SELECT id FROM users WHERE id = $1 FOR UPDATE;
+
+-- name: LatestEmailVerificationAt :one
+-- When the account's newest verification link was made, or the epoch when
+-- it has none (agentry#861's five-minute limit).
+SELECT COALESCE(max(created_at), 'epoch'::timestamptz)::timestamptz AS sent_at
+FROM email_verifications WHERE user_id = $1;
+
+-- name: CountEmailVerificationsSince :one
+-- How many links the account was sent since a moment, and the oldest of
+-- them (agentry#861's daily cap).
+SELECT count(*)::bigint AS sent,
+       COALESCE(min(created_at), now())::timestamptz AS oldest
+FROM email_verifications WHERE user_id = $1 AND created_at > $2;
+
+-- name: DeleteEmailVerificationsForUser :exec
+-- An erased account's links go with it: one followed afterwards would
+-- confirm an address nobody holds any more (agentry#861).
+DELETE FROM email_verifications WHERE user_id = $1;
+
 -- name: ConsumeEmailVerification :one
 UPDATE email_verifications
 SET consumed_at = now()
