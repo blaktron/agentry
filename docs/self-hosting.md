@@ -1115,7 +1115,15 @@ like anything typed:
   email, password), then the deployment's Terms of Service where it has
   them (below), then the account written **active but unactivated**
   (`agentry_email_verified: false`), then authenticator setup and
-  sign-in, with no mail to wait for (agentry#861). The registry mails the
+  sign-in, with no mail to wait for (agentry#861). That is **registry
+  activation**, on where `AGENTRY_DIRECTORY_REGISTRY_ACTIVATION` is set to
+  any non-empty value in the directory's environment (server and worker;
+  the compose file defaults it to `true`). Set it only where the
+  registry's provider uses the blueprint's `agentry-verified-email`
+  mapping (the bootstrap script attaches it): a mapping that asserts every
+  address verified would vouch for unconfirmed accounts. Unset, sign-up
+  is what it was before: the account written inactive and the
+  directory's own confirmation mail activating it. With it on, the registry mails the
   activation link at that first sign-in, through its own SMTP settings
   (`AGENTRY_SMTP_*`): with none set the link is only logged, and nobody
   can activate. Until the link is followed the account is **read-only**

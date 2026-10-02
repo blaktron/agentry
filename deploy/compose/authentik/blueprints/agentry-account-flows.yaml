@@ -21,13 +21,19 @@
 #
 # The registry links an IdP identity to an account by VERIFIED email (T-12),
 # and the agentry-verified-email mapping below is what tells it (DEV-061).
-# Since agentry#861 (plan unactivated-accounts.md) a self-enrolled account
-# is written ACTIVE with the attribute agentry_email_verified: false, so it
-# reaches the site at once, read-only in the registry; the mapping asserts
-# the attribute, and nothing but the registry's emailed activation link
-# sets it true. Until then (DEV-062) the account was written inactive and
-# this flow's own mail activated it; an account from before carries no
-# attribute and counts as confirmed, as every active one was.
+# Since agentry#861 (plan unactivated-accounts.md, DEV-197), where the
+# deployment sets AGENTRY_DIRECTORY_REGISTRY_ACTIVATION (any non-empty
+# value, in the server's and the worker's environment), a self-enrolled
+# account is written ACTIVE with the attribute agentry_email_verified:
+# false, so it reaches the site at once, read-only in the registry; the
+# mapping asserts the attribute, and nothing but the registry's emailed
+# activation link sets it true. Unset, sign-up is what it was (DEV-062):
+# the account written inactive and this flow's own mail activating it. An
+# account without the attribute counts as confirmed, as every active one
+# was. It is a switch because the claim's honesty depends on two halves
+# moving together: a deployment whose registry provider still uses a
+# mapping that asserts true for everyone (the SecureAgentry chart until
+# agentry-web#972) must not write unconfirmed accounts active.
 version: 1
 metadata:
   name: Agentry - Account flows (enrollment, recovery)
@@ -568,6 +574,7 @@ entries:
     attrs:
       execution_logging: false
       expression: |
+        import os
         import re
         from django.utils.timezone import now
 
@@ -578,9 +585,13 @@ entries:
             # that keeps it unactivated, which would read as confirmed.
             return False
         prompt = plan.context.get("prompt_data") or {}
-        # Unactivated until the registry's mailed link is followed
-        # (agentry#861): the agentry-verified-email mapping reads this.
-        prompt["attributes.agentry_email_verified"] = False
+        # Unactivated until the registry's mailed link is followed, where
+        # the deployment turns registry activation on (agentry#861): the
+        # agentry-verified-email mapping reads this. Off, the flow's own
+        # mail confirms the address before the account is active, and the
+        # attribute is left absent, which reads as confirmed.
+        if os.environ.get("AGENTRY_DIRECTORY_REGISTRY_ACTIVATION", "").strip():
+            prompt["attributes.agentry_email_verified"] = False
         typed = str(prompt.get("username") or "").strip()
         # The username in lower case (agentry#856); a blank display name
         # keeps the case it was typed in.
@@ -600,9 +611,10 @@ entries:
     identifiers:
       name: agentry-enrollment-user-write
     attrs:
-      # Active, and unactivated by its attribute (agentry#861): see the
-      # header and agentry-enrollment-write-defaults.
-      create_users_as_inactive: false
+      # Active, and unactivated by its attribute, where the deployment
+      # turns registry activation on (agentry#861): see the header and
+      # agentry-enrollment-write-defaults. Inactive otherwise, for the mail.
+      create_users_as_inactive: !If [!Condition [AND, !Env [AGENTRY_DIRECTORY_REGISTRY_ACTIVATION, ""]], false, true]
       user_creation_mode: always_create
       user_type: internal
       user_path_template: users/self-enrolled
@@ -679,16 +691,25 @@ entries:
       # than writing one without the version it agreed to. The has-password
       # policy always passes.
       policy_engine_mode: all
-  # The confirmation mail left sign-up (agentry#861): the registry sends
-  # the activation mail at the first sign-in. Absent, so an applied
-  # directory loses the binding too, not just this file; and only where the
-  # binding exists, because authentik 2026.8 cannot remove a binding that is
-  # not there (it deletes an unsaved one, the FlowStageBinding has no
+  # The confirmation mail: bound where registry activation is off, and
+  # removed where it is on (agentry#861), since the registry then sends the
+  # activation mail at the first sign-in. Absent, so an applied directory
+  # loses the binding too, not just this file; and only where the binding
+  # exists, because authentik 2026.8 cannot remove a binding that is not
+  # there (it deletes an unsaved one, the FlowStageBinding has no
   # policybindingmodel_ptr, and the whole blueprint rolls back), which is
   # every fresh install.
   - model: authentik_flows.flowstagebinding
+    conditions:
+      - !Condition [NAND, !Env [AGENTRY_DIRECTORY_REGISTRY_ACTIVATION, ""]]
+    identifiers:
+      target: !KeyOf flow-enrollment
+      stage: !KeyOf stage-enrollment-email
+      order: 30
+  - model: authentik_flows.flowstagebinding
     state: absent
     conditions:
+      - !Condition [AND, !Env [AGENTRY_DIRECTORY_REGISTRY_ACTIVATION, ""]]
       - !Find [authentik_flows.flowstagebinding, [target, !KeyOf flow-enrollment], [stage, !KeyOf stage-enrollment-email], [order, 30]]
     identifiers:
       target: !KeyOf flow-enrollment
