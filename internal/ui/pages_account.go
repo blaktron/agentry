@@ -138,6 +138,20 @@ func (h *handler) accountSave(w http.ResponseWriter, r *http.Request) {
 	h.back(w, r, "/ui/account", "Profile saved.", "")
 }
 
+// activationResend asks the registry for a new activation link
+// (agentry#861); the registry says when the last one was too recent.
+func (h *handler) activationResend(w http.ResponseWriter, r *http.Request) {
+	if !h.acceptForm(w, r) {
+		return
+	}
+	res, err := h.call(r).do(http.MethodPost, "/user/email-verification", nil)
+	if err != nil || !res.OK() {
+		h.back(w, r, "/ui/account", "", failMsg(res, err))
+		return
+	}
+	h.back(w, r, "/ui/account", "A new activation link is on its way. It works once, for 24 hours.", "")
+}
+
 func (h *handler) directoryDeviceRemove(w http.ResponseWriter, r *http.Request) {
 	if !h.acceptForm(w, r) {
 		return

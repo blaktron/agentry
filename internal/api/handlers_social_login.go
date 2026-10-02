@@ -444,6 +444,15 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 	if id.Email != "" {
 		u, err := q.GetUserByEmail(ctx, id.Email)
 		switch {
+		case err == nil && id.EmailVerified && u.EmailVerifiedAt == nil && s.unactivatedSuperseded(ctx, u.ID, u.Email):
+			// D10 (agentry#861): the address is held by an account that
+			// never confirmed it, and the directory account it signed in
+			// with is gone, removed by the directory when a trusted
+			// provider proved the address (D3). It owns nothing (it was
+			// read-only), so it is erased and the address starts clean.
+			if err := s.eraseSuperseded(r, u.ID, u.Email, id.Provider); err != nil {
+				return uuid.Nil, err
+			}
 		case err == nil:
 			if !id.EmailVerified || u.EmailVerifiedAt == nil {
 				return uuid.Nil, errExplicitLinkRequired
@@ -471,6 +480,7 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 
 	// 4. JIT-create an individual account.
 	newUserID := newUUID()
+	activation := ""
 	handle, err := s.allocateHandle(ctx, id.Username, id.Email, id.Provider+"-"+id.Subject)
 	if err != nil {
 		return uuid.Nil, err
@@ -496,6 +506,15 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 		}
 		if id.EmailVerified && id.Email != "" {
 			if err := tq.MarkEmailVerified(ctx, newUserID); err != nil {
+				return err
+			}
+		} else if id.Email != "" {
+			// An address the provider did not vouch for (a self-enrolled
+			// directory account, agentry#861): the account starts
+			// unactivated, and its first activation link is made here so
+			// the five-minute limit counts it.
+			var err error
+			if activation, _, err = issueActivation(ctx, tq, newUserID, false); err != nil {
 				return err
 			}
 		}
@@ -541,6 +560,9 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 		payload["promoCode"] = promo
 	}
 	s.fireEvent(r.Context(), Event{Kind: "user.registered", UserID: newUserID, Payload: payload})
+	if activation != "" {
+		s.mailActivation(ctx, email, activation)
+	}
 	return newUserID, nil
 }
 

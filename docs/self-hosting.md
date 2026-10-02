@@ -948,16 +948,19 @@ The bootstrap script attaches the `openid`, `profile`, and `email`
 scope mappings to the provider — without them authentik issues an ID
 token carrying `sub` alone and the registry can only create a placeholder
 account (`<handle>@authentik.social.local`) instead of linking to the
-existing one. For `email` it installs its own mapping, "Agentry:
-OpenID 'email' (directory-verified)", asserting `email_verified: true`:
-authentik's managed mapping hard-codes `false` (2026.8), and the
-registry's auto-link rule (T-12) only links an IdP identity to an
-existing account when *both* sides' addresses are verified. That
-assertion is sound exactly when authentik is your directory of record —
-accounts are created by operators, provisioned from an upstream
-directory, or enrolled through a flow with an email-verification stage.
-If you allow self-enrollment without one, drop that mapping and accept
-that such accounts start as new registry users.
+existing one. For `email` it attaches the account-flows blueprint's
+`agentry-verified-email` mapping instead of authentik's managed one,
+which hard-codes `email_verified: false` (2026.8); the registry's
+auto-link rule (T-12) only links an IdP identity to an existing account
+when *both* sides' addresses are verified. The blueprint's mapping
+asserts what the directory recorded (agentry#861): `false` for a
+self-enrolled account until the registry's activation link confirms it
+(the account's `agentry_email_verified` attribute), `true` once it has,
+and `true` for an account without the attribute — one created by an
+operator, provisioned from an upstream directory, or enrolled before
+agentry#861. Before agentry#861 the script made its own mapping that
+asserted `true` for everyone; re-running the script moves the provider
+onto the blueprint's (the old mapping is left unused).
 
 **Platform staff is membership of the staff organization.** Name the
 deployment's staff organization and its domain with `AGENTRY_STAFF_ORG` and
@@ -1110,11 +1113,28 @@ like anything typed:
 
 - **Sign-up** — CAPTCHA, then a form (username, an optional display name,
   email, password), then the deployment's Terms of Service where it has
-  them (below), then the account written **inactive**, then an emailed
-  confirmation link that activates it, then sign-in. Writing the account
-  inactive is what makes the directory-verified `email` assertion above
-  honest for self-enrolled users: no account is active, and so none
-  reaches the registry, before its address is confirmed. The username
+  them (below), then the account written **active but unactivated**
+  (`agentry_email_verified: false`), then authenticator setup and
+  sign-in, with no mail to wait for (agentry#861). The registry mails the
+  activation link at that first sign-in, through its own SMTP settings
+  (`AGENTRY_SMTP_*`): with none set the link is only logged, and nobody
+  can activate. Until the link is followed the account is **read-only**
+  in the registry: it reads everything, and refuses every write except
+  signing in and out, asking for another link (`POST
+  /api/v1/user/email-verification`, at most one every five minutes), its
+  display name and cookie choice, deleting or clearing itself, and
+  removing its own sessions, authenticators, tokens and SSH keys
+  (`403 account-unactivated`; git pushes are refused too). A link works
+  once, for 24 hours, and an earlier one keeps working after a new one is
+  sent. Following it (`POST /api/v1/auth/verify-email`, which stays open
+  under `externalOnly`) confirms the address in the registry and writes
+  `agentry_email_verified: true` on the directory account in one step, so
+  the directory's token says `email_verified: true` from then on; that
+  write needs the admin URL and token below, with permission to change a
+  user. The read-only rule applies where the directory owns credentials
+  (`AGENTRY_AUTH_EXTERNAL_ONLY=true`); a native deployment keeps its
+  narrower gates on an unverified address (no publishing, QuickAgents or
+  organizations). The username
   becomes the registry handle at the first sign-in, so the form refuses
   one that is not a valid handle (letters, digits and hyphens, at most
   39) or that the registry reserves for its own paths and names
@@ -1165,11 +1185,15 @@ like anything typed:
   new password. The identification stage runs with `pretend_user_exists`,
   so an unknown address gets the same answer a real one does and the form
   cannot be used to discover who has an account. Recovery deliberately
-  does **not** activate an inactive account, unlike the confirmation
-  above: an operator-deactivated user must not be able to reactivate
-  themselves by requesting a reset.
+  does **not** activate an inactive account: an operator-deactivated user
+  must not be able to reactivate themselves by requesting a reset. (Since
+  agentry#861 a self-enrolled account is active from the start, and
+  confirming its address is the registry's link, not this flow.)
 - **The two mails** (the sign-up confirmation and the reset link) are the
-  core's own templates in `deploy/compose/authentik/templates/agentry/`,
+  core's own templates in `deploy/compose/authentik/templates/agentry/`
+  (since agentry#861 the confirmation is sent only by an enrolment that
+  still binds the stage, such as the site's untrusted social providers;
+  self-enrolment's activation mail is the registry's),
   mounted read-only at `/templates`, not authentik's stock ones: they say
   Agentry and use the core's palette. Their header shows the Agentry mark
   inline (agentry#720): the HTML names `cid:logo`, and authentik attaches
@@ -1265,7 +1289,8 @@ session cookie is set; without `next` the same callback returns the JSON
 result the CLI and tests consume.
 
 With `AGENTRY_AUTH_EXTERNAL_ONLY=true` the native register, password
-login, email-verify, and TOTP endpoints answer 410 Gone, and the web
+login and TOTP endpoints answer 410 Gone (email-verify stays open: it is
+the activation link's target, agentry#861), and the web
 login page offers the directory service only. Turning the flag off (the
 default) restores the native flows — nothing was removed.
 
@@ -1295,8 +1320,10 @@ registry account (§12.7); the sign-in account — email, display name,
 password hash — lives in authentik. Set `AGENTRY_IDP_ADMIN_URL` (the API
 origin as the server reaches it: `http://authentik-server:9000` on the
 compose stack) and `AGENTRY_IDP_ADMIN_TOKEN` (an authentik API token with
-rights over users, and to view OAuth source connections for the settings
-page below; the bootstrap token works) and erasure also deletes the
+rights over users — view, change (activation writes the account's
+`agentry_email_verified` attribute, agentry#861) and delete — and to view
+OAuth source connections for the settings page below; the bootstrap token
+works) and erasure also deletes the
 person's directory account — never a superuser or a service account. The
 account is the one the directory's own id names, which the registry records
 on the person's directory identity at every sign-in (the `agentry` scope's

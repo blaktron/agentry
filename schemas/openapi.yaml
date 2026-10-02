@@ -532,6 +532,31 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /user/email-verification:
+    post:
+      operationId: sendEmailVerification
+      tags: [users]
+      summary: Send the caller a new activation link (agentry#861).
+      description: >
+        Mails a new link that confirms the account's address and so
+        activates it (plan unactivated-accounts.md). An unactivated account
+        (an address not yet confirmed) can read but not write; this is one
+        of the few writes it may make. At most one mail per account every
+        five minutes, counted from the last one sent, the one sent at the
+        first sign-in included: sooner is a 429 with `Retry-After` and
+        `resendAfter`. A link works once and for 24 hours, and an earlier
+        unexpired link keeps working. An account whose address is already
+        confirmed, or that has no address a link can reach, is a 409.
+      responses:
+        "200":
+          description: The link was sent.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailVerificationSent"
+        default:
+          $ref: "#/components/responses/Problem"
+
   /user/clear-data:
     post:
       operationId: clearCurrentUserData
@@ -4853,6 +4878,17 @@ components:
             recorded it yet (the account has not signed in or set a password
             since the directory began keeping it).
           type: boolean
+    EmailVerificationSent:
+      type: object
+      required: [sentTo, resendAfter]
+      properties:
+        sentTo:
+          description: The address the link went to.
+          type: string
+        resendAfter:
+          description: The earliest moment another link may be sent.
+          type: string
+          format: date-time
     User:
       type: object
       required: [id, handle, email, displayName, emailVerified, totpEnabled, createdAt]
@@ -4872,6 +4908,13 @@ components:
           type: boolean
         cookieAckAt:
           description: When this account acknowledged the cookie notice.
+          type: string
+          format: date-time
+        emailVerificationResendAfter:
+          description: >
+            GET /user only, while the address is unconfirmed: the earliest
+            moment `POST /user/email-verification` will send another
+            activation link (agentry#861). Absent when one may be sent now.
           type: string
           format: date-time
         platformStaff:
