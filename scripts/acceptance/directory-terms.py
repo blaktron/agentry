@@ -18,8 +18,8 @@ test token, which the blueprint's default test keys accept.
            ?email= from its page's query (agentry#860). Prints them as JSON.
   missing  the file is gone: the step says the terms could not be loaded,
            and a ticked submission is still refused.
-  off      the server names no terms file: the form leads straight to the
-           authenticator setup.
+  off      the server names no terms file and registry activation is off:
+           the form leads straight to the confirmation mail (agentry#861).
 
 The accounts are written active but unactivated (agentry#861) and are left
 there: the flow stops at the authenticator setup. directory-terms.sh
@@ -197,10 +197,11 @@ def missing():
 def off():
     flow = Flow()
     flow.to_form()
-    _, c = flow.submit_form("")
-    if c.get("component") != TOTP:
-        fail(f"with no terms file the form led to {c.get('component')} {[f.get('field_key') for f in c.get('fields', [])]}")
-    ok("with no terms file named, the form leads straight to the authenticator setup")
+    user, c = flow.submit_form("")
+    if c.get("component") != "ak-stage-email":
+        fail(f"with no terms file and registry activation off the form led to {c.get('component')} {[f.get('field_key') for f in c.get('fields', [])]}")
+    ok("with no terms file named and registry activation off, the form leads straight to the confirmation mail")
+    print("ACCOUNTS " + user)
 
 
 if __name__ == "__main__":
