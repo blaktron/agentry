@@ -194,11 +194,15 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// VerifyEmail implements POST /auth/verify-email.
+// VerifyEmail implements POST /auth/verify-email. It is the activation
+// link's target for every account (agentry#861), so unlike the rest of the
+// native credential endpoints it stays open under externalOnly: a directory
+// account follows the link the registry mailed it. Where the account signed
+// in through the directory, the confirmation is written there too, in the
+// same transaction: a directory that cannot be reached leaves the link
+// unused, to be followed again, rather than an account confirmed here and
+// still unconfirmed in the token the directory issues.
 func (s *Server) VerifyEmail(w http.ResponseWriter, r *http.Request) {
-	if s.nativeCredsGone(w, r) {
-		return
-	}
 	if !s.allowLogin(w, r) {
 		return
 	}
@@ -211,8 +215,14 @@ func (s *Server) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &req) {
 		return
 	}
+	var verified uuid.UUID
+	var dirErr error
 	err := s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
 		userID, err := q.ConsumeEmailVerification(r.Context(), auth.HashToken(req.Token))
+		if err != nil {
+			return err
+		}
+		u, err := q.GetUserByID(r.Context(), userID)
 		if err != nil {
 			return err
 		}
@@ -222,16 +232,36 @@ func (s *Server) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		e := auditEvent(r, audit.ActionUserEmailVerified)
 		e.Actor, e.ActorKind = userID, audit.ActorUser
 		e.TargetKind, e.TargetID = "user", userID
-		return s.auditW.Write(r.Context(), q, e)
+		if err := s.auditW.Write(r.Context(), q, e); err != nil {
+			return err
+		}
+		if u.EmailVerifiedAt == nil {
+			if err := s.confirmInDirectory(r.Context(), userID, u.Email); err != nil {
+				dirErr = err
+				return err
+			}
+			verified = userID
+		}
+		return nil
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			problemValidation(w, r, "This verification link is invalid or expired.")
 			return
 		}
+		if dirErr != nil {
+			s.log.ErrorContext(r.Context(), "verify-email: directory", "err", dirErr)
+			problemUnavailable(w, r, "The account could not be activated just now. Follow the link again in a minute; it still works.")
+			return
+		}
 		s.log.ErrorContext(r.Context(), "verify-email", "err", err)
 		problemInternal(w, r)
 		return
+	}
+	// Extensions hear the address confirmed (agentry#861): a sign-up's
+	// allowance and promo code wait for it (plan unactivated-accounts.md D9).
+	if verified != uuid.Nil {
+		s.fireEvent(r.Context(), Event{Kind: "user.email_verified", UserID: verified})
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

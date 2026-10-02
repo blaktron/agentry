@@ -279,6 +279,12 @@ func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *
 		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusForbidden, "forbidden"}
 	}
 
+	// An unactivated account reads but does not write (agentry#861, plan
+	// unactivated-accounts.md D2): the API's gate does not see git.
+	if act == auth.ActAgentRepoWrite && principal.Unactivated && h.cfg.Auth.ExternalOnly {
+		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusForbidden, "forbidden: activate your account first, from the link we emailed you"}
+	}
+
 	// §6.4 + §12.4: in an org that enforces SSO, mutating git operations
 	// additionally require an org-bound PAT.
 	allowed, err := h.ssoAllows(ctx, principal, agent, act)

@@ -275,6 +275,20 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow
 	return i, err
 }
 
+const latestEmailVerificationAt = `-- name: LatestEmailVerificationAt :one
+SELECT COALESCE(max(created_at), 'epoch'::timestamptz)::timestamptz AS sent_at
+FROM email_verifications WHERE user_id = $1
+`
+
+// When the account's newest verification link was made, or the epoch when
+// it has none (agentry#861's five-minute limit).
+func (q *Queries) LatestEmailVerificationAt(ctx context.Context, userID uuid.UUID) (time.Time, error) {
+	row := q.db.QueryRow(ctx, latestEmailVerificationAt, userID)
+	var sent_at time.Time
+	err := row.Scan(&sent_at)
+	return sent_at, err
+}
+
 const listPersonalNamespaceAgents = `-- name: ListPersonalNamespaceAgents :many
 SELECT a.id, a.name, a.visibility, a.latest_published_version_id
 FROM agents a JOIN handles h ON h.id = a.namespace_id
@@ -453,6 +467,20 @@ func (q *Queries) ListUserDirectoryLinks(ctx context.Context, userID uuid.UUID) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockUserRow = `-- name: LockUserRow :one
+SELECT id FROM users WHERE id = $1 FOR UPDATE
+`
+
+// Serializes the activation mail per account (agentry#861): the five-minute
+// limit is read and the new link written under this lock, so two replicas
+// answering at once send one mail, not two.
+func (q *Queries) LockUserRow(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, lockUserRow, id)
+	var id_2 uuid.UUID
+	err := row.Scan(&id_2)
+	return id_2, err
 }
 
 const markEmailVerified = `-- name: MarkEmailVerified :exec

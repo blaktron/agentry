@@ -57,6 +57,12 @@ type Server struct {
 	// dirEraser deletes the sign-in account in the directory service on
 	// erasure (agentry#20); nil when auth.idpAdminURL is unset.
 	dirEraser directoryEraser
+	// unactivatedReadOnly makes an unactivated account read-only
+	// (agentry#861): where the directory owns credentials (externalOnly),
+	// a self-enrolled account reaches the registry before its address is
+	// confirmed. A native deployment keeps its narrower gates on an
+	// unverified address (no publishing, agents or organizations).
+	unactivatedReadOnly bool
 	// dirGroups writes the directory's mirror of platform staff
 	// (staff_mirror.go, agentry#598); nil unless auth.idpStaffMirrorGroup is
 	// set, which needs the admin URL and token.
@@ -183,17 +189,18 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 		panic(nerr) // startup-time config failure, never mid-request
 	}
 	srv := &Server{
-		cfg:      cfg,
-		paths:    paths,
-		st:       st,
-		log:      log,
-		auditW:   aud,
-		notifier: notifier,
-		sealer:   sealer,
-		renderer: render.New(),
-		limits:   ratelimit.New(ratelimit.DefaultIdleTTL),
-		classes:  classesFromConfig(cfg.Limits),
-		ents:     entitlements.NewConfigResolver(cfg.Limits),
+		cfg:                 cfg,
+		unactivatedReadOnly: cfg.Auth.ExternalOnly,
+		paths:               paths,
+		st:                  st,
+		log:                 log,
+		auditW:              aud,
+		notifier:            notifier,
+		sealer:              sealer,
+		renderer:            render.New(),
+		limits:              ratelimit.New(ratelimit.DefaultIdleTTL),
+		classes:             classesFromConfig(cfg.Limits),
+		ents:                entitlements.NewConfigResolver(cfg.Limits),
 	}
 	srv.coreEnts = srv.ents
 	if fs, ok := auditStream.(*audit.FileStream); ok {
@@ -498,6 +505,11 @@ func (s *Server) Metrics() *metrics.Metrics { return s.mx }
 
 // Notifier exposes the configured notifier so other roles share one instance.
 func (s *Server) Notifier() notify.Notifier { return s.notifier }
+
+// SetUnactivatedReadOnly overrides whether an unactivated account is
+// read-only (tests: a native test server registers accounts, and turns the
+// gate on to see it work).
+func (s *Server) SetUnactivatedReadOnly(on bool) { s.unactivatedReadOnly = on }
 
 // SetNotifier overrides the notifier (tests).
 func (s *Server) SetNotifier(n notify.Notifier) {

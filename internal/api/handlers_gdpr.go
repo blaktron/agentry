@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -156,23 +157,6 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		}
 	}
 
-	tombstone, err := json.Marshal(map[string]any{
-		"emailHash": s.hashForTombstone(user.Email),
-		"deletedAt": time.Now().UTC().Format(time.RFC3339),
-		"reason":    "user-requested erasure",
-	})
-	if err != nil {
-		problemInternal(w, r)
-		return
-	}
-	scrubbedEmail := fmt.Sprintf("deleted+%s@invalid.invalid", p.UserID.String())
-	// The retired handle carries the WHOLE user id, not a prefix of it. The
-	// leading hex digits of a UUIDv7 are a millisecond timestamp, so any
-	// truncation makes two accounts erased in the same window collide on the
-	// handles unique index — and a collision here fails the erasure itself.
-	// "del-" + 32 hex characters is 36, inside the 39-character handle limit.
-	retiredHandle := "del-" + strings.ReplaceAll(p.UserID.String(), "-", "")
-
 	// Yank outside the erasure transaction: each yank is its own audited
 	// state-machine transition (§7) and must not be rolled back by a later
 	// failure — a yanked version is safe, a half-erased account is not.
@@ -201,75 +185,10 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		}
 	}
 
-	var knowledgeKeys []string
+	var erased erasedRows
 	err = s.st.WithPgxTx(r.Context(), func(tx pgx.Tx, tq *storegen.Queries) error {
-		if err := tq.PseudonymizeUser(r.Context(), storegen.PseudonymizeUserParams{
-			ID: p.UserID, Email: scrubbedEmail, DeletedTombstone: tombstone,
-		}); err != nil {
-			return err
-		}
-		if err := tq.ReleaseHandle(r.Context(), storegen.ReleaseHandleParams{
-			ID: p.UserID, Handle: retiredHandle,
-		}); err != nil {
-			return err
-		}
-		if _, err := tq.RevokeUserSessions(r.Context(), p.UserID); err != nil {
-			return err
-		}
-		// Deleted rather than revoked, unlike SCIM deactivation: the erased
-		// account cannot sign in again — PseudonymizeUser above set
-		// state='deleted' and nulled the password hash — so a surviving record
-		// is inert as a credential. What it still holds is an address and a
-		// user agent belonging to a person who asked to be deleted, and the
-		// users row survives erasure only because audit events and immutable
-		// published content need a stable actor id. Nothing needs that of a
-		// browser credential, and that one was issued is already in the audit
-		// log (agentry#461).
-		if _, err := tq.DeleteTrustedDevicesForUser(r.Context(), p.UserID); err != nil {
-			return err
-		}
-		// A desktop sign-in code another session minted moments before the
-		// erasure would otherwise still exchange for a token afterwards
-		// (agentry#502): ExchangeDesktopCode checks only the grant, not the
-		// account's state. Consumed here, as clearing data does (agentry#498).
-		desktopCodes, err := tq.ConsumeDesktopGrantsForUser(r.Context(), p.UserID)
-		if err != nil {
-			return err
-		}
-		// An erased account holds no seat anywhere (agentry#363): the
-		// last-admin guard above has already passed, so nothing is left
-		// headless by this.
-		if _, err := tq.DeleteUserMemberships(r.Context(), p.UserID); err != nil {
-			return err
-		}
-		// An erased account is not staff (agentry#556): the account is
-		// deleted and belongs to no organization, so the rule answers no.
-		if err := s.syncStaffIn(r.Context(), tq, p.UserID, registry.StaffSyncErasure, auditEvent(r, audit.ActionUserStaffSync)); err != nil {
-			return err
-		}
-		// The account's knowledge packs go with it (agentry#593), and the
-		// key that opens them once this commits.
-		if knowledgeKeys, err = knowledge.EraseOwner(r.Context(), tq, knowledge.User(p.UserID)); err != nil {
-			return err
-		}
-		// And the Writing Voice (agentry#809), whose key went with the
-		// knowledge store's erasure of the same person.
-		if _, err = voice.Erase(r.Context(), tq, p.UserID); err != nil {
-			return err
-		}
-		// Every PAT dies with the account.
-		pats, err := tq.ListPATs(r.Context(), p.UserID)
-		if err != nil {
-			return err
-		}
-		for _, pat := range pats {
-			if _, err := tq.RevokePAT(r.Context(), storegen.RevokePATParams{ID: pat.ID, UserID: p.UserID}); err != nil {
-				return err
-			}
-		}
-		// What extensions keep about the account goes in this transaction
-		// too (agentry#638), after every step of the core's own.
-		extRows, err := s.eraseInExtensions(r.Context(), tx, p.UserID, AccountErased)
+		var err error
+		erased, err = s.eraseAccountIn(r.Context(), tx, tq, p.UserID, user.Email, "user-requested erasure", auditEvent(r, audit.ActionUserStaffSync))
 		if err != nil {
 			return err
 		}
@@ -278,11 +197,11 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		e.Detail = map[string]any{
 			"publishedContent":  disposition,
 			"publishedVersions": publishedCount,
-			"desktopCodes":      desktopCodes,
-			"knowledgeObjects":  len(knowledgeKeys),
+			"desktopCodes":      erased.desktopCodes,
+			"knowledgeObjects":  len(erased.knowledgeKeys),
 		}
-		if extRows != nil {
-			e.Detail["extensions"] = extRows
+		if erased.extensions != nil {
+			e.Detail["extensions"] = erased.extensions
 		}
 		if transferOrgID != uuid.Nil {
 			e.OrgID = transferOrgID
@@ -295,7 +214,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		return
 	}
 
-	s.knowledge.FinishErasure(r.Context(), knowledge.User(p.UserID), knowledgeKeys)
+	s.knowledge.FinishErasure(r.Context(), knowledge.User(p.UserID), erased.knowledgeKeys)
 
 	// The other half (agentry#20): with credentials in the directory service
 	// the person's sign-in account — email, display name, password hash —
@@ -359,4 +278,107 @@ func (s *Server) hashForTombstone(email string) string {
 	mac := hmac.New(sha256.New, key)
 	_, _ = mac.Write([]byte(email))
 	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// erasedRows is what eraseAccountIn removed, for the erasure's audit row.
+type erasedRows struct {
+	desktopCodes  int64
+	knowledgeKeys []string
+	extensions    map[string]int64
+}
+
+// eraseAccountIn erases an account's registry half inside the caller's
+// transaction (§12.7): pseudonymized, its handle retired, every credential,
+// seat, knowledge pack and Writing Voice gone, and what extensions keep
+// about it. The account's own erasure and the removal of an unactivated
+// account a provider's verified address superseded (agentry#861, D10) both
+// run it. The caller writes the audit row, finishes the knowledge erasure
+// after the commit, and decides about the directory half.
+func (s *Server) eraseAccountIn(ctx context.Context, tx pgx.Tx, tq *storegen.Queries, userID uuid.UUID, email, reason string, staffActor audit.Event) (erasedRows, error) {
+	var out erasedRows
+	tombstone, err := json.Marshal(map[string]any{
+		"emailHash": s.hashForTombstone(email),
+		"deletedAt": time.Now().UTC().Format(time.RFC3339),
+		"reason":    reason,
+	})
+	if err != nil {
+		return out, err
+	}
+	scrubbedEmail := fmt.Sprintf("deleted+%s@invalid.invalid", userID.String())
+	// The retired handle carries the WHOLE user id, not a prefix of it. The
+	// leading hex digits of a UUIDv7 are a millisecond timestamp, so any
+	// truncation makes two accounts erased in the same window collide on the
+	// handles unique index — and a collision here fails the erasure itself.
+	// "del-" + 32 hex characters is 36, inside the 39-character handle limit.
+	retiredHandle := "del-" + strings.ReplaceAll(userID.String(), "-", "")
+
+	if err := tq.PseudonymizeUser(ctx, storegen.PseudonymizeUserParams{
+		ID: userID, Email: scrubbedEmail, DeletedTombstone: tombstone,
+	}); err != nil {
+		return out, err
+	}
+	if err := tq.ReleaseHandle(ctx, storegen.ReleaseHandleParams{
+		ID: userID, Handle: retiredHandle,
+	}); err != nil {
+		return out, err
+	}
+	if _, err := tq.RevokeUserSessions(ctx, userID); err != nil {
+		return out, err
+	}
+	// Deleted rather than revoked, unlike SCIM deactivation: the erased
+	// account cannot sign in again — PseudonymizeUser above set
+	// state='deleted' and nulled the password hash — so a surviving record
+	// is inert as a credential. What it still holds is an address and a
+	// user agent belonging to a person who asked to be deleted, and the
+	// users row survives erasure only because audit events and immutable
+	// published content need a stable actor id. Nothing needs that of a
+	// browser credential, and that one was issued is already in the audit
+	// log (agentry#461).
+	if _, err := tq.DeleteTrustedDevicesForUser(ctx, userID); err != nil {
+		return out, err
+	}
+	// A desktop sign-in code another session minted moments before the
+	// erasure would otherwise still exchange for a token afterwards
+	// (agentry#502): ExchangeDesktopCode checks only the grant, not the
+	// account's state. Consumed here, as clearing data does (agentry#498).
+	if out.desktopCodes, err = tq.ConsumeDesktopGrantsForUser(ctx, userID); err != nil {
+		return out, err
+	}
+	// An erased account holds no seat anywhere (agentry#363): the
+	// last-admin guard has already passed, so nothing is left headless by
+	// this.
+	if _, err := tq.DeleteUserMemberships(ctx, userID); err != nil {
+		return out, err
+	}
+	// An erased account is not staff (agentry#556): the account is
+	// deleted and belongs to no organization, so the rule answers no.
+	if err := s.syncStaffIn(ctx, tq, userID, registry.StaffSyncErasure, staffActor); err != nil {
+		return out, err
+	}
+	// The account's knowledge packs go with it (agentry#593), and the
+	// key that opens them once this commits.
+	if out.knowledgeKeys, err = knowledge.EraseOwner(ctx, tq, knowledge.User(userID)); err != nil {
+		return out, err
+	}
+	// And the Writing Voice (agentry#809), whose key went with the
+	// knowledge store's erasure of the same person.
+	if _, err = voice.Erase(ctx, tq, userID); err != nil {
+		return out, err
+	}
+	// Every PAT dies with the account.
+	pats, err := tq.ListPATs(ctx, userID)
+	if err != nil {
+		return out, err
+	}
+	for _, pat := range pats {
+		if _, err := tq.RevokePAT(ctx, storegen.RevokePATParams{ID: pat.ID, UserID: userID}); err != nil {
+			return out, err
+		}
+	}
+	// What extensions keep about the account goes in this transaction
+	// too (agentry#638), after every step of the core's own.
+	if out.extensions, err = s.eraseInExtensions(ctx, tx, userID, AccountErased); err != nil {
+		return out, err
+	}
+	return out, nil
 }
