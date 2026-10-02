@@ -1,0 +1,40 @@
+schemaVersion: "2"
+name: csv-column-quality-review
+namespace: acme
+version: 1.3.0
+summary: "Reads one CSV you add and reports missing values, duplicate rows and mixed-format columns, per column, with row numbers."
+license: "Apache-2.0"
+tags: ["csv", "data-quality", "validation", "missing-values", "duplicates", "formats", "reporting"]
+
+modes: [autonomous]
+
+entrypoints:
+  instruction: AGENT.md
+
+intake:
+  - id: header_row
+    prompt: "Is the first line of the file a header row of column names?"
+    type: choice
+    choices: ["yes-it-is-a-header", "no-the-first-line-is-data", "not-sure-judge-it-from-the-file"]
+  - id: missing_tokens
+    prompt: "Any extra values that should count as missing in this file, besides empty cells and na / n/a / null / none / - / ? (for example 'redacted')?"
+  - id: known_formats
+    prompt: "Any columns whose format you already know, so the check uses it instead of guessing (for example 'invoice_id: 6 digits; amount: decimal with . separator')?"
+
+guide:
+  overview: "Reads the CSV file you add from beginning to end and writes csv-data-quality.md: a summary, then one block per column giving missing values with percentages, duplicate and repeated values, and every value that does not match the column's main format, each with its row number, plus file-level problems such as ragged rows and duplicate header names. It stays on your file: no network, no commands, no key."
+  prepare: ["Add the CSV file; one file per run is clearest.", "Say in the task if only some columns matter, or if a column is a key.", "Note any placeholder your system uses for 'no value' (for example 'redacted'), or answer the intake question.", "Note the formats you expect for named columns, if you know them, so the check uses them.", "If the file has no header row, answer the header question so column names are not guessed.", "For files over a few thousand rows, expect the agent to sample examples but count every row it read, and tell you if it could not finish."]
+  files: "One CSV file. Tab- or semicolon-separated text files also work; say so in the task if the file is not comma-separated."
+  task: "e.g. Check the whole file, and flag any column that looks like an order id with repeated values first."
+
+capabilities:
+  network:
+    egress: none
+  filesystem:
+    read: none
+    write: none
+  exec: none
+  dataAccess: [files]
+
+publish:
+  include: [agent.yaml, AGENT.md, README.md, LICENSE]

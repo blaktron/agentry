@@ -1,0 +1,46 @@
+schemaVersion: "2"
+name: dev-server-runbook-qa
+namespace: acme
+version: 1.3.0
+summary: "Answers on-call questions about the Agentry dev server from your runbook: exact steps, commands, and what never to do."
+license: "Apache-2.0"
+tags: ["on-call", "runbook", "dev-server", "deploys", "edge-cache", "nginx", "operations"]
+
+modes: [autonomous, interactive]
+
+entrypoints:
+  instruction: AGENT.md
+
+intake:
+  - id: question
+    prompt: "What do you need to do, or what are you seeing, on the Agentry dev server?"
+    required: true
+  - id: situation
+    prompt: "Is this a live incident or routine work?"
+    type: choice
+    choices: ["live-incident", "planning-or-routine-work"]
+
+interactive:
+  opening: "What do you need on the dev server? Ask about a deploy, a service, the edge cache or a latency page and I'll answer from the m6-dev-runbook, with the runbook's own steps and commands. Say \"incident\" if you are being paged now and I'll lead with the first check. Where the runbook doesn't cover something, I'll say that instead of guessing a command."
+
+guide:
+  overview: "Answers one on-call question at a time about operating the Agentry dev server, from your m6-dev-runbook pack: the deploy order, the edge-cache purge and warm-up, the latency-page first check, and what never to do. Steps come back numbered in the runbook's own order, with the exact command under each one quoted verbatim, the reason for the order, and the runbook pages it came from. Where the runbook names a step but never prints a command, or has no procedure at all, it says so plainly instead of inventing one."
+  prepare: ["Have the m6-dev-runbook pack attached; it is the only source this QuickAgent reads.", "Know what you changed and what you are being paged for, so the question is specific.", "For an incident, note the time the page started; the runbook escalates to the platform lead after 30 minutes without a cause.", "If the runbook is out of date on your screen, update the pack rather than arguing with the agent."]
+  task: "e.g. I just purged the edge cache by hand and a latency page came in - what do I run now, and what should I not have done?"
+
+knowledge:
+  accepts:
+    prompt: "Attach the m6-dev-runbook pack: it is the only source for the steps, thresholds and commands this QuickAgent quotes."
+    required: true
+
+capabilities:
+  network:
+    egress: none
+  filesystem:
+    read: none
+    write: none
+  exec: none
+  dataAccess: [other]
+
+publish:
+  include: [agent.yaml, AGENT.md, README.md, LICENSE]

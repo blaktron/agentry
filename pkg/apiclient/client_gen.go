@@ -218,14 +218,17 @@ func (e AgentVersionScanStatus) Valid() bool {
 
 // Defines values for AgentVersionSource.
 const (
-	CliUpload AgentVersionSource = "cli-upload"
-	GitTag    AgentVersionSource = "git-tag"
+	CliUpload       AgentVersionSource = "cli-upload"
+	DrafterRevision AgentVersionSource = "drafter-revision"
+	GitTag          AgentVersionSource = "git-tag"
 )
 
 // Valid indicates whether the value is a known member of the AgentVersionSource enum.
 func (e AgentVersionSource) Valid() bool {
 	switch e {
 	case CliUpload:
+		return true
+	case DrafterRevision:
 		return true
 	case GitTag:
 		return true
@@ -1918,7 +1921,9 @@ type AgentVersion struct {
 
 	// ScanStatus How the version was admitted: through the pipeline, or skipped — no scan run, no findings, no attestation, the report's verdict `unscanned` (plan organization-subscriptions §4). A skipped version is a private organization agent's; a client that installs or runs one asks for consent first.
 	ScanStatus *AgentVersionScanStatus `json:"scanStatus,omitempty"`
-	Source     AgentVersionSource      `json:"source"`
+
+	// Source Where the version came from: a repository tag, an uploaded package, or an uploaded package the scan proved was a hosted Drafter revision of the agent's current release (`drafter-revision`, plan drafter-revisions §6), which S9 scans with the benefit of the doubt.
+	Source AgentVersionSource `json:"source"`
 
 	// Status Publication state machine states (§7). `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change (DEV-046).
 	Status       VersionStatus `json:"status"`
@@ -1937,7 +1942,7 @@ type AgentVersionManifestSchemaVersion int
 // AgentVersionScanStatus How the version was admitted: through the pipeline, or skipped — no scan run, no findings, no attestation, the report's verdict `unscanned` (plan organization-subscriptions §4). A skipped version is a private organization agent's; a client that installs or runs one asks for consent first.
 type AgentVersionScanStatus string
 
-// AgentVersionSource defines model for AgentVersion.Source.
+// AgentVersionSource Where the version came from: a repository tag, an uploaded package, or an uploaded package the scan proved was a hosted Drafter revision of the agent's current release (`drafter-revision`, plan drafter-revisions §6), which S9 scans with the benefit of the doubt.
 type AgentVersionSource string
 
 // AuditEvent defines model for AuditEvent.
@@ -3551,6 +3556,9 @@ type SubmitVersionMultipartBody struct {
 
 	// Digest Client-computed sha256 digest to cross-check.
 	Digest *string `json:"digest,omitempty"`
+
+	// DraftRun The hosted draft this package was published from (Edit with AI's Publish this version; plan drafter-revisions §6). A claim only: the scan asks the deployment's DraftProvenance whether the submitter ran that draft against the agent's current release and whether its recorded proof matches these files. When it does, the version's source becomes `drafter-revision` and S9 scans its manifest and instruction file as a first release's. Otherwise nothing changes. A core registry has no DraftProvenance and never grants it.
+	DraftRun *openapi_types.UUID `json:"draftRun,omitempty"`
 }
 
 // GetVersionFileParams defines parameters for GetVersionFile.

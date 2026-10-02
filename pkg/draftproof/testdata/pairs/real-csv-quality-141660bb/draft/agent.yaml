@@ -1,0 +1,54 @@
+# drafted by the Drafter (agentry draft); review every line before you submit it
+schemaVersion: "2"
+name: csv-column-quality-report
+namespace: draft
+version: 0.1.0
+summary: Checks the CSV you add for missing values, duplicate rows and mixed-format columns, and reports the problems per column.
+license: Apache-2.0
+tags:
+  - csv
+  - data-quality
+  - validation
+  - missing-values
+  - duplicates
+  - format
+  - profiling
+  - report
+modes:
+  - autonomous
+entrypoints:
+  instruction: AGENT.md
+intake:
+  - id: csv_file
+    prompt: Add the CSV file to check.
+    type: file
+    required: true
+  - id: missing_value_tokens
+    prompt: 'Any extra values that should count as missing? (Optional; blank means NA, null, nil, none, -, --, ?, #N/A and blanks.)'
+    type: text
+    required: false
+guide:
+  overview: 'Reads the CSV you add and reports its data-quality problems column by column: missing values, duplicate rows, and columns whose values are not all one format. It detects the delimiter, header row and encoding first, then lists each problem with counts and the row numbers of offending values. Returns one Markdown report, worst columns marked high severity, plus a clean-column list and a note on anything it could not verify.'
+  prepare:
+    - The CSV file, one per run.
+    - Know which tokens in your data mean 'missing', if any unusual ones.
+    - If the file has no header row, say so in the task.
+    - 'Very large files: the report marks counts partial if the agent cannot read to the end.'
+  files: One CSV (comma, semicolon, tab or pipe delimited); quoted fields, embedded newlines and trailing blanks are handled.
+  task: e.g. Check this export; treat 'unknown' as missing and put the price columns first.
+capabilities:
+  network:
+    egress: none
+  filesystem:
+    read: none
+    write: none
+  exec: none
+  dataAccess:
+    - files
+  mcpServers: []
+publish:
+  include:
+    - agent.yaml
+    - AGENT.md
+    - README.md
+    - LICENSE

@@ -107,6 +107,8 @@ type AgentVersion struct {
 	UpdatedAt       time.Time  `json:"updated_at"`
 	SubmitterIpHash *string    `json:"submitter_ip_hash"`
 	ScanStatus      string     `json:"scan_status"`
+	DraftRun        *uuid.UUID `json:"draft_run"`
+	DraftBaseline   *string    `json:"draft_baseline"`
 }
 
 type AgentVersionMcpServer struct {

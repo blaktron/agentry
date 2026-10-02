@@ -52,22 +52,23 @@ func (q *Queries) CountVersionsToday(ctx context.Context, agentID uuid.UUID) (in
 
 const createAgentVersion = `-- name: CreateAgentVersion :one
 
-INSERT INTO agent_versions (id, agent_id, version, commit_sha, manifest, capabilities, channel, submitted_by, source, submitter_ip_hash)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash, scan_status
+INSERT INTO agent_versions (id, agent_id, version, commit_sha, manifest, capabilities, channel, submitted_by, source, submitter_ip_hash, draft_run)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash, scan_status, draft_run, draft_baseline
 `
 
 type CreateAgentVersionParams struct {
-	ID              uuid.UUID `json:"id"`
-	AgentID         uuid.UUID `json:"agent_id"`
-	Version         string    `json:"version"`
-	CommitSha       string    `json:"commit_sha"`
-	Manifest        []byte    `json:"manifest"`
-	Capabilities    []byte    `json:"capabilities"`
-	Channel         string    `json:"channel"`
-	SubmittedBy     uuid.UUID `json:"submitted_by"`
-	Source          string    `json:"source"`
-	SubmitterIpHash *string   `json:"submitter_ip_hash"`
+	ID              uuid.UUID  `json:"id"`
+	AgentID         uuid.UUID  `json:"agent_id"`
+	Version         string     `json:"version"`
+	CommitSha       string     `json:"commit_sha"`
+	Manifest        []byte     `json:"manifest"`
+	Capabilities    []byte     `json:"capabilities"`
+	Channel         string     `json:"channel"`
+	SubmittedBy     uuid.UUID  `json:"submitted_by"`
+	Source          string     `json:"source"`
+	SubmitterIpHash *string    `json:"submitter_ip_hash"`
+	DraftRun        *uuid.UUID `json:"draft_run"`
 }
 
 // Agent versions + state machine (M3/WG-E).
@@ -83,6 +84,7 @@ func (q *Queries) CreateAgentVersion(ctx context.Context, arg CreateAgentVersion
 		arg.SubmittedBy,
 		arg.Source,
 		arg.SubmitterIpHash,
+		arg.DraftRun,
 	)
 	var i AgentVersion
 	err := row.Scan(
@@ -107,12 +109,14 @@ func (q *Queries) CreateAgentVersion(ctx context.Context, arg CreateAgentVersion
 		&i.UpdatedAt,
 		&i.SubmitterIpHash,
 		&i.ScanStatus,
+		&i.DraftRun,
+		&i.DraftBaseline,
 	)
 	return i, err
 }
 
 const getVersion = `-- name: GetVersion :one
-SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash, scan_status FROM agent_versions WHERE agent_id = $1 AND version = $2
+SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash, scan_status, draft_run, draft_baseline FROM agent_versions WHERE agent_id = $1 AND version = $2
 `
 
 type GetVersionParams struct {
@@ -145,12 +149,14 @@ func (q *Queries) GetVersion(ctx context.Context, arg GetVersionParams) (AgentVe
 		&i.UpdatedAt,
 		&i.SubmitterIpHash,
 		&i.ScanStatus,
+		&i.DraftRun,
+		&i.DraftBaseline,
 	)
 	return i, err
 }
 
 const getVersionByID = `-- name: GetVersionByID :one
-SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash, scan_status FROM agent_versions WHERE id = $1
+SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash, scan_status, draft_run, draft_baseline FROM agent_versions WHERE id = $1
 `
 
 func (q *Queries) GetVersionByID(ctx context.Context, id uuid.UUID) (AgentVersion, error) {
@@ -178,12 +184,14 @@ func (q *Queries) GetVersionByID(ctx context.Context, id uuid.UUID) (AgentVersio
 		&i.UpdatedAt,
 		&i.SubmitterIpHash,
 		&i.ScanStatus,
+		&i.DraftRun,
+		&i.DraftBaseline,
 	)
 	return i, err
 }
 
 const getVersionForUpdate = `-- name: GetVersionForUpdate :one
-SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash, scan_status FROM agent_versions WHERE id = $1 FOR UPDATE
+SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash, scan_status, draft_run, draft_baseline FROM agent_versions WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) GetVersionForUpdate(ctx context.Context, id uuid.UUID) (AgentVersion, error) {
@@ -211,12 +219,14 @@ func (q *Queries) GetVersionForUpdate(ctx context.Context, id uuid.UUID) (AgentV
 		&i.UpdatedAt,
 		&i.SubmitterIpHash,
 		&i.ScanStatus,
+		&i.DraftRun,
+		&i.DraftBaseline,
 	)
 	return i, err
 }
 
 const listResolvableVersions = `-- name: ListResolvableVersions :many
-SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash, scan_status FROM agent_versions
+SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash, scan_status, draft_run, draft_baseline FROM agent_versions
 WHERE agent_id = $1 AND status IN ('published','yanked')
 ORDER BY created_at DESC
 `
@@ -255,6 +265,8 @@ func (q *Queries) ListResolvableVersions(ctx context.Context, agentID uuid.UUID)
 			&i.UpdatedAt,
 			&i.SubmitterIpHash,
 			&i.ScanStatus,
+			&i.DraftRun,
+			&i.DraftBaseline,
 		); err != nil {
 			return nil, err
 		}
@@ -267,7 +279,7 @@ func (q *Queries) ListResolvableVersions(ctx context.Context, agentID uuid.UUID)
 }
 
 const listVersions = `-- name: ListVersions :many
-SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash, scan_status FROM agent_versions WHERE agent_id = $1 ORDER BY created_at DESC
+SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash, scan_status, draft_run, draft_baseline FROM agent_versions WHERE agent_id = $1 ORDER BY created_at DESC
 `
 
 func (q *Queries) ListVersions(ctx context.Context, agentID uuid.UUID) ([]AgentVersion, error) {
@@ -301,6 +313,8 @@ func (q *Queries) ListVersions(ctx context.Context, agentID uuid.UUID) ([]AgentV
 			&i.UpdatedAt,
 			&i.SubmitterIpHash,
 			&i.ScanStatus,
+			&i.DraftRun,
+			&i.DraftBaseline,
 		); err != nil {
 			return nil, err
 		}
@@ -313,7 +327,7 @@ func (q *Queries) ListVersions(ctx context.Context, agentID uuid.UUID) ([]AgentV
 }
 
 const listVersionsByStatus = `-- name: ListVersionsByStatus :many
-SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash, scan_status FROM agent_versions
+SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash, scan_status, draft_run, draft_baseline FROM agent_versions
 WHERE agent_id = $1 AND status = ANY($2::text[])
 ORDER BY created_at DESC
 `
@@ -354,6 +368,8 @@ func (q *Queries) ListVersionsByStatus(ctx context.Context, arg ListVersionsBySt
 			&i.UpdatedAt,
 			&i.SubmitterIpHash,
 			&i.ScanStatus,
+			&i.DraftRun,
+			&i.DraftBaseline,
 		); err != nil {
 			return nil, err
 		}
@@ -363,6 +379,30 @@ func (q *Queries) ListVersionsByStatus(ctx context.Context, arg ListVersionsBySt
 		return nil, err
 	}
 	return items, nil
+}
+
+const markVersionDrafterRevision = `-- name: MarkVersionDrafterRevision :execrows
+UPDATE agent_versions SET source = 'drafter-revision', draft_baseline = $2, updated_at = now()
+WHERE id = $1 AND status = 'scanning' AND source = 'cli-upload'
+  AND draft_run IS NOT NULL AND draft_baseline IS NULL
+`
+
+type MarkVersionDrafterRevisionParams struct {
+	ID            uuid.UUID `json:"id"`
+	DraftBaseline *string   `json:"draft_baseline"`
+}
+
+// The scan proved the version's claimed draft (plan drafter-revisions.md
+// §6; agentry#794): the source becomes 'drafter-revision', with the S9
+// baseline it was proved against. Only once, only while scanning, and only
+// for a cli-upload that claimed a draft (the immutability trigger holds
+// the same edge).
+func (q *Queries) MarkVersionDrafterRevision(ctx context.Context, arg MarkVersionDrafterRevisionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markVersionDrafterRevision, arg.ID, arg.DraftBaseline)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const markVersionScanSkipped = `-- name: MarkVersionScanSkipped :execrows
