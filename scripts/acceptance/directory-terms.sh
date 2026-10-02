@@ -13,8 +13,9 @@
 #      terms step follows the form with the file's text; an unticked
 #      agreement is refused; a ticked one reaches the confirmation mail; the
 #      accounts record agreement, version and time, a blank name became the
-#      username, a typed name and a promo code were kept, and the text shown
-#      was not stored.
+#      username as typed while the username was written lower-cased
+#      (agentry#856), a typed name and a promo code were kept, and the text
+#      shown was not stored.
 #   2. Unreadable (the file not UTF-8, then removed): the step says the
 #      terms could not be loaded and refuses the sign-up. Not UTF-8 is the
 #      case that once fell through: the expression raised, authentik showed
@@ -152,7 +153,7 @@ for label in ("blank", "named"):
     at = u.attributes.get("agentry_terms_accepted_at") or ""
     fresh = bool(at) and datetime.now(timezone.utc) - datetime.fromisoformat(at) < timedelta(minutes=30)
     print("TERMS", label, u.attributes.get("agentry_terms_accepted"), u.attributes.get("agentry_terms_version") == os.environ["VERSION"], fresh)
-    print("NAME", label, u.name == u.username, repr(u.name))
+    print("NAME", label, u.name == a.get(label + "Typed", u.username), repr(u.name))
     print("KEYS", label, sorted(u.attributes))
     print("ACTIVE", label, u.is_active)
 PY
@@ -161,7 +162,7 @@ for label in blank named; do
   case "$check" in *"TERMS $label True True True"*) ;; *) echo "FAIL: the $label account's terms record: $check"; exit 1 ;; esac
 done
 echo "ok   each account records the agreement, the version of the file it was shown, and when"
-case "$check" in *"NAME blank True"*) echo "ok   a blank display name became the username" ;;
+case "$check" in *"NAME blank True"*) echo "ok   the mixed-case username was written lower-cased, and a blank display name kept the case it was typed in" ;;
   *) echo "FAIL: the blank-name account: $check"; exit 1 ;; esac
 case "$check" in *"NAME named False 'Ada Lovelace'"*) echo "ok   a typed display name is kept" ;;
   *) echo "FAIL: the named account: $check"; exit 1 ;; esac
