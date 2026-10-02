@@ -1099,7 +1099,14 @@ with the group (agentry#556).
 is mounted into authentik as a blueprint and applied automatically on
 boot. It defines both self-service routes and the controls on them, and
 adds the "Sign up" and "Forgot username or password?" links to the login
-page:
+page. The flow page's template (below, with the remembered browser) also puts
+"Need an account? Sign up." on the password page that follows the first one,
+and both sign-up links carry what was typed into the sign-in's field: a name
+opens the form with the username filled in, an address with the email
+(`/if/flow/agentry-enrollment/?username=…` or `?email=…`, the sign-in's own
+query kept; agentry#860). The link shows whether or not the name exists, so
+it reveals nothing about which accounts do. A filled-in value is validated
+like anything typed:
 
 - **Sign-up** — CAPTCHA, then a form (username, an optional display name,
   email, password), then the deployment's Terms of Service where it has
@@ -1497,7 +1504,8 @@ With the secret unset on either side, the code is asked every time. After an
 authentik upgrade, re-copy the new image's `flows/templates/if/flow.html`
 above the marked block: `scripts/acceptance/directory-remember.sh` fails
 until the two match, and it also checks that the code stage the block writes
-into still exists. The checkbox is not offered on a passkey sign-in or on
+into still exists, and that the password page and first page the sign-up
+link writes into still have what its script reads. The checkbox is not offered on a passkey sign-in or on
 authentik's simplified flow page for old browsers, which asks for the code
 as before. The directory's own remember-this-device behaviour is a
 different thing and is not used: it keeps no server-side record of the
