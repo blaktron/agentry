@@ -403,6 +403,11 @@ type SubmitInput struct {
 	CommitSHA     string
 	Workspace     string
 	ClaimedDigest string // cli-upload: client digest to cross-check (may be empty)
+	// DraftRun is the hosted draft a cli-upload says it was published from
+	// (plan drafter-revisions.md §6; agentry#794). A claim only: the scan
+	// asks the extension's DraftProvenance whether it holds, and the client
+	// is never believed.
+	DraftRun *uuid.UUID
 }
 
 // skipsPipeline says whether a submission to the agent is admitted
@@ -610,7 +615,7 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 			ID: versionID, AgentID: a.ID, Version: m.Version,
 			CommitSha: in.CommitSHA, Manifest: canonical, Capabilities: caps,
 			Channel: string(m.EffectiveChannel()), SubmittedBy: p.UserID, Source: in.Source,
-			SubmitterIpHash: ipHash,
+			SubmitterIpHash: ipHash, DraftRun: in.DraftRun,
 		})
 		if err != nil {
 			return err

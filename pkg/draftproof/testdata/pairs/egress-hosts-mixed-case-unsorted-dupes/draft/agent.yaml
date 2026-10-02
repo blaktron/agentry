@@ -1,0 +1,23 @@
+# drafted by the Drafter (agentry draft); review every line before you submit it
+schemaVersion: "2"
+name: probe-agent
+namespace: draft
+version: 0.1.0
+summary: Probes how the Builder reads a revision.
+license: MIT
+modes:
+  - autonomous
+entrypoints:
+  instruction: AGENT.md
+capabilities:
+  network:
+    egress:
+      - Zeta.Example.org
+      - api.github.com
+      - API.GitHub.com
+      - alpha.example.com
+      - api.github.com
+  filesystem:
+    read: workspace
+    write: none
+  exec: none

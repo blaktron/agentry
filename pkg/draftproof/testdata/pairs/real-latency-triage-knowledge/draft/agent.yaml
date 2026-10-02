@@ -1,0 +1,55 @@
+# drafted by the Drafter (agentry draft); review every line before you submit it
+schemaVersion: "2"
+name: post-deploy-latency-triage
+namespace: draft
+version: 0.1.0
+summary: 'From your runbook: what an on-call engineer checks first when the site is slow after a deploy, and when to escalate.'
+license: Apache-2.0
+tags:
+  - on-call
+  - incident
+  - latency
+  - deploy
+  - cache
+  - runbook
+  - sre
+  - triage
+modes:
+  - autonomous
+entrypoints:
+  instruction: AGENT.md
+intake:
+  - id: incident_facts
+    prompt: What do you already know? p95 figure, the minute the page fired, when the deploy went out, and whether the warm-cache job ran. Blank is fine.
+    type: text
+    required: false
+guide:
+  overview: 'You describe a slow-after-deploy page in a sentence or two and get back a one-screen triage card, built from your team''s runbook. It orders the checks (the edge cache first, unless the facts clear it), says what confirms or rules out each one, gives the hand-run warm-up command, and prints the escalation deadline as a clock time. Nothing is fetched or run: it is a card the engineer works down.'
+  prepare:
+    - 'The page you got: the p95 figure, the minute it fired, and how long latency has been above threshold.'
+    - The time of the last deploy, and whether the deploy log shows a warm-cache run after the purge.
+    - Your m6-dev-runbook pack attached, so the card quotes the runbook you have now.
+    - 'Know who the platform lead is: the runbook names the role, not a person or a channel.'
+    - Anything already ruled out, so the card does not spend your minutes on it.
+  files: 'Optional: a deploy log, a warm-cache job log or an access-log excerpt as text — it settles whether the purge was followed by a warm-up, which decides the whole card.'
+  task: e.g. Paged at 14:12 UTC, p95 2.1s, deploy went out 14:05 — what do I check, and when do I escalate?
+capabilities:
+  network:
+    egress: none
+  filesystem:
+    read: none
+    write: none
+  exec: none
+  dataAccess:
+    - other
+  mcpServers: []
+knowledge:
+  accepts:
+    prompt: Attach your team's runbook pack (m6-dev-runbook) so the card uses your live page threshold, deploy sequence and warm-cache command.
+    required: false
+publish:
+  include:
+    - agent.yaml
+    - AGENT.md
+    - README.md
+    - LICENSE
