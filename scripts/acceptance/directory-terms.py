@@ -10,8 +10,10 @@ test token, which the blueprint's default test keys accept.
            after the form comes the terms step, the file's text and an
            unticked agreement; an unticked submission is refused in the
            policy's words; a ticked one reaches the confirmation mail. Makes
-           one account with a blank display name and one with a name and a
-           promo code. Prints them as JSON.
+           one account with a blank display name and a mixed-case username,
+           and one with a name and a promo code. A username differing from
+           an existing one only by case, and a reserved name in capitals,
+           are refused (agentry#856). Prints them as JSON.
   missing  the file is gone: the step says the terms could not be loaded,
            and a ticked submission is still refused.
   off      the server names no terms file: the form leads straight to the
@@ -71,8 +73,8 @@ class Flow:
             fail(f"after the CAPTCHA the flow is at {c.get('component')}: {json.dumps(c)[:300]}")
         return c
 
-    def submit_form(self, name, promo=""):
-        user = "dt-" + secrets.token_hex(4)
+    def submit_form(self, name, promo="", user=None):
+        user = user or "dt-" + secrets.token_hex(4)
         password = "Correct-Horse-" + secrets.token_hex(8)
         body = {"component": "ak-stage-prompt", "username": user, "email": user + "@example.test",
                 "password": password, "password_repeat": password, "attributes.agentry_promo_code": promo}
@@ -109,7 +111,9 @@ def on():
     ok(f"the display name is optional, labelled {name.get('label')!r}, with the help text")
 
     made = {}
-    user, c = flow.submit_form("")
+    # A mixed-case username (agentry#856): accepted, written lower-cased.
+    typed = "Dt-" + secrets.token_hex(4).upper()
+    user, c = flow.submit_form("", user=typed)
     text, agree = terms_step(c, "a blank display name")
     shown = (text.get("initial_value") or "") if text else ""
     if f'data-terms-version="{VERSION}"' not in shown or "Fixture clause 40" not in shown:
@@ -132,8 +136,19 @@ def on():
     c = flow.step({"component": "ak-stage-prompt", AGREE: True, TEXT: "<p>smuggled</p>"})
     if c.get("component") != "ak-stage-email":
         fail(f"a ticked agreement stopped at {c.get('component')}: {errors(c)[:300]}")
-    made["blank"] = user
+    made["blank"] = user.lower()
+    made["blankTyped"] = user
     ok("a ticked agreement reaches the confirmation mail")
+
+    # The account above exists now; the same name in another case is taken,
+    # and a reserved name is reserved in capitals too (agentry#856).
+    for clash, words in ((user.upper(), "already taken"), ("Admin", "reserved")):
+        f = Flow()
+        f.to_form()
+        _, c = f.submit_form("", user=clash)
+        if c.get("component") != "ak-stage-prompt" or words not in errors(c) or field(c, AGREE) is not None:
+            fail(f"the username {clash!r} was not refused as {words}: {c.get('component')} {errors(c)[:300]}")
+    ok("a username taken in another case, and a reserved name in capitals, are refused on the form")
 
     flow = Flow()
     flow.to_form()

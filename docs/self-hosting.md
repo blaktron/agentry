@@ -1109,9 +1109,12 @@ page:
   honest for self-enrolled users: no account is active, and so none
   reaches the registry, before its address is confirmed. The username
   becomes the registry handle at the first sign-in, so the form refuses
-  one that is not a valid handle (lowercase letters, digits and hyphens,
-  at most 39) or that the registry reserves for its own paths and names
-  (agentry#590). Users created in the directory some other way are not
+  one that is not a valid handle (letters, digits and hyphens, at most
+  39) or that the registry reserves for its own paths and names
+  (agentry#590). Any case is accepted and the username is written in
+  lower case, so `ChrisY` becomes `chrisy`; a blank display name keeps
+  the case it was typed in, and a username that differs from an existing
+  one only by case is refused as taken (agentry#856). Users created in the directory some other way are not
   checked; the registry maps such a username to a valid handle and
   records the one asked for (DEV-142).
 - **The promo code field** (agentry#759) — an optional field at the end of

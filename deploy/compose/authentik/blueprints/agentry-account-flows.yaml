@@ -215,7 +215,7 @@ entries:
       label: Username
       type: username
       required: true
-      placeholder: "your registry handle: lowercase letters, digits, hyphens"
+      placeholder: "your registry handle: letters, digits, hyphens"
       placeholder_expression: false
       order: 0
   - model: authentik_stages_prompt.prompt
@@ -227,8 +227,8 @@ entries:
       label: Display name (optional)
       type: text
       # Optional (agentry#788): left blank, the account's name is its
-      # username, written at the enrolment write by
-      # agentry-enrollment-write-defaults below.
+      # username as typed (any case; agentry#856), written at the enrolment
+      # write by agentry-enrollment-write-defaults below.
       required: false
       placeholder: ""
       placeholder_expression: false
@@ -257,6 +257,15 @@ entries:
   # TestEnrollmentUsernamePolicyMatchesHandleRules fails when they drift.
   # A handle someone already holds in the registry is not checked: no
   # endpoint answers that without an account.
+  #
+  # Any case is accepted (agentry#856): the username is checked lower-cased
+  # here and written lower-cased by agentry-enrollment-write-defaults below,
+  # so `ChrisY` becomes the account and handle `chrisy`, never an error.
+  # authentik's own "already taken" check compares the username as typed,
+  # exact-case, so this policy also refuses one that differs from an
+  # existing account's only by case: the write would otherwise collide with
+  # it. Sign-in matches usernames case-blind already (the identification
+  # stage's case_insensitive_matching, authentik's default).
   - model: authentik_policies_expression.expressionpolicy
     id: policy-enrollment-username
     identifiers:
@@ -265,16 +274,20 @@ entries:
       execution_logging: false
       expression: |
         import re
+        from authentik.core.models import User
 
         HANDLE = r"^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"
         RESERVED = {"about", "admin", "advisories", "agent-template", "agentry", "api", "auth", "build", "contact", "cookies", "dashboard", "docs", "download", "downloads", "healthz", "img", "invitations", "login", "logout", "metrics", "new", "orgs", "pricing", "privacy", "readyz", "review", "runs", "scim", "search", "secureagentry", "settings", "signup", "sso", "staff", "static", "tags", "terms", "trust", "ui"}
 
-        username = str((request.context.get("prompt_data") or {}).get("username") or "")
+        username = str((request.context.get("prompt_data") or {}).get("username") or "").strip().lower()
         if not re.fullmatch(HANDLE, username):
-            ak_message("A username is 1 to 39 lowercase letters, digits and hyphens, and starts and ends with a letter or digit. It becomes your registry handle.")
+            ak_message("A username is 1 to 39 letters, digits and hyphens, and starts and ends with a letter or digit. It becomes your registry handle, in lower case.")
             return False
         if username in RESERVED:
             ak_message("That username is reserved. Choose another; it becomes your registry handle.")
+            return False
+        if User.objects.filter(username__iexact=username).exists():
+            ak_message("Username is already taken.")
             return False
         return True
 
@@ -516,8 +529,9 @@ entries:
 
   # What the enrolment write adds (agentry#788), bound to that step like
   # agentry-record-has-password and for the same reason: a validation policy
-  # sees a copy of the form, and only the plan reaches the write. A blank
-  # display name becomes the username; where the terms step ran, the account
+  # sees a copy of the form, and only the plan reaches the write. The
+  # username is written lower-cased (agentry#856) and a blank display name
+  # becomes the username as it was typed; where the terms step ran, the account
   # records the version it agreed to, read from the text it was shown, and
   # when. Always passes: it exists for its side effect.
   - model: authentik_policies_expression.expressionpolicy
@@ -534,8 +548,12 @@ entries:
         if plan is None:
             return True
         prompt = plan.context.get("prompt_data") or {}
+        typed = str(prompt.get("username") or "").strip()
+        # The username in lower case (agentry#856); a blank display name
+        # keeps the case it was typed in.
+        prompt["username"] = typed.lower()
         if not str(prompt.get("name") or "").strip():
-            prompt["name"] = str(prompt.get("username") or "")
+            prompt["name"] = typed
         terms = prompt.pop("agentry_terms_text", None)
         if terms is not None and prompt.get("attributes_agentry_terms_accepted") is True:
             m = re.search(r'data-terms-version="([A-Za-z0-9._-]+)"', str(terms))
