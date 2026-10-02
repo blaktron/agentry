@@ -381,7 +381,7 @@ func TestUnactivatedSupersededByVerifiedSignIn(t *testing.T) {
 }
 
 // TestActivationDailyCap: past ten links in a day an account is sent no
-// more, whatever the interval (DEV-196: anyone can sign up with another
+// more, whatever the interval (DEV-197: anyone can sign up with another
 // person's address, and the cap bounds what they can make it receive).
 func TestActivationDailyCap(t *testing.T) {
 	mails := &activationMails{Notifier: notify.LogNotifier{}}
