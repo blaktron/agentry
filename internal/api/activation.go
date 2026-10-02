@@ -31,6 +31,11 @@ const (
 	// activationInterval is the least time between two links to one
 	// account (D6), counted from the newest one made, whoever made it.
 	activationInterval = 5 * time.Minute
+	// activationsPerDay caps the links one account can be sent in a day,
+	// on top of D6's interval: anyone can sign up with another person's
+	// address, and without a cap the resend would let them mail that
+	// person every five minutes for ever (DEV-196).
+	activationsPerDay = 10
 )
 
 // errActivationTooSoon is issueActivation's refusal inside the interval.
@@ -46,34 +51,41 @@ func issueActivation(ctx context.Context, q *storegen.Queries, userID uuid.UUID,
 	now := time.Now()
 	if limit {
 		if _, err := q.LockUserRow(ctx, userID); err != nil {
-			return "", time.Time{}, err
+			return "", time.Time{}, fmt.Errorf("lock the account: %w", err)
 		}
 		last, err := q.LatestEmailVerificationAt(ctx, userID)
 		if err != nil {
-			return "", time.Time{}, err
+			return "", time.Time{}, fmt.Errorf("read the last activation link: %w", err)
 		}
 		if after := last.Add(activationInterval); now.Before(after) {
 			return "", time.Time{}, errActivationTooSoon{after: after}
 		}
+		day, err := q.CountEmailVerificationsSince(ctx, storegen.CountEmailVerificationsSinceParams{UserID: userID, CreatedAt: now.Add(-24 * time.Hour)})
+		if err != nil {
+			return "", time.Time{}, fmt.Errorf("count the day's activation links: %w", err)
+		}
+		if day.Sent >= activationsPerDay {
+			return "", time.Time{}, errActivationTooSoon{after: day.Oldest.Add(24 * time.Hour)}
+		}
 	}
 	token, err := auth.NewToken(auth.VerificationPrefix)
 	if err != nil {
-		return "", time.Time{}, err
+		return "", time.Time{}, fmt.Errorf("mint an activation link: %w", err)
 	}
 	if err := q.CreateEmailVerification(ctx, storegen.CreateEmailVerificationParams{
 		TokenSha256: auth.HashToken(token),
 		UserID:      userID,
 		ExpiresAt:   now.Add(activationTTL),
 	}); err != nil {
-		return "", time.Time{}, err
+		return "", time.Time{}, fmt.Errorf("record the activation link: %w", err)
 	}
 	return token, now.Add(activationInterval), nil
 }
 
 // mailActivation sends a link issueActivation made. A failure is logged and
 // not returned: the link exists, and another can be asked for.
-func (s *Server) mailActivation(ctx context.Context, email, token string) {
-	if err := s.notifier.EmailVerification(ctx, email, token); err != nil {
+func (s *Server) mailActivation(ctx context.Context, email, handle, token string) {
+	if err := s.notifier.EmailVerification(ctx, email, handle, token); err != nil {
 		s.log.WarnContext(ctx, "activation mail", "err", err)
 	}
 }
@@ -132,8 +144,8 @@ func (s *Server) SendEmailVerification(w http.ResponseWriter, r *http.Request) {
 		wait := time.Until(soon.after)
 		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
 		writeProblemWith(w, r, http.StatusTooManyRequests, "activation-too-soon", "Too soon",
-			fmt.Sprintf("An activation link went to this address less than %d minutes ago. Check your inbox, or ask again after %s.",
-				int(activationInterval.Minutes()), soon.after.UTC().Format("15:04 UTC")),
+			fmt.Sprintf("An activation link went to this address recently. Check your inbox, or ask again after %s.",
+				soon.after.UTC().Format("2 Jan 15:04 UTC")),
 			map[string]any{"resendAfter": soon.after.UTC()})
 		return
 	}
@@ -142,7 +154,7 @@ func (s *Server) SendEmailVerification(w http.ResponseWriter, r *http.Request) {
 		problemInternal(w, r)
 		return
 	}
-	s.mailActivation(ctx, row.Email, token)
+	s.mailActivation(ctx, row.Email, row.Handle, token)
 	writeJSON(w, http.StatusOK, EmailVerificationSent{SentTo: row.Email, ResendAfter: after.UTC()})
 }
 
@@ -192,16 +204,31 @@ func (s *Server) confirmInDirectory(ctx context.Context, userID uuid.UUID, email
 	if !ok {
 		return nil
 	}
-	rows, err := s.q().ListUserDirectoryLinks(ctx, userID)
+	links, err := s.signedInDirectoryLinks(ctx, userID, email)
 	if err != nil {
-		return fmt.Errorf("read the account's directory links: %w", err)
+		return err
 	}
-	for _, r := range rows {
-		if _, err := act.ConfirmAddress(ctx, directoryLink{AccountID: r.DirectoryAccountID, UID: r.DirectorySubject, Email: email}); err != nil {
-			return err
+	for _, link := range links {
+		if _, err := act.ConfirmAddress(ctx, link); err != nil {
+			return fmt.Errorf("confirm the address in the directory: %w", err)
 		}
 	}
 	return nil
+}
+
+// signedInDirectoryLinks names the directory accounts the person signed in
+// with, none for an account that never did (unlike directoryLinksFor, which
+// falls back to the address for erasure).
+func (s *Server) signedInDirectoryLinks(ctx context.Context, userID uuid.UUID, email string) ([]directoryLink, error) {
+	rows, err := s.q().ListUserDirectoryLinks(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("read the account's directory links: %w", err)
+	}
+	links := make([]directoryLink, 0, len(rows))
+	for _, r := range rows {
+		links = append(links, directoryLink{AccountID: r.DirectoryAccountID, UID: r.DirectorySubject, Email: email})
+	}
+	return links, nil
 }
 
 // directoryPresence tells whether a directory account a link names still
@@ -241,20 +268,25 @@ func (a *authentikEraser) AccountGone(ctx context.Context, link directoryLink) (
 
 // unactivatedSuperseded reports that an unconfirmed registry account's
 // every directory account is gone (D10): the directory removed it for a
-// provider that proved the address. An account with no directory sign-in,
-// a directory that cannot be asked, or any doubt, is not superseded, and
-// the caller keeps today's answer (link it explicitly).
+// provider that proved the address. Only where unactivated accounts are
+// read-only, so the account can have made nothing, and never an
+// organization's last admin. An account with no directory sign-in, a
+// directory that cannot be asked, or any doubt, is not superseded, and the
+// caller keeps today's answer (link it explicitly).
 func (s *Server) unactivatedSuperseded(ctx context.Context, userID uuid.UUID, email string) bool {
 	pres, ok := s.dirEraser.(directoryPresence)
-	if !ok {
+	if !ok || !s.unactivatedReadOnly {
 		return false
 	}
-	rows, err := s.q().ListUserDirectoryLinks(ctx, userID)
-	if err != nil || len(rows) == 0 {
+	if _, err := s.q().GetOrgWhereUserIsLastAdmin(ctx, userID); !errors.Is(err, pgx.ErrNoRows) {
 		return false
 	}
-	for _, r := range rows {
-		gone, err := pres.AccountGone(ctx, directoryLink{AccountID: r.DirectoryAccountID, UID: r.DirectorySubject, Email: email})
+	links, err := s.signedInDirectoryLinks(ctx, userID, email)
+	if err != nil || len(links) == 0 {
+		return false
+	}
+	for _, link := range links {
+		gone, err := pres.AccountGone(ctx, link)
 		if err != nil {
 			s.log.WarnContext(ctx, "superseded check: directory", "err", err)
 			return false

@@ -109,7 +109,7 @@ var unactivatedOperations = map[string]bool{
 	"sendEmailVerification": true, "updateCurrentUser": true,
 	"deleteCurrentUser": true, "clearCurrentUserData": true,
 	"revokeOtherUserSessions": true, "revokeUserSession": true, "clearTrustedDevices": true,
-	"deleteUserDirectoryDevice": true, "revokeToken": true, "removeSshKey": true,
+	"deleteUserDirectoryDevice": true, "revokeToken": true, "removeSshKey": true, "createDesktopGrant": true,
 	"acceptInvitation": true, "samlAcs": true, "samlSloPost": true,
 }
 

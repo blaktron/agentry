@@ -448,8 +448,9 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 			// D10 (agentry#861): the address is held by an account that
 			// never confirmed it, and the directory account it signed in
 			// with is gone, removed by the directory when a trusted
-			// provider proved the address (D3). It owns nothing (it was
-			// read-only), so it is erased and the address starts clean.
+			// provider proved the address (D3). It was read-only and is
+			// no organization's last admin (unactivatedSuperseded), so it
+			// is erased and the address starts clean.
 			if err := s.eraseSuperseded(r, u.ID, u.Email, id.Provider); err != nil {
 				return uuid.Nil, err
 			}
@@ -493,7 +494,7 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 	if email == "" {
 		// No email asserted: a synthetic, unverifiable address keeps the NOT
 		// NULL/UNIQUE contract without ever claiming an address is the user's.
-		email = handle + "@" + id.Provider + ".social.local"
+		email = handle + "@" + id.Provider + auth.SyntheticAddressSuffix
 	}
 	err = s.st.WithTx(ctx, func(tq *storegen.Queries) error {
 		if err := tq.CreateHandle(ctx, storegen.CreateHandleParams{ID: newUserID, Handle: handle, Kind: "user"}); err != nil {
@@ -561,7 +562,7 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 	}
 	s.fireEvent(r.Context(), Event{Kind: "user.registered", UserID: newUserID, Payload: payload})
 	if activation != "" {
-		s.mailActivation(ctx, email, activation)
+		s.mailActivation(ctx, email, handle, activation)
 	}
 	return newUserID, nil
 }

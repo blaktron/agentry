@@ -117,6 +117,18 @@ SELECT id FROM users WHERE id = $1 FOR UPDATE;
 SELECT COALESCE(max(created_at), 'epoch'::timestamptz)::timestamptz AS sent_at
 FROM email_verifications WHERE user_id = $1;
 
+-- name: CountEmailVerificationsSince :one
+-- How many links the account was sent since a moment, and the oldest of
+-- them (agentry#861's daily cap).
+SELECT count(*)::bigint AS sent,
+       COALESCE(min(created_at), now())::timestamptz AS oldest
+FROM email_verifications WHERE user_id = $1 AND created_at > $2;
+
+-- name: DeleteEmailVerificationsForUser :exec
+-- An erased account's links go with it: one followed afterwards would
+-- confirm an address nobody holds any more (agentry#861).
+DELETE FROM email_verifications WHERE user_id = $1;
+
 -- name: ConsumeEmailVerification :one
 UPDATE email_verifications
 SET consumed_at = now()

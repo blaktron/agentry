@@ -329,7 +329,7 @@ func (s *Server) eraseAccountIn(ctx context.Context, tx pgx.Tx, tq *storegen.Que
 	// account cannot sign in again — PseudonymizeUser above set
 	// state='deleted' and nulled the password hash — so a surviving record
 	// is inert as a credential. What it still holds is an address and a
-	// user agent belonging to a person who asked to be deleted, and the
+	// user agent belonging to a person whose account is gone, and the
 	// users row survives erasure only because audit events and immutable
 	// published content need a stable actor id. Nothing needs that of a
 	// browser credential, and that one was issued is already in the audit
@@ -344,9 +344,9 @@ func (s *Server) eraseAccountIn(ctx context.Context, tx pgx.Tx, tq *storegen.Que
 	if out.desktopCodes, err = tq.ConsumeDesktopGrantsForUser(ctx, userID); err != nil {
 		return out, err
 	}
-	// An erased account holds no seat anywhere (agentry#363): the
-	// last-admin guard has already passed, so nothing is left headless by
-	// this.
+	// An erased account holds no seat anywhere (agentry#363). Every caller
+	// has refused an organization's last admin first, so nothing is left
+	// headless by this.
 	if _, err := tq.DeleteUserMemberships(ctx, userID); err != nil {
 		return out, err
 	}
@@ -363,6 +363,11 @@ func (s *Server) eraseAccountIn(ctx context.Context, tx pgx.Tx, tq *storegen.Que
 	// And the Writing Voice (agentry#809), whose key went with the
 	// knowledge store's erasure of the same person.
 	if _, err = voice.Erase(ctx, tq, userID); err != nil {
+		return out, err
+	}
+	// Its activation links too (agentry#861): one followed afterwards would
+	// confirm an address nobody holds.
+	if err := tq.DeleteEmailVerificationsForUser(ctx, userID); err != nil {
 		return out, err
 	}
 	// Every PAT dies with the account.
