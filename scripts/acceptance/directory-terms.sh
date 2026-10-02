@@ -11,7 +11,8 @@
 #
 #   1. On (a fixture terms file named): the display name is optional; the
 #      terms step follows the form with the file's text; an unticked
-#      agreement is refused; a ticked one reaches the confirmation mail; the
+#      agreement is refused; a ticked one reaches the authenticator setup
+#      with no mail step (agentry#861); the
 #      accounts record agreement, version and time, a blank name became the
 #      username as typed while the username was written lower-cased
 #      (agentry#856), a typed name and a promo code were kept, and the text
@@ -21,7 +22,10 @@
 #      case that once fell through: the expression raised, authentik showed
 #      its source, and the source matched a loose version pattern.
 #   3. Off (the server recreated without the variable): the form leads
-#      straight to the confirmation mail.
+#      straight to the authenticator setup.
+#   4. The email claim (agentry#861): the agentry-verified-email mapping
+#      says email_verified false for a fresh sign-up, true once the
+#      attribute is, and true for an account from before (no attribute).
 #
 # The scroll gate is page script and is checked in a browser, not here.
 # Needs docker, the pinned images and outbound HTTPS from the directory (the
@@ -155,7 +159,7 @@ for label in ("blank", "named"):
     print("TERMS", label, u.attributes.get("agentry_terms_accepted"), u.attributes.get("agentry_terms_version") == os.environ["VERSION"], fresh)
     print("NAME", label, u.name == a.get(label + "Typed", u.username), repr(u.name))
     print("KEYS", label, sorted(u.attributes))
-    print("ACTIVE", label, u.is_active)
+    print("ACTIVE", label, u.is_active, u.attributes.get("agentry_email_verified"))
 PY
 )
 for label in blank named; do
@@ -166,12 +170,31 @@ case "$check" in *"NAME blank True"*) echo "ok   the mixed-case username was wri
   *) echo "FAIL: the blank-name account: $check"; exit 1 ;; esac
 case "$check" in *"NAME named False 'Ada Lovelace'"*) echo "ok   a typed display name is kept" ;;
   *) echo "FAIL: the named account: $check"; exit 1 ;; esac
-case "$check" in *"KEYS named ['agentry_has_password', 'agentry_promo_code', 'agentry_terms_accepted', 'agentry_terms_accepted_at', 'agentry_terms_version']"*)
+case "$check" in *"KEYS named ['agentry_email_verified', 'agentry_has_password', 'agentry_promo_code', 'agentry_terms_accepted', 'agentry_terms_accepted_at', 'agentry_terms_version']"*)
     echo "ok   the promo code survives beside the terms record, and the text shown is not stored" ;;
   *) echo "FAIL: the named account's attributes: $check"; exit 1 ;; esac
 
-case "$check" in *"ACTIVE blank False"*"ACTIVE named False"*) echo "ok   both accounts are written inactive, for the confirmation mail to activate" ;;
-  *) echo "FAIL: an account is active before its address is confirmed: $check"; exit 1 ;; esac
+case "$check" in *"ACTIVE blank True False"*"ACTIVE named True False"*) echo "ok   both accounts are written active and unactivated (agentry_email_verified false)" ;;
+  *) echo "FAIL: an account is not written active and unactivated: $check"; exit 1 ;; esac
+
+# The claim the registry reads (agentry#861): what the directory recorded.
+claim=$(akshell -e ACCOUNTS="$accounts" <<'PY' || true
+import json, os
+from authentik.core.models import User
+from authentik.providers.oauth2.models import ScopeMapping
+m = ScopeMapping.objects.get(name="agentry-verified-email")
+u = User.objects.get(username=json.loads(os.environ["ACCOUNTS"])["blank"])
+print("CLAIM fresh", m.evaluate(user=u, request=None)["email_verified"])
+u.attributes["agentry_email_verified"] = True
+u.save()
+print("CLAIM activated", m.evaluate(user=u, request=None)["email_verified"])
+old = User.objects.create(username="dt-before-" + u.username, email="before@example.test")
+print("CLAIM before", m.evaluate(user=old, request=None)["email_verified"])
+PY
+)
+case "$claim" in *"CLAIM fresh False"*"CLAIM activated True"*"CLAIM before True"*)
+    echo "ok   the email claim says false for a fresh sign-up, true once activated, true for an account from before" ;;
+  *) echo "FAIL: the agentry-verified-email claim: $claim"; exit 1 ;; esac
 
 printf '\xff\xfe<article data-terms-version="not-utf8">' | docker exec -i -u 0 "$AK" sh -c "cat > $TERMS_PATH"
 out=$(docker exec "$DRIVER" python /driver.py missing) || { echo "FAIL (a terms file that is not UTF-8)"; echo "$out"; exit 1; }

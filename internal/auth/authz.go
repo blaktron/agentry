@@ -124,6 +124,11 @@ type Principal struct {
 	OrgRoles map[uuid.UUID]OrgRole
 	// EmailVerified gates publishing flows (§19).
 	EmailVerified bool
+	// Unactivated marks an account whose address has not been confirmed
+	// and can be (plan unactivated-accounts.md D2, agentry#861): it may
+	// read, but every write outside a short list of its own housekeeping
+	// is refused until it follows the activation link. See Unactivated.
+	Unactivated bool
 	// PlatformStaff marks trust & safety operators (SaaS platform roles;
 	// self-host: the instance admin). Gates the platform review queue and
 	// quarantine/block actions (§12.2 last row).

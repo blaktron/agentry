@@ -54,6 +54,7 @@ func ResolveSSHKey(ctx context.Context, q *storegen.Queries, fingerprint string)
 		Scopes:        append([]string(nil), SSHKeyScopes...),
 		OrgRoles:      orgRoles,
 		EmailVerified: u.EmailVerifiedAt != nil,
+		Unactivated:   Unactivated(u.EmailVerifiedAt, u.Email),
 		PlatformStaff: u.PlatformStaff,
 		SSHKeyID:      key.ID,
 	}, nil

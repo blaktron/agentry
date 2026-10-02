@@ -84,11 +84,11 @@ func NewSMTP(opt SMTPOptions, registry, baseURL string, log *slog.Logger) (*SMTP
 }
 
 // EmailVerification implements Notifier.
-func (n *SMTPNotifier) EmailVerification(ctx context.Context, toEmail, token string) error {
+func (n *SMTPNotifier) EmailVerification(ctx context.Context, toEmail, handle, token string) error {
 	// The token is a bearer secret: it goes in the body and NOWHERE else.
 	// §16.2's "never tokens/secrets" lint rule is why the log line below
 	// records only the recipient.
-	return n.deliver(ctx, toEmail, n.render.verification(token), "email_verification")
+	return n.deliver(ctx, toEmail, n.render.verification(handle, token), "email_verification")
 }
 
 // AgentQuarantined implements Notifier.
