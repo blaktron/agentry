@@ -150,6 +150,45 @@ A closed build reaches the store through `pkg/extension`:
   version (`build` or `ai-edit`), reviewed like any other; its review is
   inside the build's price and is not admitted.
 
+## The clients
+
+Every client goes through the routes above, and none moves a voice between
+a computer and the account on its own (plan `writing-voice.md` D6):
+
+- **The CLI** keeps this computer's voice and runs the Voice Writer free
+  ([A Writing Voice](runner.md#a-writing-voice)). `agentry voice upload`
+  puts that text to `PUT /voice` with the source `upload` and changes
+  nothing on the computer; `download` keeps the account's live version on
+  the computer, held to its digest; `status` shows both; `attach on|off
+  --account` is `PUT /voice/settings`.
+- **The desktop** shows both voices in its Voice panel. *Submit to
+  Agentry* is the CLI's upload, and so is a save of the account's voice
+  from its editor; *Use Agentry's voice here* is the CLI's download.
+- **The site** shows the account's voice on the Dashboard's Voice section,
+  with an editor whose Save is `PUT /voice` with the source `edit`, Restore,
+  Discard for a pending version, Delete, and the `alwaysAttach` switch in
+  Settings → Profile.
+
+A client reads `features.voice` in `GET /meta` and draws none of this
+where the store is off.
+
+## On SecureAgentry
+
+The SecureAgentry build adds three things through the doors above,
+described with the rest of its runs on [Hosted runs](hosted-runs.md):
+
+- **The hosted Voice Writer**, a run of the kind `voice_build` that
+  creates, improves or AI-edits the person's voice on a sandbox host and
+  proposes what it writes as the pending version
+  ([A hosted Voice Writer run](hosted-runs.md#a-hosted-voice-writer-run)).
+  Each costs 20 credits flat, AI Review included, and a person on Standard
+  starts one a billing cycle, whichever of the three.
+- **A run in the voice**: a hosted run or session created with
+  `voice: true` is handed the runner's live version at the hand-off
+  ([A run in the Writing Voice](hosted-runs.md#a-run-in-the-writing-voice)).
+- **The review's credit**: `AdmitsVoice` charges 1 credit for the review of
+  an edit, an upload or a Restore reviewed again (DEV-150).
+
 ## Erasure
 
 Deleting the voice removes every version and its data key. The account
