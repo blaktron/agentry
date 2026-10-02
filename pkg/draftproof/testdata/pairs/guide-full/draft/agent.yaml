@@ -1,0 +1,38 @@
+# drafted by the Drafter (agentry draft); review every line before you submit it
+schemaVersion: "2"
+name: probe-agent
+namespace: draft
+version: 0.1.0
+summary: Probes how the Builder reads a revision.
+license: MIT
+modes:
+  - autonomous
+entrypoints:
+  instruction: AGENT.md
+guide:
+  task: '  e.g. Summarise INC-1  '
+  overview: "Reads the incident.  \nReturns a summary.\n\n- one\n- two\n"
+  prepare:
+    - '  A PagerDuty account  '
+    - ""
+    - An incident id
+  files: One CSV file.
+  connect:
+    PD_TOKEN: "Create a **read-only** key.\n\n1. Open settings\n2. Copy the key  \n"
+    SLACK_TOKEN: A bot token.
+    GITHUB_TOKEN: A fine-grained token.
+    JIRA_TOKEN: An API token.
+    LINEAR_TOKEN: A personal key.
+capabilities:
+  network:
+    egress: none
+  filesystem:
+    read: workspace
+    write: none
+  exec: none
+  secrets:
+    - PD_TOKEN
+    - SLACK_TOKEN
+    - GITHUB_TOKEN
+    - JIRA_TOKEN
+    - LINEAR_TOKEN

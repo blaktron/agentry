@@ -242,6 +242,26 @@ var (
 	ErrKnowledgeTooLarge     = knowledge.ErrTooLarge
 )
 
+// ProvesDrafts is the optional interface for an extension that records
+// hosted drafts and can answer whether a version is one of them (plan
+// drafter-revisions.md §6, R5; agentry#794). An upload may claim the draft
+// it was published from; the scan computes the proof of the submitted files
+// (pkg/draftproof) and asks DraftProvenance whether the submitter ran that
+// draft against the agent's S9 baseline and recorded that proof. A yes
+// makes the version a drafter-revision, which S9 reads with the benefit of
+// the doubt; the client is never believed. Without it no version is one.
+type ProvesDrafts interface {
+	DraftProvenance() DraftProvenance
+}
+
+// DraftProvenance and DraftClaim are the seam's types: the question
+// carries the run, the account, the agent, the baseline and the proof, and
+// never a tier or a balance.
+type (
+	DraftProvenance = scan.DraftProvenance
+	DraftClaim      = scan.DraftClaim
+)
+
 // AdmitsModelInput is the optional interface for an extension that admits
 // hosted jobs to the model-input routes (agentry#608; plan builder-rework.md
 // D20, D21): AI Review of text a model is about to read, and web search

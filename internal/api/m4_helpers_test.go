@@ -24,17 +24,24 @@ func (env *testEnv) uploadVersionCLI(ns, name, pat string, files map[string]stri
 // (Idempotency-Key in the replay tests).
 func (env *testEnv) uploadVersionCLIWithHeaders(ns, name, pat string, files map[string]string, headers map[string]string) (int, string) {
 	env.t.Helper()
-	return env.uploadVersionCLIFull(ns, name, pat, files, headers, "")
+	return env.uploadVersionCLIFull(ns, name, pat, files, headers, "", nil)
 }
 
 // uploadVersionCLIWithDigest claims a digest of the caller's choosing, for
 // the tests that need the server-built digest to disagree with it.
 func (env *testEnv) uploadVersionCLIWithDigest(ns, name, pat string, files map[string]string, digest string) (int, string) {
 	env.t.Helper()
-	return env.uploadVersionCLIFull(ns, name, pat, files, nil, digest)
+	return env.uploadVersionCLIFull(ns, name, pat, files, nil, digest, nil)
 }
 
-func (env *testEnv) uploadVersionCLIFull(ns, name, pat string, files map[string]string, headers map[string]string, claimedDigest string) (int, string) {
+// uploadVersionCLIWithFields adds form fields to the upload (draftRun in
+// the provenance tests).
+func (env *testEnv) uploadVersionCLIWithFields(ns, name, pat string, files map[string]string, fields map[string]string) (int, string) {
+	env.t.Helper()
+	return env.uploadVersionCLIFull(ns, name, pat, files, nil, "", fields)
+}
+
+func (env *testEnv) uploadVersionCLIFull(ns, name, pat string, files map[string]string, headers map[string]string, claimedDigest string, fields map[string]string) (int, string) {
 	env.t.Helper()
 	ws := env.t.TempDir()
 	for path, content := range files {
@@ -73,6 +80,9 @@ func (env *testEnv) uploadVersionCLIFull(ns, name, pat string, files map[string]
 		claimedDigest = info.Digest
 	}
 	_ = mw.WriteField("digest", claimedDigest)
+	for k, v := range fields {
+		_ = mw.WriteField(k, v)
+	}
 	_ = mw.Close()
 
 	req, _ := http.NewRequest(http.MethodPost, env.srv.URL+"/api/v1/agents/"+ns+"/"+name+"/versions", &body)

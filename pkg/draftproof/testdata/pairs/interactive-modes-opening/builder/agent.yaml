@@ -1,0 +1,25 @@
+schemaVersion: "2"
+name: probe-agent
+namespace: acme
+version: 1.3.0
+summary: "Probes how the Builder reads a revision."
+license: "MIT"
+
+modes: [autonomous, interactive]
+
+entrypoints:
+  instruction: AGENT.md
+
+interactive:
+  opening: "Hello.\r\nWhat shall we look at today?"
+
+capabilities:
+  network:
+    egress: none
+  filesystem:
+    read: none
+    write: none
+  exec: none
+
+publish:
+  include: [agent.yaml, AGENT.md, README.md, LICENSE]

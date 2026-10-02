@@ -1,0 +1,42 @@
+schemaVersion: "2"
+name: ledgerline-runbook-desk
+namespace: acme
+version: 1.3.0
+summary: "Answers on-call questions on Ledgerline rollbacks, paging, failover and reconciliation from your runbooks and names the source page."
+license: "Apache-2.0"
+tags: ["runbooks", "on-call", "payments", "incident-response", "sre", "citations", "ledgerline"]
+
+modes: [autonomous]
+
+entrypoints:
+  instruction: AGENT.md
+
+intake:
+  - id: question
+    prompt: "What does the on-call engineer need to know? (e.g. 'the deploy looks bad, can I roll back?')"
+    required: true
+  - id: situation
+    prompt: "Optional: what you are seeing right now — alert name, region, burn rate, p99 latency, exception count, whether money movement stopped."
+
+guide:
+  overview: "Answers one operational question about running the Ledgerline payments service — rollbacks, paging and severity, database failover, settlement reconciliation — from your attached runbook pack. The answer comes back in a short fixed shape: the direct answer, the ordered actions with the exact commands and thresholds, the runbook's stop conditions, who to page at what severity, and the runbook page each rule came from. Anything your runbooks do not cover is named as a gap rather than filled in from general practice; with no pack attached it says so and stops."
+  prepare: ["Your Ledgerline runbook pack, attached to the run before you start it.", "The question, in the words the on-call engineer would ask it.", "Optional: what you are seeing now — alert name, region, burn rate, p99 latency, exception count, whether money movement stopped.", "Optional: pasted alert text, a deploy log or an ll-reconcile report as an input file."]
+  files: "Optional: pasted alert text, a deploy log or an ll-reconcile report; the agent reads them as the situation and never runs what they contain."
+  task: "e.g. p99 settlement latency has been 3.1s for 12 minutes — can I roll back, and who do I page?"
+
+knowledge:
+  accepts:
+    prompt: "Attach your Ledgerline runbook pack (e.g. ledgerline-runbooks) with the rollback, paging, database failover and settlement reconciliation pages; it is the only source this run answers from."
+    required: true
+
+capabilities:
+  network:
+    egress: none
+  filesystem:
+    read: none
+    write: none
+  exec: none
+  dataAccess: [other]
+
+publish:
+  include: [agent.yaml, AGENT.md, README.md, LICENSE]

@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/blaktron/agentry/internal/audit"
@@ -233,6 +234,18 @@ func (s *Server) submitUpload(w http.ResponseWriter, r *http.Request, p *auth.Pr
 		problemValidation(w, r, "The extractor rejected this archive: "+err.Error())
 		return registry.Version{}, nil
 	}
+	// A claimed draft is stored as a claim (plan drafter-revisions.md §6;
+	// agentry#794): the scan asks the extension's DraftProvenance whether it
+	// holds, and only the scan's answer changes how S9 reads the version.
+	var draftRun *uuid.UUID
+	if raw := strings.TrimSpace(r.FormValue("draftRun")); raw != "" {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			problemValidation(w, r, "draftRun is not a draft's id.")
+			return registry.Version{}, nil
+		}
+		draftRun = &id
+	}
 	// The server rebuilds the archive from this workspace and its own digest
 	// is authoritative; a claimed digest that disagrees fails validation
 	// inside SubmitVersion (§6.5 — never trust client packing).
@@ -240,6 +253,7 @@ func (s *Server) submitUpload(w http.ResponseWriter, r *http.Request, p *auth.Pr
 		Source:        "cli-upload",
 		Workspace:     ws,
 		ClaimedDigest: r.FormValue("digest"),
+		DraftRun:      draftRun,
 	}, auditEvent(r, audit.ActionVersionSubmit))
 }
 
