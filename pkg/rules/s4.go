@@ -9,9 +9,10 @@ import "strings"
 // S4 findings, sorted deterministically. Content is treated as data: patterns
 // are matched, never executed. Matching is effectively line-oriented (patterns
 // compile with the multiline flag), and a candidate hit is suppressed when any
-// of the rule's notPatterns matches the same line(s) — this is how benign
-// discussion of an attack (security docs, this very engine's own rules) is
-// kept out of the results (§17.3).
+// of the rule's notPatterns matches the same line(s), or any of the bundle's
+// notPatterns matches the containing paragraph (see suppressed) — this is how
+// benign discussion of an attack (security docs, this very engine's own rules)
+// is kept out of the results (§17.3).
 func (b *Bundle) Scan(path string, content []byte) []Finding {
 	lm := newLineMap(content)
 	var out []Finding
@@ -93,8 +94,12 @@ func evalRule(cr *compiledRule, path string, content []byte, lm *lineMap) []Find
 //     mid-sentence, so "Prompts to echo secrets, / paste tokens into output"
 //     puts the marker on a different line than the match.
 //
-// A paragraph is still a bounded scope: a blank line ends it, so one
-// descriptive phrase cannot whitelist a whole document.
+// A paragraph is still a bounded scope: a blank line or a Markdown heading
+// ends it, so one descriptive phrase cannot whitelist a whole document, and a
+// heading such as "# Findings" cannot whitelist the directive under it
+// (agentry#845, ruleset 0.3.3). Within the paragraph the reach is not
+// sentence-bounded: a descriptive sentence beside a live directive still
+// suppresses it, the residual risk DEV-010 states.
 func suppressed(cr *compiledRule, lm *lineMap, lineStart, lineEnd int) bool {
 	if len(cr.notPatterns) > 0 {
 		lineContext := lineSpanText(lm, lineStart, lineEnd)
@@ -115,18 +120,47 @@ func suppressed(cr *compiledRule, lm *lineMap, lineStart, lineEnd int) bool {
 	return false
 }
 
-// paragraphText returns the contiguous non-blank lines containing the span.
+// paragraphText returns the contiguous non-blank, non-heading lines
+// containing the span. A Markdown heading is a block of its own, so a hit on a
+// heading line takes only its own lines as context.
 func paragraphText(lm *lineMap, start, end int) string {
+	if isATXHeading(lm.text(start)) {
+		return lineSpanText(lm, start, end)
+	}
 	first := start
-	for first > 1 && strings.TrimSpace(lm.text(first-1)) != "" {
+	for first > 1 && inParagraph(lm.text(first-1)) {
 		first--
 	}
 	// lm.text returns "" past the end of the file, so this terminates.
 	last := end
-	for strings.TrimSpace(lm.text(last+1)) != "" {
+	for inParagraph(lm.text(last + 1)) {
 		last++
 	}
 	return lineSpanText(lm, first, last)
+}
+
+// inParagraph reports whether a neighbouring line continues a paragraph.
+func inParagraph(line string) bool {
+	return strings.TrimSpace(line) != "" && !isATXHeading(line)
+}
+
+// isATXHeading reports whether line is a CommonMark ATX heading: up to three
+// spaces of indentation, one to six '#', then a space, a tab or the end of the
+// line. ("#hashtag" is not a heading; four spaces of indentation is code.)
+func isATXHeading(line string) bool {
+	i := 0
+	for i < 3 && i < len(line) && line[i] == ' ' {
+		i++
+	}
+	n := 0
+	for i+n < len(line) && line[i+n] == '#' {
+		n++
+	}
+	if n == 0 || n > 6 {
+		return false
+	}
+	rest := line[i+n:]
+	return rest == "" || rest[0] == ' ' || rest[0] == '\t' || rest[0] == '\r'
 }
 
 // lineSpanText joins the text of lines [start, end] with newlines.

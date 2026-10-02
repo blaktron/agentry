@@ -97,6 +97,12 @@ S4 (injection signature families, one per §8.3 S4 family):
 `s4-instruction-override`, `s4-exfiltration`, `s4-tool-coercion`,
 `s4-credential-harvest`, `s4-persistence`, `s4-obfuscation`. The seventh
 family, `destructive`, is covered by the Amazon Q pair above.
+`s4-heading-framed` sets a live exfiltration directive under a `## Findings`
+heading, whose word is a bundle-level descriptive-framing suppression; since
+ruleset 0.3.3 a Markdown heading ends the paragraph those suppressions read,
+so it fires (agentry#845, DEV-010). Its twin `s4-heading-framed-benign` is
+review prose under the same headings whose marker wraps onto the line before
+the match, which the paragraph scope must still suppress.
 
 S2 over the manifest (a declared MCP server's plain `env`, DEV-098;
 agentry#286, agentry#288): `manifest-env-secret` (a prefixed token under a
