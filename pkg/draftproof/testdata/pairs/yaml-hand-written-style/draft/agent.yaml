@@ -1,0 +1,22 @@
+# A hand-edited release, the way a person might write it
+capabilities:   # the contract first
+  exec: { commands: [git] }
+  network:
+    egress:
+      - api.github.com   # the API
+      - uploads.github.com
+  filesystem: {read: workspace, write: {paths: [out]}}
+version: '0.1.0'
+name: probe-agent
+modes: [autonomous]
+summary: >-
+  Probes how the Builder
+  reads a revision.
+entrypoints: {instruction: AGENT.md}
+schemaVersion: "2"
+namespace: draft
+license: MIT
+tags:
+- github
+intake:
+  - {id: repo, prompt: 'Which repository?', required: true}

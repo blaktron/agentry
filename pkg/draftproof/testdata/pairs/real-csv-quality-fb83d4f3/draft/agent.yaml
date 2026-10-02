@@ -1,0 +1,59 @@
+# drafted by the Drafter (agentry draft); review every line before you submit it
+schemaVersion: "2"
+name: csv-column-quality-check
+namespace: draft
+version: 0.1.0
+summary: Reads one CSV file you add and reports, per column, missing values, duplicate rows and values that break the column's usual format.
+license: Apache-2.0
+tags:
+  - csv
+  - data-quality
+  - duplicates
+  - missing-values
+  - formats
+  - profiling
+  - reporting
+modes:
+  - autonomous
+entrypoints:
+  instruction: AGENT.md
+intake:
+  - id: header_row
+    prompt: Does the first row of the file hold the column names?
+    type: choice
+    choices:
+      - yes, it is the header
+      - no, it is data
+      - not sure — judge it from the file
+    required: false
+  - id: expected_formats
+    prompt: Anything you already know about particular columns — one per line, e.g. "order_date is YYYY-MM-DD", "id must never be blank". Optional.
+    type: text
+    required: false
+guide:
+  overview: 'You add one CSV file. It reads the whole file, works out the delimiter, the header and each column''s usual shape, then writes report.md: a summary table, the duplicate-row groups with their row numbers, and one section per column giving missing counts (blanks and placeholder tokens kept apart), the dominant format, and every format variation with its count, share, a few examples and the rows it appears on. Clean columns are listed too. It changes nothing and writes no output file.'
+  prepare:
+    - The CSV file itself — one file per run.
+    - Whether row 1 is a header or data, if you know.
+    - Any column you expect to be a key, so duplicate rows on it read as collisions.
+    - Any column whose format you already know, in the intake note or the task message.
+    - 'Know roughly how many rows the file has: the report states its basis, and a very large file may be read only in part.'
+    - Placeholders you use for "no value" (NA, -, 0, TBD) if they are unusual; the draft's list covers the common ones.
+    - 'Whether you want row numbers kept short (default: first 20 per finding) or exhaustive.'
+  files: Add exactly one CSV (or other delimited text) file. It arrives read-only under /inputs; nothing is modified and no cleaned copy is produced.
+  task: e.g. Check every column; flag anything where a column looks like an ID but repeats, and put the worst columns first.
+capabilities:
+  network:
+    egress: none
+  filesystem:
+    read: none
+    write: none
+  exec: none
+  dataAccess:
+    - files
+publish:
+  include:
+    - agent.yaml
+    - AGENT.md
+    - README.md
+    - LICENSE

@@ -57,6 +57,9 @@ type Pipeline struct {
 	rescanBatch int32
 	// gitHistory is the S2 history seam; nil = history not scanned.
 	gitHistory GitHistory
+	// drafts answers a version's claimed draft (DraftProvenance); nil =
+	// no version is a Drafter revision (the core alone).
+	drafts DraftProvenance
 	// mx records the §16.2 publish funnel. nil is a working no-op.
 	mx *metrics.Metrics
 	// osv and mcpCache are S7's vulnerability database and scanned-server
@@ -213,7 +216,7 @@ func (p *Pipeline) Scan(ctx context.Context, versionID uuid.UUID, trigger string
 		return err
 	}
 
-	result, err := p.runOrchestrator(ctx, v, agent, effPolicy, resume, runID, false)
+	result, err := p.runOrchestrator(ctx, &v, agent, effPolicy, resume, runID, false)
 	if err != nil {
 		return err
 	}
@@ -310,7 +313,7 @@ func (p *Pipeline) resumeFromRun(ctx context.Context, runID uuid.UUID) (Resume, 
 // transitions — Scan and the rescan path layer those on differently.
 func (p *Pipeline) runOrchestrator(
 	ctx context.Context,
-	v storegen.AgentVersion,
+	v *storegen.AgentVersion,
 	agent storegen.GetAgentByIDRow,
 	pol Policy,
 	resume Resume,
@@ -354,6 +357,7 @@ func (p *Pipeline) runOrchestrator(
 	// manifest-only diff would have cleared it (§8.3 S9, DEV-026).
 	var prevManifest []byte
 	var prevVersion, prevDir string
+	var baseline *storegen.AgentVersion
 	prev, err := q.GetPreviousPublishedVersion(ctx, storegen.GetPreviousPublishedVersionParams{
 		AgentID: v.AgentID, ID: v.ID,
 	})
@@ -361,10 +365,19 @@ func (p *Pipeline) runOrchestrator(
 	case err == nil:
 		prevManifest, prevVersion = prev.Manifest, prev.Version
 		prevDir = p.materializePrevArchive(ctx, workDir, prev)
+		baseline = &prev
 	case errors.Is(err, pgx.ErrNoRows):
 		// First publish: S9 is skipped by design and S8 weighs more.
 	default:
 		return RunResult{}, fmt.Errorf("scan: previous published version: %w", err)
+	}
+
+	// A Drafter revision of the baseline, proved by the extension against
+	// the files extracted above, is read by S9 with the benefit of the
+	// doubt (plan drafter-revisions.md §6; agentry#794).
+	revision, err := p.draftRevision(ctx, v, agent, extractDir, baseline, prevDir)
+	if err != nil {
+		return RunResult{}, err
 	}
 
 	// S8's anti-typosquat compare needs names to compare against; without the
@@ -428,6 +441,7 @@ func (p *Pipeline) runOrchestrator(
 			IPClusterAccounts:  clusterAccounts, IPClusterVersions: clusterVersions,
 			SubmitterIsStaff: u.PlatformStaff,
 			Source:           v.Source,
+			DraftRevision:    revision,
 			History:          p.historyReader(agent.RepoID, v.CommitSha),
 		},
 		Policy: pol, Public: agent.Visibility == "public", AgentName: agent.Name,

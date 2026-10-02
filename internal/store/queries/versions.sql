@@ -1,9 +1,19 @@
 -- Agent versions + state machine (M3/WG-E).
 
 -- name: CreateAgentVersion :one
-INSERT INTO agent_versions (id, agent_id, version, commit_sha, manifest, capabilities, channel, submitted_by, source, submitter_ip_hash)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO agent_versions (id, agent_id, version, commit_sha, manifest, capabilities, channel, submitted_by, source, submitter_ip_hash, draft_run)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING *;
+
+-- name: MarkVersionDrafterRevision :execrows
+-- The scan proved the version's claimed draft (plan drafter-revisions.md
+-- §6; agentry#794): the source becomes 'drafter-revision', with the S9
+-- baseline it was proved against. Only once, only while scanning, and only
+-- for a cli-upload that claimed a draft (the immutability trigger holds
+-- the same edge).
+UPDATE agent_versions SET source = 'drafter-revision', draft_baseline = $2, updated_at = now()
+WHERE id = $1 AND status = 'scanning' AND source = 'cli-upload'
+  AND draft_run IS NOT NULL AND draft_baseline IS NULL;
 
 -- name: MarkVersionScanSkipped :execrows
 -- The version was admitted without a scan (M21): recorded in the same

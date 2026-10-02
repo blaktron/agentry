@@ -1,0 +1,24 @@
+# drafted by the Drafter (agentry draft); review every line before you submit it
+schemaVersion: "2"
+name: weekly-issues
+namespace: draft
+version: 0.1.0
+summary: Summarises the week's closed GitHub issues.
+license: Apache-2.0
+tags:
+  - github
+modes:
+  - autonomous
+entrypoints:
+  instruction: AGENT.md
+capabilities:
+  network:
+    egress:
+      - api.github.com
+  filesystem:
+    read: workspace
+  exec: none
+homepage: https://example.org/weekly-issues
+runtime:
+  interfaces:
+    - cli

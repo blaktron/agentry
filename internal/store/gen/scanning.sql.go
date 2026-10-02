@@ -597,7 +597,7 @@ func (q *Queries) GetPolicyForOrg(ctx context.Context, orgID *uuid.UUID) (Policy
 }
 
 const getPreviousPublishedVersion = `-- name: GetPreviousPublishedVersion :one
-SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash, scan_status FROM agent_versions
+SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash, scan_status, draft_run, draft_baseline FROM agent_versions
 WHERE agent_id = $1 AND status = 'published' AND id <> $2
 ORDER BY published_at DESC LIMIT 1
 `
@@ -632,6 +632,8 @@ func (q *Queries) GetPreviousPublishedVersion(ctx context.Context, arg GetPrevio
 		&i.UpdatedAt,
 		&i.SubmitterIpHash,
 		&i.ScanStatus,
+		&i.DraftRun,
+		&i.DraftBaseline,
 	)
 	return i, err
 }
@@ -1351,7 +1353,7 @@ func (q *Queries) ListPublishedVersionsForRescan(ctx context.Context, arg ListPu
 }
 
 const listPublishedVersionsWithoutAttestation = `-- name: ListPublishedVersionsWithoutAttestation :many
-SELECT av.id, av.agent_id, av.version, av.commit_sha, av.manifest, av.capabilities, av.archive_digest, av.archive_key, av.archive_size, av.status, av.status_reason, av.published_at, av.yanked_at, av.yank_reason, av.channel, av.submitted_by, av.source, av.created_at, av.updated_at, av.submitter_ip_hash, av.scan_status
+SELECT av.id, av.agent_id, av.version, av.commit_sha, av.manifest, av.capabilities, av.archive_digest, av.archive_key, av.archive_size, av.status, av.status_reason, av.published_at, av.yanked_at, av.yank_reason, av.channel, av.submitted_by, av.source, av.created_at, av.updated_at, av.submitter_ip_hash, av.scan_status, av.draft_run, av.draft_baseline
 FROM agent_versions av
 LEFT JOIN attestations at ON at.version_id = av.id
 WHERE av.status = 'published' AND at.id IS NULL AND av.scan_status <> 'skipped'
@@ -1395,6 +1397,8 @@ func (q *Queries) ListPublishedVersionsWithoutAttestation(ctx context.Context, l
 			&i.UpdatedAt,
 			&i.SubmitterIpHash,
 			&i.ScanStatus,
+			&i.DraftRun,
+			&i.DraftBaseline,
 		); err != nil {
 			return nil, err
 		}
@@ -1539,7 +1543,7 @@ func (q *Queries) ListStageResults(ctx context.Context, scanRunID uuid.UUID) ([]
 }
 
 const listStuckScanningVersions = `-- name: ListStuckScanningVersions :many
-SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash, scan_status FROM agent_versions
+SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash, scan_status, draft_run, draft_baseline FROM agent_versions
 WHERE status = 'scanning' AND updated_at < $1
 ORDER BY updated_at
 LIMIT $2
@@ -1584,6 +1588,8 @@ func (q *Queries) ListStuckScanningVersions(ctx context.Context, arg ListStuckSc
 			&i.UpdatedAt,
 			&i.SubmitterIpHash,
 			&i.ScanStatus,
+			&i.DraftRun,
+			&i.DraftBaseline,
 		); err != nil {
 			return nil, err
 		}
@@ -1596,7 +1602,7 @@ func (q *Queries) ListStuckScanningVersions(ctx context.Context, arg ListStuckSc
 }
 
 const listStuckSubmittedVersions = `-- name: ListStuckSubmittedVersions :many
-SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash, scan_status FROM agent_versions
+SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash, scan_status, draft_run, draft_baseline FROM agent_versions
 WHERE status = 'submitted' AND source = 'git-tag' AND updated_at < $1
 ORDER BY updated_at
 LIMIT $2
@@ -1641,6 +1647,8 @@ func (q *Queries) ListStuckSubmittedVersions(ctx context.Context, arg ListStuckS
 			&i.UpdatedAt,
 			&i.SubmitterIpHash,
 			&i.ScanStatus,
+			&i.DraftRun,
+			&i.DraftBaseline,
 		); err != nil {
 			return nil, err
 		}

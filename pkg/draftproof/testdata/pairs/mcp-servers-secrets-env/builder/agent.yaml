@@ -1,0 +1,47 @@
+schemaVersion: "2"
+name: probe-agent
+namespace: acme
+version: 1.3.0
+summary: "Probes how the Builder reads a revision."
+license: "MIT"
+
+modes: [autonomous]
+
+entrypoints:
+  instruction: AGENT.md
+
+capabilities:
+  network:
+    egress: ["api.github.com"]
+  filesystem:
+    read: none
+    write: none
+  exec: none
+  secrets: ["SLACK_TOKEN", "GITHUB_TOKEN", "SLACK_TOKEN"]
+  mcpServers:
+    - npm: "@modelcontextprotocol/server-github"
+      version: "2025.4.8"
+      tools: ["search_issues", "get_issue", "search_issues"]
+      secrets: ["GITHUB_TOKEN"]
+      egress: ["API.GitHub.com", "api.github.com"]
+      env:
+        LOG_LEVEL: "warn"
+        GREETING: "hello world"
+        URL_WITH_EQ: "a=b"
+    - pypi: "mcp-server-time"
+      version: "2025.9.25"
+      env:
+        LOCAL_TIMEZONE: "Europe/Dublin"
+    - npm: "slack-mcp-lite"
+      version: "1.0.0"
+      secrets: ["SLACK_BOT"]
+      egress: ["slack.com"]
+    - npm: "fourth-mcp"
+      version: "0.3.1"
+      tools: ["a", "b"]
+      egress: ["four.example.net"]
+      env:
+        MODE: "fast"
+
+publish:
+  include: [agent.yaml, AGENT.md, README.md, LICENSE]

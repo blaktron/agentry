@@ -145,8 +145,13 @@ type Input struct {
 	// SubmitterIsStaff: the submitter is platform staff at scan time, which
 	// exempts the version from S8's two publisher signals (agentry#563).
 	SubmitterIsStaff bool
-	// Source is the version's publish source ("git-tag" | "cli-upload").
+	// Source is the version's publish source ("git-tag" | "cli-upload" |
+	// "drafter-revision").
 	Source string
+	// DraftRevision is set when the version is a Drafter revision of S9's
+	// baseline, proved by the extension's DraftProvenance (agentry#794):
+	// S9 leaves the proved files out of its content diff and escalation.
+	DraftRevision *DraftRevision
 	// History streams the git history reachable from the tagged commit as a
 	// patch (see gitsrv.HistoryPatch); nil when the scanning role has no
 	// repository access. Only meaningful for Source == "git-tag".

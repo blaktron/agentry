@@ -3,6 +3,7 @@ package scan
 import (
 	"fmt"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 
@@ -260,9 +261,52 @@ func (s S9ReleaseDiff) Run(sc stageContext, in *Input) StageResult {
 	prevFiles := withoutShippedTrees(inventoryDir(in.PrevArchiveDir), shippedPacks(in.PrevManifestJSON))
 
 	findings = append(findings, s9ManifestDiff(in)...)
+	current := s.CurrentFindings
+	if rev := in.DraftRevision; rev != nil {
+		// A Drafter revision of this baseline, proved by the registry
+		// against the draft's recorded proof (plan drafter-revisions.md §6,
+		// D2; agentry#794), is read as a first release where the proof
+		// reaches: its manifest and instruction file leave the content diff
+		// and the escalation, on both sides. The manifest diff above still
+		// reports, and every other file is diffed as for any version.
+		in, prevFiles, current = withoutProved(in, prevFiles, current, rev)
+		findings = append(findings, Finding{
+			Scanner: "S9/drafter-revision", Severity: SevInfo, Confidence: ConfHigh,
+			Title: "A Drafter revision of " + rev.Baseline + ", proved: its manifest and instruction file are scanned as a first release's",
+			Detail: map[string]any{
+				"draftRun": rev.Run, "baseline": rev.Baseline,
+				"proved": rev.Proved, "baselineProved": rev.PrevProved,
+			},
+		})
+	}
 	findings = append(findings, s9ContentDiff(sc.bundle, in, prevFiles, bump)...)
-	findings = append(findings, s9Escalate(sc, in, prevFiles, s.CurrentFindings, bump)...)
+	findings = append(findings, s9Escalate(sc, in, prevFiles, current, bump)...)
 	return StageResult{Scanner: "S9", Findings: findings}
+}
+
+// withoutProved is S9's view of a proved Drafter revision: the version's
+// files and the baseline's without the files the proof covers on each
+// side, and the current findings without those in the version's proved
+// files, so none of them is escalated.
+func withoutProved(in *Input, prevFiles []FileEntry, current []Finding, rev *DraftRevision) (*Input, []FileEntry, []Finding) {
+	drop := func(files []FileEntry, paths []string) []FileEntry {
+		out := make([]FileEntry, 0, len(files))
+		for _, f := range files {
+			if !slices.Contains(paths, f.Path) {
+				out = append(out, f)
+			}
+		}
+		return out
+	}
+	view := *in
+	view.Files = drop(in.Files, rev.Proved)
+	var kept []Finding
+	for _, f := range current {
+		if !slices.Contains(rev.Proved, f.FilePath) {
+			kept = append(kept, f)
+		}
+	}
+	return &view, drop(prevFiles, rev.PrevProved), kept
 }
 
 // s9ManifestDiff covers the declared surface: egress hosts and capabilities

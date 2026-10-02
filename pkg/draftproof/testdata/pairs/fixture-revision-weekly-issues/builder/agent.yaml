@@ -1,0 +1,23 @@
+schemaVersion: "2"
+name: weekly-issues
+namespace: acme
+version: 1.3.0
+summary: "Summarises the week's closed GitHub issues."
+license: "Apache-2.0"
+tags: ["github"]
+
+modes: [autonomous]
+
+entrypoints:
+  instruction: AGENT.md
+
+capabilities:
+  network:
+    egress: ["api.github.com"]
+  filesystem:
+    read: workspace
+    write: none
+  exec: none
+
+publish:
+  include: [agent.yaml, AGENT.md, README.md, LICENSE]
