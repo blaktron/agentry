@@ -470,6 +470,26 @@ func (m *Metrics) Meter() metric.Meter {
 	return m.provider.Meter(scopeName)
 }
 
+// extensionScope is the instrumentation scope of an extension's meter: the
+// core's own scope with the extension's name under /x/, the way its routes
+// sit under /api/v1/x/<name>/.
+func extensionScope(name string) string { return scopeName + "/x/" + name }
+
+// ExtensionMeter is the meter an extension named name creates its own
+// instruments on (agentry#777). It is the same provider as the core's, so
+// what the extension records is scraped from /metrics with the core's
+// resource labels and leaves through OTLP when that is configured; only the
+// instrumentation scope differs. Gather renders the core's scope first and
+// drops a later series whose name is already taken, so an extension that
+// reuses a core name loses its series rather than changing the core's.
+// Returns a no-op meter on a nil receiver, never nil.
+func (m *Metrics) ExtensionMeter(name string) metric.Meter {
+	if m == nil || m.provider == nil {
+		return noop.NewMeterProvider().Meter(extensionScope(name))
+	}
+	return m.provider.Meter(extensionScope(name))
+}
+
 // Handler serves the Prometheus exposition of the current instrument values.
 // It is mounted OUTSIDE /api/v1 and unauthenticated (see docs/ops/
 // deployment.md): bind agentryd to a private interface, or keep /metrics off

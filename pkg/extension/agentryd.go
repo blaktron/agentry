@@ -24,6 +24,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel/metric"
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/config"
@@ -447,6 +448,17 @@ func voiceOf(srv *api.Server, pool *pgxpool.Pool) Voice {
 	return serverVoice{srv.Voice()}
 }
 
+// meterOf is the server's meter under the extension's scope, or a no-op
+// one when the server runs without a database: an extension with no
+// database records nothing worth a series (agentry#777).
+func meterOf(srv *api.Server, pool *pgxpool.Pool, name string) metric.Meter {
+	if pool == nil {
+		var none *metrics.Metrics
+		return none.ExtensionMeter(name)
+	}
+	return srv.Metrics().ExtensionMeter(name)
+}
+
 type serverVoice struct{ svc *voice.Service }
 
 func (v serverVoice) Live(ctx context.Context, user uuid.UUID) (*VoiceVersion, error) {
@@ -739,7 +751,7 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 			b.Bind(Deps{DB: pool, Log: log.With("extension", e.Name()), Audit: auditWriter{write: write, writeIn: writeIn},
 				Entitlements: srv.CoreEntitlements(), Blobs: srv.Blobs(), Orgs: orgsOf(srv, pool), Agents: agentsOf(srv, pool),
 				Notifier: notifierOf(srv, pool), Webhooks: webhooksOf(srv, pool), Knowledge: knowledgeOf(srv, pool),
-				Voice: voiceOf(srv, pool)})
+				Voice: voiceOf(srv, pool), Meter: meterOf(srv, pool, e.Name())})
 		}
 		srv.RegisterExtension(e.Name(), e.Routes)
 		if u, ok := e.(Unthrottles); ok {
