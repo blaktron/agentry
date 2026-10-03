@@ -383,6 +383,10 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 		// A ruleset semver we have never seen means the catalogue was judged
 		// by older rules (§8.7).
 		scan.EnqueueNewRulesetWork(context.Background(), srv.jobs, log, rulesetReg)
+		if rulesetReg.New {
+			// …and that the red team has not measured the new rules yet.
+			srv.queueRedTeamForNewRuleset(context.Background(), rulesetReg.Semver)
+		}
 		if signer != nil {
 			scan.EnqueueReattestSweepIfBehind(context.Background(), st, srv.jobs, log, signer, keyReg)
 			scan.EnqueueAttestSweepIfBehind(context.Background(), st, srv.jobs, log, signer)

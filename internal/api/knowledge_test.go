@@ -782,8 +782,9 @@ type handlerQueue struct{ h map[string]queue.Handler }
 func (q *handlerQueue) Enqueue(context.Context, string, string, any, ...queue.EnqueueOption) (uuid.UUID, error) {
 	return uuid.New(), nil
 }
-func (q *handlerQueue) Register(kind string, h queue.Handler) { q.h[kind] = h }
-func (q *handlerQueue) Work(context.Context, ...string) error { return nil }
+func (q *handlerQueue) Register(kind string, h queue.Handler)               { q.h[kind] = h }
+func (q *handlerQueue) CountWaiting(context.Context, string) (int64, error) { return 0, nil }
+func (q *handlerQueue) Work(context.Context, ...string) error               { return nil }
 
 func TestTheLastScanAttemptSettlesThePack(t *testing.T) {
 	env := newTestEnv(t)

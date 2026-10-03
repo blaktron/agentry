@@ -69,15 +69,16 @@ func (q *Queries) CountJobs(ctx context.Context, arg CountJobsParams) (int64, er
 	return count, err
 }
 
-const countPendingJobsOfKind = `-- name: CountPendingJobsOfKind :one
+const countWaitingJobsOfKind = `-- name: CountWaitingJobsOfKind :one
 SELECT count(*)::bigint FROM jobs
-WHERE kind = $1 AND state IN ('available', 'running')
+WHERE kind = $1 AND state = 'available'
 `
 
-// Singleton guard for self-rescheduling maintenance jobs (audit retention):
-// a worker restart must not stack another copy on the queue.
-func (q *Queries) CountPendingJobsOfKind(ctx context.Context, kind string) (int64, error) {
-	row := q.db.QueryRow(ctx, countPendingJobsOfKind, kind)
+// The pg driver's half of queue.Client.CountWaiting: jobs of a kind not yet
+// started (queued, scheduled for later, or waiting out a retry). A
+// self-rescheduling job enqueues its successor only when none is waiting.
+func (q *Queries) CountWaitingJobsOfKind(ctx context.Context, kind string) (int64, error) {
+	row := q.db.QueryRow(ctx, countWaitingJobsOfKind, kind)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
