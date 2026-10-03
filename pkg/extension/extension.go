@@ -608,6 +608,16 @@ type Agents interface {
 	// may not maintain, and one the gate holds are the same false with no
 	// error (agentry#833).
 	Maintainable(ctx context.Context, p *Principal, namespace, name string) (AgentRef, bool, error)
+	// Publishable reports whether p may add a version to the agent at
+	// namespace/name as the core's own routes decide it: the publish role
+	// over the namespace or a grant, a personal access token's
+	// agent:publish, and the owning organization's gate for a write. The
+	// publish role ranks above maintain, so a session caller who may
+	// publish also maintains; a token may publish without org:admin, as
+	// the desktop's and the CLI's sign-in grant does. Absent, unreadable,
+	// not publishable and held by the gate are one false with no error, as
+	// Maintainable's are (agentry#875).
+	Publishable(ctx context.Context, p *Principal, namespace, name string) (AgentRef, bool, error)
 }
 
 // AgentRef is what the core says of an agent a principal may read: its
