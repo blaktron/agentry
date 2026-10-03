@@ -210,6 +210,17 @@ func (c *RiverClient) Register(kind string, h Handler) {
 	}
 }
 
+// CountWaiting counts the kind's jobs in river_job not yet started. It
+// never reads the pg driver's jobs table: a row the pg driver left there is
+// served by nothing once River runs (agentry#853).
+func (c *RiverClient) CountWaiting(ctx context.Context, kind string) (int64, error) {
+	var n int64
+	err := c.st.Pool().QueryRow(ctx, `
+		SELECT count(*) FROM river_job
+		WHERE kind = $1 AND state IN ('available', 'scheduled', 'retryable', 'pending')`, kind).Scan(&n)
+	return n, err
+}
+
 func (c *RiverClient) handler(kind string) Handler {
 	c.mu.Lock()
 	defer c.mu.Unlock()

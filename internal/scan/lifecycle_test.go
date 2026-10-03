@@ -436,8 +436,9 @@ type failingQueue struct{}
 func (failingQueue) Enqueue(context.Context, string, string, any, ...queue.EnqueueOption) (uuid.UUID, error) {
 	return uuid.Nil, errors.New("queue unavailable")
 }
-func (failingQueue) Register(string, queue.Handler)        {}
-func (failingQueue) Work(context.Context, ...string) error { return nil }
+func (failingQueue) Register(string, queue.Handler)                      {}
+func (failingQueue) Work(context.Context, ...string) error               { return nil }
+func (failingQueue) CountWaiting(context.Context, string) (int64, error) { return 0, nil }
 
 // TestQueuePipelineSurfacesEnqueueFailure pins that a scan that could not be
 // scheduled is reported. The enqueue error used to be discarded, so a queue
