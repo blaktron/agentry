@@ -499,7 +499,11 @@ type Deps struct {
 	// PascalCase name such as RunsHostedTokens, not a dotted one), and
 	// begin it with the extension's own name so it cannot take one of the
 	// core's: a series whose name the core already uses is dropped from
-	// the scrape, and the core's is kept. Label values must be bounded —
+	// the scrape, and the core's is kept, but the OTLP export carries both
+	// under their scopes, and a backend that ignores the scope (CloudWatch
+	// EMF) would merge them. An attribute named like a resource label
+	// (service.name, agentry.role, deployment.environment) is dropped from
+	// the scrape. Label values must be bounded —
 	// a run kind, a tier, an outcome — never a run id, a handle, a user or
 	// anything a caller chooses, because every distinct value is a series
 	// kept for the life of the process.

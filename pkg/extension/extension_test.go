@@ -526,13 +526,17 @@ func TestBindHandsTheVoiceStore(t *testing.T) {
 }
 
 // metered records one counter on the meter it is bound with.
-type metered struct{ noop }
+type metered struct {
+	noop
+	err error
+}
 
-func (metered) Name() string { return "metered" }
-func (metered) Bind(d Deps) {
+func (*metered) Name() string { return "metered" }
+func (m *metered) Bind(d Deps) {
 	c, err := d.Meter.Int64Counter("MeteredThings", metric.WithDescription("things the stub counted"))
 	if err != nil {
-		panic(err)
+		m.err = err
+		return
 	}
 	c.Add(context.Background(), 3, metric.WithAttributes(attribute.String("kind", "run")))
 }
@@ -552,7 +556,11 @@ func TestBindHandsTheServersMeter(t *testing.T) {
 	t.Cleanup(func() { _ = mx.Shutdown(context.Background()) })
 	srv := api.New(cfg, st, slog.New(slog.DiscardHandler))
 	srv.SetMetrics(mx)
-	applyExtensions(srv, []Extension{metered{}})
+	ext := &metered{}
+	applyExtensions(srv, []Extension{ext})
+	if ext.err != nil {
+		t.Fatalf("the bound meter refused a counter: %v", ext.err)
+	}
 
 	rec := httptest.NewRecorder()
 	api.NewHandler(srv).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
