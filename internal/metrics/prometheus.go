@@ -40,9 +40,28 @@ func (m *Metrics) Gather(ctx context.Context) ([]byte, error) {
 	// resource becomes EMF dimensions on the CloudWatch side.
 	base := labelsFromSet(rm.Resource.Set())
 
+	// The core's scope first, then the extensions' by scope name (the SDK
+	// hands scopes over in no fixed order). A name already rendered is not
+	// rendered again: two TYPE lines for one name would make the whole
+	// scrape invalid, and the core's series must not change because an
+	// extension chose one of its names (agentry#777).
+	scopes := rm.ScopeMetrics
+	sort.SliceStable(scopes, func(i, j int) bool {
+		a, b := scopes[i].Scope.Name, scopes[j].Scope.Name
+		if (a == scopeName) != (b == scopeName) {
+			return a == scopeName
+		}
+		return a < b
+	})
+	seen := map[string]bool{}
 	var buf bytes.Buffer
-	for _, sm := range rm.ScopeMetrics {
+	for _, sm := range scopes {
 		for _, md := range sm.Metrics {
+			name := sanitizeName(md.Name)
+			if seen[name] {
+				continue
+			}
+			seen[name] = true
 			writeMetric(&buf, md, base)
 		}
 	}
