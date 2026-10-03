@@ -684,6 +684,12 @@ is no agent content and no user identifiers, but you should still keep it off
 the public internet. Bind the API's metrics exposure behind your ingress, or
 scrape over the cluster network only.
 
+A build with an extension (see "Extending the server" below) may add series of
+its own to `/metrics` and to the OTLP export. They carry the same resource
+labels, are named after the extension, and hold the same rule: bounded label
+values, never an identifier. A series whose name the core already uses is left
+out of the scrape, and the core's is kept.
+
 `/healthz` (liveness) and `/readyz` (readiness, checks the database) are
 separate and are what your load balancer should use.
 
@@ -1902,8 +1908,8 @@ committed events and add worker jobs, with `GET /api/v1/meta` listing what is
 loaded. An extension may also admit or refuse a submission after every core
 check and before anything is stored (`Admits`), name a route of its own
 the anonymous rate class skips (`Unthrottles`: a payment provider's signed
-webhook), receive the database pool, the logger and an audit writer at
-start-up (`Binds`), delete the rows it keeps about a person inside the
+webhook), receive the database pool, the logger, an audit writer and a meter
+for its own metrics at start-up (`Binds`), delete the rows it keeps about a person inside the
 account erasure's and the data clear's own transaction (`ErasesAccounts`),
 run a job on a period, and register audit actions under its own name. The core carries no extension and behaves identically with none:
 a self-hosted registry has no subscription tiers, caps nothing, and never
