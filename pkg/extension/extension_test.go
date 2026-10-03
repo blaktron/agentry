@@ -6,17 +6,21 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/knowledge"
+	"github.com/blaktron/agentry/internal/metrics"
 	"github.com/blaktron/agentry/internal/queue"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 	"github.com/blaktron/agentry/internal/voice"
@@ -142,6 +146,12 @@ func TestApplyExtensionsBindsAndRegistersActions(t *testing.T) {
 	}
 	if ext.deps.Knowledge != nil {
 		t.Fatal("a server without a database handed out the knowledge store")
+	}
+	if ext.deps.Meter == nil {
+		t.Fatal("a server without a database handed out a nil meter: it must be a no-op one")
+	}
+	if _, err := ext.deps.Meter.Int64Counter("BoundThings"); err != nil {
+		t.Fatalf("the no-op meter refused an instrument: %v", err)
 	}
 	if !audit.Registered("bound.tier_set") {
 		t.Fatal("the extension's audit action is not in the catalog")
@@ -512,5 +522,56 @@ func TestBindHandsTheVoiceStore(t *testing.T) {
 	}
 	if _, err := v.store.State(ctx, uuid.New()); !errors.Is(err, ErrVoiceNotFound) {
 		t.Fatalf("another person's voice: %v", err)
+	}
+}
+
+// metered records one counter on the meter it is bound with.
+type metered struct {
+	noop
+	err error
+}
+
+func (*metered) Name() string { return "metered" }
+func (m *metered) Bind(d Deps) {
+	c, err := d.Meter.Int64Counter("MeteredThings", metric.WithDescription("things the stub counted"))
+	if err != nil {
+		m.err = err
+		return
+	}
+	c.Add(context.Background(), 3, metric.WithAttributes(attribute.String("kind", "run")))
+}
+
+// TestBindHandsTheServersMeter: an extension bound to a server with a
+// database and metrics records a counter on its meter, and the server's
+// own /metrics serves it with the core's resource labels (agentry#777).
+func TestBindHandsTheServersMeter(t *testing.T) {
+	st := migratedStore(t)
+	cfg := config.Default()
+	cfg.DevMode = true
+	cfg.Scan.OSVURL = "none"
+	mx, err := metrics.New(t.Context(), metrics.Config{ServiceName: "agentryd", Role: "api", Env: "dev"})
+	if err != nil {
+		t.Fatalf("metrics: %v", err)
+	}
+	t.Cleanup(func() { _ = mx.Shutdown(context.Background()) })
+	srv := api.New(cfg, st, slog.New(slog.DiscardHandler))
+	srv.SetMetrics(mx)
+	ext := &metered{}
+	applyExtensions(srv, []Extension{ext})
+	if ext.err != nil {
+		t.Fatalf("the bound meter refused a counter: %v", ext.err)
+	}
+
+	rec := httptest.NewRecorder()
+	api.NewHandler(srv).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("/metrics answered %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "# TYPE MeteredThings counter") {
+		t.Fatalf("the extension's counter is not on /metrics:\n%s", body)
+	}
+	if !strings.Contains(body, `MeteredThings{agentry_role="api",deployment_environment="dev",kind="run",service_name="agentryd"} 3`) {
+		t.Fatalf("the extension's series is not the one it recorded, with the resource labels:\n%s", body)
 	}
 }
