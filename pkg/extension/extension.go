@@ -614,8 +614,9 @@ type Agents interface {
 	// agent:publish, and the owning organization's gate for a write. The
 	// publish role ranks above maintain, so a session caller who may
 	// publish also maintains; a token may publish without org:admin, as
-	// the desktop's and the CLI's sign-in grant does. The same one false
-	// with no error as Maintainable's (agentry#875).
+	// the desktop's and the CLI's sign-in grant does. Absent, unreadable,
+	// not publishable and held by the gate are one false with no error, as
+	// Maintainable's are (agentry#875).
 	Publishable(ctx context.Context, p *Principal, namespace, name string) (AgentRef, bool, error)
 }
 
