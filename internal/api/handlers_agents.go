@@ -244,13 +244,14 @@ func (s *Server) GetAgent(w http.ResponseWriter, r *http.Request, ns Namespace, 
 	if !ok {
 		return
 	}
+	p := principalFrom(r.Context())
 	res := auth.AgentResource{Public: a.Visibility == "public", EffectiveRole: role}
-	maintain := auth.CheckAgent(principalFrom(r.Context()), res, auth.ActAgentMaintain) == nil
+	maintain := auth.CheckAgent(p, res, auth.ActAgentMaintain) == nil
 	out := s.agentToAPI(a, maintain)
 	// Whether the caller may add a version (agentry#875): the desktop's
 	// sign-in token carries agent:publish and never org:admin, so it reads
 	// this where the site reads the maintainer's settings to offer Edit.
-	if auth.CheckAgent(principalFrom(r.Context()), res, auth.ActAgentPublish) == nil {
+	if auth.CheckAgent(p, res, auth.ActAgentPublish) == nil {
 		yes := true
 		out.CanPublish = &yes
 	}
