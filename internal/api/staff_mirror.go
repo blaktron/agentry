@@ -229,17 +229,9 @@ func (s *Server) registerStaffMirror(q queue.Client) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	s.nudgeStaffMirror()
-	pending, err := s.q().CountPendingJobsOfKind(ctx, jobStaffMirror)
-	if err != nil {
-		s.log.WarnContext(ctx, "staff mirror: could not check for a pending run", "err", err)
-		return
-	}
-	if pending > 0 {
-		return
-	}
-	if _, err := q.Enqueue(ctx, jobStaffMirror, "core", struct{}{},
+	if _, err := keepOneWaiting(ctx, q, jobStaffMirror, struct{}{},
 		queue.WithDelay(staffMirrorInterval), queue.WithMaxAttempts(3)); err != nil {
-		s.log.WarnContext(ctx, "staff mirror: seed enqueue", "err", err)
+		s.log.WarnContext(ctx, "staff mirror: seed", "err", err)
 	}
 }
 
@@ -286,7 +278,7 @@ func (s *Server) scheduleNextStaffMirror(ctx context.Context) {
 	if s.jobs == nil || s.cfg.Auth.IdPStaffMirrorGroup == "" {
 		return
 	}
-	if _, err := s.jobs.Enqueue(ctx, jobStaffMirror, "core", struct{}{},
+	if _, err := keepOneWaiting(ctx, s.jobs, jobStaffMirror, struct{}{},
 		queue.WithDelay(staffMirrorInterval), queue.WithMaxAttempts(3)); err != nil {
 		s.log.WarnContext(ctx, "staff mirror: reschedule", "err", err)
 	}

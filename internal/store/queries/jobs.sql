@@ -45,11 +45,12 @@ SELECT
 FROM jobs
 WHERE queue = $1 AND state = 'available' AND run_at <= now();
 
--- name: CountPendingJobsOfKind :one
--- Singleton guard for self-rescheduling maintenance jobs (audit retention):
--- a worker restart must not stack another copy on the queue.
+-- name: CountWaitingJobsOfKind :one
+-- The pg driver's half of queue.Client.CountWaiting: jobs of a kind not yet
+-- started (queued, scheduled for later, or waiting out a retry). A
+-- self-rescheduling job enqueues its successor only when none is waiting.
 SELECT count(*)::bigint FROM jobs
-WHERE kind = $1 AND state IN ('available', 'running');
+WHERE kind = $1 AND state = 'available';
 
 -- name: ResetStuckJobs :execrows
 UPDATE jobs SET state = 'available', locked_at = NULL
