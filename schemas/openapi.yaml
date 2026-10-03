@@ -6643,6 +6643,16 @@ components:
         autoPublishTags:
           type: boolean
           description: Present for callers with maintain (§6.3 toggle).
+        canPublish:
+          type: boolean
+          description: >-
+            Present, and true, on GET /agents/{ns}/{name} when the caller may
+            add a version to this agent: the publish role over the namespace
+            or a grant, and a token's `agent:publish` (agentry#875). Absent
+            otherwise. A client offers Edit on it where the caller's token
+            carries no `org:admin` and so never reads `autoPublishTags` (the
+            desktop's sign-in grant). The upload decides again; the
+            organization's gate for a write is not applied here.
         allowForcePush:
           type: boolean
           description: Present for callers with maintain; whether force-push to the default branch is allowed (§6.3).

@@ -301,6 +301,27 @@ func (s *Server) AgentMaintainable(ctx context.Context, p *auth.Principal, ns, n
 	return registry.Agent{}, false, err
 }
 
+// AgentPublishable is the core's own publish decision for an extension
+// (agentry#875), shaped as AgentMaintainable: agentForAction with the
+// publish action (the publish role over the namespace or a grant, a PAT's
+// agent:publish), the organization gate for a write included. Not found,
+// not readable, readable but not publishable and held by the gate are all
+// false with no error; anything else is a fault.
+func (s *Server) AgentPublishable(ctx context.Context, p *auth.Principal, ns, name string) (registry.Agent, bool, error) {
+	if s.reg == nil {
+		return registry.Agent{}, false, errors.New("api: no registry to read agents from")
+	}
+	a, _, err := s.agentForAction(ctx, p, ns, name, auth.ActAgentPublish)
+	var gate *registry.OrgGateError
+	switch {
+	case err == nil:
+		return a, true, nil
+	case errors.Is(err, registry.ErrNotFound), errors.Is(err, auth.ErrForbidden), errors.Is(err, auth.ErrUnauthorized), errors.As(err, &gate):
+		return registry.Agent{}, false, nil
+	}
+	return registry.Agent{}, false, err
+}
+
 // ExtensionNames lists the mounted extensions in registration order.
 func (s *Server) ExtensionNames() []string {
 	out := make([]string, 0, len(s.extensions))
