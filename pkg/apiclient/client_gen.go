@@ -1817,7 +1817,10 @@ type Agent struct {
 	AutoPublishTags *bool `json:"autoPublishTags,omitempty"`
 
 	// Builtin Whether this is a built-in agent: one of the packages the Agentry CLI embeds and runs as part of the application, published here for reading (agentry#737). A client labels it Built-in in place of its run modes. Only platform staff set it, on an agent of a first-party namespace. Not the runner's attestation state `builtin`, which only the CLI's embedded copy of a package runs under; an install of this agent from the registry is an ordinary release.
-	Builtin       bool      `json:"builtin"`
+	Builtin bool `json:"builtin"`
+
+	// CanPublish Present, and true, on GET /agents/{ns}/{name} when the caller may add a version to this agent: the publish role over the namespace or a grant, and a token's `agent:publish` (agentry#875). Absent otherwise. A client offers Edit on it where the caller's token carries no `org:admin` and so never reads `autoPublishTags` (the desktop's sign-in grant). The upload decides again; the organization's gate for a write is not applied here.
+	CanPublish    *bool     `json:"canPublish,omitempty"`
 	CreatedAt     time.Time `json:"createdAt"`
 	DefaultBranch string    `json:"defaultBranch"`
 
