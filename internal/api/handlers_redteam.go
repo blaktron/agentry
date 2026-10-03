@@ -10,6 +10,8 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -24,36 +26,98 @@ import (
 // jobRedTeam is the queue kind.
 const jobRedTeam = "redteam.run"
 
-// registerRedTeam wires the handler and seeds the recurring job (same
-// shape as audit retention: the job reschedules itself, seeding is guarded
-// by the pending count so a worker restart cannot stack duplicates).
+// redTeamNewRulesetDelay is how long after a new ruleset's registration its
+// red-team run waits: long enough for the worker role of the new build to
+// be up in a rollout, short enough that the new rules are measured the same
+// hour.
+const redTeamNewRulesetDelay = 2 * time.Minute
+
+// redTeamRulesetAttempts is the retry budget of a run queued for a new
+// ruleset: a worker of the outgoing build hands it back until one of the
+// new build takes it, as the catalogue sweep does (agentry#805). Twelve
+// attempts at 2^n seconds keep it alive for about an hour of a rollout.
+const redTeamRulesetAttempts = 12
+
+// redTeamArgs are a run's arguments. The recurring chain carries none.
+type redTeamArgs struct {
+	// Ruleset is the semver a run queued by a new ruleset's registration
+	// was queued to measure. A worker whose bundle is another version
+	// hands the run back rather than measure the wrong rules.
+	Ruleset string `json:"ruleset,omitempty"`
+}
+
+// registerRedTeam wires the handler and seeds the recurring job: one run
+// waiting at a time, whatever the restarts (keepOneWaiting).
 func (s *Server) registerRedTeam(q queue.Client) {
 	if q == nil {
 		return
 	}
 	q.Register(jobRedTeam, s.runRedTeam)
-	if s.st == nil || s.cfg.RedTeam.Interval <= 0 {
+	if s.st == nil {
+		return
+	}
+	if s.cfg.RedTeam.Interval <= 0 {
+		s.log.Info("redteam: disabled (redTeam.interval is not positive)")
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	pending, err := s.q().CountPendingJobsOfKind(ctx, jobRedTeam)
+	seeded, err := keepOneWaiting(ctx, q, jobRedTeam, redTeamArgs{},
+		queue.WithDelay(5*time.Minute), queue.WithMaxAttempts(2))
 	if err != nil {
-		s.log.WarnContext(ctx, "redteam: could not check for a pending run", "err", err)
+		s.log.WarnContext(ctx, "redteam: seed", "err", err)
 		return
 	}
-	if pending > 0 {
-		return
-	}
-	if _, err := q.Enqueue(ctx, jobRedTeam, "core", struct{}{},
-		queue.WithDelay(5*time.Minute), queue.WithMaxAttempts(2)); err != nil {
-		s.log.WarnContext(ctx, "redteam: seed enqueue", "err", err)
+	if seeded {
+		s.log.InfoContext(ctx, "redteam: run scheduled", "in", (5 * time.Minute).String())
 	}
 }
 
-// runRedTeam executes one run and schedules the next.
-func (s *Server) runRedTeam(ctx context.Context, _ queue.Job) error {
+// queueRedTeamForNewRuleset queues a red-team run shortly after this
+// process registered a ruleset semver the registry had never seen, so the
+// new rules are measured on the day they ship rather than at the chain's
+// next turn. Registration is one insert across replicas, so one process
+// queues it. The run is an ordinary one: finding the chain's next run
+// waiting, it enqueues no successor.
+func (s *Server) queueRedTeamForNewRuleset(ctx context.Context, semver string) {
+	if s.jobs == nil || s.st == nil || s.cfg.RedTeam.Interval <= 0 {
+		return
+	}
+	if _, err := s.jobs.Enqueue(ctx, jobRedTeam, "core", redTeamArgs{Ruleset: semver},
+		queue.WithDelay(redTeamNewRulesetDelay), queue.WithMaxAttempts(redTeamRulesetAttempts)); err != nil {
+		s.log.WarnContext(ctx, "redteam: could not queue a run for the new ruleset", "ruleset", semver, "err", err)
+		return
+	}
+	s.log.InfoContext(ctx, "redteam: new ruleset registered; a run is queued", "ruleset", semver, "in", redTeamNewRulesetDelay.String())
+}
+
+// errRedTeamOtherRuleset hands a run queued for another ruleset back to the
+// queue, for a worker of the build that carries it.
+var errRedTeamOtherRuleset = errors.New("redteam: queued for another ruleset")
+
+// runRedTeam executes one run and keeps the chain's next run waiting.
+// Every failure is logged here, attempt by attempt: the queue logs only a
+// job's last.
+func (s *Server) runRedTeam(ctx context.Context, job queue.Job) error {
 	defer s.scheduleNextRedTeam(ctx)
+	var args redTeamArgs
+	if len(job.Args) > 0 {
+		if err := json.Unmarshal(job.Args, &args); err != nil {
+			s.log.ErrorContext(ctx, "redteam: bad args; run dropped", "err", err)
+			return nil
+		}
+	}
+	err := s.redTeamOnce(ctx, args)
+	switch {
+	case errors.Is(err, errRedTeamOtherRuleset):
+		s.log.InfoContext(ctx, "redteam: handed back", "err", err, "attempt", job.Attempt)
+	case err != nil:
+		s.log.ErrorContext(ctx, "redteam: run failed", "err", err, "attempt", job.Attempt)
+	}
+	return err
+}
+
+func (s *Server) redTeamOnce(ctx context.Context, args redTeamArgs) error {
 	if s.st == nil || s.cfg.RedTeam.Interval <= 0 {
 		return nil
 	}
@@ -61,10 +125,14 @@ func (s *Server) runRedTeam(ctx context.Context, _ queue.Job) error {
 	if err != nil {
 		return err
 	}
+	if args.Ruleset != "" && args.Ruleset != bundle.Version() {
+		return fmt.Errorf("%w: run queued for %s, this worker has %s", errRedTeamOtherRuleset, args.Ruleset, bundle.Version())
+	}
 	// One report per bundle per interval across replicas: a fresh report
 	// for this exact bundle means another worker already ran it.
 	if latest, err := s.q().LatestRedTeamReportForBundle(ctx, bundle.Digest()); err == nil &&
 		time.Since(latest.CreatedAt) < s.cfg.RedTeam.Interval/2 {
+		s.log.InfoContext(ctx, "redteam: skipped, this bundle has a fresh report", "ruleset", bundle.Version(), "reportedAt", latest.CreatedAt)
 		return nil
 	}
 	dir, err := redteam.FindCorpus(s.cfg.RedTeam.CorpusDir)
@@ -99,7 +167,7 @@ func (s *Server) scheduleNextRedTeam(ctx context.Context) {
 	if s.jobs == nil || s.cfg.RedTeam.Interval <= 0 {
 		return
 	}
-	if _, err := s.jobs.Enqueue(ctx, jobRedTeam, "core", struct{}{},
+	if _, err := keepOneWaiting(ctx, s.jobs, jobRedTeam, redTeamArgs{},
 		queue.WithDelay(s.cfg.RedTeam.Interval), queue.WithMaxAttempts(2)); err != nil {
 		s.log.WarnContext(ctx, "redteam: reschedule", "err", err)
 	}

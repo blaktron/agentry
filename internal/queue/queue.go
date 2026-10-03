@@ -42,6 +42,12 @@ type Client interface {
 	Enqueue(ctx context.Context, kind, queueName string, args any, opts ...EnqueueOption) (uuid.UUID, error)
 	Register(kind string, h Handler)
 	Work(ctx context.Context, queues ...string) error
+	// CountWaiting counts the jobs of a kind that have not started: queued,
+	// scheduled for later, or waiting out a retry, in this driver's own
+	// table. A self-rescheduling job keeps one successor waiting and asks
+	// this before it enqueues another, so a restart or a stacked chain never
+	// adds one (agentry#853).
+	CountWaiting(ctx context.Context, kind string) (int64, error)
 }
 
 // EnqueueOption customizes enqueue.
@@ -147,6 +153,11 @@ func (c *PGClient) Enqueue(ctx context.Context, kind, queueName string, args any
 
 // Register wires a handler for a job kind (before Work).
 func (c *PGClient) Register(kind string, h Handler) { c.handlers[kind] = h }
+
+// CountWaiting counts the kind's jobs in the jobs table not yet started.
+func (c *PGClient) CountWaiting(ctx context.Context, kind string) (int64, error) {
+	return c.st.Queries().CountWaitingJobsOfKind(ctx, kind)
+}
 
 // Work runs the claim/execute loop until ctx is cancelled.
 func (c *PGClient) Work(ctx context.Context, queues ...string) error {
