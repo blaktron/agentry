@@ -244,8 +244,17 @@ func (s *Server) GetAgent(w http.ResponseWriter, r *http.Request, ns Namespace, 
 	if !ok {
 		return
 	}
-	maintain := auth.CheckAgent(principalFrom(r.Context()), auth.AgentResource{Public: a.Visibility == "public", EffectiveRole: role}, auth.ActAgentMaintain) == nil
+	p := principalFrom(r.Context())
+	res := auth.AgentResource{Public: a.Visibility == "public", EffectiveRole: role}
+	maintain := auth.CheckAgent(p, res, auth.ActAgentMaintain) == nil
 	out := s.agentToAPI(a, maintain)
+	// Whether the caller may add a version (agentry#875): the desktop's
+	// sign-in token carries agent:publish and never org:admin, so it reads
+	// this where the site reads the maintainer's settings to offer Edit.
+	if auth.CheckAgent(p, res, auth.ActAgentPublish) == nil {
+		yes := true
+		out.CanPublish = &yes
+	}
 	// Open dependency alerts (agentry#177): public on the page, because a
 	// consumer deciding whether to install needs them as much as the author.
 	alerts := s.dependencyAlertsForAgent(r, a.ID, a.Namespace+"/"+a.Name)
