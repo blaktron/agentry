@@ -1,11 +1,17 @@
 package metrics
 
 import (
+	"bytes"
 	"context"
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 func newTestMetrics(t *testing.T) *Metrics {
@@ -235,4 +241,136 @@ func sampleValue(t *testing.T, exposition, name, match string) string {
 	}
 	t.Errorf("no sample for %s matching %q in:\n%s", name, match, exposition)
 	return ""
+}
+
+// An extension's instrument is scraped beside the core's, with the same
+// resource labels (agentry#777).
+func TestExtensionInstrumentIsScrapedWithTheResourceLabels(t *testing.T) {
+	m := newTestMetrics(t)
+	c, err := m.ExtensionMeter("runs").Int64Counter("RunsHostedTokens")
+	if err != nil {
+		t.Fatalf("counter: %v", err)
+	}
+	c.Add(t.Context(), 1200, metric.WithAttributes(attribute.String("kind", "run")))
+	out := gather(t, m)
+	if !strings.Contains(out, "# TYPE RunsHostedTokens counter") {
+		t.Fatalf("the extension's counter is not in the exposition:\n%s", out)
+	}
+	if got := sampleValue(t, out, "RunsHostedTokens", `kind="run"`); got != "1200" {
+		t.Errorf("RunsHostedTokens = %q, want 1200", got)
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if strings.HasPrefix(line, "RunsHostedTokens{") && !strings.Contains(line, `service_name="agentryd"`) {
+			t.Errorf("the extension's series lacks the resource labels: %s", line)
+		}
+	}
+}
+
+// An extension that names an instrument after one of the core's cannot
+// change the core's series or break the scrape: the core's is rendered and
+// the extension's dropped, whatever order the SDK hands the scopes over.
+func TestExtensionCannotShadowACoreName(t *testing.T) {
+	m := newTestMetrics(t)
+	m.RecordPublishSubmitted(t.Context())
+	c, err := m.ExtensionMeter("aaa").Int64Counter("PublishSubmitted")
+	if err != nil {
+		t.Fatalf("counter: %v", err)
+	}
+	c.Add(t.Context(), 99)
+	for range 5 {
+		out := gather(t, m)
+		if n := strings.Count(out, "# TYPE PublishSubmitted "); n != 1 {
+			t.Fatalf("PublishSubmitted declared %d times:\n%s", n, out)
+		}
+		if got := sampleValue(t, out, "PublishSubmitted", ""); got != "1" {
+			t.Fatalf("PublishSubmitted = %q, want the core's 1", got)
+		}
+	}
+}
+
+// With an OTLP endpoint, an extension's instrument leaves with the core's.
+func TestExtensionInstrumentLeavesThroughOTLP(t *testing.T) {
+	bodies := make(chan []byte, 8)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		bodies <- b
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	m, err := New(t.Context(), Config{OTLPEndpoint: srv.URL, ExportInterval: time.Hour})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	c, err := m.ExtensionMeter("runs").Int64Counter("RunsHostedTokens")
+	if err != nil {
+		t.Fatalf("counter: %v", err)
+	}
+	c.Add(t.Context(), 7)
+	// Shutdown flushes the periodic reader once.
+	if err := m.Shutdown(t.Context()); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+	select {
+	case b := <-bodies:
+		if !bytes.Contains(b, []byte("RunsHostedTokens")) || !bytes.Contains(b, []byte(extensionScope("runs"))) {
+			t.Fatal("the OTLP export did not carry the extension's instrument under its scope")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("nothing was exported")
+	}
+}
+
+// A nil *Metrics still hands an extension a usable meter.
+func TestNilMetricsHandsANoOpExtensionMeter(t *testing.T) {
+	var m *Metrics
+	mt := m.ExtensionMeter("runs")
+	if mt == nil {
+		t.Fatal("nil Metrics returned a nil extension meter")
+	}
+	c, err := mt.Int64Counter("RunsHostedTokens")
+	if err != nil {
+		t.Fatalf("counter: %v", err)
+	}
+	c.Add(t.Context(), 1)
+}
+
+// A family is dropped when any of its sample names is taken, so an
+// extension's counter named after a core histogram's _count series cannot
+// add a second sample of it.
+func TestExtensionCannotShadowAHistogramSeries(t *testing.T) {
+	m := newTestMetrics(t)
+	m.RecordGitCloneFirstByte(t.Context(), time.Second)
+	c, err := m.ExtensionMeter("aaa").Int64Counter("GitCloneFirstByteSeconds_count")
+	if err != nil {
+		t.Fatalf("counter: %v", err)
+	}
+	c.Add(t.Context(), 99)
+	out := gather(t, m)
+	if n := strings.Count(out, "\nGitCloneFirstByteSeconds_count"); n != 1 {
+		t.Fatalf("GitCloneFirstByteSeconds_count has %d samples:\n%s", n, out)
+	}
+	if got := sampleValue(t, out, "GitCloneFirstByteSeconds_count", ""); got != "1" {
+		t.Errorf("GitCloneFirstByteSeconds_count = %q, want the core's 1", got)
+	}
+}
+
+// An extension's attribute named like a resource label cannot relabel the
+// process or repeat the label, which would make the scrape invalid.
+func TestASeriesAttributeNeverOverridesAResourceLabel(t *testing.T) {
+	m := newTestMetrics(t)
+	c, err := m.ExtensionMeter("runs").Int64Counter("RunsThings")
+	if err != nil {
+		t.Fatalf("counter: %v", err)
+	}
+	c.Add(t.Context(), 1, metric.WithAttributes(attribute.String("service.name", "other"), attribute.String("kind", "run")))
+	out := gather(t, m)
+	line := ""
+	for _, l := range strings.Split(out, "\n") {
+		if strings.HasPrefix(l, "RunsThings{") {
+			line = l
+		}
+	}
+	if line != `RunsThings{agentry_role="all",deployment_environment="dev",kind="run",service_name="agentryd"} 1` {
+		t.Fatalf("the series line is %q", line)
+	}
 }
