@@ -387,6 +387,14 @@ func (a serverAgents) Maintainable(ctx context.Context, p *Principal, namespace,
 	return AgentRef{ID: ag.ID, NamespaceID: ag.NamespaceID, NamespaceKind: NamespaceKind(ag.NamespaceKind), Public: ag.Visibility == "public"}, true, nil
 }
 
+func (a serverAgents) Publishable(ctx context.Context, p *Principal, namespace, name string) (AgentRef, bool, error) {
+	ag, ok, err := a.srv.AgentPublishable(ctx, p, namespace, name)
+	if err != nil || !ok {
+		return AgentRef{}, false, err
+	}
+	return AgentRef{ID: ag.ID, NamespaceID: ag.NamespaceID, NamespaceKind: NamespaceKind(ag.NamespaceKind), Public: ag.Visibility == "public"}, true, nil
+}
+
 // notifierOf adapts the server's notifier to Notifier: nil without a
 // database, the way Deps.DB is, since the rule reads the user's row.
 func notifierOf(srv *api.Server, pool *pgxpool.Pool) Notifier {
