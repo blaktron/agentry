@@ -25,6 +25,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel/metric"
+	noopmetric "go.opentelemetry.io/otel/metric/noop"
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/config"
@@ -448,13 +449,12 @@ func voiceOf(srv *api.Server, pool *pgxpool.Pool) Voice {
 	return serverVoice{srv.Voice()}
 }
 
-// meterOf is the server's meter under the extension's scope, or a no-op
-// one when the server runs without a database: an extension with no
-// database records nothing worth a series (agentry#777).
+// meterOf is the server's meter under the extension's scope (agentry#777),
+// or a no-op one when the server runs without a database, as every other
+// dependency is absent then.
 func meterOf(srv *api.Server, pool *pgxpool.Pool, name string) metric.Meter {
 	if pool == nil {
-		var none *metrics.Metrics
-		return none.ExtensionMeter(name)
+		return noopmetric.NewMeterProvider().Meter(name)
 	}
 	return srv.Metrics().ExtensionMeter(name)
 }

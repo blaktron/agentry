@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -41,31 +42,44 @@ func (m *Metrics) Gather(ctx context.Context) ([]byte, error) {
 	base := labelsFromSet(rm.Resource.Set())
 
 	// The core's scope first, then the extensions' by scope name (the SDK
-	// hands scopes over in no fixed order). A name already rendered is not
-	// rendered again: two TYPE lines for one name would make the whole
-	// scrape invalid, and the core's series must not change because an
-	// extension chose one of its names (agentry#777).
-	scopes := rm.ScopeMetrics
-	sort.SliceStable(scopes, func(i, j int) bool {
-		a, b := scopes[i].Scope.Name, scopes[j].Scope.Name
+	// hands scopes over in no fixed order). A family any of whose sample
+	// names is already rendered is not rendered: a second TYPE line or a
+	// duplicate sample would make the whole scrape invalid, and the core's
+	// series must not change because an extension chose one of its names
+	// (agentry#777).
+	sort.SliceStable(rm.ScopeMetrics, func(i, j int) bool {
+		a, b := rm.ScopeMetrics[i].Scope.Name, rm.ScopeMetrics[j].Scope.Name
 		if (a == scopeName) != (b == scopeName) {
 			return a == scopeName
 		}
 		return a < b
 	})
-	seen := map[string]bool{}
+	taken := map[string]bool{}
 	var buf bytes.Buffer
-	for _, sm := range scopes {
+	for _, sm := range rm.ScopeMetrics {
 		for _, md := range sm.Metrics {
 			name := sanitizeName(md.Name)
-			if seen[name] {
+			samples := sampleNames(name, md.Data)
+			if slices.ContainsFunc(samples, func(s string) bool { return taken[s] }) {
 				continue
 			}
-			seen[name] = true
-			writeMetric(&buf, md, base)
+			for _, s := range samples {
+				taken[s] = true
+			}
+			writeMetric(&buf, name, md, base)
 		}
 	}
 	return buf.Bytes(), nil
+}
+
+// sampleNames are the names a family's sample lines use: the name itself,
+// and a histogram's _bucket, _sum and _count series as well.
+func sampleNames(name string, data metricdata.Aggregation) []string {
+	switch data.(type) {
+	case metricdata.Histogram[int64], metricdata.Histogram[float64]:
+		return []string{name, name + "_bucket", name + "_sum", name + "_count"}
+	}
+	return []string{name}
 }
 
 // label is one rendered name="value" pair, kept apart from its siblings so
@@ -83,8 +97,7 @@ func labelsFromSet(set *attribute.Set) []label {
 	return out
 }
 
-func writeMetric(buf *bytes.Buffer, md metricdata.Metrics, base []label) {
-	name := sanitizeName(md.Name)
+func writeMetric(buf *bytes.Buffer, name string, md metricdata.Metrics, base []label) {
 	switch data := md.Data.(type) {
 	case metricdata.Sum[int64]:
 		writeHeader(buf, name, md.Description, sumType(data.IsMonotonic))
@@ -151,10 +164,18 @@ func writeSample(buf *bytes.Buffer, name, suffix string, base, series []label, v
 }
 
 func writeLabels(buf *bytes.Buffer, base, series []label, extra []label) {
+	// A label name appears once, and the first one wins: a resource label
+	// over a series attribute of the same name (an extension's attribute
+	// cannot relabel the process, agentry#777), a series attribute over a
+	// bucket's le. A repeated name would make the scrape invalid.
 	all := make([]label, 0, len(base)+len(series)+len(extra))
-	all = append(all, base...)
-	all = append(all, series...)
-	all = append(all, extra...)
+	for _, group := range [][]label{base, series, extra} {
+		for _, l := range group {
+			if !slices.ContainsFunc(all, func(a label) bool { return a.name == l.name }) {
+				all = append(all, l)
+			}
+		}
+	}
 	if len(all) == 0 {
 		return
 	}

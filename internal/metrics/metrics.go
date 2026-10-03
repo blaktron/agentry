@@ -463,11 +463,13 @@ func (m *Metrics) RecordWebhookDelivery(ctx context.Context, outcome string) {
 
 // Meter exposes the provider's meter for callers that need an instrument this
 // package does not wrap. Returns a no-op meter on a nil receiver.
-func (m *Metrics) Meter() metric.Meter {
+func (m *Metrics) Meter() metric.Meter { return m.meter(scopeName) }
+
+func (m *Metrics) meter(scope string) metric.Meter {
 	if m == nil || m.provider == nil {
-		return noop.NewMeterProvider().Meter(scopeName)
+		return noop.NewMeterProvider().Meter(scope)
 	}
-	return m.provider.Meter(scopeName)
+	return m.provider.Meter(scope)
 }
 
 // extensionScope is the instrumentation scope of an extension's meter: the
@@ -479,15 +481,14 @@ func extensionScope(name string) string { return scopeName + "/x/" + name }
 // instruments on (agentry#777). It is the same provider as the core's, so
 // what the extension records is scraped from /metrics with the core's
 // resource labels and leaves through OTLP when that is configured; only the
-// instrumentation scope differs. Gather renders the core's scope first and
-// drops a later series whose name is already taken, so an extension that
-// reuses a core name loses its series rather than changing the core's.
+// instrumentation scope differs. In the scrape the core's series win: Gather
+// renders the core's scope first and drops a later family any of whose
+// sample names is already taken, and a series label never overrides a
+// resource label. The OTLP export keeps each scope's instruments apart and
+// is protected only by the naming rule pkg/extension's Deps.Meter states.
 // Returns a no-op meter on a nil receiver, never nil.
 func (m *Metrics) ExtensionMeter(name string) metric.Meter {
-	if m == nil || m.provider == nil {
-		return noop.NewMeterProvider().Meter(extensionScope(name))
-	}
-	return m.provider.Meter(extensionScope(name))
+	return m.meter(extensionScope(name))
 }
 
 // Handler serves the Prometheus exposition of the current instrument values.
