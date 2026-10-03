@@ -549,8 +549,9 @@ func (r *recordingQueue) Enqueue(_ context.Context, kind, queueName string, _ an
 	r.kinds = append(r.kinds, kind+"@"+queueName)
 	return uuid.New(), nil
 }
-func (*recordingQueue) Register(string, queue.Handler)        {}
-func (*recordingQueue) Work(context.Context, ...string) error { return nil }
+func (*recordingQueue) Register(string, queue.Handler)                      {}
+func (*recordingQueue) Work(context.Context, ...string) error               { return nil }
+func (*recordingQueue) CountWaiting(context.Context, string) (int64, error) { return 0, nil }
 
 func TestANewRulesetEnqueuesTheSweepAndTheRedo(t *testing.T) {
 	q := &recordingQueue{}
@@ -579,6 +580,8 @@ func (h *handlerQueue) Register(kind string, fn queue.Handler) {
 	}
 	h.handlers[kind] = fn
 }
+
+func (*handlerQueue) CountWaiting(context.Context, string) (int64, error) { return 0, nil }
 
 func rulesetJob(t *testing.T, semver string) queue.Job {
 	t.Helper()

@@ -43,7 +43,9 @@ func (c *captureQueue) Register(kind string, h queue.Handler) {
 		c.handlers[kind] = h
 	}
 }
-func (c *captureQueue) Work(context.Context, ...string) error { return nil }
+
+func (*captureQueue) CountWaiting(context.Context, string) (int64, error) { return 0, nil }
+func (c *captureQueue) Work(context.Context, ...string) error             { return nil }
 
 // TestPushBookkeepingRidesTheQueue: with a queue wired, afterReceive
 // enqueues one repo.pushed job carrying everything the bookkeeping needs
