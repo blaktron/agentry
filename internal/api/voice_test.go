@@ -473,8 +473,9 @@ type eagerQueue struct {
 	ran      int
 }
 
-func (q *eagerQueue) Register(kind string, h queue.Handler) { q.handlers[kind] = h }
-func (q *eagerQueue) Work(context.Context, ...string) error { return nil }
+func (q *eagerQueue) Register(kind string, h queue.Handler)               { q.handlers[kind] = h }
+func (q *eagerQueue) CountWaiting(context.Context, string) (int64, error) { return 0, nil }
+func (q *eagerQueue) Work(context.Context, ...string) error               { return nil }
 func (q *eagerQueue) Enqueue(ctx context.Context, kind, _ string, args any, _ ...queue.EnqueueOption) (uuid.UUID, error) {
 	raw, err := json.Marshal(args)
 	if err != nil {

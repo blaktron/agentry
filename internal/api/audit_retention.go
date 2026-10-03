@@ -41,8 +41,8 @@ type auditPruneArgs struct {
 // seeds the recurring job. Called from Server.RegisterQueueHandlers.
 //
 // The job reschedules itself rather than relying on an external scheduler
-// (there is none in v1), and seeding is guarded by a pending-job count so a
-// worker restart cannot stack duplicates.
+// (there is none in v1), and the seed and the reschedule both keep one run
+// waiting (keepOneWaiting), so a worker restart cannot stack duplicates.
 func (s *Server) registerAuditRetention(q queue.Client) {
 	if q == nil {
 		return
@@ -53,18 +53,10 @@ func (s *Server) registerAuditRetention(q queue.Client) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	pending, err := s.q().CountPendingJobsOfKind(ctx, jobAuditPrune)
-	if err != nil {
-		s.log.WarnContext(ctx, "audit retention: could not check for a pending sweep", "err", err)
-		return
-	}
-	if pending > 0 {
-		return
-	}
-	if _, err := q.Enqueue(ctx, jobAuditPrune, "core",
+	if _, err := keepOneWaiting(ctx, q, jobAuditPrune,
 		auditPruneArgs{RetentionDays: s.cfg.Audit.RetentionDays},
 		queue.WithDelay(time.Hour), queue.WithMaxAttempts(3)); err != nil {
-		s.log.WarnContext(ctx, "audit retention: seed enqueue", "err", err)
+		s.log.WarnContext(ctx, "audit retention: seed", "err", err)
 	}
 }
 
@@ -110,7 +102,7 @@ func (s *Server) scheduleNextAuditPrune(ctx context.Context) {
 	if s.jobs == nil || s.cfg.Audit.RetentionDays <= 0 {
 		return
 	}
-	if _, err := s.jobs.Enqueue(ctx, jobAuditPrune, "core",
+	if _, err := keepOneWaiting(ctx, s.jobs, jobAuditPrune,
 		auditPruneArgs{RetentionDays: s.cfg.Audit.RetentionDays},
 		queue.WithDelay(auditPruneInterval), queue.WithMaxAttempts(3)); err != nil {
 		s.log.WarnContext(ctx, "audit retention: reschedule", "err", err)

@@ -189,9 +189,10 @@ func (c *countingQueue) Enqueue(_ context.Context, kind, queueName string, _ any
 	c.kind, c.queue = kind, queueName
 	return uuid.New(), nil
 }
-func (c *countingQueue) Register(string, queue.Handler)        {}
-func (c *countingQueue) Work(context.Context, ...string) error { return nil }
-func (c *countingQueue) count() int                            { c.mu.Lock(); defer c.mu.Unlock(); return c.n }
+func (c *countingQueue) Register(string, queue.Handler)                      {}
+func (c *countingQueue) Work(context.Context, ...string) error               { return nil }
+func (c *countingQueue) CountWaiting(context.Context, string) (int64, error) { return 0, nil }
+func (c *countingQueue) count() int                                          { c.mu.Lock(); defer c.mu.Unlock(); return c.n }
 func (c *countingQueue) last() (string, string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
