@@ -116,7 +116,12 @@ type Principal struct {
 	Anonymous bool
 	UserID    uuid.UUID
 	Handle    string
-	// Via is "session", "pat" or "ssh" (git over SSH, agentry#70).
+	// Via is "session", "pat" or "ssh" (git over SSH, agentry#70), or
+	// "user": a principal the core loaded for an account with no
+	// credential, for an extension to ask about a user it holds by id
+	// (agentry#838). A "user" principal carries the account's roles and
+	// no scopes; it passes no session-only route and satisfies no
+	// enforced SSO.
 	Via string
 	// Scopes holds PAT scopes; nil for sessions.
 	Scopes []string
@@ -263,6 +268,12 @@ func Check(p *Principal, res Resource, act Action) error {
 	}
 	if p == nil || p.Anonymous {
 		return ErrUnauthorized
+	}
+	// A principal the core loaded for a user with no credential
+	// (agentry#838) is a question for the agent seams, never a caller: it
+	// authorizes no route, should one ever reach here.
+	if p.Via == "user" {
+		return ErrForbidden
 	}
 
 	// PAT scope gate (sessions bypass scopes; CSRF covers them in transport).
