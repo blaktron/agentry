@@ -15,7 +15,7 @@ intake:
   - id: header_row
     prompt: "Does the first row of the file hold the column names?"
     type: choice
-    choices: ["yes-it-is-the-header", "no-it-is-data", "not-sure-—-judge-it-from-the-file"]
+    choices: ["yes, it is the header", "no, it is data", "not sure — judge it from the file"]
   - id: expected_formats
     prompt: "Anything you already know about particular columns — one per line, e.g. \"order_date is YYYY-MM-DD\", \"id must never be blank\". Optional."
 

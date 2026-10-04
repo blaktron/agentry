@@ -21,7 +21,7 @@ intake:
   - id: region
     prompt: "Which region?"
     type: choice
-    choices: ["emea", "north-america", "apac"]
+    choices: ["emea", "north america", "apac"]
   - id: report
     prompt: "The report to read"
     type: file
