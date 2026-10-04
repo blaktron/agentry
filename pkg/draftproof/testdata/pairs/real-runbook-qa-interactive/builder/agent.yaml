@@ -18,7 +18,7 @@ intake:
   - id: situation
     prompt: "Is this a live incident or routine work?"
     type: choice
-    choices: ["live-incident", "planning-or-routine-work"]
+    choices: ["live incident", "planning or routine work"]
 
 interactive:
   opening: "What do you need on the dev server? Ask about a deploy, a service, the edge cache or a latency page and I'll answer from the m6-dev-runbook, with the runbook's own steps and commands. Say \"incident\" if you are being paged now and I'll lead with the first check. Where the runbook doesn't cover something, I'll say that instead of guessing a command."
