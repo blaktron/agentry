@@ -14,17 +14,22 @@ import (
 // were made on 2026-10-02 by running each draft through the site's own
 // Publish this version path (revision import, /build/submit, a headless
 // browser's form post; agentry#794): draft/ is the Drafter's package/,
-// builder/ is what the registry received.
+// builder/ is what the registry received. Every builder/ was regenerated on
+// 2026-10-04 from the site at agentry-web#1068, which keeps a choice as
+// written and reads every field with LF (agentry-web#949, agentry#888):
+// each draft through the revision import of the same QuickAgent and licence,
+// Publish this version's entries posted with CRLF as a browser does, then
+// inputFromForm and workspaceFiles. What is left below is what the Builder
+// still changes: a name the registry does not know (a mode, a data category,
+// a question type), and a value with a space its one-word fields cannot
+// hold. The registry would refuse each of those but a path with a space,
+// which it accepts (agentry-web#1074).
 var pairsChanged = map[string]string{
 	"data-access-unknown-dupes-order": "an unknown data category is dropped",
 	"egress-host-with-space":          "a host holding a space is dropped",
 	"fs-paths-and-exec-commands":      "a path and a command holding a space are dropped",
-	"intake-every-type":               "a multi-word choice is hyphenated and an unknown question type dropped",
+	"intake-every-type":               "an unknown question type is dropped",
 	"interactive-modes-opening":       "an unknown mode is dropped",
-	"real-csv-quality-36b37c5e":       "multi-word choices are hyphenated",
-	"real-csv-quality-fb83d4f3":       "multi-word choices are hyphenated",
-	"real-go-cve-brief-egress":        "multi-word choices are hyphenated",
-	"real-runbook-qa-interactive":     "multi-word choices are hyphenated",
 	"tags-licence-kept-name-changed":  "a tag holding a space is dropped",
 }
 

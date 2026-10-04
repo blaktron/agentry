@@ -440,6 +440,10 @@ var mountAuthz = map[string]MountDecl{
 		Gate: GateDirectoryToken, Class: RateNone,
 		Why: "the directory calls it once per sign-in over the private network, behind a 32-character secret; the site's edge never routes /internal/ to the registry, the compose edge 404s it, and a Helm ingress must exclude it as it does /metrics",
 	},
+	"POST /internal/directory/email-verification": {
+		Gate: GateDirectoryToken, Class: RateNone,
+		Why: "the directory reads confirmation for its subject and address over the private network with the same secret as the remembered-browser check; edges exclude /internal/ and proxy headers are refused (agentry#869)",
+	},
 
 	// The discovery documents are what a client reads before it holds
 	// anything to authenticate with; the signing keys are public by

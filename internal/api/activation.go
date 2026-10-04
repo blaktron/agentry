@@ -22,7 +22,7 @@ import (
 // the directory writes it active and its token says email_verified false.
 // The registry mails the link that confirms it, at the sign-in that creates
 // the account and on request from the Dashboard, and following the link
-// marks the address confirmed here and in the directory, which then says
+// marks the address confirmed here. The directory reads it and then says
 // email_verified true. Until then the account is read-only (unactivated.go).
 const (
 	// activationTTL is how long a link works (D7): a day, since nothing
@@ -156,64 +156,6 @@ func (s *Server) SendEmailVerification(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mailActivation(ctx, row.Email, row.Handle, token)
 	writeJSON(w, http.StatusOK, EmailVerificationSent{SentTo: row.Email, ResendAfter: after.UTC()})
-}
-
-// directoryActivation is the directory half of activation: the account's
-// directory record says its address is confirmed, so the directory's token
-// says email_verified true from then on (agentry-verified-email in the
-// account-flows blueprint).
-type directoryActivation interface {
-	// ConfirmAddress records the confirmation on the directory account a
-	// link names. False with no error when no account qualifies.
-	ConfirmAddress(ctx context.Context, link directoryLink) (bool, error)
-}
-
-// ConfirmAddress implements directoryActivation: agentry_email_verified
-// true in the account's attributes, the rest of them kept. authentik
-// replaces the attributes object whole on a PATCH, so it is read first.
-func (a *authentikEraser) ConfirmAddress(ctx context.Context, link directoryLink) (bool, error) {
-	u, _, err := a.findAccount(ctx, link)
-	if err != nil || u == nil {
-		return false, err
-	}
-	var full struct {
-		Attributes map[string]any `json:"attributes"`
-	}
-	path := fmt.Sprintf("/api/v3/core/users/%d/", u.PK)
-	if err := a.doJSON(ctx, http.MethodGet, path, nil, &full); err != nil {
-		return false, fmt.Errorf("directory read: %w", err)
-	}
-	if full.Attributes == nil {
-		full.Attributes = map[string]any{}
-	}
-	if v, ok := full.Attributes["agentry_email_verified"]; ok && v == true {
-		return true, nil
-	}
-	full.Attributes["agentry_email_verified"] = true
-	if err := a.doJSON(ctx, http.MethodPatch, path, map[string]any{"attributes": full.Attributes}, nil); err != nil {
-		return false, fmt.Errorf("directory write: %w", err)
-	}
-	return true, nil
-}
-
-// confirmInDirectory records an activation on every directory account the
-// person signed in with. Nothing to do for an account that never signed
-// in through the directory, or where no directory is configured.
-func (s *Server) confirmInDirectory(ctx context.Context, userID uuid.UUID, email string) error {
-	act, ok := s.dirEraser.(directoryActivation)
-	if !ok {
-		return nil
-	}
-	links, err := s.signedInDirectoryLinks(ctx, userID, email)
-	if err != nil {
-		return err
-	}
-	for _, link := range links {
-		if _, err := act.ConfirmAddress(ctx, link); err != nil {
-			return fmt.Errorf("confirm the address in the directory: %w", err)
-		}
-	}
-	return nil
 }
 
 // signedInDirectoryLinks names the directory accounts the person signed in
