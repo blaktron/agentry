@@ -330,8 +330,8 @@ func (s *Server) AgentPublishable(ctx context.Context, p *auth.Principal, ns, na
 // is not active is false with no error, as a session of it would not
 // resolve. It is a question to put to the Agents seam about a user an
 // extension holds by id (a hosted run's owner at the release prefix), never
-// a credential: every route that needs a session or a PAT refuses Via
-// "user", and it satisfies no organization's enforced SSO.
+// a credential: auth.Check refuses Via "user", so it authorizes no route,
+// and it satisfies no organization's enforced SSO.
 func (s *Server) PrincipalForUser(ctx context.Context, userID uuid.UUID) (*auth.Principal, bool, error) {
 	if s.st == nil {
 		return nil, false, errors.New("api: no database to load the user from")

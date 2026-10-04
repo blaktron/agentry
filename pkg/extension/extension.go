@@ -394,11 +394,13 @@ const (
 // ScopeAllows is how the core reads a scope for a route: an anonymous
 // caller never passes; a session passes, having the account's full
 // authority (the route still checks who the account is); a PAT passes
-// only when it was minted with the scope. An extension route calls this
-// with the principal and the scope it requires and refuses on false.
+// only when it was minted with the scope; a principal from
+// Principals.ForUser, which is no caller, never passes. An extension route
+// calls this with the principal and the scope it requires and refuses on
+// false.
 func ScopeAllows(p *Principal, s Scope) bool {
 	switch {
-	case p == nil || p.Anonymous:
+	case p == nil || p.Anonymous || p.Via == "user":
 		return false
 	case p.Via == "pat":
 		return auth.HasScope(p.Scopes, s)
@@ -641,9 +643,13 @@ type Principals interface {
 	// own session would be answered, so a role kept since an earlier check
 	// is answered as before and a role taken away is gone. An account that
 	// does not exist, or is not active (suspended, deleted), is false with
-	// no error. It is not a credential: a route that needs a session or a
-	// PAT refuses it, it satisfies no organization's enforced SSO, and an
-	// extension must never act for the user with it beyond asking.
+	// no error. It is not a credential: auth.Check and ScopeAllows refuse
+	// it, as does every route that needs a session, and an extension must
+	// never act for the user with it beyond asking. It satisfies no
+	// organization's enforced SSO, but the agent seams do not ask for SSO
+	// (only git does), so this is no SSO gate. Its answer is the role
+	// alone, without the scopes of the credential an earlier request
+	// carried: ask it only to re-check what that request already checked.
 	ForUser(ctx context.Context, userID uuid.UUID) (*Principal, bool, error)
 }
 

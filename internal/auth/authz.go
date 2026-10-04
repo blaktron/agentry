@@ -269,6 +269,12 @@ func Check(p *Principal, res Resource, act Action) error {
 	if p == nil || p.Anonymous {
 		return ErrUnauthorized
 	}
+	// A principal the core loaded for a user with no credential
+	// (agentry#838) is a question for the agent seams, never a caller: it
+	// authorizes no route, should one ever reach here.
+	if p.Via == "user" {
+		return ErrForbidden
+	}
 
 	// PAT scope gate (sessions bypass scopes; CSRF covers them in transport).
 	if p.Via == "pat" {
