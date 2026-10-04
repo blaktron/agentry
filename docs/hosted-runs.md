@@ -553,13 +553,18 @@ The key service keeps its own audit, in which every value is a keyed hash.
 ## A knowledge build
 
 A run of the kind `knowledge_build` runs the CLI's built-in Knowledge Creator
-over documents to make or extend a [knowledge pack](knowledge.md) in the
-registry's store, against the platform's model, for credits. It is created
-by the same `POST /api/v1/x/runs/` with `kind: knowledge_build`, the
-documents as `inputs`, and exactly one of `name` (a new pack of that name;
+over documents, a brief, or both to make or extend a
+[knowledge pack](knowledge.md) in the registry's store, against the
+platform's model, for credits. It is created by the same
+`POST /api/v1/x/runs/` with `kind: knowledge_build`, the documents as
+`inputs`, a `brief` (what the pack should cover and for whom: text of at most
+8 KiB after trimming, with no control characters but line breaks and tabs,
+kept in the pack as `sources/brief.md`), at least one of the two, an
+optional `web` (Search the web, below), and exactly one of `name` (a new pack of that name;
 an empty pack of that name, one a refused build left, is reused), `pack` (the
 id of one of the caller's packs) or `continue` (a finished build of the
-caller's, whose documents are copied for the new one). It names no `ref`,
+caller's, whose documents, brief and web choice are copied for the new one,
+so it takes no `inputs`, `brief` or `web` itself). It names no `ref`,
 `task` or `intake`. With `org` (an organization's handle) the build makes
 or extends that organization's shared pack: only its admins may, a caller
 who is not a member gets `404`, one who is not an admin `403`, and an
@@ -591,6 +596,24 @@ pack's digest, pages and bytes when it was `applied`, or a `note` —
 while it ran), `allocation`, or `deleted`, each settling the tokens spent,
 or `invalid` (the output held no valid pack), refunded in full.
 
+**Search the web.** `web: true` lets the Creator search, `false` forbids it,
+and with no `web` a new pack with no documents searches and anything else
+does not; the status route's `knowledgeBuild.web` states the terms and the
+words a client shows beside the choice. A build that searches runs `agentry
+knowledge … --hosted --web` on the host with a credential minted for that
+build alone, as [a hosted draft](#a-hosted-draft)'s is: its searches go to
+the registry's search route and every result and page it reads to the
+[model-input routes](model-input.md) before its model reads it, and its
+`web_read` opens only an address one of its own searches returned. The
+registry counts each call against the build's caps,
+`AGENTRY_RUNS_BUILD_SEARCHES` (30) searches and `AGENTRY_RUNS_BUILD_PAGES`
+(60) pages, and refuses what passes them (`403`). Each search the provider
+answered settles at `AGENTRY_RUNS_DRAFT_SEARCH_CREDITS` (1) inside the
+build's hold, never past it. A build without the web is handed no
+credential. The run's `build.web` record counts the searches, the pages let
+through, AI Review's reads and what it withheld. A page the Creator wrote
+from the web cites `[src: web:<url>]` and keeps none of the page's text.
+
 Refused before a pack is made or anything is held: a token without the
 scopes (`403`), a balance that cannot hold the build (`402`), a pack that is
 not the caller's (`404 knowledge-not-found`), a name a pack with a tree has
@@ -611,10 +634,24 @@ model, for credits. It is created by the same `POST /api/v1/x/runs/` with
 `kind: draft`, a `description` (at most 24 KiB of text) and up to ten
 `hints` (the services or sites it works with, whether it runs on its own or
 in a conversation, an example of the output wanted; one line of at most 500
-bytes each, blank ones dropped). It names no `ref`, and takes no `task`,
-`intake`, `inputs` or `knowledge`: each is `422`. A token needs `run:write`
-only. The description is the run's `task`; the hints are in its `draft`
-record.
+bytes each, blank ones dropped), and optionally `knowledge`, the ids of
+packs the Drafter reads first (below). It names no `ref`, and takes no
+`task`, `intake` or `inputs`: each is `422`. A token needs `run:write`, and
+`knowledge:read` beside it to name packs. The description is the run's
+`task`; the hints are in its `draft` record.
+
+**Knowledge in a draft** (agentry-enterprise#295). The packs are checked as
+a run's are ([knowledge attached to a run](#knowledge-attached-to-a-run)):
+the caller's own `ready` packs, or their organization's while they are an
+active member, at most the run's number of packs. A draft never scans a pack
+again, so each must carry a scan record that stands in: Agentry's report
+with every stage finished and AI Review configured and failing on none of
+its chunks, else `409 knowledge-scan-incomplete` ("Upload the pack again to
+have it scanned anew, or draft without it"). The packs, each counted with
+its scan record, are at most 10 MB in all (`413 knowledge-too-large`). The
+host passes them to `agentry draft --hosted --knowledge`, which withholds
+from the Drafter what their scans flagged and names it in the draft's
+notes; the draft never ships a pack.
 
 A draft holds the same on every tier: its model tokens' credits
 (`AGENTRY_RUNS_DRAFT_TOKEN_CREDITS`, 30), its searches at their price
