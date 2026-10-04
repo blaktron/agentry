@@ -45,6 +45,7 @@ const directoryTrustBodyLimit = 4 << 10
 
 func (s *Server) mountDirectoryTrust(mux httpmux.Mux) {
 	MountFunc(mux, "POST /internal/directory/trusted-device", s.directoryTrustCheck)
+	MountFunc(mux, "POST /internal/directory/email-verification", s.directoryEmailVerification)
 }
 
 type directoryTrustRequest struct {
@@ -56,17 +57,24 @@ type directoryTrustRequest struct {
 	Sub string `json:"sub"`
 }
 
-func (s *Server) directoryTrustCheck(w http.ResponseWriter, r *http.Request) {
+func (s *Server) allowDirectoryCheck(w http.ResponseWriter, r *http.Request) bool {
 	secret := s.cfg.Auth.IdPTrustCheckToken
 	if secret == "" || r.Header.Get("X-Forwarded-For") != "" || r.Header.Get("Forwarded") != "" {
 		// The directory path is off, or the request came through a proxy:
 		// either way the route answers as though it did not exist.
 		http.NotFound(w, r)
-		return
+		return false
 	}
 	given, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if !ok || subtle.ConstantTimeCompare([]byte(given), []byte(secret)) != 1 {
 		w.WriteHeader(http.StatusUnauthorized)
+		return false
+	}
+	return true
+}
+
+func (s *Server) directoryTrustCheck(w http.ResponseWriter, r *http.Request) {
+	if !s.allowDirectoryCheck(w, r) {
 		return
 	}
 	var req directoryTrustRequest

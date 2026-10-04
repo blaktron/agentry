@@ -28,7 +28,8 @@
 #      until its chart turns registry activation on (agentry-web#972).
 #   4. The email claim (agentry#861): the agentry-verified-email mapping
 #      says email_verified false for a fresh sign-up, true once the
-#      attribute is, and true for an account from before (no attribute).
+#      registry confirms its subject and address, and true for an account
+#      from before (no attribute). Refused/unreachable checks fail closed.
 #
 # The scroll gate is page script and is checked in a browser, not here.
 # Needs docker, the pinned images and outbound HTTPS from the directory (the
@@ -193,24 +194,10 @@ case "$check" in *"KEYS named ['agentry_email_verified', 'agentry_has_password',
 case "$check" in *"ACTIVE blank True False"*"ACTIVE named True False"*) echo "ok   both accounts are written active and unactivated (agentry_email_verified false)" ;;
   *) echo "FAIL: an account is not written active and unactivated: $check"; exit 1 ;; esac
 
-# The claim the registry reads (agentry#861): what the directory recorded.
-claim=$(akshell -e ACCOUNTS="$accounts" <<'PY' || true
-import json, os
-from authentik.core.models import User
-from authentik.providers.oauth2.models import ScopeMapping
-m = ScopeMapping.objects.get(name="agentry-verified-email")
-u = User.objects.get(username=json.loads(os.environ["ACCOUNTS"])["blank"])
-print("CLAIM fresh", m.evaluate(user=u, request=None)["email_verified"])
-u.attributes["agentry_email_verified"] = True
-u.save()
-print("CLAIM activated", m.evaluate(user=u, request=None)["email_verified"])
-old = User.objects.create(username="dt-before-" + u.username, email="before@example.test")
-print("CLAIM before", m.evaluate(user=old, request=None)["email_verified"])
-PY
-)
-case "$claim" in *"CLAIM fresh False"*"CLAIM activated True"*"CLAIM before True"*)
-    echo "ok   the email claim says false for a fresh sign-up, true once activated, true for an account from before" ;;
-  *) echo "FAIL: the agentry-verified-email claim: $claim"; exit 1 ;; esac
+# The claim the registry reads (agentry#869): the directory asks the registry.
+docker exec -i "$AK" ak shell -c \
+  'exec(compile(__import__("sys").stdin.read(), "verification-acceptance", "exec"))' \
+  < scripts/acceptance/directory-verification.py
 
 printf '\xff\xfe<article data-terms-version="not-utf8">' | docker exec -i -u 0 "$AK" sh -c "cat > $TERMS_PATH"
 out=$(docker exec "$DRIVER" python /driver.py missing) || { echo "FAIL (a terms file that is not UTF-8)"; echo "$out"; exit 1; }

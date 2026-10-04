@@ -219,7 +219,6 @@ func (s *Server) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var verified uuid.UUID
-	var dirErr error
 	err := s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
 		userID, err := q.ConsumeEmailVerification(r.Context(), auth.HashToken(req.Token))
 		if err != nil {
@@ -243,10 +242,6 @@ func (s *Server) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		if u.EmailVerifiedAt == nil {
-			if err := s.confirmInDirectory(r.Context(), userID, u.Email); err != nil {
-				dirErr = err
-				return err
-			}
 			verified = userID
 		}
 		return nil
@@ -254,11 +249,6 @@ func (s *Server) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			problemValidation(w, r, "This verification link is invalid or expired.")
-			return
-		}
-		if dirErr != nil {
-			s.log.ErrorContext(r.Context(), "verify-email: directory", "err", dirErr)
-			problemUnavailable(w, r, "The account could not be activated just now. Follow the link again in a minute; it still works.")
 			return
 		}
 		s.log.ErrorContext(r.Context(), "verify-email", "err", err)
