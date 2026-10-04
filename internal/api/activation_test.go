@@ -14,38 +14,36 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/config"
 )
 
-// TestDirectoryConfirmAddress: activation writes agentry_email_verified true
-// on the directory account and keeps every other attribute, since
-// authentik replaces the object whole (agentry#861).
-func TestDirectoryConfirmAddress(t *testing.T) {
-	a, d := fakeAuthentik(t)
-	ctx := context.Background()
-	d.users[0].Attributes = map[string]any{"agentry_email_verified": false, "agentry_promo_code": "LAUNCH-1", "agentry_has_password": true}
-
-	ok, err := a.ConfirmAddress(ctx, directoryLink{AccountID: 7, UID: "uid-alice", Email: "alice@example.test"})
-	if err != nil || !ok {
-		t.Fatalf("confirm: %v %v", ok, err)
-	}
-	got := d.users[0].Attributes
-	if got["agentry_email_verified"] != true || got["agentry_promo_code"] != "LAUNCH-1" || got["agentry_has_password"] != true {
-		t.Fatalf("attributes after the confirmation: %v", got)
-	}
-
-	// Once is enough: a confirmed account is not written again.
-	d.patched = nil
-	if ok, err := a.ConfirmAddress(ctx, directoryLink{AccountID: 7, UID: "uid-alice"}); err != nil || !ok || len(d.patched) != 0 {
-		t.Fatalf("second confirm: %v %v, patched %v", ok, err, d.patched)
-	}
-	// No account, no write; another account's uid at the id, no write.
-	for _, link := range []directoryLink{{AccountID: 999, UID: "uid-x"}, {AccountID: 12, UID: "uid-bob"}} {
-		if ok, err := a.ConfirmAddress(ctx, link); err != nil || ok {
-			t.Fatalf("%+v: %v %v, want nothing confirmed", link, ok, err)
-		}
-	}
-	if len(d.patched) != 0 {
-		t.Fatalf("patched %v", d.patched)
+func TestDirectoryEmailVerificationGate(t *testing.T) {
+	for _, tc := range []struct {
+		name, secret, auth, body, forwarded string
+		status                              int
+	}{
+		{"off", "", "", `{}`, "", http.StatusNotFound},
+		{"wrong bearer", "directory-secret", "Bearer wrong", `{}`, "", http.StatusUnauthorized},
+		{"through a proxy", "directory-secret", "Bearer directory-secret", `{}`, "for=203.0.113.9", http.StatusNotFound},
+		{"invalid JSON", "directory-secret", "Bearer directory-secret", `invalid`, "", http.StatusBadRequest},
+		{"empty subject", "directory-secret", "Bearer directory-secret", `{"email":"a@example.test"}`, "", http.StatusBadRequest},
+		{"empty address", "directory-secret", "Bearer directory-secret", `{"sub":"a"}`, "", http.StatusBadRequest},
+		{"oversized", "directory-secret", "Bearer directory-secret", `{"sub":"` + strings.Repeat("a", 4096) + `","email":"a@example.test"}`, "", http.StatusBadRequest},
+		{"no store", "directory-secret", "Bearer directory-secret", `{"sub":"a","email":"a@example.test"}`, "", http.StatusServiceUnavailable},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := config.Default()
+			cfg.Auth.IdPTrustCheckToken = tc.secret
+			s := &Server{cfg: cfg}
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest(http.MethodPost, "/internal/directory/email-verification", strings.NewReader(tc.body))
+			r.Header.Set("Authorization", tc.auth)
+			r.Header.Set("Forwarded", tc.forwarded)
+			s.directoryEmailVerification(w, r)
+			if w.Code != tc.status {
+				t.Fatalf("status %d, want %d", w.Code, tc.status)
+			}
+		})
 	}
 }
 
