@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -161,6 +162,30 @@ func TestCheckPATScopes(t *testing.T) {
 	}
 	if err := Check(pat(RoleMember, "org:admin"), Resource{OrgID: orgID}, ActOrgUpdate); err == nil {
 		t.Fatal("scope cannot exceed role")
+	}
+}
+
+// A principal loaded for a user with no credential (agentry#838) is asked
+// of the agent seams on its role alone and authorizes no route: Check
+// refuses it whatever the role, where the same user's session passes.
+func TestCheckRefusesAPrincipalWithNoCredential(t *testing.T) {
+	orgID := uuid.New()
+	as := func(via string) *Principal {
+		return &Principal{UserID: uuid.New(), Via: via, OrgRoles: map[uuid.UUID]OrgRole{orgID: RoleAdmin}}
+	}
+	for _, act := range []Action{ActOrgUpdate, ActUserTokensManage, ActUserSelfRead, ActAgentCreate} {
+		if err := Check(as("session"), Resource{OrgID: orgID}, act); err != nil {
+			t.Fatalf("the session of an admin, %s: %v", act, err)
+		}
+		if err := Check(as("user"), Resource{OrgID: orgID}, act); !errors.Is(err, ErrForbidden) {
+			t.Errorf("a principal with no credential, %s: %v, want ErrForbidden", act, err)
+		}
+	}
+	res := AgentResource{EffectiveRole: AgentRoleAdmin}
+	for _, act := range []Action{ActAgentRead, ActAgentMaintain, ActAgentPublish} {
+		if err := CheckAgent(as("user"), res, act); err != nil {
+			t.Errorf("the agent seams answer a principal with no credential on its role, %s: %v", act, err)
+		}
 	}
 }
 
