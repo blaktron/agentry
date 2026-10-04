@@ -274,6 +274,9 @@ func TestScopeAllows(t *testing.T) {
 	if ScopeAllows(pat, ScopeSecretWrite) || !ScopeAllows(&Principal{Via: "pat", Scopes: []string{"secret:write"}}, ScopeSecretWrite) {
 		t.Fatal("secret:write is not read as the core reads it")
 	}
+	if ScopeAllows(&Principal{Via: "user"}, ScopeRunRead) {
+		t.Fatal("a principal from Principals.ForUser passed; it is no caller (agentry#838)")
+	}
 }
 
 // wrapperLike is the shape SecureAgentry's knowledge wrapper takes (plan

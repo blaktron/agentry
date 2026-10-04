@@ -394,11 +394,13 @@ const (
 // ScopeAllows is how the core reads a scope for a route: an anonymous
 // caller never passes; a session passes, having the account's full
 // authority (the route still checks who the account is); a PAT passes
-// only when it was minted with the scope. An extension route calls this
-// with the principal and the scope it requires and refuses on false.
+// only when it was minted with the scope; a principal from
+// Principals.ForUser, which is no caller, never passes. An extension route
+// calls this with the principal and the scope it requires and refuses on
+// false.
 func ScopeAllows(p *Principal, s Scope) bool {
 	switch {
-	case p == nil || p.Anonymous:
+	case p == nil || p.Anonymous || p.Via == "user":
 		return false
 	case p.Via == "pat":
 		return auth.HasScope(p.Scopes, s)
@@ -473,6 +475,11 @@ type Deps struct {
 	// Agents is the core's read of an agent as an extension may ask it
 	// (agentry#381). nil when the server runs without a database.
 	Agents Agents
+	// Principals loads the principal the core would hold for a user, for
+	// asking Agents about someone the extension holds by id rather than
+	// by a live request (agentry#838). nil when the server runs without a
+	// database.
+	Principals Principals
 	// Notifier carries a message an extension composed to a person, under
 	// the core's rules and through the core's transport (agentry#366).
 	// nil when the server runs without a database, as DB is.
@@ -618,6 +625,32 @@ type Agents interface {
 	// not publishable and held by the gate are one false with no error, as
 	// Maintainable's are (agentry#875).
 	Publishable(ctx context.Context, p *Principal, namespace, name string) (AgentRef, bool, error)
+}
+
+// Principals answers who a user is now, as the core would resolve them,
+// for an extension that must re-ask a role later than the request that
+// gave it one — a hosted revision's release fetch asks again whether the
+// run's owner may still maintain or publish to the QuickAgent
+// (agentry#838; plan drafter-revisions §3). The extension rebuilds none of
+// the rule (memberships, roles, the account's standing): the core loads
+// them.
+type Principals interface {
+	// ForUser is the principal for userID with no credential: the
+	// account's standing and its organization roles as they are now, as
+	// a session would carry them, with Via "user", no scopes and no
+	// session. Put it to Agents: Readable, Maintainable and Publishable
+	// answer it on the role alone, which never exceeds what the person's
+	// own session would be answered, so a role kept since an earlier check
+	// is answered as before and a role taken away is gone. An account that
+	// does not exist, or is not active (suspended, deleted), is false with
+	// no error. It is not a credential: auth.Check and ScopeAllows refuse
+	// it, as does every route that needs a session, and an extension must
+	// never act for the user with it beyond asking. It satisfies no
+	// organization's enforced SSO, but the agent seams do not ask for SSO
+	// (only git does), so this is no SSO gate. Its answer is the role
+	// alone, without the scopes of the credential an earlier request
+	// carried: ask it only to re-check what that request already checked.
+	ForUser(ctx context.Context, userID uuid.UUID) (*Principal, bool, error)
 }
 
 // AgentRef is what the core says of an agent a principal may read: its
