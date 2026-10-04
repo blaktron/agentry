@@ -395,6 +395,21 @@ func (a serverAgents) Publishable(ctx context.Context, p *Principal, namespace, 
 	return AgentRef{ID: ag.ID, NamespaceID: ag.NamespaceID, NamespaceKind: NamespaceKind(ag.NamespaceKind), Public: ag.Visibility == "public"}, true, nil
 }
 
+// principalsOf adapts the server's principal loading to Principals: nil
+// without a database, the way Deps.DB is.
+func principalsOf(srv *api.Server, pool *pgxpool.Pool) Principals {
+	if pool == nil {
+		return nil
+	}
+	return serverPrincipals{srv}
+}
+
+type serverPrincipals struct{ srv *api.Server }
+
+func (p serverPrincipals) ForUser(ctx context.Context, userID uuid.UUID) (*Principal, bool, error) {
+	return p.srv.PrincipalForUser(ctx, userID)
+}
+
 // notifierOf adapts the server's notifier to Notifier: nil without a
 // database, the way Deps.DB is, since the rule reads the user's row.
 func notifierOf(srv *api.Server, pool *pgxpool.Pool) Notifier {
@@ -757,7 +772,7 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 		if b, ok := e.(Binds); ok {
 			pool, log, write, writeIn := srv.ExtensionDeps()
 			b.Bind(Deps{DB: pool, Log: log.With("extension", e.Name()), Audit: auditWriter{write: write, writeIn: writeIn},
-				Entitlements: srv.CoreEntitlements(), Blobs: srv.Blobs(), Orgs: orgsOf(srv, pool), Agents: agentsOf(srv, pool),
+				Entitlements: srv.CoreEntitlements(), Blobs: srv.Blobs(), Orgs: orgsOf(srv, pool), Agents: agentsOf(srv, pool), Principals: principalsOf(srv, pool),
 				Notifier: notifierOf(srv, pool), Webhooks: webhooksOf(srv, pool), Knowledge: knowledgeOf(srv, pool),
 				Voice: voiceOf(srv, pool), Meter: meterOf(srv, pool, e.Name())})
 		}
