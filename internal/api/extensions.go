@@ -322,6 +322,44 @@ func (s *Server) AgentPublishable(ctx context.Context, p *auth.Principal, ns, na
 	return registry.Agent{}, false, err
 }
 
+// PrincipalForUser is the principal the core would hold for userID with no
+// credential presented, for pkg/extension.Deps.Principals (agentry#838): the
+// account's current standing and memberships as a session would carry them
+// — loaded now, so a role taken away since an earlier request is gone — with
+// Via "user", no scopes and no session. An account that does not exist or
+// is not active is false with no error, as a session of it would not
+// resolve. It is a question to put to the Agents seam about a user an
+// extension holds by id (a hosted run's owner at the release prefix), never
+// a credential: every route that needs a session or a PAT refuses Via
+// "user", and it satisfies no organization's enforced SSO.
+func (s *Server) PrincipalForUser(ctx context.Context, userID uuid.UUID) (*auth.Principal, bool, error) {
+	if s.st == nil {
+		return nil, false, errors.New("api: no database to load the user from")
+	}
+	u, err := s.q().GetUserByID(ctx, userID)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return nil, false, nil
+	case err != nil:
+		return nil, false, err
+	case u.State != "active":
+		return nil, false, nil
+	}
+	roles, err := s.loadOrgRoles(ctx, userID)
+	if err != nil {
+		return nil, false, err
+	}
+	return &auth.Principal{
+		UserID:        userID,
+		Handle:        u.Handle,
+		Via:           "user",
+		OrgRoles:      roles,
+		EmailVerified: u.EmailVerifiedAt != nil,
+		Unactivated:   auth.Unactivated(u.EmailVerifiedAt, u.Email),
+		PlatformStaff: u.PlatformStaff,
+	}, true, nil
+}
+
 // ExtensionNames lists the mounted extensions in registration order.
 func (s *Server) ExtensionNames() []string {
 	out := make([]string, 0, len(s.extensions))
