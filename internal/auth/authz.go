@@ -116,7 +116,12 @@ type Principal struct {
 	Anonymous bool
 	UserID    uuid.UUID
 	Handle    string
-	// Via is "session", "pat" or "ssh" (git over SSH, agentry#70).
+	// Via is "session", "pat" or "ssh" (git over SSH, agentry#70), or
+	// "user": a principal the core loaded for an account with no
+	// credential, for an extension to ask about a user it holds by id
+	// (agentry#838). A "user" principal carries the account's roles and
+	// no scopes; it passes no session-only route and satisfies no
+	// enforced SSO.
 	Via string
 	// Scopes holds PAT scopes; nil for sessions.
 	Scopes []string
