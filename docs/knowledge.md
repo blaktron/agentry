@@ -1,9 +1,14 @@
 # Knowledge packs in the registry
 
 A knowledge pack is an LLM wiki: compiled markdown pages with an index,
-together with the documents they were compiled from, at most 10 MB, that a
-run searches through the knowledge tools over a read-only `/knowledge`
-mount. [Running QuickAgents](runner.md#knowledge-packs) covers making one,
+together with the documents and the brief they were compiled from, at most
+10 MB, that a run searches through the knowledge tools over a read-only
+`/knowledge` mount. A pack may come from documents, from a brief alone
+(what it should cover and for whom, kept as `sources/brief.md`), or both;
+its pages cite `[src: doc:<path>]`, and since agentry-cli v0.6.43 also
+`[src: web:<url>]` for a page the Knowledge Creator read on the web (the
+page's text is not kept) and `[src: model]` for what it took from its
+model's own knowledge. [Running QuickAgents](runner.md#knowledge-packs) covers making one,
 keeping it in the local store and attaching it to a run, and
 [Hosted runs](hosted-runs.md#knowledge-attached-to-a-run) attaching it to
 a run on Agentry's infrastructure. This page is the registry's side: how a
@@ -145,6 +150,16 @@ already holds is not stored again, and is no conflict, so a retried
 replace that already landed is harmless. The data key never leaves the
 core through it.
 
+In SecureAgentry two more doors read packs. A hosted knowledge build may
+take a brief instead of documents, or beside them, and search the web
+through the registry's model-input routes, each search priced inside the
+build's hold ([a knowledge build](hosted-runs.md#a-knowledge-build)). A
+hosted draft may read the account's `ready` packs, at most 10 MB in all; it
+does not scan them again, and the files their scan flagged are withheld
+from the Drafter ([a hosted draft](hosted-runs.md#a-hosted-draft)). On a
+person's computer, `agentry draft --knowledge` scans first any pack whose
+record is not a registry's ([Running QuickAgents](runner.md#agentry-draft-description)).
+
 ## Shared knowledge in an organization
 
 An organization can keep packs of its own, which every active member
@@ -214,8 +229,8 @@ place. The scan runs these stages:
   masked, and not stored in any case), S3 hidden content, S4 signatures,
   and S8's URL reputation. A pack has no manifest, no code and no listing,
   so the stages that read those do not run.
-- **AI Review, twice**: first over `sources/`, the documents the pack was
-  compiled from, then over `wiki/`, the pages compiled from them. Each
+- **AI Review, twice**: first over `sources/`, the documents and the brief
+  the pack was compiled from, then over `wiki/`, the pages compiled from them. Each
   half is read in chunks no larger than the judge provider says it reads
   in one call (the provider's `InputLimit`). That is about 50 KB for Jev
   (`typesafe`), 256 KiB for the chat providers, and eight requests' worth
