@@ -26,8 +26,9 @@
 # value, in the server's and the worker's environment), a self-enrolled
 # account is written ACTIVE with the attribute agentry_email_verified:
 # false, so it reaches the site at once, read-only in the registry; the
-# mapping asserts the attribute, and nothing but the registry's emailed
-# activation link sets it true. Unset, sign-up is what it was (DEV-062):
+# mapping asks the registry whether its emailed activation link confirmed
+# this account and address (agentry#869). The attribute stays false. Unset,
+# sign-up is what it was (DEV-062):
 # the account written inactive and this flow's own mail activating it. An
 # account without the attribute counts as confirmed, as every active one
 # was. It is a switch because the claim's honesty depends on two halves
@@ -1099,21 +1100,61 @@ entries:
   # hard-codes email_verified false (2026.8), which the registry's T-12 rule
   # treats as unlinkable, so the registry's provider uses this one instead
   # (scripts/dev/authentik-bootstrap.sh on compose; the site's chart in
-  # production). It asserts what the directory recorded: false for a
-  # self-enrolled account until the registry's activation link writes
-  # agentry_email_verified true; an account without the attribute predates
-  # agentry#861 and was confirmed (or came from a trusted provider), so it
-  # stays true. Only a literal false withholds it: a value someone edited
-  # into another type does not lock an account out.
+  # production). A literal false marker makes it read registry confirmation
+  # for the linked subject and same address (agentry#869). An account without
+  # that marker predates agentry#861 or was directory/social-confirmed and
+  # retains its claim. Activation never writes the directory marker.
+  # Shared with the site's social classify policy (D3): a failed check must
+  # withhold verification AND leave the account alone, never delete it as
+  # though a healthy registry had said it was unactivated. The raw result
+  # carries availability separately for that caller. No result is cached.
+  - model: authentik_policies_expression.expressionpolicy
+    id: policy-email-verification
+    identifiers:
+      name: agentry-email-verification
+    attrs:
+      execution_logging: false
+      expression: |
+        import os
+        account = request.context.get("registry_account")
+        unavailable = {"available": False, "verified": False}
+        if account is None:
+            return unavailable
+        if (account.attributes or {}).get("agentry_email_verified", True) is not False:
+            return {"available": True, "verified": True}
+        secret = os.environ.get("AGENTRY_IDP_TRUST_CHECK_TOKEN", "")
+        base = os.environ.get("AGENTRY_REGISTRY_INTERNAL_URL", "")
+        if not secret or not base:
+            return unavailable
+        try:
+            answer = requests.post(
+                base.rstrip("/") + "/internal/directory/email-verification",
+                json={"sub": account.uid, "email": account.email},
+                headers={"Authorization": "Bearer " + secret},
+                timeout=2,
+                allow_redirects=False,
+            )
+            if answer.status_code == 200:
+                verified = answer.json().get("verified")
+                if type(verified) is bool:
+                    return {"available": True, "verified": verified}
+        except Exception as exc:
+            ak_logger.warning("agentry: confirmation check unavailable", error=type(exc).__name__)
+        return unavailable
   - model: authentik_providers_oauth2.scopemapping
     id: scope-verified-email
     identifiers:
       name: agentry-verified-email
     attrs:
       scope_name: email
-      description: Email address, verified as the directory recorded it
+      description: Email address, confirmed by the registry for new password sign-ups
       expression: |
-        verified = (request.user.attributes or {}).get("agentry_email_verified", True) is not False
+        verified = False
+        try:
+            result = ak_call_policy("agentry-email-verification", registry_account=request.user).raw_result
+            verified = isinstance(result, dict) and result.get("available") is True and result.get("verified") is True
+        except Exception:
+            pass
         return {"email": request.user.email, "email_verified": verified}
   # The shipped sign-in flow's two bindings, restated by their shipped
   # identifiers so this updates them in place. Both policies must run when

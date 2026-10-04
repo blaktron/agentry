@@ -15,7 +15,7 @@ intake:
   - id: header_row
     prompt: "Is the first line of the file a header row of column names?"
     type: choice
-    choices: ["yes-it-is-a-header", "no-the-first-line-is-data", "not-sure-judge-it-from-the-file"]
+    choices: ["yes, it is a header", "no, the first line is data", "not sure, judge it from the file"]
   - id: missing_tokens
     prompt: "Any extra values that should count as missing in this file, besides empty cells and na / n/a / null / none / - / ? (for example 'redacted')?"
   - id: known_formats
