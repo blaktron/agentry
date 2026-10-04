@@ -660,6 +660,71 @@ The Drafter is part of the CLI the host runs, like the Knowledge Creator:
 a draft runs without a registry scan of a package. What it drafts is not
 published by it: a submission of the draft is scanned like any other.
 
+Every draft's record also keeps what its host sealed, and never the
+content: `package`, the path, SHA-256 and size of each file under
+`package/`, and `proof`, the draft's proof (below). Both come from the
+host's summary alone, and only for a package that was sealed whole.
+
+### A hosted revision
+
+A revision is a draft of the next version of a QuickAgent that is already
+published (Edit with AI, In Agentry). It is created by the same `POST
+/api/v1/x/runs/` with `kind: draft` and `revises`, the QuickAgent's current
+published release as `ns/name@version`, and the person's two texts in
+place of a description and hints: `instructions`, what to change, and
+`problems`, what is wrong with the current version. Each is text of at most
+4,000 bytes after trimming, with no control characters except line breaks
+and tabs, and at least one must be given. A revision with a `description`,
+`hints` or `knowledge` gets `422`, and so does a plain draft with
+`instructions` or `problems`.
+
+It is refused, in order:
+
+- `404 not-found` for a release the caller may not revise: a QuickAgent
+  they can neither maintain nor publish to, a version that is not its
+  current published release, and a missing name, which all get the same
+  answer. The core decides the roles, and publishing is enough because the
+  desktop's sign-in token publishes but never maintains.
+- `403 revise-tier` ("Pro and above") when the payer is on Standard. It is
+  judged on the payer's tier, as a knowledge build is, with the `account`,
+  its `tier` and `requires` in the problem. A signed-in caller's
+  `caller.revise.allowed` in `status` says the same in advance. On
+  Standard, a revision runs on the person's own computer with their own
+  keys (Agentry Desktop), which this route never sees.
+
+A revision is otherwise a draft. It has the same hold, caps, credential,
+admission and settlement, its task reads `Revise ns/name@version.`, and its
+record keeps `revises` (the ref and the digest of the release's archive, as
+resolved at create) and the two texts. An erasure removes the texts with
+the hints. Whatever the release's visibility, its claim mints a release
+grant, and the host runs `agentry draft --hosted --revise-ref REF
+--revise-registry …/api/v1/x/runs/rel` with the two texts as files. The
+release prefix serves the CLI that one release, at the pinned digest, only
+while the draft is live. The CLI's AI Review reads the two texts as it
+reads a description, and the release's manifest and instruction file as
+`input_file` chunks, before the Drafter does. The admission counts those
+release scans under a cap of their own, `releaseScans`, at most 24. A
+release too large for them stops at that scan and is refunded as a draft
+that did not run.
+
+**What publishing it proves.** A draft's proof (`pkg/draftproof`) is two
+digests. One is of the manifest, parsed and canonicalised, leaving out what
+the Builder sets itself or cannot hold. The other is of the instruction
+file's text with LF line breaks and exactly one final newline. The host
+computes the proof over `package/` before sealing, and the registry
+computes it over the files it receives, so only digests cross. An upload
+may name the run it came from in `draftRun`, which Edit with AI's *Publish
+this version* sends. That is a claim. At the version's publish scan the
+registry asks the deployment whether the submitter ran that draft, whether
+the draft succeeded with a sealed package, whether it revised the release
+S9 compares against at that release's archive digest, and whether it
+recorded the same proof. Only a yes gives the version the source
+`drafter-revision` and S9's benefit of the doubt ([trust.md,
+S9](trust.md#s9)). Anything else gets the usual S9: an unknown or failed
+run, another account's draft, a plain draft, a revision changed in the
+Builder, or a registry without this extension. The answer reads the
+draft's record alone and never a tier, a balance or the draft's body.
+
 ## A hosted Voice Writer run
 
 A run of the kind `voice_build` runs the CLI's built-in Voice Writer
