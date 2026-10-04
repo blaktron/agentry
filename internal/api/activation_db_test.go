@@ -4,8 +4,8 @@ package api_test
 // self-enrolled directory account arrives with email_verified false, is
 // mailed an activation link at the sign-in that creates it, is read-only
 // until it follows the link, may ask for another at most every five
-// minutes, and is confirmed by the link in the registry and in the
-// directory together. D10: an unactivated account whose directory account
+// minutes, and is confirmed by the link in the registry. The directory
+// reads that confirmation without an activation write (agentry#869). D10: an unactivated account whose directory account
 // is gone gives its address up to a verified sign-in.
 
 import (
@@ -47,8 +47,8 @@ func (n *activationMails) sent(to string) []string {
 }
 
 // fakeDirectoryUsers is authentik's users admin API as activation and D10
-// use it: read one account by id, PATCH its attributes (replacing them
-// whole, as authentik does), and search by address. failing makes every
+// use it: read one account by id and search by address. PATCH is refused,
+// as the registry's restricted token refuses directory writes. failing makes every
 // call answer 503.
 type fakeDirectoryUsers struct {
 	mu       sync.Mutex
@@ -73,25 +73,8 @@ func (d *fakeDirectoryUsers) handler() http.Handler {
 		}
 		_ = json.NewEncoder(w).Encode(u)
 	})
-	mux.HandleFunc("PATCH /api/v3/core/users/{pk}/", func(w http.ResponseWriter, r *http.Request) {
-		d.mu.Lock()
-		defer d.mu.Unlock()
-		if d.failing {
-			http.Error(w, "down", http.StatusServiceUnavailable)
-			return
-		}
-		pk, _ := strconv.Atoi(r.PathValue("pk"))
-		u, ok := d.accounts[pk]
-		if !ok {
-			http.Error(w, "{}", http.StatusNotFound)
-			return
-		}
-		var body struct {
-			Attributes map[string]any `json:"attributes"`
-		}
-		_ = json.NewDecoder(r.Body).Decode(&body)
-		u["attributes"] = body.Attributes
-		_ = json.NewEncoder(w).Encode(u)
+	mux.HandleFunc("PATCH /api/v3/core/users/{pk}/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
 	})
 	mux.HandleFunc("GET /api/v3/core/users/", func(w http.ResponseWriter, r *http.Request) {
 		d.mu.Lock()
@@ -132,6 +115,7 @@ func activationEnv(t *testing.T, idp *fakeOIDC, dir *fakeDirectoryUsers) (*testE
 		cfg.Social.Google = config.SocialProvider{ClientID: idp.clientID, ClientSecret: "s", Issuer: idp.origin()}
 		cfg.Auth.IdPAdminURL = dsrv.URL
 		cfg.Auth.IdPAdminToken = "tok"
+		cfg.Auth.IdPTrustCheckToken = directoryTrustToken
 	}, func(s *api.Server) {
 		s.SetOIDCHTTPClient(idp.hostClient())
 		s.SetNotifier(mails)
@@ -147,6 +131,66 @@ func activationEnv(t *testing.T, idp *fakeOIDC, dir *fakeDirectoryUsers) (*testE
 		defer mu.Unlock()
 		return append([]api.Event(nil), seen...)
 	}
+}
+
+// TestDirectoryEmailVerification answers only for the directory identity's
+// exact confirmed address, and only to the directory on the private network.
+func TestDirectoryEmailVerification(t *testing.T) {
+	idp := newFakeOIDC(t)
+	dir := &fakeDirectoryUsers{accounts: map[int]map[string]any{}}
+	env, mails, _ := activationEnv(t, idp, dir)
+	idp.email, idp.emailUnverified = "activation"+env.sfx+"@example.test", true
+	_, userID := signInAs(t, env, idp, "authentik")
+	check := func(secret, sub, email string, headers map[string]string, wantStatus int, wantVerified bool) {
+		t.Helper()
+		body, _ := json.Marshal(map[string]string{"sub": sub, "email": email})
+		req, _ := http.NewRequest(http.MethodPost, env.srv.URL+"/internal/directory/email-verification", strings.NewReader(string(body)))
+		req.Header.Set("Authorization", "Bearer "+secret)
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = res.Body.Close() }()
+		if res.StatusCode != wantStatus {
+			t.Fatalf("check: status %d, want %d", res.StatusCode, wantStatus)
+		}
+		if wantStatus == http.StatusOK {
+			var answer struct {
+				Verified *bool `json:"verified"`
+			}
+			if err := json.NewDecoder(res.Body).Decode(&answer); err != nil || answer.Verified == nil || *answer.Verified != wantVerified {
+				t.Fatalf("check: %+v (%v), want verified=%v", answer, err, wantVerified)
+			}
+		}
+	}
+	check(directoryTrustToken, idp.sub, idp.email, nil, http.StatusOK, false)
+	env.doJSON(anonymous, http.MethodPost, "/api/v1/auth/verify-email", map[string]any{"token": mails.sent(idp.email)[0]}, nil, http.StatusNoContent)
+	check(directoryTrustToken, idp.sub, strings.ToUpper(idp.email), nil, http.StatusOK, true)
+	check(directoryTrustToken, "another-subject", idp.email, nil, http.StatusOK, false)
+	check(directoryTrustToken, idp.sub, "somebody-else@example.test", nil, http.StatusOK, false)
+	check("wrong", idp.sub, idp.email, nil, http.StatusUnauthorized, false)
+	check(directoryTrustToken, "", idp.email, nil, http.StatusBadRequest, false)
+	check(directoryTrustToken, idp.sub, "", nil, http.StatusBadRequest, false)
+	for _, h := range []string{"X-Forwarded-For", "Forwarded"} {
+		check(directoryTrustToken, idp.sub, idp.email, map[string]string{h: "for=203.0.113.9"}, http.StatusNotFound, false)
+	}
+	if _, err := env.st.Pool().Exec(context.Background(), `UPDATE users SET state = 'suspended' WHERE id = $1::uuid`, userID); err != nil {
+		t.Fatal(err)
+	}
+	check(directoryTrustToken, idp.sub, idp.email, nil, http.StatusOK, false)
+	// An unavailable store must never become an affirmative answer.
+	if _, err := env.st.Pool().Exec(context.Background(), `ALTER TABLE identities RENAME TO identities_hidden`); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := env.st.Pool().Exec(context.Background(), `ALTER TABLE identities_hidden RENAME TO identities`); err != nil {
+			t.Fatal(err)
+		}
+	})
+	check(directoryTrustToken, idp.sub, idp.email, nil, http.StatusServiceUnavailable, false)
 }
 
 // signInAs completes a sign-in through the fake IdP and returns the session
@@ -275,20 +319,9 @@ func TestUnactivatedAccountUntilActivated(t *testing.T) {
 	}
 	_ = res.Body.Close()
 
-	// A directory that cannot be reached leaves the link unused (I5).
+	// Activation belongs to the registry: it works while the directory is
+	// unavailable, and does not change the directory's attributes (agentry#869).
 	dir.failing = true
-	res = env.do(anonymous, http.MethodPost, "/api/v1/auth/verify-email", map[string]any{"token": links[0]})
-	if res.StatusCode != http.StatusServiceUnavailable {
-		t.Fatalf("activation with the directory down: %d", res.StatusCode)
-	}
-	_ = res.Body.Close()
-	env.doJSON(c, http.MethodGet, "/api/v1/user", nil, &me, http.StatusOK)
-	if me.EmailVerified {
-		t.Fatal("confirmed in the registry while the directory was down")
-	}
-
-	// The older link still works after a resend, and confirms both halves.
-	dir.failing = false
 	env.doJSON(anonymous, http.MethodPost, "/api/v1/auth/verify-email", map[string]any{"token": links[0]}, nil, http.StatusNoContent)
 	me.EmailVerificationResendAfter = nil
 	env.doJSON(c, http.MethodGet, "/api/v1/user", nil, &me, http.StatusOK)
@@ -296,7 +329,7 @@ func TestUnactivatedAccountUntilActivated(t *testing.T) {
 		t.Fatalf("after activation: %+v", me)
 	}
 	attrs := dir.attributes(4242)
-	if attrs["agentry_email_verified"] != true || attrs["agentry_promo_code"] != "LAUNCH-1" {
+	if attrs["agentry_email_verified"] != false || attrs["agentry_promo_code"] != "LAUNCH-1" {
 		t.Fatalf("the directory account's attributes after activation: %v", attrs)
 	}
 	var heard int

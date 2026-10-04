@@ -959,12 +959,14 @@ existing one. For `email` it attaches the account-flows blueprint's
 which hard-codes `email_verified: false` (2026.8); the registry's
 auto-link rule (T-12) only links an IdP identity to an existing account
 when *both* sides' addresses are verified. The blueprint's mapping
-asserts what the directory recorded (agentry#861): `false` for a
+reports confirmation (agentry#861, narrowed by agentry#869): `false` for a
 self-enrolled account until the registry's activation link confirms it
-(the account's `agentry_email_verified` attribute), `true` once it has,
+(marked by `agentry_email_verified: false`), `true` once it has,
 and `true` for an account without the attribute — one created by an
 operator, provisioned from an upstream directory, or enrolled before
-agentry#861. Before agentry#861 the script made its own mapping that
+agentry#861. Since agentry#869 the false marker makes the mapping read the
+registry for the linked subject and same address; activation never changes that marker.
+Before agentry#861 the script made its own mapping that
 asserted `true` for everyone; re-running the script moves the provider
 onto the blueprint's (the old mapping is left unused).
 
@@ -1141,11 +1143,14 @@ like anything typed:
   (`403 account-unactivated`; git pushes are refused too). A link works
   once, for 24 hours, and an earlier one keeps working after a new one is
   sent. Following it (`POST /api/v1/auth/verify-email`, which stays open
-  under `externalOnly`) confirms the address in the registry and writes
-  `agentry_email_verified: true` on the directory account in one step, so
-  the directory's token says `email_verified: true` from then on; that
-  write needs the admin URL and token below, with permission to change a
-  user. The read-only rule applies where the directory owns credentials
+  under `externalOnly`) confirms the address in the registry. The directory
+  reads that confirmation through `POST /internal/directory/email-verification`
+  on `AGENTRY_REGISTRY_INTERNAL_URL`, with `AGENTRY_IDP_TRUST_CHECK_TOKEN`
+  (the remembered-browser check's URL and secret). It requires the exact linked
+  authentik subject and the same address, and withholds verification on a
+  refused, unreachable or malformed answer. The false attribute stays
+  unchanged; activation needs no directory write or `change_user` (agentry#869).
+  The read-only rule applies where the directory owns credentials
   (`AGENTRY_AUTH_EXTERNAL_ONLY=true`); a native deployment keeps its
   narrower gates on an unverified address (no publishing, QuickAgents or
   organizations). The username
@@ -1334,8 +1339,7 @@ registry account (§12.7); the sign-in account — email, display name,
 password hash — lives in authentik. Set `AGENTRY_IDP_ADMIN_URL` (the API
 origin as the server reaches it: `http://authentik-server:9000` on the
 compose stack) and `AGENTRY_IDP_ADMIN_TOKEN` (an authentik API token with
-rights over users — view, change (activation writes the account's
-`agentry_email_verified` attribute, agentry#861) and delete — and to view
+rights to view and delete users, and to view
 OAuth source connections for the settings page below; the bootstrap token
 works) and erasure also deletes the
 person's directory account — never a superuser or a service account. The
