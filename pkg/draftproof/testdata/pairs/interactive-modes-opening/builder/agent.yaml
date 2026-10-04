@@ -11,7 +11,7 @@ entrypoints:
   instruction: AGENT.md
 
 interactive:
-  opening: "Hello.\r\nWhat shall we look at today?"
+  opening: "Hello.\nWhat shall we look at today?"
 
 capabilities:
   network:
