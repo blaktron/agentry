@@ -336,6 +336,22 @@ jobs:
       - name: directory terms of service acceptance (scripts/acceptance/directory-terms.sh)
         run: ./scripts/acceptance/directory-terms.sh
 
+  # The per-IP sign-up budget (agentry#830, DEV-063) on a throwaway
+  # directory of the pinned image, at a budget of 3: a password sign-up and
+  # a reset are counted with the client's address (an account, two mails),
+  # and then a sign-up and a reset are refused at the start. One directory
+  # and no recreation, so a shorter timeout than the terms job's.
+  directory-budget:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: directory sign-up budget acceptance (scripts/acceptance/directory-budget.sh)
+        run: ./scripts/acceptance/directory-budget.sh
+
   # The headless helm chart: lint, a template render with the required
   # values, and the assertion that nothing web-shaped renders (the site is
   # its own deployment since the cut-over, DEV-091). This lived in
