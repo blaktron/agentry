@@ -11,7 +11,8 @@
 #
 # Enrollment:  captcha (5) → prompt (10) → terms, where the deployment has
 #              them (15) → user write, active but unactivated (20)
-#              → authenticator setup (40) → login (100)
+#              → set up an authenticator now or later (35)
+#              → authenticator setup, unless "later" (40) → login (100)
 # Recovery:    identification (10) → email link (20) → authenticator (25)
 #              → new password (30) → user write (40) → login (100)
 #
@@ -647,11 +648,16 @@ entries:
       remember_device: seconds=0
       remember_me_offset: seconds=0
 
-  # Authenticator (TOTP) setup inside enrollment (agentry#53, DEV-062):
-  # every new account leaves the flow with an authenticator, which is what
-  # the registry's public-publish gate reads back through the amr claim
-  # (DEV-080). Binding order 40: after the address is confirmed, before
-  # the session is created.
+  # Authenticator (TOTP) setup inside enrollment (agentry#53, DEV-062),
+  # skippable since agentry#894 (DEV-211): the step before it (order 35)
+  # asks whether to set one up now or later, and the setup (order 40) runs
+  # unless the answer is "later". An account that skips signs in with its
+  # password alone, since the sign-in's validation stage skips an account
+  # with no authenticator (authentik's shipped not_configured_action: skip),
+  # as a social sign-up without one already does. It has no second factor
+  # for the registry's public-publish gate (DEV-080) until it adds one from
+  # Settings, and the site's Dashboard says so (agentry-web#1141). Recovery
+  # still makes it set one up before it may choose a new password.
   - model: authentik_stages_authenticator_totp.authenticatortotpstage
     id: stage-totp-setup
     identifiers:
@@ -659,6 +665,72 @@ entries:
     attrs:
       friendly_name: !Format ["%s authenticator", !Env [AGENTRY_BRAND_NAME, "Agentry"]]
       digits: 6
+
+  # The choice. A flat key, like the terms' agreement, because a second
+  # prompt stage's data is merged into the plan's with dict.update; the
+  # account is already written, so it reaches no attribute. "now" is the
+  # starting value, and a value that is not one of the two is refused by
+  # the field itself.
+  - model: authentik_stages_prompt.prompt
+    id: field-authenticator-intro
+    identifiers:
+      name: agentry-enrollment-authenticator-intro
+    attrs:
+      field_key: agentry_authenticator_intro
+      # A static field renders no label; the model wants one.
+      label: Two-factor authentication
+      type: static
+      required: false
+      placeholder: ""
+      placeholder_expression: false
+      initial_value: >-
+        <p><strong>Protect your account with two-factor authentication.</strong></p>
+        <p>An authenticator app on your phone gives a six-digit code that is asked for at
+        sign-in, so a stolen password alone cannot open your account. You can set one up now,
+        or skip this and add one later from your account's settings.</p>
+      initial_value_expression: false
+      order: 0
+  - model: authentik_stages_prompt.prompt
+    id: field-authenticator-choice
+    identifiers:
+      name: agentry-enrollment-authenticator-choice
+    attrs:
+      field_key: agentry_authenticator_choice
+      label: Authenticator app
+      type: radio-button-group
+      required: true
+      placeholder_expression: true
+      placeholder: |
+        return [
+            {"label": "Set it up now (recommended)", "value": "now"},
+            {"label": "Skip for now and set it up later", "value": "later"},
+        ]
+      initial_value: now
+      initial_value_expression: false
+      order: 1
+  - model: authentik_stages_prompt.promptstage
+    id: stage-enrollment-authenticator-choice
+    identifiers:
+      name: agentry-enrollment-authenticator-choice
+    attrs:
+      fields:
+        - !KeyOf field-authenticator-intro
+        - !KeyOf field-authenticator-choice
+  # Gates the setup's binding, read when the setup is reached. Only an
+  # explicit "later" skips it: no plan, no answer or anything else shows the
+  # setup, and so does an error (the binding's failure_result: true).
+  - model: authentik_policies_expression.expressionpolicy
+    id: policy-enrollment-authenticator-wanted
+    identifiers:
+      name: agentry-enrollment-authenticator-wanted
+    attrs:
+      execution_logging: false
+      expression: |
+        plan = context.get("flow_plan")
+        if plan is None:
+            return True
+        prompt = plan.context.get("prompt_data") or {}
+        return prompt.get("agentry_authenticator_choice") != "later"
 
   - model: authentik_flows.flowstagebinding
     identifiers:
@@ -719,8 +791,20 @@ entries:
   - model: authentik_flows.flowstagebinding
     identifiers:
       target: !KeyOf flow-enrollment
+      stage: !KeyOf stage-enrollment-authenticator-choice
+      order: 35
+  - model: authentik_flows.flowstagebinding
+    id: binding-enrollment-totp
+    identifiers:
+      target: !KeyOf flow-enrollment
       stage: !KeyOf stage-totp-setup
       order: 40
+    attrs:
+      # The choice is made at 35, after the plan: read it when the setup is
+      # reached.
+      policy_engine_mode: all
+      evaluate_on_plan: false
+      re_evaluate_policies: true
   - model: authentik_flows.flowstagebinding
     identifiers:
       target: !KeyOf flow-enrollment
@@ -734,6 +818,18 @@ entries:
     identifiers:
       policy: !KeyOf policy-enrollment-terms-configured
       target: !KeyOf binding-enrollment-terms
+      order: 0
+    attrs:
+      enabled: true
+      negate: false
+      failure_result: true
+      timeout: 5
+  # A failed binding policy skips its stage, so an error in the choice's
+  # policy must count as a pass: the setup is shown rather than skipped.
+  - model: authentik_policies.policybinding
+    identifiers:
+      policy: !KeyOf policy-enrollment-authenticator-wanted
+      target: !KeyOf binding-enrollment-totp
       order: 0
     attrs:
       enabled: true
