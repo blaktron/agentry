@@ -425,9 +425,8 @@ type MCPServer struct {
 	// server's one egress host.
 	URL string `yaml:"url,omitempty" json:"url,omitempty"`
 	// Auth is how a remote server is signed in to (v2, required with
-	// URL): AuthOAuth needs a connection, AuthSecret sends the server's
-	// one declared secret as a bearer header, AuthNone sends nothing.
-	Auth string `yaml:"auth,omitempty" json:"auth,omitempty"`
+	// URL).
+	Auth MCPAuth `yaml:"auth,omitempty" json:"auth,omitempty"`
 	// Scopes are what a remote server's OAuth consent asks for (v2, with
 	// AuthOAuth only).
 	Scopes []string `yaml:"scopes,omitempty" json:"scopes,omitempty"`
@@ -457,11 +456,18 @@ type MCPServer struct {
 	OAuth *MCPOAuth `yaml:"oauth,omitempty" json:"oauth,omitempty"`
 }
 
-// The values of MCPServer.Auth.
+// MCPAuth is how a remote MCP server is signed in to (v2, agentry#910).
+type MCPAuth string
+
 const (
-	AuthOAuth  = "oauth"
-	AuthSecret = "secret"
-	AuthNone   = "none"
+	// AuthOAuth needs the person's connection: an OAuth grant to the
+	// server for this one QuickAgent version.
+	AuthOAuth MCPAuth = "oauth"
+	// AuthSecret sends the server's one declared secret as a bearer
+	// header.
+	AuthSecret MCPAuth = "secret"
+	// AuthNone sends nothing.
+	AuthNone MCPAuth = "none"
 )
 
 // MCPOAuth is a package server's OAuth sign-in: the authorization server
@@ -474,12 +480,13 @@ type MCPOAuth struct {
 	// Scopes are what consent asks for.
 	Scopes []string `yaml:"scopes,omitempty" json:"scopes,omitempty"`
 	// Files are written by the runner into the server's token folder,
-	// mounted read-only, each rendered from its template with
-	// OAuthTemplatePlaceholders.
+	// mounted read-only, each rendered by ExpandOAuthTemplate. The runner
+	// writes them itself, never through the gateway, so a template's `$`
+	// and braces are content, not expansions.
 	Files []MCPOAuthFile `yaml:"files,omitempty" json:"files,omitempty"`
 	// Env are environment variables the runner sets on the server, each
-	// rendered with OAuthEnvPlaceholders: the token itself, or a path in
-	// the token folder.
+	// rendered by ExpandOAuthEnvValue: the token itself, or a path in the
+	// token folder.
 	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
 }
 

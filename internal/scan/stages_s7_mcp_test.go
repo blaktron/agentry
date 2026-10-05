@@ -325,7 +325,8 @@ func TestS7ReportsARemoteServerWithoutLookingItUp(t *testing.T) {
 		len(got["scopes"].([]string)) != 1 {
 		t.Fatalf("detail: %+v", got)
 	}
-	if !strings.Contains(rs[0].Title, "gmailmcp.googleapis.com") || strings.Contains(strings.ToLower(rs[0].Title), "safe") {
+	if !strings.Contains(rs[0].Title, "https://gmailmcp.googleapis.com/mcp/v1") || !strings.Contains(rs[0].Title, "gmail.readonly") ||
+		strings.Contains(strings.ToLower(rs[0].Title), "safe") {
 		t.Fatalf("title: %q", rs[0].Title)
 	}
 	if nd := findScanner(res.Findings, scannerOSVNoData); len(nd) != 0 {

@@ -14,9 +14,9 @@ import (
 
 // S7 — declared MCP servers: known vulnerabilities (§8.3; reinstated for
 // manifest v2 by agentry#177, plan agentry-notes/plans/mcp-vuln-scanning.md,
-// DEV-090). A `capabilities.mcpServers` package entry is an exact npm or
-// PyPI package version; a remote entry (agentry#910) has no package and is
-// reported as S7/remote-server, never looked up. S7 asks the vulnerability database about each one — live
+// DEV-090). A `capabilities.mcpServers` package entry is an exact npm
+// or PyPI package version; a remote entry (agentry#910) has no package
+// and is reported as S7/remote-server, never looked up. S7 asks the vulnerability database about each one — live
 // the first time a package version is seen, from the mcp_server_scans
 // registry when it was checked within mcpScanTTL — and reports every
 // advisory as a finding at the gate's rating of it (AdvisoryGateSeverity:
@@ -159,23 +159,17 @@ func scoredAdvisories(advs []OSVVulnerability) []OSVVulnerability {
 // DeclaredMCPServers lists a manifest's declared servers (ecosystem "npm" or
 // "pypi"). The pipeline uses it to record the version ↔ server join.
 func DeclaredMCPServers(manifestJSON []byte) []declaredServer {
-	out, _, _ := mcpServerEntries(manifestJSON)
+	out, _, _, _ := mcpServerEntries(manifestJSON)
 	return out
 }
 
 // mcpServerEntries splits a manifest's declared servers into those S7 can
-// look up, sorted, and, in manifest order with a reason each, those it
-// cannot: neither npm nor PyPI, or no pinned version. Manifest validation
-// (V5) refuses the latter, so they only reach S7 in a manifest that came
-// some other way; S7 still names them rather than drop them.
-func mcpServerEntries(manifestJSON []byte) (declared []declaredServer, uncovered []string, reasons map[string]string) {
-	declared, uncovered, reasons, _ = mcpServerEntriesWithRemote(manifestJSON)
-	return declared, uncovered, reasons
-}
-
-// mcpServerEntriesWithRemote is mcpServerEntries plus the remote servers,
-// in manifest order, which S7 reports and never looks up.
-func mcpServerEntriesWithRemote(manifestJSON []byte) (declared []declaredServer, uncovered []string, reasons map[string]string, remote []manifest.MCPServer) {
+// look up, sorted; in manifest order with a reason each, those it cannot
+// (neither npm nor PyPI, or no pinned version: manifest validation (V5)
+// refuses both, so they only reach S7 in a manifest that came some other
+// way, and S7 still names them rather than drop them); and the remote
+// servers, which S7 reports and never looks up.
+func mcpServerEntries(manifestJSON []byte) (declared []declaredServer, uncovered []string, reasons map[string]string, remote []manifest.MCPServer) {
 	var m manifest.Manifest
 	if len(manifestJSON) == 0 || json.Unmarshal(manifestJSON, &m) != nil {
 		return nil, nil, nil, nil
@@ -224,11 +218,14 @@ func remoteServerFindings(remote []manifest.MCPServer) []Finding {
 		if scopes == nil {
 			scopes = []string{}
 		}
+		title := "Remote MCP server " + srv.URL + " (auth " + string(srv.Auth)
+		if len(scopes) > 0 {
+			title += "; scopes " + strings.Join(scopes, ", ")
+		}
 		out = append(out, Finding{
 			Scanner: scannerRemoteServer, Severity: SevLow, Confidence: ConfHigh,
-			Title: "Remote MCP server at " + srv.RemoteHost() + " (auth " + srv.Auth +
-				"): it runs at its vendor; the pipeline checked its address and scopes, not its code",
-			Detail:   map[string]any{"url": srv.URL, "host": srv.RemoteHost(), "auth": srv.Auth, "scopes": scopes},
+			Title:    title + "): it runs at its vendor; the pipeline checked its address and scopes, not its code",
+			Detail:   map[string]any{"url": srv.URL, "host": srv.RemoteHost(), "auth": string(srv.Auth), "scopes": scopes},
 			Taxonomy: []string{"LLM03", "ASI04"},
 		})
 	}
@@ -238,7 +235,7 @@ func remoteServerFindings(remote []manifest.MCPServer) []Finding {
 // Run implements Stage.
 func (s S7MCPServers) Run(sc stageContext, in *Input) StageResult {
 	res := StageResult{Scanner: "S7", NoCache: true}
-	servers, noData, reasons, remote := mcpServerEntriesWithRemote(in.ManifestJSON)
+	servers, noData, reasons, remote := mcpServerEntries(in.ManifestJSON)
 	res.Findings = append(res.Findings, remoteServerFindings(remote)...)
 	if len(servers) == 0 && len(noData) == 0 {
 		return res

@@ -166,6 +166,30 @@ func TestRemoteServerRefusals(t *testing.T) {
       auth: oauth
       scopes: [read, read]
 `, "duplicate scope"},
+		"numeric short form": {`    - url: https://127.1/mcp
+      auth: none
+`, "not an IP address"},
+		"hex form": {`    - url: https://0x7f.1/mcp
+      auth: none
+`, "not an IP address"},
+		"five numeric labels": {`    - url: https://1.2.3.4.5/x
+      auth: none
+`, "not an IP address"},
+		"ipv6": {`    - url: https://[::1]/mcp
+      auth: none
+`, "not an IP address"},
+		"uppercase scheme": {`    - url: HTTPS://mcp.example.com/mcp
+      auth: none
+`, "must be https://"},
+		"gateway expansion in the path": {`    - url: https://mcp.example.com/x/${GITHUB_TOKEN}
+      auth: none
+`, "gateway would expand"},
+		"template in the path": {`    - url: "https://mcp.example.com/{{ .Secret }}"
+      auth: none
+`, "gateway would expand"},
+		"space in the path": {`    - url: https://mcp.example.com/ mcp
+      auth: none
+`, "printable ASCII"},
 		"duplicate url": {`    - url: https://mcp.example.com/mcp
       auth: none
     - url: https://mcp.example.com/mcp
@@ -200,6 +224,22 @@ func TestMCPOAuthRefusals(t *testing.T) {
 		"issuer with query": {pkg(`        issuer: https://auth.example.com/?tenant=x
         env: {TOKEN: "{access_token}"}
 `), "no query"},
+		"issuer with an expansion": {pkg(`        issuer: https://auth.example.com/$TENANT
+        env: {TOKEN: "{access_token}"}
+`), "gateway would expand"},
+		"issuer numeric host": {pkg(`        issuer: https://10.1/
+        env: {TOKEN: "{access_token}"}
+`), "not an IP address"},
+		"mis-cased placeholder": {pkg(`        issuer: https://auth.example.com
+        files:
+          - path: c.json
+            template: '{"t":"{access_token}","e":"{Expiry}"}'
+`), "unknown placeholder {Expiry}"},
+		"double-braced placeholder": {pkg(`        issuer: https://auth.example.com
+        files:
+          - path: c.json
+            template: '{"t":"{{access_token}}"}'
+`), "single braces"},
 		"token reaches nothing": {pkg(`        issuer: https://auth.example.com
         env: {CONFIG_DIR: "{dir}"}
         files:
@@ -332,21 +372,28 @@ func TestNoRemoteFieldsEncodeAsBefore(t *testing.T) {
 }
 
 func TestExpandOAuthPlaceholders(t *testing.T) {
-	vals := map[string]string{"access_token": "ya29.TOKEN", "expiry_ms": "1700000000000"}
-	got, err := ExpandOAuthPlaceholders(`{"normal":{"access_token":"{access_token}","expiry_date":{expiry_ms}}}`, OAuthTemplatePlaceholders, vals)
+	vals := map[string]string{"access_token": "ya29.TOKEN", "expiry_ms": "1700000000000", "dir": "/oauth"}
+	got, err := ExpandOAuthTemplate(`{"normal":{"access_token":"{access_token}","expiry_date":{expiry_ms}}}`, vals)
 	if err != nil || got != `{"normal":{"access_token":"ya29.TOKEN","expiry_date":1700000000000}}` {
 		t.Fatalf("got %q, %v", got, err)
 	}
-	if _, err := ExpandOAuthPlaceholders(`{refresh_token}`, OAuthTemplatePlaceholders, vals); err == nil {
-		t.Fatal("an unknown placeholder expanded")
+	for _, bad := range []string{`{refresh_token}`, `{dir}`, `{Access_Token}`, `{expiry}`} {
+		if _, err := ExpandOAuthTemplate(bad, vals); err == nil {
+			t.Fatalf("template %s expanded", bad)
+		}
 	}
 	// JSON's own braces are not placeholders.
-	if got, err := ExpandOAuthPlaceholders(`{"a":{"b":{}}}`, OAuthTemplatePlaceholders, vals); err != nil || got != `{"a":{"b":{}}}` {
+	if got, err := ExpandOAuthTemplate(`{"a":{"b":{}}}`, vals); err != nil || got != `{"a":{"b":{}}}` {
 		t.Fatalf("plain JSON: %q, %v", got, err)
 	}
-	// A placeholder the caller has no value for is refused, never left in.
-	if _, err := ExpandOAuthPlaceholders(`{expiry}`, OAuthTemplatePlaceholders, vals); err == nil {
-		t.Fatal("a placeholder without a value expanded")
+	if got, err := ExpandOAuthEnvValue(`{dir}/keys.json`, vals); err != nil || got != "/oauth/keys.json" {
+		t.Fatalf("env: %q, %v", got, err)
+	}
+	if _, err := ExpandOAuthEnvValue(`{expiry_ms}`, vals); err == nil {
+		t.Fatal("an env value expanded a template placeholder")
+	}
+	if got := StripOAuthPlaceholders(`a{access_token}b{Dir}c`); got != "abc" {
+		t.Fatalf("strip = %q", got)
 	}
 }
 
@@ -365,7 +412,7 @@ func TestUnsupportedOAuthPackage(t *testing.T) {
 // each wider than what was consented to; a dropped scope or server narrows
 // (ARCHITECTURE.md §9, the install-contract invariant).
 func TestDiffRemoteAndOAuthServers(t *testing.T) {
-	remote := func(auth string, scopes ...string) MCPServer {
+	remote := func(auth MCPAuth, scopes ...string) MCPServer {
 		return MCPServer{URL: "https://mcp.linear.app/mcp", Auth: auth, Scopes: scopes}
 	}
 	pkg := func(o *MCPOAuth) MCPServer {
@@ -482,7 +529,7 @@ func TestV2SchemaRemoteServerShape(t *testing.T) {
 	if len(d.MCPServer.OneOf) != 3 || d.MCPServer.Properties.URL.MaxLength != MaxRemoteURLLength || d.MCPServer.Properties.OAuth == nil {
 		t.Fatalf("mcpServer: %+v", d.MCPServer)
 	}
-	if !slices.Equal(d.MCPServer.Properties.Auth.Enum, []string{AuthOAuth, AuthSecret, AuthNone}) {
+	if !slices.Equal(d.MCPServer.Properties.Auth.Enum, []string{string(AuthOAuth), string(AuthSecret), string(AuthNone)}) {
 		t.Fatalf("auth enum = %v", d.MCPServer.Properties.Auth.Enum)
 	}
 	if d.Scopes.MaxItems != MaxMCPScopes || d.Scopes.Items.MaxLength != MaxMCPScopeLength {
@@ -494,5 +541,52 @@ func TestV2SchemaRemoteServerShape(t *testing.T) {
 		f.Items.Properties.Path.Pattern != oauthFileNameRE.String() ||
 		d.OAuth.Properties.Env.MaxProperties != MaxOAuthEnvEntries {
 		t.Fatalf("mcpOAuth = %+v", d.OAuth)
+	}
+}
+
+// TestUnsupportedListIsInTheDocs holds docs/quickagents.md's table to the
+// list validation enforces.
+func TestUnsupportedListIsInTheDocs(t *testing.T) {
+	raw, err := os.ReadFile("../../docs/quickagents.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id, alt := range unsupportedOAuthPackages {
+		if row := "| `" + id + "` | `" + alt + "` |"; !strings.Contains(string(raw), row) {
+			t.Fatalf("docs/quickagents.md lacks the row %q", row)
+		}
+	}
+}
+
+// TestDiffRemoteServerToolsAndSecret: a remote server's tool allowlist and
+// its one bearer secret are part of what consent covered, so a wider
+// allowlist (or none: every tool) and a different secret widen
+// (agentry#910's review; package servers' own fields are agentry#527).
+func TestDiffRemoteServerToolsAndSecret(t *testing.T) {
+	srv := func(tools []string, secrets ...string) Capabilities {
+		return Capabilities{MCPServers: []MCPServer{{URL: "https://api.githubcopilot.com/mcp/", Auth: AuthSecret, Tools: tools, Secrets: secrets}}}
+	}
+	cases := []struct {
+		name     string
+		old, new Capabilities
+		widened  bool
+		contains string
+	}{
+		{"a tool added", srv([]string{"a"}, "GH"), srv([]string{"a", "b"}, "GH"), true, "adds tool b to MCP server url:https://api.githubcopilot.com/mcp/"},
+		{"the allowlist dropped", srv([]string{"a"}, "GH"), srv(nil, "GH"), true, "lifts the tool allowlist of MCP server url:https://api.githubcopilot.com/mcp/ (every tool it serves)"},
+		{"a tool removed", srv([]string{"a", "b"}, "GH"), srv([]string{"a"}, "GH"), false, "drops tool b of MCP server"},
+		{"an allowlist added", srv(nil, "GH"), srv([]string{"a"}, "GH"), false, "restricts MCP server url:https://api.githubcopilot.com/mcp/ to tools a"},
+		{"the secret swapped", srv(nil, "GH"), srv(nil, "OTHER"), true, "sends secret OTHER to MCP server url:https://api.githubcopilot.com/mcp/"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := DiffCapabilities(tc.old, tc.new)
+			if d.HasWidened() != tc.widened {
+				t.Fatalf("widened = %v, want %v: %+v", d.HasWidened(), tc.widened, d)
+			}
+			if all := strings.Join(append(append([]string{}, d.Widened...), d.Narrowed...), "\n"); !strings.Contains(all, tc.contains) {
+				t.Fatalf("diff lacks %q:\n%s", tc.contains, all)
+			}
+		})
 	}
 }

@@ -333,6 +333,28 @@ func s9ManifestDiff(in *Input) []Finding {
 			})
 		}
 	}
+	// A remote MCP server's host is a destination too (agentry#910): one
+	// the previous release did not reach is the same low finding.
+	prevCapsBlock, _ := readManifestCaps(in.PrevManifestJSON)
+	curCapsBlock, _ := readManifestCaps(in.ManifestJSON)
+	prevRemote := map[string]bool{}
+	for _, h := range prevCapsBlock.remoteServerHosts() {
+		prevRemote[h] = true
+	}
+	newRemote := map[string]bool{}
+	for _, h := range curCapsBlock.remoteServerHosts() {
+		if !prevRemote[h] && !prevEgress[h] {
+			newRemote[h] = true
+		}
+	}
+	for _, host := range sortedSet(newRemote) {
+		findings = append(findings, Finding{
+			Scanner: "S9/new-egress", Severity: SevLow, Confidence: ConfHigh,
+			Title:    "New remote MCP server host in this release: " + host,
+			Detail:   map[string]any{"host": host, "remoteServer": true, "pattern": "new destination after clean releases (postmark-mcp)"},
+			Taxonomy: []string{"LLM03", "ASI04"},
+		})
+	}
 	prevCaps := declaredCaps(in.PrevManifestJSON)
 	for _, c := range sortedSet(declaredCaps(in.ManifestJSON)) {
 		if !prevCaps[c] {
