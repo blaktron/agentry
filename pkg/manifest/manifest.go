@@ -33,6 +33,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"slices"
 	"strings"
 
@@ -410,15 +411,28 @@ func (c Capabilities) IsOptionalSecret(name string) bool {
 }
 
 // MCPServer is one declared MCP server requirement (§5.4, RUNNER-PLAN-3).
-// Exactly one of NPM or PyPI names the package; Version is an exact
-// release, never a range.
+// Exactly one of NPM, PyPI or URL names it. A package server (NPM or
+// PyPI) carries an exact Version, never a range; a remote server (URL,
+// v2; plan mcp-oauth-connections.md §4) runs at its vendor and carries
+// none.
 type MCPServer struct {
 	// NPM is the npm package name (optionally @scope/name).
 	NPM string `yaml:"npm,omitempty" json:"npm,omitempty"`
 	// PyPI is the PyPI project name (PEP-503 normalized form).
 	PyPI string `yaml:"pypi,omitempty" json:"pypi,omitempty"`
-	// Version is the exact package version to install (V5: no ranges).
-	Version string `yaml:"version" json:"version"`
+	// URL is a remote server's HTTPS address (v2): a public host, port
+	// 443, no user information, query or fragment. Its host is the
+	// server's one egress host.
+	URL string `yaml:"url,omitempty" json:"url,omitempty"`
+	// Auth is how a remote server is signed in to (v2, required with
+	// URL).
+	Auth MCPAuth `yaml:"auth,omitempty" json:"auth,omitempty"`
+	// Scopes are what a remote server's OAuth consent asks for (v2, with
+	// AuthOAuth only).
+	Scopes []string `yaml:"scopes,omitempty" json:"scopes,omitempty"`
+	// Version is the exact package version to install (V5: no ranges); a
+	// remote server has none.
+	Version string `yaml:"version,omitempty" json:"version,omitempty"`
 	// Tools optionally restricts the server to these tool names; empty
 	// grants the server's full set.
 	Tools []string `yaml:"tools,omitempty" json:"tools,omitempty"`
@@ -435,15 +449,92 @@ type MCPServer struct {
 	// that is also a declared secret is refused, so a value is either
 	// configuration in the contract or a secret from the profile.
 	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
+	// OAuth gives a package server an OAuth sign-in (v2): the person's
+	// connection's access token reaches the server through Env or Files,
+	// rendered by the runner, and never a refresh token or a client
+	// secret (plan mcp-oauth-connections.md D8, D15).
+	OAuth *MCPOAuth `yaml:"oauth,omitempty" json:"oauth,omitempty"`
 }
 
-// SourceID returns the ecosystem-qualified package id ("npm:@scope/x" or
-// "pypi:name") — the duplicate-detection and store key.
+// MCPAuth is how a remote MCP server is signed in to (v2, agentry#910).
+type MCPAuth string
+
+const (
+	// AuthOAuth needs the person's connection: an OAuth grant to the
+	// server for this one QuickAgent version.
+	AuthOAuth MCPAuth = "oauth"
+	// AuthSecret sends the server's one declared secret as a bearer
+	// header.
+	AuthSecret MCPAuth = "secret"
+	// AuthNone sends nothing.
+	AuthNone MCPAuth = "none"
+)
+
+// MCPOAuth is a package server's OAuth sign-in: the authorization server
+// a connection is made with, the scopes consent asks for, and how the
+// access token reaches the server.
+type MCPOAuth struct {
+	// Issuer is the authorization server's https:// issuer; the runner
+	// reads its metadata to sign in.
+	Issuer string `yaml:"issuer" json:"issuer"`
+	// Scopes are what consent asks for.
+	Scopes []string `yaml:"scopes,omitempty" json:"scopes,omitempty"`
+	// Files are written by the runner into the server's token folder,
+	// mounted read-only, each rendered by ExpandOAuthTemplate. The runner
+	// writes them itself, never through the gateway, so a template's `$`
+	// and braces are content, not expansions.
+	Files []MCPOAuthFile `yaml:"files,omitempty" json:"files,omitempty"`
+	// Env are environment variables the runner sets on the server, each
+	// rendered by ExpandOAuthEnvValue: the token itself, or a path in the
+	// token folder.
+	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
+}
+
+// MCPOAuthFile is one file of a package server's token folder.
+type MCPOAuthFile struct {
+	// Path is a plain file name in the token folder.
+	Path string `yaml:"path" json:"path"`
+	// Template is the file's content, with placeholders.
+	Template string `yaml:"template" json:"template"`
+}
+
+// SourceID returns the server's qualified id ("npm:@scope/x",
+// "pypi:name" or "url:https://…") — the duplicate-detection and store key.
 func (s MCPServer) SourceID() string {
-	if s.NPM != "" {
+	switch {
+	case s.NPM != "":
 		return "npm:" + s.NPM
+	case s.URL != "":
+		return "url:" + s.URL
 	}
 	return "pypi:" + s.PyPI
+}
+
+// IsRemote reports whether the server is declared by address rather than
+// as a package.
+func (s MCPServer) IsRemote() bool { return s.URL != "" && s.NPM == "" && s.PyPI == "" }
+
+// RemoteHost is a remote server's host name, its one egress host; "" for
+// a package server or an address that does not parse.
+func (s MCPServer) RemoteHost() string {
+	if !s.IsRemote() {
+		return ""
+	}
+	u, err := url.Parse(s.URL)
+	if err != nil {
+		return ""
+	}
+	return u.Hostname()
+}
+
+// NeedsConnection reports whether a run of the server needs the person's
+// OAuth connection: a remote server signed in to by OAuth, or a package
+// server with an OAuth block.
+func (s MCPServer) NeedsConnection() bool {
+	if s.IsRemote() {
+		return s.Auth == AuthOAuth
+	}
+	return s.OAuth != nil
 }
 
 // Network groups network capabilities (currently egress only).

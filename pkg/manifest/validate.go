@@ -737,11 +737,14 @@ var (
 )
 
 // validateMCPServers checks capabilities.mcpServers (V5, RUNNER-PLAN-3):
-// exactly one source per entry, ecosystem name grammar, EXACT version pins
+// exactly one source per entry (npm, pypi, or since agentry#910 a remote
+// server's url, checked by validateRemoteServer), ecosystem name grammar,
+// EXACT version pins
 // (a range is an error — the pin rides the release archive, so a new agent
 // version is a new supply-chain decision by construction), single-token
 // tool names, env-grammar secret names, egress host grammar, no
-// duplicates, runnable kinds only, and the plain env map (v2 only).
+// duplicates, runnable kinds only, the plain env map (v2 only), and a
+// package server's oauth block (v2, validateMCPOAuth).
 func validateMCPServers(s *issues, m *Manifest) {
 	servers := m.Capabilities.MCPServers
 	if len(servers) == 0 {
@@ -757,12 +760,15 @@ func validateMCPServers(s *issues, m *Manifest) {
 	seen := map[string]bool{}
 	for i, srv := range servers {
 		p := fmt.Sprintf("capabilities.mcpServers[%d]", i)
+		sources := 0
+		for _, set := range []bool{srv.NPM != "", srv.PyPI != "", srv.URL != ""} {
+			if set {
+				sources++
+			}
+		}
 		switch {
-		case srv.NPM != "" && srv.PyPI != "":
-			s.errf("V5", p, "declare exactly one of npm or pypi, not both")
-			continue
-		case srv.NPM == "" && srv.PyPI == "":
-			s.errf("V5", p, "declare exactly one of npm or pypi")
+		case sources != 1:
+			s.errf("V5", p, "declare exactly one of npm, pypi or url")
 			continue
 		case srv.NPM != "" && !npmNameRE.MatchString(srv.NPM):
 			s.errf("V5", p+".npm", "%q is not a valid npm package name", srv.NPM)
@@ -776,6 +782,12 @@ func validateMCPServers(s *issues, m *Manifest) {
 		} else {
 			seen[id] = true
 		}
+		validateMCPServerTools(s, p, srv)
+		if srv.IsRemote() {
+			validateRemoteServer(s, p, m.Major(), srv)
+			continue
+		}
+		validatePackageRemoteFields(s, p, srv)
 
 		switch {
 		case srv.Version == "":
@@ -790,19 +802,6 @@ func validateMCPServers(s *issues, m *Manifest) {
 			}
 		}
 
-		for j, tool := range srv.Tools {
-			tp := fmt.Sprintf("%s.tools[%d]", p, j)
-			if tool == "" {
-				s.errf("V5", tp, "tool name must not be empty")
-				continue
-			}
-			for _, r := range tool {
-				if unicode.IsSpace(r) || unicode.IsControl(r) {
-					s.errf("V5", tp, "tool %q must be a single token without whitespace", tool)
-					break
-				}
-			}
-		}
 		for j, name := range srv.Secrets {
 			checkEnvName(s, fmt.Sprintf("%s.secrets[%d]", p, j), name)
 		}
@@ -821,6 +820,24 @@ func validateMCPServers(s *issues, m *Manifest) {
 			}
 		}
 		validateMCPServerEnv(s, p, m.Major(), srv, agentSecrets)
+		validateMCPOAuth(s, p, m.Major(), srv, agentSecrets)
+	}
+}
+
+// validateMCPServerTools holds a server's tool allowlist to single tokens.
+func validateMCPServerTools(s *issues, p string, srv MCPServer) {
+	for j, tool := range srv.Tools {
+		tp := fmt.Sprintf("%s.tools[%d]", p, j)
+		if tool == "" {
+			s.errf("V5", tp, "tool name must not be empty")
+			continue
+		}
+		for _, r := range tool {
+			if unicode.IsSpace(r) || unicode.IsControl(r) {
+				s.errf("V5", tp, "tool %q must be a single token without whitespace", tool)
+				break
+			}
+		}
 	}
 }
 

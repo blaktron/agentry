@@ -305,3 +305,41 @@ func TestS7NoDataForAServerItCannotLookUp(t *testing.T) {
 		t.Fatalf("no data publishes at the baseline (D3): %+v", d)
 	}
 }
+
+// A remote server has no package to look up: S7 reports it for what it is,
+// low, naming its address, its auth and its scopes, and publishes with it
+// (plan mcp-oauth-connections.md D11, agentry#910). It is never "no data",
+// and it is reported whether or not a vulnerability database is configured.
+func TestS7ReportsARemoteServerWithoutLookingItUp(t *testing.T) {
+	m := `{"schemaVersion":"2","capabilities":{"mcpServers":[
+  {"url":"https://gmailmcp.googleapis.com/mcp/v1","auth":"oauth","scopes":["https://www.googleapis.com/auth/gmail.readonly"]},
+  {"pypi":"mcp-server-fetch","version":"0.6.2"}
+]}}`
+	osv := &fakeOSV{}
+	res := S7MCPServers{}.Run(s7ctx(osv, &MemoryMCPScanCache{}), &Input{ManifestJSON: []byte(m)})
+	rs := findScanner(res.Findings, scannerRemoteServer)
+	if len(rs) != 1 || rs[0].Severity != SevLow || osv.calls != 1 {
+		t.Fatalf("calls=%d findings: %+v", osv.calls, res.Findings)
+	}
+	if got := rs[0].Detail; got["url"] != "https://gmailmcp.googleapis.com/mcp/v1" || got["auth"] != "oauth" ||
+		len(got["scopes"].([]string)) != 1 {
+		t.Fatalf("detail: %+v", got)
+	}
+	if !strings.Contains(rs[0].Title, "https://gmailmcp.googleapis.com/mcp/v1") || !strings.Contains(rs[0].Title, "gmail.readonly") ||
+		strings.Contains(strings.ToLower(rs[0].Title), "safe") {
+		t.Fatalf("title: %q", rs[0].Title)
+	}
+	if nd := findScanner(res.Findings, scannerOSVNoData); len(nd) != 0 {
+		t.Fatalf("a remote server is not no-data: %+v", nd)
+	}
+	if got := DeclaredMCPServers([]byte(m)); len(got) != 1 || got[0].Package != "mcp-server-fetch" {
+		t.Fatalf("the registry join records packages only: %+v", got)
+	}
+	if d := Evaluate(GateInput{Findings: res.Findings, Policy: DefaultBaseline()}); d.Outcome != OutcomePublish {
+		t.Fatalf("a remote server publishes with its finding (D11): %+v", d)
+	}
+	off := S7MCPServers{}.Run(s7ctx(OfflineOSV{}, &MemoryMCPScanCache{}), &Input{ManifestJSON: []byte(m)})
+	if len(findScanner(off.Findings, scannerRemoteServer)) != 1 {
+		t.Fatalf("offline, the remote server went unreported: %+v", off.Findings)
+	}
+}
