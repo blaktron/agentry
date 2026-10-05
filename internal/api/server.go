@@ -101,6 +101,9 @@ type Server struct {
 	// another implementation.
 	samlReplay   samlsp.ReplayCache
 	samlRequests samlsp.RequestTracker
+	// totpConsumeTimeout bounds the write that records a 2FA challenge as
+	// consumed (agentry#457); SetTOTPConsumeTimeout shortens it in a test.
+	totpConsumeTimeout time.Duration
 	// jobs is the enqueue-side queue client (webhook deliveries, audit
 	// exports). The worker role drains it; nil without a database.
 	jobs queue.Client
@@ -213,6 +216,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 	srv.resolver = dnsx.NewSystemResolver()
 	srv.samlReplay = samlsp.NewMemoryReplayCache()
 	srv.samlRequests = samlsp.NewMemoryRequestTracker()
+	srv.totpConsumeTimeout = defaultTOTPConsumeTimeout
 	srv.SetOIDCEgressGuard(webhook.Guard{AllowLoopback: cfg.DevMode})
 	srv.imgKey = newImgProxyKey(cfg.Auth.SealingKey)
 	// The model-input routes (agentry#608) need no database: the scanner
@@ -590,6 +594,10 @@ func (s *Server) SetSAMLReplayCache(c samlsp.ReplayCache) { s.samlReplay = c }
 // SetSAMLRequestTracker replaces the record of outstanding SAML
 // AuthnRequests, the replay cache's mirror image.
 func (s *Server) SetSAMLRequestTracker(t samlsp.RequestTracker) { s.samlRequests = t }
+
+// SetTOTPConsumeTimeout replaces how long the write that records a 2FA
+// challenge as consumed may take before the challenge is refused.
+func (s *Server) SetTOTPConsumeTimeout(d time.Duration) { s.totpConsumeTimeout = d }
 
 // SetOIDCEgressGuard replaces the egress policy OIDC requests go through
 // (tests answer a name with an address of their choosing through the
