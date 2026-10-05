@@ -14,8 +14,9 @@ package api_test
 //   anonymous     — refused everywhere (401)
 //   plain         — signed-in, no roles anywhere (403 on all staff surfaces)
 //   staff         — platform_staff
-//   author+staff  — the review item's author, ALSO staff: proves the
-//                   author-cannot-self-approve rule outranks the staff flag
+//   author+staff  — the review item's author, ALSO staff: since
+//                   agentry#912 (DEV-213) staff may decide their own
+//                   versions, so this caller is allowed like any staff
 //   orgOwner      — owner of an unrelated org (an org reviewer for ITS queue,
 //                   nothing on the platform surface)
 //   patScoped     — the staff user's PAT WITH review:act
@@ -46,8 +47,8 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 	// staff session (m8 console fixture; cleans its queue rows up after).
 	author, itemID, staffSess := setupReviewItem(t, env, "sam")
 	authorSess := env.login(author)
-	// The author-beats-staff case: the author IS staff and still may not
-	// decide their own version.
+	// The author is staff, and since agentry#912 staff may decide their own
+	// version (a non-staff author is refused: review_staff_test.go).
 	env.makePlatformStaff(t, author)
 
 	plainH := env.register("sam-plain")
@@ -107,12 +108,11 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 		caller caller
 		want   int
 	}
-	validDecision := map[string]any{"decision": "reject", "rationale": "matrix self-authz case"}
 	emptyDecision := map[string]any{} // authorized callers stop at 422 (rationale required) — no mutation
 	cases := []sCase{
 		// listReviewQueue — platform queue is staff-only; the org queue
-		// belongs to that org's reviewers, and the staff flag is NOT an
-		// org role (documented boundary, asserted here).
+		// belongs to that org's reviewers and, since agentry#912 (DEV-213),
+		// to platform staff, who may also list every org's at once.
 		{"listReviewQueue", "GET", "/api/v1/review-queue?queue=platform&limit=1", nil, anonymous, deny1},
 		{"listReviewQueue", "GET", "/api/v1/review-queue?queue=platform&limit=1", nil, plain, deny3},
 		{"listReviewQueue", "GET", "/api/v1/review-queue?queue=platform&limit=1", nil, staffSess, pass},
@@ -120,7 +120,8 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 		{"listReviewQueue", "GET", "/api/v1/review-queue?queue=platform&limit=1", nil, patUnscoped, deny3},
 		{"listReviewQueue", "GET", "/api/v1/review-queue?queue=org&org=" + orgH + "&limit=1", nil, orgOwner, pass},
 		{"listReviewQueue", "GET", "/api/v1/review-queue?queue=org&org=" + orgH + "&limit=1", nil, plain, deny3},
-		{"listReviewQueue", "GET", "/api/v1/review-queue?queue=org&org=" + orgH + "&limit=1", nil, staffSess, deny3},
+		{"listReviewQueue", "GET", "/api/v1/review-queue?queue=org&org=" + orgH + "&limit=1", nil, staffSess, pass},
+		{"listReviewQueue", "GET", "/api/v1/review-queue?queue=org&limit=1", nil, staffSess, pass},
 
 		// getReviewItem / listReviewFiles / getReviewFile — read surface of
 		// a PLATFORM item: staff only (org reviewers of other orgs and the
@@ -140,14 +141,13 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 
 		// decideReviewItem — the empty body stops authorized callers at 422
 		// (rationale required) BEFORE any state change; the author case
-		// carries a valid body so it reaches, and is refused by, the
-		// author-cannot-self-approve check despite the staff flag.
+		// is staff, and since agentry#912 reaches the same 422 as any staff.
 		{"decideReviewItem", "POST", "/api/v1/review-items/" + itemID + "/decision", emptyDecision, anonymous, deny1},
 		{"decideReviewItem", "POST", "/api/v1/review-items/" + itemID + "/decision", emptyDecision, plain, deny3},
 		{"decideReviewItem", "POST", "/api/v1/review-items/" + itemID + "/decision", emptyDecision, patUnscoped, deny3},
 		{"decideReviewItem", "POST", "/api/v1/review-items/" + itemID + "/decision", emptyDecision, staffSess, pass},
 		{"decideReviewItem", "POST", "/api/v1/review-items/" + itemID + "/decision", emptyDecision, patScoped, pass},
-		{"decideReviewItem", "POST", "/api/v1/review-items/" + itemID + "/decision", validDecision, authorSess, deny3},
+		{"decideReviewItem", "POST", "/api/v1/review-items/" + itemID + "/decision", emptyDecision, authorSess, pass},
 
 		// setFindingVerdict — authorized via the finding's review item; the
 		// scope gate covers /findings/ by path prefix.
