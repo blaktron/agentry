@@ -26,6 +26,9 @@ const (
 	// SAMLStateUnavailable is a SAML login refused because the shared state
 	// behind it could not be read or written (agentry#414).
 	SAMLStateUnavailable Event = "saml.state_unavailable"
+	// TOTPChallengeUnavailable is a 2FA social login's second leg refused
+	// because its challenge could not be recorded as consumed (agentry#457).
+	TOTPChallengeUnavailable Event = "auth.totp_challenge_unavailable"
 	// SSRFRefused is an outbound target the private-range guard refused.
 	SSRFRefused Event = "ssrf.refused"
 	// GateVerdict is the gate deciding a version: published, rejected or
@@ -72,7 +75,7 @@ func Audit(action string) Event { return Event(AuditPrefix + action) }
 
 // All lists every catalogued name, for the completeness test and the docs.
 var All = []Event{
-	HTTPRequest, HTTPRateLimited, AuthLoginFailed, AuthSocialRejected, SAMLStateUnavailable, SSRFRefused,
+	HTTPRequest, HTTPRateLimited, AuthLoginFailed, AuthSocialRejected, SAMLStateUnavailable, TOTPChallengeUnavailable, SSRFRefused,
 	GateVerdict, GateError, ScanStage,
 	FailOpenAuditStreamDrop, FailOpenHistoryNotScanned, FailOpenOSVNotChecked, FailOpenOSVError, FailOpenDirectoryErasure,
 	GitPushRefused, MailSuppressed, WebhookDelivered, ModelInput,
