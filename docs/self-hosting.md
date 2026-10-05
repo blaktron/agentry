@@ -1277,19 +1277,32 @@ production values:
   `AUTHENTIK_CAPTCHA_SITE_KEY` and `AUTHENTIK_CAPTCHA_SECRET_KEY` (compose
   passes both through) before opening sign-up to the internet;
   `AUTHENTIK_CAPTCHA_JS_URL` / `_API_URL` point it at a different provider.
-- A **per-IP rate limit** caps how much work one address can cause: at most
-  10 accounts created plus mails sent per hour, counted from authentik's
-  own event log. Ordinary use costs 2 (an account and its confirmation
-  mail) to sign up and 1 to reset a password, so the budget is generous for
-  a shared office address while ending bulk account creation. Raise or
-  lower `MAX_PER_HOUR` in the blueprint to suit your users. Recovery also
-  keeps authentik's own per-user control on the email stage
-  (`recovery_max_attempts`, `recovery_cache_timeout`); the per-IP limit is
-  what stops one source mailing a thousand different victims.
+- A **per-IP rate limit** caps how much work one address can cause: once
+  it has caused 10 accounts created plus mails sent in the last hour, a new
+  sign-up or reset from it is refused at the start, counted from authentik's
+  own event log. An account is the `user_write` event a flow records with
+  `created` and the client's address; a mail is the budget's own
+  `custom_agentry_account_mail` event, which the sign-up's and the reset's
+  mail stages record with the client's address for a flow's first mail and
+  for each resend from the "check your mail" page. The budget records its own because authentik 2026.8 sends mail
+  from its worker, and that `email_sent` event carries no address
+  (agentry#830). Ordinary use costs 2
+  (an account and its confirmation mail) to sign up and 1 to reset a
+  password, so the budget is generous for a shared office address while
+  ending bulk account creation. Where registry activation is on, the
+  confirmation mail is the registry's, held to its own per-account limit
+  (DEV-197), and a sign-up costs 1 here. The check is made when a flow
+  starts, so a flow already open finishes, and its resends are held by the
+  mail stage's own per-account limit rather than refused by this one. Recovery also keeps authentik's
+  own per-user control on the email stage (`recovery_max_attempts`,
+  `recovery_cache_timeout`); the per-IP limit is what stops one source
+  mailing a thousand different victims. `scripts/acceptance/directory-budget.sh`
+  proves both counts and the refusal on a throwaway directory.
   The policy **fails open** on an unexpected error (a broken counter must
-  not become an outage on the only route into the product); the failure
-  shows up in authentik's event log as a `policy_exception` event, which
-  is the thing to alert on — the registry's `FailOpenEvents` metric covers
+  not become an outage on the only route into the product); the directory's
+  server logs it as `agentry: rate limit check failed, allowing`, and a mail
+  that could not be counted as `agentry: counting the account flow's mail
+  failed`, which are the things to alert on — the registry's `FailOpenEvents` metric covers
   the registry's own fail-open paths, not this one.
 
 `AUTHENTIK_ACCOUNT_FLOW_MAX_PER_HOUR` sets that budget (default 10):

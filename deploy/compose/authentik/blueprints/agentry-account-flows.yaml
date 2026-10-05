@@ -125,10 +125,18 @@ entries:
   # bypass from running all night.
   #
   # It counts SIDE EFFECTS, not page loads: accounts actually created plus
-  # mails actually sent, from this client IP, in the last hour, read from
+  # mail stages actually reached, from this client IP, in the last hour, read from
   # authentik's own event log. That choice is deliberate and was arrived at
   # by measurement, not preference:
   #
+  #   * What it counts is what authentik 2026.8 records (agentry#830). A
+  #     flow-made account is a `user_write` event with `created` in its
+  #     context and the client's address, not a `model_created` one. A mail
+  #     is sent by the worker, so its `email_sent` event carries no address:
+  #     the mail stages instead record an event of this budget's own,
+  #     `custom_agentry_account_mail`, with the address, when they are
+  #     reached (agentry-account-flow-mail-count, below). Counted the old
+  #     way, the budget had counted nothing since the 2026.8 upgrade.
   #   * A policy bound to a flow is evaluated once when the flow plan is
   #     created, not per submission — so a counter keyed on POSTs never
   #     increments at all (verified: it silently did nothing).
@@ -187,8 +195,8 @@ entries:
                       created__gte=now() - timedelta(hours=1),
                   )
                   .filter(
-                      Q(action=EventAction.EMAIL_SENT)
-                      | Q(action=EventAction.MODEL_CREATED, context__model__model_name="user")
+                      Q(action=EventAction.USER_WRITE, context__created=True)
+                      | Q(action=EventAction.CUSTOM_PREFIX + "agentry_account_mail")
                   )
                   .count()
               )
@@ -202,6 +210,38 @@ entries:
               ak_logger.warning("agentry: rate limit check failed, allowing", exc=str(exc))
           return True
         - !Env [AUTHENTIK_ACCOUNT_FLOW_MAX_PER_HOUR, "10"]
+
+  # The budget's count of mails (agentry#830). Bound to each account flow's
+  # mail stage and run on each request at the stage, never at the plan: it
+  # records `custom_agentry_account_mail` with the client's address for the
+  # first mail of the flow (a refresh of the "check your mail" page is not a
+  # second mail) and for each resend, which is a POST to the stage.
+  # The event names the flow and nothing else: the policy's context holds
+  # the flow's prompt data, a password among it, and ak_create_event would
+  # copy all of it. Always passes, an error included, because a failed stage
+  # policy skips its stage, and a mail stage skipped is a mailbox not proved.
+  - model: authentik_policies_expression.expressionpolicy
+    id: policy-account-mail-count
+    identifiers:
+      name: agentry-account-flow-mail-count
+    attrs:
+      execution_logging: false
+      expression: |
+        try:
+            from authentik.events.models import Event
+
+            http = request.http_request
+            plan = context.get("flow_plan")
+            if http is not None and plan is not None and (
+                http.method == "POST" or not plan.context.get("agentry_account_mail_counted")
+            ):
+                plan.context["agentry_account_mail_counted"] = True
+                # from_http fills in the address and saves the event.
+                Event.new("agentry_account_mail", app="agentry", flow=str(plan.flow_pk)).from_http(http)
+        except Exception as exc:
+            # The type alone: this context holds the flow's prompt data.
+            ak_logger.warning("agentry: counting the account flow's mail failed", error=type(exc).__name__)
+        return True
 
   # ==========================================================================
   # Enrollment
@@ -773,12 +813,29 @@ entries:
   # policybindingmodel_ptr, and the whole blueprint rolls back), which is
   # every fresh install.
   - model: authentik_flows.flowstagebinding
+    id: binding-enrollment-email
     conditions:
       - !Condition [NAND, !Env [AGENTRY_DIRECTORY_REGISTRY_ACTIVATION, ""]]
     identifiers:
       target: !KeyOf flow-enrollment
       stage: !KeyOf stage-enrollment-email
       order: 30
+    attrs:
+      # The mail is counted when the stage is reached (agentry#830).
+      evaluate_on_plan: false
+      re_evaluate_policies: true
+  - model: authentik_policies.policybinding
+    conditions:
+      - !Condition [NAND, !Env [AGENTRY_DIRECTORY_REGISTRY_ACTIVATION, ""]]
+    identifiers:
+      policy: !KeyOf policy-account-mail-count
+      target: !KeyOf binding-enrollment-email
+      order: 0
+    attrs:
+      enabled: true
+      negate: false
+      failure_result: true
+      timeout: 5
   - model: authentik_flows.flowstagebinding
     state: absent
     conditions:
@@ -955,12 +1012,15 @@ entries:
       policy_engine_mode: any
       invalid_response_action: retry
   - model: authentik_flows.flowstagebinding
+    id: binding-recovery-email
     identifiers:
       target: !KeyOf flow-recovery
       stage: !KeyOf stage-recovery-email
       order: 20
     attrs:
-      evaluate_on_plan: true
+      # Not at the plan: the mail-count policy below runs when the stage is
+      # reached, so opening the page counts nothing (agentry#830).
+      evaluate_on_plan: false
       re_evaluate_policies: true
       policy_engine_mode: any
       invalid_response_action: retry
@@ -1028,6 +1088,17 @@ entries:
       enabled: true
       negate: false
       timeout: 30
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      policy: !KeyOf policy-account-mail-count
+      target: !KeyOf binding-recovery-email
+      order: 0
+    attrs:
+      enabled: true
+      negate: false
+      failure_result: true
+      timeout: 5
 
   - model: authentik_policies.policybinding
     identifiers:
