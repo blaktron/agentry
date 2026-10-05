@@ -201,6 +201,12 @@
           "description": "Environment variable NAMES the agent expects; never values.",
           "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" }
         },
+        "optionalSecrets": {
+          "type": "array",
+          "description": "The declared secrets (the agent's own or a declared MCP server's) a run can do without; every other declared secret is required. Each must be declared (V5); names only, never values.",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" }
+        },
         "dataAccess": {
           "type": "array",
           "items": {

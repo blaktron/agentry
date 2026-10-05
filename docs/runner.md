@@ -410,7 +410,11 @@ under `~/.agentry/runner/profiles/…` (directory `0700`, file `0600`).
   asked.
 - **Resolution order** at run time: profile → host environment / the
   policy's env file. A secret nothing resolves refuses the run (exit 11,
-  naming the variable) — never a silent degrade.
+  naming the variable) — never a silent degrade. A manifest may mark
+  declared secrets optional (`capabilities.optionalSecrets`, see
+  [QuickAgents](quickagents.md)); the run that starts without one is
+  planned in agentry-cli#651, and until it is released an optional secret
+  is resolved and refused like any other.
 - **Completion**, when the run ends: keep → the profile survives (stamped
   `lastUsedAt`) and the next run of that exact release reuses the
   authenticated resources; remove → deleted when the run completes.
