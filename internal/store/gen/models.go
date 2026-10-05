@@ -554,6 +554,11 @@ type TeamMember struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type TotpConsumedChallenge struct {
+	ID        string    `json:"id"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
 type TrustedDevice struct {
 	ID          uuid.UUID   `json:"id"`
 	UserID      uuid.UUID   `json:"user_id"`

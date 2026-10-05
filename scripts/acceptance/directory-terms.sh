@@ -168,6 +168,7 @@ check=$(akshell -e ACCOUNTS="$accounts" -e VERSION="$VERSION" <<'PY' || true
 import json, os
 from datetime import datetime, timedelta, timezone
 from authentik.core.models import User
+from authentik.stages.authenticator import devices_for_user
 a = json.loads(os.environ["ACCOUNTS"])
 for label in ("blank", "named"):
     u = User.objects.get(username=a[label])
@@ -177,6 +178,7 @@ for label in ("blank", "named"):
     print("NAME", label, u.name == a.get(label + "Typed", u.username), repr(u.name))
     print("KEYS", label, sorted(u.attributes))
     print("ACTIVE", label, u.is_active, u.attributes.get("agentry_email_verified"))
+    print("DEVICES", label, len(list(devices_for_user(u))))
 PY
 )
 for label in blank named; do
@@ -193,6 +195,10 @@ case "$check" in *"KEYS named ['agentry_email_verified', 'agentry_has_password',
 
 case "$check" in *"ACTIVE blank True False"*"ACTIVE named True False"*) echo "ok   both accounts are written active and unactivated (agentry_email_verified false)" ;;
   *) echo "FAIL: an account is not written active and unactivated: $check"; exit 1 ;; esac
+# The named sign-up chose "later" (agentry#894): it is signed in with no
+# authenticator, and nothing of the choice is stored (KEYS above).
+case "$check" in *"DEVICES named 0"*) echo "ok   the account that skipped the authenticator setup has no authenticator" ;;
+  *) echo "FAIL: the account that skipped the setup: $check"; exit 1 ;; esac
 
 # The claim the registry reads (agentry#869): the directory asks the registry.
 docker exec -i "$AK" ak shell -c \

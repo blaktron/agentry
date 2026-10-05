@@ -292,9 +292,15 @@ paths:
       description: >
         Second leg of a login that could not carry a TOTP code inline. Today
         the only such login is social login: its callback is a browser
-        redirect. The challenge is opaque, single-use and expires in five
-        minutes; it proves nothing on its own, so a valid TOTP code is still
-        required.
+        redirect. The challenge is opaque and expires in five minutes; it
+        proves nothing on its own, so a valid TOTP code is still required. It
+        is single use: completing it records it as consumed in the database
+        every replica reads (agentry#457), so a second completion is refused
+        with 401 `totp-challenge-used`, and an expired one with 401
+        `totp-challenge-expired`. A wrong code does not consume it; attempts are
+        held to the login rate limit. When the
+        consumed record cannot be written, the challenge is refused with 503
+        and no session is opened.
       security: []
       requestBody:
         required: true
