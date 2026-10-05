@@ -1294,9 +1294,12 @@ production values:
 
 `AUTHENTIK_ACCOUNT_FLOW_MAX_PER_HOUR` sets that budget (default 10):
 compose passes it through, and the blueprint formats it into the policy at
-apply time. Enrollment ends with authenticator (TOTP) setup, and recovery
-verifies the authenticator before the password may change — a user who has
-none is sent through the same setup stage. Lost-authenticator recovery is an
+apply time. Enrollment ends by offering authenticator (TOTP) setup: the
+person sets one up there, or skips it and adds one later from their
+settings (agentry#894). An account without an authenticator signs in with
+its password alone and has no second factor for the public-publish gate
+until it adds one. Recovery verifies the authenticator before the password
+may change, and a user who has none is sent through the same setup stage. Lost-authenticator recovery is an
 operator action in the Authentik admin UI; email alone never resets both
 factors.
 
