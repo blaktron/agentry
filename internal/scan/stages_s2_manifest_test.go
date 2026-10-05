@@ -165,3 +165,33 @@ func TestS2ManifestEnvWithoutFile(t *testing.T) {
 		t.Errorf("findings = %v", res.Findings)
 	}
 }
+
+// TestS2ManifestOAuthValues: an oauth block is rendered into every run, so
+// a credential written into it (a real client secret in a template, a
+// token in an env value) is the same finding as one in env; the
+// placeholders themselves, a path in the token folder and dummy client
+// values are not (agentry#910).
+func TestS2ManifestOAuthValues(t *testing.T) {
+	in := &Input{ManifestJSON: []byte(`{"capabilities":{"mcpServers":[{"npm":"@cocal/google-calendar-mcp","version":"2.7.0","oauth":{` +
+		`"issuer":"https://accounts.google.com",` +
+		`"files":[{"path":"keys.json","template":"{\"installed\":{\"client_id\":\"agentry\",\"client_secret\":\"` + fakeHexToken() + `\"}}"},` +
+		`{"path":"tokens.json","template":"{\"normal\":{\"access_token\":\"{access_token}\",\"expiry_date\":{expiry_ms}}}"}],` +
+		`"env":{"GOOGLE_OAUTH_CREDENTIALS":"{dir}/keys.json","GITHUB_TOKEN":"{access_token}","EXTRA":"` + fakeHexToken() + `"}}}]}}`)}
+	res := S2Secrets{}.Run(stageContext{ctx: context.Background()}, in)
+	keys := map[any]bool{}
+	for _, f := range res.Findings {
+		if f.Scanner != "S2/oauth-token-value" {
+			continue
+		}
+		keys[f.Detail["key"]] = true
+		if f.Detail["server"] != "npm:@cocal/google-calendar-mcp" || f.Severity != SevMedium {
+			t.Errorf("finding: %+v", f)
+		}
+		if strings.Contains(f.Excerpt, fakeHexToken()[:12]) || strings.Contains(f.Title, fakeHexToken()[:12]) {
+			t.Errorf("%v leaks the value: %q / %q", f.Detail["key"], f.Title, f.Excerpt)
+		}
+	}
+	if !keys["oauth.files[0]"] || !keys["oauth.env.EXTRA"] || len(keys) != 2 {
+		t.Fatalf("oauth findings by key = %v; all: %+v", keys, res.Findings)
+	}
+}

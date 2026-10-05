@@ -21,9 +21,10 @@ type Policy struct {
 	AllowedLicenses []string `json:"allowedLicenses,omitempty"`
 	// BlockedMcpServers: submissions whose manifest declares one of these
 	// MCP servers are rejected at submission (RUNNER-PLAN-3 §P1 org
-	// blocklist, agentry#52). Entries are "npm:<package>" / "pypi:<package>";
-	// path.Match globs are allowed ("npm:@evil/*", "pypi:*-fetch"). Unions
-	// toward strict like blockedCapabilities.
+	// blocklist, agentry#52). Entries are "npm:<package>" / "pypi:<package>",
+	// or "url:<host>" for a remote server (agentry#910); path.Match globs
+	// are allowed ("npm:@evil/*", "pypi:*-fetch", "url:*.example.com").
+	// Unions toward strict like blockedCapabilities.
 	BlockedMcpServers []string `json:"blockedMcpServers,omitempty"`
 	// MaxAutoPublishSeverity tightens the §8.5 table: worst auto-publishable
 	// severity. "" means the baseline default, which the ruleset carries
@@ -74,8 +75,11 @@ func ParsePolicy(doc []byte) (Policy, error) {
 	}
 	for _, b := range p.BlockedMcpServers {
 		b = strings.TrimSpace(b)
-		if !strings.HasPrefix(b, "npm:") && !strings.HasPrefix(b, "pypi:") {
-			return Policy{}, fmt.Errorf("scan: policy: blockedMcpServers entry %q must be prefixed with npm or pypi", b)
+		if !strings.HasPrefix(b, "npm:") && !strings.HasPrefix(b, "pypi:") && !strings.HasPrefix(b, "url:") {
+			return Policy{}, fmt.Errorf("scan: policy: blockedMcpServers entry %q must be prefixed with npm, pypi or url", b)
+		}
+		if strings.HasPrefix(b, "url:") && strings.ContainsAny(strings.TrimPrefix(b, "url:"), "/:") {
+			return Policy{}, fmt.Errorf("scan: policy: blockedMcpServers entry %q must name a remote server's host (url:<host>), not its address", b)
 		}
 		if _, err := path.Match(b, ""); err != nil {
 			return Policy{}, fmt.Errorf("scan: policy: blockedMcpServers entry %q: %w", b, err)

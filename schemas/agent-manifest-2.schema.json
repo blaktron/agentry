@@ -327,11 +327,19 @@
     "mcpServer": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["version"],
+      "description": "A declared MCP server: a package (npm or pypi, with an exact version) or, since agentry#910, a remote server (url, with auth). Exactly one of npm, pypi or url; pkg/manifest holds the cross-field rules this schema cannot express.",
+      "oneOf": [
+        { "required": ["npm", "version"], "not": { "anyOf": [ { "required": ["pypi"] }, { "required": ["url"] } ] } },
+        { "required": ["pypi", "version"], "not": { "anyOf": [ { "required": ["npm"] }, { "required": ["url"] } ] } },
+        { "required": ["url", "auth"], "not": { "anyOf": [ { "required": ["npm"] }, { "required": ["pypi"] }, { "required": ["version"] }, { "required": ["egress"] }, { "required": ["env"] }, { "required": ["oauth"] } ] } }
+      ],
       "properties": {
-        "npm": { "type": "string", "minLength": 1, "description": "npm package name; exactly one of npm or pypi." },
-        "pypi": { "type": "string", "minLength": 1, "description": "PEP-503 normalized PyPI project name; exactly one of npm or pypi." },
-        "version": { "type": "string", "minLength": 1, "description": "Exact version to install." },
+        "npm": { "type": "string", "minLength": 1, "description": "npm package name." },
+        "pypi": { "type": "string", "minLength": 1, "description": "PEP-503 normalized PyPI project name." },
+        "url": { "type": "string", "maxLength": 512, "pattern": "^https://[a-z0-9.-]+(:443)?(/[^?#]*)?$", "description": "A remote server's HTTPS address: a public lowercase host name, port 443, no user information, query or fragment. pkg/manifest refuses IP literals and internal names." },
+        "auth": { "type": "string", "enum": ["oauth", "secret", "none"], "description": "How a remote server is signed in to: oauth (the person's connection), secret (its one declared secret as a bearer header) or none." },
+        "scopes": { "$ref": "#/$defs/oauthScopes" },
+        "version": { "type": "string", "minLength": 1, "description": "Exact version to install (a package server only)." },
         "tools": { "type": "array", "items": { "type": "string", "minLength": 1 } },
         "secrets": { "type": "array", "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" } },
         "egress": { "type": "array", "items": { "$ref": "#/$defs/egressHost" } },
@@ -346,6 +354,42 @@
             "pattern": "^[^\\p{Cc}]*$",
             "not": { "anyOf": [ { "pattern": "\\$[A-Za-z0-9_{*#@!?$-]" }, { "allOf": [ { "pattern": "\\{\\{" }, { "pattern": "\\}\\}" } ] } ] }
           }
+        },
+        "oauth": { "$ref": "#/$defs/mcpOAuth" }
+      }
+    },
+    "oauthScopes": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^\\s\\p{Cc}]+$" }
+    },
+    "mcpOAuth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issuer"],
+      "description": "A package server's OAuth sign-in (agentry#910): the runner makes or reuses the person's connection with the issuer and renders the access token, and only the access token, into files and env. {access_token} must appear in a template or an env value (pkg/manifest).",
+      "properties": {
+        "issuer": { "type": "string", "maxLength": 512, "pattern": "^https://[a-z0-9.-]+(:443)?(/[^?#]*)?$", "description": "The authorization server's https:// issuer." },
+        "scopes": { "$ref": "#/$defs/oauthScopes" },
+        "files": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "template"],
+            "properties": {
+              "path": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$", "description": "A plain file name in the token folder." },
+              "template": { "type": "string", "maxLength": 2048, "description": "The file's content. Placeholders: {access_token}, {expiry} (RFC 3339 UTC), {expiry_ms} (Unix milliseconds)." }
+            }
+          }
+        },
+        "env": {
+          "type": "object",
+          "maxProperties": 8,
+          "propertyNames": { "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+          "additionalProperties": { "type": "string", "maxLength": 512, "pattern": "^[^\\p{Cc}]*$", "description": "Placeholders: {access_token}, and {dir}, the token folder's path." }
         }
       }
     },

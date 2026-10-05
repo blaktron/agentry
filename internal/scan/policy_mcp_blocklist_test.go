@@ -36,3 +36,25 @@ func TestBlockedMcpServersPolicy(t *testing.T) {
 		t.Fatalf("no servers declared: %v", issues)
 	}
 }
+
+// A remote MCP server is blocked by its host, `url:<host>`, globs allowed
+// (agentry#910, plan mcp-oauth-connections.md D11), so a platform or an
+// organization can block a vendor.
+func TestBlockedMcpServersPolicyMatchesARemoteServersHost(t *testing.T) {
+	manifest := []byte(`{"name":"x","capabilities":{"mcpServers":[
+		{"url":"https://gmailmcp.googleapis.com/mcp/v1","auth":"oauth"},
+		{"url":"https://mcp.linear.app/mcp","auth":"oauth"}]}}`)
+	pol, err := ParsePolicy([]byte(`{"blockedMcpServers":["url:*.googleapis.com"]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	issues := CheckSubmissionPolicy(pol, registry.PolicySubmission{ManifestJSON: manifest})
+	if len(issues) != 1 || !strings.Contains(issues[0].Error(), `blocks MCP server "url:gmailmcp.googleapis.com"`) {
+		t.Fatalf("issues: %v", issues)
+	}
+	// An entry names a host, not an address.
+	if _, err := ParsePolicy([]byte(`{"blockedMcpServers":["url:https://mcp.linear.app/mcp"]}`)); err == nil ||
+		!strings.Contains(err.Error(), "host") {
+		t.Fatalf("an address entry parsed: %v", err)
+	}
+}

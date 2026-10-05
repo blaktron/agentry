@@ -14,8 +14,9 @@ import (
 
 // S7 — declared MCP servers: known vulnerabilities (§8.3; reinstated for
 // manifest v2 by agentry#177, plan agentry-notes/plans/mcp-vuln-scanning.md,
-// DEV-090). Every `capabilities.mcpServers` entry is an exact npm or PyPI
-// package version. S7 asks the vulnerability database about each one — live
+// DEV-090). A `capabilities.mcpServers` package entry is an exact npm or
+// PyPI package version; a remote entry (agentry#910) has no package and is
+// reported as S7/remote-server, never looked up. S7 asks the vulnerability database about each one — live
 // the first time a package version is seen, from the mcp_server_scans
 // registry when it was checked within mcpScanTTL — and reports every
 // advisory as a finding at the gate's rating of it (AdvisoryGateSeverity:
@@ -116,6 +117,14 @@ type declaredServer struct {
 // no advisories.
 const scannerOSVNoData = "S7/osv-no-data"
 
+// scannerRemoteServer is the finding for a remote MCP server (agentry#910,
+// plan mcp-oauth-connections.md D11): it runs at its vendor, so there is no
+// package or version to look up and no code the pipeline reads. It is low
+// and publishes; it names the address, the auth and the scopes, which are
+// what the pipeline can state about it, and says nothing of the vendor's
+// code (honest posture).
+const scannerRemoteServer = "S7/remote-server"
+
 // The reasons S7/osv-no-data names per server.
 const (
 	noDataLookupFailed = "lookup failed"
@@ -160,14 +169,24 @@ func DeclaredMCPServers(manifestJSON []byte) []declaredServer {
 // (V5) refuses the latter, so they only reach S7 in a manifest that came
 // some other way; S7 still names them rather than drop them.
 func mcpServerEntries(manifestJSON []byte) (declared []declaredServer, uncovered []string, reasons map[string]string) {
+	declared, uncovered, reasons, _ = mcpServerEntriesWithRemote(manifestJSON)
+	return declared, uncovered, reasons
+}
+
+// mcpServerEntriesWithRemote is mcpServerEntries plus the remote servers,
+// in manifest order, which S7 reports and never looks up.
+func mcpServerEntriesWithRemote(manifestJSON []byte) (declared []declaredServer, uncovered []string, reasons map[string]string, remote []manifest.MCPServer) {
 	var m manifest.Manifest
 	if len(manifestJSON) == 0 || json.Unmarshal(manifestJSON, &m) != nil {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	reasons = map[string]string{}
 	for i, s := range m.Capabilities.MCPServers {
 		var ref, why string
 		switch {
+		case s.IsRemote():
+			remote = append(remote, s)
+			continue
 		case s.NPM != "" && s.Version != "":
 			declared = append(declared, declaredServer{Ecosystem: "npm", Package: s.NPM, Version: s.Version})
 			continue
@@ -193,13 +212,34 @@ func mcpServerEntries(manifestJSON []byte) (declared []declaredServer, uncovered
 		}
 		return declared[a].Version < declared[b].Version
 	})
-	return declared, uncovered, reasons
+	return declared, uncovered, reasons, remote
+}
+
+// remoteServerFindings reports each remote server: its address, its auth
+// and its scopes.
+func remoteServerFindings(remote []manifest.MCPServer) []Finding {
+	var out []Finding
+	for _, srv := range remote {
+		scopes := srv.Scopes
+		if scopes == nil {
+			scopes = []string{}
+		}
+		out = append(out, Finding{
+			Scanner: scannerRemoteServer, Severity: SevLow, Confidence: ConfHigh,
+			Title: "Remote MCP server at " + srv.RemoteHost() + " (auth " + srv.Auth +
+				"): it runs at its vendor; the pipeline checked its address and scopes, not its code",
+			Detail:   map[string]any{"url": srv.URL, "host": srv.RemoteHost(), "auth": srv.Auth, "scopes": scopes},
+			Taxonomy: []string{"LLM03", "ASI04"},
+		})
+	}
+	return out
 }
 
 // Run implements Stage.
 func (s S7MCPServers) Run(sc stageContext, in *Input) StageResult {
 	res := StageResult{Scanner: "S7", NoCache: true}
-	servers, noData, reasons := mcpServerEntries(in.ManifestJSON)
+	servers, noData, reasons, remote := mcpServerEntriesWithRemote(in.ManifestJSON)
+	res.Findings = append(res.Findings, remoteServerFindings(remote)...)
 	if len(servers) == 0 && len(noData) == 0 {
 		return res
 	}

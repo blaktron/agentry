@@ -2,6 +2,7 @@ package scan
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"sort"
 	"strconv"
@@ -143,7 +144,60 @@ func s2ManifestEnv(in *Input, lineSeen map[string]bool) []Finding {
 			}
 		}
 	}
+	for i, srv := range m.Capabilities.MCPServers {
+		findings = append(findings, s2ManifestOAuth(i, srv)...)
+	}
 	return findings
+}
+
+// oauthQuotedRE finds the string literals of a template, where a value a
+// file carries sits whatever the file's format.
+var oauthQuotedRE = regexp.MustCompile(`"((?:[^"\\]|\\.)*)"|'([^']*)'`)
+
+// s2ManifestOAuth reads a server's oauth block (agentry#910): every env
+// value and every quoted value of a template, with the placeholders the
+// runner fills taken out, by the same token shape as env. The name rule
+// does not apply: a credential-named variable is exactly where the
+// placeholder {access_token} belongs.
+func s2ManifestOAuth(entry int, srv manifest.MCPServer) []Finding {
+	if srv.OAuth == nil {
+		return nil
+	}
+	strip := func(v string) string { return oauthPlaceholderRE.ReplaceAllString(v, "") }
+	var out []Finding
+	for i, f := range srv.OAuth.Files {
+		for _, m := range oauthQuotedRE.FindAllStringSubmatch(f.Template, -1) {
+			v := m[1] + m[2]
+			if envTokenShaped(strip(v)) {
+				out = append(out, oauthFinding(srv, entry, fmt.Sprintf("oauth.files[%d]", i), len(v)))
+				break
+			}
+		}
+	}
+	keys := make([]string, 0, len(srv.OAuth.Env))
+	for k := range srv.OAuth.Env {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if v := srv.OAuth.Env[k]; envTokenShaped(strip(v)) {
+			out = append(out, oauthFinding(srv, entry, "oauth.env."+k, len(v)))
+		}
+	}
+	return out
+}
+
+// oauthPlaceholderRE is the runner's placeholder shape (manifest's).
+var oauthPlaceholderRE = regexp.MustCompile(`\{[a-z_]+\}`)
+
+func oauthFinding(srv manifest.MCPServer, entry int, key string, n int) Finding {
+	return Finding{
+		Scanner: "S2/oauth-token-value", Severity: SevMedium, Confidence: ConfMedium,
+		Title:    "Possible credential in the oauth block of MCP server " + srv.SourceID() + " (" + key + "): Agentry supplies the token, and a value written here reaches every run",
+		Excerpt:  key + ": " + strings.Repeat("*", 8) + " (" + strconv.Itoa(n) + " characters)",
+		Detail:   map[string]any{"rule": "oauth-token-value", "server": srv.SourceID(), "key": key, "entry": entry},
+		Taxonomy: []string{"LLM03"},
+	}
 }
 
 // envFinding shapes one manifest-pass finding. The excerpt names the key

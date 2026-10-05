@@ -96,10 +96,10 @@ func TestMCPServersRefusals(t *testing.T) {
 			`    - npm: server-x
       pypi: server-x
       version: 1.0.0
-`, "exactly one of npm or pypi"},
+`, "exactly one of npm, pypi or url"},
 		"neither source": {
 			`    - version: 1.0.0
-`, "exactly one of npm or pypi"},
+`, "exactly one of npm, pypi or url"},
 		"bad npm name": {
 			`    - npm: "UpperCase"
       version: 1.0.0
