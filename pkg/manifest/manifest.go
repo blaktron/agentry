@@ -33,6 +33,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -376,6 +377,14 @@ type Capabilities struct {
 	// Secrets lists environment variable NAMES the agent expects — never
 	// values.
 	Secrets []string `yaml:"secrets,omitempty" json:"secrets,omitempty"`
+	// OptionalSecrets names the declared secrets — the agent's own or a
+	// declared MCP server's — that the author marks as ones a run can do
+	// without (v2, V5; plan optional-secrets.md D1); every other declared
+	// secret is required. It adds no name to the contract: each must
+	// already be declared. The runner and hosted runs honour it from
+	// agentry-cli#651 and agentry-enterprise#424; until then a run still
+	// requires every declared secret.
+	OptionalSecrets []string `yaml:"optionalSecrets,omitempty" json:"optionalSecrets,omitempty"`
 	// DataAccess lists semantic data categories the agent touches.
 	DataAccess []DataAccess `yaml:"dataAccess,omitempty" json:"dataAccess,omitempty"`
 	// MCPServers lists the MCP servers this agent requires at run time
@@ -390,6 +399,14 @@ type Capabilities struct {
 	// written under capabilities in agent.yaml: the knowledge block is
 	// where a release declares its packs.
 	Knowledge []string `yaml:"-" json:"knowledge,omitempty"`
+}
+
+// IsOptionalSecret reports whether the release marks the declared secret
+// name optional (capabilities.optionalSecrets): one a run may start
+// without, once the runner honours the marking (plan optional-secrets.md
+// §5). Every other declared secret is required.
+func (c Capabilities) IsOptionalSecret(name string) bool {
+	return slices.Contains(c.OptionalSecrets, name)
 }
 
 // MCPServer is one declared MCP server requirement (§5.4, RUNNER-PLAN-3).
