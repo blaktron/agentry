@@ -998,6 +998,14 @@ flagged account and member when the server starts, so changing these keys
 takes effect at the next start. Each change is audited as
 `user.staff_sync` with `rule: staff-org` and the reason.
 
+What staff can do in review: every item on the platform queue and on every
+organization's queue, private QuickAgents included. They read it, decide it
+and record a false-positive verdict on its findings; accepting risk on an
+organization's QuickAgent stays that organization's reviewers'. Staff may
+also decide versions they submitted themselves, which no one else may: such
+a decision is marked `self_decision: true` in its `review.decision` audit
+event. Give the staff role to people you trust with both.
+
 The rule rests on facts nobody sets about themselves:
 
 - **Membership** is granted by the organization's admins.
