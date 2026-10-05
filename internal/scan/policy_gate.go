@@ -134,30 +134,20 @@ func hasEvals(files []manifest.FileInfo) bool {
 // "npm:<package>" / "pypi:<package>", or "url:<host>" for a remote
 // server, sorted, for the blocklist compare.
 func declaredMcpServers(manifestJSON []byte) []string {
-	var m struct {
-		Capabilities struct {
-			McpServers []struct {
-				Npm  string `json:"npm"`
-				Pypi string `json:"pypi"`
-				URL  string `json:"url"`
-			} `json:"mcpServers"`
-		} `json:"capabilities"`
-	}
+	var m manifest.Manifest
 	if err := json.Unmarshal(manifestJSON, &m); err != nil {
 		return nil
 	}
 	var out []string
-	for _, s := range m.Capabilities.McpServers {
+	for _, srv := range m.Capabilities.MCPServers {
 		switch {
-		case s.Npm != "":
-			out = append(out, "npm:"+s.Npm)
-		case s.Pypi != "":
-			out = append(out, "pypi:"+s.Pypi)
-		case s.URL != "":
+		case srv.IsRemote():
 			// A remote server is matched by its host (agentry#910).
-			if host := (manifest.MCPServer{URL: s.URL}).RemoteHost(); host != "" {
+			if host := srv.RemoteHost(); host != "" {
 				out = append(out, "url:"+host)
 			}
+		case srv.NPM != "" || srv.PyPI != "":
+			out = append(out, srv.SourceID())
 		}
 	}
 	sort.Strings(out)

@@ -336,7 +336,7 @@
       "properties": {
         "npm": { "type": "string", "minLength": 1, "description": "npm package name." },
         "pypi": { "type": "string", "minLength": 1, "description": "PEP-503 normalized PyPI project name." },
-        "url": { "type": "string", "maxLength": 512, "pattern": "^https://[a-z0-9.-]+(:443)?(/[^?#]*)?$", "description": "A remote server's HTTPS address: a public lowercase host name, port 443, no user information, query or fragment. pkg/manifest refuses IP literals and internal names." },
+        "url": { "type": "string", "maxLength": 512, "pattern": "^https://[a-z0-9.-]+(:443)?(/[!#-~]*)?$", "not": { "pattern": "[\"<>\\\\^`{|}$'?#]" }, "description": "A remote server's HTTPS address: a public lowercase host name, port 443, no user information, query or fragment. pkg/manifest refuses IP literals and internal names." },
         "auth": { "type": "string", "enum": ["oauth", "secret", "none"], "description": "How a remote server is signed in to: oauth (the person's connection), secret (its one declared secret as a bearer header) or none." },
         "scopes": { "$ref": "#/$defs/oauthScopes" },
         "version": { "type": "string", "minLength": 1, "description": "Exact version to install (a package server only)." },
@@ -370,7 +370,7 @@
       "required": ["issuer"],
       "description": "A package server's OAuth sign-in (agentry#910): the runner makes or reuses the person's connection with the issuer and renders the access token, and only the access token, into files and env. {access_token} must appear in a template or an env value (pkg/manifest).",
       "properties": {
-        "issuer": { "type": "string", "maxLength": 512, "pattern": "^https://[a-z0-9.-]+(:443)?(/[^?#]*)?$", "description": "The authorization server's https:// issuer." },
+        "issuer": { "type": "string", "maxLength": 512, "pattern": "^https://[a-z0-9.-]+(:443)?(/[!#-~]*)?$", "not": { "pattern": "[\"<>\\\\^`{|}$'?#]" }, "description": "The authorization server's https:// issuer." },
         "scopes": { "$ref": "#/$defs/oauthScopes" },
         "files": {
           "type": "array",

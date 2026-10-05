@@ -150,28 +150,32 @@ func s2ManifestEnv(in *Input, lineSeen map[string]bool) []Finding {
 	return findings
 }
 
-// oauthQuotedRE finds the string literals of a template, where a value a
-// file carries sits whatever the file's format.
-var oauthQuotedRE = regexp.MustCompile(`"((?:[^"\\]|\\.)*)"|'([^']*)'`)
+// oauthFieldRE splits a template or a value into the runs an author
+// wrote, whatever the file's format: a JSON or YAML string, an INI value,
+// a bare word.
+var oauthFieldRE = regexp.MustCompile(`[^\s"',:=;{}\[\]()<>]+`)
 
-// s2ManifestOAuth reads a server's oauth block (agentry#910): every env
-// value and every quoted value of a template, with the placeholders the
-// runner fills taken out, by the same token shape as env. The name rule
-// does not apply: a credential-named variable is exactly where the
-// placeholder {access_token} belongs.
+// s2ManifestOAuth reads a server's oauth block (agentry#910): every run of
+// every env value and template, with the placeholders the runner fills
+// taken out (manifest.StripOAuthPlaceholders, the one grammar), by the same
+// token shape as env. The name rule does not apply: a credential-named
+// variable is exactly where the placeholder {access_token} belongs.
 func s2ManifestOAuth(entry int, srv manifest.MCPServer) []Finding {
 	if srv.OAuth == nil {
 		return nil
 	}
-	strip := func(v string) string { return oauthPlaceholderRE.ReplaceAllString(v, "") }
+	shaped := func(v string) bool {
+		for _, field := range oauthFieldRE.FindAllString(manifest.StripOAuthPlaceholders(v), -1) {
+			if envTokenShaped(field) {
+				return true
+			}
+		}
+		return false
+	}
 	var out []Finding
 	for i, f := range srv.OAuth.Files {
-		for _, m := range oauthQuotedRE.FindAllStringSubmatch(f.Template, -1) {
-			v := m[1] + m[2]
-			if envTokenShaped(strip(v)) {
-				out = append(out, oauthFinding(srv, entry, fmt.Sprintf("oauth.files[%d]", i), len(v)))
-				break
-			}
+		if shaped(f.Template) {
+			out = append(out, oauthFinding(srv, entry, fmt.Sprintf("oauth.files[%d]", i), len(f.Template)))
 		}
 	}
 	keys := make([]string, 0, len(srv.OAuth.Env))
@@ -180,16 +184,15 @@ func s2ManifestOAuth(entry int, srv manifest.MCPServer) []Finding {
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		if v := srv.OAuth.Env[k]; envTokenShaped(strip(v)) {
+		if v := srv.OAuth.Env[k]; shaped(v) {
 			out = append(out, oauthFinding(srv, entry, "oauth.env."+k, len(v)))
 		}
 	}
 	return out
 }
 
-// oauthPlaceholderRE is the runner's placeholder shape (manifest's).
-var oauthPlaceholderRE = regexp.MustCompile(`\{[a-z_]+\}`)
-
+// oauthFinding shapes an oauth-block finding: the key and the value's
+// length, never the value (as envFinding).
 func oauthFinding(srv manifest.MCPServer, entry int, key string, n int) Finding {
 	return Finding{
 		Scanner: "S2/oauth-token-value", Severity: SevMedium, Confidence: ConfMedium,

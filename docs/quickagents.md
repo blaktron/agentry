@@ -488,8 +488,11 @@ capabilities:
 ```
 
 - **A remote server** takes an `https://` address on a public host name
-  (lowercase, port 443, no user information, query or fragment; at most
-  512 characters). The address's host is the server's one network
+  (lowercase, a top-level label that starts with a letter, port 443, no
+  user information, query or fragment, and no space, quote, `$` or brace;
+  at most 512 characters). Its host counts as network: a namespace's
+  `blockedCapabilities: [network]` refuses it, and a new host in an update
+  is a low `S9/new-egress` finding. The address's host is the server's one network
   destination, so it takes no `version`, `egress`, `env` or `oauth`.
   `auth` is required. `auth: secret` sends exactly one declared secret as
   the bearer header, `auth: none` sends nothing, and `auth: oauth` needs
@@ -512,12 +515,16 @@ capabilities:
 
   `{access_token}` must appear somewhere. A name may not repeat the
   server's `env` or a secret.
-- **What a run receives.** A run receives an access token and nothing else
-  of the connection: never a refresh token or a client secret. A value a
-  server's file needs for a client id or secret is a fixed dummy (as
-  `agentry` above), and the secret scanner reads the `oauth` block's
-  templates and env values for anything credential-shaped, as it reads
-  `env`.
+- **What a run will receive.** Once the runner carries connections
+  (below), a run receives an access token and nothing else of the
+  connection: never a refresh token or a client secret. A value a server's
+  file needs for a client id or secret is a fixed dummy (as `agentry`
+  above). The runner writes the files itself, never through the gateway,
+  so a template's `$` and braces are content. The secret scanner reads
+  every value of the `oauth` block's templates and env, in any format,
+  with the placeholders taken out, and reports a token-shaped one
+  (`S2/oauth-token-value`, medium), as it reads `env`. It is a backstop:
+  a value that does not look like a token passes it.
 - **Servers that cannot run on an access token alone** refuse an `oauth`
   block by name, with an alternative to declare:
 
@@ -531,10 +538,12 @@ capabilities:
   report says so. A version publishes with it. A publication policy's
   `blockedMcpServers` blocks a remote server by its host (`url:<host>`,
   globs allowed, as in `url:*.example.com`).
-- **At install**, the consent shows each remote server's address, auth and
-  scopes, and each `oauth` block's issuer and scopes. A new remote server,
-  a changed auth, issuer or address, a new scope, or a changed `oauth`
-  file or env asks for consent again.
+- **Consent.** The capability diff the clients ask consent from
+  (`DiffCapabilities`) calls each of these wider than before: a new remote
+  server or address, a changed auth or issuer, a new scope, a remote
+  server's tool added or its allowlist lifted, a different bearer secret,
+  an added OAuth sign-in, and a changed `oauth` file or env. The CLI and
+  the desktop show them once their core pin carries this change.
 
 The manifest accepts these fields since agentry#910. A runner runs them
 once it carries the remote-server bridge (agentry-cli#663) and connections

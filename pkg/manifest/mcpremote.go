@@ -37,16 +37,22 @@ const (
 // The placeholders a template may use: the access token, and its expiry
 // as RFC 3339 UTC and as Unix milliseconds (the shapes the measured
 // servers read: workspace-mcp's "expiry", google-auth-library's
-// "expiry_date").
-var OAuthTemplatePlaceholders = []string{"access_token", "expiry", "expiry_ms"}
+// "expiry_date"). The placeholders an env value may use: the access token,
+// and the token folder's path inside the server's container.
+var (
+	oauthTemplatePlaceholders = []string{"access_token", "expiry", "expiry_ms"}
+	oauthEnvPlaceholders      = []string{"access_token", "dir"}
+)
 
-// The placeholders an oauth env value may use: the access token, and the
-// token folder's path inside the server's container.
-var OAuthEnvPlaceholders = []string{"access_token", "dir"}
-
-// placeholderRE matches `{name}` with a lowercase name. JSON's own braces
-// never match it: a key or a string inside an object starts with `"`.
-var placeholderRE = regexp.MustCompile(`\{([a-z_]+)\}`)
+// placeholderRE matches `{name}` with a name of letters and underscores,
+// any case, so a mis-cased placeholder is refused rather than left in a
+// file. JSON's own braces never match it: a key or a string inside an
+// object starts with `"`. doubleBracedRE is a placeholder written in two
+// braces, which would render as the value in one.
+var (
+	placeholderRE  = regexp.MustCompile(`\{([A-Za-z_]+)\}`)
+	doubleBracedRE = regexp.MustCompile(`\{\{[A-Za-z_]+\}\}`)
+)
 
 // oauthFileNameRE is a plain file name in the token folder.
 var oauthFileNameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
@@ -54,7 +60,8 @@ var oauthFileNameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 // unsupportedOAuthPackages are npm/PyPI servers known not to run on an
 // access token alone (they insist on a refresh token, or open a browser
 // at run time), each with the server to declare instead (plan D25). An
-// oauth block on one is refused by name.
+// oauth block on one is refused by name. docs/quickagents.md prints the
+// list, and a test holds the page to it.
 var unsupportedOAuthPackages = map[string]string{
 	// Waits on a browser on port 4100 when it has no credentials of its
 	// own, so a tool call hangs; rewrites its credentials on every call.
@@ -68,33 +75,38 @@ func UnsupportedOAuthPackage(sourceID string) (alternative string, unsupported b
 	return alt, ok
 }
 
-// UnsupportedOAuthPackages lists the unsupported packages and their
-// alternatives, sorted, for the docs and the clients.
-func UnsupportedOAuthPackages() [][2]string {
-	out := make([][2]string, 0, len(unsupportedOAuthPackages))
-	for id, alt := range unsupportedOAuthPackages {
-		out = append(out, [2]string{id, alt})
-	}
-	sort.Slice(out, func(a, b int) bool { return out[a][0] < out[b][0] })
-	return out
+// ExpandOAuthTemplate renders a token-folder file's template: `{access_token}`,
+// `{expiry}` and `{expiry_ms}` from vals. A placeholder outside those, or one
+// with no value, is an error: nothing is left half-rendered.
+func ExpandOAuthTemplate(template string, vals map[string]string) (string, error) {
+	return expandPlaceholders(template, oauthTemplatePlaceholders, vals)
 }
 
-// ExpandOAuthPlaceholders replaces each `{name}` in s, where name is one
-// of allowed, with vals[name]. A placeholder outside allowed, or one with
-// no value, is an error: nothing is left half-rendered.
-func ExpandOAuthPlaceholders(s string, allowed []string, vals map[string]string) (string, error) {
+// ExpandOAuthEnvValue renders an oauth env value: `{access_token}` and
+// `{dir}` from vals, as ExpandOAuthTemplate does.
+func ExpandOAuthEnvValue(value string, vals map[string]string) (string, error) {
+	return expandPlaceholders(value, oauthEnvPlaceholders, vals)
+}
+
+// StripOAuthPlaceholders removes every placeholder-shaped `{name}` from s,
+// for a scanner that reads what an author wrote around them.
+func StripOAuthPlaceholders(s string) string {
+	return placeholderRE.ReplaceAllString(s, "")
+}
+
+func expandPlaceholders(s string, allowed []string, vals map[string]string) (string, error) {
 	var err error
 	out := placeholderRE.ReplaceAllStringFunc(s, func(m string) string {
 		name := m[1 : len(m)-1]
 		if !slices.Contains(allowed, name) {
 			if err == nil {
-				err = fmt.Errorf("unknown placeholder %s", m)
+				err = fmt.Errorf("manifest: oauth: unknown placeholder %s", m)
 			}
 			return m
 		}
 		v, ok := vals[name]
 		if !ok && err == nil {
-			err = fmt.Errorf("no value for placeholder %s", m)
+			err = fmt.Errorf("manifest: oauth: no value for placeholder %s", m)
 		}
 		return v
 	})
@@ -116,9 +128,9 @@ func placeholdersIn(s string, allowed []string) (names []string, unknown string)
 	return names, unknown
 }
 
-// errNotHTTPS and its siblings name what is wrong with an address.
+// What is wrong with an address.
 var (
-	errNotHTTPS     = errors.New("must be https://")
+	errNotHTTPS     = errors.New("must be https:// (lowercase)")
 	errUserinfo     = errors.New("must carry no user information")
 	errQuery        = errors.New("must carry no query: a key belongs in a declared secret")
 	errFragment     = errors.New("must carry no fragment")
@@ -126,26 +138,38 @@ var (
 	errIPLiteral    = errors.New("must name a host, not an IP address")
 	errNotPublic    = errors.New("must be a public host name (a dotted DNS name, not localhost or an internal name)")
 	errHostCase     = errors.New("must spell its host in lowercase")
+	errAddressChars = errors.New("may hold only printable ASCII without spaces, quotes, `$`, braces, `<`, `>`, `\\`, `^`, `|` or a backtick (the gateway would expand a `$` or a `{{ }}`)")
 	errAddressParse = errors.New("is not a URL")
 )
 
 // internalSuffixes are names that never resolve on the public internet.
 var internalSuffixes = []string{".localhost", ".local", ".internal", ".lan", ".home.arpa", ".corp", ".intranet"}
 
+// addressBadChars are refused anywhere in an address: what the gateway
+// expands (`$`, braces), what a URL never carries unescaped, and quoting.
+const addressBadChars = " \"<>\\^`{|}$'"
+
 // checkHTTPSAddress holds a remote server's address or an issuer to the
 // shape the runner can reach through a relay and the guard: https, a
-// public lowercase DNS name, port 443, nothing a credential could ride in.
+// public lowercase DNS name whose top-level label starts with a letter (so
+// no numeric or hex form of an address, which a resolver may read as one:
+// `127.1`, `0x7f.1`), port 443, and nothing a credential or a gateway
+// expansion could ride in. Whether a public name resolves to a private
+// address is the runner's guard's to refuse at run time.
 func checkHTTPSAddress(raw string) error {
-	u, err := url.Parse(raw)
-	if err != nil || u.Host == "" {
-		if strings.HasPrefix(raw, "https://") {
-			return errAddressParse
-		}
+	if !strings.HasPrefix(raw, "https://") {
 		return errNotHTTPS
 	}
+	for _, r := range raw {
+		if r < 0x21 || r > 0x7e || strings.ContainsRune(addressBadChars, r) {
+			return errAddressChars
+		}
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return errAddressParse
+	}
 	switch {
-	case u.Scheme != "https":
-		return errNotHTTPS
 	case u.User != nil:
 		return errUserinfo
 	case u.RawQuery != "" || u.ForceQuery:
@@ -156,7 +180,7 @@ func checkHTTPSAddress(raw string) error {
 		return errPort
 	}
 	host := u.Hostname()
-	if net.ParseIP(host) != nil || strings.HasPrefix(host, "[") {
+	if net.ParseIP(host) != nil || strings.HasPrefix(u.Host, "[") {
 		return errIPLiteral
 	}
 	if host != strings.ToLower(host) {
@@ -164,6 +188,9 @@ func checkHTTPSAddress(raw string) error {
 	}
 	if !validDNSHost(host) || !strings.Contains(host, ".") || host == "localhost" {
 		return errNotPublic
+	}
+	if tld := host[strings.LastIndexByte(host, '.')+1:]; tld[0] < 'a' || tld[0] > 'z' {
+		return errIPLiteral
 	}
 	for _, suf := range internalSuffixes {
 		if strings.HasSuffix(host, suf) {
@@ -307,9 +334,12 @@ func validateMCPOAuth(s *issues, p string, major int, srv MCPServer, agentSecret
 		if strings.IndexFunc(f.Template, func(r rune) bool { return unicode.IsControl(r) && r != '\n' && r != '\t' }) >= 0 {
 			s.errf("V5", fp+".template", "a template may hold no control character but newline and tab")
 		}
-		names, unknown := placeholdersIn(f.Template, OAuthTemplatePlaceholders)
+		names, unknown := placeholdersIn(f.Template, oauthTemplatePlaceholders)
 		if unknown != "" {
 			s.errf("V5", fp+".template", "unknown placeholder %s: a template may use only {access_token}, {expiry} and {expiry_ms}", unknown)
+		}
+		if m := doubleBracedRE.FindString(f.Template); m != "" {
+			s.errf("V5", fp+".template", "%s: write a placeholder in single braces", m)
 		}
 		if slices.Contains(names, "access_token") {
 			tokenUsed = true
@@ -349,7 +379,7 @@ func validateMCPOAuth(s *issues, p string, major int, srv MCPServer, agentSecret
 		if !LiteralEnvValue(value) {
 			s.errf("V5", np, "value contains a $ the runner's gateway would expand, or a {{ }} template; use the placeholders {access_token} and {dir}")
 		}
-		names, unknown := placeholdersIn(value, OAuthEnvPlaceholders)
+		names, unknown := placeholdersIn(value, oauthEnvPlaceholders)
 		if unknown != "" {
 			s.errf("V5", np, "unknown placeholder %s: an env value may use only {access_token} and {dir}", unknown)
 		}

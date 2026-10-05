@@ -195,7 +195,7 @@ func describeNewServer(srv MCPServer) string {
 		parts = append(parts, "env "+strings.Join(pairs, ", "))
 	}
 	if srv.IsRemote() {
-		a := "auth " + srv.Auth
+		a := "auth " + string(srv.Auth)
 		if len(srv.Scopes) > 0 {
 			a += "; scopes " + strings.Join(srv.Scopes, ", ")
 		}
@@ -243,6 +243,9 @@ func (d *CapabilityDiff) appendServerDiff(id string, prev, next MCPServer) {
 		d.Widened = append(d.Widened, fmt.Sprintf("changes auth of MCP server %s: %s (was %s)", id, next.Auth, prev.Auth))
 	}
 	d.appendScopeDiff(id, prev.Scopes, next.Scopes)
+	if next.IsRemote() {
+		d.appendRemoteToolsAndSecret(id, prev, next)
+	}
 
 	// A package server's OAuth sign-in.
 	switch {
@@ -258,6 +261,33 @@ func (d *CapabilityDiff) appendServerDiff(id string, prev, next MCPServer) {
 		if !slices.Equal(prev.OAuth.Files, next.OAuth.Files) || !maps.Equal(prev.OAuth.Env, next.OAuth.Env) {
 			d.Widened = append(d.Widened, fmt.Sprintf("changes how MCP server %s receives its token (its oauth files or env)", id))
 		}
+	}
+}
+
+// appendRemoteToolsAndSecret compares what a remote server may be asked
+// and what it is sent. Its tool allowlist bounds what the model reaches at
+// a vendor that holds the person's account, so a tool added, or the list
+// lifted (every tool the server serves), widens; and its one bearer secret
+// is sent to the vendor, so a different name widens. The same fields of a
+// package server are agentry#527's.
+func (d *CapabilityDiff) appendRemoteToolsAndSecret(id string, prev, next MCPServer) {
+	switch {
+	case len(prev.Tools) > 0 && len(next.Tools) == 0:
+		d.Widened = append(d.Widened, fmt.Sprintf("lifts the tool allowlist of MCP server %s (every tool it serves)", id))
+	case len(prev.Tools) == 0 && len(next.Tools) > 0:
+		d.Narrowed = append(d.Narrowed, fmt.Sprintf("restricts MCP server %s to tools %s", id, strings.Join(next.Tools, ", ")))
+	default:
+		added, removed := diffSets(prev.Tools, next.Tools)
+		for _, tool := range added {
+			d.Widened = append(d.Widened, fmt.Sprintf("adds tool %s to MCP server %s", tool, id))
+		}
+		for _, tool := range removed {
+			d.Narrowed = append(d.Narrowed, fmt.Sprintf("drops tool %s of MCP server %s", tool, id))
+		}
+	}
+	added, _ := diffSets(prev.Secrets, next.Secrets)
+	for _, name := range added {
+		d.Widened = append(d.Widened, fmt.Sprintf("sends secret %s to MCP server %s", name, id))
 	}
 }
 
