@@ -73,6 +73,14 @@ class Flow:
                 "password": password, "password_repeat": password, FIELD: code}
         return user, self.step(body)
 
+    def set_up_now(self, c):
+        """Past the choice to set up an authenticator now or later
+        (agentry#894), choosing now; anything else is returned as it came."""
+        if c.get("component") == "ak-stage-prompt" and any(
+                f.get("field_key") == "agentry_authenticator_choice" for f in c.get("fields", [])):
+            return self.step({"component": "ak-stage-prompt", "agentry_authenticator_choice": "now"})
+        return c
+
 
 def field_of(challenge):
     for f in challenge.get("fields", []):
@@ -102,6 +110,7 @@ def on():
         flow = Flow()  # a fresh browser per account
         flow.to_prompt()
         user, c = flow.submit(code)
+        c = flow.set_up_now(c)
         if c.get("component") != "ak-stage-authenticator-totp":
             fail(f"the {label} sign-up stopped at {c.get('component')}: {json.dumps(c.get('response_errors') or {})[:300]}")
         made[label] = user
@@ -118,6 +127,7 @@ def off():
         fail(f"with the field off a promo link filled it in: {f.get('initial_value')!r}")
     ok("the field is off: served hidden, and a promo link fills nothing in")
     user, c = flow.submit("SMUGGLED-1")
+    c = flow.set_up_now(c)
     if c.get("component") != "ak-stage-authenticator-totp":
         fail(f"the sign-up with the field off stopped at {c.get('component')}")
     print("ACCOUNTS " + json.dumps({"smuggled": user}))
