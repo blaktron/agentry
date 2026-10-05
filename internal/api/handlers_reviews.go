@@ -435,8 +435,7 @@ func (s *Server) DecideReviewItem(w http.ResponseWriter, r *http.Request, id ope
 	p := principalFrom(r.Context())
 
 	// Author-cannot-self-approve (§12.2), at every layer, except for
-	// platform staff (the operator, agentry#912): staff publish the
-	// built-in packages and review any item, their own included.
+	// platform staff, who publish the built-in packages (agentry#912).
 	v, err := s.q().GetVersionByID(r.Context(), ri.VersionID)
 	if err != nil {
 		problemInternal(w, r)
@@ -576,10 +575,11 @@ func (s *Server) SetFindingVerdict(w http.ResponseWriter, r *http.Request, id op
 		}
 		// The actor half of §8.5 (DEV-034): on an org-namespace agent the
 		// waiver is the org's call. reviewItemAccess admits any platform
-		// staff member to a platform-queue item — right for the protective
-		// actions (quarantine, block, false-positive) but not for accepting
-		// risk on someone else's behalf — so this re-checks the org role
-		// regardless of the staff flag. Personal-namespace agents have no org
+		// staff member to any item, an org-queue one included since
+		// agentry#912 — right for the protective actions (quarantine,
+		// block, false-positive) but not for accepting risk on someone
+		// else's behalf — so this re-checks the org role regardless of the
+		// staff flag. Personal-namespace agents have no org
 		// to defer to and keep the platform-queue rule.
 		v, err := s.q().GetVersionByID(r.Context(), run.VersionID)
 		if err != nil {
