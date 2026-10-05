@@ -21,8 +21,22 @@ type manifestCaps struct {
 		Read  json.RawMessage `json:"read"`
 		Write json.RawMessage `json:"write"`
 	} `json:"filesystem"`
-	Exec    json.RawMessage `json:"exec"`
-	Secrets []string        `json:"secrets"`
+	Exec       json.RawMessage      `json:"exec"`
+	Secrets    []string             `json:"secrets"`
+	MCPServers []manifest.MCPServer `json:"mcpServers"`
+}
+
+// remoteServerHosts are the hosts of the manifest's remote MCP servers
+// (agentry#910): network the release reaches, through the runner's bridge,
+// as surely as through network.egress.
+func (c manifestCaps) remoteServerHosts() []string {
+	var out []string
+	for _, srv := range c.MCPServers {
+		if h := srv.RemoteHost(); h != "" {
+			out = append(out, h)
+		}
+	}
+	return out
 }
 
 // readManifestCaps decodes the capabilities block. ok is false when the
@@ -45,7 +59,7 @@ func declaredCaps(manifestJSON []byte) map[string]bool {
 	if !ok {
 		return out
 	}
-	if len(c.Network.Egress.Hosts) > 0 && !onlyNone(c.Network.Egress.Hosts) {
+	if (len(c.Network.Egress.Hosts) > 0 && !onlyNone(c.Network.Egress.Hosts)) || len(c.remoteServerHosts()) > 0 {
 		out["network"] = true
 	}
 	if notNone(c.Filesystem.Write) {
