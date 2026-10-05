@@ -4342,7 +4342,7 @@ type ClientInterface interface {
 
 	// TotpChallengeWithBody Complete a pending 2FA challenge and open the session (§12.1).
 	//
-	// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+	// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads (agentry#457), so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -4351,7 +4351,7 @@ type ClientInterface interface {
 
 	// TotpChallenge Complete a pending 2FA challenge and open the session (§12.1).
 	//
-	// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+	// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads (agentry#457), so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -6228,7 +6228,7 @@ func (c *Client) YankVersion(ctx context.Context, ns Namespace, name AgentName, 
 
 // TotpChallengeWithBody Complete a pending 2FA challenge and open the session (§12.1).
 //
-// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads (agentry#457), so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
 //
 // Takes any type of body and a specified content type.
 //
@@ -6247,7 +6247,7 @@ func (c *Client) TotpChallengeWithBody(ctx context.Context, contentType string, 
 
 // TotpChallenge Complete a pending 2FA challenge and open the session (§12.1).
 //
-// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads (agentry#457), so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -17296,7 +17296,7 @@ type ClientWithResponsesInterface interface {
 
 	// TotpChallengeWithBodyWithResponse Complete a pending 2FA challenge and open the session (§12.1).
 	//
-	// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+	// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads (agentry#457), so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -17305,7 +17305,7 @@ type ClientWithResponsesInterface interface {
 
 	// TotpChallengeWithResponse Complete a pending 2FA challenge and open the session (§12.1).
 	//
-	// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+	// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads (agentry#457), so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -27356,7 +27356,7 @@ func (c *ClientWithResponses) YankVersionWithResponse(ctx context.Context, ns Na
 
 // TotpChallengeWithBodyWithResponse Complete a pending 2FA challenge and open the session (§12.1).
 //
-// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads (agentry#457), so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -27371,7 +27371,7 @@ func (c *ClientWithResponses) TotpChallengeWithBodyWithResponse(ctx context.Cont
 
 // TotpChallengeWithResponse Complete a pending 2FA challenge and open the session (§12.1).
 //
-// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque, single-use and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required.
+// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads (agentry#457), so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

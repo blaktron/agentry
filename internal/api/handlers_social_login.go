@@ -22,6 +22,7 @@ package api
 // enabled TOTP does not lose it by signing in with Google.
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -53,6 +54,13 @@ const (
 	socialRestartCookie = "agentry_social_restart"
 	// totpChallengeTTL bounds the second leg of a 2FA social login.
 	totpChallengeTTL = 5 * time.Minute
+	// maxTOTPChallengeID bounds a challenge's id as the consumed set's
+	// table does; the server mints 52 characters (auth.NewToken).
+	maxTOTPChallengeID = 64
+	// defaultTOTPConsumeTimeout bounds the consumed set's write, so a
+	// database that does not answer refuses the challenge rather than
+	// holding the sign-in.
+	defaultTOTPConsumeTimeout = 5 * time.Second
 )
 
 // isBrowserNavigation reports whether the request is a top-level browser
@@ -111,8 +119,11 @@ const maxNextPathBytes = 512
 
 // totpChallengeBlob is the sealed payload behind a pending 2FA challenge. It
 // names the user and expires; possessing it is not authentication, which is
-// why the code is still required.
+// why the code is still required. ID is random and is recorded in the
+// database when the challenge completes, which is what makes it single use
+// at every replica (agentry#457).
 type totpChallengeBlob struct {
+	ID        string    `json:"i"`
 	UserID    uuid.UUID `json:"u"`
 	ExpiresAt time.Time `json:"e"`
 	Provider  string    `json:"p"`
@@ -579,8 +590,16 @@ func signupPromoCode(id *social.Identity) string {
 
 // sealTOTPChallenge mints the opaque challenge for a pending 2FA login.
 func (s *Server) sealTOTPChallenge(userID uuid.UUID, provider string) (string, error) {
+	return s.sealTOTPChallengeAt(userID, provider, time.Now().Add(totpChallengeTTL))
+}
+
+func (s *Server) sealTOTPChallengeAt(userID uuid.UUID, provider string, expiresAt time.Time) (string, error) {
+	id, err := auth.NewToken("")
+	if err != nil {
+		return "", err
+	}
 	blob, err := json.Marshal(totpChallengeBlob{
-		UserID: userID, ExpiresAt: time.Now().Add(totpChallengeTTL), Provider: provider,
+		ID: id, UserID: userID, ExpiresAt: expiresAt, Provider: provider,
 	})
 	if err != nil {
 		return "", err
@@ -615,13 +634,29 @@ func (s *Server) TotpChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var blob totpChallengeBlob
-	if err := json.Unmarshal(raw, &blob); err != nil || time.Now().After(blob.ExpiresAt) {
-		problemUnauthorized(w, r, "The two-factor challenge expired. Start the sign-in again.")
+	if err := json.Unmarshal(raw, &blob); err != nil || blob.ID == "" || len(blob.ID) > maxTOTPChallengeID {
+		// A challenge sealed before agentry#457 carries no id, so it cannot
+		// be held to single use: it is refused, and the sign-in starts again.
+		problemUnauthorized(w, r, "The two-factor challenge is invalid. Start the sign-in again.")
 		return
 	}
+	expired := time.Now().After(blob.ExpiresAt)
 	user, err := s.q().GetUserByID(r.Context(), blob.UserID)
 	if err != nil || user.State != "active" || !user.TotpEnabled {
+		if expired {
+			// The expiry is answered as it always was; only an account that
+			// still signs in has the refusal written to its audit trail.
+			writeProblem(w, r, http.StatusUnauthorized, "totp-challenge-expired", "Two-factor challenge expired",
+				"The two-factor challenge expired. Start the sign-in again.")
+			return
+		}
 		problemUnauthorized(w, r, "The two-factor challenge is invalid. Start the sign-in again.")
+		return
+	}
+	if expired {
+		s.auditTOTPChallengeFailure(r, user.ID, blob.Provider, "expired")
+		writeProblem(w, r, http.StatusUnauthorized, "totp-challenge-expired", "Two-factor challenge expired",
+			"The two-factor challenge expired. Start the sign-in again.")
 		return
 	}
 	secret, err := s.sealer.Open(user.TotpSecretEnc)
@@ -631,18 +666,66 @@ func (s *Server) TotpChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !auth.ValidateTOTP(req.Code, string(secret)) {
-		e := auditEvent(r, audit.ActionUserLoginFailed)
-		e.Actor, e.ActorKind = user.ID, audit.ActorUser
-		e.Detail = map[string]any{"stage": "totp_challenge", "provider": blob.Provider}
-		if werr := s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
-			return s.auditW.Write(r.Context(), q, e)
-		}); werr != nil {
-			s.log.WarnContext(r.Context(), "audit totp challenge failure", "err", werr)
-		}
+		s.auditTOTPChallengeFailure(r, user.ID, blob.Provider, "code")
 		problemUnauthorized(w, r, "That code did not match. Try the current code from the authenticator app.")
 		return
 	}
+	// The challenge is consumed only once its code is right, so a mistyped
+	// code can be tried again; a second completion is refused. A store that
+	// cannot record it refuses the challenge, as the SAML consumed set does
+	// (DEV-119).
+	consumed, err := s.consumeTOTPChallenge(r.Context(), blob)
+	if err != nil {
+		// A request that had already ended is a refusal, not an outage: a
+		// rolling deploy must not emit a burst of the alert's line.
+		if r.Context().Err() != nil {
+			s.log.WarnContext(r.Context(), "totp challenge: the sign-in ended while recording it as consumed", "err", err)
+		} else {
+			s.log.ErrorContext(r.Context(), "totp challenge: recording it as consumed", logevent.TOTPChallengeUnavailable.Attr(), "err", err)
+		}
+		problemUnavailable(w, r, "The sign-in cannot be completed right now. Try again in a moment.")
+		return
+	}
+	if !consumed {
+		s.auditTOTPChallengeFailure(r, user.ID, blob.Provider, "replayed")
+		writeProblem(w, r, http.StatusUnauthorized, "totp-challenge-used", "Two-factor challenge already used",
+			"This two-factor challenge was already used. Start the sign-in again.")
+		return
+	}
 	s.issueSocialSession(w, r, user, blob.Provider, "", nil, false)
+}
+
+// consumeTOTPChallenge records the challenge's id in the consumed set every
+// replica reads, and says whether this was its first completion. The row is
+// kept a TTL past the challenge's own expiry, a margin for the replicas'
+// clocks, then swept here.
+func (s *Server) consumeTOTPChallenge(reqCtx context.Context, blob totpChallengeBlob) (bool, error) {
+	ctx, cancel := context.WithTimeout(reqCtx, s.totpConsumeTimeout)
+	defer cancel()
+	q := s.q()
+	n, err := q.ConsumeTOTPChallenge(ctx, storegen.ConsumeTOTPChallengeParams{
+		ID: blob.ID, ExpiresAt: blob.ExpiresAt.Add(totpChallengeTTL),
+	})
+	if err != nil {
+		return false, err
+	}
+	if _, err := q.DeleteExpiredTOTPChallenges(ctx); err != nil {
+		s.log.WarnContext(ctx, "totp challenge: dropping expired consumed challenges", "err", err)
+	}
+	return n == 1, nil
+}
+
+// auditTOTPChallengeFailure records a refused second leg; reason tells a
+// wrong code, an expired challenge and a replayed one apart.
+func (s *Server) auditTOTPChallengeFailure(r *http.Request, userID uuid.UUID, provider, reason string) {
+	e := auditEvent(r, audit.ActionUserLoginFailed)
+	e.Actor, e.ActorKind = userID, audit.ActorUser
+	e.Detail = map[string]any{"stage": "totp_challenge", "provider": provider, "reason": reason}
+	if werr := s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
+		return s.auditW.Write(r.Context(), q, e)
+	}); werr != nil {
+		s.log.WarnContext(r.Context(), "audit totp challenge failure", "err", werr)
+	}
 }
 
 // issueSocialSession opens an ordinary session (no org SSO tag) and answers:

@@ -9,8 +9,10 @@ test token, which the blueprint's default test keys accept.
   on       the server names a terms file: the display name is optional;
            after the form comes the terms step, the file's text and an
            unticked agreement; an unticked submission is refused in the
-           policy's words; a ticked one reaches the authenticator setup, with
-           no mail step (agentry#861). Makes
+           policy's words; a ticked one reaches the choice to set up an
+           authenticator now or later, with no mail step (agentry#861), and
+           "now" reaches the setup while "later" skips it to the session
+           (agentry#894). Makes
            one account with a blank display name and a mixed-case username,
            and one with a name and a promo code. A username differing from
            an existing one only by case, and a reserved name in capitals,
@@ -22,8 +24,9 @@ test token, which the blueprint's default test keys accept.
            the form leads straight to the confirmation mail (agentry#861).
 
 The accounts are written active but unactivated (agentry#861) and are left
-there: the flow stops at the authenticator setup. directory-terms.sh
-reads what was written with ak shell.
+there: the blank-name sign-up stops at the authenticator setup and the
+named one skips it and is signed in. directory-terms.sh reads what was
+written with ak shell.
 """
 
 import http.cookiejar
@@ -40,8 +43,10 @@ VERSION = os.environ.get("TERMS_VERSION", "")
 TEXT = "agentry_terms_text"
 AGREE = "attributes_agentry_terms_accepted"
 CAPTCHA_TEST_TOKEN = "XXXX.DUMMY.TOKEN.XXXX"
-# Where sign-up goes after the write since agentry#861: the authenticator
-# setup, the confirmation mail having left the flow.
+# Where sign-up goes after the write since agentry#861, the confirmation
+# mail having left the flow: the choice to set up an authenticator now or
+# later (agentry#894), then the setup unless the answer is later.
+CHOICE = "agentry_authenticator_choice"
 TOTP = "ak-stage-authenticator-totp"
 
 
@@ -107,6 +112,14 @@ def terms_step(c, label):
     return field(c, TEXT), field(c, AGREE)
 
 
+def choice_step(c, label):
+    choice = field(c, CHOICE)
+    if c.get("component") != "ak-stage-prompt" or choice is None:
+        fail(f"{label}: after the terms the flow is at {c.get('component')} with fields "
+             f"{[f.get('field_key') for f in c.get('fields', [])]}, not the authenticator choice: {errors(c)[:300]}")
+    return choice
+
+
 def on():
     flow = Flow()
     name = field(flow.to_form(), "name")
@@ -152,11 +165,22 @@ def on():
     ok("an unticked or absent agreement is refused, in the policy's words")
 
     c = flow.step({"component": "ak-stage-prompt", AGREE: True, TEXT: "<p>smuggled</p>"})
+    choice = choice_step(c, "a ticked agreement")
+    values = [ch.get("value") if isinstance(ch, dict) else ch for ch in (choice.get("choices") or [])]
+    if choice.get("type") != "radio-button-group" or not choice.get("required") or values != ["now", "later"] or choice.get("initial_value") != "now":
+        fail(f"the authenticator choice is {choice.get('type')}, required {choice.get('required')}, "
+             f"choices {choice.get('choices')}, initial {choice.get('initial_value')!r}")
+    ok(f"a ticked agreement reaches the authenticator choice, now or later, starting at now: {choice.get('choices')}")
+    c = flow.step({"component": "ak-stage-prompt", CHOICE: "maybe"})
+    if c.get("component") != "ak-stage-prompt" or CHOICE not in errors(c):
+        fail(f"a choice that is neither now nor later got through: {c.get('component')} {errors(c)[:300]}")
+    ok("a choice that is neither now nor later is refused")
+    c = flow.step({"component": "ak-stage-prompt", CHOICE: "now"})
     if c.get("component") != TOTP:
-        fail(f"a ticked agreement stopped at {c.get('component')}: {errors(c)[:300]}")
+        fail(f"choosing now stopped at {c.get('component')}: {errors(c)[:300]}")
     made["blank"] = user.lower()
     made["blankTyped"] = user
-    ok("a ticked agreement reaches the authenticator setup, with no mail step to wait at")
+    ok("choosing now reaches the authenticator setup, with no mail step to wait at")
 
     # The account above exists now; the same name in another case is taken,
     # and a reserved name is reserved in capitals too (agentry#856).
@@ -173,10 +197,15 @@ def on():
     user, c = flow.submit_form("Ada Lovelace", promo="launch-2026")
     terms_step(c, "a named sign-up")
     c = flow.step({"component": "ak-stage-prompt", AGREE: "on"})
-    if c.get("component") != TOTP:
-        fail(f"the named sign-up stopped at {c.get('component')}: {errors(c)[:300]}")
-    made["named"] = user
+    choice_step(c, "the named sign-up")
     ok("a sign-up with a display name and a promo code goes through the terms too")
+    # Skipped (agentry#894): no setup, straight through the login to the
+    # flow's redirect, signed in.
+    c = flow.step({"component": "ak-stage-prompt", CHOICE: "later"})
+    if c.get("component") != "xak-flow-redirect":
+        fail(f"choosing later did not finish the sign-up: {c.get('component')} {errors(c)[:300]}")
+    made["named"] = user
+    ok("choosing later skips the authenticator setup and finishes the sign-up, signed in")
     print("ACCOUNTS " + json.dumps(made))
 
 

@@ -80,6 +80,7 @@ is a name missing from this table.
 | `auth.login_failed` | INFO | a native sign-in failed | `user` (the id when the login named an account; the zero id otherwise). The login as typed is on the audit row, not here |
 | `auth.social_rejected` | WARN | a social or directory sign-in was rejected at the token exchange | `provider`, `err` |
 | `saml.state_unavailable` | ERROR | a SAML login refused because the shared state behind it could not be read or written; the fail-closed opposite of `failopen.*` | `set` (`assertions`, `requests`), `err` |
+| `auth.totp_challenge_unavailable` | ERROR | a 2FA social login's second leg refused because its challenge could not be recorded as consumed in the shared set; fail closed, as `saml.state_unavailable` is (agentry#457). A request that had already ended logs a WARN without the event | `err` |
 | `ssrf.refused` | WARN | the private-range guard refused a webhook target | `org`, `delivery`, `endpoint`, `host` |
 | `gate.verdict` | INFO | the gate decided a version | `outcome` (`published`, `rejected`, `needs_review`), `version`, `agent`, `run`, `worst_severity`, `findings`, `reason`; and `ruleset` when a new ruleset's redo of the review queue published a held version |
 | `gate.error` | WARN | the platform's own failure sent a version to review: stage errors, an unusable policy, the watchdog | `version`, `run`, and `stage_errors` or `kind` + `err` |
