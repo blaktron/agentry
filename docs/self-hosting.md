@@ -1728,8 +1728,9 @@ thresholds only move down.
 Three notes on the knobs:
 
 - `blockedMcpServers` rejects a submission whose manifest declares one of the
-  listed MCP servers (`npm:<package>` / `pypi:<package>`, `path.Match` globs
-  such as `npm:@evil/*`); it unions across baseline and org like
+  listed MCP servers (`npm:<package>` / `pypi:<package>`, or `url:<host>`
+  for a remote server, `path.Match` globs such as `npm:@evil/*` or
+  `url:*.example.com`); it unions across baseline and org like
   `blockedCapabilities`.
 - `blockedCapabilities` rejects a submission that *declares* the capability;
   it is a gate on the manifest, not a runtime restriction. Combine it with

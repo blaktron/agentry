@@ -458,6 +458,90 @@ a finding of that severity in your own files. Pin a
 version with a fix rather than asking for an exception; the [trust
 model](trust.md) page describes what the check does and does not prove.
 
+**Remote servers and OAuth sign-in** (v2). Many MCP servers run at their
+vendor and sign a person in on the vendor's own consent screen. A
+QuickAgent declares one by its address, and may give a package server an
+OAuth sign-in:
+
+```yaml
+capabilities:
+  mcpServers:
+    - url: https://mcp.linear.app/mcp   # a remote server: exactly one of npm, pypi, url
+      auth: oauth                       # oauth | secret | none
+      scopes: [read]                    # what consent asks for (auth: oauth only)
+      tools: [list_issues]
+    - url: https://api.githubcopilot.com/mcp/
+      auth: secret                      # its one secret, sent as a bearer header
+      secrets: [GITHUB_TOKEN]
+    - pypi: workspace-mcp               # a package server signed in by OAuth
+      version: 2.0.1
+      egress: [gmail.googleapis.com, www.googleapis.com]
+      env: {MCP_SINGLE_USER_MODE: "1"}
+      oauth:
+        issuer: https://accounts.google.com
+        scopes: [https://www.googleapis.com/auth/gmail.readonly]
+        files:                          # written into the server's token folder, read-only
+          - path: me.json
+            template: '{"token":"{access_token}","expiry":"{expiry}"}'
+        env:
+          WORKSPACE_MCP_CREDENTIALS_DIR: "{dir}"
+```
+
+- **A remote server** takes an `https://` address on a public host name
+  (lowercase, port 443, no user information, query or fragment; at most
+  512 characters). The address's host is the server's one network
+  destination, so it takes no `version`, `egress`, `env` or `oauth`.
+  `auth` is required. `auth: secret` sends exactly one declared secret as
+  the bearer header, `auth: none` sends nothing, and `auth: oauth` needs
+  the person's **connection**.
+- **A connection** is the person's OAuth grant to one server, made on the
+  vendor's consent screen the first time a run of that QuickAgent version
+  needs it, and kept for that version's later runs. It belongs to that one
+  version. Another QuickAgent, or another version of this one, makes its
+  own.
+- **An `oauth` block on a package server** names the authorization server
+  (`issuer`, `https://`), the `scopes` consent asks for, and how the access
+  token reaches the server:
+  - `files`: at most four, each a plain file name in the server's token
+    folder and a template of at most 2,048 bytes. A template's placeholders
+    are `{access_token}`, `{expiry}` (RFC 3339, UTC) and `{expiry_ms}`
+    (Unix milliseconds).
+  - `env`: at most eight variables. An env value's placeholders are
+    `{access_token}`, and `{dir}`, the token folder's path, which needs at
+    least one file declared.
+
+  `{access_token}` must appear somewhere. A name may not repeat the
+  server's `env` or a secret.
+- **What a run receives.** A run receives an access token and nothing else
+  of the connection: never a refresh token or a client secret. A value a
+  server's file needs for a client id or secret is a fixed dummy (as
+  `agentry` above), and the secret scanner reads the `oauth` block's
+  templates and env values for anything credential-shaped, as it reads
+  `env`.
+- **Servers that cannot run on an access token alone** refuse an `oauth`
+  block by name, with an alternative to declare:
+
+  | Package | Declare instead |
+  |---|---|
+  | `pypi:mcp-gsuite` | `pypi:workspace-mcp` |
+
+- **At the gate**, stage S7 reports each remote server as
+  `S7/remote-server`, a low finding naming its address, auth and scopes.
+  There is no package to look up and no code the pipeline reads, and the
+  report says so. A version publishes with it. A publication policy's
+  `blockedMcpServers` blocks a remote server by its host (`url:<host>`,
+  globs allowed, as in `url:*.example.com`).
+- **At install**, the consent shows each remote server's address, auth and
+  scopes, and each `oauth` block's issuer and scopes. A new remote server,
+  a changed auth, issuer or address, a new scope, or a changed `oauth`
+  file or env asks for consent again.
+
+The manifest accepts these fields since agentry#910. A runner runs them
+once it carries the remote-server bridge (agentry-cli#663) and connections
+(agentry-cli#664, agentry-cli#665), and hosted runs from
+agentry-enterprise#425. A CLI or desktop older than its core pin refuses
+such a manifest by its unknown field.
+
 ### `dependencies`
 
 `dependencies.agents: [{ref: ns/name, version: "^1.2"}]` is informational:
