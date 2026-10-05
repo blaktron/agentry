@@ -2528,7 +2528,12 @@ paths:
     get:
       operationId: listReviewQueue
       tags: [reviews]
-      summary: Pending review items (platform staff or org security_reviewer).
+      summary: Pending review items (platform staff, or an org's security_reviewer for its queue).
+      description: >-
+        The platform queue is platform staff's. An org queue is that
+        organization's reviewers' and platform staff's (agentry#912); staff
+        may leave `org` out to list every organization's pending items, and
+        anyone else must name it (422).
       parameters:
         - name: queue
           in: query
@@ -2538,6 +2543,7 @@ paths:
             enum: [platform, org]
         - name: org
           in: query
+          description: The organization of an org queue; optional for platform staff.
           schema:
             type: string
         - name: limit
@@ -2634,7 +2640,12 @@ paths:
     post:
       operationId: decideReviewItem
       tags: [reviews]
-      summary: Approve or reject a version under review (not its author, §12.2).
+      summary: Approve or reject a version under review (not its author, unless platform staff; §12.2, agentry#912).
+      description: >-
+        An author cannot decide their own version (403), whatever their
+        organization role. Platform staff may decide any item, their own
+        versions included; the decision's audit event then carries
+        `self_decision: true`.
       parameters:
         - name: id
           in: path

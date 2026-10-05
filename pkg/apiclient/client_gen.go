@@ -3812,8 +3812,10 @@ type GetReviewFileParams struct {
 // ListReviewQueueParams defines parameters for ListReviewQueue.
 type ListReviewQueueParams struct {
 	Queue ListReviewQueueParamsQueue `form:"queue" json:"queue"`
-	Org   *string                    `form:"org,omitempty" json:"org,omitempty"`
-	Limit *int                       `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Org The organization of an org queue; optional for platform staff.
+	Org   *string `form:"org,omitempty" json:"org,omitempty"`
+	Limit *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListReviewQueueParamsQueue defines parameters for ListReviewQueue.
@@ -5293,14 +5295,18 @@ type ClientInterface interface {
 	// Corresponds with GET /review-items/{id} (the `GetReviewItem` operationId).
 	GetReviewItem(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DecideReviewItemWithBody Approve or reject a version under review (not its author, §12.2).
+	// DecideReviewItemWithBody Approve or reject a version under review (not its author, unless platform staff; §12.2, agentry#912).
+	//
+	// An author cannot decide their own version (403), whatever their organization role. Platform staff may decide any item, their own versions included; the decision's audit event then carries `self_decision: true`.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /review-items/{id}/decision (the `DecideReviewItem` operationId).
 	DecideReviewItemWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DecideReviewItem Approve or reject a version under review (not its author, §12.2).
+	// DecideReviewItem Approve or reject a version under review (not its author, unless platform staff; §12.2, agentry#912).
+	//
+	// An author cannot decide their own version (403), whatever their organization role. Platform staff may decide any item, their own versions included; the decision's audit event then carries `self_decision: true`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -5317,7 +5323,9 @@ type ClientInterface interface {
 	// Corresponds with GET /review-items/{id}/files (the `ListReviewFiles` operationId).
 	ListReviewFiles(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListReviewQueue Pending review items (platform staff or org security_reviewer).
+	// ListReviewQueue Pending review items (platform staff, or an org's security_reviewer for its queue).
+	//
+	// The platform queue is platform staff's. An org queue is that organization's reviewers' and platform staff's (agentry#912); staff may leave `org` out to list every organization's pending items, and anyone else must name it (422).
 	//
 	// Corresponds with GET /review-queue (the `ListReviewQueue` operationId).
 	ListReviewQueue(ctx context.Context, params *ListReviewQueueParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -8549,7 +8557,9 @@ func (c *Client) GetReviewItem(ctx context.Context, id openapi_types.UUID, reqEd
 	return c.Client.Do(req)
 }
 
-// DecideReviewItemWithBody Approve or reject a version under review (not its author, §12.2).
+// DecideReviewItemWithBody Approve or reject a version under review (not its author, unless platform staff; §12.2, agentry#912).
+//
+// An author cannot decide their own version (403), whatever their organization role. Platform staff may decide any item, their own versions included; the decision's audit event then carries `self_decision: true`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -8566,7 +8576,9 @@ func (c *Client) DecideReviewItemWithBody(ctx context.Context, id openapi_types.
 	return c.Client.Do(req)
 }
 
-// DecideReviewItem Approve or reject a version under review (not its author, §12.2).
+// DecideReviewItem Approve or reject a version under review (not its author, unless platform staff; §12.2, agentry#912).
+//
+// An author cannot decide their own version (403), whatever their organization role. Platform staff may decide any item, their own versions included; the decision's audit event then carries `self_decision: true`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -8613,7 +8625,9 @@ func (c *Client) ListReviewFiles(ctx context.Context, id openapi_types.UUID, req
 	return c.Client.Do(req)
 }
 
-// ListReviewQueue Pending review items (platform staff or org security_reviewer).
+// ListReviewQueue Pending review items (platform staff, or an org's security_reviewer for its queue).
+//
+// The platform queue is platform staff's. An org queue is that organization's reviewers' and platform staff's (agentry#912); staff may leave `org` out to list every organization's pending items, and anyone else must name it (422).
 //
 // Corresponds with GET /review-queue (the `ListReviewQueue` operationId).
 func (c *Client) ListReviewQueue(ctx context.Context, params *ListReviewQueueParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -18371,14 +18385,18 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /review-items/{id} (the `GetReviewItem` operationId).
 	GetReviewItemWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetReviewItemResponse, error)
 
-	// DecideReviewItemWithBodyWithResponse Approve or reject a version under review (not its author, §12.2).
+	// DecideReviewItemWithBodyWithResponse Approve or reject a version under review (not its author, unless platform staff; §12.2, agentry#912).
+	//
+	// An author cannot decide their own version (403), whatever their organization role. Platform staff may decide any item, their own versions included; the decision's audit event then carries `self_decision: true`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /review-items/{id}/decision (the `DecideReviewItem` operationId).
 	DecideReviewItemWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DecideReviewItemResponse, error)
 
-	// DecideReviewItemWithResponse Approve or reject a version under review (not its author, §12.2).
+	// DecideReviewItemWithResponse Approve or reject a version under review (not its author, unless platform staff; §12.2, agentry#912).
+	//
+	// An author cannot decide their own version (403), whatever their organization role. Platform staff may decide any item, their own versions included; the decision's audit event then carries `self_decision: true`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -18399,7 +18417,9 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /review-items/{id}/files (the `ListReviewFiles` operationId).
 	ListReviewFilesWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*ListReviewFilesResponse, error)
 
-	// ListReviewQueueWithResponse Pending review items (platform staff or org security_reviewer).
+	// ListReviewQueueWithResponse Pending review items (platform staff, or an org's security_reviewer for its queue).
+	//
+	// The platform queue is platform staff's. An org queue is that organization's reviewers' and platform staff's (agentry#912); staff may leave `org` out to list every organization's pending items, and anyone else must name it (422).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -29253,7 +29273,9 @@ func (c *ClientWithResponses) GetReviewItemWithResponse(ctx context.Context, id 
 	return ParseGetReviewItemResponse(rsp)
 }
 
-// DecideReviewItemWithBodyWithResponse Approve or reject a version under review (not its author, §12.2).
+// DecideReviewItemWithBodyWithResponse Approve or reject a version under review (not its author, unless platform staff; §12.2, agentry#912).
+//
+// An author cannot decide their own version (403), whatever their organization role. Platform staff may decide any item, their own versions included; the decision's audit event then carries `self_decision: true`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29266,7 +29288,9 @@ func (c *ClientWithResponses) DecideReviewItemWithBodyWithResponse(ctx context.C
 	return ParseDecideReviewItemResponse(rsp)
 }
 
-// DecideReviewItemWithResponse Approve or reject a version under review (not its author, §12.2).
+// DecideReviewItemWithResponse Approve or reject a version under review (not its author, unless platform staff; §12.2, agentry#912).
+//
+// An author cannot decide their own version (403), whatever their organization role. Platform staff may decide any item, their own versions included; the decision's audit event then carries `self_decision: true`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29305,7 +29329,9 @@ func (c *ClientWithResponses) ListReviewFilesWithResponse(ctx context.Context, i
 	return ParseListReviewFilesResponse(rsp)
 }
 
-// ListReviewQueueWithResponse Pending review items (platform staff or org security_reviewer).
+// ListReviewQueueWithResponse Pending review items (platform staff, or an org's security_reviewer for its queue).
+//
+// The platform queue is platform staff's. An org queue is that organization's reviewers' and platform staff's (agentry#912); staff may leave `org` out to list every organization's pending items, and anyone else must name it (422).
 //
 // Returns a wrapper object for the known response body format(s).
 //
