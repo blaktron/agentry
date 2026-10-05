@@ -255,15 +255,20 @@ func (s *Server) ListReviewQueue(w http.ResponseWriter, r *http.Request, params 
 			return
 		}
 	case "org":
+		// Platform staff may read any organization's queue, or every
+		// organization's at once by naming none (agentry#912).
 		if params.Org == nil {
-			problemValidation(w, r, "Name the organization for the org queue.")
-			return
+			if !p.PlatformStaff {
+				problemValidation(w, r, "Name the organization for the org queue.")
+				return
+			}
+			break
 		}
 		orgRow, ok := s.orgOrNotFound(w, r, *params.Org)
 		if !ok {
 			return
 		}
-		if !s.isOrgReviewer(p, orgRow.ID) {
+		if !p.PlatformStaff && !s.isOrgReviewer(p, orgRow.ID) {
 			problemForbidden(w, r, "The org queue needs the organization's security_reviewer role or higher.")
 			return
 		}
@@ -309,7 +314,8 @@ func (s *Server) reviewItemAccess(w http.ResponseWriter, r *http.Request, id uui
 			return storegen.ReviewItem{}, false
 		}
 	case "org":
-		if ri.OrgID == nil || !s.isOrgReviewer(p, *ri.OrgID) {
+		// Platform staff may review any organization's item (agentry#912).
+		if ri.OrgID == nil || (!p.PlatformStaff && !s.isOrgReviewer(p, *ri.OrgID)) {
 			problemForbidden(w, r, "This review item needs the organization's security_reviewer role or higher.")
 			return storegen.ReviewItem{}, false
 		}
@@ -401,8 +407,10 @@ func (s *Server) GetReviewItem(w http.ResponseWriter, r *http.Request, id openap
 	writeJSON(w, http.StatusOK, bundle)
 }
 
-// DecideReviewItem implements POST /review-items/{id}/decision. Authors can
-// never approve their own versions (§12.2, enforced here).
+// DecideReviewItem implements POST /review-items/{id}/decision. An author
+// cannot decide their own version (§12.2, enforced here), unless they are
+// platform staff (agentry#912, DEV-213): staff may decide any item, and a
+// staff decision on their own version is marked in its audit event.
 func (s *Server) DecideReviewItem(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
 	if !s.requireDB(w, r) {
 		return
@@ -426,13 +434,16 @@ func (s *Server) DecideReviewItem(w http.ResponseWriter, r *http.Request, id ope
 	}
 	p := principalFrom(r.Context())
 
-	// Author-cannot-self-approve (§12.2), at every layer.
+	// Author-cannot-self-approve (§12.2), at every layer, except for
+	// platform staff (the operator, agentry#912): staff publish the
+	// built-in packages and review any item, their own included.
 	v, err := s.q().GetVersionByID(r.Context(), ri.VersionID)
 	if err != nil {
 		problemInternal(w, r)
 		return
 	}
-	if v.SubmittedBy == p.UserID {
+	selfDecision := v.SubmittedBy == p.UserID
+	if selfDecision && !p.PlatformStaff {
 		problemForbidden(w, r, "Authors cannot decide their own versions.")
 		return
 	}
@@ -462,7 +473,7 @@ func (s *Server) DecideReviewItem(w http.ResponseWriter, r *http.Request, id ope
 	// then made unrecoverable.
 	handedOff, err := s.pipeline.DecideReview(r.Context(), scan.ReviewDecision{
 		ItemID: ri.ID, VersionID: ri.VersionID, Target: target, State: newState,
-		Rationale: rationale, DecidedBy: p.UserID, Audit: e,
+		Rationale: rationale, DecidedBy: p.UserID, SelfDecision: selfDecision, Audit: e,
 	})
 	if err != nil {
 		switch {

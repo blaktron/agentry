@@ -1127,6 +1127,10 @@ type ReviewDecision struct {
 	State     string
 	Rationale string
 	DecidedBy uuid.UUID
+	// SelfDecision marks platform staff deciding a version they submitted
+	// (agentry#912): allowed, and recorded in the audit event's detail so
+	// it stays visible after the fact.
+	SelfDecision bool
 	// Audit is the caller's audit event (actor, request context); the action
 	// and target are filled in here.
 	Audit audit.Event
@@ -1196,6 +1200,9 @@ func (p *Pipeline) DecideReview(ctx context.Context, in ReviewDecision) (handedO
 		e.TargetKind, e.TargetID = "review_item", in.ItemID
 		e.Detail = map[string]any{
 			"decision": in.State, "version_id": in.VersionID.String(), "target": string(in.Target),
+		}
+		if in.SelfDecision {
+			e.Detail["self_decision"] = true
 		}
 		if err := p.aud.Write(ctx, q, e); err != nil {
 			return err
