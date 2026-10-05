@@ -445,7 +445,10 @@ as the token.
 The run's declared names are checked against the caller's secrets. The
 release's names and its MCP servers' are one namespace. A name that is not
 set is `409 secret-missing`, with `missing` naming each and `secrets`
-naming all, and nothing is held or queued. More than 32 declared names is
+naming all, and nothing is held or queued. (A manifest may mark declared
+secrets optional, `capabilities.optionalSecrets`; a create that needs only
+the required ones is planned in agentry-enterprise#424, and until then an
+optional name is checked like any other.) More than 32 declared names is
 `422 validation`. With every name set, the run records the names
 (`secrets`, names only) and is queued.
 

@@ -603,3 +603,57 @@ func TestAccountInstallMovesNoDownloadCounter(t *testing.T) {
 		t.Fatalf("download_stats gained %d rows from account installs", rollups)
 	}
 }
+
+// Optional secrets (plan optional-secrets.md D6, agentry#906): the stored
+// contract carries capabilities.optionalSecrets through the account install
+// and the version read, and a release that only moves a secret between
+// optional and required asks for no capability acceptance again, in either
+// direction, because the names and their scoping are unchanged.
+func TestAccountInstallOptionalSecretFlipAsksNothing(t *testing.T) {
+	env := newTestEnv(t)
+	authorH := env.register("ao-author")
+	env.verifyEmail(authorH)
+	author := env.login(authorH)
+	env.doJSON(author, http.MethodPost, "/api/v1/agents",
+		map[string]any{"namespace": authorH, "name": "flipper", "modes": []string{"autonomous"}, "visibility": "public"}, nil, http.StatusCreated)
+	optional := func(version string) map[string]string {
+		files := installCapsFiles(authorH, "flipper", version, []string{"api.example"}, []string{"OTHER_TOKEN"})
+		files["agent.yaml"] = strings.Replace(files["agent.yaml"], "  secrets: [OTHER_TOKEN]\n",
+			"  secrets: [OTHER_TOKEN]\n  optionalSecrets: [OTHER_TOKEN]\n", 1)
+		return files
+	}
+	env.publishVersions(t, author, authorH, "flipper", []versionFiles{
+		{"1.0.0", installCapsFiles(authorH, "flipper", "1.0.0", []string{"api.example"}, []string{"OTHER_TOKEN"})},
+		{"1.1.0", optional("1.1.0")},
+		{"1.2.0", installCapsFiles(authorH, "flipper", "1.2.0", []string{"api.example"}, []string{"OTHER_TOKEN"})},
+	})
+	personH := env.register("ao-person")
+	env.verifyEmail(personH)
+	person := env.login(personH)
+	ref := authorH + "/flipper"
+
+	if code, _, prob := env.putInstall(t, person, ref, map[string]any{"version": "1.0.0", "acceptCapabilities": true}); code != http.StatusOK {
+		t.Fatalf("first install: %d %+v", code, prob)
+	}
+	code, rec, prob := env.putInstall(t, person, ref, map[string]any{"version": "1.1.0"})
+	if code != http.StatusOK || deref(rec.InstalledVersion) != "1.1.0" {
+		t.Fatalf("required → optional asked again: %d %+v", code, prob)
+	}
+	if opt, _ := rec.Capabilities["optionalSecrets"].([]any); len(opt) != 1 || opt[0] != "OTHER_TOKEN" {
+		t.Fatalf("the snapshot lost optionalSecrets: %v", rec.Capabilities)
+	}
+	var v struct {
+		Capabilities map[string]any `json:"capabilities"`
+	}
+	env.doJSON(person, http.MethodGet, "/api/v1/agents/"+ref+"/versions/1.1.0", nil, &v, http.StatusOK)
+	if opt, _ := v.Capabilities["optionalSecrets"].([]any); len(opt) != 1 {
+		t.Fatalf("the version read lost optionalSecrets: %v", v.Capabilities)
+	}
+	code, rec, prob = env.putInstall(t, person, ref, map[string]any{"version": "1.2.0"})
+	if code != http.StatusOK || deref(rec.InstalledVersion) != "1.2.0" {
+		t.Fatalf("optional → required asked again: %d %+v", code, prob)
+	}
+	if _, has := rec.Capabilities["optionalSecrets"]; has {
+		t.Fatalf("the snapshot kept a marking the release dropped: %v", rec.Capabilities)
+	}
+}
