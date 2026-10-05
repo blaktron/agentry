@@ -95,7 +95,9 @@ func (h *handler) reviewQueue(w http.ResponseWriter, r *http.Request) {
 		d.Queue = "org"
 	}
 	path := "/review-queue?limit=100&queue=" + d.Queue
-	if d.Queue == "org" {
+	// No organization named: platform staff get every organization's
+	// queue (agentry#912); anyone else the API's request to name one.
+	if d.Queue == "org" && d.Org != "" {
 		path += "&org=" + url.QueryEscape(d.Org)
 	}
 	res, err := h.call(r).do(http.MethodGet, path, nil)

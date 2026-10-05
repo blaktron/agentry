@@ -91,12 +91,9 @@ func TestReviewApprovalFlow(t *testing.T) {
 		t.Fatalf("bundle item versionStatus = %q, want needs_review", bundle.Item.VersionStatus)
 	}
 
-	// Author cannot decide their own version (§12.2) — even as staff would,
-	// the author is not staff here, but assert the self-approve guard too by
-	// making the author staff and trying.
-	env.makePlatformStaff(t, author)
-	authorStaffSess := env.login(author)
-	res := env.do(authorStaffSess, http.MethodPost, "/api/v1/review-items/"+itemID+"/decision",
+	// An author who is not platform staff cannot decide their own version
+	// (§12.2). Staff may (agentry#912): review_staff_test.go.
+	res := env.do(authorSess, http.MethodPost, "/api/v1/review-items/"+itemID+"/decision",
 		map[string]any{"decision": "approve", "rationale": "mine"})
 	_ = res.Body.Close()
 	if res.StatusCode != http.StatusForbidden {

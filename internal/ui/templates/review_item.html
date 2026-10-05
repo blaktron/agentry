@@ -41,7 +41,7 @@
   <button type="submit" name="decision" value="reject" class="danger">Reject</button>
   {{if eq .Bundle.Item.VersionStatus "quarantined"}}<p class="muted">This version was published, then quarantined: visible, not installable. Approve publishes and signs it again; reject yanks it — an exact pin still resolves a yanked version, nothing else does.</p>{{end}}
   <p class="muted">The rationale is recorded in the audit log, and mailed to the author unless they switched these emails off.</p>
-  <p class="muted">Approving publishes and signs this version. Authors cannot decide their own submissions. The server enforces this.</p>
+  <p class="muted">Approving publishes and signs this version. Authors cannot decide their own submissions, unless they are platform staff. The server enforces this.</p>
 </form>
 </section>
 {{end}}

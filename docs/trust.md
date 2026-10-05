@@ -151,6 +151,9 @@ rule about honesty, and these are the specific things behind it:
 - **Review is human, and humans are the ones deciding.** Reviewer
   dismissals (false positive, or accepted risk) stay on the public report
   with their rationale, so a waived finding is visible rather than erased.
+  An author never decides their own version, with one exception: platform
+  staff may review any version in review, their own included, and such a
+  decision is marked as theirs in the audit log.
 
 ## Because detection improves after publication
 
