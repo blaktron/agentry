@@ -170,7 +170,7 @@ intake:
 |---|---|
 | `id` | `[a-z0-9_]{1,64}`, unique within the manifest |
 | `prompt` | required |
-| `type` | `text`, `secret` (injected as a run-scoped secret, never written as text or recorded; the upper-cased id must be listed under `capabilities.secrets`, or the run refuses it), `choice` (needs `choices`), `file` (a host path the runner stages into the inputs folder) |
+| `type` | `text`, `secret` (injected as a run-scoped secret, never written as text or recorded; the upper-cased id must be listed under `capabilities.secrets`, or the run refuses it; and `required` must agree with that secret: `true` for a required secret, absent or `false` for one under `capabilities.optionalSecrets`, or publishing refuses it, V10), `choice` (needs `choices`), `file` (a host path the runner stages into the inputs folder) |
 | `choices` | only with `type: choice` |
 | at most 20 questions | |
 
@@ -354,6 +354,28 @@ container starts (missing ⇒ refuse, exit 11, naming the variable), and
 injects values only into the tools container. The `fetch` tool can send a
 declared secret as an auth header without the value entering model
 context; values never appear in plans, receipts, or process listings.
+
+**`optionalSecrets`** (v2): the declared secrets a run can do without, by
+name. Each must already be declared, under `capabilities.secrets` or a
+declared MCP server's `secrets`, so the list marks a secret optional and
+never adds one to the contract; every declared secret it does not list is
+**required**. Moving a secret between optional and required is no change of
+capability, and asks for no consent again; a newly declared secret is a
+widening either way. That holds because a consent lists every declared
+secret by name, optional or not.
+
+```yaml
+capabilities:
+  secrets: [GITHUB_TOKEN]          # private repositories as well as public ones
+  optionalSecrets: [GITHUB_TOKEN]
+```
+
+The run that honours it is planned (agentry#905): the CLI from
+agentry-cli#651 and hosted runs from agentry-enterprise#424 start without
+an optional secret that has no value and tell the QuickAgent which secrets
+it was not given, while a missing required secret still refuses. Until then every declared secret is still
+required at run time. A CLI or desktop that pins a core older than this
+field refuses a manifest that carries it, by name.
 
 **`dataAccess`** holds semantic categories for review and audit: `email`,
 `calendar`, `files`, `tickets`, `code`, `messages`, `payments`, `other`.

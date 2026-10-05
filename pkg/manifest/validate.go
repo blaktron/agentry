@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -251,6 +252,7 @@ func Validate(m *Manifest) []error {
 	validateRuntime(&s, m)
 	validateCapabilities(&s, m.Capabilities)
 	validateMCPServers(&s, m)
+	validateOptionalSecrets(&s, m)
 	validateDependencies(&s, m.Dependencies)
 	validatePublish(&s, m.Publish)
 	validateIntake(&s, m)
@@ -475,6 +477,42 @@ func validateIntake(s *issues, m *Manifest) {
 	}
 }
 
+// validateSecretIntakeAgreement is V10's rule for secret questions (plan
+// optional-secrets.md D7): the release's own declared secret of the
+// question's upper-cased id carries the answer (the runner's rule, so a
+// server's secret carries none), and the question's required must say
+// what that secret's marking says. A secret question with no such secret
+// is the runner's refusal, not this rule's.
+//
+// It is a publish rule, here and not in Validate, on purpose: a release
+// published before optionalSecrets existed may carry a secret question
+// that is not required over a required secret, and the CLI and the
+// desktop run Validate at install and at run. Those keep today's
+// behaviour (refused at run when the secret is missing) until the release
+// is published again.
+func validateSecretIntakeAgreement(s *issues, m *Manifest) {
+	if m.Major() != 2 {
+		return
+	}
+	c := m.Capabilities
+	for i, q := range m.Intake {
+		if q.Type != IntakeSecret {
+			continue
+		}
+		name := strings.ToUpper(q.ID)
+		if !slices.Contains(c.Secrets, name) {
+			continue
+		}
+		p := fmt.Sprintf("intake[%d].required", i)
+		switch optional := c.IsOptionalSecret(name); {
+		case optional && q.Required:
+			s.errf("V10", p, "secret question %q is required but the secret %s that carries it is optional: drop required, or take %s out of capabilities.optionalSecrets", q.ID, name, name)
+		case !optional && !q.Required:
+			s.errf("V10", p, "secret question %q is not required but the secret %s that carries it is required: set required: true, or list %s in capabilities.optionalSecrets", q.ID, name, name)
+		}
+	}
+}
+
 // validateInteractive is V10's session-hints half (plan §3.6).
 func validateInteractive(s *issues, m *Manifest) {
 	if m.Major() != 2 || m.Interactive == nil {
@@ -523,15 +561,7 @@ func validateGuide(s *issues, m *Manifest) {
 	guideLine(s, "guide.files", "files", g.Files, MaxGuideFilesChars, false)
 	guideLine(s, "guide.task", "task", g.Task, MaxGuideTaskChars, false)
 
-	declared := map[string]bool{}
-	for _, n := range m.Capabilities.Secrets {
-		declared[n] = true
-	}
-	for _, srv := range m.Capabilities.MCPServers {
-		for _, n := range srv.Secrets {
-			declared[n] = true
-		}
-	}
+	declared := declaredSecretNames(m.Capabilities)
 	names := make([]string, 0, len(g.Connect))
 	for n := range g.Connect {
 		names = append(names, n)
@@ -794,6 +824,53 @@ func validateMCPServers(s *issues, m *Manifest) {
 	}
 }
 
+// validateOptionalSecrets is V5's optional-secrets half (plan
+// optional-secrets.md D1): a v2 list, without duplicates, of names the
+// release already declares, in capabilities.secrets or a declared MCP
+// server's secrets (one namespace, as the runner and the vault treat it),
+// so it can mark a secret optional but never add one to the contract.
+func validateOptionalSecrets(s *issues, m *Manifest) {
+	c := m.Capabilities
+	if len(c.OptionalSecrets) == 0 {
+		return
+	}
+	if m.Major() != 2 {
+		s.errf("V1", "capabilities.optionalSecrets", "optionalSecrets is a v2 field; set schemaVersion: 2")
+		return
+	}
+	declared := declaredSecretNames(c)
+	seen := make(map[string]bool, len(c.OptionalSecrets))
+	for i, name := range c.OptionalSecrets {
+		p := fmt.Sprintf("capabilities.optionalSecrets[%d]", i)
+		if !checkEnvName(s, p, name) {
+			continue
+		}
+		if seen[name] {
+			s.errf("V5", p, "duplicate optional secret %q", name)
+			continue
+		}
+		seen[name] = true
+		if !declared[name] {
+			s.errf("V5", p, "%q is not a secret this release declares (capabilities.secrets or an MCP server's secrets)", name)
+		}
+	}
+}
+
+// declaredSecretNames is the release's one secret namespace: its own
+// secrets and every declared MCP server's.
+func declaredSecretNames(c Capabilities) map[string]bool {
+	out := make(map[string]bool, len(c.Secrets))
+	for _, n := range c.Secrets {
+		out[n] = true
+	}
+	for _, srv := range c.MCPServers {
+		for _, n := range srv.Secrets {
+			out[n] = true
+		}
+	}
+	return out
+}
+
 // checkEnvName is the one environment-variable grammar check shared by
 // the agent's secrets, a server's secrets and a server's env names; ok is
 // false when an issue was recorded.
@@ -934,6 +1011,7 @@ func ValidateInContext(m *Manifest, ctx Context) []error {
 	validateShippedPacks(&s, m, ctx, resolved)
 	validateQuotas(&s, m, ctx, resolved)
 	validateFrontmatter(&s, m, ctx)
+	validateSecretIntakeAgreement(&s, m)
 
 	return s.list
 }
