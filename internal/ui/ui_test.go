@@ -430,7 +430,11 @@ func TestSSHKeysPageRendersTheKeyAndItsLimits(t *testing.T) {
 
 // reviewFake is what the review fake varies: the version status it
 // reports on ri1 (agentry#273).
-type reviewFake struct{ versionStatus string }
+type reviewFake struct {
+	versionStatus string
+	// queues is each review-queue query the page sent.
+	queues []string
+}
 
 // reviewAPI fakes the review endpoints for ri1 on top of fakeAPI.
 func reviewAPI(t *testing.T, f *reviewFake) http.Handler {
@@ -447,6 +451,7 @@ func reviewAPI(t *testing.T, f *reviewFake) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/api/v1/review-queue":
+			f.queues = append(f.queues, r.URL.RawQuery)
 			_, _ = io.WriteString(w, `[{"id":"ri1","queue":"platform","state":"pending","version":"1.0.0","agent":"risky","namespace":"acme"}]`)
 		case r.Method == "GET" && r.URL.Path == "/api/v1/review-items/ri1":
 			_, _ = io.WriteString(w, `{"item":{"id":"ri1","queue":"platform","state":"pending","version":"1.0.0","versionStatus":"`+f.versionStatus+`","agent":"risky","namespace":"acme"},"findings":[{"id":"f1","scanner":"S1","severity":"high","confidence":"high","title":"Prompt injection","filePath":"SKILL.md","lineStart":1,"verdict":"open"}],"manifest":{"name":"risky","modes":["autonomous"],"capabilities":{"mcpServers":[{"npm":"github-mcp-server-js","version":"0.1.7","tools":["list_issues"],"secrets":["GITHUB_TOKEN"],"env":{"LOGS_DIR":"/tmp/logs","GITHUB_PERMISSION":"read-only"}}]}},"report":{"judgeModel":"qwen-test","judgeUsage":{"promptTokens":812,"completionTokens":97}}}`)
@@ -473,6 +478,22 @@ func reviewAPI(t *testing.T, f *reviewFake) http.Handler {
 		}
 	})
 	return api
+}
+
+// The org queue with no organization named asks the API for every
+// organization's, which platform staff are given (agentry#912); naming one
+// asks for that one.
+func TestReviewQueueNamesAnOrganizationOnlyWhenChosen(t *testing.T) {
+	f := &reviewFake{versionStatus: "needs_review"}
+	h := New(Options{API: reviewAPI(t, f)})
+	for _, path := range []string{"/ui/review?queue=org", "/ui/review?org=acme"} {
+		if w := get(h, path, sessCookie, csrfCookieV); w.Code != http.StatusOK {
+			t.Fatalf("%s: %d", path, w.Code)
+		}
+	}
+	if len(f.queues) != 2 || f.queues[0] != "limit=100&queue=org" || f.queues[1] != "limit=100&queue=org&org=acme" {
+		t.Fatalf("the queries sent: %q", f.queues)
+	}
 }
 
 // The operator pages act through the same client: the queue, an item with
