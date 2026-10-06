@@ -56,8 +56,9 @@ ecosystem), and the registry's `/healthz`. With a ref or `--local DIR` it
 also checks that QuickAgent: resolution, the verified install (a warning
 until the first `run --prepare`), the declared MCP servers' store, the
 compiled plan, the MCP profile, the registry's vulnerability verdict on each
-declared MCP server, and that **every declared secret resolves** —
-the exit-11 refusals a scheduled run would otherwise meet at 03:00. Exit 0
+declared MCP server, and that **every required secret resolves** —
+the exit-11 refusals a scheduled run would otherwise meet at 03:00. An
+optional secret that does not resolve is a note, not a failure. Exit 0
 when every check passes (warnings allowed), 1 otherwise; `--json` for
 machines. No secret *value* is ever printed. `--adapter NAME` adds the
 checks a host-run harness needs: that its executable resolves (on `PATH`
@@ -483,12 +484,18 @@ under `~/.agentry/runner/profiles/…` (directory `0700`, file `0600`).
   from the environment at run time), and the keep/remove question is
   asked.
 - **Resolution order** at run time: profile → host environment / the
-  policy's env file. A secret nothing resolves refuses the run (exit 11,
-  naming the variable) — never a silent degrade. A manifest may mark
-  declared secrets optional (`capabilities.optionalSecrets`, see
-  [QuickAgents](quickagents.md)); the run that starts without one is
-  planned in agentry-cli#651, and until it is released an optional secret
-  is resolved and refused like any other.
+  policy's env file. A required secret nothing resolves refuses the run
+  (exit 11, naming the variable) — never a silent degrade. A manifest may
+  mark declared secrets optional (`capabilities.optionalSecrets`, see
+  [QuickAgents](quickagents.md)), and since v0.6.66 a run starts without an
+  optional secret nothing resolves. It is written **empty** into the
+  gateway's secrets file, because a variable the file lacks would get the
+  gateway's own placeholder, so the runner's `fetch` answers `secret NAME
+  not set`. The System Prompt names the optional secrets this run was not
+  given, and the receipt's `capabilities_enforced["secrets.absent"]` names
+  them. A declared MCP server sees its variable set but empty; whether it
+  works without the value is the server's own. Guided setup says which
+  keys are optional.
 - **Completion**, when the run ends: keep → the profile survives (stamped
   `lastUsedAt`) and the next run of that exact release reuses the
   authenticated resources; remove → deleted when the run completes.
@@ -945,7 +952,8 @@ It has two parts:
 - **The body** is composed from the compiled plan. It states the run's
   actual grants and never one the plan does not make: the network (none,
   the declared hosts through `fetch`, or a built-in's web tools), the
-  workspace, the commands, the secrets by name, the MCP servers, and the
+  workspace, the commands, the secrets by name (marking the optional ones
+  and naming those this run was not given), the MCP servers, and the
   output schema. It also covers the inputs, how to read a knowledge pack's
   wiki, the output, and working within the run's limits.
 
