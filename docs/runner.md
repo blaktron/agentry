@@ -1023,8 +1023,9 @@ honest about which half is which.
 ```
 <out>/
   result.json            the machine-readable envelope (status, exit class,
-                         digest, attestation state, capabilities_enforced,
-                         usage, run-plan hash)
+                         stage and reason when it failed, digest,
+                         attestation state, capabilities_enforced, usage,
+                         run-plan hash)
   reports/…              whatever the QuickAgent wrote via write_report
   receipts/
     events.ndjson        the raw harness event stream
@@ -1034,6 +1035,9 @@ honest about which half is which.
     run-plan.json        the exact compiled plan that ran
     meta.json, task.txt  run identity, timing, budgets, the task input
     intake.json          the non-secret intake answers (when the release asks any)
+    calls.ndjson         a one-shot run's runner-tool calls: a start line, then
+                         each call's tool and whether it answered, never its
+                         arguments, and the agent's end_blocked sentence
     transcript.md        the conversation, for an interactive session
 ```
 
@@ -1045,10 +1049,58 @@ characters is not masked — it is a switch, not a credential. The masking
 matches values as they were resolved; an encoded copy (base64, URL-escaped)
 is not recognised.
 
+### Exit codes, stage and reason
+
 Exit codes: `0` ok · `1` other CLI error · `2` usage · `10` verify failed ·
 `11` refused by policy / missing secret · `12` not compilable/runnable ·
 `13` gateway or docker environment · `14` the QuickAgent failed ·
-`15` timeout · `16` budget · `17` output schema.
+`15` timeout · `16` budget · `17` output schema · `18` blocked. The
+envelope's `exitClass` names the code (`ok`, `cli`, `usage`, `verify`,
+`policy`, `compile`, `gateway`, `harness`, `timeout`, `budget`,
+`outputSchema`, `blocked`); a client acts on the name, never on the number.
+
+**18, blocked.** A one-shot run of a release whose agent could not do its
+task ends `blocked`, not `ok` (DR-72). The agent says so with the runner's
+`end_blocked` tool, one sentence that lands in the envelope's `error` and in
+`receipts/calls.ndjson`, masked like every receipt. The runner also ends a
+run blocked on its own evidence, from that ledger: its tools could not write
+the output folder at all, or every input read, or every `write_report`,
+failed on the run's own machinery (permission denied, an I/O error, a
+read-only or full disk). A name that is not among the inputs, or a report
+over its cap, is the agent's mistake and never that evidence. The agent's
+last message stays the run's `result`. A built-in's run and a session never
+end blocked.
+
+A failed run's envelope also says **where** it stopped, `stage`, one word
+from a fixed list in about the order a run meets them: `policy`,
+`description` (a draft's description, read by AI Review), `verify`,
+`consent`, `mcp-servers`, `compile`, `images`, `profile`, `intake`,
+`prepare`, `infra`, `agent`, `output`. A successful run has none.
+
+And, when the step that stopped it decided **why**, `reason`: a `code` from
+the closed list below, the release's own declared `names` it concerns
+(commands, servers as `npm:`/`pypi:` ids, or secret names; never a file name,
+a path or any text the run, the model, the author or the person wrote; at
+most eight), and for some codes a `detail` word (DR-68):
+
+| `code` | Decided by | `names` | `detail` |
+|---|---|---|---|
+| `exec-not-provided` | compile: the exec catalogue | the commands | — |
+| `mcp-vulnerable` | the registry's vulnerability verdict | the servers | — |
+| `mcp-not-resolved` | resolving a declared server's pin | the server | — |
+| `mcp-runtime-excluded` | the npm builder's `engines.node` check | the server | — |
+| `mcp-install-failed` | the install | the server | `pin-changed`, `store-changed`, `image`, `install-proxy`, `builder`, `runtime-check`, `record` |
+| `mcp-start-failed` | the gateway's start of a declared server | the server | — |
+| `secret-missing` | resolving the secrets | the secrets | — |
+| `input-refused` | staging or checking the inputs | none | `malware`, `name-clash`, `unreadable` |
+| `inputs-not-decoded` | the decode step | none | `image`, `run` |
+| `agent-blocked` | the agent's `end_blocked` | none | — |
+| `runner-blocked` | the runner's evidence | none | `tools-unrecorded`, `inputs-unread`, `report-unwritten` |
+
+Other refusals (wildcard egress, the web-tools and review-grant rules, the
+dataAccess files, the adapter, consent, the images steps) carry their class
+and stage and no reason yet. A hosted run's record keeps `stage` and
+`reason` under the same rule ([hosted runs](hosted-runs.md#the-receipt-the-usage-and-the-outputs)).
 
 ## The desktop app
 
@@ -1345,7 +1397,7 @@ key variable's **name** only.
 | `validate DIR --json` | `passed`, `manifest`, `issues[]` (`rule`, `severity`, `path`, `message`), `inventory[]`, `findings[]` (`ruleId`, `scanner`, `severity`, `confidence`, `title`, `filePath`, `lineStart`, `lineEnd`, `excerpt`, `detail`), `readErrors[]`, `fileCount`, `bundle`, `counts`, `strict`; the report prints and the exit is 1 when it failed |
 | `setup --json` | `policyPath`, `provider`, `model`, `apiKeyEnv` (a name), `baseUrl`, `images` ready\|skipped |
 | `run ns/name --plan --json` (or `--local DIR`) | the consent-free preview a client shows before a person consents: `ref`, `version`, `digest`, `mode`, `modes`, `plan` (the compiled plan, canonical — what a run would enforce), `planSha256` (the receipt's `runPlanSha256`, over the plan's canonical indented form — match it, do not re-derive it from the compact `plan` bytes), `contract`, `contractDigest`, `attestation` verified\|unsigned\|local\|mismatch\|unverifiable, `keyId`, `signed`, `installed`, `diff`, `needsConfirmation`, `reason`, `refusals[]` (every refusal the attestation and vulnerable-server gates would meet, in the order a run meets them: `kind` attestation\|vulnerable_server, `message`, `lift` — the flag that lifts it, `--allow-unsigned`, `--allow-unscanned` or `--allow-vulnerable-mcp`, absent when none does), `refusal` (deprecated: the first refusal's message). Asks nothing, records nothing, materializes into a temp home; exit 0 whether or not a run would be refused (`--dry-run` is the plan for a person who consented on the terminal) |
-| `run … --output-format json` | the result envelope: `agentry` (`run/v1`), `status`, `exitCode` and `exitClass`, `error`, `runId`, `ref`, `digest`, `attestation`, `capabilities_enforced`, `harness`, `usage`, `result`, `outDir`, `resultFile`, `receipts` (`dir`, `runPlanSha256`), and `policy` (`path` of the operator policy file the run enforced, absolute; `source` default\|flag\|env — the runner home's file, `--policy`, or a home relocated by `AGENTRY_RUNNER_HOME`; `sha256`, the plan's `policySha256` — the digest of that file) |
+| `run … --output-format json` | the result envelope: `agentry` (`run/v1`), `status`, `exitCode` and `exitClass`, `error`, for a failed run `stage` and `reason` ([Exit codes, stage and reason](#exit-codes-stage-and-reason)), `runId`, `ref`, `digest`, `attestation`, `capabilities_enforced`, `harness`, `usage`, `result`, `outDir`, `resultFile`, `receipts` (`dir`, `runPlanSha256`), and `policy` (`path` of the operator policy file the run enforced, absolute; `source` default\|flag\|env — the runner home's file, `--policy`, or a home relocated by `AGENTRY_RUNNER_HOME`; `sha256`, the plan's `policySha256` — the digest of that file) |
 | `draft … --json` | the draft itself, `draft.json`: `manifest` (the v2 manifest as JSON), `instructions`, `notes`, `matches[]` (`ref`, `why`), `sources[]` (`url`, `used`, `withheld`), `openQuestions[]`, `drafter` (`ref`, `build`, `model`, `runId`), `aiReview` (the description's verdict, the receipt's web counts as its own fields — `scan`, `pages`, `read`, `passed`, `withheld`, … — `withheldSources[]` with `tool`, `url` and `reason`, and `check`, AI Review's check of the finished draft: `rubric` (`verdict` pass, flagged or not_scanned, `scores`, `findings[]` with `id`, `score` and `path`, `rubricHash`, `failure`), `draft` (`verdict`, `score`, `scores`, `flagged[]`, `questionSet`, `failure`), `model`, `requests`, `inputTokens`, `checks` (how many checks were asked, at most 2), or `unanswered`, the reason it has no answer, with no verdicts), `validation` (the `validate --json` report on the rendered package), `manifestError` |
 | `draft … --output-format json` | the Drafter run's result envelope, as `run … --output-format json` writes one (its `usage`, the attestation `builtin`, the `web` counts), with an empty `result` and the draft's report under `draft`: `file` (where `draft.json` is), `rendered`, `passed`, `manifestError` (a flag), `matches`, `openQuestions` and `withheld` (counts), `corrections` (how many slips were corrected), `repaired` (whether the one repair turn ran) and `check` (AI Review's check as one word: `pass`, `flagged`, `not_scanned`, or `unanswered`; absent for a draft that could not be rendered). The envelope's usage is both turns' together. A draft that stops before the Drafter runs still writes one envelope with its class and stage |
 | `knowledge create NAME --json` / `knowledge add DIR --json` | `dir`, `manifest` (the pack's `manifest.json`: `schema`, `name`, `id`, `created`, `updated`, `creator`, `pages`, `bytes`, `sha256`, and `scan`, the string `not scanned` or a registry's record), `documents[]` (what the run was given), `skipped[]` (documents not ingested), `written[]` (the paths the build applied), `dropped[]` (`path`, `reason`, `kept`), `receipts` (the Creator run's receipt directory), `decode` (the decode step's report, when documents were decoded), `stopped` (the budget or error that stopped the run early, when one did) |
