@@ -380,7 +380,7 @@
             "additionalProperties": false,
             "required": ["path", "template"],
             "properties": {
-              "path": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$", "description": "A plain file name in the token folder." },
+              "path": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._@-]{0,63}$", "description": "A plain file name in the token folder." },
               "template": { "type": "string", "maxLength": 2048, "description": "The file's content. Placeholders: {access_token}, {expiry} (RFC 3339 UTC), {expiry_ms} (Unix milliseconds)." }
             }
           }
