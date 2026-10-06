@@ -144,7 +144,7 @@ JOIN handles h ON h.id = a.namespace_id
 WHERE h.id = $1 AND h.kind = 'user' AND a.visibility = 'public' AND av.status = 'published';
 
 -- name: ListPersonalNamespaceAgents :many
-SELECT a.id, a.name, a.visibility, a.latest_published_version_id
+SELECT a.id, a.name, a.visibility, a.latest_published_version_id, a.retired_at, a.deleted_at
 FROM agents a JOIN handles h ON h.id = a.namespace_id
 WHERE h.id = $1 AND h.kind = 'user';
 

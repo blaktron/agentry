@@ -67,6 +67,9 @@ type Agent struct {
 	Modes                    []string    `json:"modes"`
 	PipelineSkip             bool        `json:"pipeline_skip"`
 	Builtin                  bool        `json:"builtin"`
+	RetiredAt                *time.Time  `json:"retired_at"`
+	RetiredVisibility        *string     `json:"retired_visibility"`
+	DeletedAt                *time.Time  `json:"deleted_at"`
 }
 
 type AgentTeamGrant struct {

@@ -98,6 +98,33 @@ only a version that passed the gate is ever public. A version admitted
 without a scan carries `scanStatus: skipped` on the version and on
 resolve, its report `verdict: unscanned`, and has no attestation.
 
+A publisher puts away their own agent in two ways (agentry#942, DEV-219),
+both open to the namespace's administrators. `POST
+/agents/{ns}/{name}/retire` makes it private and marks it `retiredAt`.
+Every submission to it is then refused with `409 agent-retired`, as is
+`PATCH` to public, and it holds no place under the private-agent cap.
+`POST …/restore` returns the visibility it had, under the same rules as
+any agent becoming public (`409 agent-unscanned`). Back to private it is
+under the cap again (`422 private-agent-cap`). It answers `409
+agent-not-retired` when there is nothing to restore.
+
+`DELETE /agents/{ns}/{name}` removes an agent that never had a version, as
+before. For one with version history the request needs `confirm=<name>`
+(`422 confirm-name`), and the delete leaves a tombstone:
+- every published or quarantined version is yanked, with the reason "The
+  publisher deleted this QuickAgent.";
+- every route by name, `GET /resolve`, git and hosted runs answer the 404
+  a missing name gets, to everyone;
+- nothing is removed, and the name is held for good, so creating it again
+  answers `409 name-held`.
+
+The delete waits (`409`) while a version is in the pipeline or in review.
+It is refused while the agent carries advisories, abuse reports, a
+quarantine or a block, because an advisory reaches its readers only through
+the public feed. `GET /agents?namespace=` takes `q`, `state` (`active`,
+`retired`) and `sort` (`name`, `newest`, `installs`, `submitted`). It never
+lists a deleted agent.
+
 A built-in agent (agentry#737) is one of the packages the Agentry CLI
 embeds, published for reading: `builtin` on the agent and on every search
 hit says so, and clients label it Built-in in place of its run modes.
