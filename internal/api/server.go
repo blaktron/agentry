@@ -256,6 +256,9 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 			jobs = queue.NewRiverClient(st, log)
 		}
 		srv.jobs = jobs
+		// A fork's copy is a worker's, which holds the repositories
+		// (agentry#943).
+		srv.reg.SetForkHandOff(forkQueue{q: srv.jobs})
 		srv.webhooks = webhook.NewDispatcher(webhook.Deps{
 			Store: st, Sealer: sealer, Queue: srv.jobs, Log: log,
 			DeliveriesPerSecond: float64(cfg.Limits.WebhookDeliveriesPerSecond),
@@ -569,6 +572,18 @@ func (t tagArchiveQueue) StoreTagArchive(ctx context.Context, args registry.Stor
 	return nil
 }
 
+// forkQueue is the registry's ForkHandOff over the job queue: the copy
+// runs on the sandbox queue, as the store of a tag's archive does, since it
+// reads repositories people pushed.
+type forkQueue struct{ q queue.Client }
+
+func (f forkQueue) CopyFork(ctx context.Context, args registry.CopyForkArgs) error {
+	if _, err := f.q.Enqueue(ctx, registry.JobCopyFork, "sandbox", args); err != nil {
+		return fmt.Errorf("enqueue %s for agent %s: %w", registry.JobCopyFork, args.AgentID, err)
+	}
+	return nil
+}
+
 // Reg exposes the registry service so role wiring can share one instance
 // (git role injects its archiver; auto-publish uses the same hand-off).
 func (s *Server) Reg() *registry.Service { return s.reg }
@@ -627,6 +642,20 @@ func (s *Server) RegisterQueueHandlers(q queue.Client) {
 			return fmt.Errorf("%s: bad args: %w", registry.JobStoreTagArchive, err)
 		}
 		return s.reg.StoreTagArchive(ctx, args, scan.QueuePipeline{Q: q})
+	})
+	// A fork's repository copy and first submission (agentry#943), as the
+	// account that forked stands now.
+	q.Register(registry.JobCopyFork, func(ctx context.Context, job queue.Job) error {
+		var args registry.CopyForkArgs
+		if err := json.Unmarshal(job.Args, &args); err != nil {
+			return fmt.Errorf("%s: bad args: %w", registry.JobCopyFork, err)
+		}
+		// An account that no longer stands is nil, which the copy fails.
+		p, _, err := s.PrincipalForUser(ctx, args.UserID)
+		if err != nil {
+			return err
+		}
+		return s.reg.CopyFork(ctx, args, p, scan.QueuePipeline{Q: q})
 	})
 	s.registerAuditRetention(q)     // §4.3 hot-table retention (audit_retention.go)
 	s.registerRedTeam(q)            // §17.5 report-only red-team job (handlers_redteam.go)

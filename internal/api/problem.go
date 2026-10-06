@@ -241,6 +241,14 @@ func problemAgentUnscanned(w http.ResponseWriter, r *http.Request, standing int6
 	writeProblemWith(w, r, http.StatusConflict, "agent-unscanned", "Unscanned versions cannot be made public", detail, map[string]any{"unscanned": standing})
 }
 
+// problemForkStaysPrivate refuses making a fork public (agentry#943, D9):
+// a fork is private for good, to keep Publisher Earnings with the
+// QuickAgent's own publisher.
+func problemForkStaysPrivate(w http.ResponseWriter, r *http.Request) {
+	writeProblem(w, r, http.StatusConflict, "fork-stays-private", "A fork stays private",
+		"A fork of a QuickAgent is private for good, so it cannot be made public. Its origin's publisher keeps the public QuickAgent.")
+}
+
 // problemAgentRetired refuses a write a retired agent does not take
 // (agentry#942): a submission, or being made public other than by Restore.
 func problemAgentRetired(w http.ResponseWriter, r *http.Request) {

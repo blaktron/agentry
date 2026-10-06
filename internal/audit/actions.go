@@ -143,8 +143,10 @@ const (
 	ActionAgentUninstall Action = "agent.uninstall"
 	ActionAgentDelete    Action = "agent.delete"
 	// Retire and Restore of a publisher's own agent (agentry#942).
-	ActionAgentRetire       Action = "agent.retire"
-	ActionAgentRestore      Action = "agent.restore"
+	ActionAgentRetire  Action = "agent.retire"
+	ActionAgentRestore Action = "agent.restore"
+	// A fork recorded in its own namespace (agentry#943).
+	ActionAgentFork         Action = "agent.fork"
 	ActionAgentTransfer     Action = "agent.transfer"
 	ActionWebhookPing       Action = "webhook.ping"
 	ActionAuditPlatformRead Action = "audit.platform_read"
@@ -182,7 +184,7 @@ func init() {
 		ActionWebhookCreate, ActionWebhookUpdate, ActionWebhookDelete,
 		ActionDomainClaim, ActionDomainVerified, ActionAuditExport,
 		ActionAgentStar, ActionAgentUnstar, ActionAgentInstall, ActionAgentUninstall, ActionAgentDelete,
-		ActionAgentRetire, ActionAgentRestore,
+		ActionAgentRetire, ActionAgentRestore, ActionAgentFork,
 		ActionAgentTransfer, ActionWebhookPing, ActionAuditPlatformRead,
 		ActionAuditPrune, ActionSocialLogin,
 	} {

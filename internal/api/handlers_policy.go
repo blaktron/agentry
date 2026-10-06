@@ -178,9 +178,21 @@ func (s *Server) PlatformAgentAction(w http.ResponseWriter, r *http.Request, ns 
 		return
 	}
 
+	// How many forks the action leaves as they are (agentry#943, D11): a
+	// fork went through its own pipeline and may have changed, so it is not
+	// quarantined or blocked with its origin, and staff see how many there
+	// are on the record of the act. A count only, never which.
+	// A count that cannot be read is left out of the record, never in
+	// the way of the act.
 	e := auditEvent(r, auditAction)
 	e.TargetKind, e.TargetID = "agent", a.ID
 	e.Detail = map[string]any{"reason": req.Reason}
+	forks, ferr := s.q().CountForks(r.Context(), a.ID)
+	if ferr != nil {
+		s.log.ErrorContext(r.Context(), "platform action: fork count", "agent", a.ID, "err", ferr)
+	} else {
+		e.Detail["forks"] = forks
+	}
 	err = s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
 		if err := q.SetAgentQuarantineState(r.Context(), storegen.SetAgentQuarantineStateParams{
 			ID: a.ID, QuarantineState: quarantineState,
@@ -228,7 +240,7 @@ func (s *Server) PlatformAgentAction(w http.ResponseWriter, r *http.Request, ns 
 		return
 	}
 	s.log.InfoContext(r.Context(), "platform trust & safety action", "action", action,
-		"agent", ns+"/"+name, "versions", moved)
+		"agent", ns+"/"+name, "versions", moved, "forks", forks)
 	w.WriteHeader(http.StatusNoContent)
 }
 

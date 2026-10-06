@@ -34,6 +34,7 @@ import (
 	"github.com/blaktron/agentry/internal/logx"
 	"github.com/blaktron/agentry/internal/metrics"
 	"github.com/blaktron/agentry/internal/queue"
+	"github.com/blaktron/agentry/internal/registry"
 	"github.com/blaktron/agentry/internal/scan"
 	"github.com/blaktron/agentry/internal/store"
 	"github.com/blaktron/agentry/internal/version"
@@ -279,8 +280,10 @@ func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st 
 	if rerr == nil {
 		pipeline.SetGitHistory(repos)
 		// A git role's tag submission is stored by the worker, which
-		// rebuilds its archive from the repository (agentry#508).
+		// rebuilds its archive from the repository (agentry#508), and a
+		// fork's repository is copied here (agentry#943).
 		srv.Reg().SetGitArchiver(repos)
+		srv.Reg().SetForkRepos(repos)
 	} else {
 		log.Warn("worker: git history scan unavailable", "err", rerr)
 		repos = nil
@@ -371,12 +374,26 @@ func agentsOf(srv *api.Server, pool *pgxpool.Pool) Agents {
 
 type serverAgents struct{ srv *api.Server }
 
+// agentRefOf is what the seams say of a resolved agent, its origin
+// included when it is a fork (agentry#943).
+func agentRefOf(ag registry.Agent) AgentRef {
+	ref := AgentRef{ID: ag.ID, NamespaceID: ag.NamespaceID, NamespaceKind: NamespaceKind(ag.NamespaceKind), Public: ag.Visibility == "public"}
+	if ag.ForkedFromAgentID != nil && ag.OriginNamespaceID != nil && ag.OriginNamespaceKind != nil {
+		ref.ForkedFrom = &AgentOrigin{
+			AgentID:       *ag.ForkedFromAgentID,
+			NamespaceID:   *ag.OriginNamespaceID,
+			NamespaceKind: NamespaceKind(*ag.OriginNamespaceKind),
+		}
+	}
+	return ref
+}
+
 func (a serverAgents) Readable(ctx context.Context, p *Principal, namespace, name string) (AgentRef, bool, error) {
 	ag, ok, err := a.srv.AgentReadable(ctx, p, namespace, name)
 	if err != nil || !ok {
 		return AgentRef{}, false, err
 	}
-	return AgentRef{ID: ag.ID, NamespaceID: ag.NamespaceID, NamespaceKind: NamespaceKind(ag.NamespaceKind), Public: ag.Visibility == "public"}, true, nil
+	return agentRefOf(ag), true, nil
 }
 
 func (a serverAgents) Maintainable(ctx context.Context, p *Principal, namespace, name string) (AgentRef, bool, error) {
@@ -384,7 +401,7 @@ func (a serverAgents) Maintainable(ctx context.Context, p *Principal, namespace,
 	if err != nil || !ok {
 		return AgentRef{}, false, err
 	}
-	return AgentRef{ID: ag.ID, NamespaceID: ag.NamespaceID, NamespaceKind: NamespaceKind(ag.NamespaceKind), Public: ag.Visibility == "public"}, true, nil
+	return agentRefOf(ag), true, nil
 }
 
 func (a serverAgents) Publishable(ctx context.Context, p *Principal, namespace, name string) (AgentRef, bool, error) {
@@ -392,7 +409,7 @@ func (a serverAgents) Publishable(ctx context.Context, p *Principal, namespace, 
 	if err != nil || !ok {
 		return AgentRef{}, false, err
 	}
-	return AgentRef{ID: ag.ID, NamespaceID: ag.NamespaceID, NamespaceKind: NamespaceKind(ag.NamespaceKind), Public: ag.Visibility == "public"}, true, nil
+	return agentRefOf(ag), true, nil
 }
 
 // principalsOf adapts the server's principal loading to Principals: nil
@@ -664,6 +681,9 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		}
 		reg := s.Reg()
 		reg.SetGitArchiver(repos)
+		if role == "all" {
+			reg.SetForkRepos(repos) // `all` is also the worker that copies forks (agentry#943)
+		}
 		if pl := s.Pipeline(); pl != nil {
 			pl.SetGitHistory(repos) // S2 history scan on git-tag publishes (agentry#54)
 		}

@@ -345,15 +345,75 @@ everyone — and `POST /orgs/{org}/reinstate`, which ends a suspension or
 cancels a hold that has not run; an erased organization does not come
 back.
 
-## Agent deletion
+## Retire, delete and fork
 
-`DELETE /agents/{ns}/{name}` is described in §9.2 as "only if never
-published". It is implemented as **refused once any version row exists at
-all**, with distinct messages for "has history" and "a submission is in
-flight", because a row still at `submitted` holds a foreign key that §4.3
-will not let go. Agents carrying advisories or abuse reports are also
-refused; those are trust & safety records that outlive an author's wish to
-remove the agent (DEV-021).
+A QuickAgent's namespace administrators (its owner, or an organization's
+admins) can put it away or end it, and anyone signed in can copy a public
+one (plan forks-and-publisher, agentry#942 and agentry#943).
+
+**Retire.** `POST /agents/{ns}/{name}/retire` makes the agent private and
+labels it `retiredAt`, keeping the visibility it had. A retired agent takes
+no submission (`409 agent-retired`) and holds no place under the
+private-agent cap. `POST …/restore` puts the visibility back, under the
+rules of any agent becoming public (`409 agent-unscanned`) or of a private
+one (`422 private-agent-cap`).
+
+**Delete.** `DELETE /agents/{ns}/{name}` removes an agent with no version
+outright, with its repository, and its name is free again. An agent with
+version history is deleted as a **tombstone**, and only with `?confirm=` set
+to its name (`422 confirm-name` otherwise):
+- every published or quarantined version is yanked;
+- every route by name, the git transport and hosted runs answer the 404 a
+  missing name gets, to everyone;
+- nothing is removed, because version rows are kept forever and the
+  archives, receipts and audit trail stay with them;
+- the name stays held in its namespace: creating it again, or forking into
+  it, answers `409 name-held`.
+
+A delete is refused (`409`) while a version is in the pipeline or in review,
+and while the agent carries trust & safety records (advisories, abuse
+reports, a quarantine or a block), which outlive the publisher's wish to
+remove it (DEV-021, DEV-219).
+
+**Fork.** `POST /agents/{ns}/{name}/fork {namespace, name?}` copies a
+public agent into a namespace the caller may create a private agent in:
+their own, or an organization they are an active member of. The quota and
+the private-agent cap apply. The fork takes the origin's name unless `name`
+gives another. A name the namespace already has answers `409 name-taken`.
+The origin must be public, neither quarantined nor blocked (`409
+fork-source`), and have a published version (`409 nothing-to-fork`). A fork:
+- **is private for good.** `PATCH` to public answers `409
+  fork-stays-private`, and the database refuses it as well. That keeps
+  Publisher Earnings with the origin's publisher;
+- **records its origin** (`forkedFrom`: the namespace, the name, the version
+  it was taken from, and `available`, whether the origin is still public,
+  not deleted and not blocked). The origin is permanent: there is no
+  detach, and its name stays on the fork even after the origin is made
+  private, retired or deleted;
+- **is answered `202`** with `forkState: copying` (or `failed`, with
+  `forkDetail`, when the copy could not even be started). A worker then copies the
+  origin's repository: every branch and tag, its objects copied rather than
+  shared, so retiring or deleting the origin later changes nothing in the
+  fork. It writes one commit, *Fork of ns/name@version*, that renames the
+  manifest into the fork's namespace. The fork's default branch and a
+  `v<version>` tag point at it, and the origin's default branch, where it
+  had moved on past the release, is kept as `origin-<branch>`. That tag is
+  submitted through the pipeline like any submission, charged like one; a
+  fork's first version is always scanned. The fork's history runs back
+  through the origin's commits. An origin published by upload has no
+  commits, and the fork's first commit is then built from its release
+  archive's files as they are. `forkState` is then `ready`, or `failed`
+  with `forkDetail` saying why. Until then git refuses the fork's
+  repository (`409`) to those who may read it. A copy that has not finished
+  after two hours is marked failed;
+- **is a fork of an original.** A fork is private, so a fork cannot itself
+  be forked, and lineage is one level deep.
+
+A public agent's read carries `forkCount`: a count, never which forks.
+`GET /agents?namespace=` takes `forks=only` or `forks=none`. When the
+platform quarantines or blocks an origin, its forks are left as they are:
+each went through its own pipeline. The act's audit record carries how many
+forks there are (D11).
 
 ## Personal access tokens and their scopes
 
