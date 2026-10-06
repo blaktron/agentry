@@ -15,7 +15,6 @@ import (
 const countAgentDeleteBlockers = `-- name: CountAgentDeleteBlockers :one
 SELECT
   (SELECT count(*) FROM agent_versions av WHERE av.agent_id = $1)::bigint AS versions,
-  (SELECT count(*) FROM agent_versions av2 WHERE av2.agent_id = $1 AND av2.status <> 'submitted')::bigint AS versions_past_submitted,
   -- Versions the pipeline or a reviewer has yet to decide: a tombstone waits
   -- for them, so nothing is published onto a deleted agent (agentry#942).
   (SELECT count(*) FROM agent_versions av3 WHERE av3.agent_id = $1
@@ -25,24 +24,21 @@ SELECT
 `
 
 type CountAgentDeleteBlockersRow struct {
-	Versions              int64 `json:"versions"`
-	VersionsPastSubmitted int64 `json:"versions_past_submitted"`
-	VersionsInFlight      int64 `json:"versions_in_flight"`
-	Advisories            int64 `json:"advisories"`
-	AbuseReports          int64 `json:"abuse_reports"`
+	Versions         int64 `json:"versions"`
+	VersionsInFlight int64 `json:"versions_in_flight"`
+	Advisories       int64 `json:"advisories"`
+	AbuseReports     int64 `json:"abuse_reports"`
 }
 
-// Everything that makes DELETE /agents/{ns}/{name} unsafe (§9.2, §4.3).
-// Version rows can never be deleted, so ANY version row blocks the delete;
-// versions_past_submitted separates "never published" from "in flight" for
-// the error message. Advisories and abuse reports are trust & safety
-// records: they outlive the author's wish to remove the agent.
+// What DELETE /agents/{ns}/{name} must know (§9.2, §4.3, agentry#942).
+// Version rows can never be deleted, so an agent with any is deleted as a
+// tombstone rather than outright. Advisories and abuse reports are trust &
+// safety records: they outlive the author's wish to remove the agent.
 func (q *Queries) CountAgentDeleteBlockers(ctx context.Context, agentID uuid.UUID) (CountAgentDeleteBlockersRow, error) {
 	row := q.db.QueryRow(ctx, countAgentDeleteBlockers, agentID)
 	var i CountAgentDeleteBlockersRow
 	err := row.Scan(
 		&i.Versions,
-		&i.VersionsPastSubmitted,
 		&i.VersionsInFlight,
 		&i.Advisories,
 		&i.AbuseReports,
