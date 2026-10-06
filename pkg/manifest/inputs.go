@@ -8,10 +8,11 @@ import (
 // A QuickAgent may say what files it takes and how its agent reads them
 // (plan quickagents-that-run.md M6, D1; agentry#892; DEV-218). The runner
 // offers every input in two views since agentry-cli#631: `text`, the
-// decoded text (a document's, HTML's Markdown), and `original`, the file
-// as uploaded. Without a declaration each file keeps its own default (a
-// document's text, anything else as uploaded) and any kind of file is
-// taken, which is how every release published before the block reads.
+// text a decoder made (a document's, an image's, HTML's Markdown), and
+// `original`, the file as uploaded. Without a declaration each file keeps
+// its own default (a decoder's text where one made it, anything else as
+// uploaded) and any kind of file is taken, which is how every release
+// published before the block reads.
 // The kinds tell the run setup and the Drafter what to ask for; the view
 // tells the runner which one the agent is pointed at first. Neither grants
 // anything: attaching a file is the grant, so the block is outside the
@@ -47,20 +48,29 @@ const (
 	InputViewText InputView = "text"
 	// InputViewOriginal points the agent at each input as uploaded.
 	InputViewOriginal InputView = "original"
-	// InputViewBoth keeps each file's own default (a document's text,
-	// anything else as uploaded) and says the agent uses both views. It is
-	// what an undeclared view means.
+	// InputViewBoth keeps each file's own default (a decoder's text where
+	// one made it, anything else as uploaded) and says the agent uses both
+	// views. The runner treats it exactly as an undeclared view; declaring
+	// it records the author's intent for the run setup and the Drafter.
 	InputViewBoth InputView = "both"
 )
 
-// InputKinds returns the closed set of input kinds, in order.
-func InputKinds() []InputKind {
-	return []InputKind{InputKindDocuments, InputKindCode, InputKindData, InputKindImages, InputKindAny}
+// Valid reports whether k is one of the closed set of input kinds.
+func (k InputKind) Valid() bool {
+	switch k {
+	case InputKindDocuments, InputKindCode, InputKindData, InputKindImages, InputKindAny:
+		return true
+	}
+	return false
 }
 
-// InputViews returns the closed set of input views, in order.
-func InputViews() []InputView {
-	return []InputView{InputViewText, InputViewOriginal, InputViewBoth}
+// Valid reports whether v is one of the closed set of input views.
+func (v InputView) Valid() bool {
+	switch v {
+	case InputViewText, InputViewOriginal, InputViewBoth:
+		return true
+	}
+	return false
 }
 
 // Inputs is the manifest's inputs block (v2, V12).
@@ -72,19 +82,19 @@ type Inputs struct {
 	View InputView `yaml:"view,omitempty" json:"view,omitempty"`
 }
 
-// InputKinds returns the kinds of file the release takes: its declared
+// TakesKinds returns the kinds of file the release takes: its declared
 // kinds, or [any] when it declares none. The slice is the caller's own.
-func (m *Manifest) InputKinds() []InputKind {
+func (m *Manifest) TakesKinds() []InputKind {
 	if m == nil || m.Inputs == nil || len(m.Inputs.Kinds) == 0 {
 		return []InputKind{InputKindAny}
 	}
 	return slices.Clone(m.Inputs.Kinds)
 }
 
-// InputView returns the view the agent reads an input in by default: the
-// declared view, or InputViewBoth (each file's own default) when the
-// release declares none.
-func (m *Manifest) InputView() InputView {
+// DefaultInputView returns the view the agent reads an input in by
+// default: the declared view, or InputViewBoth (each file's own default)
+// when the release declares none.
+func (m *Manifest) DefaultInputView() InputView {
 	if m == nil || m.Inputs == nil || m.Inputs.View == "" {
 		return InputViewBoth
 	}
@@ -104,11 +114,14 @@ func validateInputs(s *issues, m *Manifest) {
 	if len(in.Kinds) == 0 && in.View == "" {
 		s.errf("V12", "inputs", "inputs must declare kinds or a view")
 	}
+	if in.Kinds != nil && len(in.Kinds) == 0 {
+		s.errf("V12", "inputs.kinds", "kinds is empty: name at least one, or leave it out to take any")
+	}
 	seen := make(map[InputKind]bool, len(in.Kinds))
 	for i, k := range in.Kinds {
 		p := fmt.Sprintf("inputs.kinds[%d]", i)
 		switch {
-		case !slices.Contains(InputKinds(), k):
+		case !k.Valid():
 			s.errf("V12", p, "unknown input kind %q (documents | code | data | images | any)", k)
 		case seen[k]:
 			s.errf("V12", p, "input kind %q is declared twice", k)
@@ -118,7 +131,7 @@ func validateInputs(s *issues, m *Manifest) {
 	if seen[InputKindAny] && len(in.Kinds) > 1 {
 		s.errf("V12", "inputs.kinds", "any is declared alone: it already takes every kind")
 	}
-	if in.View != "" && !slices.Contains(InputViews(), in.View) {
+	if in.View != "" && !in.View.Valid() {
 		s.errf("V12", "inputs.view", "unknown input view %q (text | original | both)", in.View)
 	}
 }

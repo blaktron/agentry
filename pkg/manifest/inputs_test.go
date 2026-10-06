@@ -39,11 +39,11 @@ func TestInputsParsesAndValidates(t *testing.T) {
 	if errs := inputsIssues(t, m); len(errs) != 0 {
 		t.Fatalf("a valid inputs declaration is refused: %v", errs)
 	}
-	if got := m.InputKinds(); !slices.Equal(got, []InputKind{InputKindCode, InputKindData}) {
-		t.Fatalf("InputKinds = %v", got)
+	if got := m.TakesKinds(); !slices.Equal(got, []InputKind{InputKindCode, InputKindData}) {
+		t.Fatalf("TakesKinds = %v", got)
 	}
-	if got := m.InputView(); got != InputViewOriginal {
-		t.Fatalf("InputView = %q", got)
+	if got := m.DefaultInputView(); got != InputViewOriginal {
+		t.Fatalf("DefaultInputView = %q", got)
 	}
 }
 
@@ -56,35 +56,35 @@ func TestInputsAbsentKeepsTodaysBehaviour(t *testing.T) {
 	if m.Inputs != nil {
 		t.Fatalf("inputs = %+v", m.Inputs)
 	}
-	if got := m.InputKinds(); !slices.Equal(got, []InputKind{InputKindAny}) {
-		t.Fatalf("InputKinds = %v, want [any]", got)
+	if got := m.TakesKinds(); !slices.Equal(got, []InputKind{InputKindAny}) {
+		t.Fatalf("TakesKinds = %v, want [any]", got)
 	}
-	if got := m.InputView(); got != InputViewBoth {
-		t.Fatalf("InputView = %q, want both", got)
+	if got := m.DefaultInputView(); got != InputViewBoth {
+		t.Fatalf("DefaultInputView = %q, want both", got)
 	}
 	// Half a declaration defaults the other half.
 	m.Inputs = &Inputs{View: InputViewText}
-	if got := m.InputKinds(); !slices.Equal(got, []InputKind{InputKindAny}) {
-		t.Fatalf("InputKinds with only a view = %v, want [any]", got)
+	if got := m.TakesKinds(); !slices.Equal(got, []InputKind{InputKindAny}) {
+		t.Fatalf("TakesKinds with only a view = %v, want [any]", got)
 	}
 	m.Inputs = &Inputs{Kinds: []InputKind{InputKindDocuments}}
-	if got := m.InputView(); got != InputViewBoth {
-		t.Fatalf("InputView with only kinds = %q, want both", got)
+	if got := m.DefaultInputView(); got != InputViewBoth {
+		t.Fatalf("DefaultInputView with only kinds = %q, want both", got)
 	}
 	var nilM *Manifest
-	if nilM.InputView() != InputViewBoth || !slices.Equal(nilM.InputKinds(), []InputKind{InputKindAny}) {
+	if nilM.DefaultInputView() != InputViewBoth || !slices.Equal(nilM.TakesKinds(), []InputKind{InputKindAny}) {
 		t.Fatal("a nil manifest does not read as undeclared")
 	}
 }
 
-// TestInputsKindsAreTheCallersOwn: the slice InputKinds returns may be
+// TestInputsKindsAreTheCallersOwn: the slice TakesKinds returns may be
 // changed without changing the manifest.
 func TestInputsKindsAreTheCallersOwn(t *testing.T) {
 	m := mustParse(t, inputsYAML)
-	got := m.InputKinds()
+	got := m.TakesKinds()
 	got[0] = InputKindImages
 	if m.Inputs.Kinds[0] != InputKindCode {
-		t.Fatal("InputKinds aliases the manifest's slice")
+		t.Fatal("TakesKinds aliases the manifest's slice")
 	}
 }
 
@@ -112,6 +112,7 @@ func TestInputsRefusals(t *testing.T) {
 		path string
 	}{
 		{"empty block", &Inputs{}, "inputs"},
+		{"empty kinds beside a view", &Inputs{Kinds: []InputKind{}, View: InputViewText}, "inputs.kinds"},
 		{"unknown kind", &Inputs{Kinds: []InputKind{"spreadsheets"}}, "inputs.kinds[0]"},
 		{"kind in the wrong case", &Inputs{Kinds: []InputKind{"Code"}}, "inputs.kinds[0]"},
 		{"duplicate kind", &Inputs{Kinds: []InputKind{InputKindCode, InputKindData, InputKindCode}}, "inputs.kinds[2]"},
@@ -193,6 +194,7 @@ func TestV2SchemaInputsShape(t *testing.T) {
 				MinProperties        int   `json:"minProperties"`
 				Properties           struct {
 					Kinds struct {
+						MinItems    int  `json:"minItems"`
 						UniqueItems bool `json:"uniqueItems"`
 						Items       struct {
 							Enum []string `json:"enum"`
@@ -209,17 +211,48 @@ func TestV2SchemaInputsShape(t *testing.T) {
 		t.Fatal(err)
 	}
 	in := schema.Properties.Inputs
-	if in.AdditionalProperties == nil || *in.AdditionalProperties || in.MinProperties != 1 || !in.Properties.Kinds.UniqueItems {
+	if in.AdditionalProperties == nil || *in.AdditionalProperties || in.MinProperties != 1 || in.Properties.Kinds.MinItems != 1 || !in.Properties.Kinds.UniqueItems {
 		t.Fatalf("the schema's inputs block is not closed, may be empty, or allows repeats: %+v", in)
 	}
-	var kinds, views []string
-	for _, k := range InputKinds() {
-		kinds = append(kinds, string(k))
+	kinds := []InputKind{InputKindDocuments, InputKindCode, InputKindData, InputKindImages, InputKindAny}
+	views := []InputView{InputViewText, InputViewOriginal, InputViewBoth}
+	var wantKinds, wantViews []string
+	for _, k := range kinds {
+		wantKinds = append(wantKinds, string(k))
 	}
-	for _, v := range InputViews() {
-		views = append(views, string(v))
+	for _, v := range views {
+		wantViews = append(wantViews, string(v))
 	}
-	if !slices.Equal(in.Properties.Kinds.Items.Enum, kinds) || !slices.Equal(in.Properties.View.Enum, views) {
-		t.Fatalf("schema kinds %v views %v; Go kinds %v views %v", in.Properties.Kinds.Items.Enum, in.Properties.View.Enum, kinds, views)
+	if !slices.Equal(in.Properties.Kinds.Items.Enum, wantKinds) || !slices.Equal(in.Properties.View.Enum, wantViews) {
+		t.Fatalf("schema kinds %v views %v; Go kinds %v views %v", in.Properties.Kinds.Items.Enum, in.Properties.View.Enum, wantKinds, wantViews)
+	}
+	// Valid is the closed set the schema's enums name, and nothing else.
+	for _, k := range kinds {
+		if !k.Valid() {
+			t.Errorf("%q is not Valid", k)
+		}
+	}
+	for _, v := range views {
+		if !v.Valid() {
+			t.Errorf("%q is not Valid", v)
+		}
+	}
+	if InputKind("Code").Valid() || InputKind("").Valid() || InputView("raw").Valid() || InputView("").Valid() {
+		t.Error("Valid admits a value outside the closed set")
+	}
+}
+
+// TestInputsEmptyKindsInYAMLIsRefused: `kinds: []` written out is refused
+// as the schema refuses it (minItems), not read as "any".
+func TestInputsEmptyKindsInYAMLIsRefused(t *testing.T) {
+	m := mustParse(t, v2YAML+"\ninputs:\n  kinds: []\n  view: text\n")
+	var hit bool
+	for _, is := range blockingIssues(Validate(m)) {
+		if is.Rule == "V12" && is.Path == "inputs.kinds" {
+			hit = true
+		}
+	}
+	if !hit {
+		t.Fatalf("kinds: [] was accepted: %v", Validate(m))
 	}
 }

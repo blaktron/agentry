@@ -1,6 +1,6 @@
 // Package manifest implements the agent.yaml package manifest defined in
 // PLAN §5: strict parsing (closed schema, rule V1), the validation rules
-// V1–V10 (§5.3), the closed capability vocabulary (§5.4), and the canonical
+// V1–V12 (§5.3), the closed capability vocabulary (§5.4), and the canonical
 // JSON form stored as agent_versions.manifest (§4.2).
 //
 // Two schema majors are read. Major 2 (DEV-088) classifies a QuickAgent by
@@ -184,7 +184,7 @@ type Manifest struct {
 	// Inputs says what kinds of file the QuickAgent takes and which view
 	// of them its agent reads by default (v2, V12; plan
 	// quickagents-that-run.md D1). Absent, any kind is taken and each file
-	// keeps its own default view; use InputKinds and InputView. It grants
+	// keeps its own default view; use TakesKinds and DefaultInputView. It grants
 	// nothing and is outside the contract.
 	Inputs *Inputs `yaml:"inputs,omitempty" json:"inputs,omitempty"`
 	// Runtime carries informational runtime hints and install targets.
