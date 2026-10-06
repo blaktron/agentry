@@ -326,7 +326,7 @@ func (q *Queries) LatestEmailVerificationAt(ctx context.Context, userID uuid.UUI
 }
 
 const listPersonalNamespaceAgents = `-- name: ListPersonalNamespaceAgents :many
-SELECT a.id, a.name, a.visibility, a.latest_published_version_id
+SELECT a.id, a.name, a.visibility, a.latest_published_version_id, a.retired_at, a.deleted_at
 FROM agents a JOIN handles h ON h.id = a.namespace_id
 WHERE h.id = $1 AND h.kind = 'user'
 `
@@ -336,6 +336,8 @@ type ListPersonalNamespaceAgentsRow struct {
 	Name                     string     `json:"name"`
 	Visibility               string     `json:"visibility"`
 	LatestPublishedVersionID *uuid.UUID `json:"latest_published_version_id"`
+	RetiredAt                *time.Time `json:"retired_at"`
+	DeletedAt                *time.Time `json:"deleted_at"`
 }
 
 func (q *Queries) ListPersonalNamespaceAgents(ctx context.Context, id uuid.UUID) ([]ListPersonalNamespaceAgentsRow, error) {
@@ -352,6 +354,8 @@ func (q *Queries) ListPersonalNamespaceAgents(ctx context.Context, id uuid.UUID)
 			&i.Name,
 			&i.Visibility,
 			&i.LatestPublishedVersionID,
+			&i.RetiredAt,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
