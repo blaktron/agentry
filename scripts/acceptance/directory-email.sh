@@ -24,6 +24,7 @@
 set -euo pipefail
 cd "$(cd "$(dirname "$0")/../.." && pwd)"
 echo "== directory email acceptance =="
+source scripts/acceptance/directory-resources.sh
 
 BLUEPRINT=deploy/compose/authentik/blueprints/agentry-account-flows.yaml
 TEMPLATES=deploy/compose/authentik/templates
@@ -59,7 +60,7 @@ done
 # the host's daemon from inside a runner container, where the checkout's
 # path means nothing to the daemon (and an SELinux host would refuse the
 # container a home-directory mount anyway).
-cid=$(docker create -i --entrypoint python \
+cid=$(docker create "${DIRECTORY_DOCKER_LABELS[@]}" -i --entrypoint python \
   -e AUTHENTIK_SECRET_KEY=acceptance-only \
   -e AUTHENTIK_LOG_LEVEL=error \
   -e DJANGO_SETTINGS_MODULE=authentik.root.settings \
