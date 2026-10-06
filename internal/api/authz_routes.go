@@ -74,9 +74,12 @@ var routeAuthz = map[string]RouteDecl{
 	// the handler: visibility, allowForcePush and pipelineSkip against
 	// ActAgentAdminister, the way ssoRequired is inside updateOrg, and
 	// builtin against platform staff (agentry#737, DEV-174).
-	"updateAgent":       {Action: auth.ActAgentMaintain, AgentScoped: true},
-	"deleteAgent":       {Action: auth.ActAgentAdminister, AgentScoped: true},
-	"retireAgent":       {Action: auth.ActAgentAdminister, AgentScoped: true},
+	"updateAgent": {Action: auth.ActAgentMaintain, AgentScoped: true},
+	"deleteAgent": {Action: auth.ActAgentAdminister, AgentScoped: true},
+	"retireAgent": {Action: auth.ActAgentAdminister, AgentScoped: true},
+	// The origin is read by name and the target namespace decided by the
+	// handler, as createAgent's is (agentry#943).
+	"forkAgent":         {Action: auth.ActAgentCreate},
 	"restoreAgent":      {Action: auth.ActAgentAdminister, AgentScoped: true},
 	"listAgentActivity": {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
 	"getAgentStats":     {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},

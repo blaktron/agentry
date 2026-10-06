@@ -408,6 +408,10 @@ type SubmitInput struct {
 	// asks the extension's DraftProvenance whether it holds, and the client
 	// is never believed.
 	DraftRun *uuid.UUID
+	// pipeline, when set, is where the version goes once recorded, in place
+	// of the service's own: a fork's first version is submitted by a
+	// worker, whose service keeps no hand-off of its own (agentry#943).
+	pipeline Pipeline
 }
 
 // skipsPipeline says whether a submission to the agent is admitted
@@ -699,7 +703,11 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 		}
 		return s.st.Queries().GetVersionByID(ctx, versionID)
 	}
-	return s.enterPipeline(ctx, a, versionID, submitted, sysEvent, s.pipeline)
+	pipeline := s.pipeline
+	if in.pipeline != nil {
+		pipeline = in.pipeline
+	}
+	return s.enterPipeline(ctx, a, versionID, submitted, sysEvent, pipeline)
 }
 
 // enterPipeline takes a recorded version whose archive is in the store
