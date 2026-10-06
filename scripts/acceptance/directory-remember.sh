@@ -30,6 +30,7 @@
 set -euo pipefail
 cd "$(cd "$(dirname "$0")/../.." && pwd)"
 echo "== directory remembered-browser acceptance =="
+source scripts/acceptance/directory-resources.sh
 
 COMPOSE=deploy/compose/docker-compose.yaml
 IMAGE="${AUTHENTIK_IMAGE:-$(awk '/image: ghcr.io\/goauthentik\/server:/{print $2; exit}' "$COMPOSE")}"
@@ -58,7 +59,7 @@ trap cleanup EXIT
 # private network, so runs on one daemon never meet.
 
 # ---------------------------------------------------------------- 1. the template
-probe=$(docker create --name "$P-probe" "$IMAGE")
+probe=$(docker create "${DIRECTORY_DOCKER_LABELS[@]}" --name "$P-probe" "$IMAGE")
 docker cp "$probe:/authentik/flows/templates/if/flow.html" "$TMP/flow.orig.html"
 docker cp "$probe:/web/dist" "$TMP/dist" >/dev/null
 docker rm -fv "$probe" >/dev/null
@@ -95,10 +96,10 @@ PG_PW=$(openssl rand -hex 16)
 CHECK_TOKEN=$(openssl rand -hex 32)
 CLIENT_SECRET=$(openssl rand -hex 24)
 USER_PASSWORD="pw-$(openssl rand -hex 12)"
-docker network create "$NET" >/dev/null
-docker run -d --name "$P-pg" --network "$NET" --network-alias dr-pg \
+docker network create "${DIRECTORY_DOCKER_LABELS[@]}" "$NET" >/dev/null
+docker run -d "${DIRECTORY_DOCKER_LABELS[@]}" --name "$P-pg" --network "$NET" --network-alias dr-pg \
   -e POSTGRES_PASSWORD="$PG_PW" -e POSTGRES_USER=authentik -e POSTGRES_DB=authentik "$PG_IMAGE" >/dev/null
-docker run -d --name "$P-redis" --network "$NET" --network-alias dr-redis "$REDIS_IMAGE" >/dev/null
+docker run -d "${DIRECTORY_DOCKER_LABELS[@]}" --name "$P-redis" --network "$NET" --network-alias dr-redis "$REDIS_IMAGE" >/dev/null
 AK_ENV=(
   -e AUTHENTIK_SECRET_KEY="$(openssl rand -hex 32)"
   -e AUTHENTIK_POSTGRESQL__HOST=dr-pg -e AUTHENTIK_POSTGRESQL__USER=authentik
@@ -108,8 +109,8 @@ AK_ENV=(
   -e AGENTRY_ACCOUNT_URL=http://registry.test/settings -e AGENTRY_PUBLIC_WEB_URL=http://registry.test
   -e AGENTRY_IDP_TRUST_CHECK_TOKEN="$CHECK_TOKEN" -e AGENTRY_REGISTRY_INTERNAL_URL=http://dr-driver:8080
 )
-docker create --name "$AK" --network "$NET" --network-alias dr-ak-server "${AK_ENV[@]}" "$IMAGE" server >/dev/null
-docker create --name "$P-ak-worker" --network "$NET" "${AK_ENV[@]}" "$IMAGE" worker >/dev/null
+docker create "${DIRECTORY_DOCKER_LABELS[@]}" --name "$AK" --network "$NET" --network-alias dr-ak-server "${AK_ENV[@]}" "$IMAGE" server >/dev/null
+docker create "${DIRECTORY_DOCKER_LABELS[@]}" --name "$P-ak-worker" --network "$NET" "${AK_ENV[@]}" "$IMAGE" worker >/dev/null
 for c in "$AK" "$P-ak-worker"; do
   docker cp deploy/compose/authentik/templates/. "$c:/templates" >/dev/null
   docker cp deploy/compose/authentik/blueprints/. "$c:/blueprints/custom" >/dev/null
@@ -117,7 +118,7 @@ done
 docker start "$AK" "$P-ak-worker" >/dev/null
 
 # The stand-in registry must answer before the first sign-in.
-docker create --name "$DRIVER" --network "$NET" --network-alias dr-driver \
+docker create "${DIRECTORY_DOCKER_LABELS[@]}" --name "$DRIVER" --network "$NET" --network-alias dr-driver \
   -e AK=http://dr-ak-server:9000 -e CHECK_TOKEN="$CHECK_TOKEN" \
   -e CLIENT_SECRET="$CLIENT_SECRET" -e USER_PASSWORD="$USER_PASSWORD" \
   "$PY_IMAGE" python /driver.py serve >/dev/null
