@@ -100,6 +100,11 @@ func (s *Server) writeSubmitError(w http.ResponseWriter, r *http.Request, err er
 			fields = append(fields, FieldError{Field: "manifest", Message: sentence(iss.Error())})
 		}
 		problemValidation(w, r, "The registry rejected the submission. Each field error says what to fix.", fields...)
+	case errors.Is(err, registry.ErrRetired):
+		problemAgentRetired(w, r)
+	case errors.Is(err, registry.ErrNotFound):
+		// The agent was deleted while the submission was on its way.
+		problemNotFound(w, r)
 	case errors.Is(err, registry.ErrTwoFactorRequired):
 		problemForbidden(w, r, "Enable two-factor authentication before publishing to a public namespace.")
 	case errors.Is(err, registry.ErrScanNotScheduled):

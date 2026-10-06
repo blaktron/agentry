@@ -1,10 +1,12 @@
 package api
 
-// The §9.2 agent endpoints beyond CRUD: deletion of never-published agents,
-// the activity feed, and tag browsing.
+// The §9.2 agent endpoints beyond CRUD: deletion (outright, or as a
+// tombstone), retire and restore (agentry#942), the activity feed, and tag
+// browsing.
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/registry"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
@@ -54,16 +57,20 @@ var publicTransitionStates = map[string]bool{
 	"published": true, "yanked": true, "quarantined": true, "blocked": true,
 }
 
-// DeleteAgent implements DELETE /agents/{ns}/{name} (§9.2 "only if never
-// published"). Requires agent maintain.
+// DeleteAgent implements DELETE /agents/{ns}/{name} (§9.2, agentry#942),
+// for the namespace's administrators.
 //
 // §4.3 forbids deleting agent_version rows outright — yanked hides, blocked
 // disables, but the row and its digest survive so installed copies keep
-// verifying. That makes "no versions past submitted" and "no version rows at
-// all" the same rule in practice: a submitted row still holds a foreign key
-// to the agent and cannot be removed to make way. The two counts are
-// separated only so the refusal can say which case it is.
-func (s *Server) DeleteAgent(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName) {
+// verifying. An agent with no version row at all is deleted outright, with
+// its repository. One with version history is deleted as a tombstone
+// (registry.Tombstone): its versions yanked, the row kept and hidden from
+// every read by name, the name held. A submitted row still holds a foreign
+// key to the agent, and a version in the pipeline or in review would be
+// decided onto a deleted agent, so both wait for the verdict. Advisories,
+// abuse reports and a quarantine or block are trust & safety records: they
+// outlive the publisher's wish to remove the agent (DEV-021 §1).
+func (s *Server) DeleteAgent(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, params DeleteAgentParams) {
 	if !s.requireDB(w, r) {
 		return
 	}
@@ -78,17 +85,32 @@ func (s *Server) DeleteAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 		return
 	}
 	switch {
-	case blockers.VersionsPastSubmitted > 0:
-		problemConflict(w, r,
-			"This QuickAgent has version history, so it cannot be deleted. Yank the versions instead.")
-		return
-	case blockers.Versions > 0:
-		problemConflict(w, r,
-			"A version submission is still in flight. Deleting works only before the first submission.")
-		return
-	case blockers.Advisories > 0 || blockers.AbuseReports > 0:
+	// An advisory reaches its readers through the public feed, which a
+	// tombstone (private) leaves: deleting a flagged agent would take the
+	// warning from everyone who installed it.
+	case blockers.Advisories > 0 || blockers.AbuseReports > 0 || (blockers.Versions > 0 && a.QuarantineState != "none"):
 		problemConflict(w, r,
 			"This QuickAgent carries trust & safety records, so it cannot be deleted.")
+		return
+	case blockers.VersionsInFlight > 0:
+		problemDeleteInFlight(w, r)
+		return
+	case blockers.Versions > 0:
+		if params.Confirm == nil || *params.Confirm != a.Name {
+			writeProblem(w, r, http.StatusUnprocessableEntity, "confirm-name", "Confirm the name to delete",
+				"This QuickAgent has version history. Deleting it yanks every version and cannot be undone, and its name stays held: send confirm="+a.Name+" to go ahead.")
+			return
+		}
+		if err := s.reg.Tombstone(r.Context(), a, auditEvent(r, audit.ActionAgentDelete)); err != nil {
+			if errors.Is(err, registry.ErrVersionsInFlight) {
+				problemDeleteInFlight(w, r)
+				return
+			}
+			s.log.ErrorContext(r.Context(), "tombstone agent", "err", err)
+			problemInternal(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
@@ -122,6 +144,76 @@ func (s *Server) DeleteAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	// repo uuid, so an orphan is inert).
 	s.removeRepoDir(repoID.String())
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// problemDeleteInFlight refuses a delete while a version awaits its
+// verdict, from the handler's check or the tombstone's own under the lock.
+func problemDeleteInFlight(w http.ResponseWriter, r *http.Request) {
+	problemConflict(w, r,
+		"A version of this QuickAgent is still being scanned or reviewed. Delete it once that version has its verdict.")
+}
+
+// RetireAgent implements POST /agents/{ns}/{name}/retire (agentry#942).
+// The namespace's administrators: it changes who can see the agent.
+func (s *Server) RetireAgent(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName) {
+	if !s.requireDB(w, r) {
+		return
+	}
+	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentAdminister)
+	if !ok {
+		return
+	}
+	if err := s.reg.Retire(r.Context(), a, auditEvent(r, audit.ActionAgentRetire)); err != nil {
+		s.log.ErrorContext(r.Context(), "retire agent", "err", err)
+		problemInternal(w, r)
+		return
+	}
+	s.writeAgentAfterChange(w, r, ns, name)
+}
+
+// RestoreAgent implements POST /agents/{ns}/{name}/restore (agentry#942).
+func (s *Server) RestoreAgent(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName) {
+	if !s.requireDB(w, r) {
+		return
+	}
+	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentAdminister)
+	if !ok {
+		return
+	}
+	err := s.reg.Restore(r.Context(), a, auditEvent(r, audit.ActionAgentRestore))
+	var unscanned *registry.UnscannedStandingError
+	switch {
+	case err == nil:
+		s.writeAgentAfterChange(w, r, ns, name)
+	case errors.Is(err, registry.ErrNotRetired):
+		writeProblem(w, r, http.StatusConflict, "agent-not-retired", "Not retired",
+			"This QuickAgent is not retired, so there is nothing to restore.")
+	case errors.Is(err, registry.ErrPipelineSkipOnRestore):
+		// The state PATCH refuses when it makes a flagged agent public,
+		// answered the same way.
+		writeProblem(w, r, http.StatusConflict, "agent-unscanned", "Unscanned versions cannot be made public",
+			"This QuickAgent was public when it was retired and is off the pipeline now: clear pipeline: skip, then restore it.")
+	case errors.As(err, &unscanned):
+		problemAgentUnscanned(w, r, unscanned.N)
+	case errors.Is(err, registry.ErrPrivateAgentCap):
+		problemPrivateAgentCap(w, r)
+	default:
+		s.log.ErrorContext(r.Context(), "restore agent", "err", err)
+		problemInternal(w, r)
+	}
+}
+
+// writeAgentAfterChange answers a lifecycle change with the agent as it now
+// is, maintainer fields included: only the namespace's administrators get
+// here.
+func (s *Server) writeAgentAfterChange(w http.ResponseWriter, r *http.Request, ns, name string) {
+	updated, err := s.reg.Resolve(r.Context(), ns, name)
+	if err != nil {
+		s.log.ErrorContext(r.Context(), "agent after change", "agent", ns+"/"+name, "err", err)
+		problemInternal(w, r)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.agentToAPI(updated, true))
 }
 
 // removeRepoDir deletes the bare repository backing a deleted agent. Failures
