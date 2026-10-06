@@ -430,12 +430,24 @@ capabilities:
   optionalSecrets: [GITHUB_TOKEN]
 ```
 
-The run that honours it is planned (agentry#905): the CLI from
-agentry-cli#651 and hosted runs from agentry-enterprise#424 start without
-an optional secret that has no value and tell the QuickAgent which secrets
-it was not given, while a missing required secret still refuses. Until then every declared secret is still
-required at run time. A CLI or desktop that pins a core older than this
-field refuses a manifest that carries it, by name.
+A run starts without an optional secret that has no value (agentry-cli
+v0.6.66 and later). The runner writes it empty into the gateway's secrets
+file, so the runner's own `fetch` answers that the secret is not set; the
+System Prompt tells the QuickAgent which optional secrets it was not given;
+and the receipt's `capabilities_enforced["secrets.absent"]` names them. A
+declared MCP server that reads the secret sees its variable set but empty,
+and what it does then is its own. A missing required secret still refuses
+the run (exit 11), naming only the required ones. A hosted run asks only
+for the required secrets ([Hosted runs](hosted-runs.md)). Write the
+instruction for both cases: say what the QuickAgent does without the
+optional secret, never that it stops.
+
+A CLI or desktop that pins a core older than this field refuses a manifest
+that carries it, by name, so a release that marks a secret optional needs
+agentry-cli v0.6.66 or later to run. The Builder on the site and in the
+desktop marks each secret Optional or Required, and the Drafter behind
+Describe it marks each secret it declares, from its 1.10.0 (agentry-cli
+v0.6.75).
 
 **`dataAccess`** holds semantic categories for review and audit: `email`,
 `calendar`, `files`, `tickets`, `code`, `messages`, `payments`, `other`.
