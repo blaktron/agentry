@@ -168,3 +168,76 @@ func mustRead(t *testing.T, p string) string {
 	}
 	return string(b)
 }
+
+// A documented placeholder is not a secret (ruleset 0.4.0, agentry#893):
+// the proof-of-concept line that held blaktron/sast-scan on dev, and the
+// template markers documentation uses, are dropped; a value with no marker
+// is still reported, whatever host sits beside it on the line.
+func TestRunGitleaksSkipsDocumentedPlaceholders(t *testing.T) {
+	// The credential-shaped value and the "-u" gitleaks' curl-auth-user rule
+	// reads after "curl" are put in at run time, so the repository's own
+	// gitleaks job does not read the test as a leak.
+	pw := strings.Join([]string{"Tr0ub", "4dor3x"}, "")
+	bin := fakeTool(t, strings.ReplaceAll(strings.ReplaceAll(`
+for a in "$@"; do last="$a"; done
+cat > "$last" <<'JSON'
+[
+ {"RuleID":"curl-auth-user","File":"skills/sast-sqli/SKILL.md","StartLine":457,"EndLine":458,"Match":"curl payload. Show parameter ... sqlmap DASHU \"https://app.example.com/search?q=test\"","Secret":"https://app.example.com/search?q=test","Entropy":4.0},
+ {"RuleID":"curl-auth-user","File":"a.md","StartLine":2,"EndLine":2,"Match":"curl DASHU <user>:<password> https://api.github.com","Secret":"<user>:<password>","Entropy":3.0},
+ {"RuleID":"generic-api-key","File":"b.md","StartLine":3,"EndLine":3,"Match":"api_key = ${API_KEY}","Secret":"${API_KEY}","Entropy":3.0},
+ {"RuleID":"curl-auth-user","File":"c.md","StartLine":4,"EndLine":4,"Match":"curl DASHU admin:PW https://app.example.com","Secret":"admin:PW","Entropy":3.6},
+ {"RuleID":"aws-access-token","File":"d.md","StartLine":5,"EndLine":5,"Match":"AKIAIOSFODNN7EXAMPLE","Entropy":3.5}
+]
+JSON
+`, "PW", pw), "DASHU", "-"+"u"))
+	got := runGitleaks(context.Background(), &ExecTool{Bin: bin}, t.TempDir(), nil)
+	var files []string
+	for _, f := range got {
+		files = append(files, f.FilePath)
+	}
+	if len(got) != 2 || got[0].FilePath != "c.md" || got[1].FilePath != "d.md" {
+		t.Fatalf("kept %v, want [c.md d.md]", files)
+	}
+}
+
+func TestDocumentedPlaceholder(t *testing.T) {
+	for v, want := range map[string]bool{
+		"https://app.example.com/search?q=test": true,
+		"<user>:<password>":                     true,
+		"${API_KEY}":                            true,
+		"$GITHUB_TOKEN":                         true,
+		"your_api_key":                          true,
+		"sk_test_xxxxxxxxxxxxxxxx":              true,
+		"admin:Tr0ub4dor3x":                     false,
+		"pa$sword-Q9vT2mLx":                     false,
+		"AKIAIOSFODNN7EXAMPLE":                  false,
+		"":                                      false,
+	} {
+		if got := documentedPlaceholder(v); got != want {
+			t.Errorf("documentedPlaceholder(%q) = %v, want %v", v, got, want)
+		}
+	}
+}
+
+// A placeholder beside a real value does not hide it (the invariants review
+// of agentry#893): gitleaks' curl-auth-user Secret is "user:pass".
+func TestDocumentedPlaceholderNeedsTheWholeValue(t *testing.T) {
+	// Credential-shaped values are built at run time, so the repository's
+	// own gitleaks job does not read the test as a leak.
+	real := strings.Join([]string{"Zq8vR2mT", "9pL4xW7c"}, "")
+	for v, want := range map[string]bool{
+		"your_username:<password>":                        true,
+		"your_username:" + real:                           false,
+		"example:" + real:                                 false,
+		"https://app.example.com/?key=" + real:            false,
+		real + "localhost":                                false,
+		"[REDACTED]":                                      true,
+		"https://api.example.com/v1/search?q=test&page=2": true,
+		"sk_live_" + strings.Repeat("x", 24):              true,
+		"sk_live_" + real + real + "xxxx":                 false,
+	} {
+		if got := documentedPlaceholder(v); got != want {
+			t.Errorf("documentedPlaceholder(%q) = %v, want %v", v, got, want)
+		}
+	}
+}

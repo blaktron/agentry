@@ -548,8 +548,9 @@ func rescanSeverity(f Finding) Severity {
 
 // reratedToHigh reports a finding that is high only by ruleset 0.2.2's
 // re-rating (D16): S6's undeclared environment read, and AI Review's
-// injection and undeclared-capability axes at score 2, in a release's own
-// scan or a shipped pack's.
+// injection and undeclared-capability axes at score 2 (and user deception,
+// since ruleset 0.4.0, agentry#893), in a release's own scan or a shipped
+// pack's.
 func reratedToHigh(f Finding) bool {
 	if f.Scanner == scannerUndeclaredEnv {
 		return true

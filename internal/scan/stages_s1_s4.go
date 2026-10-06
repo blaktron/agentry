@@ -198,13 +198,15 @@ func readArchiveFile(dir, rel string) ([]byte, error) {
 
 // S3S4Content wraps the pkg/rules S3 hidden-content detectors and S4
 // signature engine (§8.3). It runs on the inventoried text files, and on the
-// text recovered from image metadata.
+// text recovered from image metadata. The capability families' hits are
+// rated by what the manifest declares (ruleset 0.4.0, agentry#893): they
+// hold only for a capability it does not declare.
 type S3S4Content struct{}
 
 func (S3S4Content) ID() string { return "S3S4" }
 
 func (S3S4Content) Run(sc stageContext, in *Input) StageResult {
-	rfs := rulesScan(sc, in)
+	rfs := rules.RateByDeclaration(rulesScan(sc, in), declarationOf(in.ManifestJSON))
 	findings := make([]Finding, 0, len(rfs))
 	for _, rf := range rfs {
 		findings = append(findings, fromRules(rf))
