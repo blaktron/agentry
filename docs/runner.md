@@ -230,9 +230,11 @@ or `remove --all` deletes them.
 
 ### `agentry connect <ns/name[@version]>`
 
-Makes the [connection](#connections) of each remote MCP server an installed
-QuickAgent version declares with `auth: oauth`, ahead of a run, on a
-terminal. A server already connected is left alone; `--again` makes its
+Makes the [connection](#connections) of each MCP server an installed
+QuickAgent version signs in to by OAuth (a remote server's `auth: oauth`, a
+package server's `oauth` block), ahead of a run, on a terminal. A package
+the manifest reference lists as unable to run on an access token alone is
+refused before any consent. A server already connected is left alone; `--again` makes its
 connection again. With several versions installed, name one.
 
 ### `agentry connections`
@@ -562,9 +564,8 @@ and the line says `remote (not looked up …)`.
   that call with a sentence naming the server; the run goes on.
 - `auth: oauth` sends the access token of the person's
   [connection](#connections) for this release, written where an
-  `auth: secret` bearer is and read the same way. An `oauth` block on a
-  package server is still refused with exit 11, naming the server, until the
-  runner can hand a package its token (agentry-cli#665).
+  `auth: secret` bearer is and read the same way, and renewed there before
+  it expires (below).
 
 The receipt's `capabilities_enforced["mcpServers.remote"]` names each remote
 server, its auth, the bearer secret by name, its tool filter and its one
@@ -575,9 +576,11 @@ something the run checks.
 
 ### Connections
 
-A **connection** is your OAuth grant to one remote MCP server, made on the
+A **connection** is your OAuth grant to one MCP server, made on the
 vendor's own consent screen, for **one QuickAgent version**: its ref and
-archive digest. Another QuickAgent, or another version of this one, makes
+archive digest. A remote server is signed in to by `auth: oauth`, at the
+authorization server its own metadata names; a package server by its
+`oauth` block, at the block's `issuer`. Another QuickAgent, or another version of this one, makes
 its own; the same version's later runs reuse it without asking.
 
 - **When it is asked for.** At Start, the first time a run of that version
@@ -600,7 +603,11 @@ its own; the same version's later runs reuse it without asking.
   the vendor for this connection ("Agentry Desktop"). A vendor that allows
   none of these, as Google does, needs your own client: the CLI asks for its
   id and secret once, showing Agentry's steps for making one at Google, and
-  keeps it for every later consent there.
+  keeps it for every later consent there. At Google that is a **Desktop
+  app** client in a project with the product's API enabled; while the app
+  is in Testing, add the account you sign in with under Audience → Test
+  users (Google refuses any other), and expect its sign-ins to stop after
+  7 days unless the app is published or Internal.
 - **Where it is kept.** Under the runner home's `connections/`: a `0600`
   record per release and server that holds no token, and its refresh token
   in the OS keychain, or a `0600` file beside the record where no keychain
@@ -612,10 +619,27 @@ its own; the same version's later runs reuse it without asking.
   marks the connection broken, and the next Start asks again. A vendor that
   cannot be reached fails the run with exit 1 and leaves the connection as
   it was.
-- **What the run gets.** The access token alone, in the server's
-  connection folder (0600, mounted read-only into its bridge alone, deleted
-  at teardown, masked in the receipts). The refresh token and any client
-  secret never enter a run. The receipt's
+- **What the run gets.** The access token alone, never the refresh token
+  or any client secret, and masked in the receipts:
+  - a remote server: in its connection folder (0600), mounted read-only
+    into its bridge alone and never in the gateway's secrets file;
+  - a package server: in the files its `oauth` block declares, rendered by
+    the runner into a folder of its own (`/run/agentry/connection`, 0600
+    files in a 0700 folder) that is mounted **writable** into that server
+    alone, because a server such as `workspace-mcp` will not start unless
+    it can write there; the folder is the run's, holds nothing of the
+    connection but the access token, and is deleted at teardown. Or in an
+    env variable, which the gateway sets from its secrets file, so the
+    gateway holds that token for the run;
+  - every connection folder is deleted at teardown, `--keep-run-dir` or not.
+- **Renewal during a run.** While a run or a session lasts, the runner
+  refreshes each connection again before its access token expires (half
+  the token's life ahead, at most ten minutes, so an hour-long Google token
+  is renewed at about fifty minutes) and renames the new token into place;
+  a bridge reads its file at every request, and a server that re-reads its
+  token file picks it up. An env token is fixed for the run. A renewal the
+  vendor refuses is said once on the run's stderr and tried again each
+  minute; the server's calls fail once the old token expires. The receipt's
   `capabilities_enforced["mcpServers.connections"]` names each connection
   used: the server, the issuer, the scopes and the client kind.
 - **Every request to a vendor** (discovery, registration, the code exchange,
@@ -835,6 +859,7 @@ Hosted runs are why the knob exists: the platform's run worker renders
 | `exec: {commands}` | `run_command` argv0 allowlist + a shim `PATH` containing only the declared commands |
 | `secrets: [names]` | values only in the profile, the per-run secrets file (0600, deleted at teardown), the tools container env (a declared server's own: that server's container env), and the MCP gateway's container, which reads the whole secrets file to inject them — never in plans, receipts, or process listings |
 | a remote MCP server | the runner image's bridge, launched by the gateway on its relay network behind one relay to the address's host on 443; the gateway itself dials nothing. An `auth: secret` bearer, or an `auth: oauth` connection's access token, is in a 0600 file mounted read-only into that bridge alone, never in the gateway's secrets file; a connection's refresh token and any client secret stay in the runner's store and never enter the run |
+| a package server's `oauth` block | the connection's access token alone, rendered into the block's files in that server's own folder (mounted writable into it alone, the only writable bind besides the output and the workspace, deleted at teardown) or into its env through the gateway's secrets file; renewed before it expires by a rename into the folder; the refresh token and any client secret never enter the run |
 | run inputs | `--file` items land in a per-run folder mounted **read-only** at `/inputs` on the tool plane, served by always-granted `list_inputs`/`read_input`; job output and receipts live on the separate `/out` volume |
 | the agent container itself | internal-only network; reachable endpoints: the gateway (Bearer token) and the egress proxy (allowlist = `model.proxyAllow`); `/plan` is its only mount |
 | the gateway on an SELinux host | the gateway is the one container that drives the host's docker daemon, so on a daemon with SELinux enabled it runs with label confinement off (`--security-opt label=disable`) — a confined container cannot open that socket at all. Everything else in the run stays confined, and the run's own directories are relabelled so the tool containers can use them; the socket itself is never relabelled, which would hand daemon access to every container on the machine. |
