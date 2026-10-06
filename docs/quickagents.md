@@ -545,9 +545,11 @@ capabilities:
   an added OAuth sign-in, and a changed `oauth` file or env. The CLI and
   the desktop show them once their core pin carries this change.
 
-The manifest accepts these fields since agentry#910. A runner runs them
-once it carries the remote-server bridge (agentry-cli#663) and connections
-(agentry-cli#664, agentry-cli#665), and hosted runs from
+The manifest accepts these fields since agentry#910. The CLI runs a remote
+server with `auth: none` or `auth: secret` since agentry-cli#663, through
+the runner image's bridge (see [the runner reference](runner.md)). It
+refuses `auth: oauth` and an `oauth` block by name until it makes
+connections (agentry-cli#664, agentry-cli#665); hosted runs follow from
 agentry-enterprise#425. A CLI or desktop older than its core pin refuses
 such a manifest by its unknown field.
 
