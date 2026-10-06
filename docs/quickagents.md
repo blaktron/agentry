@@ -544,7 +544,7 @@ capabilities:
       oauth:
         issuer: https://accounts.google.com
         scopes: [https://www.googleapis.com/auth/gmail.readonly]
-        files:                          # written into the server's token folder
+        files:                          # written into the server's own token folder
           - path: me@agentry.invalid.json
             template: '{"token": "{access_token}", "expiry": "{expiry}", "scopes": ["https://www.googleapis.com/auth/gmail.readonly"], "token_uri": "https://oauth2.googleapis.com/token", "client_id": "agentry", "client_secret": "agentry"}'
         env:
@@ -613,11 +613,19 @@ capabilities:
 
 The manifest accepts these fields since agentry#910. The CLI runs a remote
 server with `auth: none` or `auth: secret` since agentry-cli#663, through
-the runner image's bridge (see [the runner reference](runner.md)). It
-refuses `auth: oauth` and an `oauth` block by name until it makes
-connections (agentry-cli#664, agentry-cli#665); hosted runs follow from
-agentry-enterprise#425. A CLI or desktop older than its core pin refuses
-such a manifest by its unknown field.
+the runner image's bridge, `auth: oauth` on the person's connection since
+agentry-cli#664, and a package server's `oauth` block since agentry-cli#665
+(see [the runner reference](runner.md#connections)): the access token is
+written into the files the block declares, in a folder of the server's own,
+or into its env, and renewed before it expires while a local run lasts
+where the server reads it from a file (an env token is fixed for the run,
+so a server that reads its token from env alone stops working once the
+token expires, about an hour for Google). A file's client id or secret, if
+the server's format has one, is a fixed placeholder the author writes (as
+`agentry` above), never a real value: the runner substitutes nothing but
+the placeholders. Hosted runs follow from agentry-enterprise#425. A CLI or
+desktop older than its core pin refuses such a manifest by its unknown
+field.
 
 ### `dependencies`
 
