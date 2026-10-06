@@ -28,6 +28,7 @@
 set -euo pipefail
 cd "$(cd "$(dirname "$0")/../.." && pwd)"
 echo "== directory sign-up budget acceptance =="
+source scripts/acceptance/directory-resources.sh
 
 COMPOSE=deploy/compose/docker-compose.yaml
 IMAGE="${AUTHENTIK_IMAGE:-$(awk '/image: ghcr.io\/goauthentik\/server:/{print $2; exit}' "$COMPOSE")}"
@@ -48,10 +49,10 @@ cleanup() {
 trap cleanup EXIT
 
 PG_PW=$(openssl rand -hex 16)
-docker network create "$NET" >/dev/null
-docker run -d --name "$P-pg" --network "$NET" --network-alias dl-pg \
+docker network create "${DIRECTORY_DOCKER_LABELS[@]}" "$NET" >/dev/null
+docker run -d "${DIRECTORY_DOCKER_LABELS[@]}" --name "$P-pg" --network "$NET" --network-alias dl-pg \
   -e POSTGRES_PASSWORD="$PG_PW" -e POSTGRES_USER=authentik -e POSTGRES_DB=authentik "$PG_IMAGE" >/dev/null
-docker run -d --name "$P-redis" --network "$NET" --network-alias dl-redis "$REDIS_IMAGE" >/dev/null
+docker run -d "${DIRECTORY_DOCKER_LABELS[@]}" --name "$P-redis" --network "$NET" --network-alias dl-redis "$REDIS_IMAGE" >/dev/null
 # The budget is read when the worker applies the blueprint (it is formatted
 # into the expression), so the worker carries it; the server too, as the
 # compose file sets it on both. Registry activation is off (unset), so the
@@ -68,13 +69,13 @@ AK_ENV=(
 for role in server worker; do
   name=$AK alias=(--network-alias dl-ak-server)
   [ "$role" = worker ] && name=$WORKER alias=()
-  docker create --name "$name" --network "$NET" "${alias[@]}" "${AK_ENV[@]}" "$IMAGE" "$role" >/dev/null
+  docker create "${DIRECTORY_DOCKER_LABELS[@]}" --name "$name" --network "$NET" "${alias[@]}" "${AK_ENV[@]}" "$IMAGE" "$role" >/dev/null
   docker cp deploy/compose/authentik/templates/. "$name:/templates" >/dev/null
   docker cp deploy/compose/authentik/blueprints/. "$name:/blueprints/custom" >/dev/null
   docker start "$name" >/dev/null
 done
 
-docker create --name "$DRIVER" --network "$NET" --network-alias dl-driver \
+docker create "${DIRECTORY_DOCKER_LABELS[@]}" --name "$DRIVER" --network "$NET" --network-alias dl-driver \
   -e AK=http://dl-ak-server:9000 "$PY_IMAGE" sleep 3600 >/dev/null
 docker cp scripts/acceptance/directory-budget.py "$DRIVER:/driver.py" >/dev/null
 docker start "$DRIVER" >/dev/null
