@@ -475,14 +475,19 @@ capabilities:
       secrets: [GITHUB_TOKEN]
     - pypi: workspace-mcp               # a package server signed in by OAuth
       version: 2.0.1
-      egress: [gmail.googleapis.com, www.googleapis.com]
-      env: {MCP_SINGLE_USER_MODE: "1"}
+      tools: [search_gmail_messages, get_gmail_message_content]
+      egress: [gmail.googleapis.com]
+      env:
+        MCP_SINGLE_USER_MODE: "1"
+        WORKSPACE_MCP_TOOLS: gmail
+        WORKSPACE_MCP_READ_ONLY: "true"
+        USER_GOOGLE_EMAIL: me@agentry.invalid   # names the token file below
       oauth:
         issuer: https://accounts.google.com
         scopes: [https://www.googleapis.com/auth/gmail.readonly]
-        files:                          # written into the server's token folder, read-only
-          - path: me.json
-            template: '{"token":"{access_token}","expiry":"{expiry}"}'
+        files:                          # written into the server's token folder
+          - path: me@agentry.invalid.json
+            template: '{"token": "{access_token}", "expiry": "{expiry}", "scopes": ["https://www.googleapis.com/auth/gmail.readonly"], "token_uri": "https://oauth2.googleapis.com/token", "client_id": "agentry", "client_secret": "agentry"}'
         env:
           WORKSPACE_MCP_CREDENTIALS_DIR: "{dir}"
 ```
@@ -506,7 +511,9 @@ capabilities:
   (`issuer`, `https://`), the `scopes` consent asks for, and how the access
   token reaches the server:
   - `files`: at most four, each a plain file name in the server's token
-    folder and a template of at most 2,048 bytes. A template's placeholders
+    folder (letters, digits, `.`, `_`, `-` and `@`, at most 64; `@` for a
+    server that looks its file up by an account's email, as
+    `workspace-mcp` does) and a template of at most 2,048 bytes. A template's placeholders
     are `{access_token}`, `{expiry}` (RFC 3339, UTC) and `{expiry_ms}`
     (Unix milliseconds).
   - `env`: at most eight variables. An env value's placeholders are

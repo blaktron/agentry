@@ -544,6 +544,21 @@ func TestV2SchemaRemoteServerShape(t *testing.T) {
 	}
 }
 
+// A token-folder file is a plain name, which may carry an account's email
+// (agentry#937), and never a path.
+func TestOAuthFileNames(t *testing.T) {
+	for name, ok := range map[string]bool{
+		"me.json": true, "me@agentry.invalid.json": true, "credentials_1-a.json": true,
+		strings.Repeat("a", 64): true, strings.Repeat("a", 65): false,
+		"../escape.json": false, "a/b.json": false, ".hidden": false, "@me.json": false,
+		"me json": false, "...": false, "": false, `a\b`: false, "a$b": false,
+	} {
+		if got := validOAuthFileName(name); got != ok {
+			t.Errorf("%q: %v, want %v", name, got, ok)
+		}
+	}
+}
+
 // TestUnsupportedListIsInTheDocs holds docs/quickagents.md's table to the
 // list validation enforces.
 func TestUnsupportedListIsInTheDocs(t *testing.T) {
