@@ -24,6 +24,7 @@ var rules = []Rule{
 	{ID: "V9", Title: "skill frontmatter agrees with the manifest"},
 	{ID: "V10", Title: "intake, interactive hints and the guide"},
 	{ID: "V11", Title: "the knowledge block and its shipped packs"},
+	{ID: "V12", Title: "the inputs declaration"},
 }
 
 // Rules returns the rules Validate and ValidateInContext can report, in
