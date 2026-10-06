@@ -159,6 +159,25 @@
         }
       }
     },
+    "inputs": {
+      "type": "object",
+      "description": "What files the QuickAgent takes and which view of them its agent reads by default (V12; plan quickagents-that-run.md D1, DEV-218). Absent, any kind is taken and each file keeps its own default view: a document's decoded text, anything else as uploaded. It grants nothing: attaching a file is the grant, so the block is outside the contract.",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "kinds": {
+          "type": "array",
+          "description": "The kinds of file it takes, for the run setup and the Drafter: documents (PDFs, office documents, e-books), code (source, markup, configuration, a repository), data (CSV, JSON, YAML, spreadsheets, logs), images (photographs, scans, screenshots, diagrams), or any, which is declared alone. Absent means any.",
+          "uniqueItems": true,
+          "items": { "type": "string", "enum": ["documents", "code", "data", "images", "any"] }
+        },
+        "view": {
+          "type": "string",
+          "description": "The view the agent reads an input in by default: text (the decoded text, and the upload for a file with none), original (the file as uploaded), or both (each file's own default, with both views offered). Absent means both. Either view stays readable whatever the default.",
+          "enum": ["text", "original", "both"]
+        }
+      }
+    },
     "runtime": {
       "type": "object",
       "additionalProperties": false,

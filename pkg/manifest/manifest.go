@@ -181,6 +181,12 @@ type Manifest struct {
 	// (v2, V11; plan knowledge.md §4.6). The shipped names are part of the
 	// contract (Contract); what is accepted is shown to people only.
 	Knowledge *Knowledge `yaml:"knowledge,omitempty" json:"knowledge,omitempty"`
+	// Inputs says what kinds of file the QuickAgent takes and which view
+	// of them its agent reads by default (v2, V12; plan
+	// quickagents-that-run.md D1). Absent, any kind is taken and each file
+	// keeps its own default view; use InputKinds and InputView. It grants
+	// nothing and is outside the contract.
+	Inputs *Inputs `yaml:"inputs,omitempty" json:"inputs,omitempty"`
 	// Runtime carries informational runtime hints and install targets.
 	Runtime Runtime `yaml:"runtime,omitempty" json:"runtime,omitempty"`
 	// Capabilities is the security contract (closed vocabulary, V5).
