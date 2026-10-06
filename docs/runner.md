@@ -365,6 +365,24 @@ done, and writes a draft. It never submits anything.
   finished draft go through the registry with the job's credential in
   `$AGENTRY_JOB_TOKEN`, and no Jev or search key
   is on the host ([the draft kind](hosted-runs.md#a-hosted-draft)).
+- **Its drafting guide.** The Drafter ships a knowledge pack of its own,
+  `drafting-guide`, declared in its manifest's `knowledge.ships` and
+  published and scanned with its release. Every run of the Drafter gets it
+  through the knowledge tools, the repair turn included, on this machine and
+  in Agentry. It holds:
+    - how a QuickAgent run works;
+    - what a declared MCP server meets in the runner: musl images, no install
+      scripts, wheels only, a start with no arguments, stdio only, none of
+      the run's files, and only port 443 to its declared hosts;
+    - a check to make before pinning a server;
+    - two lists of servers, *Runs here* and *Does not run here*, each entry
+      saying what a survey saw, on which runtime and when;
+    - the reference to every manifest field and the rules' bounds.
+
+  The lists are one thing for the Drafter to look at, not a judgement of any
+  server. The guide is not one of your packs: it does not count against
+  `--knowledge`'s limits, and a pack of yours named `drafting-guide` is
+  refused.
 
 #### Before a draft is written
 
@@ -377,7 +395,37 @@ The CLI checks every draft in four steps (agentry-cli#417, agentry-cli#418):
    word, ending with "…". The limits are the rules' own. The notes name
    each correction under "Corrected after drafting", and nothing is
    invented.
-2. **The rules check it**, with `agentry validate`'s own code.
+2. **The rules check it**, with `agentry validate`'s own code, and with
+   the Drafter's own rules on what a run can run:
+    - **Commands.** A draft declares only the
+      [commands every machine provides](#the-commands-every-machine-provides),
+      and the archive readers among them (`tar`, `unzip`, `gunzip`,
+      `bunzip2`, `unxz`, `zcat`, `bzcat`, `xzcat`) only when the QuickAgent
+      takes input files. Any other command is refused by these rules: a run
+      on a machine whose catalogue does not carry it refuses it before it
+      starts, and a run in Agentry always does.
+    - **Declared servers' versions.** Each pinned MCP server is looked up in
+      the package registries your runs install from (the policy's
+      `mcpRegistries`). A version the registry does not publish, one with no
+      program to start, or one whose `engines.node` or `requires_python`
+      excludes the runtime the runner uses (Node 24.21.0, Python 3.12.14) is
+      refused by the rules. A registry that does not answer is this
+      machine's problem, not the draft's: the server is listed under "MCP
+      servers not checked". The names and versions go to the package
+      registry, from this machine, and nothing else does.
+    - **The server lists.** A pin that the guide's *Does not run here*
+      covers, or a server whose own direct dependencies include a package
+      that list names (`onnxruntime`, `puppeteer`, `playwright`, …), is
+      refused by the rules. The dependencies come from the metadata the
+      version check already read, and the list is the guide's own, so this
+      sends nothing new off the machine. An npm install script is not
+      refused: it is listed under "MCP servers to check before a run",
+      because the runner installs with `--ignore-scripts`. A server on
+      neither list may be pinned, and the notes say what admitted each one
+      the draft keeps, under "What admitted each MCP server".
+
+    What the rules still refuse after step 4 is in the notes: "Commands to
+    fix before a run", "MCP servers to fix before a run".
 3. **AI Review checks the finished draft.** It reads the rendered package
    (exactly the files `publish.include` takes, the license among them) two
    ways: with the release rubric, asked as the pipeline's stage S5 asks it
@@ -389,16 +437,16 @@ The CLI checks every draft in four steps (agentry-cli#417, agentry-cli#418):
    and the CLI never retries. The verdicts go into `draft.json` under
    `aiReview.check`, and the notes say what a flag means under "AI
    Review's check".
-    - The rubric's C3 (a capability used but not declared) is recorded and
-      never sent to the repair turn; at publish it sends the version to
-      review, not to refusal.
+    - The rubric's findings are recorded with the severity the pipeline's
+      stage S5 would give each, and none is sent to the repair turn. At
+      publish a high one sends the version to review, not to refusal.
     - A description over 8 KiB is not checked, and neither is a draft that
       could not be rendered.
     - A pass does not mean the draft does all of the task. The pipeline
       scans the whole version at publish whatever the check said.
 4. **One repair turn.** If the rules still refuse the draft, or the check
-   flagged something the draft can fix (`off_task`, or a rubric finding
-   other than C3), the Drafter runs once more, without its web tools.
+   flagged `off_task`, the Drafter runs once more, without its web tools.
+   No release rubric finding sends a draft to the turn.
     - Its task is the rules' report, what the check flagged, and its own
       manifest and instructions, and nothing else: no notes, no page. With a
       flag it is also given the task the first turn was given, which AI
@@ -409,8 +457,10 @@ The CLI checks every draft in four steps (agentry-cli#417, agentry-cli#418):
       names it.
     - The second answer is corrected and checked like the first, so a draft
       asks at most two checks. It is kept whether or not it passes, unless
-      it breaks rules the first passed. Its notes say "Repaired once" and
-      what sent it to the turn.
+      it drops a declared MCP server, host, command or secret of the first
+      that the report did not name (the task needs it, and a repair never
+      clears a report by removing it), or it breaks rules the first passed.
+      Its notes say "Repaired once" and what sent it to the turn.
     - A repair turn that returns no draft leaves the first, with its
       problems and a note saying why. When the first was not a draft
       either, the draft ends with exit 17.
@@ -826,12 +876,28 @@ command the catalog does not carry is refused when the plan is compiled
 `agentry doctor --local <dir>` says so first. The build records the versions
 apk resolved, and the run's receipt names them beside each command's package
 (`capabilities_enforced.exec`, "packages resolved at image build: …"). The
-default policy ships no entries: an operator opts in per tool, and an
-example's README says which entry it needs. Because git refuses a
+default policy ships no entries beyond the base commands below: an operator
+opts in per tool, and an example's README says which entry it needs. Because git refuses a
 repository owned by another user as "dubious ownership", and a run's
 workspace and inputs are bind mounts owned by you read by root inside the
 container, an image that carries `git` sets `safe.directory` for the run's
 workspace and inputs mounts — exactly those paths, and the receipt says so.
+
+### The commands every machine provides
+
+Every machine provides these to a QuickAgent that declares them in `exec`,
+with no entry in `exec.packages` (DR-64): `base64`, `basename`, `bunzip2`,
+`bzcat`, `cat`, `cksum`, `cmp`, `comm`, `cut`, `diff`, `dirname`, `du`,
+`fold`, `grep`, `gunzip`, `head`, `hexdump`, `ls`, `md5sum`, `nl`, `od`,
+`paste`, `realpath`, `rev`, `sha1sum`, `sha256sum`, `sha512sum`, `sort`,
+`stat`, `strings`, `tac`, `tail`, `tar`, `tr`, `tree`, `uniq`, `unxz`,
+`unzip`, `wc`, `xzcat`, `zcat`. They are busybox applets the runner image
+already carries, so nothing is installed for them. They read and compare
+text, take checksums and read archives, and none of them runs another
+program: `sh`, `awk`, `sed`, `find`, `xargs` and `env` are left out on
+purpose. A declared command writes only beneath `/tmp` and a granted
+workspace, so an archive is unpacked there. A run in Agentry provides these
+and no others. `agentry doctor` lists them.
 
 ## The System Prompt
 
