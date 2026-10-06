@@ -349,13 +349,14 @@ file is the grant, so the block is outside the capability contract, and a
 release that changes only its inputs asks no one to consent again. Write
 `guide.files` to match it.
 
-The runner sets the default view from the block once a CLI release
-carries agentry-cli#693; until then every input keeps its own default.
-The site's and the desktop's run setups show it with agentry-web#1235 and
-agentry-desktop#704. A CLI or desktop older than the core release that
-added the block refuses a manifest carrying one as an unknown field, and so
-does a hosted run until the sandbox hosts run a CLI that knows it, so use
-it once your tools and the hosted runner are current.
+The runner sets the default view from the block since CLI v0.6.73
+(agentry-cli#693): `list_inputs` marks it, and the System Prompt names it.
+The Drafter fills the block since Drafter 1.9.0 (agentry-cli#634), in the
+CLI release after it. A hosted run takes the block with the sandbox hosts'
+next CLI, and until then refuses a manifest carrying one as an unknown
+field, as does a CLI before v0.6.73 or a desktop built on one. The site's
+and the desktop's run setups are to show it (agentry-web#1235,
+agentry-desktop#704).
 
 ### `runtime`: informational hints
 
