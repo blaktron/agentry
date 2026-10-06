@@ -197,10 +197,10 @@ func TestRescanSweepLeavesWhatAReviewerApproved(t *testing.T) {
 	}{
 		{"approved with a high finding", map[scan.JudgeCategory]int{scan.CatInjection: 3},
 			map[scan.JudgeCategory]int{scan.CatInjection: 3}, registry.StatusPublished},
-		{"approved with a medium a new ruleset rates high", map[scan.JudgeCategory]int{scan.CatDeception: 2},
-			map[scan.JudgeCategory]int{scan.CatDeception: 3}, registry.StatusPublished},
-		{"approved with one finding, rescanned with a new high", map[scan.JudgeCategory]int{scan.CatDeception: 2},
-			map[scan.JudgeCategory]int{scan.CatDeception: 2, scan.CatInjection: 3}, registry.StatusQuarantined},
+		{"approved with a medium a new ruleset rates high", map[scan.JudgeCategory]int{scan.CatObfuscation: 2},
+			map[scan.JudgeCategory]int{scan.CatObfuscation: 3}, registry.StatusPublished},
+		{"approved with one finding, rescanned with a new high", map[scan.JudgeCategory]int{scan.CatObfuscation: 2},
+			map[scan.JudgeCategory]int{scan.CatObfuscation: 2, scan.CatInjection: 3}, registry.StatusQuarantined},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -268,7 +268,7 @@ func TestRescanSweepLeavesAnOrgApprovedRerating(t *testing.T) {
 	e := newPipeEnv(t)
 	org := e.seedOrg("rerate" + suffix())
 	holdMedium(t, e, org)
-	scores := map[scan.JudgeCategory]int{scan.CatDeception: 2}
+	scores := map[scan.JudgeCategory]int{scan.CatObfuscation: 2}
 	e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, scoredProvider{scores: &scores}, nil))
 	v := e.publishOrg(org, "rerated", "public", benignFiles(org.handle, "rerated", "1.0.0"))
 	if v.Status != "needs_review" {
@@ -280,7 +280,7 @@ func TestRescanSweepLeavesAnOrgApprovedRerating(t *testing.T) {
 	}
 	approve(t, e, v.ID)
 
-	scores = map[scan.JudgeCategory]int{scan.CatDeception: 3}
+	scores = map[scan.JudgeCategory]int{scan.CatObfuscation: 3}
 	if err := e.pipe.RescanSweep(context.Background()); err != nil {
 		t.Fatalf("rescan sweep: %v", err)
 	}

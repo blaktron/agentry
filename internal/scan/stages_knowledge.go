@@ -96,7 +96,7 @@ func (s SKKnowledge) Run(sc stageContext, in *Input) StageResult {
 			errs = append(errs, fmt.Errorf("knowledge pack %s: the archive holds none of its text", name))
 			continue
 		}
-		report, hits := s.o.scanPack(sc.Context(), files)
+		report, hits := s.o.scanPack(sc.Context(), files, in.ManifestJSON)
 		for _, p := range report.Read.NotRead {
 			// S1 took it for text; the pack scan cannot read it as such.
 			hits = append(hits, packHit{part: partOf(p), finding: Finding{
