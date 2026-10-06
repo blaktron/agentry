@@ -259,6 +259,7 @@ func Validate(m *Manifest) []error {
 	validateInteractive(&s, m)
 	validateGuide(&s, m)
 	validateKnowledge(&s, m)
+	validateInputs(&s, m)
 
 	return s.list
 }

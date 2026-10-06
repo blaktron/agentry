@@ -298,6 +298,65 @@ A CLI or desktop older than the core release that added the block refuses
 a manifest carrying one as an unknown field; use it once your tools are
 current.
 
+### `inputs`: what files it takes, and how it reads them
+
+The files a person hands a run reach the agent through the input tools
+(`list_inputs`, `read_input`, `search_inputs`), which offer every input in
+two views: `text`, the text a decoder made of it (a PDF's or an office
+document's text, an image's recognised text, HTML as Markdown), and
+`original`, the file as uploaded (a binary file in base64 pages). Without
+this block a QuickAgent takes any kind of file, and each file keeps its own
+default view: the decoder's text where one made it, and anything else
+(code, markup, HTML, configuration, data) as uploaded. That is how every release published
+before the block reads, and it stays so. The block lets the author say
+what to bring and which view the agent reads first:
+
+```yaml
+inputs:
+  kinds: [code, data]   # documents | code | data | images, or any alone; absent: any
+  view: original        # text | original | both; absent: both
+```
+
+| Kind | Means |
+|---|---|
+| `documents` | prose to read: PDFs, office documents, e-books, rich text |
+| `code` | a codebase or its files: source, markup, build and configuration files, a repository (loose or as an archive) |
+| `data` | structured data: CSV, JSON, YAML, spreadsheets, logs |
+| `images` | photographs, scans, screenshots, diagrams |
+| `any` | no particular kind; declared alone |
+
+| View | The agent reads an input by default |
+|---|---|
+| `text` | as its decoded text, and as uploaded when it has none (a summariser of saved web pages wants their Markdown) |
+| `original` | as uploaded (a reviewer of a site's pages wants the HTML with its scripts); a PDF, an office document or an image is then base64 pages, so pair `original` with `documents` or `images` only when the agent works on the bytes |
+| `both` | each file's own default; the runner reads it exactly as leaving `view` out, and it tells the run setup and the Drafter that the agent uses both |
+
+| Rule | |
+|---|---|
+| the block | at least one of `kinds` and `view`; no other key (V12) |
+| `kinds` | from the list above, each once, at least one when present; `any` alone (V12) |
+| `view` | `text`, `original` or `both` (V12) |
+| schema | v2 only; a v1 manifest carrying `inputs` is refused (V1) |
+
+The default is only a default: the agent can still ask for any view an
+input has, so declaring `text` never hides an original. (Some inputs have
+one view: a file decoded out of a document inside an archive has only its
+text, and a file the malware check found, a refused file and `.git`
+internals have neither.) The kinds are for
+the run setup, which asks for them, and for the Drafter, which fills the
+block when it writes a QuickAgent. Neither grants anything: attaching a
+file is the grant, so the block is outside the capability contract, and a
+release that changes only its inputs asks no one to consent again. Write
+`guide.files` to match it.
+
+The runner sets the default view from the block once a CLI release
+carries agentry-cli#693; until then every input keeps its own default.
+The site's and the desktop's run setups show it with agentry-web#1235 and
+agentry-desktop#704. A CLI or desktop older than the core release that
+added the block refuses a manifest carrying one as an unknown field, and so
+does a hosted run until the sandbox hosts run a CLI that knows it, so use
+it once your tools and the hosted runner are current.
+
 ### `runtime`: informational hints
 
 | Field | Meaning |
