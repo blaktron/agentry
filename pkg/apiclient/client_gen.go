@@ -63,6 +63,27 @@ func (e AccountInstallQuarantineState) Valid() bool {
 	}
 }
 
+// Defines values for AgentForkState.
+const (
+	AgentForkStateCopying AgentForkState = "copying"
+	AgentForkStateFailed  AgentForkState = "failed"
+	AgentForkStateReady   AgentForkState = "ready"
+)
+
+// Valid indicates whether the value is a known member of the AgentForkState enum.
+func (e AgentForkState) Valid() bool {
+	switch e {
+	case AgentForkStateCopying:
+		return true
+	case AgentForkStateFailed:
+		return true
+	case AgentForkStateReady:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentQuarantineState.
 const (
 	AgentQuarantineStateBlocked     AgentQuarantineState = "blocked"
@@ -1305,6 +1326,24 @@ func (e ListAgentsParamsState) Valid() bool {
 	}
 }
 
+// Defines values for ListAgentsParamsForks.
+const (
+	ListAgentsParamsForksNone ListAgentsParamsForks = "none"
+	ListAgentsParamsForksOnly ListAgentsParamsForks = "only"
+)
+
+// Valid indicates whether the value is a known member of the ListAgentsParamsForks enum.
+func (e ListAgentsParamsForks) Valid() bool {
+	switch e {
+	case ListAgentsParamsForksNone:
+		return true
+	case ListAgentsParamsForksOnly:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListAgentsParamsSort.
 const (
 	ListAgentsParamsSortInstalls  ListAgentsParamsSort = "installs"
@@ -1869,6 +1908,18 @@ type Agent struct {
 	// DependencyAlerts Open dependency alerts on this agent's published versions (agentry#177). Present on GET /agents/{ns}/{name}.
 	DependencyAlerts *[]DependencyAlert `json:"dependencyAlerts,omitempty"`
 
+	// ForkCount Present on a public agent: how many forks of it exist. A count only; no read names a fork to the origin's publisher.
+	ForkCount *int `json:"forkCount,omitempty"`
+
+	// ForkDetail Present on a fork whose copy failed, saying why in words.
+	ForkDetail *string `json:"forkDetail,omitempty"`
+
+	// ForkState Present on a fork (agentry#943): `copying` until a worker has copied the repository and submitted the first version, `ready` after, `failed` with `forkDetail`.
+	ForkState *AgentForkState `json:"forkState,omitempty"`
+
+	// ForkedFrom What a fork was taken from (agentry#943). Kept for good: there is no detach.
+	ForkedFrom *ForkOrigin `json:"forkedFrom,omitempty"`
+
 	// GitHttpUrl Clone URL for the hosted repository (§6.1).
 	GitHttpUrl string `json:"gitHttpUrl"`
 
@@ -1896,6 +1947,9 @@ type Agent struct {
 	Summary    string          `json:"summary"`
 	Visibility AgentVisibility `json:"visibility"`
 }
+
+// AgentForkState Present on a fork (agentry#943): `copying` until a worker has copied the repository and submitted the first version, `ready` after, `failed` with `forkDetail`.
+type AgentForkState string
 
 // AgentQuarantineState defines model for Agent.QuarantineState.
 type AgentQuarantineState string
@@ -2311,6 +2365,17 @@ type EmailVerificationSent struct {
 
 	// SentTo The address the link went to.
 	SentTo string `json:"sentTo"`
+}
+
+// ForkOrigin What a fork was taken from (agentry#943). Kept for good: there is no detach.
+type ForkOrigin struct {
+	// Available Whether the origin is still public, not deleted and not blocked, which is when a client may link it. A quarantined origin is available: its page says it is quarantined.
+	Available bool   `json:"available"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+
+	// Version The origin's published version the fork was taken from.
+	Version string `json:"version"`
 }
 
 // Invitation defines model for Invitation.
@@ -3533,12 +3598,18 @@ type ListAgentsParams struct {
 	// State `active` lists agents that are not retired, `retired` only the retired ones; absent, both.
 	State *ListAgentsParamsState `form:"state,omitempty" json:"state,omitempty"`
 
+	// Forks `only` lists the namespace's forks, `none` the agents that are not forks; absent, both (agentry#943).
+	Forks *ListAgentsParamsForks `form:"forks,omitempty" json:"forks,omitempty"`
+
 	// Sort `name` (the default), `newest` (created), `installs` (the last 30 days) or `submitted` (the newest submission of any version).
 	Sort *ListAgentsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 }
 
 // ListAgentsParamsState defines parameters for ListAgents.
 type ListAgentsParamsState string
+
+// ListAgentsParamsForks defines parameters for ListAgents.
+type ListAgentsParamsForks string
 
 // ListAgentsParamsSort defines parameters for ListAgents.
 type ListAgentsParamsSort string
@@ -3565,7 +3636,7 @@ type UpdateAgentJSONBody struct {
 	PipelineSkip *bool   `json:"pipelineSkip,omitempty"`
 	Summary      *string `json:"summary,omitempty"`
 
-	// Visibility `public` is refused on a retired agent (`409 agent-retired`): Restore is how a retired agent comes back.
+	// Visibility `public` is refused on a retired agent (`409 agent-retired`): Restore is how a retired agent comes back. It is refused on a fork for good (`409 fork-stays-private`, agentry#943).
 	Visibility *UpdateAgentJSONBodyVisibility `json:"visibility,omitempty"`
 }
 
@@ -3589,6 +3660,15 @@ type ListAgentActivityParams struct {
 
 	// Limit Page size; values outside the range are clamped, not rejected.
 	Limit *Limit100 `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ForkAgentJSONBody defines parameters for ForkAgent.
+type ForkAgentJSONBody struct {
+	// Name The fork's name; the origin's when absent.
+	Name *string `json:"name,omitempty"`
+
+	// Namespace The namespace the fork goes into.
+	Namespace string `json:"namespace"`
 }
 
 // SetAgentTeamGrantJSONBody defines parameters for SetAgentTeamGrant.
@@ -3965,6 +4045,9 @@ type UpdateAgentJSONRequestBody UpdateAgentJSONBody
 // ReportAbuseJSONRequestBody defines body for ReportAbuse for application/json ContentType.
 type ReportAbuseJSONRequestBody ReportAbuseJSONBody
 
+// ForkAgentJSONRequestBody defines body for ForkAgent for application/json ContentType.
+type ForkAgentJSONRequestBody ForkAgentJSONBody
+
 // SetAgentTeamGrantJSONRequestBody defines body for SetAgentTeamGrant for application/json ContentType.
 type SetAgentTeamGrantJSONRequestBody SetAgentTeamGrantJSONBody
 
@@ -4206,7 +4289,7 @@ type ClientInterface interface {
 
 	// ListAgents List agents in a namespace (public ones for everyone).
 	//
-	// Public agents for everyone; the private ones too for the namespace's owner and the active members of its organization. A deleted agent is never listed. The publisher's page (agentry#942) narrows and orders the list with `q`, `state` and `sort`, and each agent carries `installs30d`, `lastSubmittedAt` and, when it is retired, `retiredAt`.
+	// Public agents for everyone; the private ones too for the namespace's owner and the active members of its organization. A deleted agent is never listed. The publisher's page (agentry#942) narrows and orders the list with `q`, `state`, `forks` (agentry#943) and `sort`, and each agent carries `installs30d`, `lastSubmittedAt`, `forkCount` on a public agent, `forkedFrom` and `forkState` on a fork and, when it is retired, `retiredAt`.
 	//
 	// Corresponds with GET /agents (the `ListAgents` operationId).
 	ListAgents(ctx context.Context, params *ListAgentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4277,6 +4360,24 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /agents/{ns}/{name}/activity (the `ListAgentActivity` operationId).
 	ListAgentActivity(ctx context.Context, ns Namespace, name AgentName, params *ListAgentActivityParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ForkAgentWithBody Fork a public agent into a namespace the caller may create in (agentry#943).
+	//
+	// Makes a private copy of a public agent: a new agent in `namespace`, under the origin's name unless `name` gives another, that records the origin and the published version it was taken from, for good. A fork is never public (`PATCH` to public answers `409 fork-stays-private`). The fork is answered `202` with `forkState: copying`: a worker then copies the origin's repository (every branch and tag, objects copied rather than shared), writes one commit, "Fork of ns/name@version", that renames the manifest into the fork's namespace, tags it with the origin's version and submits it through the pipeline like any submission, charged like one. `forkState` is then `ready`, or `failed` with `forkDetail` saying why. The origin must be readable, public, neither quarantined nor blocked, and have a published version; the caller must be able to create a private agent in `namespace` (its owner, or an active member of the organization), within its agent quota and private-agent cap. A name the namespace already has answers `409 name-taken`; one a deleted agent holds, `409 name-held`.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /agents/{ns}/{name}/fork (the `ForkAgent` operationId).
+	ForkAgentWithBody(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ForkAgent Fork a public agent into a namespace the caller may create in (agentry#943).
+	//
+	// Makes a private copy of a public agent: a new agent in `namespace`, under the origin's name unless `name` gives another, that records the origin and the published version it was taken from, for good. A fork is never public (`PATCH` to public answers `409 fork-stays-private`). The fork is answered `202` with `forkState: copying`: a worker then copies the origin's repository (every branch and tag, objects copied rather than shared), writes one commit, "Fork of ns/name@version", that renames the manifest into the fork's namespace, tags it with the origin's version and submits it through the pipeline like any submission, charged like one. `forkState` is then `ready`, or `failed` with `forkDetail` saying why. The origin must be readable, public, neither quarantined nor blocked, and have a published version; the caller must be able to create a private agent in `namespace` (its owner, or an active member of the organization), within its agent quota and private-agent cap. A name the namespace already has answers `409 name-taken`; one a deleted agent holds, `409 name-held`.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /agents/{ns}/{name}/fork (the `ForkAgent` operationId).
+	ForkAgent(ctx context.Context, ns Namespace, name AgentName, body ForkAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListAgentGrants List explicit grants (maintain).
 	//
@@ -5794,7 +5895,7 @@ func (c *Client) GetAdvisory(ctx context.Context, advisoryId openapi_types.UUID,
 
 // ListAgents List agents in a namespace (public ones for everyone).
 //
-// Public agents for everyone; the private ones too for the namespace's owner and the active members of its organization. A deleted agent is never listed. The publisher's page (agentry#942) narrows and orders the list with `q`, `state` and `sort`, and each agent carries `installs30d`, `lastSubmittedAt` and, when it is retired, `retiredAt`.
+// Public agents for everyone; the private ones too for the namespace's owner and the active members of its organization. A deleted agent is never listed. The publisher's page (agentry#942) narrows and orders the list with `q`, `state`, `forks` (agentry#943) and `sort`, and each agent carries `installs30d`, `lastSubmittedAt`, `forkCount` on a public agent, `forkedFrom` and `forkState` on a fork and, when it is retired, `retiredAt`.
 //
 // Corresponds with GET /agents (the `ListAgents` operationId).
 func (c *Client) ListAgents(ctx context.Context, params *ListAgentsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5956,6 +6057,44 @@ func (c *Client) ReportAbuse(ctx context.Context, ns Namespace, name AgentName, 
 // Corresponds with GET /agents/{ns}/{name}/activity (the `ListAgentActivity` operationId).
 func (c *Client) ListAgentActivity(ctx context.Context, ns Namespace, name AgentName, params *ListAgentActivityParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListAgentActivityRequest(c.Server, ns, name, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ForkAgentWithBody Fork a public agent into a namespace the caller may create in (agentry#943).
+//
+// Makes a private copy of a public agent: a new agent in `namespace`, under the origin's name unless `name` gives another, that records the origin and the published version it was taken from, for good. A fork is never public (`PATCH` to public answers `409 fork-stays-private`). The fork is answered `202` with `forkState: copying`: a worker then copies the origin's repository (every branch and tag, objects copied rather than shared), writes one commit, "Fork of ns/name@version", that renames the manifest into the fork's namespace, tags it with the origin's version and submits it through the pipeline like any submission, charged like one. `forkState` is then `ready`, or `failed` with `forkDetail` saying why. The origin must be readable, public, neither quarantined nor blocked, and have a published version; the caller must be able to create a private agent in `namespace` (its owner, or an active member of the organization), within its agent quota and private-agent cap. A name the namespace already has answers `409 name-taken`; one a deleted agent holds, `409 name-held`.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /agents/{ns}/{name}/fork (the `ForkAgent` operationId).
+func (c *Client) ForkAgentWithBody(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewForkAgentRequestWithBody(c.Server, ns, name, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ForkAgent Fork a public agent into a namespace the caller may create in (agentry#943).
+//
+// Makes a private copy of a public agent: a new agent in `namespace`, under the origin's name unless `name` gives another, that records the origin and the published version it was taken from, for good. A fork is never public (`PATCH` to public answers `409 fork-stays-private`). The fork is answered `202` with `forkState: copying`: a worker then copies the origin's repository (every branch and tag, objects copied rather than shared), writes one commit, "Fork of ns/name@version", that renames the manifest into the fork's namespace, tags it with the origin's version and submits it through the pipeline like any submission, charged like one. `forkState` is then `ready`, or `failed` with `forkDetail` saying why. The origin must be readable, public, neither quarantined nor blocked, and have a published version; the caller must be able to create a private agent in `namespace` (its owner, or an active member of the organization), within its agent quota and private-agent cap. A name the namespace already has answers `409 name-taken`; one a deleted agent holds, `409 name-held`.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /agents/{ns}/{name}/fork (the `ForkAgent` operationId).
+func (c *Client) ForkAgent(ctx context.Context, ns Namespace, name AgentName, body ForkAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewForkAgentRequest(c.Server, ns, name, body)
 	if err != nil {
 		return nil, err
 	}
@@ -9769,6 +9908,18 @@ func NewListAgentsRequest(server string, params *ListAgentsParams) (*http.Reques
 
 		}
 
+		if params.Forks != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "forks", *params.Forks, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.Sort != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
@@ -10128,6 +10279,60 @@ func NewListAgentActivityRequest(server string, ns Namespace, name AgentName, pa
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewForkAgentRequest calls the generic ForkAgent builder with application/json body
+func NewForkAgentRequest(server string, ns Namespace, name AgentName, body ForkAgentJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewForkAgentRequestWithBody(server, ns, name, "application/json", bodyReader)
+}
+
+// NewForkAgentRequestWithBody constructs an http.Request for the ForkAgent method, with any body, and a specified content type
+func NewForkAgentRequestWithBody(server string, ns Namespace, name AgentName, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/fork", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -17333,7 +17538,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListAgentsWithResponse List agents in a namespace (public ones for everyone).
 	//
-	// Public agents for everyone; the private ones too for the namespace's owner and the active members of its organization. A deleted agent is never listed. The publisher's page (agentry#942) narrows and orders the list with `q`, `state` and `sort`, and each agent carries `installs30d`, `lastSubmittedAt` and, when it is retired, `retiredAt`.
+	// Public agents for everyone; the private ones too for the namespace's owner and the active members of its organization. A deleted agent is never listed. The publisher's page (agentry#942) narrows and orders the list with `q`, `state`, `forks` (agentry#943) and `sort`, and each agent carries `installs30d`, `lastSubmittedAt`, `forkCount` on a public agent, `forkedFrom` and `forkState` on a fork and, when it is retired, `retiredAt`.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -17412,6 +17617,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /agents/{ns}/{name}/activity (the `ListAgentActivity` operationId).
 	ListAgentActivityWithResponse(ctx context.Context, ns Namespace, name AgentName, params *ListAgentActivityParams, reqEditors ...RequestEditorFn) (*ListAgentActivityResponse, error)
+
+	// ForkAgentWithBodyWithResponse Fork a public agent into a namespace the caller may create in (agentry#943).
+	//
+	// Makes a private copy of a public agent: a new agent in `namespace`, under the origin's name unless `name` gives another, that records the origin and the published version it was taken from, for good. A fork is never public (`PATCH` to public answers `409 fork-stays-private`). The fork is answered `202` with `forkState: copying`: a worker then copies the origin's repository (every branch and tag, objects copied rather than shared), writes one commit, "Fork of ns/name@version", that renames the manifest into the fork's namespace, tags it with the origin's version and submits it through the pipeline like any submission, charged like one. `forkState` is then `ready`, or `failed` with `forkDetail` saying why. The origin must be readable, public, neither quarantined nor blocked, and have a published version; the caller must be able to create a private agent in `namespace` (its owner, or an active member of the organization), within its agent quota and private-agent cap. A name the namespace already has answers `409 name-taken`; one a deleted agent holds, `409 name-held`.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /agents/{ns}/{name}/fork (the `ForkAgent` operationId).
+	ForkAgentWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ForkAgentResponse, error)
+
+	// ForkAgentWithResponse Fork a public agent into a namespace the caller may create in (agentry#943).
+	//
+	// Makes a private copy of a public agent: a new agent in `namespace`, under the origin's name unless `name` gives another, that records the origin and the published version it was taken from, for good. A fork is never public (`PATCH` to public answers `409 fork-stays-private`). The fork is answered `202` with `forkState: copying`: a worker then copies the origin's repository (every branch and tag, objects copied rather than shared), writes one commit, "Fork of ns/name@version", that renames the manifest into the fork's namespace, tags it with the origin's version and submits it through the pipeline like any submission, charged like one. `forkState` is then `ready`, or `failed` with `forkDetail` saying why. The origin must be readable, public, neither quarantined nor blocked, and have a published version; the caller must be able to create a private agent in `namespace` (its owner, or an active member of the organization), within its agent quota and private-agent cap. A name the namespace already has answers `409 name-taken`; one a deleted agent holds, `409 name-held`.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /agents/{ns}/{name}/fork (the `ForkAgent` operationId).
+	ForkAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, body ForkAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*ForkAgentResponse, error)
 
 	// ListAgentGrantsWithResponse List explicit grants (maintain).
 	//
@@ -19542,6 +19765,54 @@ func (r ListAgentActivityResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListAgentActivityResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ForkAgentResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *Agent
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r ForkAgentResponse) GetJSON202() *Agent {
+	return r.JSON202
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ForkAgentResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ForkAgentResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ForkAgentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ForkAgentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ForkAgentResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -27323,7 +27594,7 @@ func (c *ClientWithResponses) GetAdvisoryWithResponse(ctx context.Context, advis
 
 // ListAgentsWithResponse List agents in a namespace (public ones for everyone).
 //
-// Public agents for everyone; the private ones too for the namespace's owner and the active members of its organization. A deleted agent is never listed. The publisher's page (agentry#942) narrows and orders the list with `q`, `state` and `sort`, and each agent carries `installs30d`, `lastSubmittedAt` and, when it is retired, `retiredAt`.
+// Public agents for everyone; the private ones too for the namespace's owner and the active members of its organization. A deleted agent is never listed. The publisher's page (agentry#942) narrows and orders the list with `q`, `state`, `forks` (agentry#943) and `sort`, and each agent carries `installs30d`, `lastSubmittedAt`, `forkCount` on a public agent, `forkedFrom` and `forkState` on a fork and, when it is retired, `retiredAt`.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -27461,6 +27732,36 @@ func (c *ClientWithResponses) ListAgentActivityWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseListAgentActivityResponse(rsp)
+}
+
+// ForkAgentWithBodyWithResponse Fork a public agent into a namespace the caller may create in (agentry#943).
+//
+// Makes a private copy of a public agent: a new agent in `namespace`, under the origin's name unless `name` gives another, that records the origin and the published version it was taken from, for good. A fork is never public (`PATCH` to public answers `409 fork-stays-private`). The fork is answered `202` with `forkState: copying`: a worker then copies the origin's repository (every branch and tag, objects copied rather than shared), writes one commit, "Fork of ns/name@version", that renames the manifest into the fork's namespace, tags it with the origin's version and submits it through the pipeline like any submission, charged like one. `forkState` is then `ready`, or `failed` with `forkDetail` saying why. The origin must be readable, public, neither quarantined nor blocked, and have a published version; the caller must be able to create a private agent in `namespace` (its owner, or an active member of the organization), within its agent quota and private-agent cap. A name the namespace already has answers `409 name-taken`; one a deleted agent holds, `409 name-held`.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /agents/{ns}/{name}/fork (the `ForkAgent` operationId).
+func (c *ClientWithResponses) ForkAgentWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ForkAgentResponse, error) {
+	rsp, err := c.ForkAgentWithBody(ctx, ns, name, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseForkAgentResponse(rsp)
+}
+
+// ForkAgentWithResponse Fork a public agent into a namespace the caller may create in (agentry#943).
+//
+// Makes a private copy of a public agent: a new agent in `namespace`, under the origin's name unless `name` gives another, that records the origin and the published version it was taken from, for good. A fork is never public (`PATCH` to public answers `409 fork-stays-private`). The fork is answered `202` with `forkState: copying`: a worker then copies the origin's repository (every branch and tag, objects copied rather than shared), writes one commit, "Fork of ns/name@version", that renames the manifest into the fork's namespace, tags it with the origin's version and submits it through the pipeline like any submission, charged like one. `forkState` is then `ready`, or `failed` with `forkDetail` saying why. The origin must be readable, public, neither quarantined nor blocked, and have a published version; the caller must be able to create a private agent in `namespace` (its owner, or an active member of the organization), within its agent quota and private-agent cap. A name the namespace already has answers `409 name-taken`; one a deleted agent holds, `409 name-held`.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /agents/{ns}/{name}/fork (the `ForkAgent` operationId).
+func (c *ClientWithResponses) ForkAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, body ForkAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*ForkAgentResponse, error) {
+	rsp, err := c.ForkAgent(ctx, ns, name, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseForkAgentResponse(rsp)
 }
 
 // ListAgentGrantsWithResponse List explicit grants (maintain).
@@ -30751,6 +31052,45 @@ func ParseListAgentActivityResponse(rsp *http.Response) (*ListAgentActivityRespo
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseForkAgentResponse parses an HTTP response from a ForkAgentWithResponse call
+func ParseForkAgentResponse(rsp *http.Response) (*ForkAgentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ForkAgentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest Agent
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case rsp.StatusCode == 409:
+		break // No content-type
+
+	case rsp.StatusCode == 422:
+		break // No content-type
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

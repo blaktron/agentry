@@ -70,6 +70,11 @@ type Agent struct {
 	RetiredAt                *time.Time  `json:"retired_at"`
 	RetiredVisibility        *string     `json:"retired_visibility"`
 	DeletedAt                *time.Time  `json:"deleted_at"`
+	ForkedFromAgentID        *uuid.UUID  `json:"forked_from_agent_id"`
+	ForkedFromVersionID      *uuid.UUID  `json:"forked_from_version_id"`
+	ForkedBy                 *uuid.UUID  `json:"forked_by"`
+	ForkState                *string     `json:"fork_state"`
+	ForkDetail               string      `json:"fork_detail"`
 }
 
 type AgentTeamGrant struct {
