@@ -59,6 +59,19 @@ func (q *Queries) CountAgentsInNamespace(ctx context.Context, namespaceID uuid.U
 	return count, err
 }
 
+const countForks = `-- name: CountForks :one
+SELECT count(*) FROM agents WHERE forked_from_agent_id = $1::uuid AND deleted_at IS NULL
+`
+
+// How many forks an agent has: a count only, never which (agentry#943,
+// the plan's invariant 5). A fork deleted as a tombstone is not counted.
+func (q *Queries) CountForks(ctx context.Context, id uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countForks, id)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countPrivateAgentsInNamespace = `-- name: CountPrivateAgentsInNamespace :one
 SELECT count(*) FROM agents
 WHERE namespace_id = $1 AND visibility = 'private'
@@ -173,7 +186,7 @@ func (q *Queries) CountUnscannedVersionsStanding(ctx context.Context, agentID uu
 const createAgent = `-- name: CreateAgent :one
 INSERT INTO agents (id, namespace_id, name, visibility, repo_id, summary, modes)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, namespace_id, name, visibility, repo_id, summary, latest_published_version_id, quarantine_state, auto_publish_tags, search_tsv, created_at, updated_at, readme_text, allow_force_push, modes, pipeline_skip, builtin, retired_at, retired_visibility, deleted_at
+RETURNING id, namespace_id, name, visibility, repo_id, summary, latest_published_version_id, quarantine_state, auto_publish_tags, search_tsv, created_at, updated_at, readme_text, allow_force_push, modes, pipeline_skip, builtin, retired_at, retired_visibility, deleted_at, forked_from_agent_id, forked_from_version_id, forked_by, fork_state, fork_detail
 `
 
 type CreateAgentParams struct {
@@ -218,6 +231,77 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent
 		&i.RetiredAt,
 		&i.RetiredVisibility,
 		&i.DeletedAt,
+		&i.ForkedFromAgentID,
+		&i.ForkedFromVersionID,
+		&i.ForkedBy,
+		&i.ForkState,
+		&i.ForkDetail,
+	)
+	return i, err
+}
+
+const createForkAgent = `-- name: CreateForkAgent :one
+INSERT INTO agents (id, namespace_id, name, visibility, repo_id, summary, modes,
+                    forked_from_agent_id, forked_from_version_id, forked_by, fork_state)
+VALUES ($1, $2, $3, 'private', $4, $5, $6,
+        $7, $8, $9, 'copying')
+RETURNING id, namespace_id, name, visibility, repo_id, summary, latest_published_version_id, quarantine_state, auto_publish_tags, search_tsv, created_at, updated_at, readme_text, allow_force_push, modes, pipeline_skip, builtin, retired_at, retired_visibility, deleted_at, forked_from_agent_id, forked_from_version_id, forked_by, fork_state, fork_detail
+`
+
+type CreateForkAgentParams struct {
+	ID                  uuid.UUID  `json:"id"`
+	NamespaceID         uuid.UUID  `json:"namespace_id"`
+	Name                string     `json:"name"`
+	RepoID              uuid.UUID  `json:"repo_id"`
+	Summary             string     `json:"summary"`
+	Modes               []string   `json:"modes"`
+	ForkedFromAgentID   *uuid.UUID `json:"forked_from_agent_id"`
+	ForkedFromVersionID *uuid.UUID `json:"forked_from_version_id"`
+	ForkedBy            *uuid.UUID `json:"forked_by"`
+}
+
+// A fork's row (agentry#943): private, with its origin and the version it
+// was taken from, copying until a worker has copied the repository and
+// submitted the first version.
+func (q *Queries) CreateForkAgent(ctx context.Context, arg CreateForkAgentParams) (Agent, error) {
+	row := q.db.QueryRow(ctx, createForkAgent,
+		arg.ID,
+		arg.NamespaceID,
+		arg.Name,
+		arg.RepoID,
+		arg.Summary,
+		arg.Modes,
+		arg.ForkedFromAgentID,
+		arg.ForkedFromVersionID,
+		arg.ForkedBy,
+	)
+	var i Agent
+	err := row.Scan(
+		&i.ID,
+		&i.NamespaceID,
+		&i.Name,
+		&i.Visibility,
+		&i.RepoID,
+		&i.Summary,
+		&i.LatestPublishedVersionID,
+		&i.QuarantineState,
+		&i.AutoPublishTags,
+		&i.SearchTsv,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ReadmeText,
+		&i.AllowForcePush,
+		&i.Modes,
+		&i.PipelineSkip,
+		&i.Builtin,
+		&i.RetiredAt,
+		&i.RetiredVisibility,
+		&i.DeletedAt,
+		&i.ForkedFromAgentID,
+		&i.ForkedFromVersionID,
+		&i.ForkedBy,
+		&i.ForkState,
+		&i.ForkDetail,
 	)
 	return i, err
 }
@@ -230,6 +314,30 @@ INSERT INTO repos (id) VALUES ($1) RETURNING id, default_branch, size_bytes, las
 // Agents, repos, and per-agent grants (M2/WG-C; grows in M3).
 func (q *Queries) CreateRepo(ctx context.Context, id uuid.UUID) (Repo, error) {
 	row := q.db.QueryRow(ctx, createRepo, id)
+	var i Repo
+	err := row.Scan(
+		&i.ID,
+		&i.DefaultBranch,
+		&i.SizeBytes,
+		&i.LastPushAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createRepoWithBranch = `-- name: CreateRepoWithBranch :one
+INSERT INTO repos (id, default_branch) VALUES ($1, $2) RETURNING id, default_branch, size_bytes, last_push_at, created_at
+`
+
+type CreateRepoWithBranchParams struct {
+	ID            uuid.UUID `json:"id"`
+	DefaultBranch string    `json:"default_branch"`
+}
+
+// A fork's repository row (agentry#943), on the origin's default branch so
+// the copied history keeps its trunk's name.
+func (q *Queries) CreateRepoWithBranch(ctx context.Context, arg CreateRepoWithBranchParams) (Repo, error) {
+	row := q.db.QueryRow(ctx, createRepoWithBranch, arg.ID, arg.DefaultBranch)
 	var i Repo
 	err := row.Scan(
 		&i.ID,
@@ -297,7 +405,7 @@ func (q *Queries) DeleteRepoByID(ctx context.Context, id uuid.UUID) error {
 }
 
 const getAgentByID = `-- name: GetAgentByID :one
-SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, a.builtin, a.retired_at, a.retired_visibility, a.deleted_at, h.handle AS namespace, h.kind AS namespace_kind
+SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, a.builtin, a.retired_at, a.retired_visibility, a.deleted_at, a.forked_from_agent_id, a.forked_from_version_id, a.forked_by, a.fork_state, a.fork_detail, h.handle AS namespace, h.kind AS namespace_kind
 FROM agents a JOIN handles h ON h.id = a.namespace_id
 WHERE a.id = $1
 `
@@ -323,6 +431,11 @@ type GetAgentByIDRow struct {
 	RetiredAt                *time.Time  `json:"retired_at"`
 	RetiredVisibility        *string     `json:"retired_visibility"`
 	DeletedAt                *time.Time  `json:"deleted_at"`
+	ForkedFromAgentID        *uuid.UUID  `json:"forked_from_agent_id"`
+	ForkedFromVersionID      *uuid.UUID  `json:"forked_from_version_id"`
+	ForkedBy                 *uuid.UUID  `json:"forked_by"`
+	ForkState                *string     `json:"fork_state"`
+	ForkDetail               string      `json:"fork_detail"`
 	Namespace                string      `json:"namespace"`
 	NamespaceKind            string      `json:"namespace_kind"`
 }
@@ -351,6 +464,11 @@ func (q *Queries) GetAgentByID(ctx context.Context, id uuid.UUID) (GetAgentByIDR
 		&i.RetiredAt,
 		&i.RetiredVisibility,
 		&i.DeletedAt,
+		&i.ForkedFromAgentID,
+		&i.ForkedFromVersionID,
+		&i.ForkedBy,
+		&i.ForkState,
+		&i.ForkDetail,
 		&i.Namespace,
 		&i.NamespaceKind,
 	)
@@ -358,10 +476,13 @@ func (q *Queries) GetAgentByID(ctx context.Context, id uuid.UUID) (GetAgentByIDR
 }
 
 const getAgentByPath = `-- name: GetAgentByPath :one
-SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, a.builtin, a.retired_at, a.retired_visibility, a.deleted_at, h.handle AS namespace, h.kind AS namespace_kind, r.default_branch, r.size_bytes
+SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, a.builtin, a.retired_at, a.retired_visibility, a.deleted_at, a.forked_from_agent_id, a.forked_from_version_id, a.forked_by, a.fork_state, a.fork_detail, h.handle AS namespace, h.kind AS namespace_kind, r.default_branch, r.size_bytes,
+       oa.namespace_id AS origin_namespace_id, oh.kind AS origin_namespace_kind
 FROM agents a
 JOIN handles h ON h.id = a.namespace_id
 JOIN repos r ON r.id = a.repo_id
+LEFT JOIN agents oa ON oa.id = a.forked_from_agent_id
+LEFT JOIN handles oh ON oh.id = oa.namespace_id
 WHERE h.handle = $1 AND a.name = $2
   AND (a.deleted_at IS NULL OR $3::boolean)
 `
@@ -393,15 +514,24 @@ type GetAgentByPathRow struct {
 	RetiredAt                *time.Time  `json:"retired_at"`
 	RetiredVisibility        *string     `json:"retired_visibility"`
 	DeletedAt                *time.Time  `json:"deleted_at"`
+	ForkedFromAgentID        *uuid.UUID  `json:"forked_from_agent_id"`
+	ForkedFromVersionID      *uuid.UUID  `json:"forked_from_version_id"`
+	ForkedBy                 *uuid.UUID  `json:"forked_by"`
+	ForkState                *string     `json:"fork_state"`
+	ForkDetail               string      `json:"fork_detail"`
 	Namespace                string      `json:"namespace"`
 	NamespaceKind            string      `json:"namespace_kind"`
 	DefaultBranch            string      `json:"default_branch"`
 	SizeBytes                int64       `json:"size_bytes"`
+	OriginNamespaceID        *uuid.UUID  `json:"origin_namespace_id"`
+	OriginNamespaceKind      *string     `json:"origin_namespace_kind"`
 }
 
 // A deleted agent's tombstone (agentry#942) is absent from every read path
 // that asks for it by name; include_deleted is the platform staff's door to
 // it, for the trust & safety actions only.
+// A fork carries its origin's namespace (the origin's publisher) for the
+// extension seam (agentry#943).
 func (q *Queries) GetAgentByPath(ctx context.Context, arg GetAgentByPathParams) (GetAgentByPathRow, error) {
 	row := q.db.QueryRow(ctx, getAgentByPath, arg.Handle, arg.Name, arg.IncludeDeleted)
 	var i GetAgentByPathRow
@@ -426,16 +556,23 @@ func (q *Queries) GetAgentByPath(ctx context.Context, arg GetAgentByPathParams) 
 		&i.RetiredAt,
 		&i.RetiredVisibility,
 		&i.DeletedAt,
+		&i.ForkedFromAgentID,
+		&i.ForkedFromVersionID,
+		&i.ForkedBy,
+		&i.ForkState,
+		&i.ForkDetail,
 		&i.Namespace,
 		&i.NamespaceKind,
 		&i.DefaultBranch,
 		&i.SizeBytes,
+		&i.OriginNamespaceID,
+		&i.OriginNamespaceKind,
 	)
 	return i, err
 }
 
 const getAgentForUpdate = `-- name: GetAgentForUpdate :one
-SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, a.builtin, a.retired_at, a.retired_visibility, a.deleted_at, h.handle AS namespace, h.kind AS namespace_kind
+SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, a.builtin, a.retired_at, a.retired_visibility, a.deleted_at, a.forked_from_agent_id, a.forked_from_version_id, a.forked_by, a.fork_state, a.fork_detail, h.handle AS namespace, h.kind AS namespace_kind
 FROM agents a JOIN handles h ON h.id = a.namespace_id
 WHERE a.id = $1
 FOR UPDATE OF a
@@ -462,6 +599,11 @@ type GetAgentForUpdateRow struct {
 	RetiredAt                *time.Time  `json:"retired_at"`
 	RetiredVisibility        *string     `json:"retired_visibility"`
 	DeletedAt                *time.Time  `json:"deleted_at"`
+	ForkedFromAgentID        *uuid.UUID  `json:"forked_from_agent_id"`
+	ForkedFromVersionID      *uuid.UUID  `json:"forked_from_version_id"`
+	ForkedBy                 *uuid.UUID  `json:"forked_by"`
+	ForkState                *string     `json:"fork_state"`
+	ForkDetail               string      `json:"fork_detail"`
 	Namespace                string      `json:"namespace"`
 	NamespaceKind            string      `json:"namespace_kind"`
 }
@@ -493,6 +635,11 @@ func (q *Queries) GetAgentForUpdate(ctx context.Context, id uuid.UUID) (GetAgent
 		&i.RetiredAt,
 		&i.RetiredVisibility,
 		&i.DeletedAt,
+		&i.ForkedFromAgentID,
+		&i.ForkedFromVersionID,
+		&i.ForkedBy,
+		&i.ForkState,
+		&i.ForkDetail,
 		&i.Namespace,
 		&i.NamespaceKind,
 	)
@@ -513,6 +660,39 @@ func (q *Queries) GetAgentUserGrant(ctx context.Context, arg GetAgentUserGrantPa
 	var role string
 	err := row.Scan(&role)
 	return role, err
+}
+
+const getForkOrigin = `-- name: GetForkOrigin :one
+SELECT oh.handle AS origin_namespace, oa.name AS origin_name, ov.version AS origin_version,
+       (oa.visibility = 'public' AND oa.deleted_at IS NULL AND oa.quarantine_state <> 'blocked')::boolean AS origin_public
+FROM agents f
+JOIN agents oa ON oa.id = f.forked_from_agent_id
+JOIN handles oh ON oh.id = oa.namespace_id
+JOIN agent_versions ov ON ov.id = f.forked_from_version_id
+WHERE f.id = $1
+`
+
+type GetForkOriginRow struct {
+	OriginNamespace string `json:"origin_namespace"`
+	OriginName      string `json:"origin_name"`
+	OriginVersion   string `json:"origin_version"`
+	OriginPublic    bool   `json:"origin_public"`
+}
+
+// What a fork's read says of its origin (agentry#943): the origin's path and
+// the version the fork was taken from, and whether the origin can still be
+// read by anyone (public, not deleted and not blocked), which is when a
+// page may link it.
+func (q *Queries) GetForkOrigin(ctx context.Context, id uuid.UUID) (GetForkOriginRow, error) {
+	row := q.db.QueryRow(ctx, getForkOrigin, id)
+	var i GetForkOriginRow
+	err := row.Scan(
+		&i.OriginNamespace,
+		&i.OriginName,
+		&i.OriginVersion,
+		&i.OriginPublic,
+	)
+	return i, err
 }
 
 const getRepo = `-- name: GetRepo :one
@@ -602,10 +782,16 @@ func (q *Queries) ListAgentTeamGrantsForUser(ctx context.Context, arg ListAgentT
 }
 
 const listAgentsByNamespace = `-- name: ListAgentsByNamespace :many
-SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, a.builtin, a.retired_at, a.retired_visibility, a.deleted_at, h.handle AS namespace,
+SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, a.builtin, a.retired_at, a.retired_visibility, a.deleted_at, a.forked_from_agent_id, a.forked_from_version_id, a.forked_by, a.fork_state, a.fork_detail, h.handle AS namespace,
        coalesce(d.installs, 0)::bigint AS installs,
-       ls.created_at AS last_submitted_at
+       ls.created_at AS last_submitted_at,
+       oh.handle AS origin_namespace, oa.name AS origin_name, ov.version AS origin_version,
+       (oa.visibility = 'public' AND oa.deleted_at IS NULL AND oa.quarantine_state <> 'blocked') AS origin_public,
+       (SELECT count(*) FROM agents fk WHERE fk.forked_from_agent_id = a.id AND fk.deleted_at IS NULL)::bigint AS fork_count
 FROM agents a JOIN handles h ON h.id = a.namespace_id
+LEFT JOIN agents oa ON oa.id = a.forked_from_agent_id
+LEFT JOIN handles oh ON oh.id = oa.namespace_id
+LEFT JOIN agent_versions ov ON ov.id = a.forked_from_version_id
 LEFT JOIN orgs o ON o.id = a.namespace_id
 LEFT JOIN (
   SELECT agent_id, sum(installs) AS installs
@@ -623,12 +809,15 @@ WHERE h.handle = $1
        OR ($3::text = 'active' AND a.retired_at IS NULL)
        OR ($3::text = 'retired' AND a.retired_at IS NOT NULL))
   AND ($4::text = ''
-       OR a.name::text ILIKE '%' || $4::text || '%'
-       OR a.summary ILIKE '%' || $4::text || '%')
+       OR ($4::text = 'only' AND a.forked_from_agent_id IS NOT NULL)
+       OR ($4::text = 'none' AND a.forked_from_agent_id IS NULL))
+  AND ($5::text = ''
+       OR a.name::text ILIKE '%' || $5::text || '%'
+       OR a.summary ILIKE '%' || $5::text || '%')
 ORDER BY
-  CASE WHEN $5::text = 'newest' THEN a.created_at END DESC NULLS LAST,
-  CASE WHEN $5::text = 'installs' THEN coalesce(d.installs, 0) END DESC NULLS LAST,
-  CASE WHEN $5::text = 'submitted' THEN ls.created_at END DESC NULLS LAST,
+  CASE WHEN $6::text = 'newest' THEN a.created_at END DESC NULLS LAST,
+  CASE WHEN $6::text = 'installs' THEN coalesce(d.installs, 0) END DESC NULLS LAST,
+  CASE WHEN $6::text = 'submitted' THEN ls.created_at END DESC NULLS LAST,
   a.name, a.id
 `
 
@@ -636,6 +825,7 @@ type ListAgentsByNamespaceParams struct {
 	Handle         string `json:"handle"`
 	IncludePrivate bool   `json:"include_private"`
 	State          string `json:"state"`
+	Forks          string `json:"forks"`
 	Query          string `json:"query"`
 	Sort           string `json:"sort"`
 }
@@ -661,9 +851,19 @@ type ListAgentsByNamespaceRow struct {
 	RetiredAt                *time.Time  `json:"retired_at"`
 	RetiredVisibility        *string     `json:"retired_visibility"`
 	DeletedAt                *time.Time  `json:"deleted_at"`
+	ForkedFromAgentID        *uuid.UUID  `json:"forked_from_agent_id"`
+	ForkedFromVersionID      *uuid.UUID  `json:"forked_from_version_id"`
+	ForkedBy                 *uuid.UUID  `json:"forked_by"`
+	ForkState                *string     `json:"fork_state"`
+	ForkDetail               string      `json:"fork_detail"`
 	Namespace                string      `json:"namespace"`
 	Installs                 int64       `json:"installs"`
 	LastSubmittedAt          *time.Time  `json:"last_submitted_at"`
+	OriginNamespace          *string     `json:"origin_namespace"`
+	OriginName               *string     `json:"origin_name"`
+	OriginVersion            *string     `json:"origin_version"`
+	OriginPublic             *bool       `json:"origin_public"`
+	ForkCount                int64       `json:"fork_count"`
 }
 
 // A suspended or erased organization's agents are absent (agentry#363);
@@ -671,7 +871,8 @@ type ListAgentsByNamespaceRow struct {
 // predicate keeps the listing honest on its own. A deleted agent's
 // tombstone is never listed (agentry#942). The publisher's page searches
 // (query: name and summary, case-folded), filters by state (active,
-// retired; empty is both) and sorts (name, newest, installs, submitted —
+// retired; empty is both) and by origin (forks: only, none; empty is both,
+// agentry#943) and sorts (name, newest, installs, submitted —
 // the last submission of any version); the trailing keys keep every
 // ordering total.
 func (q *Queries) ListAgentsByNamespace(ctx context.Context, arg ListAgentsByNamespaceParams) ([]ListAgentsByNamespaceRow, error) {
@@ -679,6 +880,7 @@ func (q *Queries) ListAgentsByNamespace(ctx context.Context, arg ListAgentsByNam
 		arg.Handle,
 		arg.IncludePrivate,
 		arg.State,
+		arg.Forks,
 		arg.Query,
 		arg.Sort,
 	)
@@ -710,9 +912,19 @@ func (q *Queries) ListAgentsByNamespace(ctx context.Context, arg ListAgentsByNam
 			&i.RetiredAt,
 			&i.RetiredVisibility,
 			&i.DeletedAt,
+			&i.ForkedFromAgentID,
+			&i.ForkedFromVersionID,
+			&i.ForkedBy,
+			&i.ForkState,
+			&i.ForkDetail,
 			&i.Namespace,
 			&i.Installs,
 			&i.LastSubmittedAt,
+			&i.OriginNamespace,
+			&i.OriginName,
+			&i.OriginVersion,
+			&i.OriginPublic,
+			&i.ForkCount,
 		); err != nil {
 			return nil, err
 		}
@@ -804,6 +1016,39 @@ func (q *Queries) ListAgentsByTag(ctx context.Context, arg ListAgentsByTagParams
 	return items, nil
 }
 
+const listStuckForks = `-- name: ListStuckForks :many
+SELECT id FROM agents
+WHERE fork_state = 'copying' AND created_at < $1
+ORDER BY created_at LIMIT $2
+`
+
+type ListStuckForksParams struct {
+	CreatedBefore time.Time `json:"created_before"`
+	RowLimit      int32     `json:"row_limit"`
+}
+
+// Forks whose copy never finished (a job out of retries, a worker without
+// the git volume), for the watchdog.
+func (q *Queries) ListStuckForks(ctx context.Context, arg ListStuckForksParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listStuckForks, arg.CreatedBefore, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockNamespace = `-- name: LockNamespace :exec
 SELECT id FROM handles WHERE id = $1 FOR UPDATE
 `
@@ -814,6 +1059,18 @@ SELECT id FROM handles WHERE id = $1 FOR UPDATE
 // org row's lock (agentry#411).
 func (q *Queries) LockNamespace(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, lockNamespace, id)
+	return err
+}
+
+const markForkReady = `-- name: MarkForkReady :exec
+UPDATE agents SET fork_state = 'ready', fork_detail = '', updated_at = now()
+WHERE id = $1 AND fork_state IN ('copying', 'failed')
+`
+
+// A fork whose first version is recorded is ready, from copying or from a
+// failure the watchdog declared while the copy was still running.
+func (q *Queries) MarkForkReady(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, markForkReady, id)
 	return err
 }
 
@@ -1148,6 +1405,27 @@ type SetAgentReadmeTextParams struct {
 func (q *Queries) SetAgentReadmeText(ctx context.Context, arg SetAgentReadmeTextParams) error {
 	_, err := q.db.Exec(ctx, setAgentReadmeText, arg.ID, arg.ReadmeText)
 	return err
+}
+
+const setForkState = `-- name: SetForkState :execrows
+UPDATE agents SET fork_state = $1, fork_detail = $2, updated_at = now()
+WHERE id = $3 AND fork_state = 'copying'
+`
+
+type SetForkStateParams struct {
+	ForkState  *string   `json:"fork_state"`
+	ForkDetail string    `json:"fork_detail"`
+	ID         uuid.UUID `json:"id"`
+}
+
+// The copy's outcome, from copying only: a fork that is ready or failed
+// stays so.
+func (q *Queries) SetForkState(ctx context.Context, arg SetForkStateParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setForkState, arg.ForkState, arg.ForkDetail, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const tombstoneAgent = `-- name: TombstoneAgent :execrows

@@ -229,6 +229,9 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, params ListA
 	if params.State != nil {
 		lp.State = string(*params.State)
 	}
+	if params.Forks != nil {
+		lp.Forks = string(*params.Forks)
+	}
 	if params.Sort != nil && *params.Sort != ListAgentsParamsSortName {
 		lp.Sort = string(*params.Sort)
 	}
@@ -242,7 +245,7 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, params ListA
 	base := strings.TrimSuffix(s.cfg.BaseURL, "/")
 	for _, row := range rows {
 		installs := int(row.Installs)
-		out = append(out, Agent{
+		a := Agent{
 			Id: row.ID, Namespace: row.Namespace, Name: row.Name,
 			Modes: apiModes(row.Modes), Visibility: AgentVisibility(row.Visibility),
 			Summary: row.Summary, DefaultBranch: "main",
@@ -253,7 +256,28 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, params ListA
 			RetiredAt:       row.RetiredAt,
 			Installs30d:     &installs,
 			LastSubmittedAt: row.LastSubmittedAt,
-		})
+		}
+		// Forks (agentry#943): a fork's origin and copy state, a public
+		// agent's count of forks — a count only.
+		if row.ForkState != nil {
+			st := AgentForkState(*row.ForkState)
+			a.ForkState = &st
+			if *row.ForkState == registry.ForkFailed && row.ForkDetail != "" {
+				d := row.ForkDetail
+				a.ForkDetail = &d
+			}
+			if row.OriginNamespace != nil && row.OriginName != nil && row.OriginVersion != nil {
+				a.ForkedFrom = &ForkOrigin{
+					Namespace: *row.OriginNamespace, Name: *row.OriginName, Version: *row.OriginVersion,
+					Available: row.OriginPublic != nil && *row.OriginPublic,
+				}
+			}
+		}
+		if row.Visibility == "public" {
+			n := int(row.ForkCount)
+			a.ForkCount = &n
+		}
+		out = append(out, a)
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -291,6 +315,7 @@ func (s *Server) GetAgent(w http.ResponseWriter, r *http.Request, ns Namespace, 
 	// consumer deciding whether to install needs them as much as the author.
 	alerts := s.dependencyAlertsForAgent(r, a.ID, a.Namespace+"/"+a.Name)
 	out.DependencyAlerts = &alerts
+	s.addLineage(r.Context(), &out, a)
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -331,6 +356,12 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	// it public and retired at once. Decided again under the row lock.
 	if req.Visibility != nil && string(*req.Visibility) == "public" && a.RetiredAt != nil {
 		problemAgentRetired(w, r)
+		return
+	}
+	// A fork is private for good (agentry#943, D9), whoever asks; the
+	// database's CHECK is the wall behind this.
+	if req.Visibility != nil && string(*req.Visibility) == "public" && a.ForkedFromAgentID != nil {
+		problemForkStaysPrivate(w, r)
 		return
 	}
 	if req.AllowForcePush != nil && *req.AllowForcePush != a.AllowForcePush && !administers() {
@@ -440,6 +471,10 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 		}
 		if req.Visibility != nil && string(*req.Visibility) == "public" && locked.RetiredAt != nil {
 			refuse = func() { problemAgentRetired(w, r) }
+			return errRefused
+		}
+		if req.Visibility != nil && string(*req.Visibility) == "public" && locked.ForkedFromAgentID != nil {
+			refuse = func() { problemForkStaysPrivate(w, r) }
 			return errRefused
 		}
 		visibility, skip := locked.Visibility, locked.PipelineSkip

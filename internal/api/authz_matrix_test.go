@@ -582,6 +582,17 @@ func requestFactories(env *testEnv) map[string]opRequest {
 				return "/api/v1/agents/" + s.orgH + "/" + caseID + "/retire"
 			},
 		},
+		// The fixture agent has no published version: an allowed caller
+		// gets 409 nothing-to-fork, a refused one its 401 or 403, and no
+		// fork is made (agentry#943). A session forks into its own
+		// namespace, as createAgent's does below.
+		"forkAgent": {
+			method: "POST",
+			path:   agentPath("/fork"),
+			body: func(s *matrixSeed, caseID string) any {
+				return map[string]any{"namespace": s.orgH, "name": "fk" + caseID}
+			},
+		},
 		// The fixture agent is not retired: an allowed caller gets 409
 		// agent-not-retired, a refused one its 403, and nothing changes.
 		"restoreAgent": {
@@ -841,6 +852,9 @@ func TestAuthzMatrix(t *testing.T) {
 					bodyOverride = map[string]any{
 						"namespace": mc.caller.name, "name": "ag" + caseID, "modes": []string{"autonomous"},
 					}
+				}
+				if opID == "forkAgent" && mc.caller.session != "" {
+					bodyOverride = map[string]any{"namespace": mc.caller.name, "name": "fk" + caseID}
 				}
 				if opID == "revokeToken" && mc.caller.session != "" {
 					// Mint a disposable token as this caller to revoke.
